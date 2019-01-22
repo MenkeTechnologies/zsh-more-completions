@@ -4,7 +4,7 @@ local arguments
 
 arguments=(
   {-h,--help}'[show this help message and exit]'
-  '--parity[E,O,S,M}  set parity, one of {N E O S M}, default: N]'
+  '--parity[E,O,S,M set parity, one of {N E O S M}, default: N]'
   '--rtscts[enable RTS/CTS flow control (default off)]'
   '--xonxoff[enable software flow control (default off)]'
   '--rts[set initial RTS line state (possible values: 0, 1)]'
@@ -13,7 +13,7 @@ arguments=(
   {-e,--echo}'[enable local echo (default off)]'
   '--encoding[set the encoding for the serial port (e.g. hexlify]'
   {-f,--filter}'[add text transformation]'
-  '--eol[LF,CRLF}    end of line mode]'
+  '--eol[LF,CRLF end of line mode]'
   '--raw[do no apply any encodings/transformations]'
   '--exit-char[unicode of special character that is used to exit the]'
   '--menu-char[unicode code of special character that is used to]'
