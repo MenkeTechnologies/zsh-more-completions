@@ -1,0 +1,46 @@
+#compdef hardened.sh
+
+local arguments
+
+arguments=(
+  '-O2[(or higher)]'
+  '-fstack-protector-strong[]'
+  '-D[_FORTIFY_SOURCE=2]'
+  {-Wl,-z}'[now]'
+  {-Wl,-z}'[relro]'
+  '-fPIC[]'
+  '-fPIE[]'
+  {-Wl,-pie}'[]'
+  '-D[_GLIBCXX_ASSERTIONS]'
+  '-fstack-clash-protection[]'
+  '-fcf-protection[]'
+  '-mcet[]'
+  {-h,--help}'[display this information and exit.]'
+  {-v,--version}'[report the version number of this script and exit.]'
+  {-q,--quiet}'[do not include the script name in the output.]'
+  {-s,--silent}'[produce no output, just an exit status.]'
+  {-V,--verbose}'[report on progress.]'
+  {-u,--vulnerable}'[only report files known to be vulnerable. \[default\]]'
+  {-n,--not-hardened}'[report any file that is not proven to be hardened.]'
+  {-a,--all}'[report the hardening status of all files.]'
+  {-f,--file-type}'[automatically distinguish libraries from executables. \[default\]]'
+  {-f,--file-type}'[assume all files are shared libraries.]'
+  {-f,--file-type}'[assume all files are executables.]'
+  {-f,--filetype}'[assume all files are object files/archives.]'
+  {-k,--skip}'[skip check of optimization level]'
+  {-k,--skip}'[skip check of stack-protector status]'
+  {-k,--skip}'[skip check of fortify source status]'
+  {-k,--skip}'[skip check of BIND_NOW status]'
+  {-k,--skip}'[skip check of RELRO status]'
+  {-k,--skip}'[skip check for PIC/PIE compilation.  (Good for RHEL-6 binaries)]'
+  {-k,--skip}'[skip check for operator\[\] range testing.]'
+  {-k,--skip}'[skip check for stack clash protection.]'
+  {-k,--skip}'[skip check for control flow protection.]'
+  {-k,--skip-cet}'[skip check for control flow enforcement technology.]'
+  {-i,--ignore-unknown}'[silently skip any file that is not an ELF binary.]'
+  {-r,--readelf}'[path to version of readelf to use.]'
+  {-t,--tmpfile}'[temporary file to use.]'
+  '*:filename:_files'
+)
+
+_arguments -s $arguments
