@@ -3,10 +3,10 @@
 local arguments
 
 arguments=(
-  '-d[: Enable debug output.]'
-  '-i[: Show icon if it exists.]'
-  '-x[: Enable hex dump output.]'
-  {-v,-version,--version}'[: Show version.]'
+  '-d[Enable debug output.]'
+  '-i[Show icon if it exists.]'
+  '-x[Enable hex dump output.]'
+  {-v,-version,--version}'[Show version.]'
   '*:filename:_files'
 )
 

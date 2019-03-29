@@ -3,7 +3,7 @@
 local arguments
 
 arguments=(
-  '-f[: force]'
+  '-f[force]'
   '*:filename:_files'
 )
 
