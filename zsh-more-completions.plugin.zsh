@@ -1,1 +1,1 @@
-fpath=("${0:h}/src" $fpath)
+fpath=($fpath "${0:h}/src")
