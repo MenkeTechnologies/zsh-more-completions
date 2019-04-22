@@ -1,0 +1,34 @@
+#compdef bison.yacc
+
+local arguments
+
+arguments=(
+  {-h,--help}'[display this help and exit]'
+  {-V,--version}'[output version information and exit]'
+  '--print-localedir[output directory containing locale-dependent data]'
+  '--print-datadir[output directory containing skeletons and XSLT]'
+  {-y,--yacc}'[emulate POSIX Yacc]'
+  {-W,--warnings}'[report the warnings falling in CATEGORY]'
+  {-f,--feature}'[activate miscellaneous features]'
+  {-L,--language}'[specify the output programming language]'
+  {-S,--skeleton}'[specify the skeleton to use]'
+  {-t,--debug}'[instrument the parser for tracing]'
+  '--locations[enable location support]'
+  {-D,--define}'[VALUE\]        similar to %define NAME "VALUE"]'
+  {-F,--force-define}'[VALUE\]  override %define NAME "VALUE"]'
+  {-p,--name-prefix}'[prepend PREFIX to the external symbols]'
+  {-l,--no-lines}'[dont generate #line directives]'
+  {-k,--token-table}'[include a table of token names]'
+  '--defines[also produce a header file]'
+  '-d[likewise but cannot specify FILE (for POSIX Yacc)]'
+  {-r,--report}'[also produce details on the automaton]'
+  '--report-file[write report to FILE]'
+  {-v,--verbose}'[same as --report=state]'
+  {-b,--file-prefix}'[specify a PREFIX for output files]'
+  {-o,--output}'[leave output to FILE]'
+  {-g,--graph}'[also output a graph of the automaton]'
+  {-x,--xml}'[also output an XML report of the automaton]'
+  '*:filename:_files'
+)
+
+_arguments -s $arguments
