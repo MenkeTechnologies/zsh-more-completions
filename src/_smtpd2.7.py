@@ -8,7 +8,7 @@ arguments=(
   '--version[]'
   '-V[print the version number and exit.]'
   '--class[]'
-  '-c[use `classname as the concrete SMTP proxy class.  Uses `PureProxy by]'
+  '-c[use `classname as the concrete SMTP proxy class. Uses `PureProxy by]'
   '--debug[]'
   '-d[turn on debugging prints.]'
   '--help[]'

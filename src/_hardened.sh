@@ -32,7 +32,7 @@ arguments=(
   {-k,--skip}'[skip check of fortify source status]'
   {-k,--skip}'[skip check of BIND_NOW status]'
   {-k,--skip}'[skip check of RELRO status]'
-  {-k,--skip}'[skip check for PIC/PIE compilation.  (Good for RHEL-6 binaries)]'
+  {-k,--skip}'[skip check for PIC/PIE compilation. (Good for RHEL-6 binaries)]'
   {-k,--skip}'[skip check for operator\[\] range testing.]'
   {-k,--skip}'[skip check for stack clash protection.]'
   {-k,--skip}'[skip check for control flow protection.]'

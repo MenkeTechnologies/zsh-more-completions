@@ -7,7 +7,7 @@ arguments=(
   {-h,--help}'[show this help message and exit]'
   {-p,--profile}'[tile cutting profile (mercator,geodetic,raster) -]'
   {-r,--resampling}'[resampling method (average,near,bilinear,cubic,cubicsp]'
-  {-s,--s}'[_srs=SRS   The spatial reference system used for the source input]'
+  {-s,--s}'[_srs=SRS The spatial reference system used for the source input]'
   {-z,--zoom}'[zoom levels to render (format:2-5 or 10).]'
   {-e,--resume}'[resume mode. Generate only missing files.]'
   {-a,--srcnodata}'[NODATA transparency value to assign to the input data]'

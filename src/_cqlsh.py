@@ -9,7 +9,7 @@ arguments=(
   '--no-color[never use color output]'
   '--browser[the browser to use to display CQL help, where BROWSER]'
   '--ssl[use SSL]'
-  '--no[_compact          No Compact]'
+  '--no[_compact No Compact]'
   {-u,--username}'[authenticate as user.]'
   {-p,--password}'[authenticate using password.]'
   {-k,--keyspace}'[authenticate to the given keyspace.]'
