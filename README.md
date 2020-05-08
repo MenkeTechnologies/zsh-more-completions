@@ -13,6 +13,32 @@ cd "$HOME/.oh-my-zsh/custom/plugins" && git clone https://github.com/MenkeTechno
 
 Add `zsh-more-completions` to plugins array in ~/.zshrc
 
+For the plugin to take effect, compinit must be run after sourcing this file in .zshrc
+This requires a second and slow compinit because OMZ runs compinit before sourcing any plugins.
+To avoid this add the src dirs to fpath before OMZ run its compinit like such
+```sh
+# OMZ does not add nested comp dirs to fpath so do it here, asssume src
+plugins=(plugin1 plugin2)
+for plug in ${plugins[@]}; do
+    if [[ -d "$ZSH/custom/plugins/$plug" ]]; then
+        #null glob - no error
+        for dir in "$ZSH/custom/plugins/$plug/"*src(N); do
+            if [[ -d "$dir" ]]; then
+                if [[ -z ${fpath[(r)$dir]} ]];then
+                    if echo $dir | grep -qs "override"; then
+                        fpath=($dir $fpath)
+                    else
+                        fpath=($fpath $dir)
+                    fi
+                    #echo "add $dir to $fpath" >> "$ZPWR_LOGFILE"
+                fi
+            fi
+        done
+    fi
+done
+
+```
+
 ## General Install
 
 ```sh
