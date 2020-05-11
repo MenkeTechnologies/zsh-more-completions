@@ -17,7 +17,7 @@ For the plugin to take effect, compinit must be run after sourcing this file in 
 This requires a second and slow compinit because OMZ runs compinit before sourcing any plugins.
 To avoid this add the src dirs to fpath before OMZ run its compinit like such
 ```sh
-# OMZ does not add nested comp dirs to fpath so do it here, asssume src
+# OMZ does not add nested comp dirs to fpath so do it here, assume src
 plugins=(plugin1 plugin2)
 for plug in ${plugins[@]}; do
     if [[ -d "$ZSH/custom/plugins/$plug" ]]; then
