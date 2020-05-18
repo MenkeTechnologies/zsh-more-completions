@@ -18,5 +18,6 @@ arguments=(
     '-v[Set verbose mode.]'
     '-V[Print version information and exit.]'
     '-?[Print usage information and exit.]'
+    '*:filename:_files'
 )
 _arguments -s $arguments

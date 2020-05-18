@@ -10,5 +10,6 @@ arguments=(
     '--libs[Prints the linker command line options used to link with the ISC BIND librari…]'
     '--prefix[Prints the directory prefix used in the ISC BIND installation for architectur…]'
     '--version[Prints the version of the installed ISC BIND suite.]'
+    '*:filename:_files'
 )
 _arguments -s $arguments

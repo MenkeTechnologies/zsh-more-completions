@@ -33,5 +33,6 @@ arguments=(
     '--decode-errors[What to do in case of decode errors.]:DECODE_ERRORS'
     '--version[Show program\s version number and exit.]'
     {-h,--help}'[Show a help message and exit.]'
+    '*:filename:_files'
 )
 _arguments -s $arguments

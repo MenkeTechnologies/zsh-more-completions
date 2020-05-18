@@ -16,5 +16,6 @@ arguments=(
     '--with-configs[Includes output from ~/. asoundrc and /etc/asound. conf if they exist.]'
     '--update[Check server for updates.]'
     '--about[Print information about authors.]'
+    '*:filename:_files'
 )
 _arguments -s $arguments

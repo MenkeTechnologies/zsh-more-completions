@@ -11,5 +11,6 @@ arguments=(
     '-B[Include core modules in the output and the recursive search list.]'
     '-R[Only show dependencies found in the files listed and do not recurse.]'
     '-V[Verbose mode: Output all files found during the process; show dependencies b…]'
+    '*:filename:_files'
 )
 _arguments -s $arguments
