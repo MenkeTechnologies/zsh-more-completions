@@ -13,15 +13,15 @@ cd "$HOME/.oh-my-zsh/custom/plugins" && git clone https://github.com/MenkeTechno
 
 Add `zsh-more-completions` to plugins array in ~/.zshrc
 
-For the plugin to take effect, compinit must be run after sourcing this file in .zshrc
-This requires a second and slow compinit because OMZ runs compinit before sourcing any plugins.
-To avoid this add the src dirs to fpath before OMZ run its compinit like such
+For the plugin to take effect, compinit must be run after sourcing this file.
+With OMZ this requires a second and slow compinit because after sourcing OMZ b/c OMZ runs compinit before sourcing any plugins.
+To avoid this add the source dirs to fpath before sourcing OMZ when its compinit like such
 ```sh
 # OMZ does not add nested comp dirs to fpath so do it here, assume src
 plugins=(plugin1 plugin2)
 for plug in ${plugins[@]}; do
     if [[ -d "$ZSH/custom/plugins/$plug" ]]; then
-        #null glob - no error
+        # null glob - no error
         for dir in "$ZSH/custom/plugins/$plug/"*src(N); do
             if [[ -d "$dir" ]]; then
                 if [[ -z ${fpath[(r)$dir]} ]];then
@@ -45,7 +45,7 @@ done
 git clone https://github.com/MenkeTechnologies/zsh-more-completions.git
 ```
 
-copy all _ files in src directory to somewhere in fpath
+copy all _ files in source directories to somewhere in fpath
 
 ## Usage
 Run  `autoload -Uz compinit` and then `compinit` to generate the .zcompdump file after install.
