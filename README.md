@@ -13,30 +13,31 @@ cd "$HOME/.oh-my-zsh/custom/plugins" && git clone https://github.com/MenkeTechno
 
 Add `zsh-more-completions` to plugins array in ~/.zshrc
 
-For the plugin to take effect, compinit must be run after sourcing this file.
-With OMZ this requires a second and slow compinit because after sourcing OMZ b/c OMZ runs compinit before sourcing any plugins.
-To avoid this add the source dirs to fpath before sourcing OMZ when its compinit like such
+For the plugin completions to take effect, compinit must be run after adding the source dirs to fpath.
+With OMZ this requires a second and slow compinit because OMZ only adds plugin root directory to fpath.
+To avoid this add the source dirs inside the plugin to fpath before sourcing OMZ and it running compinit.
+
+Here is how I did it in my `.zshrc`.
+
 ```sh
-# OMZ does not add nested comp dirs to fpath so do it here, assume src
-plugins=(plugin1 plugin2)
+# OMZ does not add nested comp dirs to fpath so do it here, assume *src has completions
 for plug in ${plugins[@]}; do
     if [[ -d "$ZSH/custom/plugins/$plug" ]]; then
         # null glob - no error
         for dir in "$ZSH/custom/plugins/$plug/"*src(N); do
             if [[ -d "$dir" ]]; then
                 if [[ -z ${fpath[(r)$dir]} ]];then
-                    if echo $dir | grep -qs "override"; then
+                    if [[ $dir = *override* ]]; then
                         fpath=($dir $fpath)
                     else
                         fpath=($fpath $dir)
                     fi
-                    #echo "add $dir to $fpath" >> "$ZPWR_LOGFILE"
+                    # echo "add $dir to $fpath" >> "$ZPWR_LOGFILE"
                 fi
             fi
         done
     fi
 done
-
 ```
 
 ## General Install
@@ -48,7 +49,6 @@ git clone https://github.com/MenkeTechnologies/zsh-more-completions.git
 copy all _ files in source directories to somewhere in fpath
 
 ## Usage
-Run  `autoload -Uz compinit` and then `compinit` to generate the .zcompdump file after install.
-Make sure to use the .zcompdump cache when invoking compinit like `compinit -C` in your .zshrc.
+Run  `autoload -Uz compinit` and then `compinit` to generate the `~/.zcompdump` file after install.
+Make sure to use the `~/.zcompdump` file as a cache when invoking compinit like `compinit -C` in your `~/.zshrc`.
 This will reduce interactive shell startup time dramatically.
-
