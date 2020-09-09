@@ -8,9 +8,11 @@ As such they are of varying quality.
 > `~/.zshrc`
 ```sh
 source "$HOME/.zinit/bin/zinit.zsh"
-zinit ice lucid nocompile
+zinit ice lucid nocompile wait'0e' nocompletions
 zinit load MenkeTechnologies/zsh-more-completions
 ```
+It is recommended to have zinit not symlink all the completions into `~/.zinit/completions` but to allow the plugin to append and prepend to fpath.  This is to have zsh-more-completions have certain completions override others but not override system completions which by default with zinit come after `~/.zinit/completions` in fpath.
+The ice `nocompletions` achieves this as the plugin is still sourced and fpath is set to find the completions.
 
 ## Install for Oh My Zsh
 
