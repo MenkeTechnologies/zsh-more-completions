@@ -17,7 +17,7 @@ arguments=(
     '-A[specifies a flag to be passed to gvmap. For example, gvmap.]:flag"'
     '-v[Set verbose mode.]'
     '-V[Print version information and exit.]'
-    '-?[Print usage information and exit.]'
+    '-\?[Print usage information and exit.]'
     '*:filename:_files'
 )
 _arguments -s $arguments
