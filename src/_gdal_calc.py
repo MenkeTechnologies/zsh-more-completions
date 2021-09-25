@@ -3,7 +3,7 @@
 local arguments
 
 arguments=(
-  {-h,--help}'[show this help message and exit]'
+  '(- * :)'{-h,--help}'[show this help message and exit]'
   '--calc[calculation in gdalnumeric syntax using +-/* or any]'
   '-A[input gdal raster file, you can use any letter (A-Z)]'
   '--A[_band=n number of raster band for file A (default 1)]'

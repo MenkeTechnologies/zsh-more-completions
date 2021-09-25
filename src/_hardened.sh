@@ -15,7 +15,7 @@ arguments=(
   '-fstack-clash-protection[]'
   '-fcf-protection[]'
   '-mcet[]'
-  {-h,--help}'[display this information and exit.]'
+  '(- * :)'{-h,--help}'[display this information and exit.]'
   {-v,--version}'[report the version number of this script and exit.]'
   {-q,--quiet}'[do not include the script name in the output.]'
   {-s,--silent}'[produce no output, just an exit status.]'

@@ -3,7 +3,7 @@
 local arguments
 
 arguments=(
-  {-h,--help}'[show this help message and exit]'
+  '(- * :)'{-h,--help}'[show this help message and exit]'
   '--stix-version[the version of STIX to validate against]'
   '--schema-dir[schema directory. If not provided, the STIX schemas]'
   '--use-schemaloc[use schemaLocation attribute to determine schema]'

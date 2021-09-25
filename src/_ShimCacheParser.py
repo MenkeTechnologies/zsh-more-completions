@@ -3,7 +3,7 @@
 local arguments
 
 arguments=(
-  {-h,--help}'[show this help message and exit]'
+  '(- * :)'{-h,--help}'[show this help message and exit]'
   {-v,--verbose}'[toggles verbose output]'
   {-t,--isotime}'[use YYYY-MM-DD ISO format instead of MM/DD/YY default]'
   {-B,--bom}'[write UTF8 BOM to CSV for easier Excel 2007+ import]'

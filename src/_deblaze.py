@@ -4,7 +4,7 @@ local arguments
 
 arguments=(
   '--version[show programs version number and exit]'
-  {-h,--help}'[show this help message and exit]'
+  '(- * :)'{-h,--help}'[show this help message and exit]'
   {-u,--url}'[URL for AMF Gateway]'
   {-s,--service}'[remote service to call]'
   {-m,--method}'[method to call]'

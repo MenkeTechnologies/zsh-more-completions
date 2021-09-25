@@ -3,7 +3,7 @@
 local arguments
 
 arguments=(
-  {-h,--help}'[display this help and exit]'
+  '(- * :)'{-h,--help}'[display this help and exit]'
   {-V,--version}'[output version information and exit]'
   '--print-localedir[output directory containing locale-dependent data]'
   '--print-datadir[output directory containing skeletons and XSLT]'

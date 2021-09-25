@@ -3,7 +3,7 @@
 local arguments
 
 arguments=(
-  {-h,--help}'[show this help message and exit]'
+  '(- * :)'{-h,--help}'[show this help message and exit]'
   {-v,--version}'[report version and exit]'
   {-f,--file}'[read MFT from FILE]'
   {-j,--json}'[file paths should use the windows path separator]'

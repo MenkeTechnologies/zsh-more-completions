@@ -3,7 +3,7 @@
 local arguments
 
 arguments=(
-  {-h,--help}'[show this help message]'
+  '(- * :)'{-h,--help}'[show this help message]'
   {-v,--verbose}'[0, 1, 2\] Show debugging output to stderr. Larger is more verbose.]'
   {-s,--stdout}'[write all completions to stdout (trumps the --directory option)]'
   {-d,--directory}'[write all completions to the given directory, instead of to ~/.local/share/fish/generated_completions]'

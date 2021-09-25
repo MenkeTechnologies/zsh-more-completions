@@ -3,7 +3,7 @@
 local arguments
 
 arguments=(
-  {-h,--help}'[show this help message and exit]'
+  '(- * :)'{-h,--help}'[show this help message and exit]'
   {-p,--proxy}'[proxy url. ex. http://127.0.0.1:8080]'
   {-v,--verbose}'[set verbose mode. If set to 1, show opcode. If set to]'
   {-n,--nocert}'[ignore invalid SSL cert]'

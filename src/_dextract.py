@@ -3,7 +3,7 @@
 local arguments
 
 arguments=(
-  {-h,--help}'[show this help message and exit]'
+  '(- * :)'{-h,--help}'[show this help message and exit]'
   '-d[template Definition File]'
   '-f[input File To Be Searched]'
   '-o[(Optional) Tab Seperated Output Filename]'

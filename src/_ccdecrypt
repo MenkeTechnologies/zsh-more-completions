@@ -8,7 +8,7 @@ arguments=(
   {-c,--cat}'[cat; decrypt files to stdout]'
   {-x,--keychange}'[change key]'
   {-u,--unixcrypt}'[decrypt old unix crypt files]'
-  {-h,--help}'[print this help message and exit]'
+  '(- * :)'{-h,--help}'[print this help message and exit]'
   {-V,--version}'[print version info and exit]'
   {-L,--license}'[print license info and exit]'
   {-v,--verbose}'[print progress information to stderr]'

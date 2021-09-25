@@ -3,7 +3,7 @@
 local arguments
 
 arguments=(
-  {-h,--help}'[show this help message and exit]'
+  '(- * :)'{-h,--help}'[show this help message and exit]'
   {-l,--logfilename}'[contains error messages]'
   {-v,--verbosity}'[level of information and diagnostics provided]'
   {-m,--mmap}'[1: use mmap; 0: dont use mmap; -1: accept heuristic]'

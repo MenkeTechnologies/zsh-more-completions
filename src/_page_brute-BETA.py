@@ -3,7 +3,7 @@
 local arguments
 
 arguments=(
-  {-h,--help}'[show this help message and exit]'
+  '(- * :)'{-h,--help}'[show this help message and exit]'
   {-r,--rules}'[file/directory containing YARA signatures (must end]'
   {-f,--file}'[pagefile or any chunk/block-based binary file]'
   {-p,--size}'[size of chunk/block in bytes (Default 4096)]'

@@ -4,7 +4,7 @@ local arguments
 
 arguments=(
   '--version[show programs version number and exit]'
-  {-h,--help}'[show this help message and exit]'
+  '(- * :)'{-h,--help}'[show this help message and exit]'
   {-s,--search}'[string to search in indirect objects (except streams)]'
   {-f,--filter}'[pass stream object through filters (FlateDecode]'
   {-o,--object}'[id of indirect object to select (version independent)]'

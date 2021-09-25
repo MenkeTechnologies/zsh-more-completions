@@ -3,7 +3,7 @@
 local arguments
 
 arguments=(
-  {-h,--help}'[show this help message and exit]'
+  '(- * :)'{-h,--help}'[show this help message and exit]'
   '--parity[E,O,S,M set parity, one of {N E O S M}, default: N]'
   '--rtscts[enable RTS/CTS flow control (default off)]'
   '--xonxoff[enable software flow control (default off)]'

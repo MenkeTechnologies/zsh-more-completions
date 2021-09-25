@@ -4,7 +4,7 @@ local arguments
 
 arguments=(
   '--version[show programs version number and exit]'
-  {-h,--help}'[show this help message and exit]'
+  '(- * :)'{-h,--help}'[show this help message and exit]'
   {-p,--profile}'[tile cutting profile (mercator,geodetic,raster) -]'
   {-r,--resampling}'[resampling method (average,near,bilinear,cubic,cubicsp]'
   {-s,--s}'[_srs=SRS The spatial reference system used for the source input]'

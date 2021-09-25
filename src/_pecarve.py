@@ -3,7 +3,7 @@
 local arguments
 
 arguments=(
-  {-h,--help}'[show this help message and exit]'
+  '(- * :)'{-h,--help}'[show this help message and exit]'
   {-f,--file}'[raw file to carve]'
   {-o,--output}'[output folder for extracted files]'
   '--log[log output file]'

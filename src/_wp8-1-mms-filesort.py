@@ -3,7 +3,7 @@
 local arguments
 
 arguments=(
-  {-h,--help}'[show this help message and exit]'
+  '(- * :)'{-h,--help}'[show this help message and exit]'
   '-i[input Directory To Be Processed]'
   '-t[output Tab Separated Variable (TSV) filename (Optional)]'
   '-o[output HTML filename (Optional)]'

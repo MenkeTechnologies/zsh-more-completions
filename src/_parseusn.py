@@ -3,7 +3,7 @@
 local arguments
 
 arguments=(
-  {-h,--help}'[show this help message and exit]'
+  '(- * :)'{-h,--help}'[show this help message and exit]'
   {-f,--infile}'[input filename, extracted $UsnJrnl:$J]'
   {-m,--mft}'[MFT filename, for getting the full path]'
   {-o,--outfile}'[output filename, default to STDOUT]'

@@ -3,7 +3,7 @@
 local arguments
 
 arguments=(
-  {-h,--help}'[show this help message and exit]'
+  '(- * :)'{-h,--help}'[show this help message and exit]'
   {-p,--pid}'[attach running process specified by its identifier]'
   {-f,--fork}'[trace fork and child process]'
   '--trace-exec[trace execve() event]'

@@ -3,7 +3,7 @@
 local arguments
 
 arguments=(
-  {-h,--help}'[show this help message and exit]'
+  '(- * :)'{-h,--help}'[show this help message and exit]'
   '--version[show version number.]'
   {-b,--bind}'[bind socket to ADDRESS.]'
   {-s,--server}'[use SERVER as backend.]'

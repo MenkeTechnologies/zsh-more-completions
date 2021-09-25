@@ -3,7 +3,7 @@
 local arguments
 
 arguments=(
-  {-h,--help}'[show this help]'
+  '(- * :)'{-h,--help}'[show this help]'
   {-M,--collect-mobile-documents}'[(default: all containers)]'
   {-s,--sysdiagnose}'[do not collect whats already part of sysdiagnose]'
   {-t,--uitest}'[collect logs for UI tests]'
@@ -28,7 +28,7 @@ arguments=(
   '-g[dump global activity of the iCloud Drive]'
   '-i[dump changes incrementally]'
   {-S,--scope}'[restrict the NSMetadataQuery scope to docs, data, external or a combination]'
-  {-h,--help}'[show this help]'
+  '(- * :)'{-h,--help}'[show this help]'
   {-M,--collect-mobile-documents}'[(default: all containers)]'
   {-s,--sysdiagnose}'[do not collect whats already part of sysdiagnose]'
   {-t,--uitest}'[collect logs for UI tests]'
@@ -53,7 +53,7 @@ arguments=(
   '-g[dump global activity of the iCloud Drive]'
   '-i[dump changes incrementally]'
   {-S,--scope}'[restrict the NSMetadataQuery scope to docs, data, external or a combination]'
-  {-h,--help}'[show this help]'
+  '(- * :)'{-h,--help}'[show this help]'
   {-M,--collect-mobile-documents}'[(default: all containers)]'
   {-s,--sysdiagnose}'[do not collect whats already part of sysdiagnose]'
   {-t,--uitest}'[collect logs for UI tests]'

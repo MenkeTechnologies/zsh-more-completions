@@ -12,7 +12,7 @@ arguments=(
   {-w,--wait}'[wait for command to complete;]'
   {-v,--verbose}'[print a message for each action;]'
   {-V,--version}'[print program version and exit;]'
-  {-h,--help}'[output a brief help message.]'
+  '(- * :)'{-h,--help}'[output a brief help message.]'
   '*:filename:_files'
 )
 

@@ -4,7 +4,7 @@ local arguments
 
 arguments=(
   '--version[show programs version number and exit]'
-  {-h,--help}'[show this help message and exit]'
+  '(- * :)'{-h,--help}'[show this help message and exit]'
   {-C,--color}'[always use color output]'
   '--no-color[never use color output]'
   '--browser[the browser to use to display CQL help, where BROWSER]'

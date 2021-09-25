@@ -3,7 +3,7 @@
 local arguments
 
 arguments=(
-  {-h,--help}'[show this help message and exit]'
+  '(- * :)'{-h,--help}'[show this help message and exit]'
   '-t[threads_db2 input file]'
   '-c[contacts_db2 input file]'
   '-x[(Optional) Contacts Tab Separated Output Filename]'

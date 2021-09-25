@@ -3,7 +3,7 @@
 local arguments
 
 arguments=(
-  {-h,--help}'[show this help message and exit]'
+  '(- * :)'{-h,--help}'[show this help message and exit]'
   '--cybox-version[the version of CybOX to validate against]'
   '--schema-dir[schema directory. If not provided, the CybOX schemas]'
   '--use-schemaloc[use schemaLocation attribute to determine schema]'

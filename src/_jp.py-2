@@ -3,7 +3,7 @@
 local arguments
 
 arguments=(
-  {-h,--help}'[show this help message and exit]'
+  '(- * :)'{-h,--help}'[show this help message and exit]'
   {-f,--filename}'[the filename containing the input data. If a filename]'
   '--ast[pretty print the AST, do not search the data.]'
   '*:filename:_files'

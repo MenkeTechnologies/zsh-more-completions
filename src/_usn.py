@@ -3,7 +3,7 @@
 local arguments
 
 arguments=(
-  {-h,--help}'[show this help message and exit]'
+  '(- * :)'{-h,--help}'[show this help message and exit]'
   {-b,--body}'[return USN records in comma-separated format]'
   {-c,--csv}'[return USN records in comma-separated format]'
   {-f,--file}'[parse the given USN journal file]'

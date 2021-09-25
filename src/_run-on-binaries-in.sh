@@ -3,7 +3,7 @@
 local arguments
 
 arguments=(
-  {-h,--help}'[display this information and then exit.]'
+  '(- * :)'{-h,--help}'[display this information and then exit.]'
   {-v,--version}'[report the version number of this script.]'
   {-V,--verbose}'[report on progress.]'
   {-q,--quiet}'[do not include the script name in the output.]'
