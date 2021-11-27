@@ -15,29 +15,29 @@
 }
 
 @test 'man src' {
-	for _file in "$pluginDir/man_src/"*; do
-        run zsh -n "$_file"
+    for f in "$pluginDir/man_src/"*; do
+        run zsh -n "$f"
         assert $state equals 0
     done
 }
 
 @test 'src' {
-	for _file in "$pluginDir/src/"*; do
-        run zsh -n "$_file"
+    for f in "$pluginDir/src/"*; do
+        run zsh -n "$f"
         assert $state equals 0
     done
 }
 
 @test 'override_src' {
-	for _file in "$pluginDir/override_src/"*; do
-        run zsh -n "$_file"
+    for f in "$pluginDir/override_src/"*; do
+        run zsh -n "$f"
         assert $state equals 0
     done
 }
 
 @test 'plugin *.zsh' {
-	for file in "$pluginDir/"*.zsh; do
-        run zsh -n "$file"
+    for f in "$pluginDir/"*.zsh; do
+        run zsh -n "$f"
         assert $state equals 0
     done
 }
