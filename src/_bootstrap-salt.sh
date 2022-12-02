@@ -1,0 +1,46 @@
+#compdef bootstrap-salt.sh
+
+local arguments
+
+arguments=(
+  '-h[display this message]'
+  '-v[display script version]'
+  '-n[no colours]'
+  '-D[show debug output]'
+  '-c[temporary configuration directory]'
+  '-g[salt Git repository URL. Default: https://github.com/saltstack/salt.git]'
+  '-w[install packages from downstream package repository rather than]'
+  '-k[temporary directory holding the minion keys which will pre-seed]'
+  '-s[sleep time used when waiting for daemons to start, restart and when]'
+  '-L[also install salt-cloud and required python-libcloud package]'
+  '-M[also install salt-master]'
+  '-S[also install salt-syndic]'
+  '-N[do not install salt-minion]'
+  '-X[do not start daemons after installation]'
+  '-d[disables checking if Salt services are enabled to start on system boot.]'
+  '-P[allow pip based installations. On some distributions the required salt]'
+  '-U[if set, fully upgrade the system prior to bootstrapping Salt]'
+  '-I[if set, allow insecure connections while downloading any files. For]'
+  '-F[allow copied files to overwrite existing (config, init.d, etc)]'
+  '-K[if set, keep the temporary files in the temporary directories specified]'
+  '-C[only run the configuration function. Implies -F (forced overwrite).]'
+  '-A[pass the salt-master DNS name or IP. This will be stored under]'
+  '-i[pass the salt-minion id. This will be stored under]'
+  '-p[extra-package to install while installing Salt dependencies. One package]'
+  '-H[use the specified HTTP proxy for all download URLs (including https://).]'
+  '-b[assume that dependencies are already installed and software sources are]'
+  '-f[force shallow cloning for git installations.]'
+  '-l[disable ssl checks. When passed, switches "https" calls to "http" where]'
+  '-V[install Salt into virtualenv]'
+  '-a[pip install all Python pkg dependencies for Salt. Requires -V to install]'
+  '-r[disable all repository configuration performed by this script. This]'
+  '-R[specify a custom repository URL. Assumes the custom repository URL]'
+  '-J[replace the Master config file with data passed in as a JSON string. If]'
+  '-j[replace the Minion config file with data passed in as a JSON string. If]'
+  '-q[quiet salt installation from git (setup.py install -q)]'
+  '-x[changes the Python version used to install Salt.]'
+  '-y[installs a different python version on host. Currently this has only been]'
+  '*:filename:_files'
+)
+
+_arguments -s $arguments
