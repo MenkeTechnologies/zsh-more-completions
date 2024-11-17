@@ -5,12 +5,14 @@
 local arguments
 
 arguments=(
-    '-e[Scan \\s-1STRING\\s0 as a string containing perl code.]:s-1STRINGs0'
-    '-c[Compiles the code and inspects its \\f(CW%INC, in addition to static scanning.]'
-    '-x[Executes the code and inspects its \\f(CW%INC, in addition to static scanning.]'
-    '-B[Include core modules in the output and the recursive search list.]'
-    '-R[Only show dependencies found in the files listed and do not recurse.]'
-    '-V[Verbose mode: Output all files found during the process; show dependencies b…]'
+    {-e,--eval}'[Scan \\s-1STRING\\s0 as a string containing perl code.]':s-1STRINGs0
+    {-c,--compile}'[Compiles the code and inspects its \\f(CW%INC, in addition to static scanning.]'
+    {-x,--execute}'[Executes the code and inspects its \\f(CW%INC, in addition to static scanning.]'
+    '--xargs[If -x is given, splits the \\f(CW\\*(C`STRING\\*(C\ using the function \\f(CW\\*(…]:s-1STRINGs0'
+    {-B,--bundle}'[Include core modules in the output and the recursive search list.]'
+    {-R,--no-recurse}'[Only show dependencies found in the files listed and do not recurse.]'
+    {-V,--verbose}'[Verbose mode: Output all files found during the process; show dependencies b…]'
+    {-C,--cachedeps}'[Use \\s-1CACHEFILE\\s0 to speed up the scanning process by caching dependencies.]':s-1CACHEFILEs0
     '*:filename:_files'
 )
 _arguments -s $arguments
