@@ -1,27 +1,91 @@
-#compdef temprs tp
+#compdef tp temprs
 
-local arguments
+# Zsh completion for temprs/tp — temporary file stack manager
 
-arguments=(
-  {-c,--clear}'[remove all tempfiles]'
-  {-d,--dir}'[list temprs directory]'
-  {-h,--help}'[prints help information]'
-  {-L,--list-contents}'[list all tempfiles contents on the stack to stdout]'
-  {-N,--list-contents-numbered}'[list all tempfiles numbered with contents on the stack to stdout]'
-  {-l,--list-files}'[list all tempfiles on the stack to stdout]'
-  {-n,--list-files-numbered}'[list all tempfiles numbered on the stack to stdout]'
-  {-m,--master}'[list temprs master record file]'
-  {-p,--pop}'[remove from top of stack]'
-  {-s,--shift}'[remove from bottom of stack]'
-  {-q,--quiet}'[no output when creating tempfile]'
-  {-u,--unshift}'[add to bottom of stack]'
-  {-V,--version}'[prints version information]'
-  {-v,--verbose}'[set the level of verbosity]'
-  {-a,--add}'[insert tempfile at INDEX]'
-  {-i,--input}'[set tempfile INDEX to write into]'
-  {-o,--output}'[set tempfile INDEX to read from]'
-  {-r,--remove}'[set tempfile INDEX to remove]'
-  '*:filename:_files'
-)
+# Helper: list 1-based indices from the temprs stack
+_tp_indices() {
+  local master_file stack_dir
+  stack_dir="${TEMPRS_DIR:-${TMPDIR:-/tmp}/temprs}"
+  master_file="${stack_dir}/temprs-stack"
+  [[ -r "$master_file" ]] || return
 
-_arguments -s $arguments
+  local -a indices descriptions
+  local i=1 filepath name_tag
+  local content
+  content="$(<"$master_file")"
+  [[ -z "$content" ]] && return
+
+  # records are separated by \0\0, fields within a record by \0
+  local -a records
+  records=("${(@s:\0\0:)content}")
+  for record in "${records[@]}"; do
+    [[ -z "$record" ]] && continue
+    if [[ "$record" == *$'\0'* ]]; then
+      filepath="${record%%$'\0'*}"
+      name_tag="${record#*$'\0'}"
+    else
+      filepath="$record"
+      name_tag=""
+    fi
+    [[ -z "$filepath" ]] && continue
+    if [[ -n "$name_tag" ]]; then
+      descriptions+=("${i}:${filepath:t} @${name_tag}")
+      descriptions+=("${name_tag}:${filepath:t} [${i}]")
+    else
+      descriptions+=("${i}:${filepath:t}")
+    fi
+    (( i++ ))
+  done
+
+  _describe -t indices 'stack index' descriptions
+}
+
+_tp() {
+  local -a args
+  args=(
+    '(-i --input)'{-i,--input}'[Write into tempfile at INDEX]:index:_tp_indices'
+    '(-o --output)'{-o,--output}'[Read from tempfile at INDEX]:index:_tp_indices'
+    '(-a --add)'{-a,--add}'[Insert tempfile at INDEX]:index:_tp_indices'
+    '(-r --remove)'{-r,--remove}'[Remove tempfile at INDEX]:index:_tp_indices'
+    '(-e --edit)'{-e,--edit}'[Open tempfile at INDEX in $EDITOR]:index:_tp_indices'
+    '(-w --name)'{-w,--name}'[Tag tempfile with NAME]:name: '
+    '(-R --rename)'{-R,--rename}'[Rename tag from OLD to NEW]:old name:_tp_indices:new name: '
+    '(-I --info)'{-I,--info}'[Show metadata for tempfile at INDEX]:index:_tp_indices'
+    '(-g --grep)'{-g,--grep}'[Search tempfile contents for PATTERN]:pattern: '
+    '(-C --cat)'{-C,--cat}'[Concatenate tempfiles to stdout]:*:index:_tp_indices'
+    '(-k --count)'{-k,--count}'[Print number of tempfiles on the stack]'
+    '(-D --diff)'{-D,--diff}'[Diff two tempfiles]:file A:_tp_indices:file B:_tp_indices'
+    '(-M --mv)'{-M,--mv}'[Move tempfile to another position]:from:_tp_indices:to:_tp_indices'
+    '(-x --dup)'{-x,--dup}'[Duplicate tempfile onto top of stack]:index:_tp_indices'
+    '(-S --swap)'{-S,--swap}'[Swap two tempfiles]:file A:_tp_indices:file B:_tp_indices'
+    '(-A --append)'{-A,--append}'[Append stdin to tempfile at INDEX]:index:_tp_indices'
+    '(--rev)'--rev'[Reverse the entire stack order]'
+    '(--expire)'--expire'[Purge tempfiles older than HOURS hours]:hours: '
+    '(--head)'--head'[Show first N lines of tempfile]:index:_tp_indices:lines: '
+    '(--tail)'--tail'[Show last N lines of tempfile]:index:_tp_indices:lines: '
+    '(--wc)'--wc'[Print line count of tempfile]:index:_tp_indices'
+    '(--size)'--size'[Print byte size of tempfile]:index:_tp_indices'
+    '(--sort)'--sort'[Sort stack by key]:key:(name size mtime)'
+    '(--replace)'--replace'[Replace pattern in tempfile]:index:_tp_indices:pattern: :replacement: '
+    '(--path)'--path'[Print file path of tempfile]:index:_tp_indices'
+    '(-p --pop)'{-p,--pop}'[Pop from top of stack]'
+    '(-u --unshift)'{-u,--unshift}'[Push to bottom of stack]'
+    '(-s --shift)'{-s,--shift}'[Shift from bottom of stack]'
+    '(-d --dir)'{-d,--dir}'[List temprs directory]'
+    '(-m --master)'{-m,--master}'[List temprs master record file]'
+    '(-l --list-files)'{-l,--list-files}'[List all tempfiles on the stack]'
+    '(-n --list-files-numbered)'{-n,--list-files-numbered}'[List all tempfiles numbered on the stack]'
+    '(-L --list-contents)'{-L,--list-contents}'[List all tempfile contents on the stack]'
+    '(-N --list-contents-numbered)'{-N,--list-contents-numbered}'[List all tempfiles numbered with contents]'
+    '(-q --quiet)'{-q,--quiet}'[Suppress output when creating tempfile]'
+    '(-c --clear)'{-c,--clear}'[Purge all tempfiles from the stack]'
+    '*'{-v,--verbose}'[Increase verbosity level]'
+    '(-h --help)'{-h,--help}'[Print help]'
+    '(-V --version)'{-V,--version}'[Print version]'
+    '1::input file:_files'
+  )
+
+  _arguments -s -S $args
+}
+
+_tp "$@"
