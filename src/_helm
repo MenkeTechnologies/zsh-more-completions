@@ -1,29 +1,616 @@
 #compdef helm
 
-local arguments
+# Zsh completion for Helm 3.x (Kubernetes package manager)
 
-arguments=(
-  '--add-dir-header[if true, adds the file directory to the header]'
-  '--alsologtostderr[log to standard error as well as files]'
+local curcontext="$curcontext" state line
+typeset -A opt_args
+
+local -a global_flags
+global_flags=(
+  '--burst-limit[client-side default throttling limit (default 100)]:limit'
   '--debug[enable verbose output]'
-  '(- * :)'{-h,--help}'[help for helm]'
-  '--kube-context[name of the kubeconfig context to use]'
-  '--kubeconfig[path to the kubeconfig file]'
-  '--log-backtrace-at[when logging hits line file:N, emit a stack trace (default :0)]'
-  '--log-dir[if non-empty, write log files in this directory]'
-  '--log-file[if non-empty, use this log file]'
-  '--log-file-max-size[defines the maximum size a log file can grow to. Unit is megabytes. If the value is 0, the maximum file size is unlimited. (default 1800)]'
-  '--logtostderr[log to standard error instead of files (default true)]'
-  {-n,--namespace}'[namespace scope for this request]'
-  '--registry-config[path to the registry config file (default "/home/wizard/.config/helm/registry.json")]'
-  '--repository-cache[path to the file containing cached repository indexes (default "/home/wizard/.cache/helm/repository")]'
-  '--repository-config[path to the file containing repository names and URLs (default "/home/wizard/.config/helm/repositories.yaml")]'
-  '--skip-headers[if true, avoid header prefixes in the log messages]'
-  '--skip-log-headers[if true, avoid headers when opening log files]'
-  '--stderrthreshold[logs at or above this threshold go to stderr (default 2)]'
-  {-v,--v}'[number for the log level verbosity]'
-  '--vmodule[comma-separated list of pattern=N settings for file-filtered logging]'
-  '*:filename:_files'
+  '(- *)'{-h,--help}'[help for helm]'
+  '--kube-apiserver[the address and the port of the Kubernetes API server]:address'
+  '*--kube-as-group[group to impersonate for the operation; can be repeated]:group'
+  '--kube-as-user[username to impersonate for the operation]:user'
+  '--kube-ca-file[the certificate authority file for the Kubernetes API server connection]:file:_files'
+  '--kube-context[name of the kubeconfig context to use]:context'
+  '--kube-insecure-skip-tls-verify[if true, the Kubernetes API server TLS certificate will not be checked for validity]'
+  '--kube-tls-server-name[server name to use for Kubernetes API server certificate validation]:name'
+  '--kube-token[bearer token used for authentication]:token'
+  '--kubeconfig[path of the kubeconfig file]:file:_files'
+  {-n,--namespace}'[namespace scope for this request]:namespace'
+  '--qps[queries per second used when communicating with the Kubernetes API]:qps'
+  '--registry-config[path to the registry config file]:file:_files'
+  '--repository-cache[path to the file containing cached repository indexes]:dir:_directories'
+  '--repository-config[path to the file containing repository names and URLs]:file:_files'
 )
 
-_arguments -s $arguments
+# Common chart-sourcing flags used across install, upgrade, template
+local -a _helm_chart_source_flags
+_helm_chart_source_flags=(
+  '--ca-file[verify certificates of HTTPS-enabled servers using this CA bundle]:file:_files'
+  '--cert-file[identify HTTPS client using this SSL certificate file]:file:_files'
+  '--key-file[identify HTTPS client using this SSL key file]:file:_files'
+  '--insecure-skip-tls-verify[skip TLS certificate checks for the chart download]'
+  '--keyring[location of a public keyring]:file:_files'
+  '--pass-credentials[pass credentials to all domains]'
+  '--password[chart repository password where to locate the requested chart]:password'
+  '--plain-http[use insecure HTTP connections for the chart download]'
+  '--repo[chart repository URL where to locate the requested chart]:url'
+  '--username[chart repository username where to locate the requested chart]:username'
+  '--verify[verify the package before using it]'
+  '--version[specify a version constraint for the chart version to use]:version'
+)
+
+local -a _helm_value_flags
+_helm_value_flags=(
+  '*--set[set values on the command line (can specify multiple or separate values with commas)]:key=value'
+  '*--set-file[set values from respective files specified via the command line]:key=filepath:_files'
+  '*--set-json[set JSON values on the command line]:key=jsonvalue'
+  '*--set-literal[set a literal STRING value on the command line]:key=value'
+  '*--set-string[set STRING values on the command line]:key=value'
+  '*'{-f,--values}'[specify values in a YAML file or a URL (can specify multiple)]:file:_files'
+)
+
+local -a _helm_install_flags
+_helm_install_flags=(
+  '--atomic[if set, the installation process deletes the installation on failure; implies --wait]'
+  '--create-namespace[create the release namespace if not present]'
+  '--dependency-update[update dependencies if they are missing before installing the chart]'
+  '--description[add a custom description]:description'
+  '--devel[use development versions, too (equivalent to version >0.0.0-0)]'
+  '--disable-openapi-validation[if set, the installation process will not validate rendered templates against the Kubernetes OpenAPI Schema]'
+  '--dry-run[simulate an install]:dry-run mode:(client server true false)'
+  '--enable-dns[enable DNS lookups when rendering templates]'
+  '--force[force resource updates through a replacement strategy]'
+  {-g,--generate-name}'[generate the name (and omit the NAME parameter)]'
+  '--hide-notes[if set, do not show notes in install output]'
+  '--hide-secret[if set, do not output secret values in dry-run output]'
+  '--label[add labels to the release metadata; can be specified multiple times]:key=value'
+  '--name-template[specify template used to name the release]:template'
+  '--no-hooks[prevent hooks from running during install]'
+  {-o,--output}'[prints the output in the specified format]:format:(table json yaml)'
+  '--post-renderer[the path to an executable to be used for post rendering]:executable:_files'
+  '--post-renderer-args[arguments to the post renderer]:args'
+  '--render-subchart-notes[render subchart notes along with the parent]'
+  '--replace[re-use the given name, only if that name is a deleted release which remains in the history]'
+  '--skip-crds[if set, no CRDs will be installed]'
+  '--skip-schema-validation[if set, disables JSON schema validation]'
+  '--timeout[time to wait for any individual Kubernetes operation (like Jobs for hooks) (default 5m0s)]:duration'
+  '--wait[if set, will wait until all Pods, PVCs, Services, and minimum number of Pods of a Deployment, StatefulSet, or ReplicaSet are in a ready state]'
+  '--wait-for-jobs[if set and --wait enabled, will wait until all Jobs have been completed]'
+  $_helm_chart_source_flags
+  $_helm_value_flags
+)
+
+_helm_subcommands() {
+  local -a commands
+  commands=(
+    'completion:generate autocompletion scripts for the specified shell'
+    'create:create a new chart with the given name'
+    'dependency:manage a chart'\''s dependencies'
+    'env:helm client environment information'
+    'get:download extended information of a named release'
+    'history:fetch release history'
+    'install:install a chart'
+    'lint:examine a chart for possible issues'
+    'list:list releases'
+    'package:package a chart directory into a chart archive'
+    'plugin:install, list, or uninstall Helm plugins'
+    'pull:download a chart from a repository and (optionally) unpack it in local directory'
+    'push:push a chart to remote'
+    'registry:login to or logout from a registry'
+    'repo:add, list, remove, update, and index chart repositories'
+    'rollback:roll back a release to a previous revision'
+    'search:search for a keyword in charts'
+    'show:show information of a chart'
+    'status:display the status of the named release'
+    'template:locally render templates'
+    'test:run tests for a release'
+    'uninstall:uninstall a release'
+    'upgrade:upgrade a release'
+    'verify:verify that a chart at the given path has been signed and is valid'
+    'version:print the client version information'
+  )
+  _describe -t commands 'helm command' commands "$@"
+}
+
+_helm_completion() {
+  local -a shells
+  shells=(bash zsh fish powershell)
+  _describe -t shells 'shell' shells
+}
+
+_helm_dependency_subcommands() {
+  local -a subcommands
+  subcommands=(
+    'build:rebuild the charts/ directory based on the Chart.lock file'
+    'list:list the dependencies for the given chart'
+    'update:update charts/ based on the contents of Chart.yaml'
+  )
+  _describe -t subcommands 'dependency subcommand' subcommands
+}
+
+_helm_get_subcommands() {
+  local -a subcommands
+  subcommands=(
+    'all:download all information for a named release'
+    'hooks:download all hooks for a named release'
+    'manifest:download the manifest for a named release'
+    'metadata:download the metadata for a named release'
+    'notes:download the notes for a named release'
+    'values:download the values file for a named release'
+  )
+  _describe -t subcommands 'get subcommand' subcommands
+}
+
+_helm_plugin_subcommands() {
+  local -a subcommands
+  subcommands=(
+    'install:install one or more Helm plugins'
+    'list:list installed Helm plugins'
+    'uninstall:uninstall one or more Helm plugins'
+    'update:update one or more Helm plugins'
+  )
+  _describe -t subcommands 'plugin subcommand' subcommands
+}
+
+_helm_registry_subcommands() {
+  local -a subcommands
+  subcommands=(
+    'login:login to a registry'
+    'logout:logout from a registry'
+  )
+  _describe -t subcommands 'registry subcommand' subcommands
+}
+
+_helm_repo_subcommands() {
+  local -a subcommands
+  subcommands=(
+    'add:add a chart repository'
+    'index:generate an index file given a directory containing packaged charts'
+    'list:list chart repositories'
+    'remove:remove one or more chart repositories'
+    'update:update information of available charts locally from chart repositories'
+  )
+  _describe -t subcommands 'repo subcommand' subcommands
+}
+
+_helm_search_subcommands() {
+  local -a subcommands
+  subcommands=(
+    'hub:search for charts in the Artifact Hub or your own hub instance'
+    'repo:search repositories for a keyword in charts'
+  )
+  _describe -t subcommands 'search subcommand' subcommands
+}
+
+_helm_show_subcommands() {
+  local -a subcommands
+  subcommands=(
+    'all:show all information of the chart'
+    'chart:show the chart'\''s definition'
+    'crds:show the chart'\''s CRDs'
+    'readme:show the chart'\''s README'
+    'values:show the chart'\''s values'
+  )
+  _describe -t subcommands 'show subcommand' subcommands
+}
+
+_arguments -C \
+  $global_flags \
+  '1:command:_helm_subcommands' \
+  '*::arg:->args'
+
+case $state in
+  args)
+    case $line[1] in
+      completion)
+        _arguments \
+          '1:shell:_helm_completion' \
+          '--no-descriptions[disable completion descriptions]' \
+          $global_flags
+        ;;
+      create)
+        _arguments \
+          '--starter[the name or absolute path to Helm starter scaffold]:name:_files' \
+          '1:name' \
+          $global_flags
+        ;;
+      dependency)
+        _arguments -C \
+          '1:subcommand:_helm_dependency_subcommands' \
+          '*::dep-arg:->dep-args' \
+          $global_flags
+
+        case $state in
+          dep-args)
+            case $line[1] in
+              build)
+                _arguments \
+                  '--keyring[keyring containing public keys]:file:_files' \
+                  '--skip-refresh[do not refresh the local repository cache]' \
+                  '--verify[verify the packages against signatures]' \
+                  '1:chart:_files -/' \
+                  $global_flags
+                ;;
+              list)
+                _arguments \
+                  '--max-col-width[maximum column width for output table (default 80)]:width' \
+                  '1:chart:_files -/' \
+                  $global_flags
+                ;;
+              update)
+                _arguments \
+                  '--keyring[keyring containing public keys]:file:_files' \
+                  '--skip-refresh[do not refresh the local repository cache]' \
+                  '--verify[verify the packages against signatures]' \
+                  '1:chart:_files -/' \
+                  $global_flags
+                ;;
+            esac
+            ;;
+        esac
+        ;;
+      env)
+        _arguments $global_flags
+        ;;
+      get)
+        _arguments -C \
+          '1:subcommand:_helm_get_subcommands' \
+          '*::get-arg:->get-args' \
+          $global_flags
+
+        case $state in
+          get-args)
+            case $line[1] in
+              all|hooks|manifest|metadata|notes)
+                _arguments \
+                  '--revision[get the named release with revision]:revision' \
+                  '--template[go template for formatting the output]:template' \
+                  '1:release name' \
+                  $global_flags
+                ;;
+              values)
+                _arguments \
+                  '--revision[get the named release with revision]:revision' \
+                  {-a,--all}'[dump all (computed) values]' \
+                  {-o,--output}'[output format]:format:(table json yaml)' \
+                  '1:release name' \
+                  $global_flags
+                ;;
+            esac
+            ;;
+        esac
+        ;;
+      history)
+        _arguments \
+          '--max[maximum number of revisions to include in history (default 256)]:max' \
+          {-o,--output}'[prints the output in the specified format]:format:(table json yaml)' \
+          '1:release name' \
+          $global_flags
+        ;;
+      install)
+        _arguments \
+          $_helm_install_flags \
+          '1:release name' \
+          '2:chart:_files' \
+          $global_flags
+        ;;
+      lint)
+        _arguments \
+          '--quiet[print only warnings and errors]' \
+          '--strict[fail on lint warnings]' \
+          '--with-subcharts[lint dependent charts]' \
+          $_helm_value_flags \
+          '*:chart path:_files -/' \
+          $global_flags
+        ;;
+      list)
+        _arguments \
+          {-A,--all-namespaces}'[list releases across all namespaces]' \
+          {-a,--all}'[show all releases without any filter applied]' \
+          {-d,--date}'[sort by release date]' \
+          '--deployed[show deployed releases (if no other filter, applied by default)]' \
+          '--failed[show failed releases]' \
+          {-f,--filter}'[a regular expression (RE2) filter on releases; only list matching]:regex' \
+          {-m,--max}'[maximum number of releases to fetch (default 256)]:max' \
+          '--no-headers[don'\''t print headers when using the default output format]' \
+          {-o,--output}'[prints the output in the specified format]:format:(table json yaml)' \
+          '--pending[show pending releases]' \
+          {-q,--short}'[output short (quiet) listing format]' \
+          {-r,--reverse}'[reverse the sort order]' \
+          '--selector[selector (label query) to filter on, supports =, ==, and !=]:selector' \
+          '--superseded[show superseded releases]' \
+          '--time-format[format time using golang time formatter]:format' \
+          '--uninstalled[show uninstalled releases (if --all is given, this is set automatically)]' \
+          '--uninstalling[show releases that are currently being uninstalled]' \
+          {-l,--offset}'[next release name in the list, used to offset to start of list]:offset' \
+          $global_flags
+        ;;
+      package)
+        _arguments \
+          '--app-version[set the appVersion on the chart to this version]:version' \
+          {-u,--dependency-update}'[update dependencies from "Chart.yaml" to dir "charts/" before packaging]' \
+          {-d,--destination}'[location to write the chart]:dir:_directories' \
+          '--key[name of the key to use when signing. Used if --sign is true]:key' \
+          '--keyring[location of a public keyring]:file:_files' \
+          '--passphrase-file[location of a file which contains the passphrase for the signing key]:file:_files' \
+          '--sign[use a PGP private key to sign this package]' \
+          '--version[set the version on the chart to this semver version]:version' \
+          '*:chart path:_files -/' \
+          $global_flags
+        ;;
+      plugin)
+        _arguments -C \
+          '1:subcommand:_helm_plugin_subcommands' \
+          '*::plugin-arg:->plugin-args' \
+          $global_flags
+
+        case $state in
+          plugin-args)
+            case $line[1] in
+              install)
+                _arguments \
+                  '--version[specify a version constraint]:version' \
+                  '1:plugin (path, URL, or plugin name)' \
+                  $global_flags
+                ;;
+              list)
+                _arguments $global_flags
+                ;;
+              uninstall)
+                _arguments '1:plugin name' $global_flags
+                ;;
+              update)
+                _arguments '1:plugin name' $global_flags
+                ;;
+            esac
+            ;;
+        esac
+        ;;
+      pull)
+        _arguments \
+          '--destination[location to write the chart. If using --untar, this is the parent dir]:dir:_directories' \
+          '--devel[use development versions, too (equivalent to version >0.0.0-0)]' \
+          '--prov[fetch the provenance file, but don'\''t perform verification]' \
+          '--untar[if set to true, will untar the chart after downloading it]' \
+          '--untardir[if untar is specified, this flag specifies the name of the directory]:dir:_directories' \
+          $_helm_chart_source_flags \
+          '1:chart' \
+          $global_flags
+        ;;
+      push)
+        _arguments \
+          '--ca-file[verify certificates of HTTPS-enabled servers using this CA bundle]:file:_files'  \
+          '--cert-file[identify HTTPS client using this SSL certificate file]:file:_files' \
+          '--insecure-skip-tls-verify[skip tls certificate checks for the chart upload]' \
+          '--key-file[identify HTTPS client using this SSL key file]:file:_files' \
+          '--plain-http[use insecure HTTP connections for the chart upload]' \
+          '1:chart:_files' \
+          '2:remote URL' \
+          $global_flags
+        ;;
+      registry)
+        _arguments -C \
+          '1:subcommand:_helm_registry_subcommands' \
+          '*::reg-arg:->reg-args' \
+          $global_flags
+
+        case $state in
+          reg-args)
+            case $line[1] in
+              login)
+                _arguments \
+                  '--ca-file[verify certificates of HTTPS-enabled servers using this CA bundle]:file:_files' \
+                  '--cert-file[identify HTTPS client using this SSL certificate file]:file:_files' \
+                  '--insecure[allow connections to TLS registry without certs]' \
+                  '--key-file[identify HTTPS client using this SSL key file]:file:_files' \
+                  {-p,--password}'[registry password or identity token]:password' \
+                  '--password-stdin[read password or identity token from stdin]' \
+                  {-u,--username}'[registry username]:username' \
+                  '1:host' \
+                  $global_flags
+                ;;
+              logout)
+                _arguments \
+                  '1:host' \
+                  $global_flags
+                ;;
+            esac
+            ;;
+        esac
+        ;;
+      repo)
+        _arguments -C \
+          '1:subcommand:_helm_repo_subcommands' \
+          '*::repo-arg:->repo-args' \
+          $global_flags
+
+        case $state in
+          repo-args)
+            case $line[1] in
+              add)
+                _arguments \
+                  '--allow-deprecated-repos[by default, this command will not allow adding official repos that have been permanently deleted]' \
+                  '--ca-file[verify certificates of HTTPS-enabled servers using this CA bundle]:file:_files' \
+                  '--cert-file[identify HTTPS client using this SSL certificate file]:file:_files' \
+                  '--force-update[replace (overwrite) the repo if it already exists]' \
+                  '--insecure-skip-tls-verify[skip TLS certificate checks for the repository]' \
+                  '--key-file[identify HTTPS client using this SSL key file]:file:_files' \
+                  '--no-update[ignored; formerly raised an error if the repo was already registered]' \
+                  '--pass-credentials[pass credentials to all domains]' \
+                  '--password[chart repository password]:password' \
+                  '--password-stdin[read chart repository password from stdin]' \
+                  '--username[chart repository username]:username' \
+                  '1:name' \
+                  '2:url' \
+                  $global_flags
+                ;;
+              index)
+                _arguments \
+                  '--merge[merge the generated index into the given index]:file:_files' \
+                  '--url[url of chart repository]:url' \
+                  '1:directory:_directories' \
+                  $global_flags
+                ;;
+              list)
+                _arguments \
+                  {-o,--output}'[prints the output in the specified format]:format:(table json yaml)' \
+                  $global_flags
+                ;;
+              remove)
+                _arguments \
+                  '*:repository name' \
+                  $global_flags
+                ;;
+              update)
+                _arguments \
+                  '--fail-on-repo-update-fail[update fails if any of the repository updates fail]' \
+                  '*:repository name' \
+                  $global_flags
+                ;;
+            esac
+            ;;
+        esac
+        ;;
+      rollback)
+        _arguments \
+          '--cleanup-on-fail[allow deletion of new resources created in this rollback when rollback fails]' \
+          '--dry-run[simulate a rollback]' \
+          '--force[force resource update through delete/recreate if needed]' \
+          '--history-max[limit the maximum number of revisions saved per release (default 10)]:max' \
+          '--no-hooks[prevent hooks from running during rollback]' \
+          '--recreate-pods[performs pods restart for the resource if applicable]' \
+          '--timeout[time to wait for any individual Kubernetes operation (default 5m0s)]:duration' \
+          '--wait[if set, will wait until all Pods, PVCs, Services and min number of Pods are in ready state]' \
+          '--wait-for-jobs[if set and --wait enabled, will wait until all Jobs have been completed]' \
+          '1:release name' \
+          '2:revision' \
+          $global_flags
+        ;;
+      search)
+        _arguments -C \
+          '1:subcommand:_helm_search_subcommands' \
+          '*::search-arg:->search-args' \
+          $global_flags
+
+        case $state in
+          search-args)
+            case $line[1] in
+              hub)
+                _arguments \
+                  '--endpoint[Hub instance to query for charts (default "https://hub.helm.sh")]:url' \
+                  '--fail-on-no-result[search fails if no results are found]' \
+                  '--list-repo-url[print charts repository URL]' \
+                  '--max-col-width[maximum column width for output table (default 50)]:width' \
+                  {-o,--output}'[prints the output in the specified format]:format:(table json yaml)' \
+                  '*:keyword' \
+                  $global_flags
+                ;;
+              repo)
+                _arguments \
+                  '--devel[use development versions (alpha, beta, and release candidate releases), too]' \
+                  '--max-col-width[maximum column width for output table (default 50)]:width' \
+                  {-o,--output}'[prints the output in the specified format]:format:(table json yaml)' \
+                  {-r,--regexp}'[use regular expressions for searching repositories]' \
+                  '--version[search using semantic versioning constraints on repositories]:version' \
+                  {-l,--versions}'[show the long listing, each version of every chart on its own line]' \
+                  '--fail-on-no-result[search fails if no results are found]' \
+                  '*:keyword' \
+                  $global_flags
+                ;;
+            esac
+            ;;
+        esac
+        ;;
+      show)
+        _arguments -C \
+          '1:subcommand:_helm_show_subcommands' \
+          '*::show-arg:->show-args' \
+          $global_flags
+
+        case $state in
+          show-args)
+            _arguments \
+              '--devel[use development versions, too]' \
+              $_helm_chart_source_flags \
+              '*:chart:_files' \
+              $global_flags
+            ;;
+        esac
+        ;;
+      status)
+        _arguments \
+          {-o,--output}'[prints the output in the specified format]:format:(table json yaml)' \
+          '--revision[if set, display the status of the named release with revision]:revision' \
+          '--show-desc[if set, display the description message of the named release]' \
+          '--show-resources[if set, display the resources of the named release]' \
+          '1:release name' \
+          $global_flags
+        ;;
+      template)
+        _arguments \
+          $_helm_install_flags \
+          {-a,--api-versions}'[Kubernetes api versions used for Capabilities.APIVersions]:versions' \
+          '--include-crds[include CRDs in the templated output]' \
+          '--is-upgrade[set .Release.IsUpgrade instead of .Release.IsInstall]' \
+          '--kube-version[Kubernetes version used for Capabilities.KubeVersion]:version' \
+          '--output-dir[writes the executed templates to files in output-dir instead of stdout]:dir:_directories' \
+          '--release-name[use release name in the output-dir path]' \
+          '--show-only[only show manifests rendered from the given templates]:template' \
+          '--validate[validate your manifests against the Kubernetes cluster you are currently pointing at]' \
+          '1:release name' \
+          '2:chart:_files' \
+          $global_flags
+        ;;
+      test)
+        _arguments \
+          '*--filter[specify tests by their name]:filter' \
+          '--logs[dump the logs from test pods (this runs after all tests are complete, but before any cleanup)]' \
+          '--timeout[time to wait for any individual Kubernetes operation (default 5m0s)]:duration' \
+          '1:release name' \
+          $global_flags
+        ;;
+      uninstall)
+        _arguments \
+          '--cascade[must be "background", "orphan", or "foreground". Selects the deletion cascading strategy. (default "background")]:strategy:(background orphan foreground)' \
+          '--description[add a custom description]:description' \
+          '--dry-run[simulate a uninstall]:dry-run mode:(client server true false)' \
+          '--ignore-not-found[treat "release not found" as a successful uninstall]' \
+          '--keep-history[remove all associated resources and mark the release as deleted, but retain the release history]' \
+          '--no-hooks[prevent hooks from running during uninstallation]' \
+          '--timeout[time to wait for any individual Kubernetes operation (default 5m0s)]:duration' \
+          '--wait[if set, will wait until all the resources are deleted before returning]' \
+          '*:release name' \
+          $global_flags
+        ;;
+      upgrade)
+        _arguments \
+          $_helm_install_flags \
+          '--cleanup-on-fail[allow deletion of new resources created in this upgrade when upgrade fails]' \
+          '--history-max[limit the maximum number of revisions saved per release (default 10)]:max' \
+          {-i,--install}'[if a release by this name doesn'\''t already exist, run an install]' \
+          '--reset-values[when upgrading, reset the values to the ones built into the chart]' \
+          '--reset-then-reuse-values[when upgrading, reset the values to the ones built into the chart, apply the last release'\''s values and merge in any overrides from the command line via --set and -f]' \
+          '--reuse-values[when upgrading, reuse the last release'\''s values and merge in any overrides from the command line via --set and -f]' \
+          '1:release name' \
+          '2:chart:_files' \
+          $global_flags
+        ;;
+      verify)
+        _arguments \
+          '--keyring[keyring containing public keys (default "~/.gnupg/pubring.gpg")]:file:_files' \
+          '1:path:_files' \
+          $global_flags
+        ;;
+      version)
+        _arguments \
+          '--short[print the version number]' \
+          '--template[template for the version string format]:template' \
+          $global_flags
+        ;;
+    esac
+    ;;
+esac

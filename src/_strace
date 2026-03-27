@@ -1,44 +1,179 @@
 #compdef strace
 
-local arguments
+# Zsh completion for strace (Linux syscall tracer, version 6.x+)
 
-arguments=(
-  '-p[... / \[-D\] \[-E var=val\]... \[-u username\] PROG \[ARGS\]]'
-  '-p[... / \[-D\] \[-E var=val\]... \[-u username\] PROG \[ARGS\]]'
-  '-a[alignment COLUMN for printing syscall results (default 40)]'
-  '-i[print instruction pointer at time of syscall]'
-  '-o[send trace output to FILE instead of stderr]'
-  '-q[suppress messages about attaching, detaching, etc.]'
-  '-r[print relative timestamp]'
-  '-s[limit length of print strings to STRSIZE chars (default 32)]'
-  '-t[print absolute timestamp]'
-  '-tt[print absolute timestamp with usecs]'
-  '-T[print time spent in each syscall]'
-  '-x[print non-ascii strings in hex]'
-  '-xx[print all strings in hex]'
-  '-y[print paths associated with file descriptor arguments]'
-  '-yy[print protocol specific information associated with socket file descriptors]'
-  '-c[count time, calls, and errors for each syscall and report summary]'
-  '-C[like -c but also print regular output]'
-  '-O[set overhead for tracing syscalls to OVERHEAD usecs]'
-  '-S[sort syscall counts by: time, calls, name, nothing (default time)]'
-  '-w[summarise syscall latency (default is system time)]'
-  '-e[a qualifying expression: option=\[!\]all or option=\[!\]val1\[,val2\]...]'
-  '-P[trace accesses to path]'
-  '-b[detach on execve syscall]'
-  '-D[run tracer process as a detached grandchild, not as parent]'
-  '-f[follow forks]'
-  '-ff[follow forks with output into separate files]'
-  '-I[1: no signals are blocked]'
-  '-E[remove var from the environment for command]'
-  '-E[val put var=val in the environment for command]'
-  '-p[trace process with process id PID, may be repeated]'
-  '-u[run command as username handling setuid and/or setgid]'
-  '-d[enable debug output to stderr]'
-  '-v[verbose mode: print unabbreviated argv, stat, termios, etc. args]'
-  '-h[print help message]'
-  '-V[print version]'
-  '*:filename:_files'
-)
+_strace_syscalls() {
+  local -a syscalls
+  if [[ -r /proc/kallsyms ]]; then
+    syscalls=( ${${(f)"$(sed -n 's/.*\bsys_\([a-z0-9_]*\)$/\1/p' /proc/kallsyms 2>/dev/null)"}:#} )
+  elif (( $+commands[ausyscall] )); then
+    syscalls=( ${${(f)"$(ausyscall --dump 2>/dev/null | awk '{print $2}')"}:#} )
+  fi
+  if (( $#syscalls )); then
+    _values -s , 'syscall' $syscalls
+  else
+    _message 'syscall name or number'
+  fi
+}
 
-_arguments -s $arguments
+_strace_trace_sets() {
+  local -a sets
+  sets=(
+    '%file:trace file-related syscalls'
+    '%process:trace process-related syscalls'
+    '%network:trace network-related syscalls'
+    '%signal:trace signal-related syscalls'
+    '%ipc:trace IPC-related syscalls'
+    '%desc:trace file descriptor-related syscalls'
+    '%memory:trace memory mapping-related syscalls'
+    '%pure:trace syscalls that always succeed and have no arguments'
+    '%creds:trace credential-related syscalls'
+    '%clock:trace clock-related syscalls'
+    '%stat:trace stat-related and stat-like syscalls'
+    '%%stat:trace syscalls used for stat-like purposes'
+    '%lstat:trace lstat-related syscalls'
+    '%%lstat:trace syscalls used for lstat-like purposes'
+    '%fstat:trace fstat-related syscalls'
+    '%%fstat:trace syscalls used for fstat-like purposes'
+    '%statfs:trace statfs-related syscalls'
+    '%%statfs:trace syscalls used for statfs-like purposes'
+    '%fstatfs:trace fstatfs-related syscalls'
+    '%%fstatfs:trace syscalls used for fstatfs-like purposes'
+    'all:trace all syscalls'
+    'none:trace no syscalls'
+  )
+  _describe -t sets 'trace set' sets
+}
+
+_strace_signals() {
+  local -a sigs
+  sigs=(
+    'SIGHUP' 'SIGINT' 'SIGQUIT' 'SIGILL' 'SIGTRAP' 'SIGABRT'
+    'SIGBUS' 'SIGFPE' 'SIGKILL' 'SIGUSR1' 'SIGSEGV' 'SIGUSR2'
+    'SIGPIPE' 'SIGALRM' 'SIGTERM' 'SIGSTKFLT' 'SIGCHLD' 'SIGCONT'
+    'SIGSTOP' 'SIGTSTP' 'SIGTTIN' 'SIGTTOU' 'SIGURG' 'SIGXCPU'
+    'SIGXFSZ' 'SIGVTALRM' 'SIGPROF' 'SIGWINCH' 'SIGIO' 'SIGPWR'
+    'SIGSYS' 'all'
+  )
+  _values -s , 'signal' $sigs
+}
+
+_strace_expression() {
+  local -a qualifiers
+  qualifiers=(
+    'trace:specify set of syscalls to trace'
+    'abbrev:abbreviate output of large structures'
+    'verbose:dereference structures for specified syscalls'
+    'raw:print raw undecoded arguments for specified syscalls'
+    'signal:trace only specified signals'
+    'read:perform hex/ASCII dump of read data on file descriptors'
+    'write:perform hex/ASCII dump of write data on file descriptors'
+    'fault:perform syscall fault injection'
+    'inject:perform syscall injection'
+    'status:trace only syscalls with the specified return status'
+    'kvm:print the exit reason of kvm vcpu'
+    'decode-fds:decode file descriptor information'
+    'decode-pids:decode PID information'
+  )
+  _describe -t qualifiers 'qualifying expression' qualifiers -S =
+}
+
+_strace() {
+  local curcontext="$curcontext"
+
+  _arguments -s -S \
+    '-a+[set alignment column for printing syscall results]:column number' \
+    '-A[open output file in append mode]' \
+    '-b+[detach on the specified syscall]:syscall:(execve)' \
+    '-c[count time, calls, and errors for each syscall; print summary on exit]' \
+    '-C[like -c, but also print regular output while processes are running]' \
+    '-d[enable debug output to stderr of strace itself]' \
+    '-D+[run tracer process as a detached grandchild]:type:((1\:grandchild 2\:grandchild\ in\ separate\ pgroup 3\:grandchild\ in\ separate\ session))' \
+    '--daemonize=-[run tracer process as a detached grandchild]::type:((grandchild pgroup session))' \
+    '*-e+[qualifying expression]:expression:_strace_expression' \
+    '--trace=[trace only the specified set of syscalls]:set:_strace_trace_sets' \
+    '--trace-fds=[trace only syscalls operating on the specified fds]:fd set' \
+    '--signal=[trace only the specified set of signals]:set:_strace_signals' \
+    '--status=[trace only syscalls with the specified return status]:status:_values -s , status successful failed unfinished unavailable detached' \
+    '--read=[perform full hex/ASCII dump of read data on these fds]:fd set' \
+    '--write=[perform full hex/ASCII dump of write data on these fds]:fd set' \
+    '--fault=[inject faults for the specified set of syscalls]:expression' \
+    '--inject=[inject errors/delays for the specified set of syscalls]:expression' \
+    '--kvm=[print the exit reason of kvm vcpu]:vcpu:(vcpu)' \
+    '*-E+[set or remove environment variable for command]:var=val' \
+    '-f[trace child processes created by currently traced processes via fork/clone/vfork]' \
+    '--follow-forks[same as -f]' \
+    '-ff[write each process trace to a separate file (requires -o)]' \
+    '--output-separately[output into separate files for each traced process (requires -o)]' \
+    {-h,--help}'[print help message]' \
+    '-i[print instruction pointer at time of syscall]' \
+    '--instruction-pointer[print instruction pointer at time of syscall]' \
+    '-I+[control strace interruptibility]:mode:((1\:"no signals blocked" 2\:"fatal signals blocked while decoding" 3\:"fatal signals always blocked" 4\:"fatal+SIGTSTP blocked, never interrupted"))' \
+    '--interruptible=[control strace interruptibility]:mode:((anywhere\:"no signals blocked" waiting\:"fatal signals blocked while decoding" never\:"fatal signals always blocked" never_tstp\:"fatal+SIGTSTP blocked"))' \
+    '-k[print stack trace for each syscall]' \
+    '--stack-traces[print stack trace for each syscall]' \
+    '--stack-trace-frame-limit=[limit the number of stack frames printed]:number' \
+    '-n[print syscall numbers]' \
+    '--syscall-number[print syscall numbers]' \
+    '-o+[send trace output to file instead of stderr]:file:_files' \
+    '--output=[send trace output to file instead of stderr]:file:_files' \
+    '-O+[overhead in usecs to subtract per traced syscall]:microseconds' \
+    '-p+[attach to and trace process with specified PID]:pid:_pids' \
+    '--attach=[attach to and trace process with specified PID]:pid:_pids' \
+    '*-P+[trace only syscalls accessing specified path]:path:_files' \
+    '*--trace-path=[trace only syscalls accessing specified path]:path:_files' \
+    '-q[suppress messages about attaching, detaching, etc.]' \
+    '-qq[suppress messages about process exit status as well]' \
+    '-qqq[suppress all suppressible messages]' \
+    '--quiet=[suppress various informational messages]:set:_values -s , message attach personality exit all' \
+    '--silent=[suppress various informational messages]:set:_values -s , message attach personality exit all' \
+    '-r[print relative timestamp upon entry to each syscall]' \
+    '--relative-timestamps[print relative timestamp upon entry to each syscall]' \
+    '--relative-timestamps=[print relative timestamp with specified precision]::precision:(s ms us ns)' \
+    '-s+[limit length of printed strings to STRSIZE chars]:max string size' \
+    '--string-limit=[limit length of printed strings]:max string size' \
+    '-S+[sort syscall counts by specified criterion]:sort key:(time time-percent calls errors name nothing)' \
+    '--summary-sort-by=[sort syscall counts by specified criterion]:sort key:(time time-percent calls errors name nothing)' \
+    '--summary-columns=[set the syscall summary columns to show]:columns:_values -s , column time-percent time time-avg calls errors name' \
+    '-U+[set the syscall summary columns to show]:columns:_values -s , column time-percent time time-avg calls errors name' \
+    '--seccomp-bpf[use seccomp-bpf to restrict syscalls, improving performance]' \
+    '-z[trace only syscalls that returned without error]' \
+    '--successful-only[trace only syscalls that returned without error]' \
+    '-Z[trace only syscalls that returned with an error]' \
+    '--failed-only[trace only syscalls that returned with an error]' \
+    '-t[prefix each line with the wall clock time]' \
+    '-tt[prefix each line with the wall clock time including usecs]' \
+    '-ttt[prefix each line with the unix epoch time including usecs]' \
+    '-T[show time spent in each syscall]' \
+    '--syscall-times[show time spent in each syscall]' \
+    '--syscall-times=[show time spent in each syscall with specified precision]::precision:(s ms us ns)' \
+    '--absolute-timestamps[print absolute timestamps]' \
+    '--absolute-timestamps=[print absolute timestamps with options]::format:(none time unix us ms ns)' \
+    '--timestamps=[print timestamps]::format:(none time unix us ms ns)' \
+    '-u+[run command with specified user credentials]:username:_users' \
+    '--username=[run command with specified user credentials]:username:_users' \
+    '-v[verbose mode: print unabbreviated argv, stat, termios, etc.]' \
+    '--no-abbrev[verbose mode: do not abbreviate structures]' \
+    '-V[print strace version]' \
+    '-w[summarise syscall latency (wall clock time instead of system time)]' \
+    '--summary-wall-clock[summarise using wall clock time for latency]' \
+    '-x[print non-ASCII strings in hex]' \
+    '-xx[print all strings in hex]' \
+    '-X+[set the format for printing named constants and flags]:format:(raw abbrev verbose)' \
+    '--const-print-style=[format of named constants and flags]:style:(raw abbrev verbose)' \
+    '-y[print paths associated with file descriptor arguments]' \
+    '-yy[print protocol-specific info for socket fds and block/char device numbers]' \
+    '-Y[print command name associated with PIDs]' \
+    '--decode-fds=[print various information associated with fds]:set:_values -s , fd-info path socket dev pidfd signalfd' \
+    '--decode-pids=[decode PID information]:set:_values -s , pid-info comm pidns' \
+    '--strings-in-hex=[control hex printing of strings]:mode:(none all non-ascii-chars non-ascii)' \
+    '-l[list only: display matching syscall names for -e trace expression]' \
+    '--list-syscalls[list only: display matching syscall names for -e trace expression]' \
+    '--tips=[control tip display at the end of output]:mode:((none\:"no tips" id\:"specific tip by id" random\:"random tip"))' \
+    '--secontext=[print SELinux contexts]:format:_values -s , format full mismatch' \
+    '--pidns-translation[show translated PIDs in PID namespace contexts]' \
+    '--argv0=[set argv\[0\] of the command being traced]:name' \
+    '*:command:_command_names -e'
+}
+
+_strace "$@"

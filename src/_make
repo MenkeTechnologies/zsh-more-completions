@@ -1,40 +1,164 @@
-#compdef make
+#compdef make gmake
 
-local arguments
+# Zsh completion for GNU Make
+# Provides option completion and Makefile target extraction
 
-arguments=(
-  {-b,-m}'[ignored for compatibility.]'
-  {-B,--always-make}'[unconditionally make all targets.]'
-  {-C,--directory}'[change to DIRECTORY before doing anything.]'
-  '-d[print lots of debugging information.]'
-  '--debug[print various types of debugging information.]'
-  {-e,--environment-overrides}'[environment variables override makefiles.]'
-  '--eval[evaluate STRING as a makefile statement.]'
-  {-f,--file,--makefile}'[read FILE as a makefile.]'
-  '(- * :)'{-h,--help}'[print this message and exit.]'
-  {-i,--ignore-errors}'[ignore errors from recipes.]'
-  {-I,--include-dir}'[search DIRECTORY for included makefiles.]'
-  {-j,--jobs}'[allow N jobs at once; infinite jobs with no arg.]'
-  {-k,--keep-going}'[keep going when some targets cant be made.]'
-  {-l,--load-average,--max-load}'[dont start multiple jobs unless load is below N.]'
-  {-L,--check-symlink-times}'[use the latest mtime between symlinks and target.]'
-  {-n,--just-print,--dry-run,--recon}'[dont actually run any recipe; just print them.]'
-  {-o,--old-file,--assume-old}'[consider FILE to be very old and dont remake it.]'
-  {-O,--output-sync}'[synchronize output of parallel jobs by TYPE.]'
-  {-p,--print-data-base}'[print makes internal database.]'
-  {-q,--question}'[run no recipe; exit status says if up to date.]'
-  {-r,--no-builtin-rules}'[disable the built-in implicit rules.]'
-  {-R,--no-builtin-variables}'[disable the built-in variable settings.]'
-  {-s,--silent,--quiet}'[dont echo recipes.]'
-  {-S,--no-keep-going,--stop}'[turns off -k.]'
-  {-t,--touch}'[touch targets instead of remaking them.]'
-  '--trace[print tracing information.]'
-  {-v,--version}'[print the version number of make and exit.]'
-  {-w,--print-directory}'[print the current directory.]'
-  '--no-print-directory[turn off -w, even if it was turned on implicitly.]'
-  {-W,--what-if,--new-file,--assume-new}'[consider FILE to be infinitely new.]'
-  '--warn-undefined-variables[warn when an undefined variable is referenced.]'
-  '*:filename:_files'
-)
+_make_targets() {
+  local -a makefile targets
+  local file dir
 
-_arguments -s $arguments
+  # Determine which makefile to parse
+  # Check for -f/--file/--makefile argument first
+  for (( i = 1; i < ${#words[@]}; i++ )); do
+    case "${words[$i]}" in
+      -f|-f*|--file=*|--makefile=*)
+        if [[ "${words[$i]}" == -f && -n "${words[$((i+1))]}" ]]; then
+          file="${words[$((i+1))]}"
+        elif [[ "${words[$i]}" == -f* ]]; then
+          file="${words[$i]#-f}"
+        elif [[ "${words[$i]}" == --file=* ]]; then
+          file="${words[$i]#--file=}"
+        elif [[ "${words[$i]}" == --makefile=* ]]; then
+          file="${words[$i]#--makefile=}"
+        fi
+        ;;
+    esac
+  done
+
+  # Check for -C/--directory argument to change base directory
+  dir="."
+  for (( i = 1; i < ${#words[@]}; i++ )); do
+    case "${words[$i]}" in
+      -C)
+        [[ -n "${words[$((i+1))]}" ]] && dir="${words[$((i+1))]}"
+        ;;
+      -C*)
+        dir="${words[$i]#-C}"
+        ;;
+      --directory=*)
+        dir="${words[$i]#--directory=}"
+        ;;
+    esac
+  done
+
+  # If no -f specified, look for default makefiles
+  if [[ -z "$file" ]]; then
+    for f in GNUmakefile makefile Makefile; do
+      if [[ -f "$dir/$f" ]]; then
+        file="$dir/$f"
+        break
+      fi
+    done
+  elif [[ "$file" != /* ]]; then
+    file="$dir/$file"
+  fi
+
+  if [[ -n "$file" && -r "$file" ]]; then
+    # Extract targets from the makefile
+    # Match lines that look like "target: ..." but skip variable assignments,
+    # comments, pattern rules (%), and special targets (.PHONY, etc.)
+    targets=(${(f)"$(
+      command sed -n \
+        -e '/^[[:space:]]*#/d' \
+        -e '/^[[:space:]]*$/d' \
+        -e '/^[%.]/d' \
+        -e 's/^\([a-zA-Z0-9_][a-zA-Z0-9_./-]*\)[[:space:]]*[:].*/\1/p' \
+        "$file" 2>/dev/null
+    )"})
+
+    # Also extract .PHONY targets if present
+    local phony_targets=(${(f)"$(
+      command sed -n 's/^\.PHONY[[:space:]]*:[[:space:]]*//p' "$file" 2>/dev/null
+    )"})
+    targets+=($phony_targets)
+
+    # Deduplicate
+    targets=(${(u)targets})
+  fi
+
+  # Add common conventional targets as fallback descriptions
+  local -a described_targets
+  for t in $targets; do
+    case "$t" in
+      all)          described_targets+=("$t:build all targets") ;;
+      clean)        described_targets+=("$t:remove build artifacts") ;;
+      install)      described_targets+=("$t:install to system") ;;
+      uninstall)    described_targets+=("$t:uninstall from system") ;;
+      test|check)   described_targets+=("$t:run tests") ;;
+      dist)         described_targets+=("$t:create distribution archive") ;;
+      distclean)    described_targets+=("$t:remove all generated files") ;;
+      help)         described_targets+=("$t:show help") ;;
+      *)            described_targets+=("$t") ;;
+    esac
+  done
+
+  if (( ${#described_targets} )); then
+    _describe 'target' described_targets
+  else
+    _files
+  fi
+}
+
+_make_debug_flags() {
+  local -a flags
+  flags=(
+    'a:all debugging output (same as -d)'
+    'b:basic debugging'
+    'v:verbose basic debugging'
+    'i:show implicit rules'
+    'j:details on command invocation'
+    'm:debugging while remaking makefiles'
+    'n:no debugging (disable all flags)'
+  )
+  _describe -t flags 'debug flag' flags
+}
+
+_make_sync_types() {
+  local -a types
+  types=(
+    'none:no output synchronization'
+    'line:synchronize by line'
+    'target:synchronize by target'
+    'recurse:synchronize by recursive make'
+  )
+  _describe -t types 'sync type' types
+}
+
+_make() {
+  _arguments -s -S \
+    {-b,-m}'[ignored for compatibility]' \
+    {-B,--always-make}'[unconditionally make all targets]' \
+    '*'{-C+,--directory=}'[change to directory before doing anything]:directory:_directories' \
+    '-d[print lots of debugging information]' \
+    '--debug=-[print various types of debugging information]::flags:_make_debug_flags' \
+    {-e,--environment-overrides}'[environment variables override makefiles]' \
+    '--eval=[evaluate string as a makefile statement]:string: ' \
+    '*'{-f+,--file=,--makefile=}'[read file as a makefile]:makefile:_files' \
+    '(- *)'{-h,--help}'[print help message and exit]' \
+    {-i,--ignore-errors}'[ignore errors from recipes]' \
+    '*'{-I+,--include-dir=}'[search directory for included makefiles]:directory:_directories' \
+    {-j+,--jobs=}'[allow N jobs at once; infinite jobs with no arg]:number of jobs: ' \
+    {-k,--keep-going}'[keep going when some targets cannot be made]' \
+    {-l+,--load-average=,--max-load=}'[do not start multiple jobs unless load is below N]:load average: ' \
+    {-L,--check-symlink-times}'[use the latest mtime between symlinks and target]' \
+    {-n,--just-print,--dry-run,--recon}'[do not actually run any recipe; just print them]' \
+    '*'{-o+,--old-file=,--assume-old=}'[consider file to be very old and do not remake it]:file:_files' \
+    {-O+,--output-sync=}'[synchronize output of parallel jobs by type]:sync type:_make_sync_types' \
+    {-p,--print-data-base}'[print internal database of make]' \
+    {-q,--question}'[run no recipe; exit status says if up to date]' \
+    {-r,--no-builtin-rules}'[disable the built-in implicit rules]' \
+    {-R,--no-builtin-variables}'[disable the built-in variable settings]' \
+    {-s,--silent,--quiet}'[do not echo recipes]' \
+    {-S,--no-keep-going,--stop}'[turns off -k]' \
+    {-t,--touch}'[touch targets instead of remaking them]' \
+    '--trace[print tracing information]' \
+    '(- *)'{-v,--version}'[print the version number of make and exit]' \
+    {-w,--print-directory}'[print the current directory]' \
+    '--no-print-directory[turn off -w, even if it was turned on implicitly]' \
+    '*'{-W+,--what-if=,--new-file=,--assume-new=}'[consider file to be infinitely new]:file:_files' \
+    '--warn-undefined-variables[warn when an undefined variable is referenced]' \
+    '--shuffle=-[randomize order of targets and prerequisites]:seed: ' \
+    '*:target:_make_targets'
+}
+
+_make "$@"

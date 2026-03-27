@@ -1,16 +1,95 @@
 #compdef timedatectl
 
-local arguments
+# Zsh completion for timedatectl (systemd time and date management)
 
-arguments=(
-  '(- * :)'{-h,--help}'[show this help message]'
-  '--version[show package version]'
-  '--no-pager[do not pipe output into a pager]'
-  '--no-ask-password[do not prompt for password]'
-  {-H,--host}'[@\]HOST Operate on remote host]'
-  {-M,--machine}'[operate on local container]'
-  '--adjust-system-clock[system clock when changing local RTC mode]'
-  '*:filename:_files'
-)
+_timedatectl() {
+    local curcontext="$curcontext" state line ret=1
+    typeset -A opt_args
 
-_arguments -s $arguments
+    local -a global_opts
+    global_opts=(
+        '(- *)'{-h,--help}'[show help message]'
+        '(- *)--version[show package version]'
+        '--no-pager[do not pipe output into a pager]'
+        '--no-ask-password[do not prompt for password]'
+        {-H,--host}'[execute the operation on a remote host]:user@host:_hosts'
+        {-M,--machine}'[execute the operation on a local container]:container'
+        '--adjust-system-clock[adjust system clock when changing local RTC mode or timezone]'
+        '--monitor[monitor status of systemd-timesyncd]'
+        {-p,--property}'[show only properties by this name]:property'
+        {-a,--all}'[show all properties, including empty ones]'
+        '--value[when showing properties, only print the value]'
+        '(-): :->command'
+        '(-)*:: :->option-or-argument'
+    )
+
+    _arguments -s -C $global_opts && ret=0
+
+    case $state in
+        (command)
+            local -a commands
+            commands=(
+                'status:show current time settings'
+                'show:show properties of systemd-timedated'
+                'set-time:set the system time'
+                'set-timezone:set the system timezone'
+                'list-timezones:show known timezones'
+                'set-local-rtc:control whether RTC is in local time'
+                'set-ntp:control whether NTP is enabled'
+                'timesync-status:show status of systemd-timesyncd'
+                'ntp-servers:set NTP servers for an interface'
+                'revert:revert NTP server configuration for an interface'
+            )
+            _describe -t commands 'timedatectl command' commands && ret=0
+            ;;
+        (option-or-argument)
+            curcontext=${curcontext%:*:*}:timedatectl-$words[1]:
+            case $words[1] in
+                set-time)
+                    _message 'time (YYYY-MM-DD HH:MM:SS)' && ret=0
+                    ;;
+                set-timezone)
+                    local -a timezones
+                    if timezones=(${(f)"$(timedatectl list-timezones 2>/dev/null)"}); then
+                        _describe -t timezones 'timezone' timezones && ret=0
+                    else
+                        _message 'timezone' && ret=0
+                    fi
+                    ;;
+                set-local-rtc)
+                    local -a bool_vals
+                    bool_vals=(
+                        'true:set RTC to local time'
+                        'false:set RTC to UTC'
+                    )
+                    _describe -t values 'boolean' bool_vals && ret=0
+                    ;;
+                set-ntp)
+                    local -a bool_vals
+                    bool_vals=(
+                        'true:enable NTP synchronization'
+                        'false:disable NTP synchronization'
+                    )
+                    _describe -t values 'boolean' bool_vals && ret=0
+                    ;;
+                ntp-servers)
+                    if (( CURRENT == 2 )); then
+                        _net_interfaces && ret=0
+                    else
+                        _message 'NTP server' && ret=0
+                    fi
+                    ;;
+                revert)
+                    _net_interfaces && ret=0
+                    ;;
+                status|show|list-timezones|timesync-status)
+                    ret=0
+                    ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_timedatectl "$@"

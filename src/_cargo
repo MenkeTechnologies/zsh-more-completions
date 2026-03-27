@@ -1,19 +1,631 @@
 #compdef cargo
 
-local arguments
-
-arguments=(
-  {-V,--version}'[print version info and exit]'
-  '--list[list installed commands]'
-  '--explain[run `rustc --explain CODE`]'
-  {-v,--verbose}'[use verbose output (-vv very verbose/build.rs output)]'
-  {-q,--quiet}'[no output printed to stdout]'
-  '--color[coloring: auto, always, never]'
-  '--frozen[require Cargo.lock and cache are up to date]'
-  '--locked[require Cargo.lock is up to date]'
-  '-Z[... Unstable (nightly-only) flags to Cargo, see cargo -Z help for details]'
-  '(- * :)'{-h,--help}'[prints help information]'
-  '*:filename:_files'
+# Helper for common options shared across most subcommands
+_cargo_common_opts=(
+  '(-v --verbose)'{-v,--verbose}'[use verbose output (-vv very verbose)]'
+  '(-q --quiet)'{-q,--quiet}'[do not print cargo log messages]'
+  '--color[coloring]:when:(auto always never)'
+  '*--config[override a configuration value]:config:'
+  '-Z[unstable (nightly-only) flags]:flag:'
+  '(-h --help)'{-h,--help}'[print help information]'
 )
 
-_arguments -s $arguments
+# Helper for manifest options shared across most subcommands
+_cargo_manifest_opts=(
+  '--manifest-path[path to Cargo.toml]:path:_files -g "*.toml"'
+  '--locked[assert that Cargo.lock will remain unchanged]'
+  '--offline[run without accessing the network]'
+  '--frozen[equivalent to specifying both --locked and --offline]'
+)
+
+# Helper for feature selection options
+_cargo_feature_opts=(
+  '(-F --features)'{-F,--features}'[space or comma separated list of features to activate]:features:'
+  '--all-features[activate all available features]'
+  '--no-default-features[do not activate the default feature]'
+)
+
+# Helper for compilation options
+_cargo_compilation_opts=(
+  '(-j --jobs)'{-j,--jobs}'[number of parallel jobs, defaults to # of CPUs]:jobs:'
+  '--keep-going[do not abort the build as soon as there is an error]'
+  '(-r --release)'{-r,--release}'[build artifacts in release mode, with optimizations]'
+  '--profile[build artifacts with the specified profile]:profile:'
+  '--target[build for the target triple]:target:'
+  '--target-dir[directory for all generated artifacts]:directory:_directories'
+  '--timings[output a build timing report at the end of the build]'
+)
+
+# Helper for package selection options (workspace-aware)
+_cargo_package_opts=(
+  '(-p --package)'{-p,--package}'[package to operate on]:package:'
+  '--workspace[operate on all packages in the workspace]'
+  '*--exclude[exclude packages]:package:'
+  '--all[alias for --workspace (deprecated)]'
+)
+
+# Helper for target selection options
+_cargo_target_selection_opts=(
+  '--lib[only this package library]'
+  '*--bin[only the specified binary]:binary:'
+  '--bins[all binaries]'
+  '*--example[only the specified example]:example:'
+  '--examples[all examples]'
+  '*--test[only the specified test target]:test:'
+  '--tests[all test targets]'
+  '*--bench[only the specified bench target]:bench:'
+  '--benches[all bench targets]'
+  '--all-targets[all targets]'
+)
+
+# Helper for message format option
+_cargo_message_format_opt=(
+  '--message-format[error format]:format:(human short json json-diagnostic-short json-diagnostic-rendered-ansi json-render-diagnostics)'
+)
+
+_cargo() {
+  local curcontext="$curcontext" state line
+  typeset -A opt_args
+
+  local -a global_opts
+  global_opts=(
+    '(- *)'{-V,--version}'[print version info and exit]'
+    '--list[list installed commands]'
+    '--explain[provide a detailed explanation of a rustc error message]:error code:'
+    '(-v --verbose)'{-v,--verbose}'[use verbose output (-vv very verbose)]'
+    '(-q --quiet)'{-q,--quiet}'[do not print cargo log messages]'
+    '--color[coloring]:when:(auto always never)'
+    '--frozen[equivalent to specifying both --locked and --offline]'
+    '--locked[assert that Cargo.lock will remain unchanged]'
+    '--offline[run without accessing the network]'
+    '*--config[override a configuration value]:config:'
+    '-Z[unstable (nightly-only) flags]:flag:'
+    '-C[change to directory before doing anything]:directory:_directories'
+    '(- *)'{-h,--help}'[print help information]'
+  )
+
+  local -a subcommands
+  subcommands=(
+    'build:compile the current package'
+    'b:compile the current package (alias for build)'
+    'check:analyze the current package and report errors without building'
+    'c:analyze the current package (alias for check)'
+    'clean:remove the target directory'
+    'doc:build this package'\''s and its dependencies'\'' documentation'
+    'd:build documentation (alias for doc)'
+    'new:create a new cargo package'
+    'init:create a new cargo package in an existing directory'
+    'add:add dependencies to a manifest file'
+    'remove:remove dependencies from a manifest file'
+    'rm:remove dependencies (alias for remove)'
+    'run:run a binary or example of the local package'
+    'r:run a binary or example (alias for run)'
+    'test:run the tests'
+    't:run the tests (alias for test)'
+    'bench:run the benchmarks'
+    'update:update dependencies listed in Cargo.lock'
+    'search:search registry for crates'
+    'publish:package and upload this package to the registry'
+    'install:install a Rust binary'
+    'uninstall:uninstall a Rust binary'
+    'clippy:check a package to catch common mistakes and improve your Rust code'
+    'fmt:format all bin and lib files of the current crate using rustfmt'
+    'fix:automatically fix lint warnings reported by rustc'
+    'tree:display a tree visualization of a dependency graph'
+    'vendor:vendor all dependencies for a project locally'
+    'metadata:output the resolved dependencies of a package in machine-readable format'
+    'generate-lockfile:generate the lockfile for a package'
+    'locate-project:print a JSON representation of a Cargo.toml file'\''s location'
+    'pkgid:print a fully qualified package specification'
+    'verify-project:check correctness of crate manifest (deprecated)'
+    'fetch:fetch dependencies of a package from the network'
+    'package:assemble the local package into a distributable tarball'
+    'login:log in to a registry'
+    'logout:remove an API token from the registry locally'
+    'owner:manage the owners of a crate on the registry'
+    'yank:remove a pushed crate from the index'
+    'rustc:compile a package and pass extra options to the compiler'
+    'rustdoc:build a package'\''s documentation using specified custom flags'
+    'config:inspect configuration values'
+    'report:generate and display various kinds of reports'
+    'info:display information about a package'
+    'help:display help for a cargo subcommand'
+  )
+
+  _arguments -s -S \
+    $global_opts \
+    '1: :->subcommand' \
+    '*:: :->args' && return
+
+  case $state in
+    subcommand)
+      _describe -t subcommands 'cargo subcommand' subcommands
+      ;;
+    args)
+      local subcmd="$line[1]"
+      case $subcmd in
+        build|b)
+          _arguments -s -S \
+            $_cargo_package_opts \
+            $_cargo_target_selection_opts \
+            $_cargo_feature_opts \
+            $_cargo_compilation_opts \
+            $_cargo_message_format_opt \
+            $_cargo_manifest_opts \
+            '--future-incompat-report[outputs a future incompatibility report at the end of the build]' \
+            '--ignore-rust-version[ignore rust-version specification in packages]' \
+            '--artifact-dir[copy final artifacts to this directory (unstable)]:directory:_directories' \
+            '--out-dir[copy final artifacts to this directory (deprecated)]:directory:_directories' \
+            $_cargo_common_opts
+          ;;
+        check|c)
+          _arguments -s -S \
+            $_cargo_package_opts \
+            $_cargo_target_selection_opts \
+            $_cargo_feature_opts \
+            $_cargo_compilation_opts \
+            $_cargo_message_format_opt \
+            $_cargo_manifest_opts \
+            '--future-incompat-report[outputs a future incompatibility report at the end of the build]' \
+            '--ignore-rust-version[ignore rust-version specification in packages]' \
+            $_cargo_common_opts
+          ;;
+        clean)
+          _arguments -s -S \
+            '(-p --package)'{-p,--package}'[package to clean artifacts for]:package:' \
+            '--workspace[clean artifacts of the workspace members]' \
+            '--doc[whether or not to clean just the documentation directory]' \
+            '(-n --dry-run)'{-n,--dry-run}'[display what would be deleted without deleting anything]' \
+            '(-r --release)'{-r,--release}'[whether or not to clean release artifacts]' \
+            '--profile[clean artifacts of the specified profile]:profile:' \
+            '--target[target triple to clean output for]:target:' \
+            '--target-dir[directory for all generated artifacts]:directory:_directories' \
+            $_cargo_manifest_opts \
+            $_cargo_common_opts
+          ;;
+        doc|d)
+          _arguments -s -S \
+            $_cargo_package_opts \
+            '--lib[document only this package library]' \
+            '*--bin[document only the specified binary]:binary:' \
+            '--bins[document all binaries]' \
+            '*--example[document only the specified example]:example:' \
+            '--examples[document all examples]' \
+            '--no-deps[do not build documentation for dependencies]' \
+            '--document-private-items[document private items]' \
+            '--open[open the docs in a browser after building them]' \
+            $_cargo_feature_opts \
+            $_cargo_compilation_opts \
+            $_cargo_message_format_opt \
+            $_cargo_manifest_opts \
+            '--ignore-rust-version[ignore rust-version specification in packages]' \
+            $_cargo_common_opts
+          ;;
+        new)
+          _arguments -s -S \
+            '--lib[use a library template]' \
+            '--bin[use a binary (application) template]' \
+            '--edition[edition to set for the crate generated]:edition:(2015 2018 2021 2024)' \
+            '--name[set the resulting package name]:name:' \
+            '--vcs[initialize a new repository for the given version control system]:vcs:(git hg pijul fossil none)' \
+            '--registry[registry to use]:registry:' \
+            $_cargo_manifest_opts \
+            $_cargo_common_opts \
+            '1:path:_directories'
+          ;;
+        init)
+          _arguments -s -S \
+            '--lib[use a library template]' \
+            '--bin[use a binary (application) template]' \
+            '--edition[edition to set for the crate generated]:edition:(2015 2018 2021 2024)' \
+            '--name[set the resulting package name]:name:' \
+            '--vcs[initialize a new repository for the given version control system]:vcs:(git hg pijul fossil none)' \
+            '--registry[registry to use]:registry:' \
+            $_cargo_manifest_opts \
+            $_cargo_common_opts \
+            '1:path:_directories'
+          ;;
+        add)
+          _arguments -s -S \
+            '--dev[add as development dependency]' \
+            '--build[add as build dependency]' \
+            '--target[add as dependency to the given target platform]:target:' \
+            '--optional[mark the dependency as optional]' \
+            '--no-optional[mark the dependency as required]' \
+            '--public[mark the dependency as public (unstable)]' \
+            '--no-public[mark the dependency as private (unstable)]' \
+            '--rename[rename the dependency]:name:' \
+            '--default-features[re-enable the default features]' \
+            '--no-default-features[disable the default features]' \
+            '(-F --features)'{-F,--features}'[features to activate]:features:' \
+            '--path[filesystem path to local crate to add]:path:_directories' \
+            '--git[git repository location]:url:' \
+            '--branch[git branch to download the crate from]:branch:' \
+            '--tag[git tag to download the crate from]:tag:' \
+            '--rev[git reference to download the crate from]:rev:' \
+            '--registry[registry to use]:registry:' \
+            '(-n --dry-run)'{-n,--dry-run}'[don'\''t actually write the manifest]' \
+            '(-p --package)'{-p,--package}'[package to modify]:package:' \
+            $_cargo_manifest_opts \
+            '--ignore-rust-version[ignore rust-version specification in packages]' \
+            $_cargo_common_opts \
+            '*:dependency:'
+          ;;
+        remove|rm)
+          _arguments -s -S \
+            '--dev[remove from dev-dependencies]' \
+            '--build[remove from build-dependencies]' \
+            '--target[remove from target-dependencies]:target:' \
+            '(-n --dry-run)'{-n,--dry-run}'[don'\''t actually write the manifest]' \
+            '(-p --package)'{-p,--package}'[package to remove from]:package:' \
+            $_cargo_manifest_opts \
+            $_cargo_common_opts \
+            '*:dependency:'
+          ;;
+        run|r)
+          _arguments -s -S \
+            '(-p --package)'{-p,--package}'[package with the target to run]:package:' \
+            '*--bin[name of the bin target to run]:binary:' \
+            '*--example[name of the example target to run]:example:' \
+            $_cargo_feature_opts \
+            $_cargo_compilation_opts \
+            $_cargo_message_format_opt \
+            $_cargo_manifest_opts \
+            '--ignore-rust-version[ignore rust-version specification in packages]' \
+            $_cargo_common_opts \
+            '(-)--[arguments to pass to the binary]' \
+            '*:args:'
+          ;;
+        test|t)
+          _arguments -s -S \
+            $_cargo_package_opts \
+            $_cargo_target_selection_opts \
+            '--doc[test only this library'\''s documentation]' \
+            '--no-run[compile, but don'\''t run tests]' \
+            '--no-fail-fast[run all tests regardless of failure]' \
+            '--future-incompat-report[outputs a future incompatibility report at the end of the build]' \
+            $_cargo_feature_opts \
+            $_cargo_compilation_opts \
+            $_cargo_message_format_opt \
+            $_cargo_manifest_opts \
+            '--ignore-rust-version[ignore rust-version specification in packages]' \
+            $_cargo_common_opts \
+            '(-)--[arguments to pass to the test binary]' \
+            '*:test name:'
+          ;;
+        bench)
+          _arguments -s -S \
+            $_cargo_package_opts \
+            $_cargo_target_selection_opts \
+            '--no-run[compile, but don'\''t run benchmarks]' \
+            '--no-fail-fast[run all benchmarks regardless of failure]' \
+            $_cargo_feature_opts \
+            '(-j --jobs)'{-j,--jobs}'[number of parallel jobs]:jobs:' \
+            '--profile[build artifacts with the specified profile]:profile:' \
+            '--target[build for the target triple]:target:' \
+            '--target-dir[directory for all generated artifacts]:directory:_directories' \
+            '--timings[output a build timing report at the end of the build]' \
+            $_cargo_message_format_opt \
+            $_cargo_manifest_opts \
+            '--ignore-rust-version[ignore rust-version specification in packages]' \
+            $_cargo_common_opts \
+            '(-)--[arguments to pass to the bench binary]' \
+            '*:bench name:'
+          ;;
+        update)
+          _arguments -s -S \
+            '(-w --workspace)'{-w,--workspace}'[only update the workspace packages]' \
+            '--recursive[force updating all dependencies of given packages as well]' \
+            '--precise[update a single dependency to exactly PRECISE]:version:' \
+            '(-n --dry-run)'{-n,--dry-run}'[don'\''t actually write the lockfile]' \
+            '(-b --breaking)'{-b,--breaking}'[update to latest SemVer-breaking version (unstable)]' \
+            $_cargo_manifest_opts \
+            '--ignore-rust-version[ignore rust-version specification in packages]' \
+            $_cargo_common_opts \
+            '*:package spec:'
+          ;;
+        search)
+          _arguments -s -S \
+            '--limit[limit the number of results (default 10, max 100)]:limit:' \
+            '--index[registry index URL to search]:url:' \
+            '--registry[registry to search packages in]:registry:' \
+            $_cargo_manifest_opts \
+            $_cargo_common_opts \
+            '*:query:'
+          ;;
+        publish)
+          _arguments -s -S \
+            '(-p --package)'{-p,--package}'[package(s) to publish]:package:' \
+            '--workspace[publish all packages in the workspace]' \
+            '*--exclude[don'\''t publish specified packages]:package:' \
+            '--index[registry index URL to upload to]:url:' \
+            '--registry[registry to upload the package to]:registry:' \
+            '--no-verify[don'\''t verify the contents by building them]' \
+            '--allow-dirty[allow dirty working directories to be packaged]' \
+            '(-n --dry-run)'{-n,--dry-run}'[perform all checks without uploading]' \
+            $_cargo_feature_opts \
+            '(-j --jobs)'{-j,--jobs}'[number of parallel jobs]:jobs:' \
+            '--keep-going[do not abort the build as soon as there is an error]' \
+            '--target[build for the target triple]:target:' \
+            '--target-dir[directory for generated artifacts]:directory:_directories' \
+            $_cargo_manifest_opts \
+            $_cargo_common_opts
+          ;;
+        install)
+          _arguments -s -S \
+            '--version[specify a version to install]:version:' \
+            '--path[filesystem path to local crate to install]:path:_directories' \
+            '--git[git URL to install the specified crate from]:url:' \
+            '--branch[branch to use when installing from git]:branch:' \
+            '--tag[tag to use when installing from git]:tag:' \
+            '--rev[specific commit to use when installing from git]:rev:' \
+            '--index[registry index to install from]:url:' \
+            '--registry[registry to use]:registry:' \
+            '--root[directory to install packages into]:directory:_directories' \
+            '(-f --force)'{-f,--force}'[force overwriting existing crates or binaries]' \
+            '(-n --dry-run)'{-n,--dry-run}'[perform all checks without installing (unstable)]' \
+            '--no-track[do not save tracking information]' \
+            '--list[list all installed packages and their versions]' \
+            '--debug[build in debug mode (with the dev profile) instead of release mode]' \
+            '*--bin[install only the specified binary]:binary:' \
+            '--bins[install all binaries]' \
+            '*--example[install only the specified example]:example:' \
+            '--examples[install all examples]' \
+            $_cargo_feature_opts \
+            $_cargo_compilation_opts \
+            $_cargo_message_format_opt \
+            '--ignore-rust-version[ignore rust-version specification in packages]' \
+            '--locked[assert that Cargo.lock will remain unchanged]' \
+            '--offline[run without accessing the network]' \
+            '--frozen[equivalent to specifying both --locked and --offline]' \
+            $_cargo_common_opts \
+            '*:crate:'
+          ;;
+        uninstall)
+          _arguments -s -S \
+            '(-p --package)'{-p,--package}'[package to uninstall]:package:' \
+            '*--bin[only uninstall the binary NAME]:name:' \
+            '--root[directory to uninstall packages from]:directory:_directories' \
+            $_cargo_common_opts \
+            '*:crate:'
+          ;;
+        clippy)
+          _arguments -s -S \
+            $_cargo_package_opts \
+            $_cargo_target_selection_opts \
+            '(-r --release)'{-r,--release}'[check in release mode]' \
+            '--profile[check with the specified profile]:profile:' \
+            $_cargo_feature_opts \
+            '--target[check for the target triple]:target:' \
+            '--target-dir[directory for generated artifacts]:directory:_directories' \
+            '--manifest-path[path to Cargo.toml]:path:_files -g "*.toml"' \
+            $_cargo_message_format_opt \
+            '--fix[automatically apply lint suggestions]' \
+            '--no-deps[run clippy only on the given package]' \
+            '--allow-dirty[allow fix to apply to a dirty working directory]' \
+            '--allow-staged[allow fix to apply with staged changes]' \
+            '-W[set lint warnings]:lint:' \
+            '-A[set lint allowed]:lint:' \
+            '-D[set lint denied]:lint:' \
+            '-F[set lint forbidden]:lint:' \
+            '--locked[assert that Cargo.lock will remain unchanged]' \
+            '--offline[run without accessing the network]' \
+            '--frozen[equivalent to specifying both --locked and --offline]' \
+            $_cargo_common_opts \
+            '(-)--[arguments to pass to clippy]' \
+            '*:args:'
+          ;;
+        fmt)
+          _arguments -s -S \
+            '--all[format all packages]' \
+            '(-p --package)'{-p,--package}'[package to format]:package:' \
+            '--check[run rustfmt in check mode, exit with 0 if formatted correctly]' \
+            '--manifest-path[path to Cargo.toml]:path:_files -g "*.toml"' \
+            $_cargo_message_format_opt \
+            $_cargo_common_opts \
+            '(-)--[arguments to pass to rustfmt]' \
+            '*:args:'
+          ;;
+        fix)
+          _arguments -s -S \
+            $_cargo_package_opts \
+            $_cargo_target_selection_opts \
+            $_cargo_feature_opts \
+            $_cargo_compilation_opts \
+            $_cargo_message_format_opt \
+            $_cargo_manifest_opts \
+            '--ignore-rust-version[ignore rust-version specification in packages]' \
+            '--edition[fix in preparation for the next edition upgrade]' \
+            '--edition-idioms[fix warnings to migrate to the idioms of an edition]' \
+            '--broken-code[fix code even if it already has compiler errors]' \
+            '--allow-no-vcs[fix code even if a VCS was not detected]' \
+            '--allow-dirty[fix code even if the working directory is dirty or has staged changes]' \
+            '--allow-staged[fix code even if the working directory has staged changes]' \
+            $_cargo_common_opts
+          ;;
+        tree)
+          _arguments -s -S \
+            '(-p --package)'{-p,--package}'[package to be used as the root of the tree]:package:' \
+            '--workspace[display the tree for all packages in the workspace]' \
+            '*--exclude[exclude specific workspace members]:package:' \
+            $_cargo_feature_opts \
+            '(-e --edges)'{-e,--edges}'[the kinds of dependencies to display]:kinds:(all normal build dev features public no-normal no-build no-dev no-proc-macro)' \
+            '(-i --invert)'{-i,--invert}'[invert the tree direction and focus on the given package]:package:' \
+            '--prune[prune the given package from the display]:package:' \
+            '--depth[maximum display depth of the dependency tree]:depth:' \
+            '--no-dedupe[do not de-duplicate repeated dependencies]' \
+            '(-d --duplicates)'{-d,--duplicates}'[show only packages with multiple versions (implies -i)]' \
+            '--charset[character set to use in output]:charset:(utf8 ascii)' \
+            '(-f --format)'{-f,--format}'[format string used for printing dependencies]:format:' \
+            '--prefix[change the prefix for each line]:prefix:(depth indent none)' \
+            '--target[filter dependencies matching the given target triple]:target:' \
+            $_cargo_manifest_opts \
+            $_cargo_common_opts
+          ;;
+        vendor)
+          _arguments -s -S \
+            '--no-delete[don'\''t delete older crates in the vendor directory]' \
+            '--respect-source-config[respect source replacement configuration]' \
+            '--versioned-dirs[always include version in subdir name]' \
+            '(-s --sync)'{-s,--sync}'[additional Cargo.toml to sync and vendor]:path:_files -g "*.toml"' \
+            $_cargo_manifest_opts \
+            $_cargo_common_opts \
+            '1:path:_directories'
+          ;;
+        metadata)
+          _arguments -s -S \
+            '--no-deps[output information only about the workspace members]' \
+            '--format-version[format version]:version:(1)' \
+            '--filter-platform[only include resolve dependencies matching the given target triple]:target:' \
+            $_cargo_feature_opts \
+            $_cargo_manifest_opts \
+            $_cargo_common_opts
+          ;;
+        generate-lockfile)
+          _arguments -s -S \
+            $_cargo_manifest_opts \
+            $_cargo_common_opts
+          ;;
+        locate-project)
+          _arguments -s -S \
+            '--workspace[locate Cargo.toml of the workspace root]' \
+            '--message-format[output representation]:format:(json plain)' \
+            $_cargo_manifest_opts \
+            $_cargo_common_opts
+          ;;
+        pkgid)
+          _arguments -s -S \
+            '(-p --package)'{-p,--package}'[argument to get the package ID for]:package:' \
+            $_cargo_manifest_opts \
+            $_cargo_common_opts \
+            '*:spec:'
+          ;;
+        verify-project)
+          _arguments -s -S \
+            $_cargo_manifest_opts \
+            $_cargo_common_opts
+          ;;
+        fetch)
+          _arguments -s -S \
+            '--target[fetch dependencies for the target triple]:target:' \
+            $_cargo_manifest_opts \
+            $_cargo_common_opts
+          ;;
+        package)
+          _arguments -s -S \
+            '(-p --package)'{-p,--package}'[package(s) to assemble]:package:' \
+            '--workspace[assemble all packages in the workspace]' \
+            '*--exclude[don'\''t assemble specified packages]:package:' \
+            '--index[registry index URL to prepare the package for]:url:' \
+            '--registry[registry to prepare the package for]:registry:' \
+            '(-l --list)'{-l,--list}'[print files included in a package without making one]' \
+            '--no-verify[don'\''t verify the contents by building them]' \
+            '--no-metadata[ignore warnings about a lack of human-usable metadata]' \
+            '--allow-dirty[allow dirty working directories to be packaged]' \
+            '--exclude-lockfile[don'\''t include the lock file when packaging]' \
+            $_cargo_feature_opts \
+            '(-j --jobs)'{-j,--jobs}'[number of parallel jobs]:jobs:' \
+            '--keep-going[do not abort the build as soon as there is an error]' \
+            '--target[build for the target triple]:target:' \
+            '--target-dir[directory for generated artifacts]:directory:_directories' \
+            $_cargo_manifest_opts \
+            $_cargo_common_opts
+          ;;
+        login)
+          _arguments -s -S \
+            '--registry[registry to use]:registry:' \
+            $_cargo_manifest_opts \
+            $_cargo_common_opts \
+            '(-)--[additional arguments for the credential provider]' \
+            '*:token:'
+          ;;
+        logout)
+          _arguments -s -S \
+            '--registry[registry to use]:registry:' \
+            $_cargo_manifest_opts \
+            $_cargo_common_opts
+          ;;
+        owner)
+          _arguments -s -S \
+            '(-a --add)'{-a,--add}'[name of a user or team to invite as an owner]:login:' \
+            '(-r --remove)'{-r,--remove}'[name of a user or team to remove as an owner]:login:' \
+            '(-l --list)'{-l,--list}'[list owners of a crate]' \
+            '--index[registry index URL to modify owners for]:url:' \
+            '--registry[registry to modify owners for]:registry:' \
+            '--token[API token to use when authenticating]:token:' \
+            $_cargo_manifest_opts \
+            $_cargo_common_opts \
+            '*:crate:'
+          ;;
+        yank)
+          _arguments -s -S \
+            '--version[the version to yank or un-yank]:version:' \
+            '--undo[undo a yank, putting a version back into the index]' \
+            '--index[registry index URL to yank from]:url:' \
+            '--registry[registry to yank from]:registry:' \
+            '--token[API token to use when authenticating]:token:' \
+            $_cargo_manifest_opts \
+            $_cargo_common_opts \
+            '*:crate:'
+          ;;
+        rustc)
+          _arguments -s -S \
+            '(-p --package)'{-p,--package}'[package to build]:package:' \
+            $_cargo_target_selection_opts \
+            $_cargo_feature_opts \
+            $_cargo_compilation_opts \
+            $_cargo_message_format_opt \
+            $_cargo_manifest_opts \
+            '--ignore-rust-version[ignore rust-version specification in packages]' \
+            '--future-incompat-report[outputs a future incompatibility report at the end of the build]' \
+            '--print[output compiler information without compiling]:info:' \
+            '--crate-type[comma separated list of types of crates for the compiler to emit]:crate-type:' \
+            $_cargo_common_opts \
+            '*:extra rustc flags:'
+          ;;
+        rustdoc)
+          _arguments -s -S \
+            '(-p --package)'{-p,--package}'[package to document]:package:' \
+            $_cargo_target_selection_opts \
+            $_cargo_feature_opts \
+            $_cargo_compilation_opts \
+            $_cargo_message_format_opt \
+            $_cargo_manifest_opts \
+            '--ignore-rust-version[ignore rust-version specification in packages]' \
+            '--open[open the docs in a browser after the operation]' \
+            '--output-format[the output type to write (unstable)]:format:(html json)' \
+            $_cargo_common_opts \
+            '*:extra rustdoc flags:'
+          ;;
+        config)
+          _arguments -s -S \
+            '1:subcommand:(get)' \
+            $_cargo_manifest_opts \
+            $_cargo_common_opts
+          ;;
+        report)
+          _arguments -s -S \
+            '1:subcommand:(future-incompatibilities)' \
+            $_cargo_manifest_opts \
+            $_cargo_common_opts
+          ;;
+        info)
+          _arguments -s -S \
+            '--index[registry index URL to search packages in]:url:' \
+            '--registry[registry to search packages in]:registry:' \
+            $_cargo_manifest_opts \
+            $_cargo_common_opts \
+            '1:package spec:'
+          ;;
+        help)
+          _describe -t subcommands 'cargo subcommand' subcommands
+          ;;
+        *)
+          _default
+          ;;
+      esac
+      ;;
+  esac
+}
+
+_cargo "$@"

@@ -3,36 +3,113 @@
 local arguments
 
 arguments=(
-  '(- * :)'{-h,--help}'[show this help]'
-  '--version[print version string]'
-  {-q,--quiet}'[do not show status information]'
-  {-D,--directory}'[root directory for the container]'
-  {-i,--image}'[file system device or image for the container]'
-  {-b,--boot}'[boot up full system (i.e. invoke init)]'
-  {-u,--user}'[run the command under specified user or uid]'
-  {-M,--machine}'[set the machine name for the container]'
-  '--uuid[set a specific machine UUID for the container]'
-  {-S,--slice}'[place the container in the specified slice]'
-  '--private-network[disable network in container]'
-  '--network-interface[assign an existing network interface to the]'
-  '--network-macvlan[create a macvlan network interface based on an]'
-  '--network-veth[add a virtual ethernet connection between host]'
-  '--network-bridge[add a virtual ethernet connection between host]'
-  {-Z,--selinux-context}'[set the SELinux security context to be used by]'
-  {-L,--selinux-apifs-context}'[set the SELinux security context to be used by]'
-  '--capability[in addition to the default, retain specified]'
-  '--drop-capability[drop the specified capability from the default set]'
-  '--link-journal[link up guest journal, one of no, auto, guest, host]'
-  '-j[equivalent to --link-journal=try-guest]'
+  '(- * :)'{-h,--help}'[show help text]'
+  '--version[show package version]'
+  '--no-pager[do not pipe output into a pager]'
+  '--no-ask-password[do not prompt for password]'
+
+  # Image options
+  {-D,--directory=}'[root directory for the container]:directory:_directories'
+  '--template=[directory or btrfs subvolume to use as template]:template directory:_directories'
+  {-x,--ephemeral}'[run container with temporary snapshot]'
+  {-i,--image=}'[disk image to mount as root directory]:image file:_files'
+  '--image-policy=[image policy string]:policy string'
+  '--mstack=[mount stack directory]:directory:_directories'
+  '--oci-bundle=[path to OCI runtime bundle]:bundle directory:_directories'
   '--read-only[mount the root directory read-only]'
-  '--bind[bind mount a file or directory from the host into]'
-  '--bind-ro[similar, but creates a read-only bind mount]'
-  '--tmpfs[mount an empty tmpfs to the specified directory]'
-  '--setenv[VALUE    Pass an environment variable to PID 1]'
-  '--share-system[share system namespaces with host]'
-  '--register[register container as machine]'
-  '--keep-unit[do not register a scope for the machine, reuse]'
-  '*:filename:_files'
+  '--volatile=[boot container in volatile mode]:mode:(yes state overlay no)'
+  '--root-hash=[dm-verity root hash in hexadecimal]:hash'
+  '--root-hash-sig=[PKCS7 signature of root hash]:signature file:_files'
+  '--verity-data=[path to dm-verity integrity data file]:verity file:_files'
+  '--pivot-root=[pivot specified directory to / in container]:directory'
+
+  # Execution options
+  {-a,--as-pid2}'[invoke program as PID 2 instead of PID 1]'
+  {-b,--boot}'[boot up full system (invoke init as PID 1)]'
+  '--chdir=[change to specified working directory in container]:directory'
+  {-E,--setenv=}'[set environment variable for init process]:NAME=VALUE'
+  {-u,--user=}'[run the command under specified user]:user:_users'
+  '--kill-signal=[signal to send when nspawn receives SIGTERM]:signal:_signals'
+  '--notify-ready=[configure readiness notifications from init]:bool:(yes no)'
+  '--suppress-sync=[turn off filesystem synchronization]:bool:(yes no)'
+
+  # System identity options
+  {-M,--machine=}'[set the machine name for the container]:machine name'
+  '--hostname=[set kernel hostname within container]:hostname'
+  '--uuid=[set specific machine UUID for the container]:uuid'
+
+  # Property options
+  {-S,--slice=}'[place the container in the specified slice]:slice'
+  '--property=[set unit property on scope unit]:property'
+  '--register=[register container with systemd-machined]:bool:(yes no)'
+  '--keep-unit[do not register a scope for the machine, reuse existing unit]'
+
+  # User namespacing options
+  '--private-users=[control user namespacing]:UID shift and count'
+  '--private-users-ownership=[control UID/GID adjustment for container image]:mode:(off chown map auto)'
+  '--private-users-delegate=[request additional UID/GID ranges delegation]:bool:(yes no)'
+  '-U[equivalent to --private-users=pick --private-users-ownership=auto]'
+
+  # Networking options
+  '--private-network[disconnect container networking from the host]'
+  '--network-interface=[assign network interface to container]:interface:_net_interfaces'
+  '--network-macvlan=[create macvlan interface based on host interface]:interface:_net_interfaces'
+  '--network-ipvlan=[create ipvlan interface based on host interface]:interface:_net_interfaces'
+  {-n,--network-veth}'[create virtual ethernet link between host and container]'
+  '--network-veth-extra=[add additional virtual ethernet link]:host:container names'
+  '--network-bridge=[add host side of veth to specified bridge]:bridge interface:_net_interfaces'
+  '--network-zone=[create veth and add to auto-managed bridge]:zone name'
+  '--network-namespace-path=[path to kernel network namespace]:namespace path:_files'
+  {-p,--port=}'[map port on host to port in container]:protocol/host-port\:container-port'
+
+  # Security options
+  '--capability=[grant additional capabilities to container]:capability'
+  '--drop-capability=[drop specified capabilities from container]:capability'
+  '--ambient-capability=[pass capabilities in inheritable and ambient set]:capability'
+  '--no-new-privileges=[set PR_SET_NO_NEW_PRIVS flag]:bool:(yes no)'
+  '--system-call-filter=[alter system call filter for containers]:syscall filter'
+  {-Z,--selinux-context=}'[set SELinux security context for processes]:context'
+  {-L,--selinux-apifs-context=}'[set SELinux context for virtual API filesystems]:context'
+
+  # Resource options
+  '--rlimit=[set POSIX resource limit for container payload]:resource limit'
+  '--oom-score-adjust=[change OOM score adjustment value]:value'
+  '--cpu-affinity=[control CPU affinity of container payload]:cpus'
+  '--personality=[control architecture reported by uname]:personality:(x86 x86-64)'
+
+  # Integration options
+  '--resolv-conf=[configure /etc/resolv.conf handling]:mode:(off copy-host copy-static copy-uplink copy-stub replace-host replace-static replace-uplink replace-stub bind-host bind-static bind-uplink bind-stub delete auto)'
+  '--timezone=[configure /etc/localtime handling]:mode:(off copy delete bind symlink auto)'
+  '--link-journal=[control container journal visibility]:mode:(no auto guest host try-guest try-host)'
+  '-j[equivalent to --link-journal=try-guest]'
+
+  # Mount options
+  '--bind=[bind mount a file or directory from host into container]:source\:destination'
+  '--bind-ro=[create read-only bind mount]:source\:destination'
+  '--bind-user=[bind home directory of specified host user]:user:_users'
+  '--bind-user-shell=[include specified shell in bound user records]:shell:_files'
+  '--bind-user-group=[include specified group as auxiliary group]:group:_groups'
+  '--inaccessible=[make specified path inaccessible in container]:path:_files'
+  '--tmpfs=[mount tmpfs filesystem into container]:path\:options'
+  '--overlay=[combine directory trees into overlay filesystem]:paths'
+  '--overlay-ro=[create read-only overlay filesystem]:paths'
+
+  # Input/Output options
+  '--console=[configure console and /dev/console setup]:mode:(interactive read-only passive pipe autopipe)'
+  {-P,--pipe}'[equivalent to --console=pipe]'
+  '--background=[change terminal background color]:ansi color'
+
+  # Credentials options
+  '--load-credential=[pass credential from file to container]:ID\:PATH'
+  '--set-credential=[pass credential with literal value]:ID\:VALUE'
+
+  # Quiet
+  {-q,--quiet}'[do not show status information]'
+  '--settings=[control .nspawn settings file usage]:mode:(yes no override trusted)'
+
+  '--cleanup[clean up leftover mounts and exit]'
+
+  '*:command:_command_names -e'
 )
 
 _arguments -s $arguments
