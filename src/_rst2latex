@@ -21,7 +21,7 @@ arguments=(
   '--no-section-numbering[disable section numbering by Docutils.]'
   '--strip-comments[remove comment elements from the document tree.]'
   '--leave-comments[leave comment elements in the document tree. (default)]'
-  '--strip-elements-with-class[remove all elements with classes="<class>" from the]'
+  '--strip-elements-with-class[remove all elements with specified class from the output]:class: '
   '--strip-class[remove all classes="<class>" attributes from elements]'
   {--report,-r}'[report system messages at or higher than <level>:]'
   {--verbose,-v}'[report all system messages. (Same as "--report=1".)]'
