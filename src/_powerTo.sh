@@ -1,6 +1,6 @@
 #compdef powerTo.sh
 
-_arguments \
+_arguments -s -S \
        '(-h)-help[prints an help message]' \
        '(-help)-h[prints an help message]' \
        '(-v)-version[prints the version]' \
