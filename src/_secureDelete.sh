@@ -30,7 +30,7 @@ arguments=(
   '-tu[sort by atime]'
   '-r[reverse sort order]'
   '-w[format N columns wide]'
-  '--color[{always,never,auto}\]]'
+  '--color[set color mode (always, never, auto)]'
   '-R[recurse]'
   '-c[list changed files]'
   '-v[verbose]'
