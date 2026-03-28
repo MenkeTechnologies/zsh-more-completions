@@ -1,7 +1,5 @@
 # ⚡ zsh-more-completions
 
-[![CI](https://github.com/MenkeTechnologies/zsh-more-completions/actions/workflows/ci.yml/badge.svg)](https://github.com/MenkeTechnologies/zsh-more-completions/actions/workflows/ci.yml)
-
 ```
  ███▄ ▄███▓ ▒█████   ██▀███  ▓█████
 ▓██▒▀█▀ ██▒▒██▒  ██▒▓██ ▒ ██▒▓█   ▀
@@ -27,6 +25,9 @@
 > _"The shell is the street. The completions are the chrome."_
 
 ---
+
+[![CI](https://github.com/MenkeTechnologies/zsh-more-completions/actions/workflows/ci.yml/badge.svg)](https://github.com/MenkeTechnologies/zsh-more-completions/actions/workflows/ci.yml)
+
 
 ## // WHAT IS THIS
 
