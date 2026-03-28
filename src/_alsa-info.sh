@@ -1,4 +1,4 @@
-#compdef alsa-info
+#compdef alsa-info alsa-info.sh
 
 
 local -a arguments

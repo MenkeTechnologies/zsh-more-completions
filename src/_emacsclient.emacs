@@ -1,4 +1,4 @@
-#compdef emacsclient
+#compdef emacsclient emacsclient.emacs
 
 
 local -a arguments

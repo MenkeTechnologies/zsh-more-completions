@@ -1,4 +1,4 @@
-#compdef ebrowse
+#compdef ebrowse ebrowse.emacs
 
 local -a arguments
 

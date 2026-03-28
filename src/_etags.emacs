@@ -1,4 +1,4 @@
-#compdef etags
+#compdef etags etags.emacs
 
 
 local -a arguments

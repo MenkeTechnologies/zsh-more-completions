@@ -1,4 +1,4 @@
-#compdef gvmap
+#compdef gvmap gvmap.sh
 
 local -a arguments
 
