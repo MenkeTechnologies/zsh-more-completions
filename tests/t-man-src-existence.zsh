@@ -828,7 +828,7 @@
 
 @test 'man_src/_ab2 compdef is ab2' {
     run head -1 "$msrc/_ab2"
-    assert $output same_as '#compdef ab'
+    assert $output same_as '#compdef ab ab2'
 }
 
 @test 'man_src/_alsamixer compdef is alsamixer' {

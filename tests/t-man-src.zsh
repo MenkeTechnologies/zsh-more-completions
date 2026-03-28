@@ -131,7 +131,7 @@
 
 @test 'man_src/_python compdef is python2' {
     run head -1 "$msrc/_python"
-    assert $output same_as '#compdef python2'
+    assert $output same_as '#compdef python2 python'
 }
 
 @test 'man_src/_python has -c command flag' {

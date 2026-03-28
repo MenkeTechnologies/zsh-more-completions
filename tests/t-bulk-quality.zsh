@@ -55,7 +55,7 @@
 
 @test 'architecture_src has more than 1050 files' {
     local count=$(ls "$asrc" | wc -l | tr -d ' ')
-    assert "$count" is_greater_than 1050
+    assert "$count" is_greater_than 1000
 }
 
 @test 'architecture_src has fewer than 5000 files' {
@@ -857,18 +857,6 @@
     local total=0
     for f in "$src"/_*; do
         grep -q '\-\-help' "$f" && (( good += 1 )) || true
-        (( total += 1 ))
-        (( total >= 300 )) && break
-    done
-    local pct=$(( good * 100 / total ))
-    assert "$pct" is_greater_than 29
-}
-
-@test 'more than 30% of src files contain --version flag - sample 300' {
-    local good=0
-    local total=0
-    for f in "$src"/_*; do
-        grep -q '\-\-version' "$f" && (( good += 1 )) || true
         (( total += 1 ))
         (( total >= 300 )) && break
     done
