@@ -1,6 +1,6 @@
 #compdef recbin.pl
 
-local arguments
+local -a arguments
 
 arguments=(
   '-f[..................path to XP INFO2 file or Win7/10 $I file]'
@@ -12,4 +12,4 @@ arguments=(
   '*:filename:_files'
 )
 
-_arguments -s $arguments
+_arguments -s -S $arguments

@@ -1,15 +1,10 @@
 #compdef gitSdiffColorizer.pl
 
-local arguments
+local -a arguments
 
 arguments=(
-  '--help[]'
-  '--help[.cjk]'
-  '--help[.dic]'
-  '-h[]'
-  '-h[.cjk]'
-  '-h[.dic]'
+  '(- * :)'{-h,--help}'[show help information]'
   '*:filename:_files'
 )
 
-_arguments -s $arguments
+_arguments -s -S $arguments

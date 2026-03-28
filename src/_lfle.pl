@@ -1,6 +1,6 @@
 #compdef lfle.pl
 
-local arguments
+local -a arguments
 
 arguments=(
   '-f[........file to be parsed]'
@@ -10,4 +10,4 @@ arguments=(
   '*:filename:_files'
 )
 
-_arguments -s $arguments
+_arguments -s -S $arguments

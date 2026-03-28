@@ -1,6 +1,6 @@
 #compdef msgfmt3.12.py
 
-local arguments
+local -a arguments
 
 arguments=(
   '-o[]'
@@ -12,4 +12,4 @@ arguments=(
   '*:filename:_files'
 )
 
-_arguments -s $arguments
+_arguments -s -S $arguments

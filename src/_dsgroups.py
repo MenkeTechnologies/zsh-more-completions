@@ -1,6 +1,6 @@
 #compdef dsgroups.py
 
-local arguments
+local -a arguments
 
 arguments=(
   '--rid[rid>]'
@@ -11,4 +11,4 @@ arguments=(
   '*:filename:_files'
 )
 
-_arguments -s $arguments
+_arguments -s -S $arguments

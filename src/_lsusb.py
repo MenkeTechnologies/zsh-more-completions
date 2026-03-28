@@ -1,6 +1,6 @@
 #compdef lsusb.py
 
-local arguments
+local -a arguments
 
 arguments=(
   '-h[this help]'
@@ -14,4 +14,4 @@ arguments=(
   '*:filename:_files'
 )
 
-_arguments -s $arguments
+_arguments -s -S $arguments

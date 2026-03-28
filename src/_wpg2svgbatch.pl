@@ -1,6 +1,6 @@
 #compdef wpg2svgbatch.pl
 
-local arguments
+local -a arguments
 
 arguments=(
   '-d[begins the conversion process in directory "dir"]'
@@ -12,4 +12,4 @@ arguments=(
   '*:filename:_files'
 )
 
-_arguments -s $arguments
+_arguments -s -S $arguments

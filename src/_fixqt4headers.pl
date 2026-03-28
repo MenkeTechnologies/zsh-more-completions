@@ -1,6 +1,6 @@
 #compdef fixqt4headers.pl
 
-local arguments
+local -a arguments
 
 arguments=(
   '--dry-run[Do not replace anything, just print what would be replaced]'
@@ -10,4 +10,4 @@ arguments=(
   '*:filename:_files'
 )
 
-_arguments -s $arguments
+_arguments -s -S $arguments

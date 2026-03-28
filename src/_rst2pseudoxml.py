@@ -1,6 +1,6 @@
 #compdef rst2pseudoxml.py
 
-local arguments
+local -a arguments
 
 arguments=(
   '--title[specify the document title as metadata.]'
@@ -69,4 +69,4 @@ arguments=(
   '*:filename:_files'
 )
 
-_arguments -s $arguments
+_arguments -s -S $arguments

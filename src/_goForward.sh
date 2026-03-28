@@ -1,6 +1,6 @@
 #compdef goForward.sh
 
-local arguments
+local -a arguments
 
 arguments=(
   '-L[force symbolic links to be followed: resolve symbolic]'
@@ -281,4 +281,4 @@ arguments=(
   '*:filename:_files'
 )
 
-_arguments -s $arguments
+_arguments -s -S $arguments

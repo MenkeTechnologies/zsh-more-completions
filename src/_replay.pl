@@ -1,6 +1,6 @@
 #compdef replay.pl
 
-local arguments
+local -a arguments
 
 arguments=(
   '-file[parse request from this file]'
@@ -9,4 +9,4 @@ arguments=(
   '*:filename:_files'
 )
 
-_arguments -s $arguments
+_arguments -s -S $arguments

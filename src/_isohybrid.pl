@@ -1,6 +1,6 @@
 #compdef isohybrid.pl
 
-local arguments
+local -a arguments
 
 arguments=(
   '-h[number of default geometry heads]'
@@ -15,4 +15,4 @@ arguments=(
   '*:filename:_files'
 )
 
-_arguments -s $arguments
+_arguments -s -S $arguments

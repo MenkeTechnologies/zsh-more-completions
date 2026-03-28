@@ -1,12 +1,12 @@
 #compdef bing-bar-parser.pl
 
-local arguments
+local -a arguments
 
 arguments=(
-  '-h[|help ... Help (print this information). Does not run anything else.]'
-  '-f[... Bing Bar searchhs.dat file to be parsed.]'
-  '-d[....... Applies URI decoding to search terms (eg replaces %20 with space).]'
+  '-h[print help information]'
+  '-f[Bing Bar searchhs.dat file to be parsed]:file:_files'
+  '-d[apply URI decoding to search terms]'
   '*:filename:_files'
 )
 
-_arguments -s $arguments
+_arguments -s -S $arguments

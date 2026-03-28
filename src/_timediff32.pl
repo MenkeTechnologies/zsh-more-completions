@@ -1,6 +1,6 @@
 #compdef timediff32.pl
 
-local arguments
+local -a arguments
 
 arguments=(
   '-h[|help ........ Help (print this information). Does not run anything else.]'
@@ -9,4 +9,4 @@ arguments=(
   '*:filename:_files'
 )
 
-_arguments -s $arguments
+_arguments -s -S $arguments

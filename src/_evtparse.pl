@@ -1,6 +1,6 @@
 #compdef evtparse.pl
 
-local arguments
+local -a arguments
 
 arguments=(
   '-e[........Event log (full path)]'
@@ -11,4 +11,4 @@ arguments=(
   '*:filename:_files'
 )
 
-_arguments -s $arguments
+_arguments -s -S $arguments

@@ -1,6 +1,6 @@
 #compdef pipes.sh
 
-local arguments
+local -a arguments
 
 arguments=(
   '-p[1-\] number of pipes (D=1)]'
@@ -19,4 +19,4 @@ arguments=(
   '*:filename:_files'
 )
 
-_arguments -s $arguments
+_arguments -s -S $arguments

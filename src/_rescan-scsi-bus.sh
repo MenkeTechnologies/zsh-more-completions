@@ -1,6 +1,6 @@
 #compdef rescan-scsi-bus.sh
 
-local arguments
+local -a arguments
 
 arguments=(
   '-a[scan all targets, not just currently existing \[default: disabled\]]'
@@ -39,4 +39,4 @@ arguments=(
   '*:filename:_files'
 )
 
-_arguments -s $arguments
+_arguments -s -S $arguments

@@ -1,6 +1,6 @@
 #compdef bodyfile.pl
 
-local arguments
+local -a arguments
 
 arguments=(
   '-f[........event file to be parsed; must be 5-field TLN]'
@@ -9,4 +9,4 @@ arguments=(
   '*:filename:_files'
 )
 
-_arguments -s $arguments
+_arguments -s -S $arguments

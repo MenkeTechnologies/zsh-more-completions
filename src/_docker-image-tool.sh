@@ -1,6 +1,6 @@
 #compdef docker-image-tool.sh
 
-local arguments
+local -a arguments
 
 arguments=(
   '-f[dockerfile to build for JVM based Jobs. By default builds the Dockerfile shipped with Spark.]'
@@ -14,4 +14,4 @@ arguments=(
   '*:filename:_files'
 )
 
-_arguments -s $arguments
+_arguments -s -S $arguments

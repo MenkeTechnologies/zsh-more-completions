@@ -1,6 +1,6 @@
 #compdef hardened.sh
 
-local arguments
+local -a arguments
 
 arguments=(
   '-O2[(or higher)]'
@@ -43,4 +43,4 @@ arguments=(
   '*:filename:_files'
 )
 
-_arguments -s $arguments
+_arguments -s -S $arguments

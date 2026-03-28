@@ -1,10 +1,10 @@
 #compdef WP8_AppPerms.py
 
-local arguments
+local -a arguments
 
 arguments=(
   '(- * :)'{-h,--help}'[show this help message and exit]'
   '*:filename:_files'
 )
 
-_arguments -s $arguments
+_arguments -s -S $arguments

@@ -1,6 +1,6 @@
 #compdef dsusers.py
 
-local arguments
+local -a arguments
 
 arguments=(
   '--sid[sid>]'
@@ -24,4 +24,4 @@ arguments=(
   '*:filename:_files'
 )
 
-_arguments -s $arguments
+_arguments -s -S $arguments

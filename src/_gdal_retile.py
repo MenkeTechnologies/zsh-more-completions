@@ -1,10 +1,10 @@
 #compdef gdal_retile.py
 
-local arguments
+local -a arguments
 
 arguments=(
   '-targetDir[input_files]'
   '*:filename:_files'
 )
 
-_arguments -s $arguments
+_arguments -s -S $arguments

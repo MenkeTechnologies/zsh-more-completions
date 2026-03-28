@@ -1,10 +1,10 @@
 #compdef dskeytab.py
 
-local arguments
+local -a arguments
 
 arguments=(
   '--debug[turn on detailed error messages and stack trace]'
   '*:filename:_files'
 )
 
-_arguments -s $arguments
+_arguments -s -S $arguments

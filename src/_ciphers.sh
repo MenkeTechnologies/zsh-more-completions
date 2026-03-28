@@ -1,6 +1,6 @@
 #compdef ciphers.sh
 
-local arguments
+local -a arguments
 
 arguments=(
   '--help[]'
@@ -11,4 +11,4 @@ arguments=(
   '*:filename:_files'
 )
 
-_arguments -s $arguments
+_arguments -s -S $arguments

@@ -1,10 +1,10 @@
 #compdef event_rpcgen.py
 
-local arguments
+local -a arguments
 
 arguments=(
   '--help[No such file or directory]'
   '*:filename:_files'
 )
 
-_arguments -s $arguments
+_arguments -s -S $arguments

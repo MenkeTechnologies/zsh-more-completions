@@ -1,6 +1,6 @@
 #compdef createTextFile.sh
 
-local arguments
+local -a arguments
 
 arguments=(
   {-c,--console}'[use the given VT number;]'
@@ -16,4 +16,4 @@ arguments=(
   '*:filename:_files'
 )
 
-_arguments -s $arguments
+_arguments -s -S $arguments

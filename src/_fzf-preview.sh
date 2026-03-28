@@ -1,6 +1,6 @@
 #compdef fzf-preview.sh
 
-local arguments
+local -a arguments
 
 arguments=(
   '-M[use LIST as a colon-separated list of magic]'
@@ -39,4 +39,4 @@ arguments=(
   '*:filename:_files'
 )
 
-_arguments -s $arguments
+_arguments -s -S $arguments

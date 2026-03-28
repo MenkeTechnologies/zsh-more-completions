@@ -1,6 +1,6 @@
 #compdef createScriptButDontOpenSublime.sh
 
-local arguments
+local -a arguments
 
 arguments=(
   '--project[load the given project]'
@@ -16,4 +16,4 @@ arguments=(
   '*:filename:_files'
 )
 
-_arguments -s $arguments
+_arguments -s -S $arguments

@@ -1,6 +1,6 @@
 #compdef bison.yacc
 
-local arguments
+local -a arguments
 
 arguments=(
   '(- * :)'{-h,--help}'[display this help and exit]'
@@ -14,8 +14,8 @@ arguments=(
   {-S,--skeleton}'[specify the skeleton to use]'
   {-t,--debug}'[instrument the parser for tracing]'
   '--locations[enable location support]'
-  {-D,--define}'[VALUE\] similar to %define NAME "VALUE"]'
-  {-F,--force-define}'[VALUE\] override %define NAME "VALUE"]'
+  {-D,--define}'[similar to %define NAME "VALUE"]:name\=value:'
+  {-F,--force-define}'[override %define NAME "VALUE"]:name\=value:'
   {-p,--name-prefix}'[prepend PREFIX to the external symbols]'
   {-l,--no-lines}'[dont generate #line directives]'
   {-k,--token-table}'[include a table of token names]'
@@ -31,4 +31,4 @@ arguments=(
   '*:filename:_files'
 )
 
-_arguments -s $arguments
+_arguments -s -S $arguments

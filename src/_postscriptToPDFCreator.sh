@@ -1,6 +1,6 @@
 #compdef postscriptToPDFCreator.sh
 
-local arguments
+local -a arguments
 
 arguments=(
   '-g[run using GUI (like "gvim")]'
@@ -60,4 +60,4 @@ arguments=(
   '*:filename:_files'
 )
 
-_arguments -s $arguments
+_arguments -s -S $arguments

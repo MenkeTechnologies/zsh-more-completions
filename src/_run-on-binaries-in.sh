@@ -1,6 +1,6 @@
 #compdef run-on-binaries-in.sh
 
-local arguments
+local -a arguments
 
 arguments=(
   '(- * :)'{-h,--help}'[display this information and then exit.]'
@@ -16,4 +16,4 @@ arguments=(
   '*:filename:_files'
 )
 
-_arguments -s $arguments
+_arguments -s -S $arguments

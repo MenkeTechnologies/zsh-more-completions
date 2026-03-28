@@ -1,6 +1,6 @@
 #compdef cpu_profiler.d
 
-local arguments
+local -a arguments
 
 arguments=(
   '-p[# examine this PID]'
@@ -10,4 +10,4 @@ arguments=(
   '*:filename:_files'
 )
 
-_arguments -s $arguments
+_arguments -s -S $arguments

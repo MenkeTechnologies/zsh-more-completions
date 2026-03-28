@@ -1,10 +1,10 @@
 #compdef target_dec_fate.sh
 
-local arguments
+local -a arguments
 
 arguments=(
   '--help[not an accessable directory]'
   '*:filename:_files'
 )
 
-_arguments -s $arguments
+_arguments -s -S $arguments

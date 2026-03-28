@@ -1,6 +1,6 @@
 #compdef picture_finder.sh
 
-local arguments
+local -a arguments
 
 arguments=(
   '-m[mode]'
@@ -8,4 +8,4 @@ arguments=(
   '*:filename:_files'
 )
 
-_arguments -s $arguments
+_arguments -s -S $arguments

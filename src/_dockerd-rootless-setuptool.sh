@@ -1,6 +1,6 @@
 #compdef dockerd-rootless-setuptool.sh
 
-local arguments
+local -a arguments
 
 arguments=(
   {-f,--force}'[ignore rootful Docker (/var/run/docker.sock)]'
@@ -8,4 +8,4 @@ arguments=(
   '*:filename:_files'
 )
 
-_arguments -s $arguments
+_arguments -s -S $arguments

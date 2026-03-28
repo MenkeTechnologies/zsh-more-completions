@@ -1,6 +1,6 @@
 #compdef bootstrap-salt.sh
 
-local arguments
+local -a arguments
 
 arguments=(
   '-h[display this message]'
@@ -43,4 +43,4 @@ arguments=(
   '*:filename:_files'
 )
 
-_arguments -s $arguments
+_arguments -s -S $arguments

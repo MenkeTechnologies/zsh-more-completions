@@ -1,6 +1,6 @@
 #compdef rawie.pl
 
-local arguments
+local -a arguments
 
 arguments=(
   '-f[........Path to a file]'
@@ -11,4 +11,4 @@ arguments=(
   '*:filename:_files'
 )
 
-_arguments -s $arguments
+_arguments -s -S $arguments

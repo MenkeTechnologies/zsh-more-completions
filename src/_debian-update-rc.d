@@ -1,10 +1,10 @@
 #compdef debian-update-rc.d
 
-local arguments
+local -a arguments
 
 arguments=(
   '-f[force]'
   '*:filename:_files'
 )
 
-_arguments -s $arguments
+_arguments -s -S $arguments

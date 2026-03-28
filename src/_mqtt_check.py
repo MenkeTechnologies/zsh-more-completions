@@ -1,6 +1,6 @@
 #compdef mqtt_check.py
 
-local arguments
+local -a arguments
 
 arguments=(
   '--help[show this help message and exit]'
@@ -11,4 +11,4 @@ arguments=(
   '*:filename:_files'
 )
 
-_arguments -s $arguments
+_arguments -s -S $arguments

@@ -1,17 +1,17 @@
 #compdef gdb.py
 
-local arguments
+local -a arguments
 
 arguments=(
   '(- * :)'{-h,--help}'[show this help message and exit]'
   {-p,--pid}'[attach running process specified by its identifier]'
   {-f,--fork}'[trace fork and child process]'
   '--trace-exec[trace execve() event]'
-  '--no-stdout[use /dev/null as stdout/stderr, or close stdout and]'
+  '--no-stdout[use /dev/null as stdout/stderr, or close stdout and stderr]'
   {-q,--quiet}'[be quiet (set log level to ERROR)]'
   {-v,--verbose}'[debug mode (set log level to INFO)]'
   '--debug[debug mode (set log level to DEBUG)]'
   '*:filename:_files'
 )
 
-_arguments -s $arguments
+_arguments -s -S $arguments

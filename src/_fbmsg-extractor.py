@@ -1,14 +1,14 @@
 #compdef fbmsg-extractor.py
 
-local arguments
+local -a arguments
 
 arguments=(
   '(- * :)'{-h,--help}'[show this help message and exit]'
-  '-t[threads_db2 input file]'
-  '-c[contacts_db2 input file]'
-  '-x[(Optional) Contacts Tab Separated Output Filename]'
-  '-z[(Optional) Messages Tab Separated Output Filename]'
+  '-t[threads_db2 input file]:file:_files'
+  '-c[contacts_db2 input file]:file:_files'
+  '-x[contacts tab separated output filename]:file:_files'
+  '-z[messages tab separated output filename]:file:_files'
   '*:filename:_files'
 )
 
-_arguments -s $arguments
+_arguments -s -S $arguments

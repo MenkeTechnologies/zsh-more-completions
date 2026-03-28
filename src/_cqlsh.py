@@ -1,6 +1,6 @@
 #compdef cqlsh.py
 
-local arguments
+local -a arguments
 
 arguments=(
   '--version[show programs version number and exit]'
@@ -26,4 +26,4 @@ arguments=(
   '*:filename:_files'
 )
 
-_arguments -s $arguments
+_arguments -s -S $arguments

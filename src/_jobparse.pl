@@ -1,6 +1,6 @@
 #compdef jobparse.pl
 
-local arguments
+local -a arguments
 
 arguments=(
   '-d[...parse all files in directory]'
@@ -12,4 +12,4 @@ arguments=(
   '*:filename:_files'
 )
 
-_arguments -s $arguments
+_arguments -s -S $arguments

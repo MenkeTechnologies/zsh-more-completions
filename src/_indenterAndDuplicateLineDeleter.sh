@@ -1,6 +1,6 @@
 #compdef indenterAndDuplicateLineDeleter.sh
 
-local arguments
+local -a arguments
 
 arguments=(
   {-a,--archive}'[same as -dR --preserve=all]'
@@ -102,4 +102,4 @@ arguments=(
   '*:filename:_files'
 )
 
-_arguments -s $arguments
+_arguments -s -S $arguments

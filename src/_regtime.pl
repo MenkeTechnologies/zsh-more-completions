@@ -1,6 +1,6 @@
 #compdef regtime.pl
 
-local arguments
+local -a arguments
 
 arguments=(
   '-m[.........Hive file to prepend to key paths (use / separator, use _]'
@@ -11,4 +11,4 @@ arguments=(
   '*:filename:_files'
 )
 
-_arguments -s $arguments
+_arguments -s -S $arguments

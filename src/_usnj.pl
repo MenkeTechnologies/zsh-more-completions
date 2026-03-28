@@ -1,6 +1,6 @@
 #compdef usnj.pl
 
-local arguments
+local -a arguments
 
 arguments=(
   '-f[........USN Change Journal (full path)]'
@@ -11,4 +11,4 @@ arguments=(
   '*:filename:_files'
 )
 
-_arguments -s $arguments
+_arguments -s -S $arguments

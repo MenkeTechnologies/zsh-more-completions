@@ -1,6 +1,6 @@
 #compdef clearList.sh
 
-local arguments
+local -a arguments
 
 arguments=(
   {-b,--binary}'[list file sizes with binary prefixes]'
@@ -87,4 +87,4 @@ arguments=(
   '*:filename:_files'
 )
 
-_arguments -s $arguments
+_arguments -s -S $arguments

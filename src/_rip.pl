@@ -1,6 +1,6 @@
 #compdef rip.pl
 
-local arguments
+local -a arguments
 
 arguments=(
   '-r[hive file...Registry hive file to parse]'
@@ -13,4 +13,4 @@ arguments=(
   '*:filename:_files'
 )
 
-_arguments -s $arguments
+_arguments -s -S $arguments

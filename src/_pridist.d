@@ -1,6 +1,6 @@
 #compdef pridist.d
 
-local arguments
+local -a arguments
 
 arguments=(
   '-arch[programs and Mach-O files for the specified architecture]'
@@ -37,4 +37,4 @@ arguments=(
   '*:filename:_files'
 )
 
-_arguments -s $arguments
+_arguments -s -S $arguments

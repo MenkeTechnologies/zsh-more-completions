@@ -1,6 +1,6 @@
 #compdef check-abi.sh
 
-local arguments
+local -a arguments
 
 arguments=(
   '(- * :)'{-h,--help}'[display this information.]'
@@ -25,4 +25,4 @@ arguments=(
   '*:filename:_files'
 )
 
-_arguments -s $arguments
+_arguments -s -S $arguments

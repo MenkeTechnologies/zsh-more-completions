@@ -1,6 +1,6 @@
 #compdef loginall.py
 
-local arguments
+local -a arguments
 
 arguments=(
   '-d[debug on]'
@@ -18,4 +18,4 @@ arguments=(
   '*:filename:_files'
 )
 
-_arguments -s $arguments
+_arguments -s -S $arguments
