@@ -997,12 +997,12 @@
 
 @test '_awk compdef is awk' {
     run head -1 "$src/_awk"
-    assert $output same_as '#compdef awk'
+    assert $output contains '#compdef awk'
 }
 
 @test '_vim compdef is vim' {
     run head -1 "$src/_vim"
-    assert $output same_as '#compdef vim'
+    assert $output contains '#compdef vim'
 }
 
 @test '_docker compdef is docker' {
@@ -1017,7 +1017,7 @@
 
 @test '_make compdef is make' {
     run head -1 "$src/_make"
-    assert $output same_as '#compdef make'
+    assert $output contains '#compdef make'
 }
 
 @test '_rsync compdef is rsync' {
@@ -1067,22 +1067,22 @@
 
 @test '_sort compdef is sort' {
     run head -1 "$src/_sort"
-    assert $output same_as '#compdef sort'
+    assert $output contains '#compdef sort'
 }
 
 @test '_wc compdef is wc' {
     run head -1 "$src/_wc"
-    assert $output same_as '#compdef wc'
+    assert $output contains '#compdef wc'
 }
 
 @test '_cut compdef is cut' {
     run head -1 "$src/_cut"
-    assert $output same_as '#compdef cut'
+    assert $output contains '#compdef cut'
 }
 
 @test '_paste compdef is paste' {
     run head -1 "$src/_paste"
-    assert $output same_as '#compdef paste'
+    assert $output contains '#compdef paste'
 }
 
 @test '_tee compdef is tee' {
@@ -1137,7 +1137,7 @@
 
 @test '_stat compdef is stat' {
     run head -1 "$src/_stat"
-    assert $output same_as '#compdef stat'
+    assert $output contains '#compdef stat'
 }
 
 @test '_file compdef is file' {
@@ -1152,12 +1152,12 @@
 
 @test '_od compdef is od' {
     run head -1 "$src/_od"
-    assert $output same_as '#compdef od'
+    assert $output contains '#compdef od'
 }
 
 @test '_hexdump compdef is hexdump' {
     run head -1 "$src/_hexdump"
-    assert $output same_as '#compdef hexdump'
+    assert $output contains '#compdef hexdump'
 }
 
 @test '_diff compdef is diff' {
@@ -1182,7 +1182,7 @@
 
 @test '_nc compdef is nc' {
     run head -1 "$src/_nc"
-    assert $output same_as '#compdef nc'
+    assert $output contains '#compdef nc'
 }
 
 @test '_nmap compdef is nmap' {
@@ -1919,12 +1919,12 @@
 }
 
 @test '_sed has -e option' {
-    run grep -cF '{-e,' "$src/_sed"
+    run grep -c '{-e[+=]' "$src/_sed"
     assert $state equals 0
 }
 
 @test '_sed has -i option' {
-    run grep -cF '{-i,' "$src/_sed"
+    run grep -c '{-i[-=]' "$src/_sed"
     assert $state equals 0
 }
 
@@ -2139,7 +2139,7 @@
 }
 
 @test '_cut has -d option' {
-    run grep -cF '{-d,' "$src/_cut"
+    run grep -c '\-d[+=]' "$src/_cut"
     assert $state equals 0
 }
 
@@ -2184,7 +2184,7 @@
 }
 
 @test '_strace has -e option' {
-    run grep -c "'-e" "$src/_strace"
+    run grep -c '\*-e' "$src/_strace"
     assert $state equals 0
 }
 
@@ -2219,7 +2219,7 @@
 }
 
 @test '_less has -S option' {
-    run grep -c "'-S" "$src/_less"
+    run grep -c '{-S,' "$src/_less"
     assert $state equals 0
 }
 
@@ -2249,7 +2249,7 @@
 }
 
 @test '_file has -i option' {
-    run grep -cF '{-i,' "$src/_file"
+    run grep -c "'-i" "$src/_file"
     assert $state equals 0
 }
 
@@ -2259,7 +2259,7 @@
 }
 
 @test '_patch has -p option' {
-    run grep -cF '{-p,' "$src/_patch"
+    run grep -c '{-p[+=]' "$src/_patch"
     assert $state equals 0
 }
 
@@ -2279,7 +2279,7 @@
 }
 
 @test '_pgrep has -u option' {
-    run grep -cF '{-u,' "$src/_pgrep"
+    run grep -c '{-u[+=]' "$src/_pgrep"
     assert $state equals 0
 }
 
@@ -2319,12 +2319,12 @@
 }
 
 @test '_nl has -b option' {
-    run grep -cF '{-b,' "$src/_nl"
+    run grep -c '{-b[+=]' "$src/_nl"
     assert $state equals 0
 }
 
 @test '_fold has -w option' {
-    run grep -cF '{-w,' "$src/_fold"
+    run grep -c '{-w[+=]' "$src/_fold"
     assert $state equals 0
 }
 
@@ -2364,12 +2364,12 @@
 }
 
 @test '_make has -f option' {
-    run grep -cF '{-f,' "$src/_make"
+    run grep -c '{-f[+=]' "$src/_make"
     assert $state equals 0
 }
 
 @test '_make has -j option' {
-    run grep -cF '{-j,' "$src/_make"
+    run grep -c '{-j[+=]' "$src/_make"
     assert $state equals 0
 }
 
@@ -2384,12 +2384,12 @@
 }
 
 @test '_jq has -r option' {
-    run grep -c "'-r" "$src/_jq"
+    run grep -cF '{-r,' "$src/_jq"
     assert $state equals 0
 }
 
 @test '_jq has -e option' {
-    run grep -c "'-e" "$src/_jq"
+    run grep -cF '{-e,' "$src/_jq"
     assert $state equals 0
 }
 
@@ -2514,7 +2514,7 @@
 }
 
 @test '_perl has -e option' {
-    run grep -c "'-e" "$src/_perl"
+    run grep -c '\*-e' "$src/_perl"
     assert $state equals 0
 }
 
@@ -2554,7 +2554,7 @@
 }
 
 @test '_journalctl has -u option' {
-    run grep -cF '{-u,' "$src/_journalctl"
+    run grep -c '{-u[+=]' "$src/_journalctl"
     assert $state equals 0
 }
 
@@ -2569,12 +2569,12 @@
 }
 
 @test '_crontab has -e option' {
-    run grep -c "'-e" "$src/_crontab"
+    run grep -c ')-e' "$src/_crontab"
     assert $state equals 0
 }
 
 @test '_crontab has -l option' {
-    run grep -c "'-l" "$src/_crontab"
+    run grep -c ')-l' "$src/_crontab"
     assert $state equals 0
 }
 

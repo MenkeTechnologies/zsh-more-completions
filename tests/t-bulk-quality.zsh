@@ -702,7 +702,7 @@
     local good=0
     local total=0
     for f in "$msrc"/_*; do
-        grep -q 'local arguments' "$f" && (( good += 1 )) || true
+        grep -qE 'local (-a )?arguments' "$f" && (( good += 1 )) || true
         (( total += 1 ))
         (( total >= 300 )) && break
     done
@@ -749,7 +749,7 @@
     local good=0
     local total=0
     for f in "$src"/_*; do
-        grep -q 'local arguments' "$f" && (( good += 1 )) || true
+        grep -qE 'local (-a )?arguments' "$f" && (( good += 1 )) || true
         (( total += 1 ))
         (( total >= 300 )) && break
     done
@@ -948,7 +948,7 @@
     local good=0
     local total=0
     for f in "$asrc"/_*; do
-        grep -q 'local arguments' "$f" && (( good += 1 )) || true
+        grep -qE 'local (-a )?arguments' "$f" && (( good += 1 )) || true
         (( total += 1 ))
         (( total >= 200 )) && break
     done

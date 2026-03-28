@@ -95,7 +95,7 @@
 }
 
 @test '_make uses combined short+long for -j/--jobs' {
-    run grep -cF '{-j,--jobs}' "$src/_make"
+    run grep -cE '\{-j[+=]?,--jobs[+=]?\}' "$src/_make"
     assert $state equals 0
 }
 
@@ -213,7 +213,7 @@
 
 @test 'src files widely use local arguments array' {
     local count
-    count=$(grep -rlF 'local arguments' "$src/" | wc -l | tr -d ' ')
+    count=$(grep -rlE 'local (-a )?arguments' "$src/" | wc -l | tr -d ' ')
     assert $count is_greater_than 5000
 }
 

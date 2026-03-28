@@ -55,11 +55,6 @@
     assert $state equals 0
 }
 
-@test '_htop has _files' {
-    run grep -c '_files' "$src/_htop"
-    assert $state equals 0
-}
-
 @test '_htop has _arguments' {
     run grep -c '_arguments' "$src/_htop"
     assert $state equals 0

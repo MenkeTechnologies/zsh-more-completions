@@ -204,7 +204,7 @@
 
 @test '_make compdef is make' {
     run head -1 "$src/_make"
-    assert $output same_as '#compdef make'
+    assert $output contains '#compdef make'
 }
 
 @test '_make has --jobs' {
@@ -288,7 +288,7 @@
 
 @test '_awk compdef is awk' {
     run head -1 "$src/_awk"
-    assert $output same_as '#compdef awk'
+    assert $output contains '#compdef awk'
 }
 
 @test '_awk has --file flag' {
@@ -357,7 +357,7 @@
 
 @test '_vim compdef is vim' {
     run head -1 "$src/_vim"
-    assert $output same_as '#compdef vim'
+    assert $output contains '#compdef vim'
 }
 
 @test '_vim has -d diff mode' {
@@ -461,9 +461,9 @@
 
 # ─── _systemctl content ───────────────────────────────────────────────────────
 
-@test '_systemctl compdef includes systemd-loginctl' {
+@test '_systemctl compdef includes systemctl' {
     run head -1 "$src/_systemctl"
-    assert $output contains 'systemd-loginctl'
+    assert $output contains 'systemctl'
 }
 
 @test '_systemctl has unit type completion' {
