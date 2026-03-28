@@ -1,6 +1,6 @@
 #compdef socat-chain.sh
 
-local arguments
+local -a arguments
 
 arguments=(
   '-d[*  -S <sigmask>  -t <timeout>  -T <timeout> 	are passed to socat]'
@@ -8,4 +8,4 @@ arguments=(
   '*:filename:_files'
 )
 
-_arguments -s $arguments
+_arguments -s -S $arguments

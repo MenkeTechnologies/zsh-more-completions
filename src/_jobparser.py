@@ -3,8 +3,8 @@
 local -a arguments
 
 arguments=(
-  '-f[]'
-  '-d[of job files>]'
+  '-f[specify job file]:file:_files'
+  '-d[specify directory of job files]:directory:_files -/'
   '*:filename:_files'
 )
 

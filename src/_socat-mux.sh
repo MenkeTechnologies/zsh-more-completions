@@ -1,6 +1,6 @@
 #compdef socat-mux.sh
 
-local arguments
+local -a arguments
 
 arguments=(
   '-h[show this help text and exit]'
@@ -12,4 +12,4 @@ arguments=(
   '*:filename:_files'
 )
 
-_arguments -s $arguments
+_arguments -s -S $arguments

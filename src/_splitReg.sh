@@ -1,6 +1,6 @@
 #compdef splitReg.sh
 
-local arguments
+local -a arguments
 
 arguments=(
   '-i[|inverse set filter to after regex]'
@@ -9,4 +9,4 @@ arguments=(
   '*:filename:_files'
 )
 
-_arguments -s $arguments
+_arguments -s -S $arguments

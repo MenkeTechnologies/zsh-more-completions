@@ -1,6 +1,6 @@
 #compdef sixLangDisplayer.sh
 
-local arguments
+local -a arguments
 
 arguments=(
   '-b[mode: Borg]'
@@ -22,4 +22,4 @@ arguments=(
   '*:filename:_files'
 )
 
-_arguments -s $arguments
+_arguments -s -S $arguments

@@ -7,7 +7,7 @@ arguments=(
   {--version,-V}'[show version and exit]'
   {--yes,-y}'[do not ask for confirmation.]'
   {--all,-a}'[remove *all* memos and externs.]'
-  {--quiet,-q}'[]'
+  {--quiet,-q}'[suppress informational messages]'
   {--prefix,-p}'[A path prefix to clean;]'
   '*:filename:_files'
 )

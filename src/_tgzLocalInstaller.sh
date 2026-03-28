@@ -3,9 +3,9 @@
 local -a arguments
 
 arguments=(
-  '-h[|help Display this message]'
-  '-v[|version Display script version]'
-  '-n[|no-install No sudo make install]'
+  {-h,--help}'[display this message]'
+  {-v,--version}'[display script version]'
+  {-n,--no-install}'[no sudo make install]'
   '*:filename:_files'
 )
 

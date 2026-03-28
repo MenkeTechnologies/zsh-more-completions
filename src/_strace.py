@@ -1,6 +1,6 @@
 #compdef strace.py
 
-local arguments
+local -a arguments
 
 arguments=(
   '(- * :)'{-h,--help}'[show this help message and exit]'
@@ -31,4 +31,4 @@ arguments=(
   '*:filename:_files'
 )
 
-_arguments -s $arguments
+_arguments -s -S $arguments

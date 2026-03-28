@@ -1,6 +1,6 @@
 #compdef sqlparser.py
 
-local arguments
+local -a arguments
 
 arguments=(
   '-f[/sanforensics/smsmms.db -o report.tsv]'
@@ -12,4 +12,4 @@ arguments=(
   '*:filename:_files'
 )
 
-_arguments -s $arguments
+_arguments -s -S $arguments

@@ -19,7 +19,7 @@ arguments=(
   '--hostformat[Host Based Report Options - none \[default\], split, splitmail.]'
   '--hostlimit[Limit report to hostname - host1,host2.]'
   '--hostname[overwrites hostname]'
-  '--html[_wrap <num_characters>: Default is 80.]'
+  '--html_wrap[set HTML wrap width (default 80)]:num_characters:'
   '--version[Displays current version.]'
   '--help[This message.]'
   '--usage[Same as --help.]'
