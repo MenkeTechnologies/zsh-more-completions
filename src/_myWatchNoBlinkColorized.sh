@@ -3,7 +3,7 @@
 local -a arguments
 
 arguments=(
-  '-h[]'
+  '-h[show help]'
   '-b[bold]'
   '*:filename:_files'
 )
