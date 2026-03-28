@@ -3,11 +3,10 @@
 local arguments
 
 arguments=(
-  '-h[help message]'
-  '-R[ibnetdiscover information (Default is to reuse ibnetdiscover output)]'
-  '-C[use selected Channel Adaptor name for queries]'
-  '-P[use selected channel adaptor port for queries]'
-  '*:filename:_files'
+    '-h[Show help message]'
+    '-R[Specify ibnetdiscover information file]:file:_files'
+    '-C[Use selected Channel Adaptor name for queries]:ca_name'
+    '-P[Use selected channel adaptor port for queries]:port'
+    '*:filename:_files'
 )
-
 _arguments -s $arguments

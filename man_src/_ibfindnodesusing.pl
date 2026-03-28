@@ -3,10 +3,9 @@
 local arguments
 
 arguments=(
-  '-R[ibnetdiscover information]'
-  '-C[use selected Channel Adaptor name for queries]'
-  '-P[use selected channel adaptor port for queries]'
-  '*:filename:_files'
+    '-R[Specify ibnetdiscover information file]:file:_files'
+    '-C[Use selected Channel Adaptor name for queries]:ca_name'
+    '-P[Use selected channel adaptor port for queries]:port'
+    '*:filename:_files'
 )
-
 _arguments -s $arguments
