@@ -8,21 +8,25 @@ _tp_indices() {
   stack_dir="${TEMPRS_DIR:-${TMPDIR:-/tmp}/temprs}"
   master_file="${stack_dir}/temprs-stack"
   [[ -r "$master_file" ]] || return
+  [[ ! -s "$master_file" ]] && return
 
-  local -a indices descriptions
+  local -a descriptions
   local i=1 filepath name_tag
-  local content
-  content="$(<"$master_file")"
+
+  # The master record uses \0\0 as record delimiter and \0 as field delimiter.
+  # Zsh variables cannot hold null bytes, so replace \0 with RS (\x1e) first:
+  #   record delimiter \0\0 becomes \x1e\x1e, field delimiter \0 becomes \x1e
+  local content RS=$'\x1e' RSRS=$'\x1e\x1e'
+  content=$(tr '\0' "$RS" < "$master_file")
   [[ -z "$content" ]] && return
 
-  # records are separated by \0\0, fields within a record by \0
   local -a records
-  records=("${(@s:\0\0:)content}")
+  records=("${(@ps:$RSRS:)content}")
   for record in "${records[@]}"; do
     [[ -z "$record" ]] && continue
-    if [[ "$record" == *$'\0'* ]]; then
-      filepath="${record%%$'\0'*}"
-      name_tag="${record#*$'\0'}"
+    if [[ "$record" == *"$RS"* ]]; then
+      filepath="${record%%"$RS"*}"
+      name_tag="${record#*"$RS"}"
     else
       filepath="$record"
       name_tag=""
