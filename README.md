@@ -1,5 +1,7 @@
 # ⚡ zsh-more-completions
 
+[![CI](https://github.com/MenkeTechnologies/zsh-more-completions/actions/workflows/ci.yml/badge.svg)](https://github.com/MenkeTechnologies/zsh-more-completions/actions/workflows/ci.yml)
+
 ```
  ███▄ ▄███▓ ▒█████   ██▀███  ▓█████
 ▓██▒▀█▀ ██▒▒██▒  ██▒▓██ ▒ ██▒▓█   ▀
