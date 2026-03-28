@@ -3,8 +3,8 @@
 local -a arguments
 
 arguments=(
-  '-h[|help Display this message]'
-  '-v[|version Display script version]'
+  '-h[display this message]'
+  '-v[display script version]'
   '*:filename:_files'
 )
 

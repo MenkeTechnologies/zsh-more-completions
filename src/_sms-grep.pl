@@ -3,7 +3,7 @@
 local -a arguments
 
 arguments=(
-  '-h[|help ... Help (print this information). Does not run anything else.]'
+  '-h[print help information and exit]'
   '-c[. Configuration file containing db schema.]'
   '-f[... File to be parsed (eg database, journal).]'
   '-s[.. Phone number(s) to be searched for.]'

@@ -15,7 +15,7 @@ arguments=(
   {-f,--filter}'[add text transformation]'
   '--eol[LF,CRLF end of line mode]'
   '--raw[do no apply any encodings/transformations]'
-  '--exit-char[unicode of special character that is used to exit the]'
+  '--exit-char[unicode of special character that is used to exit the application]'
   '--menu-char[unicode code of special character that is used to trigger the menu]'
   {-q,--quiet}'[suppress non-error messages]'
   '--develop[show Python traceback on error]'

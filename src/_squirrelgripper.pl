@@ -3,7 +3,7 @@
 local -a arguments
 
 arguments=(
-  '-h[|help .......... Help (print this information). Does not run anything else.]'
+  '-h[print help information and exit]'
   '-newdb[.......... Creates a new SQLite Database using the -db name. WARNING: Deletes existing database.]'
   '-db[..... SQLite Database filename to extract information to.]'
   '-case[.... Case Tag to apply to the files in the database.]'

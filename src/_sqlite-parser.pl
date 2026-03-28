@@ -3,7 +3,7 @@
 local -a arguments
 
 arguments=(
-  '-h[|help .......... Help (print this information). Does not run anything else.]'
+  '-h[print help information and exit]'
   '-file[... sqlite filename to be parsed.]'
   '*:filename:_files'
 )
