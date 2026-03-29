@@ -11,6 +11,7 @@
     0="${${(M)0:#/*}:-$PWD/$0}"
     pluginDir="${0:h:A}"
     src="$pluginDir/src"
+    xsrc="$pluginDir/more_src"
     msrc="$pluginDir/man_src"
     osrc="$pluginDir/override_src"
     asrc="$pluginDir/architecture_src"
@@ -23,9 +24,14 @@
     assert "$count" is_greater_than 9000
 }
 
-@test 'src has more than 10200 files' {
+@test 'src has more than 9100 files' {
     local count=$(ls "$src" | wc -l | tr -d ' ')
-    assert "$count" is_greater_than 10200
+    assert "$count" is_greater_than 9100
+}
+
+@test 'more_src has more than 1100 files' {
+    local count=$(ls "$xsrc" | wc -l | tr -d ' ')
+    assert "$count" is_greater_than 1100
 }
 
 @test 'src has fewer than 20000 files' {
@@ -70,28 +76,31 @@
 
 @test 'total completion count exceeds 13000' {
     local s=$(ls "$src" | wc -l | tr -d ' ')
+    local x=$(ls "$xsrc" | wc -l | tr -d ' ')
     local m=$(ls "$msrc" | wc -l | tr -d ' ')
     local a=$(ls "$asrc" | wc -l | tr -d ' ')
     local o=$(ls "$osrc" | wc -l | tr -d ' ')
-    local total=$(( s + m + a + o ))
+    local total=$(( s + x + m + a + o ))
     assert "$total" is_greater_than 13000
 }
 
-@test 'total completion count exceeds 14600' {
+@test 'total completion count exceeds 14700' {
     local s=$(ls "$src" | wc -l | tr -d ' ')
+    local x=$(ls "$xsrc" | wc -l | tr -d ' ')
     local m=$(ls "$msrc" | wc -l | tr -d ' ')
     local a=$(ls "$asrc" | wc -l | tr -d ' ')
     local o=$(ls "$osrc" | wc -l | tr -d ' ')
-    local total=$(( s + m + a + o ))
-    assert "$total" is_greater_than 14600
+    local total=$(( s + x + m + a + o ))
+    assert "$total" is_greater_than 14700
 }
 
 @test 'total completion count is less than 20000' {
     local s=$(ls "$src" | wc -l | tr -d ' ')
+    local x=$(ls "$xsrc" | wc -l | tr -d ' ')
     local m=$(ls "$msrc" | wc -l | tr -d ' ')
     local a=$(ls "$asrc" | wc -l | tr -d ' ')
     local o=$(ls "$osrc" | wc -l | tr -d ' ')
-    local total=$(( s + m + a + o ))
+    local total=$(( s + x + m + a + o ))
     assert "$total" is_less_than 20000
 }
 
