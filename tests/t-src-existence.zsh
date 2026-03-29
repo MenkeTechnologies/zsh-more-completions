@@ -115,10 +115,6 @@
     assert "$src/_tail" is_file
 }
 
-@test 'src has _head' {
-    assert "$src/_head" is_file
-}
-
 @test 'src has _sort' {
     assert "$src/_sort" is_file
 }
@@ -1060,11 +1056,6 @@
     assert $output same_as '#compdef tail'
 }
 
-@test '_head compdef is head' {
-    run head -1 "$src/_head"
-    assert $output same_as '#compdef head'
-}
-
 @test '_sort compdef is sort' {
     run head -1 "$src/_sort"
     assert $output contains '#compdef sort'
@@ -1392,11 +1383,6 @@
     assert $state equals 0
 }
 
-@test '_head passes syntax check' {
-    run zsh -n "$src/_head"
-    assert $state equals 0
-}
-
 @test '_tail passes syntax check' {
     run zsh -n "$src/_tail"
     assert $state equals 0
@@ -1584,11 +1570,6 @@
     assert $state equals 0
 }
 
-@test '_head uses _arguments' {
-    run grep -c '_arguments' "$src/_head"
-    assert $state equals 0
-}
-
 @test '_tail uses _arguments' {
     run grep -c '_arguments' "$src/_tail"
     assert $state equals 0
@@ -1768,11 +1749,6 @@
 
 @test '_more completes filenames' {
     run grep -c '_files' "$src/_more"
-    assert $state equals 0
-}
-
-@test '_head completes filenames' {
-    run grep -c '_files' "$src/_head"
     assert $state equals 0
 }
 

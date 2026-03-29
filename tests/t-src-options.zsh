@@ -805,23 +805,6 @@
     assert $state equals 0
 }
 
-# ─── _head ────────────────────────────────────────────────────────────────────
-
-@test '_head has _files' {
-    run grep -c '_files' "$src/_head"
-    assert $state equals 0
-}
-
-@test '_head has _arguments' {
-    run grep -c '_arguments' "$src/_head"
-    assert $state equals 0
-}
-
-@test '_head has -c' {
-    run grep -c '\-c' "$src/_head"
-    assert $state equals 0
-}
-
 # ─── _tail ────────────────────────────────────────────────────────────────────
 
 @test '_tail has --bytes' {
