@@ -2443,13 +2443,13 @@
     assert $state equals 0
 }
 
-@test '_cheat has options state' {
-    run grep -c 'options' "$osrc/_cheat"
+@test '_cheat caches language list' {
+    run grep -c 'cache' "$osrc/_cheat"
     assert $state equals 0
 }
 
-@test '_cheat uses _alternative' {
-    run grep -c '_alternative' "$osrc/_cheat"
+@test '_cheat uses compadd' {
+    run grep -c 'compadd' "$osrc/_cheat"
     assert $state equals 0
 }
 
@@ -2463,18 +2463,18 @@
     assert $state equals 0
 }
 
-@test '_cheat has noargs state' {
-    run grep -c 'noargs' "$osrc/_cheat"
+@test '_cheat uses XDG_CACHE_HOME' {
+    run grep -c 'XDG_CACHE_HOME' "$osrc/_cheat"
     assert $state equals 0
 }
 
-@test '_cheat has CURRENT check' {
-    run grep -c 'CURRENT' "$osrc/_cheat"
+@test '_cheat declares local variables' {
+    run grep -c 'local' "$osrc/_cheat"
     assert $state equals 0
 }
 
-@test '_cheat defines __CHTSH_LANGS' {
-    run grep -c '__CHTSH_LANGS' "$osrc/_cheat"
+@test '_cheat uses array parameter expansion' {
+    run grep -c '@f' "$osrc/_cheat"
     assert $state equals 0
 }
 
@@ -2483,24 +2483,24 @@
     assert $state equals 0
 }
 
-@test '_cheat uses case/esac' {
-    run grep -c 'case' "$osrc/_cheat"
+@test '_cheat checks for curl command' {
+    run grep -c 'commands\[curl\]' "$osrc/_cheat"
     assert $state equals 0
 }
 
-@test '_cheat uses esac' {
-    run grep -c 'esac' "$osrc/_cheat"
+@test '_cheat uses background cache write' {
+    run grep -c '&!' "$osrc/_cheat"
     assert $state equals 0
 }
 
-@test '_cheat has arguments array' {
-    run grep -c 'arguments=' "$osrc/_cheat"
+@test '_cheat uses find for cache expiry' {
+    run grep -c 'find' "$osrc/_cheat"
     assert $state equals 0
 }
 
-@test '_cheat file size is reasonable - over 20 lines' {
+@test '_cheat file size is reasonable - over 10 lines' {
     local lc=$(wc -l < "$osrc/_cheat")
-    assert "$lc" is_greater_than 20
+    assert "$lc" is_greater_than 10
 }
 
 @test '_cheat file size is reasonable - under 50 lines' {
@@ -2523,13 +2523,13 @@
     assert $state equals 0
 }
 
-@test '_cheat has nothing to complete message' {
-    run grep -c 'nothing to complete' "$osrc/_cheat"
+@test '_cheat has query message' {
+    run grep -c 'query' "$osrc/_cheat"
     assert $state equals 0
 }
 
-@test '_cheat has no more arguments message' {
-    run grep -c 'no more arguments' "$osrc/_cheat"
+@test '_cheat uses _message for search query' {
+    run grep -c 'search query' "$osrc/_cheat"
     assert $state equals 0
 }
 
@@ -2543,13 +2543,13 @@
     assert $state equals 0
 }
 
-@test '_cheat references $state variable' {
-    run grep -c '$state' "$osrc/_cheat"
+@test '_cheat uses elif' {
+    run grep -c 'elif' "$osrc/_cheat"
     assert $state equals 0
 }
 
-@test '_cheat has return statement' {
-    run grep -c 'return' "$osrc/_cheat"
+@test '_cheat uses cheat_langs variable' {
+    run grep -c 'cheat_langs' "$osrc/_cheat"
     assert $state equals 0
 }
 
@@ -2568,23 +2568,23 @@
     assert $state equals 0
 }
 
-@test '_cheat has show help description' {
-    run grep -c 'show this help' "$osrc/_cheat"
+@test '_cheat has help description' {
+    run grep -c 'show help' "$osrc/_cheat"
     assert $state equals 0
 }
 
-@test '_cheat has enter shell description' {
-    run grep -c 'enter shell' "$osrc/_cheat"
+@test '_cheat has shell description' {
+    run grep -c 'shell mode' "$osrc/_cheat"
     assert $state equals 0
 }
 
-@test '_cheat has cheat lang label' {
-    run grep -c 'cheat lang' "$osrc/_cheat"
+@test '_cheat has cheat sheet label' {
+    run grep -c 'cheat sheet' "$osrc/_cheat"
     assert $state equals 0
 }
 
-@test '_cheat uses commands tag in _alternative' {
-    run grep -c 'commands:cheat' "$osrc/_cheat"
+@test '_cheat uses compadd -a for array' {
+    run grep -c 'compadd -a' "$osrc/_cheat"
     assert $state equals 0
 }
 
@@ -2598,57 +2598,27 @@
     assert $state equals 0
 }
 
-@test '_cheat has -ge comparison' {
-    run grep -c '\-ge' "$osrc/_cheat"
+@test '_cheat uses mtime for cache expiry' {
+    run grep -c 'mtime' "$osrc/_cheat"
     assert $state equals 0
 }
 
-@test '_cheat references CURRENT variable' {
-    run grep -c 'CURRENT' "$osrc/_cheat"
-    assert $state equals 0
-}
-
-@test '_cheat uses parentheses for noargs case' {
-    run grep -c 'noargs)' "$osrc/_cheat"
-    assert $state equals 0
-}
-
-@test '_cheat uses parentheses for lang case' {
-    run grep -c 'lang)' "$osrc/_cheat"
-    assert $state equals 0
-}
-
-@test '_cheat uses parentheses for options case' {
-    run grep -c 'options)' "$osrc/_cheat"
-    assert $state equals 0
-}
-
-@test '_cheat uses double semicolons for case breaks' {
-    run grep -c ';;' "$osrc/_cheat"
+@test '_cheat uses file redirection for cache' {
+    run grep -c 'cache_file' "$osrc/_cheat"
     assert $state equals 0
 }
 
 @test '_cheat has help flag with bracket description' {
-    run grep -c '\[show this help' "$osrc/_cheat"
+    run grep -c '\[show help' "$osrc/_cheat"
     assert $state equals 0
 }
 
 @test '_cheat has shell flag with bracket description' {
-    run grep -c '\[enter shell' "$osrc/_cheat"
+    run grep -c '\[enter interactive shell' "$osrc/_cheat"
     assert $state equals 0
 }
 
-@test '_cheat uses state arrow notation' {
-    run grep -c '\->lang' "$osrc/_cheat"
-    assert $state equals 0
-}
-
-@test '_cheat uses noargs arrow notation' {
-    run grep -c '\->noargs' "$osrc/_cheat"
-    assert $state equals 0
-}
-
-@test '_cheat uses options arrow notation' {
-    run grep -c '\->options' "$osrc/_cheat"
+@test '_cheat uses exclusion pattern for help' {
+    run grep -c '(- \*)' "$osrc/_cheat"
     assert $state equals 0
 }

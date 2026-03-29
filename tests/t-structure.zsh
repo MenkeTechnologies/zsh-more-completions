@@ -75,7 +75,7 @@
 }
 
 @test '_lftp declares local arguments' {
-    run grep -c 'local arguments' "$pluginDir/override_src/_lftp"
+    run grep -c 'local.*arguments' "$pluginDir/override_src/_lftp"
     assert $state equals 0
 }
 
