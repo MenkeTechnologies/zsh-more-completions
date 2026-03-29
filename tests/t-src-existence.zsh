@@ -2607,3 +2607,267 @@
     run grep -c '\-\-verify' "$src/_gpg"
     assert $state equals 0
 }
+
+# ─── Additional file existence tests ─────────────────────────────────────────
+
+@test 'src has _wget' {
+    assert "$src/_wget" is_file
+}
+
+@test 'src has _ssh' {
+    assert "$src/_ssh" is_file
+}
+
+@test 'src has _xargs' {
+    assert "$src/_xargs" is_file
+}
+
+@test 'src has _gzip' {
+    assert "$src/_gzip" is_file
+}
+
+@test 'src has _bzip2' {
+    assert "$src/_bzip2" is_file
+}
+
+@test 'src has _date' {
+    assert "$src/_date" is_file
+}
+
+@test 'src has _env' {
+    assert "$src/_env" is_file
+}
+
+@test 'src has _free' {
+    assert "$src/_free" is_file
+}
+
+@test 'src has _touch' {
+    assert "$src/_touch" is_file
+}
+
+@test 'src has _who' {
+    assert "$src/_who" is_file
+}
+
+@test 'src has _uptime' {
+    assert "$src/_uptime" is_file
+}
+
+# ─── Compdef header tests ────────────────────────────────────────────────────
+
+@test '_wget compdef is wget' {
+    run head -1 "$src/_wget"
+    assert $output same_as '#compdef wget'
+}
+
+@test '_ssh compdef is ssh' {
+    run head -1 "$src/_ssh"
+    assert $output same_as '#compdef ssh'
+}
+
+@test '_xargs compdef is xargs' {
+    run head -1 "$src/_xargs"
+    assert $output same_as '#compdef xargs'
+}
+
+@test '_gzip compdef is gzip' {
+    run head -1 "$src/_gzip"
+    assert $output same_as '#compdef gzip'
+}
+
+@test '_bzip2 compdef is bzip2' {
+    run head -1 "$src/_bzip2"
+    assert $output same_as '#compdef bzip2'
+}
+
+@test '_date compdef is date' {
+    run head -1 "$src/_date"
+    assert $output same_as '#compdef date'
+}
+
+@test '_env compdef is env' {
+    run head -1 "$src/_env"
+    assert $output same_as '#compdef env'
+}
+
+@test '_free compdef is free' {
+    run head -1 "$src/_free"
+    assert $output same_as '#compdef free'
+}
+
+@test '_touch compdef is touch' {
+    run head -1 "$src/_touch"
+    assert $output same_as '#compdef touch'
+}
+
+@test '_who compdef is who' {
+    run head -1 "$src/_who"
+    assert $output same_as '#compdef who'
+}
+
+@test '_uptime compdef is uptime' {
+    run head -1 "$src/_uptime"
+    assert $output same_as '#compdef uptime'
+}
+
+@test '_tee compdef is tee' {
+    run head -1 "$src/_tee"
+    assert $output same_as '#compdef tee'
+}
+
+# ─── Syntax check tests ──────────────────────────────────────────────────────
+
+@test '_wget passes syntax check' {
+    run zsh -n "$src/_wget"
+    assert $state equals 0
+}
+
+@test '_ssh passes syntax check' {
+    run zsh -n "$src/_ssh"
+    assert $state equals 0
+}
+
+@test '_xargs passes syntax check' {
+    run zsh -n "$src/_xargs"
+    assert $state equals 0
+}
+
+@test '_gzip passes syntax check' {
+    run zsh -n "$src/_gzip"
+    assert $state equals 0
+}
+
+@test '_bzip2 passes syntax check' {
+    run zsh -n "$src/_bzip2"
+    assert $state equals 0
+}
+
+@test '_date passes syntax check' {
+    run zsh -n "$src/_date"
+    assert $state equals 0
+}
+
+@test '_env passes syntax check' {
+    run zsh -n "$src/_env"
+    assert $state equals 0
+}
+
+@test '_free passes syntax check' {
+    run zsh -n "$src/_free"
+    assert $state equals 0
+}
+
+@test '_touch passes syntax check' {
+    run zsh -n "$src/_touch"
+    assert $state equals 0
+}
+
+@test '_who passes syntax check' {
+    run zsh -n "$src/_who"
+    assert $state equals 0
+}
+
+@test '_uptime passes syntax check' {
+    run zsh -n "$src/_uptime"
+    assert $state equals 0
+}
+
+@test '_tee passes syntax check' {
+    run zsh -n "$src/_tee"
+    assert $state equals 0
+}
+
+# ─── _arguments usage tests ──────────────────────────────────────────────────
+
+@test '_wget uses _arguments' {
+    run grep -c '_arguments' "$src/_wget"
+    assert $state equals 0
+}
+
+@test '_ssh uses _arguments' {
+    run grep -c '_arguments' "$src/_ssh"
+    assert $state equals 0
+}
+
+@test '_xargs uses _arguments' {
+    run grep -c '_arguments' "$src/_xargs"
+    assert $state equals 0
+}
+
+@test '_gzip uses _arguments' {
+    run grep -c '_arguments' "$src/_gzip"
+    assert $state equals 0
+}
+
+@test '_bzip2 uses _arguments' {
+    run grep -c '_arguments' "$src/_bzip2"
+    assert $state equals 0
+}
+
+@test '_date uses _arguments' {
+    run grep -c '_arguments' "$src/_date"
+    assert $state equals 0
+}
+
+@test '_env uses _arguments' {
+    run grep -c '_arguments' "$src/_env"
+    assert $state equals 0
+}
+
+@test '_free uses _arguments' {
+    run grep -c '_arguments' "$src/_free"
+    assert $state equals 0
+}
+
+@test '_touch uses _arguments' {
+    run grep -c '_arguments' "$src/_touch"
+    assert $state equals 0
+}
+
+@test '_who uses _arguments' {
+    run grep -c '_arguments' "$src/_who"
+    assert $state equals 0
+}
+
+@test '_uptime uses _arguments' {
+    run grep -c '_arguments' "$src/_uptime"
+    assert $state equals 0
+}
+
+@test '_tee uses _arguments' {
+    run grep -c '_arguments' "$src/_tee"
+    assert $state equals 0
+}
+
+# ─── _files completion tests ─────────────────────────────────────────────────
+
+@test '_wget completes URLs' {
+    run grep -c '_urls' "$src/_wget"
+    assert $state equals 0
+}
+
+@test '_gzip completes filenames' {
+    run grep -c '_files' "$src/_gzip"
+    assert $state equals 0
+}
+
+@test '_bzip2 completes filenames' {
+    run grep -c '_files' "$src/_bzip2"
+    assert $state equals 0
+}
+
+@test '_touch completes filenames' {
+    run grep -c '_files' "$src/_touch"
+    assert $state equals 0
+}
+
+@test '_who completes filenames' {
+    run grep -c '_files' "$src/_who"
+    assert $state equals 0
+}
+
+@test '_tee completes filenames' {
+    run grep -c '_files' "$src/_tee"
+    assert $state equals 0
+}

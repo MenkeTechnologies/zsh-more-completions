@@ -2428,3 +2428,367 @@
     run grep -c '\-r' "$src/_exiftool"
     assert $state equals 0
 }
+
+# ─── _wget ────────────────────────────────────────────────────────────────────
+
+@test '_wget has --recursive' {
+    run grep -c 'recursive' "$src/_wget"
+    assert $state equals 0
+}
+
+@test '_wget has --output-document' {
+    run grep -c 'output-document' "$src/_wget"
+    assert $state equals 0
+}
+
+@test '_wget has --continue' {
+    run grep -c 'continue' "$src/_wget"
+    assert $state equals 0
+}
+
+@test '_wget has --no-check-certificate' {
+    run grep -c 'no-check-certificate' "$src/_wget"
+    assert $state equals 0
+}
+
+@test '_wget has --user-agent' {
+    run grep -c 'user-agent' "$src/_wget"
+    assert $state equals 0
+}
+
+@test '_wget has --mirror' {
+    run grep -c 'mirror' "$src/_wget"
+    assert $state equals 0
+}
+
+@test '_wget has --quiet' {
+    run grep -c 'quiet' "$src/_wget"
+    assert $state equals 0
+}
+
+@test '_wget has --spider' {
+    run grep -c 'spider' "$src/_wget"
+    assert $state equals 0
+}
+
+@test '_wget has --limit-rate' {
+    run grep -c 'limit-rate' "$src/_wget"
+    assert $state equals 0
+}
+
+@test '_wget has --no-parent' {
+    run grep -c 'no-parent' "$src/_wget"
+    assert $state equals 0
+}
+
+# ─── _ssh ─────────────────────────────────────────────────────────────────────
+
+@test '_ssh has -i identity' {
+    run grep -c 'identity' "$src/_ssh"
+    assert $state equals 0
+}
+
+@test '_ssh has -p port' {
+    run grep -c 'port' "$src/_ssh"
+    assert $state equals 0
+}
+
+@test '_ssh has -X forwarding' {
+    run grep -c 'X11 forwarding' "$src/_ssh"
+    assert $state equals 0
+}
+
+@test '_ssh has -N no remote command' {
+    run grep -c 'not execute a remote command' "$src/_ssh"
+    assert $state equals 0
+}
+
+@test '_ssh has -C compression' {
+    run grep -c 'compression' "$src/_ssh"
+    assert $state equals 0
+}
+
+@test '_ssh has -J jump host' {
+    run grep -c 'jump' "$src/_ssh"
+    assert $state equals 0
+}
+
+@test '_ssh has -v verbose' {
+    run grep -c 'verbose' "$src/_ssh"
+    assert $state equals 0
+}
+
+@test '_ssh has -l login name' {
+    run grep -c 'login name' "$src/_ssh"
+    assert $state equals 0
+}
+
+# ─── _xargs ──────────────────────────────────────────────────────────────────
+
+@test '_xargs has --null' {
+    run grep -c 'null' "$src/_xargs"
+    assert $state equals 0
+}
+
+@test '_xargs has --max-procs' {
+    run grep -c 'max-procs' "$src/_xargs"
+    assert $state equals 0
+}
+
+@test '_xargs has --max-args' {
+    run grep -c 'max-args' "$src/_xargs"
+    assert $state equals 0
+}
+
+@test '_xargs has --replace' {
+    run grep -c 'replace' "$src/_xargs"
+    assert $state equals 0
+}
+
+@test '_xargs has --verbose' {
+    run grep -c 'verbose' "$src/_xargs"
+    assert $state equals 0
+}
+
+@test '_xargs has --interactive' {
+    run grep -c 'interactive' "$src/_xargs"
+    assert $state equals 0
+}
+
+@test '_xargs has --no-run-if-empty' {
+    run grep -c 'no-run-if-empty' "$src/_xargs"
+    assert $state equals 0
+}
+
+# ─── _gzip ────────────────────────────────────────────────────────────────────
+
+@test '_gzip has --decompress' {
+    run grep -c 'decompress' "$src/_gzip"
+    assert $state equals 0
+}
+
+@test '_gzip has --keep' {
+    run grep -c 'keep' "$src/_gzip"
+    assert $state equals 0
+}
+
+@test '_gzip has --fast' {
+    run grep -c 'fast' "$src/_gzip"
+    assert $state equals 0
+}
+
+@test '_gzip has --best' {
+    run grep -c 'best' "$src/_gzip"
+    assert $state equals 0
+}
+
+@test '_gzip has --verbose' {
+    run grep -c 'verbose' "$src/_gzip"
+    assert $state equals 0
+}
+
+@test '_gzip has --recursive' {
+    run grep -c 'recursive' "$src/_gzip"
+    assert $state equals 0
+}
+
+@test '_gzip has --test' {
+    run grep -c 'test' "$src/_gzip"
+    assert $state equals 0
+}
+
+@test '_gzip has --stdout' {
+    run grep -c 'stdout' "$src/_gzip"
+    assert $state equals 0
+}
+
+# ─── _bzip2 ──────────────────────────────────────────────────────────────────
+
+@test '_bzip2 has --decompress' {
+    run grep -c 'decompress' "$src/_bzip2"
+    assert $state equals 0
+}
+
+@test '_bzip2 has --compress' {
+    run grep -c 'compress' "$src/_bzip2"
+    assert $state equals 0
+}
+
+@test '_bzip2 has --keep' {
+    run grep -c 'keep' "$src/_bzip2"
+    assert $state equals 0
+}
+
+@test '_bzip2 has --force' {
+    run grep -c 'force' "$src/_bzip2"
+    assert $state equals 0
+}
+
+@test '_bzip2 has --test' {
+    run grep -c 'test' "$src/_bzip2"
+    assert $state equals 0
+}
+
+@test '_bzip2 has --small' {
+    run grep -c 'small' "$src/_bzip2"
+    assert $state equals 0
+}
+
+# ─── _date ────────────────────────────────────────────────────────────────────
+
+@test '_date has --date' {
+    run grep -c 'date' "$src/_date"
+    assert $state equals 0
+}
+
+@test '_date has --utc' {
+    run grep -c 'utc' "$src/_date"
+    assert $state equals 0
+}
+
+@test '_date has --iso-8601' {
+    run grep -c 'iso-8601' "$src/_date"
+    assert $state equals 0
+}
+
+@test '_date has --reference' {
+    run grep -c 'reference' "$src/_date"
+    assert $state equals 0
+}
+
+@test '_date has RFC format' {
+    run grep -c 'RFC' "$src/_date"
+    assert $state equals 0
+}
+
+# ─── _env ─────────────────────────────────────────────────────────────────────
+
+@test '_env has --ignore-environment' {
+    run grep -c 'ignore-environment' "$src/_env"
+    assert $state equals 0
+}
+
+@test '_env has --unset' {
+    run grep -c 'unset' "$src/_env"
+    assert $state equals 0
+}
+
+@test '_env has --chdir' {
+    run grep -c 'chdir' "$src/_env"
+    assert $state equals 0
+}
+
+# ─── _free ────────────────────────────────────────────────────────────────────
+
+@test '_free has --bytes' {
+    run grep -c 'bytes' "$src/_free"
+    assert $state equals 0
+}
+
+@test '_free has --human' {
+    run grep -c 'human' "$src/_free"
+    assert $state equals 0
+}
+
+@test '_free has --total' {
+    run grep -c 'total' "$src/_free"
+    assert $state equals 0
+}
+
+@test '_free has --wide' {
+    run grep -c 'wide' "$src/_free"
+    assert $state equals 0
+}
+
+@test '_free has --mega' {
+    run grep -c 'mega' "$src/_free"
+    assert $state equals 0
+}
+
+@test '_free has --giga' {
+    run grep -c 'giga' "$src/_free"
+    assert $state equals 0
+}
+
+# ─── _touch ──────────────────────────────────────────────────────────────────
+
+@test '_touch has --no-create' {
+    run grep -c 'no-create' "$src/_touch"
+    assert $state equals 0
+}
+
+@test '_touch has --reference' {
+    run grep -c 'reference' "$src/_touch"
+    assert $state equals 0
+}
+
+@test '_touch has access time' {
+    run grep -c 'access time' "$src/_touch"
+    assert $state equals 0
+}
+
+@test '_touch has modification time' {
+    run grep -c 'modification time' "$src/_touch"
+    assert $state equals 0
+}
+
+@test '_touch has --date' {
+    run grep -c 'date' "$src/_touch"
+    assert $state equals 0
+}
+
+# ─── _who ─────────────────────────────────────────────────────────────────────
+
+@test '_who has --all' {
+    run grep -c '\-\-all' "$src/_who"
+    assert $state equals 0
+}
+
+@test '_who has --boot' {
+    run grep -c 'boot' "$src/_who"
+    assert $state equals 0
+}
+
+@test '_who has --dead' {
+    run grep -c 'dead' "$src/_who"
+    assert $state equals 0
+}
+
+@test '_who has --heading' {
+    run grep -c 'heading' "$src/_who"
+    assert $state equals 0
+}
+
+@test '_who has --runlevel' {
+    run grep -c 'runlevel' "$src/_who"
+    assert $state equals 0
+}
+
+@test '_who has --count' {
+    run grep -c 'count' "$src/_who"
+    assert $state equals 0
+}
+
+# ─── _tee ─────────────────────────────────────────────────────────────────────
+
+@test '_tee has append' {
+    run grep -c 'append' "$src/_tee"
+    assert $state equals 0
+}
+
+@test '_tee has ignore' {
+    run grep -c 'ignore' "$src/_tee"
+    assert $state equals 0
+}
+
+# ─── _uptime ─────────────────────────────────────────────────────────────────
+
+@test '_uptime has --pretty' {
+    run grep -c 'pretty' "$src/_uptime"
+    assert $state equals 0
+}
+
+@test '_uptime has --since' {
+    run grep -c 'since' "$src/_uptime"
+    assert $state equals 0
+}

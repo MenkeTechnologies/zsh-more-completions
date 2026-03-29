@@ -579,3 +579,303 @@
     run zsh -n "$src/_cargo"
     assert $state equals 0
 }
+
+# ─── _wget content ───────────────────────────────────────────────────────────
+
+@test 'src has _wget' {
+    assert "$src/_wget" is_file
+}
+
+@test '_wget compdef is wget' {
+    run head -1 "$src/_wget"
+    assert $output same_as '#compdef wget'
+}
+
+@test '_wget has --recursive' {
+    run grep -c 'recursive' "$src/_wget"
+    assert $state equals 0
+}
+
+@test '_wget has --output-document' {
+    run grep -c 'output-document' "$src/_wget"
+    assert $state equals 0
+}
+
+@test '_wget has --continue' {
+    run grep -c 'continue' "$src/_wget"
+    assert $state equals 0
+}
+
+@test '_wget has --mirror' {
+    run grep -c 'mirror' "$src/_wget"
+    assert $state equals 0
+}
+
+@test '_wget has --no-check-certificate' {
+    run grep -c 'no-check-certificate' "$src/_wget"
+    assert $state equals 0
+}
+
+@test '_wget has --user-agent' {
+    run grep -c 'user-agent' "$src/_wget"
+    assert $state equals 0
+}
+
+@test '_wget has --timestamping' {
+    run grep -c 'timestamping' "$src/_wget"
+    assert $state equals 0
+}
+
+@test '_wget has --page-requisites' {
+    run grep -c 'page-requisites' "$src/_wget"
+    assert $state equals 0
+}
+
+@test '_wget has --convert-links' {
+    run grep -c 'convert-links' "$src/_wget"
+    assert $state equals 0
+}
+
+@test '_wget has --no-parent' {
+    run grep -c 'no-parent' "$src/_wget"
+    assert $state equals 0
+}
+
+@test '_wget uses _arguments' {
+    run grep -c '_arguments' "$src/_wget"
+    assert $state equals 0
+}
+
+@test '_wget completes URLs' {
+    run grep -c '_urls' "$src/_wget"
+    assert $state equals 0
+}
+
+@test '_wget passes syntax check' {
+    run zsh -n "$src/_wget"
+    assert $state equals 0
+}
+
+# ─── _ssh content ────────────────────────────────────────────────────────────
+
+@test 'src has _ssh' {
+    assert "$src/_ssh" is_file
+}
+
+@test '_ssh compdef is ssh' {
+    run head -1 "$src/_ssh"
+    assert $output same_as '#compdef ssh'
+}
+
+@test '_ssh has -i identity' {
+    run grep -c 'identity' "$src/_ssh"
+    assert $state equals 0
+}
+
+@test '_ssh has -p port' {
+    run grep -c 'port' "$src/_ssh"
+    assert $state equals 0
+}
+
+@test '_ssh has -C compression' {
+    run grep -c 'compression' "$src/_ssh"
+    assert $state equals 0
+}
+
+@test '_ssh has -X X11 forwarding' {
+    run grep -c 'X11 forwarding' "$src/_ssh"
+    assert $state equals 0
+}
+
+@test '_ssh has -J jump host' {
+    run grep -c 'jump' "$src/_ssh"
+    assert $state equals 0
+}
+
+@test '_ssh has -N no remote command' {
+    run grep -c 'not execute a remote command' "$src/_ssh"
+    assert $state equals 0
+}
+
+@test '_ssh has -l login name' {
+    run grep -c 'login name' "$src/_ssh"
+    assert $state equals 0
+}
+
+@test '_ssh has -A agent forwarding' {
+    run grep -c 'authentication agent' "$src/_ssh"
+    assert $state equals 0
+}
+
+@test '_ssh has ProxyJump' {
+    run grep -c 'ProxyJump' "$src/_ssh"
+    assert $state equals 0
+}
+
+@test '_ssh uses _arguments' {
+    run grep -c '_arguments' "$src/_ssh"
+    assert $state equals 0
+}
+
+@test '_ssh passes syntax check' {
+    run zsh -n "$src/_ssh"
+    assert $state equals 0
+}
+
+# ─── _gzip content ───────────────────────────────────────────────────────────
+
+@test 'src has _gzip' {
+    assert "$src/_gzip" is_file
+}
+
+@test '_gzip compdef is gzip' {
+    run head -1 "$src/_gzip"
+    assert $output same_as '#compdef gzip'
+}
+
+@test '_gzip has --decompress' {
+    run grep -c 'decompress' "$src/_gzip"
+    assert $state equals 0
+}
+
+@test '_gzip has --keep' {
+    run grep -c 'keep' "$src/_gzip"
+    assert $state equals 0
+}
+
+@test '_gzip has --fast' {
+    run grep -c 'fast' "$src/_gzip"
+    assert $state equals 0
+}
+
+@test '_gzip has --best' {
+    run grep -c 'best' "$src/_gzip"
+    assert $state equals 0
+}
+
+@test '_gzip has --stdout' {
+    run grep -c 'stdout' "$src/_gzip"
+    assert $state equals 0
+}
+
+@test '_gzip has --recursive' {
+    run grep -c 'recursive' "$src/_gzip"
+    assert $state equals 0
+}
+
+@test '_gzip has --rsyncable' {
+    run grep -c 'rsyncable' "$src/_gzip"
+    assert $state equals 0
+}
+
+@test '_gzip uses _arguments' {
+    run grep -c '_arguments' "$src/_gzip"
+    assert $state equals 0
+}
+
+@test '_gzip completes filenames' {
+    run grep -c '_files' "$src/_gzip"
+    assert $state equals 0
+}
+
+@test '_gzip passes syntax check' {
+    run zsh -n "$src/_gzip"
+    assert $state equals 0
+}
+
+# ─── _bzip2 content ──────────────────────────────────────────────────────────
+
+@test 'src has _bzip2' {
+    assert "$src/_bzip2" is_file
+}
+
+@test '_bzip2 compdef is bzip2' {
+    run head -1 "$src/_bzip2"
+    assert $output same_as '#compdef bzip2'
+}
+
+@test '_bzip2 has --decompress' {
+    run grep -c 'decompress' "$src/_bzip2"
+    assert $state equals 0
+}
+
+@test '_bzip2 has --compress' {
+    run grep -c 'compress' "$src/_bzip2"
+    assert $state equals 0
+}
+
+@test '_bzip2 has --keep' {
+    run grep -c 'keep' "$src/_bzip2"
+    assert $state equals 0
+}
+
+@test '_bzip2 has --force' {
+    run grep -c 'force' "$src/_bzip2"
+    assert $state equals 0
+}
+
+@test '_bzip2 has --small' {
+    run grep -c 'small' "$src/_bzip2"
+    assert $state equals 0
+}
+
+@test '_bzip2 uses _arguments' {
+    run grep -c '_arguments' "$src/_bzip2"
+    assert $state equals 0
+}
+
+@test '_bzip2 completes filenames' {
+    run grep -c '_files' "$src/_bzip2"
+    assert $state equals 0
+}
+
+@test '_bzip2 passes syntax check' {
+    run zsh -n "$src/_bzip2"
+    assert $state equals 0
+}
+
+# ─── _xargs content ──────────────────────────────────────────────────────────
+
+@test 'src has _xargs' {
+    assert "$src/_xargs" is_file
+}
+
+@test '_xargs compdef is xargs' {
+    run head -1 "$src/_xargs"
+    assert $output same_as '#compdef xargs'
+}
+
+@test '_xargs has --null' {
+    run grep -c 'null' "$src/_xargs"
+    assert $state equals 0
+}
+
+@test '_xargs has --max-procs' {
+    run grep -c 'max-procs' "$src/_xargs"
+    assert $state equals 0
+}
+
+@test '_xargs has --max-args' {
+    run grep -c 'max-args' "$src/_xargs"
+    assert $state equals 0
+}
+
+@test '_xargs has --replace' {
+    run grep -c 'replace' "$src/_xargs"
+    assert $state equals 0
+}
+
+@test '_xargs has --no-run-if-empty' {
+    run grep -c 'no-run-if-empty' "$src/_xargs"
+    assert $state equals 0
+}
+
+@test '_xargs uses _arguments' {
+    run grep -c '_arguments' "$src/_xargs"
+    assert $state equals 0
+}
+
+@test '_xargs passes syntax check' {
+    run zsh -n "$src/_xargs"
+    assert $state equals 0
+}
