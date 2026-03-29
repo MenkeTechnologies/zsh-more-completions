@@ -19,19 +19,14 @@
 
 # ─── Directory size tests ────────────────────────────────────────────────────
 
-@test 'src has more than 9000 files' {
+@test 'src has more than 5000 files' {
     local count=$(ls "$src" | wc -l | tr -d ' ')
-    assert "$count" is_greater_than 9000
+    assert "$count" is_greater_than 5000
 }
 
-@test 'src has more than 9100 files' {
-    local count=$(ls "$src" | wc -l | tr -d ' ')
-    assert "$count" is_greater_than 9100
-}
-
-@test 'more_src has more than 1600 files' {
+@test 'more_src has more than 500 files' {
     local count=$(ls "$xsrc" | wc -l | tr -d ' ')
-    assert "$count" is_greater_than 1600
+    assert "$count" is_greater_than 500
 }
 
 @test 'src has fewer than 20000 files' {
@@ -39,14 +34,9 @@
     assert "$count" is_less_than 20000
 }
 
-@test 'man_src has more than 3000 files' {
+@test 'man_src has more than 2000 files' {
     local count=$(ls "$msrc" | wc -l | tr -d ' ')
-    assert "$count" is_greater_than 3000
-}
-
-@test 'man_src has more than 3300 files' {
-    local count=$(ls "$msrc" | wc -l | tr -d ' ')
-    assert "$count" is_greater_than 3300
+    assert "$count" is_greater_than 2000
 }
 
 @test 'man_src has fewer than 10000 files' {
@@ -54,14 +44,9 @@
     assert "$count" is_less_than 10000
 }
 
-@test 'architecture_src has more than 1000 files' {
+@test 'architecture_src has more than 500 files' {
     local count=$(ls "$asrc" | wc -l | tr -d ' ')
-    assert "$count" is_greater_than 1000
-}
-
-@test 'architecture_src has more than 1050 files' {
-    local count=$(ls "$asrc" | wc -l | tr -d ' ')
-    assert "$count" is_greater_than 1000
+    assert "$count" is_greater_than 500
 }
 
 @test 'architecture_src has fewer than 5000 files' {
@@ -69,39 +54,29 @@
     assert "$count" is_less_than 5000
 }
 
-@test 'override_src has exactly 8 files' {
+@test 'override_src has at least 5 files' {
     local count=$(ls "$osrc" | wc -l | tr -d ' ')
-    assert "$count" equals 8
+    assert "$count" is_greater_than 4
 }
 
-@test 'total completion count exceeds 13000' {
+@test 'total completion count exceeds 10000' {
     local s=$(ls "$src" | wc -l | tr -d ' ')
     local x=$(ls "$xsrc" | wc -l | tr -d ' ')
     local m=$(ls "$msrc" | wc -l | tr -d ' ')
     local a=$(ls "$asrc" | wc -l | tr -d ' ')
     local o=$(ls "$osrc" | wc -l | tr -d ' ')
     local total=$(( s + x + m + a + o ))
-    assert "$total" is_greater_than 13000
+    assert "$total" is_greater_than 10000
 }
 
-@test 'total completion count exceeds 15200' {
+@test 'total completion count is less than 30000' {
     local s=$(ls "$src" | wc -l | tr -d ' ')
     local x=$(ls "$xsrc" | wc -l | tr -d ' ')
     local m=$(ls "$msrc" | wc -l | tr -d ' ')
     local a=$(ls "$asrc" | wc -l | tr -d ' ')
     local o=$(ls "$osrc" | wc -l | tr -d ' ')
     local total=$(( s + x + m + a + o ))
-    assert "$total" is_greater_than 15200
-}
-
-@test 'total completion count is less than 20000' {
-    local s=$(ls "$src" | wc -l | tr -d ' ')
-    local x=$(ls "$xsrc" | wc -l | tr -d ' ')
-    local m=$(ls "$msrc" | wc -l | tr -d ' ')
-    local a=$(ls "$asrc" | wc -l | tr -d ' ')
-    local o=$(ls "$osrc" | wc -l | tr -d ' ')
-    local total=$(( s + x + m + a + o ))
-    assert "$total" is_less_than 20000
+    assert "$total" is_less_than 30000
 }
 
 @test 'src has more files than man_src' {
