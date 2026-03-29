@@ -15,9 +15,9 @@ arguments=(
   {-P,--plugin}'[pluginname=*]'
   {-P,--plugin}'[pluginname=ext,ext2]'
   {-P,--plugin}'[My::Module::Name=*]'
-  {-w,--warnings}'[]'
-  {-now,--nowarnings}'[]'
-  {-v,--verbose}'[]'
+  {-w,--warnings}''
+  {-now,--nowarnings}''
+  {-v,--verbose}''
   '*:filename:_files'
 )
 
