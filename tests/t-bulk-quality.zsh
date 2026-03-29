@@ -23,9 +23,9 @@
     assert "$count" is_greater_than 9000
 }
 
-@test 'src has more than 9900 files' {
+@test 'src has more than 10200 files' {
     local count=$(ls "$src" | wc -l | tr -d ' ')
-    assert "$count" is_greater_than 9900
+    assert "$count" is_greater_than 10200
 }
 
 @test 'src has fewer than 20000 files' {
@@ -77,13 +77,13 @@
     assert "$total" is_greater_than 13000
 }
 
-@test 'total completion count exceeds 14000' {
+@test 'total completion count exceeds 14600' {
     local s=$(ls "$src" | wc -l | tr -d ' ')
     local m=$(ls "$msrc" | wc -l | tr -d ' ')
     local a=$(ls "$asrc" | wc -l | tr -d ' ')
     local o=$(ls "$osrc" | wc -l | tr -d ' ')
     local total=$(( s + m + a + o ))
-    assert "$total" is_greater_than 14000
+    assert "$total" is_greater_than 14600
 }
 
 @test 'total completion count is less than 20000' {
