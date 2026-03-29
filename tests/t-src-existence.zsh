@@ -1062,7 +1062,7 @@
 
 @test '_head compdef is head' {
     run head -1 "$src/_head"
-    assert $output same_as '#compdef HEAD'
+    assert $output same_as '#compdef head'
 }
 
 @test '_sort compdef is sort' {
