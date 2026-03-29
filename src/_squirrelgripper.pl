@@ -4,7 +4,7 @@ local -a arguments
 
 arguments=(
   '-h[print help information and exit]'
-  '-newdb[.......... Creates a new SQLite Database using the -db name. WARNING: Deletes existing database.]'
+  '-newdb[.......... Creates a new SQLite Database using the -db name]'
   '-db[..... SQLite Database filename to extract information to.]'
   '-case[.... Case Tag to apply to the files in the database.]'
   '-tag[..... Optional Tag Name to apply to selected files in the database.]'
