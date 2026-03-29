@@ -10,7 +10,7 @@ arguments=(
   {-Wl,-z}'[relro]'
   '-fPIC[]'
   '-fPIE[]'
-  {-Wl,-pie}''
+  {-Wl,-pie}'[pass option to linker or build as PIE]'
   '-D[_GLIBCXX_ASSERTIONS]'
   '-fstack-clash-protection[]'
   '-fcf-protection[]'

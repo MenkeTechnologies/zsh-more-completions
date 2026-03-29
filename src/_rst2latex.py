@@ -74,7 +74,7 @@ arguments=(
   '--figure-citations[use figure floats for citations (might get mixed with]'
   '--attribution[format for block quote attributions: one of "dash"]'
   '--stylesheet[file,...\]>]'
-  {--stylesheet,--stylesheet-path}''
+  {--stylesheet,--stylesheet-path}'[specify LaTeX stylesheet or path]'
   '--stylesheet-path[file,...\]>]'
   '--link-stylesheet[link to the stylesheet(s) in the output file.]'
   '--embed-stylesheet[embed the stylesheet(s) in the output file.]'
