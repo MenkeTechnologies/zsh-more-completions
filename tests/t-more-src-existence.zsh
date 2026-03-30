@@ -16,30 +16,6 @@
 
 # ─── File existence tests ───────────────────────────────────────────────────
 
-@test 'more_src has _2to3-2.7' {
-    assert "$xsrc/_2to3-2.7" is_file
-}
-
-@test 'more_src has _2to3-3.5' {
-    assert "$xsrc/_2to3-3.5" is_file
-}
-
-@test 'more_src has _2to3-3.6' {
-    assert "$xsrc/_2to3-3.6" is_file
-}
-
-@test 'more_src has _2to3-3.7' {
-    assert "$xsrc/_2to3-3.7" is_file
-}
-
-@test 'more_src has _2to3-3.8' {
-    assert "$xsrc/_2to3-3.8" is_file
-}
-
-@test 'more_src has _2to3-3.9' {
-    assert "$xsrc/_2to3-3.9" is_file
-}
-
 @test 'more_src has _CompileDaemon' {
     assert "$xsrc/_CompileDaemon" is_file
 }
@@ -100,10 +76,6 @@
     assert "$xsrc/_afinfo" is_file
 }
 
-@test 'more_src has _afterglow.pl.bak' {
-    assert "$xsrc/_afterglow.pl.bak" is_file
-}
-
 @test 'more_src has _age' {
     assert "$xsrc/_age" is_file
 }
@@ -142,10 +114,6 @@
 
 @test 'more_src has _amber' {
     assert "$xsrc/_amber" is_file
-}
-
-@test 'more_src has _amcache.py.bak' {
-    assert "$xsrc/_amcache.py.bak" is_file
 }
 
 @test 'more_src has _amfora' {
@@ -226,34 +194,6 @@
 
 @test 'more_src has _aria2c' {
     assert "$xsrc/_aria2c" is_file
-}
-
-@test 'more_src has _arm-linux-gnueabihf-cpp-4.9' {
-    assert "$xsrc/_arm-linux-gnueabihf-cpp-4.9" is_file
-}
-
-@test 'more_src has _arm-linux-gnueabihf-g++-4.9' {
-    assert "$xsrc/_arm-linux-gnueabihf-g++-4.9" is_file
-}
-
-@test 'more_src has _arm-linux-gnueabihf-gcc-4.9' {
-    assert "$xsrc/_arm-linux-gnueabihf-gcc-4.9" is_file
-}
-
-@test 'more_src has _arm-linux-gnueabihf-gcc-ar-4.9' {
-    assert "$xsrc/_arm-linux-gnueabihf-gcc-ar-4.9" is_file
-}
-
-@test 'more_src has _arm-linux-gnueabihf-gcc-nm-4.9' {
-    assert "$xsrc/_arm-linux-gnueabihf-gcc-nm-4.9" is_file
-}
-
-@test 'more_src has _arm-linux-gnueabihf-gcc-ranlib-4.9' {
-    assert "$xsrc/_arm-linux-gnueabihf-gcc-ranlib-4.9" is_file
-}
-
-@test 'more_src has _arm-linux-gnueabihf-gcov-4.9' {
-    assert "$xsrc/_arm-linux-gnueabihf-gcov-4.9" is_file
 }
 
 @test 'more_src has _artillery' {
@@ -608,14 +548,6 @@
     assert "$xsrc/_bun" is_file
 }
 
-@test 'more_src has _bundle2.7' {
-    assert "$xsrc/_bundle2.7" is_file
-}
-
-@test 'more_src has _bundler2.7' {
-    assert "$xsrc/_bundler2.7" is_file
-}
-
 @test 'more_src has _bw' {
     assert "$xsrc/_bw" is_file
 }
@@ -670,30 +602,6 @@
 
 @test 'more_src has _calico' {
     assert "$xsrc/_calico" is_file
-}
-
-@test 'more_src has _camlp4o.opt' {
-    assert "$xsrc/_camlp4o.opt" is_file
-}
-
-@test 'more_src has _camlp4of.opt' {
-    assert "$xsrc/_camlp4of.opt" is_file
-}
-
-@test 'more_src has _camlp4oof.opt' {
-    assert "$xsrc/_camlp4oof.opt" is_file
-}
-
-@test 'more_src has _camlp4orf.opt' {
-    assert "$xsrc/_camlp4orf.opt" is_file
-}
-
-@test 'more_src has _camlp4r.opt' {
-    assert "$xsrc/_camlp4r.opt" is_file
-}
-
-@test 'more_src has _camlp4rf.opt' {
-    assert "$xsrc/_camlp4rf.opt" is_file
 }
 
 @test 'more_src has _capistrano' {
@@ -1248,10 +1156,6 @@
     assert "$xsrc/_coverage" is_file
 }
 
-@test 'more_src has _cpp-4.9' {
-    assert "$xsrc/_cpp-4.9" is_file
-}
-
 @test 'more_src has _cpuctl' {
     assert "$xsrc/_cpuctl" is_file
 }
@@ -1724,22 +1628,6 @@
     assert "$xsrc/_earthly" is_file
 }
 
-@test 'more_src has _easy_install-2.7' {
-    assert "$xsrc/_easy_install-2.7" is_file
-}
-
-@test 'more_src has _easy_install-3.5' {
-    assert "$xsrc/_easy_install-3.5" is_file
-}
-
-@test 'more_src has _easy_install-3.6' {
-    assert "$xsrc/_easy_install-3.6" is_file
-}
-
-@test 'more_src has _easy_install-3.7' {
-    assert "$xsrc/_easy_install-3.7" is_file
-}
-
 @test 'more_src has _ebook-convert' {
     assert "$xsrc/_ebook-convert" is_file
 }
@@ -1802,14 +1690,6 @@
 
 @test 'more_src has _epy' {
     assert "$xsrc/_epy" is_file
-}
-
-@test 'more_src has _erb2.5' {
-    assert "$xsrc/_erb2.5" is_file
-}
-
-@test 'more_src has _erb2.7' {
-    assert "$xsrc/_erb2.7" is_file
 }
 
 @test 'more_src has _erd' {
@@ -1882,22 +1762,6 @@
 
 @test 'more_src has _f2' {
     assert "$xsrc/_f2" is_file
-}
-
-@test 'more_src has _f2py2.7' {
-    assert "$xsrc/_f2py2.7" is_file
-}
-
-@test 'more_src has _f2py3.5' {
-    assert "$xsrc/_f2py3.5" is_file
-}
-
-@test 'more_src has _f2py3.6' {
-    assert "$xsrc/_f2py3.6" is_file
-}
-
-@test 'more_src has _f2py3.7' {
-    assert "$xsrc/_f2py3.7" is_file
 }
 
 @test 'more_src has _faas-cli' {
@@ -2120,10 +1984,6 @@
     assert "$xsrc/_fzy" is_file
 }
 
-@test 'more_src has _g++-4.9' {
-    assert "$xsrc/_g++-4.9" is_file
-}
-
 @test 'more_src has _gallery-dl' {
     assert "$xsrc/_gallery-dl" is_file
 }
@@ -2144,24 +2004,8 @@
     assert "$xsrc/_gau" is_file
 }
 
-@test 'more_src has _gcc-ar-4.9' {
-    assert "$xsrc/_gcc-ar-4.9" is_file
-}
-
-@test 'more_src has _gcc-nm-4.9' {
-    assert "$xsrc/_gcc-nm-4.9" is_file
-}
-
-@test 'more_src has _gcc-ranlib-4.9' {
-    assert "$xsrc/_gcc-ranlib-4.9" is_file
-}
-
 @test 'more_src has _gcloud-crc32c' {
     assert "$xsrc/_gcloud-crc32c" is_file
-}
-
-@test 'more_src has _gcov-4.9' {
-    assert "$xsrc/_gcov-4.9" is_file
 }
 
 @test 'more_src has _gcsfuse' {
@@ -2196,18 +2040,6 @@
     assert "$xsrc/_gh-dash" is_file
 }
 
-@test 'more_src has _ghc-8.10.7' {
-    assert "$xsrc/_ghc-8.10.7" is_file
-}
-
-@test 'more_src has _ghc-pkg-8.6.5' {
-    assert "$xsrc/_ghc-pkg-8.6.5" is_file
-}
-
-@test 'more_src has _ghci-8.10.7' {
-    assert "$xsrc/_ghci-8.10.7" is_file
-}
-
 @test 'more_src has _ghcup' {
     assert "$xsrc/_ghcup" is_file
 }
@@ -2222,14 +2054,6 @@
 
 @test 'more_src has _ghq' {
     assert "$xsrc/_ghq" is_file
-}
-
-@test 'more_src has _gimp-2.8' {
-    assert "$xsrc/_gimp-2.8" is_file
-}
-
-@test 'more_src has _gimp-console-2.8' {
-    assert "$xsrc/_gimp-console-2.8" is_file
 }
 
 @test 'more_src has _git-absorb' {
@@ -2544,10 +2368,6 @@
     assert "$xsrc/_guix" is_file
 }
 
-@test 'more_src has _haddock-ghc-8.10.7' {
-    assert "$xsrc/_haddock-ghc-8.10.7" is_file
-}
-
 @test 'more_src has _hadolint' {
     assert "$xsrc/_hadolint" is_file
 }
@@ -2740,24 +2560,8 @@
     assert "$xsrc/_idea" is_file
 }
 
-@test 'more_src has _idle2.7' {
-    assert "$xsrc/_idle2.7" is_file
-}
-
-@test 'more_src has _idle3.6' {
-    assert "$xsrc/_idle3.6" is_file
-}
-
-@test 'more_src has _idle3.7' {
-    assert "$xsrc/_idle3.7" is_file
-}
-
 @test 'more_src has _idris2' {
     assert "$xsrc/_idris2" is_file
-}
-
-@test 'more_src has _ifenslave-2.6' {
-    assert "$xsrc/_ifenslave-2.6" is_file
 }
 
 @test 'more_src has _ijq' {
@@ -2850,14 +2654,6 @@
 
 @test 'more_src has _ipvsadm' {
     assert "$xsrc/_ipvsadm" is_file
-}
-
-@test 'more_src has _irb2.5' {
-    assert "$xsrc/_irb2.5" is_file
-}
-
-@test 'more_src has _irb2.7' {
-    assert "$xsrc/_irb2.7" is_file
 }
 
 @test 'more_src has _iredis' {
@@ -3504,10 +3300,6 @@
     assert "$xsrc/_lazysql" is_file
 }
 
-@test 'more_src has _ld.so' {
-    assert "$xsrc/_ld.so" is_file
-}
-
 @test 'more_src has _leave' {
     assert "$xsrc/_leave" is_file
 }
@@ -3578,10 +3370,6 @@
 
 @test 'more_src has _lldb-server' {
     assert "$xsrc/_lldb-server" is_file
-}
-
-@test 'more_src has _lli-3.5' {
-    assert "$xsrc/_lli-3.5" is_file
 }
 
 @test 'more_src has _llm' {
@@ -3656,10 +3444,6 @@
     assert "$xsrc/_luacheck" is_file
 }
 
-@test 'more_src has _luajit-2.0.5' {
-    assert "$xsrc/_luajit-2.0.5" is_file
-}
-
 @test 'more_src has _lychee' {
     assert "$xsrc/_lychee" is_file
 }
@@ -3684,10 +3468,6 @@
     assert "$xsrc/_machine" is_file
 }
 
-@test 'more_src has _macho-dump-3.5' {
-    assert "$xsrc/_macho-dump-3.5" is_file
-}
-
 @test 'more_src has _mackup' {
     assert "$xsrc/_mackup" is_file
 }
@@ -3706,10 +3486,6 @@
 
 @test 'more_src has _mailpit' {
     assert "$xsrc/_mailpit" is_file
-}
-
-@test 'more_src has _mako-render-3.9' {
-    assert "$xsrc/_mako-render-3.9" is_file
 }
 
 @test 'more_src has _mamba' {
@@ -3870,10 +3646,6 @@
 
 @test 'more_src has _minisign' {
     assert "$xsrc/_minisign" is_file
-}
-
-@test 'more_src has _miniterm.pyc' {
-    assert "$xsrc/_miniterm.pyc" is_file
 }
 
 @test 'more_src has _mise' {
@@ -4192,10 +3964,6 @@
     assert "$xsrc/_nomad" is_file
 }
 
-@test 'more_src has _nosetests-2.7' {
-    assert "$xsrc/_nosetests-2.7" is_file
-}
-
 @test 'more_src has _notation' {
     assert "$xsrc/_notation" is_file
 }
@@ -4264,100 +4032,8 @@
     assert "$xsrc/_oc" is_file
 }
 
-@test 'more_src has _ocamlbuild.byte' {
-    assert "$xsrc/_ocamlbuild.byte" is_file
-}
-
-@test 'more_src has _ocamlbuild.native' {
-    assert "$xsrc/_ocamlbuild.native" is_file
-}
-
-@test 'more_src has _ocamlc.byte' {
-    assert "$xsrc/_ocamlc.byte" is_file
-}
-
-@test 'more_src has _ocamlc.opt' {
-    assert "$xsrc/_ocamlc.opt" is_file
-}
-
-@test 'more_src has _ocamlcp.byte' {
-    assert "$xsrc/_ocamlcp.byte" is_file
-}
-
-@test 'more_src has _ocamlcp.opt' {
-    assert "$xsrc/_ocamlcp.opt" is_file
-}
-
-@test 'more_src has _ocamldep.byte' {
-    assert "$xsrc/_ocamldep.byte" is_file
-}
-
-@test 'more_src has _ocamldep.opt' {
-    assert "$xsrc/_ocamldep.opt" is_file
-}
-
-@test 'more_src has _ocamldoc.opt' {
-    assert "$xsrc/_ocamldoc.opt" is_file
-}
-
 @test 'more_src has _ocamlfind' {
     assert "$xsrc/_ocamlfind" is_file
-}
-
-@test 'more_src has _ocamllex.byte' {
-    assert "$xsrc/_ocamllex.byte" is_file
-}
-
-@test 'more_src has _ocamllex.opt' {
-    assert "$xsrc/_ocamllex.opt" is_file
-}
-
-@test 'more_src has _ocamlmklib.byte' {
-    assert "$xsrc/_ocamlmklib.byte" is_file
-}
-
-@test 'more_src has _ocamlmklib.opt' {
-    assert "$xsrc/_ocamlmklib.opt" is_file
-}
-
-@test 'more_src has _ocamlmktop.byte' {
-    assert "$xsrc/_ocamlmktop.byte" is_file
-}
-
-@test 'more_src has _ocamlmktop.opt' {
-    assert "$xsrc/_ocamlmktop.opt" is_file
-}
-
-@test 'more_src has _ocamlobjinfo.byte' {
-    assert "$xsrc/_ocamlobjinfo.byte" is_file
-}
-
-@test 'more_src has _ocamlobjinfo.opt' {
-    assert "$xsrc/_ocamlobjinfo.opt" is_file
-}
-
-@test 'more_src has _ocamlopt.byte' {
-    assert "$xsrc/_ocamlopt.byte" is_file
-}
-
-@test 'more_src has _ocamlopt.opt' {
-    assert "$xsrc/_ocamlopt.opt" is_file
-}
-
-@test 'more_src has _ocamloptp.byte' {
-    assert "$xsrc/_ocamloptp.byte" is_file
-}
-
-@test 'more_src has _ocamloptp.opt' {
-    assert "$xsrc/_ocamloptp.opt" is_file
-}
-
-@test 'more_src has _ocamlprof.byte' {
-    assert "$xsrc/_ocamlprof.byte" is_file
-}
-
-@test 'more_src has _ocamlprof.opt' {
-    assert "$xsrc/_ocamlprof.opt" is_file
 }
 
 @test 'more_src has _oci' {
@@ -4568,22 +4244,6 @@
     assert "$xsrc/_pbzip2" is_file
 }
 
-@test 'more_src has _pdb3.5' {
-    assert "$xsrc/_pdb3.5" is_file
-}
-
-@test 'more_src has _pdb3.6' {
-    assert "$xsrc/_pdb3.6" is_file
-}
-
-@test 'more_src has _pdb3.7' {
-    assert "$xsrc/_pdb3.7" is_file
-}
-
-@test 'more_src has _pdb3.8' {
-    assert "$xsrc/_pdb3.8" is_file
-}
-
 @test 'more_src has _pdfgrep' {
     assert "$xsrc/_pdfgrep" is_file
 }
@@ -4672,18 +4332,6 @@
     assert "$xsrc/_pip-audit" is_file
 }
 
-@test 'more_src has _pip2.7' {
-    assert "$xsrc/_pip2.7" is_file
-}
-
-@test 'more_src has _pip3.7' {
-    assert "$xsrc/_pip3.7" is_file
-}
-
-@test 'more_src has _pip3.8' {
-    assert "$xsrc/_pip3.8" is_file
-}
-
 @test 'more_src has _pipdeptree' {
     assert "$xsrc/_pipdeptree" is_file
 }
@@ -4766,10 +4414,6 @@
 
 @test 'more_src has _pnpm' {
     assert "$xsrc/_pnpm" is_file
-}
-
-@test 'more_src has _pnuke-2.7' {
-    assert "$xsrc/_pnuke-2.7" is_file
 }
 
 @test 'more_src has _podlet' {
@@ -4896,14 +4540,6 @@
     assert "$xsrc/_pspg" is_file
 }
 
-@test 'more_src has _pssh-2.7' {
-    assert "$xsrc/_pssh-2.7" is_file
-}
-
-@test 'more_src has _pssh-askpass-2.7' {
-    assert "$xsrc/_pssh-askpass-2.7" is_file
-}
-
 @test 'more_src has _pt-query-digest' {
     assert "$xsrc/_pt-query-digest" is_file
 }
@@ -4968,26 +4604,6 @@
     assert "$xsrc/_pyenv" is_file
 }
 
-@test 'more_src has _pygettext2.7' {
-    assert "$xsrc/_pygettext2.7" is_file
-}
-
-@test 'more_src has _pygettext3.5' {
-    assert "$xsrc/_pygettext3.5" is_file
-}
-
-@test 'more_src has _pygettext3.6' {
-    assert "$xsrc/_pygettext3.6" is_file
-}
-
-@test 'more_src has _pygettext3.7' {
-    assert "$xsrc/_pygettext3.7" is_file
-}
-
-@test 'more_src has _pygettext3.8' {
-    assert "$xsrc/_pygettext3.8" is_file
-}
-
 @test 'more_src has _pyinfra' {
     assert "$xsrc/_pyinfra" is_file
 }
@@ -5002,46 +4618,6 @@
 
 @test 'more_src has _pyspark' {
     assert "$xsrc/_pyspark" is_file
-}
-
-@test 'more_src has _python.app' {
-    assert "$xsrc/_python.app" is_file
-}
-
-@test 'more_src has _python2.7' {
-    assert "$xsrc/_python2.7" is_file
-}
-
-@test 'more_src has _python3.5' {
-    assert "$xsrc/_python3.5" is_file
-}
-
-@test 'more_src has _python3.6' {
-    assert "$xsrc/_python3.6" is_file
-}
-
-@test 'more_src has _python3.7' {
-    assert "$xsrc/_python3.7" is_file
-}
-
-@test 'more_src has _python3.8' {
-    assert "$xsrc/_python3.8" is_file
-}
-
-@test 'more_src has _python3.9' {
-    assert "$xsrc/_python3.9" is_file
-}
-
-@test 'more_src has _pythonw2.7' {
-    assert "$xsrc/_pythonw2.7" is_file
-}
-
-@test 'more_src has _pyvenv-3.6' {
-    assert "$xsrc/_pyvenv-3.6" is_file
-}
-
-@test 'more_src has _pyvenv-3.7' {
-    assert "$xsrc/_pyvenv-3.7" is_file
 }
 
 @test 'more_src has _q' {
@@ -5062,14 +4638,6 @@
 
 @test 'more_src has _r2' {
     assert "$xsrc/_r2" is_file
-}
-
-@test 'more_src has _racc2.7' {
-    assert "$xsrc/_racc2.7" is_file
-}
-
-@test 'more_src has _racc2y2.7' {
-    assert "$xsrc/_racc2y2.7" is_file
 }
 
 @test 'more_src has _raco' {
@@ -5126,14 +4694,6 @@
 
 @test 'more_src has _rdm' {
     assert "$xsrc/_rdm" is_file
-}
-
-@test 'more_src has _rdoc2.5' {
-    assert "$xsrc/_rdoc2.5" is_file
-}
-
-@test 'more_src has _rdoc2.7' {
-    assert "$xsrc/_rdoc2.7" is_file
 }
 
 @test 'more_src has _re2d' {
@@ -5232,14 +4792,6 @@
     assert "$xsrc/_rga" is_file
 }
 
-@test 'more_src has _ri2.5' {
-    assert "$xsrc/_ri2.5" is_file
-}
-
-@test 'more_src has _ri2.7' {
-    assert "$xsrc/_ri2.7" is_file
-}
-
 @test 'more_src has _rider' {
     assert "$xsrc/_rider" is_file
 }
@@ -5320,28 +4872,12 @@
     assert "$xsrc/_rtx" is_file
 }
 
-@test 'more_src has _ruby2.5' {
-    assert "$xsrc/_ruby2.5" is_file
-}
-
-@test 'more_src has _ruby2.7' {
-    assert "$xsrc/_ruby2.7" is_file
-}
-
 @test 'more_src has _rubymine' {
     assert "$xsrc/_rubymine" is_file
 }
 
 @test 'more_src has _ruff' {
     assert "$xsrc/_ruff" is_file
-}
-
-@test 'more_src has _runghc-8.10.7' {
-    assert "$xsrc/_runghc-8.10.7" is_file
-}
-
-@test 'more_src has _runghc-8.6.5' {
-    assert "$xsrc/_runghc-8.6.5" is_file
 }
 
 @test 'more_src has _runme' {
@@ -6548,10 +6084,6 @@
     assert "$xsrc/_usage" is_file
 }
 
-@test 'more_src has _usbdeviceforensics.py.bak' {
-    assert "$xsrc/_usbdeviceforensics.py.bak" is_file
-}
-
 @test 'more_src has _usbguard' {
     assert "$xsrc/_usbguard" is_file
 }
@@ -6868,14 +6400,6 @@
     assert "$xsrc/_whatip" is_file
 }
 
-@test 'more_src has _wheel3.8' {
-    assert "$xsrc/_wheel3.8" is_file
-}
-
-@test 'more_src has _wheel3.9' {
-    assert "$xsrc/_wheel3.9" is_file
-}
-
 @test 'more_src has _wiki-tui' {
     assert "$xsrc/_wiki-tui" is_file
 }
@@ -6886,14 +6410,6 @@
 
 @test 'more_src has _wipe' {
     assert "$xsrc/_wipe" is_file
-}
-
-@test 'more_src has _wish8.5' {
-    assert "$xsrc/_wish8.5" is_file
-}
-
-@test 'more_src has _wish8.6' {
-    assert "$xsrc/_wish8.6" is_file
 }
 
 @test 'more_src has _wishlist' {
@@ -6960,16 +6476,8 @@
     assert "$xsrc/_wrk2" is_file
 }
 
-@test 'more_src has _wsdump-3.6' {
-    assert "$xsrc/_wsdump-3.6" is_file
-}
-
 @test 'more_src has _wtfutil' {
     assert "$xsrc/_wtfutil" is_file
-}
-
-@test 'more_src has _xattr-2.7' {
-    assert "$xsrc/_xattr-2.7" is_file
 }
 
 @test 'more_src has _xc' {
@@ -7008,10 +6516,6 @@
     assert "$xsrc/_xmake" is_file
 }
 
-@test 'more_src has _xml2-config.bak' {
-    assert "$xsrc/_xml2-config.bak" is_file
-}
-
 @test 'more_src has _xml2man' {
     assert "$xsrc/_xml2man" is_file
 }
@@ -7046,10 +6550,6 @@
 
 @test 'more_src has _xzmore' {
     assert "$xsrc/_xzmore" is_file
-}
-
-@test 'more_src has _y2racc2.7' {
-    assert "$xsrc/_y2racc2.7" is_file
 }
 
 @test 'more_src has _yabai' {
@@ -7218,10 +6718,6 @@
 
 @test 'more_src has _zrun' {
     assert "$xsrc/_zrun" is_file
-}
-
-@test 'more_src has _zsh-5.8' {
-    assert "$xsrc/_zsh-5.8" is_file
 }
 
 @test 'more_src has _zstdgrep' {
