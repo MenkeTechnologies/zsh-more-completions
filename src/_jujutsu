@@ -1,0 +1,206 @@
+#compdef jj
+
+local curcontext="$curcontext" state line ret=1
+
+local -a commands=(
+  'init:create a new repo in the given directory'
+  'config:manage config options'
+  'log:show revision history'
+  'diff:show changes in a revision'
+  'status:show high-level repo status'
+  'new:create a new empty change'
+  'describe:update the change description'
+  'edit:sets the given revision as the working-copy revision'
+  'commit:update the description and create a new change on top'
+  'squash:move changes from a revision into its parent'
+  'unsquash:move changes from a parent into its child'
+  'abandon:abandon a revision'
+  'duplicate:create a new change with the same content'
+  'rebase:move a revision to a different parent'
+  'restore:restore paths from another revision'
+  'show:show commit description and diff'
+  'split:split a revision in two'
+  'merge:merge work from multiple branches'
+  'branch:manage branches'
+  'bookmark:manage bookmarks'
+  'git:commands for working with the underlying Git repo'
+  'op:commands for working with the operation log'
+  'workspace:commands for working with workspaces'
+  'util:infrequently used commands'
+  'resolve:resolve a conflicted file'
+  'interdiff:compare the changes of two revisions'
+  'obslog:show how a change has evolved'
+  'file:commands for working with files'
+  'fix:update files with formatting fixes'
+  'parallelize:parallelize revisions by making them siblings'
+  'absorb:move changes from the working copy to ancestors'
+  'tag:manage tags'
+  'evolog:show how a change has evolved'
+)
+
+_jj_revisions() {
+  local -a revs
+  revs=(${(f)"$(jj log --no-graph -r 'all()' -T 'change_id.shortest() ++ "\n"' 2>/dev/null | head -50)"})
+  _describe -t revisions 'revision' revs
+}
+
+_jj_branches() {
+  local -a branches
+  branches=(${(f)"$(jj branch list 2>/dev/null | awk '{print $1}')"})
+  _describe -t branches 'branch' branches
+}
+
+_arguments -s -S \
+  '(- *)'{-h,--help}'[show help]' \
+  '(- *)--version[show version]' \
+  '--at-operation=[operation to load the repo at]:operation' \
+  '-R+[path to repository]:repo:_directories' \
+  '--repository=[path to repository]:repo:_directories' \
+  '--ignore-working-copy[do not snapshot or update the working copy]' \
+  '--color=[when to use color output]:when:(always never auto)' \
+  '--no-pager[disable the pager]' \
+  '--config-toml=[additional config in TOML]:config' \
+  '--quiet[silence non-primary output]' \
+  '--verbose[show more verbose output]' \
+  '1:command:->command' \
+  '*:: :->args' && ret=0
+
+case $state in
+  (command)
+    _describe -t commands 'jj command' commands && ret=0
+    ;;
+  (args)
+    case $words[1] in
+      (log)
+        _arguments -s -S \
+          '(-r --revisions)'{-r,--revisions}'=[which revisions to show]:revset' \
+          '--no-graph[do not show graph]' \
+          '(-T --template)'{-T,--template}'=[render template]:template' \
+          '(-p --patch)'{-p,--patch}'[show patch]' \
+          '(-s --summary)'{-s,--summary}'[show summary of changes]' \
+          '--stat[show diffstat]' \
+          '--types[show file types]' \
+          '--reversed[show oldest first]' \
+          '-n+[limit number of revisions]:count' \
+          '--limit=[limit number of revisions]:count' && ret=0
+        ;;
+      (diff)
+        _arguments -s -S \
+          '(-r --revision)'{-r,--revision}'=[show diff for this revision]:revision:_jj_revisions' \
+          '--from=[show diff from this revision]:revision:_jj_revisions' \
+          '--to=[show diff to this revision]:revision:_jj_revisions' \
+          '(-s --summary)'{-s,--summary}'[show summary of changes]' \
+          '--stat[show diffstat]' \
+          '--types[show file types]' \
+          '--git[show git diff format]' \
+          '--color-words[show color words diff]' \
+          '--tool=[external diff tool]:tool' \
+          '*:paths:_files' && ret=0
+        ;;
+      (new)
+        _arguments -s -S \
+          '(-m --message)'{-m,--message}'=[set change description]:message' \
+          '--no-edit[do not edit the new change]' \
+          '-A[insert after the given revision]' \
+          '--insert-after[insert after the given revision]' \
+          '-B[insert before the given revision]' \
+          '--insert-before[insert before the given revision]' \
+          '*:revisions:_jj_revisions' && ret=0
+        ;;
+      (describe)
+        _arguments -s -S \
+          '(-m --message)'{-m,--message}'=[set change description]:message' \
+          '--stdin[read description from stdin]' \
+          '--no-edit[do not open editor]' \
+          '--reset-author[reset author to configured user]' \
+          '1:revision:_jj_revisions' && ret=0
+        ;;
+      (commit)
+        _arguments -s -S \
+          '(-m --message)'{-m,--message}'=[set change description]:message' \
+          '--interactive[interactively choose which changes to include]' \
+          '*:paths:_files' && ret=0
+        ;;
+      (rebase)
+        _arguments -s -S \
+          '(-r --revision)'{-r,--revision}'=[revision to rebase]:revision:_jj_revisions' \
+          '(-s --source)'{-s,--source}'=[rebase this revision and descendants]:revision:_jj_revisions' \
+          '(-b --branch)'{-b,--branch}'=[rebase all revisions reachable from this]:revision:_jj_revisions' \
+          '(-d --destination)'{-d,--destination}'=[the revision to rebase onto]:revision:_jj_revisions' \
+          '--skip-empty[do not rebase empty revisions]' && ret=0
+        ;;
+      (branch|bookmark)
+        local -a branch_cmds=(
+          'create:create a new branch'
+          'delete:delete an existing branch'
+          'forget:forget everything about a branch'
+          'list:list branches'
+          'move:move branch to another revision'
+          'rename:rename a branch'
+          'set:create or update a branch'
+          'track:start tracking a remote branch'
+          'untrack:stop tracking a remote branch'
+        )
+        _arguments \
+          '1:subcommand:_describe -t branch-commands "branch command" branch_cmds' \
+          '*:args' && ret=0
+        ;;
+      (git)
+        local -a git_cmds=(
+          'remote:manage Git remotes'
+          'fetch:fetch from a Git remote'
+          'clone:create a jj repo backed by a Git repo'
+          'push:push to a Git remote'
+          'import:update repo with changes from underlying Git repo'
+          'export:update underlying Git repo with changes from jj repo'
+          'init:create a new Git backed repo'
+        )
+        _arguments \
+          '1:subcommand:_describe -t git-commands "git command" git_cmds' \
+          '*:args' && ret=0
+        ;;
+      (squash)
+        _arguments -s -S \
+          '(-r --revision)'{-r,--revision}'=[revision to squash]:revision:_jj_revisions' \
+          '--into=[destination revision]:revision:_jj_revisions' \
+          '(-m --message)'{-m,--message}'=[set description on destination]:message' \
+          '--interactive[interactively choose changes to squash]' \
+          '*:paths:_files' && ret=0
+        ;;
+      (edit|abandon|duplicate|show)
+        _arguments '1:revision:_jj_revisions' && ret=0
+        ;;
+      (split)
+        _arguments -s -S \
+          '(-r --revision)'{-r,--revision}'=[revision to split]:revision:_jj_revisions' \
+          '--interactive[interactively choose which changes to include]' \
+          '*:paths:_files' && ret=0
+        ;;
+      (workspace)
+        local -a ws_cmds=(
+          'add:add a workspace'
+          'forget:stop tracking a workspace'
+          'list:list workspaces'
+          'root:show the current workspace root'
+          'update-stale:update a workspace that has fallen behind'
+        )
+        _arguments \
+          '1:subcommand:_describe -t workspace-commands "workspace command" ws_cmds' \
+          '*:args' && ret=0
+        ;;
+      (op)
+        local -a op_cmds=(
+          'log:show the operation log'
+          'undo:undo an operation'
+          'restore:restore to an operation'
+          'abandon:abandon operation history'
+        )
+        _arguments \
+          '1:subcommand:_describe -t op-commands "operation command" op_cmds' \
+          '*:args' && ret=0
+        ;;
+    esac
+    ;;
+esac
+
+return ret
