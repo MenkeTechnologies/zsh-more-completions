@@ -36,6 +36,13 @@
     done
 }
 
+@test 'more_src' {
+    for f in "$pluginDir/more_src/"_*; do
+        run zsh -n "$f"
+        assert $state equals 0
+    done
+}
+
 @test 'architecture_src' {
     for f in "$pluginDir/architecture_src/"*; do
         run zsh -n "$f"
