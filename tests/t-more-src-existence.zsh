@@ -24,8 +24,8 @@
     assert "$xsrc/_HandBrakeCLI" is_file
 }
 
-@test 'more_src has _Linguist' {
-    assert "$xsrc/_Linguist" is_file
+@test 'more_src has _linguist' {
+    assert "$xsrc/_linguist" is_file
 }
 
 @test 'more_src has _VBoxManage' {

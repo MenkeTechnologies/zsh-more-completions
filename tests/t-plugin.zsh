@@ -53,13 +53,18 @@
     assert $state equals 0
 }
 
+@test 'plugin.zsh adds more_src to fpath' {
+    run grep -cF '/more_src"' "$pluginFile"
+    assert $state equals 0
+}
+
 @test 'plugin.zsh prepends override_src to fpath' {
     local count
     count=$(grep -cF '__zsh_more_comp_dir $fpath)' "$pluginFile")
     assert $count is_greater_than 0
 }
 
-@test 'plugin.zsh appends src man_src architecture_src to fpath' {
+@test 'plugin.zsh appends src more_src man_src architecture_src to fpath' {
     local count
     count=$(grep -cF '$fpath $__zsh_more_comp_dir)' "$pluginFile")
     assert $count is_greater_than 0
@@ -85,7 +90,7 @@
     assert $state equals 0
 }
 
-@test 'plugin.zsh src and man_src are in last-priority dirs array' {
+@test 'plugin.zsh src more_src man_src architecture_src are in last-priority dirs array' {
     run grep -c '__zsh_more_comp_dirs_last' "$pluginFile"
     assert $state equals 0
 }
@@ -102,6 +107,10 @@
 
 @test 'man_src directory exists' {
     assert "$pluginDir/man_src" is_dir
+}
+
+@test 'more_src directory exists' {
+    assert "$pluginDir/more_src" is_dir
 }
 
 @test 'architecture_src directory exists' {
