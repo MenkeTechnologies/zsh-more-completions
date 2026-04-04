@@ -144,7 +144,7 @@ From the repository root, with [ZUnit](https://github.com/MenkeTechnologies/zuni
 zunit tests/*.zsh
 ```
 
-GitHub Actions runs the same command on Ubuntu. Helper `tests/verify_more_src_case.py` is exercised from `tests/t-more-src-case-sensitivity.zsh` so every path in `tests/t-more-src-existence.zsh` matches real filenames on a **case-sensitive** filesystem (Linux CI). On macOS, a wrong-case path can still `stat` the file; assertions must use the exact basename (e.g. `_linguist`, not `_Linguist`).
+GitHub Actions runs the same command on Ubuntu. Helper `tests/verify_more_src_case.py` is exercised from `tests/t-more-src-case-sensitivity.zsh` so every path in `tests/t-more-src-existence.zsh` matches real filenames on a **case-sensitive** filesystem (Linux CI). On macOS, a wrong-case path can still `stat` the file; assertions must use the exact basename (e.g. `_linguist`, not `_Linguist`). `tests/t-repo-invariants.zsh` locks down repo metadata: `blacklist.txt` integrity, `.github/workflows/ci.yml` contract, `license.md`, and absence of tracked `.zwc` files.
 
 ---
 
