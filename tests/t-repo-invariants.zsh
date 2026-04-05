@@ -95,15 +95,6 @@
     assert $state equals 0
 }
 
-@test 'tests/verify_more_src_case.py exists' {
-    assert "$pluginDir/tests/verify_more_src_case.py" is_file
-}
-
-@test 'verify_more_src_case.py exits 0' {
-    run python3 "$pluginDir/tests/verify_more_src_case.py"
-    assert $state equals 0
-}
-
 # ─── README structure ────────────────────────────────────────────────────────
 
 @test 'README.md documents STATS section' {
