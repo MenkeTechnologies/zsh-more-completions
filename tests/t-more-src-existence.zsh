@@ -1192,6 +1192,10 @@
     assert "$xsrc/_crossplane" is_file
 }
 
+@test 'more_src has _cursor-agent' {
+    assert "$xsrc/_cursor-agent" is_file
+}
+
 @test 'more_src has _cscli' {
     assert "$xsrc/_cscli" is_file
 }
