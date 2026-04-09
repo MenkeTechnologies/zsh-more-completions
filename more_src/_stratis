@@ -1,0 +1,163 @@
+#compdef stratis
+
+# Zsh completion for stratis - Stratis storage management
+
+local curcontext="$curcontext" state line ret=1
+
+local -a commands=(
+  'pool:pool management'
+  'filesystem:filesystem management'
+  'blockdev:block device management'
+  'key:key management for encryption'
+  'report:generate a report'
+  'daemon:daemon management'
+)
+
+_arguments -s -S \
+  '1:command:->command' \
+  '--version[show version]' \
+  '(-h --help)'{-h,--help}'[show help]' \
+  '--propagate[allow exceptions to propagate]' \
+  '*:: :->args' && ret=0
+
+case $state in
+  (command)
+    _describe -t commands 'stratis command' commands && ret=0
+    ;;
+  (args)
+    case $words[1] in
+      (pool)
+        local -a pool_commands=(
+          'create:create a new pool'
+          'list:list pools'
+          'destroy:destroy a pool'
+          'rename:rename a pool'
+          'add-data:add block devices as data devices to a pool'
+          'add-cache:add block devices as cache devices to a pool'
+          'init-cache:initialize cache for a pool'
+          'bind:bind a pool for auto-unlock'
+          'unbind:unbind a pool'
+          'rebind:rebind a pool'
+          'extend-data:extend pool data tier'
+          'is-encrypted:check if pool is encrypted'
+          'has-passphrase:check if pool has a passphrase'
+          'clevis-pin:show Clevis pin for pool'
+          'explain:explain pool alert codes'
+          'overprovision:manage overprovisioning'
+          'debug:debug commands'
+        )
+        _arguments -s -S \
+          '1:pool command:->pool_cmd' \
+          '*:: :->pool_args' && ret=0
+        case $state in
+          (pool_cmd) _describe -t commands 'pool command' pool_commands && ret=0 ;;
+          (pool_args)
+            local -a pools=("${(@f)$(stratis pool list 2>/dev/null | tail -n +2 | awk '{print $1}')}")
+            case $words[1] in
+              (create)
+                _arguments -s -S \
+                  '--key-desc=[key description for encryption]:key description' \
+                  '--clevis=[Clevis configuration]:config' \
+                  '--no-overprovision[disable overprovisioning]' \
+                  '1:pool name' \
+                  '*:block devices:_files' && ret=0
+                ;;
+              (destroy|rename|is-encrypted|has-passphrase|clevis-pin)
+                _arguments '1:pool name:compadd -a pools' && ret=0
+                ;;
+              (list) _arguments '--stopped[list stopped pools]' && ret=0 ;;
+              (add-data|add-cache|init-cache)
+                _arguments '1:pool name:compadd -a pools' '*:block devices:_files' && ret=0
+                ;;
+              (bind)
+                _arguments '1:bind method:(nbde tpm2 keyring)' '2:pool name:compadd -a pools' && ret=0
+                ;;
+              (unbind|rebind)
+                _arguments '1:pool name:compadd -a pools' && ret=0
+                ;;
+            esac
+            ;;
+        esac
+        ;;
+      (filesystem)
+        local -a fs_commands=(
+          'create:create a filesystem'
+          'list:list filesystems'
+          'destroy:destroy a filesystem'
+          'rename:rename a filesystem'
+          'snapshot:create a snapshot of a filesystem'
+        )
+        _arguments -s -S \
+          '1:filesystem command:->fs_cmd' \
+          '*:: :->fs_args' && ret=0
+        case $state in
+          (fs_cmd) _describe -t commands 'filesystem command' fs_commands && ret=0 ;;
+          (fs_args)
+            local -a pools=("${(@f)$(stratis pool list 2>/dev/null | tail -n +2 | awk '{print $1}')}")
+            case $words[1] in
+              (create) _arguments '1:pool name:compadd -a pools' '2:filesystem name' && ret=0 ;;
+              (list) _arguments '1:pool name:compadd -a pools' && ret=0 ;;
+              (destroy) _arguments '1:pool name:compadd -a pools' '*:filesystem name' && ret=0 ;;
+              (rename) _arguments '1:pool name:compadd -a pools' '2:old name' '3:new name' && ret=0 ;;
+              (snapshot) _arguments '1:pool name:compadd -a pools' '2:origin filesystem' '3:snapshot name' && ret=0 ;;
+            esac
+            ;;
+        esac
+        ;;
+      (blockdev)
+        local -a bd_commands=(
+          'list:list block devices'
+        )
+        _arguments -s -S \
+          '1:blockdev command:->bd_cmd' \
+          '*:: :->bd_args' && ret=0
+        case $state in
+          (bd_cmd) _describe -t commands 'blockdev command' bd_commands && ret=0 ;;
+          (bd_args)
+            case $words[1] in
+              (list)
+                local -a pools=("${(@f)$(stratis pool list 2>/dev/null | tail -n +2 | awk '{print $1}')}")
+                _arguments '1:pool name:compadd -a pools' && ret=0
+                ;;
+            esac
+            ;;
+        esac
+        ;;
+      (key)
+        local -a key_commands=(
+          'set:set a key in the kernel keyring'
+          'list:list keys in the kernel keyring'
+          'reset:reset a key in the kernel keyring'
+          'unset:unset a key from the kernel keyring'
+        )
+        _arguments -s -S \
+          '1:key command:->key_cmd' \
+          '*:: :->key_args' && ret=0
+        case $state in
+          (key_cmd) _describe -t commands 'key command' key_commands && ret=0 ;;
+          (key_args)
+            case $words[1] in
+              (set|reset) _arguments '--keyfile-path=[path to key file]:file:_files' '--capture-key[read key from stdin]' '1:key description' && ret=0 ;;
+              (unset) _arguments '1:key description' && ret=0 ;;
+            esac
+            ;;
+        esac
+        ;;
+      (report)
+        _arguments '1:report type:(engine_state managed_objects_report)' && ret=0
+        ;;
+      (daemon)
+        local -a daemon_commands=(
+          'redundancy:list redundancy levels'
+          'version:show daemon version'
+        )
+        _arguments '1:daemon command:->daemon_cmd' && ret=0
+        if [[ $state == daemon_cmd ]]; then
+          _describe -t commands 'daemon command' daemon_commands && ret=0
+        fi
+        ;;
+    esac
+    ;;
+esac
+
+return ret
