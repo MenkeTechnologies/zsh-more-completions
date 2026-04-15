@@ -1,112 +1,180 @@
-#compdef forge
+#compdef forge fo
 
-# Zsh completion for forge (Foundry - Ethereum development)
+# Zsh completion for forge / fo — a Perl interpreter written in Rust
+#
+# Three contexts:
+#   1. `fo build SCRIPT [-o OUT]`            — AOT compile a script to a standalone binary
+#   2. `fo convert [-i] [-d DELIM] FILE...`  — convert Perl to forge syntax with |> pipes
+#   3. `fo [perl-flags] [SCRIPT] [args]`     — normal interpreter mode
+#
+# Note on the dispatch pattern: we use `_arguments -C` + `'1: :->cmd'` + `'*::arg:->args'`
+# so subcommand handlers run via the standard state-machine. An earlier version of this
+# file used `_arguments -s -S $args && return` which short-circuited the state dispatch
+# (`_arguments` returns 0 after merely walking the spec, so `&& return` ran before the
+# `case` block could fire), making `forge <TAB>` produce nothing.
 
-local curcontext="$curcontext" state line ret=1
+_forge_debug_flags() {
+  _values -s '' 'debug flag' \
+    'p[tokenizing and parsing]' \
+    's[stack snapshots]' \
+    'l[label stack processing]' \
+    't[trace execution]' \
+    'o[method and overloading resolution]' \
+    'c[string/numeric conversions]' \
+    'P[print profiling info]' \
+    'm[memory and SV allocation]' \
+    'f[format processing]' \
+    'r[regular expression parsing and execution]' \
+    'x[syntax tree dump]' \
+    'u[tainting checks]' \
+    'H[hash dump]' \
+    'X[scratchpad allocation]' \
+    'D[cleaning up]' \
+    'S[op slab allocation]' \
+    'T[tokenizing]' \
+    'R[include reference counts of dumped variables]' \
+    'J[show s/// junctions]' \
+    'v[verbose: use abs path when printing file names]'
+}
 
-local -a commands=(
-  'bind:generate Rust bindings for smart contracts'
-  'build:build the project (alias: b, compile)'
-  'cache:manage the cache'
-  'clean:remove build artifacts'
-  'completions:generate shell completions'
-  'config:display the current config'
-  'coverage:generate coverage report'
-  'create:deploy a smart contract'
-  'debug:debugs a single smart contract as a script'
-  'doc:generate documentation for Solidity source files'
-  'flatten:flatten a source file'
-  'fmt:format Solidity source files'
-  'geiger:detect usage of unsafe cheat codes'
-  'init:create a new Forge project'
-  'inspect:get specialized information about a contract'
-  'install:install one or more dependencies'
-  'remappings:get the automatically inferred remappings'
-  'remove:remove one or more dependencies'
-  'script:run a smart contract as a script'
-  'selectors:manage function selectors'
-  'snapshot:create a snapshot of each test gas usage'
-  'test:run the project tests (alias: t)'
-  'tree:display the project dependency tree'
-  'update:update one or more dependencies'
-  'verify-check:check verification status on a block explorer'
-  'verify-contract:verify a contract on a block explorer'
-)
+# `fo build SCRIPT [-o OUT]` — bake a Perl script into a standalone executable
+_forge_build() {
+  _arguments -s -S \
+    '(-o --output)'{-o+,--output=}'[output binary path]:output:_files' \
+    '(-h --help)'{-h,--help}'[show fo build usage]' \
+    '1:script file:_files -g "*.for *.pl *.pm *.t *.cgi *.psgi"'
+}
 
-_arguments -s -S \
-  '(-h --help)'{-h,--help}'[show help]' \
-  '(-V --version)'{-V,--version}'[show version]' \
-  '1:command:->command' \
-  '*::arg:->args' && ret=0
+# `fo docs [TOPIC]` — built-in documentation browser
+_forge_docs() {
+  local -a _topics
+  _topics=(${(f)"$(fo docs --list 2>/dev/null | sed 's/^ *[0-9]*\. //')"})
+  _describe 'docs topic' _topics
+}
 
-case $state in
-  (command)
-    _describe -t commands 'forge command' commands && ret=0
-    ;;
-  (args)
-    case ${line[1]} in
-      (build|b|compile)
-        _arguments \
-          '--force[force rebuild]' \
-          '--optimize[enable optimization]' \
-          '--optimizer-runs[optimizer runs]:runs:' \
-          '--via-ir[use the Yul IR compilation pipeline]' \
-          '--sizes[print contract sizes]' \
-          '--out[output directory]:dir:_files -/' \
-          '--root[project root]:dir:_files -/' && ret=0
-        ;;
-      (test|t)
-        _arguments \
-          '(-m --match-test)'{-m,--match-test}'[only run tests matching regex]:pattern:' \
-          '--match-contract[only run tests in contracts matching regex]:pattern:' \
-          '--match-path[only run tests in files matching glob]:glob:' \
-          '--no-match-test[skip tests matching regex]:pattern:' \
-          '--no-match-contract[skip contracts matching regex]:pattern:' \
-          '--no-match-path[skip files matching glob]:glob:' \
-          '(-v --verbosity)'{-v,--verbosity}'[verbosity level]:level:(1 2 3 4 5)' \
-          '--gas-report[print gas report]' \
-          '--fuzz-runs[number of fuzz runs]:runs:' \
-          '--fuzz-seed[fuzz seed]:seed:' \
-          '-f[fork URL]:url:' \
-          '--fork-url[fork URL]:url:' \
-          '--fork-block-number[fork at block number]:block:' \
-          '--debug[run a single test in debug mode]' && ret=0
-        ;;
-      (create)
-        _arguments \
-          '--constructor-args[constructor arguments]:args:' \
-          '--rpc-url[RPC URL]:url:' \
-          '--private-key[private key]:key:' \
-          '--verify[verify on block explorer]' \
-          '--etherscan-api-key[API key for verification]:key:' \
-          '--chain[chain name or ID]:chain:' \
-          '*:contract:_files -g "*.sol"' && ret=0
-        ;;
-      (init)
-        _arguments \
-          '--template[template to use]:template:' \
-          '--force[force init even in non-empty directory]' \
-          '--no-git[do not create a git repository]' \
-          '--no-commit[do not create initial commit]' \
-          '1:directory:_files -/' && ret=0
-        ;;
-      (fmt)
-        _arguments \
-          '--root[project root]:dir:_files -/' \
-          '--check[check formatting without changing files]' \
-          '--raw[format raw Solidity from stdin]' \
-          '*:file:_files -g "*.sol"' && ret=0
-        ;;
-      (snapshot)
-        _arguments \
-          '--diff[diff against snapshot]:file:_files' \
-          '--check[compare against snapshot]:file:_files' \
-          '--snap[output file]:file:_files' \
-          '--asc[sort by gas ascending]' \
-          '--desc[sort by gas descending]' && ret=0
-        ;;
-    esac
-    ;;
-esac
+# `fo serve [PORT] [SCRIPT]` — built-in HTTP server (default port 8000)
+_forge_serve() {
+  _arguments -s -S \
+    '(-h --help)'{-h,--help}'[show fo serve usage]' \
+    '1:port (default 8000):' \
+    '2:script or -e:_files -g "*.for *.pl"'
+}
 
-return ret
+_forge_deconvert() {
+  _arguments -s -S \
+    '(-i --in-place)'{-i,--in-place}'[write .pl files alongside originals]' \
+    '(-d --output-delim)'{-d+,--output-delim=}'[delimiter for s/// tr/// m// (default: preserve original)]:delimiter:' \
+    '(-h --help)'{-h,--help}'[show fo deconvert usage]' \
+    '*:forge files:_files -g "*.for"'
+}
+# `fo convert [-i] [-d DELIM] FILE...` — convert Perl source to idiomatic forge syntax
+_forge_convert() {
+  _arguments -s -S \
+    '(-i --in-place)'{-i,--in-place}'[rewrite files in place]' \
+    '(-d --output-delim)'{-d+,--output-delim=}'[delimiter for s/// tr/// m// (default: preserve original)]:delimiter:' \
+    '(-h --help)'{-h,--help}'[show fo convert usage]' \
+    '*:perl files:_files -g "*.pl *.pm *.t *.cgi *.psgi"'
+}
+
+_forge() {
+  local curcontext="$curcontext" state state_descr line
+  typeset -A opt_args
+
+  # Top-level: every flag is exposed via `_arguments`. The two trailing positional specs
+  # (`1:...:->cmd` and `*::arg:->args`) defer subcommand handling to the case block below.
+  #
+  # `-C` is mandatory: without it, `$state` is not exported to the surrounding function.
+  _arguments -s -S \
+    '--lsp[run language server over stdio (no script needed)]' \
+    '--remote-worker[persistent cluster worker over stdio]' \
+    '--remote-worker-v1[legacy one-shot cluster worker over stdio]' \
+    '--compat[Perl 5 strict-compat: disable all forge extensions]' \
+    '--script[force arg to be a script file (skip code detection)]' \
+    '*-e+[one line of program (several allowed)]:code:' \
+    '*-E+[like -e but enables all optional features]:code:' \
+    '-c[check syntax only (parse; does not compile or run)]' \
+    '(--lint --check)'{--lint,--check}'[parse + compile bytecode without running]' \
+    '(--disasm --disassemble)'{--disasm,--disassemble}'[print bytecode disassembly to stderr before running]' \
+    '--ast[dump parsed AST as JSON and exit (no execution)]' \
+    '--fmt[pretty-print parsed Perl to stdout and exit]' \
+    '--profile[wall-clock profile: per-line + per-sub timings to stderr]' \
+    '--flame[SVG flamegraph to stdout (fo --flame script.for > flame.svg)]' \
+    '--no-jit[disable Cranelift JIT (bytecode interpreter only)]' \
+    '--explain=[print expanded hint for an error code]:error code (e.g. E0001):' \
+    '-d+[run program under debugger]::module:' \
+    '-D+[set debugging flags]:flags:_forge_debug_flags' \
+    '-u[dump core after parsing program]' \
+    '-n[assume "while (<>) \{ ... \}" loop around program]' \
+    '-p[assume loop like -n but print line also like sed]' \
+    '-a[autosplit mode with -n or -p (splits $_ into @F)]' \
+    '-F+[split() pattern for -a switch]:pattern:' \
+    '-l+[enable line ending processing]::octnum:' \
+    '-0+[specify record separator]::octal:' \
+    '-g[read all input in one go (slurp mode, alias for -0777)]' \
+    '-i+[edit <> files in place (backup if extension supplied)]::extension:' \
+    '*-M+[use module before executing program]:module:_perl_modules' \
+    '*-m+[use module() before executing program (no import)]:module:_perl_modules' \
+    '*-I+[specify @INC directory]:directory:_directories' \
+    '-f[do not do $sitelib/sitecustomize.pl at startup]' \
+    '-S[look for programfile using PATH]' \
+    '-x+[ignore text before \#!perl line]::directory:_directories' \
+    '-C+[enable listed Unicode features]::number/list:' \
+    '-t[enable tainting warnings]' \
+    '-T[enable tainting checks]' \
+    '-U[allow unsafe operations]' \
+    '-s[enable switch parsing after programfile]' \
+    '-w[enable many useful warnings]' \
+    '-W[enable all warnings]' \
+    '-X[disable all warnings]' \
+    '(-v --version)'{-v,--version}'[print version patchlevel and license]' \
+    '-V+[print configuration summary]::config variable:(version api_version archname osname threads useithreads usethreads use64bitint use64bitall cc optimize prefix installprefix perlpath)' \
+    '(- *)'{-h,--help}'[print help]' \
+    '(-j --threads)'{-j+,--threads=}'[number of threads for parallel operations]:threads:' \
+    '(-)1:script or subcommand:->script_or_subcommand' \
+    '(-)*::script arguments:->script_args' && return 0
+
+  case $state in
+    script_or_subcommand)
+      # Offer the `build` subcommand alongside the script-file glob. `_describe` is the
+      # canonical way to surface a NAME:DESCRIPTION array — `compadd -d` requires the
+      # display array to be indexed identically to the values, which is fragile.
+      local -a subcmds
+      subcmds=(
+        'build:compile a Perl script into a standalone executable binary'
+        'convert:convert Perl source to idiomatic forge syntax with |> pipes'
+        'deconvert:convert forge source to vanilla perl syntax'
+        'docs:built-in documentation browser (fo docs pmap)'
+        'serve:start a built-in HTTP server (fo serve 8080 app.for)'
+      )
+      _alternative \
+        'subcommands:forge subcommand:((${subcmds}))' \
+        'scripts:perl script:_files -g "*.for *.pl *.pm *.t *.cgi *.psgi"'
+      ;;
+    script_args)
+      # `$line[1]` is the first positional that was already consumed. If it was `build`,
+      # delegate to the build subcommand handler; otherwise treat the rest as script args.
+      case $line[1] in
+        build)
+          _forge_build
+          ;;
+        deconvert)
+          _forge_deconvert
+          ;;
+        docs)
+          _forge_docs
+          ;;
+        serve)
+          _forge_serve
+          ;;
+        convert)
+          _forge_convert
+          ;;
+        *)
+          _files
+          ;;
+      esac
+      ;;
+  esac
+}
+
+_forge "$@"
