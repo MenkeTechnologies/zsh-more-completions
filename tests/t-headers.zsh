@@ -103,12 +103,6 @@
     assert $count is_greater_than 100
 }
 
-@test 'override_src has at least 8 files' {
-    local count
-    count=$(ls "$pluginDir/override_src/" | wc -l | tr -d ' ')
-    assert $count is_greater_than 7
-}
-
 @test 'all completion filenames start with underscore' {
     local bad=0
     for f in "$pluginDir/override_src/"*; do

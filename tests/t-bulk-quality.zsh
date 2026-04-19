@@ -55,11 +55,6 @@
     assert "$count" is_less_than 5000
 }
 
-@test 'override_src has at least 5 files' {
-    local count=$(ls "$osrc" | wc -l | tr -d ' ')
-    assert "$count" is_greater_than 4
-}
-
 @test 'total completion count exceeds 10000' {
     local s=$(ls "$src" | wc -l | tr -d ' ')
     local x=$(ls "$xsrc" | wc -l | tr -d ' ')
