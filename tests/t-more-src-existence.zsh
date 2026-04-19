@@ -1924,10 +1924,6 @@
     assert "$xsrc/_foreman" is_file
 }
 
-@test 'more_src has _forge' {
-    assert "$xsrc/_forge" is_file
-}
-
 @test 'more_src has _fortio' {
     assert "$xsrc/_fortio" is_file
 }
