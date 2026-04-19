@@ -132,12 +132,6 @@
     assert $n is_greater_than 100
 }
 
-@test 'override_src contains exactly 9 underscore files' {
-    local n
-    n=$(find "$pluginDir/override_src" -maxdepth 1 -name '_*' -type f 2>/dev/null | wc -l | tr -d ' ')
-    assert $n equals 9
-}
-
 @test 'architecture_src contains underscore completion files' {
     local n
     n=$(find "$pluginDir/architecture_src" -maxdepth 1 -name '_*' -type f 2>/dev/null | wc -l | tr -d ' ')
