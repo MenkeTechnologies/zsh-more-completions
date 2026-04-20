@@ -1,17 +1,32 @@
 #compdef stryke st s
 
-# Zsh completion for stryke / st — a Perl interpreter written in Rust
+# Zsh completion for stryke / s — a Perl interpreter written in Rust
 #
-# Three contexts:
-#   1. `st build SCRIPT [-o OUT]`            — AOT compile a script to a standalone binary
-#   2. `st convert [-i] [-d DELIM] FILE...`  — convert Perl to stryke syntax with |> pipes
-#   3. `st [perl-flags] [SCRIPT] [args]`     — normal interpreter mode
+# Subcommands:
+#   s build [--project DIR] SCRIPT [-o OUT]  — AOT compile to standalone binary
+#   s convert [-i] [-d DELIM] FILE...        — convert Perl to stryke syntax with |> pipes
+#   s deconvert [-i] FILE...                 — convert stryke back to Perl syntax
+#   s fmt [-i] FILE...                       — format stryke source files
+#   s check FILE...                          — parse + compile without executing
+#   s disasm [--jit] FILE                    — disassemble bytecode
+#   s profile [--flame] [--json] FILE        — run with profiling
+#   s bench [FILE|DIR]                       — run benchmark files
+#   s test [FILE|DIR]                        — run test files
+#   s init [NAME]                            — scaffold a new project
+#   s repl [--load FILE]                     — start interactive REPL
+#   s lsp                                    — start Language Server Protocol
+#   s completions [SHELL]                    — emit shell completions
+#   s ast FILE                               — dump AST as JSON
+#   s docs [TOPIC]                           — documentation browser
+#   s serve [PORT] [SCRIPT]                  — HTTP server
+#   s run [SCRIPT]                           — run main.stk
+#   s prun FILE...                           — run multiple files in parallel
+#   s *.stk                                  — run multiple files sequentially
+#   s -j4 *.stk                              — run multiple files in parallel (4 threads)
+#   s [perl-flags] [SCRIPT] [args]           — normal interpreter mode
 #
 # Note on the dispatch pattern: we use `_arguments -C` + `'1: :->cmd'` + `'*::arg:->args'`
-# so subcommand handlers run via the standard state-machine. An earlier version of this
-# file used `_arguments -s -S $args && return` which short-circuited the state dispatch
-# (`_arguments` returns 0 after merely walking the spec, so `&& return` ran before the
-# `case` block could fire), making `stryke <TAB>` produce nothing.
+# so subcommand handlers run via the standard state-machine.
 
 _stryke_debug_flags() {
   _values -s '' 'debug flag' \
@@ -37,25 +52,123 @@ _stryke_debug_flags() {
     'v[verbose: use abs path when printing file names]'
 }
 
-# `st build SCRIPT [-o OUT]` — bake a Perl script into a standalone executable
+# `s build [--project DIR] SCRIPT [-o OUT]` — bake a Perl script into a standalone executable
 _stryke_build() {
   _arguments -s -S \
     '(-o --output)'{-o+,--output=}'[output binary path]:output:_files' \
-    '(-h --help)'{-h,--help}'[show st build usage]' \
-    '1:script file:_files -g "*.stk *.pl *.pm *.t *.cgi *.psgi"'
+    '(-p --project)'{-p+,--project=}'[bundle project directory (main.stk + lib/)]:directory:_directories' \
+    '(-h --help)'{-h,--help}'[show s build usage]' \
+    '1:script file:_files -g "*.stk *.pl *.pm"'
 }
 
-# `st docs [TOPIC]` — built-in documentation browser
+# `s fmt [-i] FILE...` — format stryke source files
+_stryke_fmt() {
+  _arguments -s -S \
+    '(-i --in-place)'{-i,--in-place}'[rewrite files in place]' \
+    '(-h --help)'{-h,--help}'[show s fmt usage]' \
+    '*:stryke files:_files -g "*.stk *.pl *.pm"'
+}
+
+# `s check FILE...` — parse + compile without executing
+_stryke_check() {
+  _arguments -s -S \
+    '(-q --quiet)'{-q,--quiet}'[only output errors, no success messages]' \
+    '--json[output diagnostics as JSON]' \
+    '(-h --help)'{-h,--help}'[show s check usage]' \
+    '*:stryke files:_files -g "*.stk *.pl *.pm"'
+}
+
+# `s disasm [--jit] FILE` — disassemble bytecode
+_stryke_disasm() {
+  _arguments -s -S \
+    '--jit[also show Cranelift IR]' \
+    '(-h --help)'{-h,--help}'[show s disasm usage]' \
+    '1:script file:_files -g "*.stk *.pl *.pm"'
+}
+
+# `s profile [OPTIONS] FILE` — run with profiling
+_stryke_profile() {
+  _arguments -s -S \
+    '(-o --output)'{-o+,--output=}'[write output to file]:output:_files' \
+    '--flame[generate flamegraph SVG]' \
+    '--json[output profile data as JSON]' \
+    '(-h --help)'{-h,--help}'[show s profile usage]' \
+    '1:script file:_files -g "*.stk *.pl *.pm"'
+}
+
+# `s bench [FILE|DIR]` — run benchmark files
+_stryke_bench() {
+  _arguments -s -S \
+    '(-h --help)'{-h,--help}'[show s bench usage]' \
+    '1:benchmark file or directory:_files -g "*.stk *.pl"'
+}
+
+# `s test [FILE|DIR]` — run test files
+_stryke_test() {
+  _arguments -s -S \
+    '(-h --help)'{-h,--help}'[show s test usage]' \
+    '1:test file or directory:_files -g "*.stk *.pl *.t"'
+}
+
+# `s init [NAME]` — scaffold a new project
+_stryke_init() {
+  _arguments -s -S \
+    '(-h --help)'{-h,--help}'[show s init usage]' \
+    '1:project name:'
+}
+
+# `s repl [--load FILE]` — start interactive REPL
+_stryke_repl() {
+  _arguments -s -S \
+    '(-l --load)'{-l+,--load=}'[evaluate file before REPL]:file:_files -g "*.stk *.pl *.pm"' \
+    '(-h --help)'{-h,--help}'[show s repl usage]'
+}
+
+# `s run [SCRIPT]` — run main.stk or specified script
+_stryke_run() {
+  _arguments -s -S \
+    '(-h --help)'{-h,--help}'[show s run usage]' \
+    '1:script file:_files -g "*.stk *.pl"'
+}
+
+# `s prun FILE...` — run multiple files in parallel
+_stryke_prun() {
+  _arguments -s -S \
+    '(-h --help)'{-h,--help}'[show s prun usage]' \
+    '*:script files:_files -g "*.stk *.pl *.pm *.t"'
+}
+
+# `s lsp` — start Language Server Protocol over stdio
+_stryke_lsp() {
+  _arguments -s -S \
+    '(-h --help)'{-h,--help}'[show s lsp usage]'
+}
+
+# `s completions [SHELL]` — emit shell completions
+_stryke_completions() {
+  _arguments -s -S \
+    '(-h --help)'{-h,--help}'[show s completions usage]' \
+    '1:shell:(zsh)'
+}
+
+# `s ast FILE` — dump AST as JSON
+_stryke_ast() {
+  _arguments -s -S \
+    '(-h --help)'{-h,--help}'[show s ast usage]' \
+    '1:script file:_files -g "*.stk *.pl *.pm"'
+}
+
+# `s docs [TOPIC]` — built-in documentation browser
 _stryke_docs() {
   local -a _topics
-  _topics=(${(f)"$(st docs --list 2>/dev/null | sed 's/^ *[0-9]*\. //')"})
+  _topics=(${(f)"$(s docs --list 2>/dev/null | sed 's/^ *[0-9]*\. //')"})
   _describe 'docs topic' _topics
 }
 
-# `st serve [PORT] [SCRIPT]` — built-in HTTP server (default port 8000)
+# `s serve [PORT] [SCRIPT]` — built-in HTTP server (default port 8000)
 _stryke_serve() {
   _arguments -s -S \
-    '(-h --help)'{-h,--help}'[show st serve usage]' \
+    '(-h --help)'{-h,--help}'[show s serve usage]' \
     '1:port (default 8000):' \
     '2:script or -e:_files -g "*.stk *.pl"'
 }
@@ -64,15 +177,15 @@ _stryke_deconvert() {
   _arguments -s -S \
     '(-i --in-place)'{-i,--in-place}'[write .pl files alongside originals]' \
     '(-d --output-delim)'{-d+,--output-delim=}'[delimiter for s/// tr/// m// (default: preserve original)]:delimiter:' \
-    '(-h --help)'{-h,--help}'[show st deconvert usage]' \
+    '(-h --help)'{-h,--help}'[show s deconvert usage]' \
     '*:stryke files:_files -g "*.stk"'
 }
-# `st convert [-i] [-d DELIM] FILE...` — convert Perl source to idiomatic stryke syntax
+# `s convert [-i] [-d DELIM] FILE...` — convert Perl source to idiomatic stryke syntax
 _stryke_convert() {
   _arguments -s -S \
     '(-i --in-place)'{-i,--in-place}'[rewrite files in place]' \
     '(-d --output-delim)'{-d+,--output-delim=}'[delimiter for s/// tr/// m// (default: preserve original)]:delimiter:' \
-    '(-h --help)'{-h,--help}'[show st convert usage]' \
+    '(-h --help)'{-h,--help}'[show s convert usage]' \
     '*:perl files:_files -g "*.pl *.pm *.t *.cgi *.psgi"'
 }
 
@@ -135,43 +248,58 @@ _stryke() {
 
   case $state in
     script_or_subcommand)
-      # Offer the `build` subcommand alongside the script-file glob. `_describe` is the
-      # canonical way to surface a NAME:DESCRIPTION array — `compadd -d` requires the
-      # display array to be indexed identically to the values, which is fragile.
+      # Offer subcommands alongside the script-file glob.
       local -a subcmds
       subcmds=(
-        'build:compile a Perl script into a standalone executable binary'
-        'convert:convert Perl source to idiomatic stryke syntax with |> pipes'
-        'deconvert:convert stryke source to vanilla perl syntax'
-        'docs:built-in documentation browser (st docs pmap)'
-        'serve:start a built-in HTTP server (st serve 8080 app.stk)'
+        'build:compile script/project into standalone binary'
+        'run:run ./main.stk or specified script'
+        'prun:run multiple files in parallel'
+        'test:run tests in t/'
+        'bench:run benchmarks in bench/'
+        'check:parse + compile without executing'
+        'disasm:disassemble bytecode'
+        'profile:run with profiling'
+        'fmt:format stryke source files'
+        'init:scaffold a new stryke project'
+        'repl:start interactive REPL'
+        'lsp:start Language Server Protocol'
+        'completions:emit shell completions'
+        'ast:dump AST as JSON'
+        'convert:convert Perl to stryke syntax'
+        'deconvert:convert stryke to Perl syntax'
+        'docs:documentation browser'
+        'serve:start HTTP server'
       )
       _alternative \
         'subcommands:stryke subcommand:((${subcmds}))' \
         'scripts:perl script:_files -g "*.stk *.pl *.pm *.t *.cgi *.psgi"'
       ;;
     script_args)
-      # `$line[1]` is the first positional that was already consumed. If it was `build`,
-      # delegate to the build subcommand handler; otherwise treat the rest as script args.
+      # Delegate to subcommand handler based on first positional.
       case $line[1] in
-        build)
-          _stryke_build
+        build)     _stryke_build ;;
+        fmt)       _stryke_fmt ;;
+        check)     _stryke_check ;;
+        disasm)    _stryke_disasm ;;
+        profile)   _stryke_profile ;;
+        bench)     _stryke_bench ;;
+        test)      _stryke_test ;;
+        init)      _stryke_init ;;
+        repl)      _stryke_repl ;;
+        run)       _stryke_run ;;
+        prun)      _stryke_prun ;;
+        lsp)       _stryke_lsp ;;
+        completions) _stryke_completions ;;
+        ast)       _stryke_ast ;;
+        convert)   _stryke_convert ;;
+        deconvert) _stryke_deconvert ;;
+        docs)      _stryke_docs ;;
+        serve)     _stryke_serve ;;
+        *.stk|*.pl|*.pm|*.t)
+          # Multi-file execution: `st *.stk` runs all files
+          _files -g "*.stk *.pl *.pm *.t"
           ;;
-        deconvert)
-          _stryke_deconvert
-          ;;
-        docs)
-          _stryke_docs
-          ;;
-        serve)
-          _stryke_serve
-          ;;
-        convert)
-          _stryke_convert
-          ;;
-        *)
-          _files
-          ;;
+        *)         _files ;;
       esac
       ;;
   esac
