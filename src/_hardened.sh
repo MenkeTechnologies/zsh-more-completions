@@ -5,7 +5,7 @@ local -a arguments
 arguments=(
   '-O2[(or higher)]'
   '-fstack-protector-strong[stack: protector strong]'
-  '-D[_FORTIFY_SOURCE=2]'
+  '-D_FORTIFY_SOURCE=[2]'
   {-Wl,-z}'[now]'
   {-Wl,-z}'[relro]'
   '-fPIC[enable PIC]'

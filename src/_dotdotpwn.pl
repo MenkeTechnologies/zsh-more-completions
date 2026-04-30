@@ -12,7 +12,7 @@ arguments=(
   '-f[specific filename (e.g. /etc/motd; default: according to OS detected, defaults in TraversalEngine.pm)]'
   '-E[add @Extra_files in TraversalEngine.pm (e.g. web.config, httpd.conf, etc.)]'
   '-S[use SSL for HTTP and Payload module (not needed for http-url, use a https:// url instead)]'
-  '-u[URL with the part to be fuzzed marked as TRAVERSAL (e.g. http://foo:8080/id.php?x=TRAVERSAL&y=31337)]'
+  '-u[with the part to be fuzzed marked as TRAVERSAL (e.g. http://foo:8080/id.php?x=TRAVERSAL&y=31337)]:url'
   '-k[text pattern to match in the response (http-url & payload modules - e.g. "root:" if trying /etc/passwd)]'
   '-p[filename with the payload to be sent and the part to be fuzzed marked with the TRAVERSAL keyword]'
   '-x[port to connect (default: HTTP=80; FTP=21; TFTP=69)]'
