@@ -18,7 +18,7 @@ arguments=(
   {-f,--files-from}'[read the filenames to be examined from FILE]'
   {-F,--separator}'[use string as separator instead of `:]'
   {-I,--mime}'[output MIME type strings (--mime-type and]'
-  '--mime-encoding[)]'
+  '--mime-encoding'
   '--extension[output a slash-separated list of extensions]'
   '--mime-type[output the MIME type]'
   '--mime-encoding[output the MIME encoding]'

@@ -9,7 +9,7 @@ arguments=(
   '--active[list only active accounts. This option cannot be used]'
   '--locked[list only locked accounts. This option cannot be used]'
   '--uac[flag combination as hex>]'
-  '--locked[]'
+  '--locked[use lockfile / dependency lock]'
   '--syshive[to system hive>]'
   '--lmoutfile[of the LM hash output file>]'
   '--ntoutfile[of the NT hash output file>]'
