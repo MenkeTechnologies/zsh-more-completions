@@ -17,7 +17,7 @@ arguments=(
   {-n,--no-clobber}'[do not overwrite an existing file (overrides]'
   {-P,--no-dereference}'[never follow symbolic links in SOURCE]'
   '-p[same as --preserve=mode,ownership,timestamps]'
-  '--preserve[preserve the specified attributes (default:]'
+  '--preserve[preserve the specified attributes]'
   '--no-preserve[dont preserve the specified attributes]'
   '--parents[use full source file name under DIRECTORY]'
   {-R,-r,--recursive}'[copy directories recursively]'

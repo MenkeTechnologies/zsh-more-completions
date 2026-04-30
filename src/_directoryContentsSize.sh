@@ -4,7 +4,7 @@ local -a arguments
 
 arguments=(
   '-h[help]'
-  '-s[]'
+  '-s[sort by size]'
   '-a[hidden files]'
   '*:filename:_files'
 )
