@@ -1,0 +1,333 @@
+#compdef zd
+
+# zsh completion for zd (the standalone HTTP client for zshrs-daemon).
+# Sub-command-aware: the first positional drives the menu of valid
+# sub-sub-commands and their flags. Mirrors bins/zd.rs — keep in sync
+# when adding a new top-level command or subcommand.
+
+local curcontext=$curcontext state line
+typeset -A opt_args
+
+# ---- Top-level commands --------------------------------------------------
+
+_zd_commands() {
+    local -a cmds
+    cmds=(
+        'health:GET /health — daemon liveness + version probe'
+        'ops:GET /ops — list every op the daemon accepts'
+        'info:full daemon snapshot (catalog stats, uptime, paths)'
+        'ping:round-trip latency + pong'
+        'metrics:Prometheus-shaped metrics as JSON'
+        'call:generic op caller for ops without a dedicated wrapper'
+        'cache:persistent KV store (sqlite-backed, TTL-aware, namespaced)'
+        'job:tokio task queue (submit/status/output/list/kill/wait)'
+        'lock:named cross-process mutex (PID-tied auto-release)'
+        'publish:publish a pubsub event'
+        'events:stream pubsub matches via SSE (uses curl)'
+        'watch:stream fsnotify events for a directory via SSE'
+        'defs:federated definitions catalog (query/kinds/emit/diff)'
+        'snapshot:portable canonical-state artifacts (save/list/load/diff)'
+        'artifact:content-addressed cache (sha256 + names.db)'
+        'schedule:cron-equivalent scheduled job submitter'
+        'export:render the catalog in any format (sh/json/yaml/csv/sql/pdf/...)'
+        'view:human-readable dump of a catalog target'
+    )
+    _describe -t commands 'zd command' cmds
+}
+
+# ---- Sub-command argument completers ------------------------------------
+
+_zd_cache() {
+    local -a sub
+    sub=(
+        'put:store a key/value (optionally TTL)'
+        'get:fetch a value by key'
+        'del:delete a key'
+        'list:list keys in a namespace (optional prefix filter)'
+        'stats:per-namespace stats'
+    )
+    if (( CURRENT == 2 )); then
+        _describe -t cache-sub 'cache subcommand' sub
+        return
+    fi
+    case $line[1] in
+        put)
+            _arguments -S \
+                ':namespace:' \
+                ':key:' \
+                ':value:' \
+                '--ttl[time-to-live in seconds]:seconds:'
+            ;;
+        get|del)
+            _arguments -S ':namespace:' ':key:'
+            ;;
+        list)
+            _arguments -S ':namespace:' ':prefix:'
+            ;;
+        stats)
+            _arguments -S ':namespace:'
+            ;;
+    esac
+}
+
+_zd_job() {
+    local -a sub
+    sub=(
+        'submit:submit a command (use -- to separate from zd flags)'
+        'status:fetch current state of a job by id'
+        'output:fetch stdout (or --stderr) of a job'
+        'list:list jobs (filter by --state / --tag / --limit)'
+        'kill:SIGTERM/SIGKILL a running job'
+        'wait:block until a job reaches a terminal state'
+    )
+    if (( CURRENT == 2 )); then
+        _describe -t job-sub 'job subcommand' sub
+        return
+    fi
+    case $line[1] in
+        submit)
+            _arguments -S ':--:' '*:cmd:_command_names'
+            ;;
+        status|output|kill|wait)
+            _arguments -S ':job-id (u64):' \
+                '--stderr[fetch stderr instead of stdout (output only)]'
+            ;;
+        list)
+            _arguments -S \
+                '--state[filter by job state]:state:(queued running exited failed killed cancelled)' \
+                '--tag[filter by tag]:tag:' \
+                '--limit[max rows to return]:N:'
+            ;;
+    esac
+}
+
+_zd_lock() {
+    local -a sub
+    sub=(
+        'acquire:acquire (waits up to --timeout)'
+        'try:non-blocking acquire'
+        'release:release a held lock by NAME + TOKEN'
+        'list:list every active lock'
+    )
+    if (( CURRENT == 2 )); then
+        _describe -t lock-sub 'lock subcommand' sub
+        return
+    fi
+    case $line[1] in
+        acquire)
+            _arguments -S ':lock name:' '--timeout[seconds before giving up]:seconds:'
+            ;;
+        try)
+            _arguments -S ':lock name:'
+            ;;
+        release)
+            _arguments -S ':lock name:' ':token (u128):'
+            ;;
+    esac
+}
+
+_zd_defs() {
+    local -a sub
+    sub=(
+        'query:query the federated catalog'
+        'kinds:list every populated definition kind'
+        'emit:write one record (third-party shells use this)'
+        'diff:cross-shell diff between two shell_ids'
+    )
+    if (( CURRENT == 2 )); then
+        _describe -t defs-sub 'defs subcommand' sub
+        return
+    fi
+    local -a kinds known_shell_ids
+    kinds=(
+        alias galias salias function function_autoload env params
+        params_typed bindkey compdef named_dir zstyle zmodload setopt
+        trap sched source zle completion path fpath manpath
+    )
+    known_shell_ids=(
+        zshrs zsh bash dash ksh mksh fish nu elvish pwsh xonsh
+        oil ysh csh tcsh
+    )
+    case $line[1] in
+        query)
+            _arguments -S \
+                '--kind[restrict to one kind]:kind:(($kinds))' \
+                '--name[exact name match]:name:' \
+                '--prefix[prefix match]:prefix:' \
+                '--shell-id[restrict to records from one shell]:shell:(($known_shell_ids))' \
+                '--limit[max rows]:N:'
+            ;;
+        emit)
+            _arguments -S \
+                '--shell-id[recording shell identity (required)]:shell:(($known_shell_ids))' \
+                '--kind[record kind (required)]:kind:(($kinds))' \
+                '--name[record name (required)]:name:' \
+                '--value[record value]:value:' \
+                '--file[source file:line attribution]:file:_files' \
+                '--line[source line number]:N:' \
+                '--fn-chain[caller chain, " > " separated]:chain:'
+            ;;
+        diff)
+            _arguments -S \
+                ':shell A:(($known_shell_ids))' \
+                ':shell B:(($known_shell_ids))' \
+                ':kind (optional):(($kinds))'
+            ;;
+    esac
+}
+
+_zd_snapshot() {
+    local -a sub
+    sub=(
+        'save:save the canonical state under TAG'
+        'list:list every saved snapshot'
+        'load:load TAG (atomic replace)'
+        'diff:diff two saved tags (added/removed/changed)'
+    )
+    if (( CURRENT == 2 )); then
+        _describe -t snapshot-sub 'snapshot subcommand' sub
+        return
+    fi
+    case $line[1] in
+        save)
+            _arguments -S ':tag:' '--notes[free-form notes]:text:'
+            ;;
+        load)
+            _arguments -S ':tag:'
+            ;;
+        diff)
+            _arguments -S ':tag A:' ':tag B:'
+            ;;
+    esac
+}
+
+_zd_artifact() {
+    local -a sub
+    sub=(
+        'put:store an artifact (raw VALUE or --file PATH for binaries)'
+        'get:fetch an artifact (optional -o OUT for binary writes)'
+        'list:list artifacts (optional prefix filter)'
+        'gc:garbage-collect by --max-age / --max-bytes'
+    )
+    if (( CURRENT == 2 )); then
+        _describe -t artifact-sub 'artifact subcommand' sub
+        return
+    fi
+    case $line[1] in
+        put)
+            _arguments -S ':name:' ':value:' '--file[read VALUE from PATH (base64-encoded over the wire)]:path:_files'
+            ;;
+        get)
+            _arguments -S ':name:' \
+                '-o[write decoded value to PATH]:output:_files'
+            ;;
+        list)
+            _arguments -S ':prefix:'
+            ;;
+        gc)
+            _arguments -S \
+                '--max-age[evict older than this many seconds]:seconds:' \
+                '--max-bytes[evict so total bytes ≤ this]:bytes:'
+            ;;
+    esac
+}
+
+_zd_schedule() {
+    local -a sub
+    sub=(
+        'add:add a cron-style scheduled job'
+        'add-once:add a one-shot scheduled job'
+        'list:list every active schedule'
+        'remove:remove a schedule by id'
+    )
+    if (( CURRENT == 2 )); then
+        _describe -t schedule-sub 'schedule subcommand' sub
+        return
+    fi
+    case $line[1] in
+        add)
+            _arguments -S \
+                ':cron expression (6-field):' \
+                '*::cmd (use --):'
+            ;;
+        add-once)
+            _arguments -S \
+                ':fire-at unix seconds:' \
+                '*::cmd (use --):'
+            ;;
+        remove)
+            _arguments -S ':schedule id:'
+            ;;
+    esac
+}
+
+_zd_call() {
+    # Generic op caller — the only completion we can provide here is
+    # the op name itself, sourced live from the daemon.
+    local -a ops
+    if (( CURRENT == 2 )); then
+        ops=( ${(f)"$(zd ops 2>/dev/null | jq -r '.ops[]?' 2>/dev/null)"} )
+        if (( ${#ops} > 0 )); then
+            _describe -t op-name 'op' ops
+            return
+        fi
+    fi
+    _arguments -S ':op:' ':JSON body:'
+}
+
+_zd_publish() {
+    _arguments -S ':topic (scope.topic):' ':data (JSON):'
+}
+
+_zd_events() {
+    _arguments -S ':channel pattern (default *.*):'
+}
+
+_zd_watch() {
+    _arguments -S ':directory:_directories' '--recursive[watch sub-directories too]'
+}
+
+_zd_export() {
+    _arguments -S \
+        ':target:' \
+        ':format:(sh json yaml text csv sql native disasm zcompdump zsh-histfile pdf)'
+}
+
+_zd_view() {
+    _arguments -S \
+        ':target:' \
+        ':format:(sh json yaml text csv sql native disasm zcompdump zsh-histfile pdf)'
+}
+
+# ---- Top-level dispatch -------------------------------------------------
+
+_arguments -C -S : \
+    '(- *)'{-h,--help}'[print help and exit]' \
+    '(- *)--version[print version and exit]' \
+    '--url[override $DAEMON_URL]:URL:' \
+    '--token[override $DAEMON_TOKEN]:bearer token:' \
+    '1: :_zd_commands' \
+    '*::: :->args' \
+    && return 0
+
+case $state in
+    args)
+        case $words[1] in
+            cache)    _zd_cache    ;;
+            job)      _zd_job      ;;
+            lock)     _zd_lock     ;;
+            defs)     _zd_defs     ;;
+            snapshot) _zd_snapshot ;;
+            artifact) _zd_artifact ;;
+            schedule) _zd_schedule ;;
+            call)     _zd_call     ;;
+            publish)  _zd_publish  ;;
+            events)   _zd_events   ;;
+            watch)    _zd_watch    ;;
+            export)   _zd_export   ;;
+            view)     _zd_view     ;;
+            ping)     _arguments '*:echo args:' ;;
+            health|ops|info|metrics) ;;  # no-arg leaf commands
+        esac
+        ;;
+esac
