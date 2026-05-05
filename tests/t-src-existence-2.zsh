@@ -16,10 +16,6 @@
 
 # ─── File existence tests ───────────────────────────────────────────────────
 
-@test 'src has _%{fc_name}' {
-    assert "$src/_%{fc_name}" is_file
-}
-
 @test 'src has _2to3' {
     assert "$src/_2to3" is_file
 }
