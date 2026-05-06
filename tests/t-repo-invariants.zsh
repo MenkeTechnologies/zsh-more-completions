@@ -86,12 +86,12 @@
 
 # ─── Helper scripts & regression tools ────────────────────────────────────────
 
-@test 'scripts/print-repo-stats.sh exists' {
-    assert "$pluginDir/scripts/print-repo-stats.sh" is_file
+@test 'scripts/print-repo-stats.zsh exists' {
+    assert "$pluginDir/scripts/print-repo-stats.zsh" is_file
 }
 
-@test 'scripts/print-repo-stats.sh is executable' {
-    run test -x "$pluginDir/scripts/print-repo-stats.sh"
+@test 'scripts/print-repo-stats.zsh is executable' {
+    run test -x "$pluginDir/scripts/print-repo-stats.zsh"
     assert $state equals 0
 }
 
@@ -107,8 +107,8 @@
     assert $state equals 0
 }
 
-@test 'README.md references print-repo-stats.sh' {
-    run grep -q 'print-repo-stats.sh' "$pluginDir/README.md"
+@test 'README.md references print-repo-stats.zsh' {
+    run grep -q 'print-repo-stats.zsh' "$pluginDir/README.md"
     assert $state equals 0
 }
 
