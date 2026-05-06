@@ -3264,6 +3264,10 @@
     assert "$xsrc/_kubie" is_file
 }
 
+@test 'more_src has _kubevpn' {
+    assert "$xsrc/_kubevpn" is_file
+}
+
 @test 'more_src has _kustomize' {
     assert "$xsrc/_kustomize" is_file
 }
@@ -4108,6 +4112,10 @@
     assert "$xsrc/_opentofu" is_file
 }
 
+@test 'more_src has _openhands' {
+    assert "$xsrc/_openhands" is_file
+}
+
 @test 'more_src has _operator-sdk' {
     assert "$xsrc/_operator-sdk" is_file
 }
@@ -4870,6 +4878,10 @@
 
 @test 'more_src has _rtx' {
     assert "$xsrc/_rtx" is_file
+}
+
+@test 'more_src has _rtk' {
+    assert "$xsrc/_rtk" is_file
 }
 
 @test 'more_src has _rubymine' {
@@ -6727,4 +6739,3 @@
 @test 'more_src has _zx' {
     assert "$xsrc/_zx" is_file
 }
-
