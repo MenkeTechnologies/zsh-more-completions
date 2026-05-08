@@ -1,0 +1,75 @@
+#compdef knope
+
+# Zsh completion for knope (knope-dev/knope, clap). Global flags and conditional
+# flags from crates/knope/src/main.rs (build_cli). Workflow names are taken from
+# [[workflows]] / name = … in ./knope.toml when present; if none match, defaults
+# match generate_workflows() in crates/knope/src/config/mod.rs (release,
+# document-change, get-version for single-package repos).
+
+local curcontext="$curcontext" state line ret=1
+local -a wspec wdefaults baseargs
+local wline inwf val
+
+wdefaults=(
+  'release:prepare changelog bump version create release'
+  'document-change:create change file for next release'
+  'get-version:print current version (single-package default)'
+)
+
+baseargs=(
+  '(--dry-run)'--dry-run'[simulate workflow without side effects]'
+  '(-v --verbose)'{-v,--verbose}'[debug logging]'
+)
+
+if [[ -f knope.toml ]]; then
+  baseargs+=(
+    '--upgrade[upgrade deprecated knope.toml syntax]'
+    '--validate[validate knope.toml only]'
+  )
+else
+  baseargs+=('--generate[write knope.toml for current repo]')
+fi
+
+_arguments -C -s -S \
+  "$baseargs[@]" \
+  '1: :->wf' \
+  '*::args: _default' && ret=0
+
+case $state in
+  (wf)
+    wspec=()
+    if [[ -r knope.toml ]]; then
+      inwf=0
+      while IFS= read -r wline || [[ -n $wline ]]; do
+        [[ $wline == [[:space:]]#\#* ]] && continue
+        if [[ $wline == '[[workflows]]' ]]; then
+          inwf=1
+          continue
+        fi
+        if [[ $wline == \[* ]]; then
+          inwf=0
+          continue
+        fi
+        if (( inwf )) && [[ $wline == *name=* ]]; then
+          val=${wline#*name}
+          val=${val#*=}
+          val=${val##[[:space:]]##}
+          val=${val%%[[:space:]]##}
+          if [[ $val == \"*\" ]]; then
+            val=${val#\"}
+            val=${val%\"}
+          elif [[ $val == \'*\' ]]; then
+            val=${val#\'}
+            val=${val%\'}
+          fi
+          [[ -n $val ]] && wspec+=("$val:workflow in knope.toml")
+        fi
+      done < knope.toml
+    fi
+    if (( ${#wspec} == 0 )); then
+      wspec=("${wdefaults[@]}")
+    fi
+    _describe -t commands 'knope workflow' wspec && ret=0 ;;
+esac
+
+return ret
