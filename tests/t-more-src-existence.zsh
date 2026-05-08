@@ -624,6 +624,10 @@
     assert "$xsrc/_cargo-audit" is_file
 }
 
+
+@test 'more_src has _cargo-auditable' {
+    assert "$xsrc/_cargo-auditable" is_file
+}
 @test 'more_src has _cargo-bench' {
     assert "$xsrc/_cargo-bench" is_file
 }
@@ -832,6 +836,10 @@
     assert "$xsrc/_cbonsai" is_file
 }
 
+
+@test 'more_src has _cbor-edn' {
+    assert "$xsrc/_cbor-edn" is_file
+}
 @test 'more_src has _ccls' {
     assert "$xsrc/_ccls" is_file
 }
@@ -1352,6 +1360,10 @@
     assert "$xsrc/_depcheck" is_file
 }
 
+
+@test 'more_src has _desed' {
+    assert "$xsrc/_desed" is_file
+}
 @test 'more_src has _detect-secrets' {
     assert "$xsrc/_detect-secrets" is_file
 }
@@ -1588,6 +1600,10 @@
     assert "$xsrc/_duc" is_file
 }
 
+
+@test 'more_src has _duca' {
+    assert "$xsrc/_duca" is_file
+}
 @test 'more_src has _duckdb' {
     assert "$xsrc/_duckdb" is_file
 }
@@ -1600,6 +1616,10 @@
     assert "$xsrc/_dufs" is_file
 }
 
+
+@test 'more_src has _dumbpipe' {
+    assert "$xsrc/_dumbpipe" is_file
+}
 @test 'more_src has _dunstctl' {
     assert "$xsrc/_dunstctl" is_file
 }
@@ -1740,6 +1760,10 @@
     assert "$xsrc/_eternal-terminal" is_file
 }
 
+
+@test 'more_src has _ets' {
+    assert "$xsrc/_ets" is_file
+}
 @test 'more_src has _evans' {
     assert "$xsrc/_evans" is_file
 }
@@ -1912,6 +1936,10 @@
     assert "$xsrc/_fnott" is_file
 }
 
+
+@test 'more_src has _fnox' {
+    assert "$xsrc/_fnox" is_file
+}
 @test 'more_src has _fonttools' {
     assert "$xsrc/_fonttools" is_file
 }
@@ -2092,6 +2120,10 @@
     assert "$xsrc/_git-gone" is_file
 }
 
+
+@test 'more_src has _git-grab' {
+    assert "$xsrc/_git-grab" is_file
+}
 @test 'more_src has _git-journal' {
     assert "$xsrc/_git-journal" is_file
 }
@@ -2132,6 +2164,10 @@
     assert "$xsrc/_git-trim" is_file
 }
 
+
+@test 'more_src has _git-who' {
+    assert "$xsrc/_git-who" is_file
+}
 @test 'more_src has _gitbatch' {
     assert "$xsrc/_gitbatch" is_file
 }
@@ -2612,6 +2648,10 @@
     assert "$xsrc/_infracost" is_file
 }
 
+
+@test 'more_src has _inlyne' {
+    assert "$xsrc/_inlyne" is_file
+}
 @test 'more_src has _innernet' {
     assert "$xsrc/_innernet" is_file
 }
@@ -3488,6 +3528,10 @@
     assert "$xsrc/_magick" is_file
 }
 
+
+@test 'more_src has _mago' {
+    assert "$xsrc/_mago" is_file
+}
 @test 'more_src has _mailpit' {
     assert "$xsrc/_mailpit" is_file
 }
@@ -4444,6 +4488,10 @@
     assert "$xsrc/_podman-tui" is_file
 }
 
+
+@test 'more_src has _pokeget' {
+    assert "$xsrc/_pokeget" is_file
+}
 @test 'more_src has _polaris' {
     assert "$xsrc/_polaris" is_file
 }
@@ -4800,6 +4848,10 @@
     assert "$xsrc/_rga" is_file
 }
 
+
+@test 'more_src has _rgr' {
+    assert "$xsrc/_rgr" is_file
+}
 @test 'more_src has _rider' {
     assert "$xsrc/_rider" is_file
 }
@@ -4848,6 +4900,10 @@
     assert "$xsrc/_rojo" is_file
 }
 
+
+@test 'more_src has _rooster' {
+    assert "$xsrc/_rooster" is_file
+}
 @test 'more_src has _ropper' {
     assert "$xsrc/_ropper" is_file
 }
@@ -5128,6 +5184,10 @@
     assert "$xsrc/_shotcut" is_file
 }
 
+
+@test 'more_src has _sic' {
+    assert "$xsrc/_sic" is_file
+}
 @test 'more_src has _signal-cli' {
     assert "$xsrc/_signal-cli" is_file
 }
@@ -5268,6 +5328,10 @@
     assert "$xsrc/_solana" is_file
 }
 
+
+@test 'more_src has _somo' {
+    assert "$xsrc/_somo" is_file
+}
 @test 'more_src has _sonar-scanner' {
     assert "$xsrc/_sonar-scanner" is_file
 }
@@ -5624,6 +5688,10 @@
     assert "$xsrc/_taskwarrior-tui" is_file
 }
 
+
+@test 'more_src has _tattoy' {
+    assert "$xsrc/_tattoy" is_file
+}
 @test 'more_src has _tccutil' {
     assert "$xsrc/_tccutil" is_file
 }
@@ -6028,6 +6096,14 @@
     assert "$xsrc/_typst" is_file
 }
 
+
+@test 'more_src has _uairctl' {
+    assert "$xsrc/_uairctl" is_file
+}
+
+@test 'more_src has _uair' {
+    assert "$xsrc/_uair" is_file
+}
 @test 'more_src has _ubi' {
     assert "$xsrc/_ubi" is_file
 }
@@ -6280,6 +6356,10 @@
     assert "$xsrc/_vsce" is_file
 }
 
+
+@test 'more_src has _vscli' {
+    assert "$xsrc/_vscli" is_file
+}
 @test 'more_src has _vultr' {
     assert "$xsrc/_vultr" is_file
 }
