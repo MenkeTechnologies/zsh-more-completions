@@ -648,6 +648,10 @@
     assert "$xsrc/_cargo-check" is_file
 }
 
+@test 'more_src has _cargo-clone' {
+    assert "$xsrc/_cargo-clone" is_file
+}
+
 @test 'more_src has _cargo-component' {
     assert "$xsrc/_cargo-component" is_file
 }
@@ -790,6 +794,10 @@
 
 @test 'more_src has _cargo-upgrade' {
     assert "$xsrc/_cargo-upgrade" is_file
+}
+
+@test 'more_src has _cargo-upgrades' {
+    assert "$xsrc/_cargo-upgrades" is_file
 }
 
 @test 'more_src has _cargo-vendor' {
@@ -1184,6 +1192,10 @@
     assert "$xsrc/_crashlog" is_file
 }
 
+@test 'more_src has _crates-tui' {
+    assert "$xsrc/_crates-tui" is_file
+}
+
 @test 'more_src has _crc32' {
     assert "$xsrc/_crc32" is_file
 }
@@ -1540,6 +1552,14 @@
     assert "$xsrc/_dosbox" is_file
 }
 
+@test 'more_src has _dotenv-vault' {
+    assert "$xsrc/_dotenv-vault" is_file
+}
+
+@test 'more_src has _dotenvage' {
+    assert "$xsrc/_dotenvage" is_file
+}
+
 @test 'more_src has _dotenvx' {
     assert "$xsrc/_dotenvx" is_file
 }
@@ -1588,6 +1608,10 @@
     assert "$xsrc/_dsq" is_file
 }
 
+@test 'more_src has _dt-cli' {
+    assert "$xsrc/_dt-cli" is_file
+}
+
 @test 'more_src has _dtplite' {
     assert "$xsrc/_dtplite" is_file
 }
@@ -1628,8 +1652,16 @@
     assert "$xsrc/_duplicacy" is_file
 }
 
+@test 'more_src has _dupe-krill' {
+    assert "$xsrc/_dupe-krill" is_file
+}
+
 @test 'more_src has _dura' {
     assert "$xsrc/_dura" is_file
+}
+
+@test 'more_src has _dusage' {
+    assert "$xsrc/_dusage" is_file
 }
 
 @test 'more_src has _dutree' {
@@ -2812,6 +2844,10 @@
     assert "$xsrc/_jqp" is_file
 }
 
+@test 'more_src has _json2parquet' {
+    assert "$xsrc/_json2parquet" is_file
+}
+
 @test 'more_src has _jsonlint' {
     assert "$xsrc/_jsonlint" is_file
 }
@@ -3144,6 +3180,10 @@
     assert "$xsrc/_keytool" is_file
 }
 
+@test 'more_src has _keyscope' {
+    assert "$xsrc/_keyscope" is_file
+}
+
 @test 'more_src has _khal' {
     assert "$xsrc/_khal" is_file
 }
@@ -3154,6 +3194,10 @@
 
 @test 'more_src has _kickstart' {
     assert "$xsrc/_kickstart" is_file
+}
+
+@test 'more_src has _killport' {
+    assert "$xsrc/_killport" is_file
 }
 
 @test 'more_src has _kind' {
@@ -4256,6 +4300,10 @@
     assert "$xsrc/_parcel" is_file
 }
 
+@test 'more_src has _parquet2json' {
+    assert "$xsrc/_parquet2json" is_file
+}
+
 @test 'more_src has _paru' {
     assert "$xsrc/_paru" is_file
 }
@@ -4310,6 +4358,10 @@
 
 @test 'more_src has _peek' {
     assert "$xsrc/_peek" is_file
+}
+
+@test 'more_src has _perc' {
+    assert "$xsrc/_perc" is_file
 }
 
 @test 'more_src has _perlbrew' {
@@ -4430,6 +4482,10 @@
 
 @test 'more_src has _please' {
     assert "$xsrc/_please" is_file
+}
+
+@test 'more_src has _please-cli' {
+    assert "$xsrc/_please-cli" is_file
 }
 
 @test 'more_src has _plex' {
@@ -4680,6 +4736,10 @@
     assert "$xsrc/_q" is_file
 }
 
+@test 'more_src has _qrtool' {
+    assert "$xsrc/_qrtool" is_file
+}
+
 @test 'more_src has _qsv' {
     assert "$xsrc/_qsv" is_file
 }
@@ -4798,6 +4858,10 @@
 
 @test 'more_src has _redo' {
     assert "$xsrc/_redo" is_file
+}
+
+@test 'more_src has _relay' {
+    assert "$xsrc/_relay" is_file
 }
 
 @test 'more_src has _reflex' {
@@ -5364,6 +5428,10 @@
     assert "$xsrc/_spark" is_file
 }
 
+@test 'more_src has _spreet' {
+    assert "$xsrc/_spreet" is_file
+}
+
 @test 'more_src has _spectral' {
     assert "$xsrc/_spectral" is_file
 }
@@ -5378,6 +5446,10 @@
 
 @test 'more_src has _splain' {
     assert "$xsrc/_splain" is_file
+}
+
+@test 'more_src has _sprocket' {
+    assert "$xsrc/_sprocket" is_file
 }
 
 @test 'more_src has _sq' {
@@ -6560,6 +6632,10 @@
     assert "$xsrc/_wrangler" is_file
 }
 
+@test 'more_src has _wthrr' {
+    assert "$xsrc/_wthrr" is_file
+}
+
 @test 'more_src has _wrk' {
     assert "$xsrc/_wrk" is_file
 }
@@ -6770,6 +6846,10 @@
 
 @test 'more_src has _zitadel' {
     assert "$xsrc/_zitadel" is_file
+}
+
+@test 'more_src has _zizmor' {
+    assert "$xsrc/_zizmor" is_file
 }
 
 @test 'more_src has _zk' {
