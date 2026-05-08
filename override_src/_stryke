@@ -12,7 +12,14 @@
 #   s profile [--flame] [--json] FILE        — run with profiling
 #   s bench [FILE|DIR]                       — run benchmark files
 #   s test [FILE|DIR]                        — run test files
-#   s init [NAME]                            — scaffold a new project
+#   s init [NAME]                            — scaffold project in cwd (stryke.toml + lib/, t/, benches/)
+#   s new NAME                               — scaffold a new project at ./NAME/
+#   s install [--offline]                    — resolve manifest, populate stryke.lock + ~/.stryke/store
+#   s add NAME[@VER] [flags]                 — add a dep to stryke.toml; reruns install
+#   s remove NAME                            — drop a dep from stryke.toml; reruns install
+#   s tree                                   — print resolved dep graph from stryke.lock
+#   s info NAME                              — show lockfile entry + store path for a dep
+#   s pkg <subcommand>                       — dispatcher for the above package commands
 #   s repl [--load FILE]                     — start interactive REPL
 #   s lsp                                    — start Language Server Protocol
 #   s completions [SHELL]                    — emit shell completions
@@ -110,11 +117,115 @@ _stryke_test() {
     '1:test file or directory:_files -g "*.stk *.pl *.t"'
 }
 
-# `s init [NAME]` — scaffold a new project
+# `s init [NAME]` — scaffold the cwd as a stryke project (writes stryke.toml,
+# main.stk, .gitignore + lib/, t/, benches/, bin/, examples/ subdirs).
 _stryke_init() {
   _arguments -s -S \
     '(-h --help)'{-h,--help}'[show s init usage]' \
+    '1:project name (defaults to cwd basename):'
+}
+
+# `s new NAME` — scaffold a new project at ./NAME/. Same layout as `s init`.
+_stryke_new() {
+  _arguments -s -S \
+    '(-h --help)'{-h,--help}'[show s new usage]' \
     '1:project name:'
+}
+
+# Pull dep names from the project's stryke.toml so `s remove`/`s info` complete
+# with the real dep set instead of arbitrary words. Walks up from cwd to find
+# the manifest. Cheap (just grep over a small TOML file).
+_stryke_pkg_dep_names() {
+  local manifest_dir="$PWD"
+  while [[ "$manifest_dir" != "/" && ! -f "$manifest_dir/stryke.toml" ]]; do
+    manifest_dir="${manifest_dir:h}"
+  done
+  [[ -f "$manifest_dir/stryke.toml" ]] || return
+  local -a deps
+  # Match three forms in stryke.toml: shorthand `name = "ver"`, table `[deps.NAME]`,
+  # and grouped `[deps]` then `name = ...`. Keep it conservative — just enough to
+  # complete the common cases.
+  deps=(${(f)"$(awk '
+    /^\[deps\.[^]]+\]/ { gsub(/\[deps\.|\]/, ""); print; next }
+    /^\[deps\]/ { in_deps = 1; next }
+    /^\[/ { in_deps = 0; next }
+    in_deps && /^[a-zA-Z][-_a-zA-Z0-9]*[ \t]*=/ { sub(/[ \t]*=.*/, ""); print }
+  ' "$manifest_dir/stryke.toml" 2>/dev/null)"})
+  _describe 'project dep' deps
+}
+
+# `s install [--offline]` — resolve manifest deps + write stryke.lock.
+_stryke_install() {
+  _arguments -s -S \
+    '--offline[only use cached packages; never fetch]' \
+    '(-h --help)'{-h,--help}'[show s install usage]'
+}
+
+# `s add NAME[@VER] [--dev|--group=NAME] [--path=DIR] [--features=...]`
+# Edits stryke.toml and re-runs install.
+_stryke_add() {
+  _arguments -s -S \
+    '--dev[add as a dev-dep instead of runtime]' \
+    '--group=[add to a named group (e.g. bench)]:group name:' \
+    '--path=[depend on a local path instead of the registry]:path:_directories' \
+    '--features=[comma-separated feature flags to enable]:features:' \
+    '(-h --help)'{-h,--help}'[show s add usage]' \
+    '1:dep name (NAME or NAME@VERSION):'
+}
+
+# `s remove NAME` — drop a dep from stryke.toml and re-run install.
+_stryke_remove() {
+  _arguments -s -S \
+    '(-h --help)'{-h,--help}'[show s remove usage]' \
+    '1:dep name:_stryke_pkg_dep_names'
+}
+
+# `s tree` — print resolved dep graph from stryke.lock.
+_stryke_tree() {
+  _arguments -s -S \
+    '(-h --help)'{-h,--help}'[show s tree usage]'
+}
+
+# `s info NAME` — show lockfile entry + store path for a dep.
+_stryke_info() {
+  _arguments -s -S \
+    '(-h --help)'{-h,--help}'[show s info usage]' \
+    '1:dep name:_stryke_pkg_dep_names'
+}
+
+# `s pkg <subcommand>` — dispatcher mirror for the package commands above.
+_stryke_pkg() {
+  local curcontext="$curcontext" state line
+  _arguments -C \
+    '(-h --help)'{-h,--help}'[show s pkg usage]' \
+    '1:pkg subcommand:->pkg_cmd' \
+    '*::pkg arg:->pkg_args'
+  case $state in
+    pkg_cmd)
+      local -a pkg_subcmds
+      pkg_subcmds=(
+        'init:scaffold project in cwd'
+        'new:scaffold project at ./NAME/'
+        'install:resolve deps + write stryke.lock'
+        'add:add a dep to stryke.toml'
+        'remove:drop a dep from stryke.toml'
+        'tree:print resolved dep graph'
+        'info:show lockfile entry for a dep'
+      )
+      _describe 'pkg subcommand' pkg_subcmds
+      ;;
+    pkg_args)
+      case $line[1] in
+        init)    _stryke_init ;;
+        new)     _stryke_new ;;
+        install) _stryke_install ;;
+        add)     _stryke_add ;;
+        remove)  _stryke_remove ;;
+        tree)    _stryke_tree ;;
+        info)    _stryke_info ;;
+      esac
+      ;;
+  esac
 }
 
 # `s repl [--load FILE]` — start interactive REPL
@@ -158,11 +269,63 @@ _stryke_ast() {
     '1:script file:_files -g "*.stk *.pl *.pm"'
 }
 
-# `s docs [TOPIC]` — built-in documentation browser
-_stryke_docs() {
+# `s docs [FLAGS|TOPIC]` — built-in documentation browser.
+#
+# Two completion sources merged:
+#   * Long flags (`--toc` / `--list` / `--list-all` / `--search` / `--help`)
+#   * Topic names from `s docs --list-all` — the full set of every
+#     callable spelling, including aliases (`tj`, `bn`), `CORE::name` /
+#     `main::name` qualified forms, sigil-prefixed reflection hashes
+#     (`%a`, `%b`, `%stryke::builtins`), and language keywords. Drives
+#     ~27k completion candidates so any name the user might type
+#     resolves cleanly.
+#
+# `--list-all` was added specifically for shell tab-complete. Do NOT
+# fall back to `--list`: that drops aliases and qualified spellings,
+# breaking completion for `s docs CORE::<TAB>` and friends.
+#
+# IMPORTANT: topics are fed through `compadd`, NOT `_describe`. zsh's
+# `_describe` treats `:` as the name/description separator, so any
+# entry containing `::` (`CORE::print`, `main::sum`, `%main::ENV`,
+# `@main::a`, `%stryke::builtins`) gets parsed as `name=CORE` /
+# `description=:print` — collapsing thousands of qualified spellings
+# into duplicate `CORE` / `main` / `@main` / `%main` / `%stryke` rows
+# with the suffix stuffed into the description column. `compadd -a`
+# adds the array verbatim with no colon parsing.
+# Flag set for `s docs` — pulled into its own helper so `_alternative`
+# can register it as a distinct tag/section.
+_stryke_docs_flags() {
+  local -a _flags
+  _flags=(
+    '--toc:table of contents'
+    '-t:table of contents'
+    '--list:list all pages (primaries + keywords)'
+    '-l:list all pages (primaries + keywords)'
+    '--list-all:every callable spelling (full completion set)'
+    '-L:every callable spelling (full completion set)'
+    '--search:search all pages'
+    '-s:search all pages'
+    '--help:show docs subcommand usage'
+    '-h:show docs subcommand usage'
+  )
+  _describe -t flags 'flag' _flags
+}
+
+# Topic set for `s docs` — `compadd -a` (NOT `_describe`) so entries
+# containing `::` (`CORE::print`, `%stryke::builtins`, `@main::a`,
+# `%main::ENV`) survive intact. `_describe` would split each at the
+# first `:` and collapse thousands of qualified spellings into
+# duplicate `CORE` / `@main` / `%main` / `%stryke` rows.
+_stryke_docs_topics() {
   local -a _topics
-  _topics=(${(f)"$(s docs --list 2>/dev/null | sed 's/^ *[0-9]*\. //')"})
-  _describe 'docs topic' _topics
+  _topics=(${(f)"$(s docs --list-all 2>/dev/null | sed 's/^ *[0-9]*\. //')"})
+  compadd -a _topics
+}
+
+_stryke_docs() {
+  _alternative \
+    'flags:flag:_stryke_docs_flags' \
+    'topics:docs topic:_stryke_docs_topics'
 }
 
 # `s serve [PORT] [SCRIPT]` — built-in HTTP server (default port 8000)
@@ -214,6 +377,7 @@ _stryke() {
     '--flame[SVG flamegraph to stdout (st --flame script.stk > flame.svg)]' \
     '--no-jit[disable Cranelift JIT (bytecode interpreter only)]' \
     '--explain=[print expanded hint for an error code]:error code (e.g. E0001):' \
+    '--no-interop[enforce idiomatic stryke]' \
     '-d+[run program under debugger]::module:' \
     '-D+[set debugging flags]:flags:_stryke_debug_flags' \
     '-u[dump core after parsing program]' \
@@ -260,7 +424,14 @@ _stryke() {
         'disasm:disassemble bytecode'
         'profile:run with profiling'
         'fmt:format stryke source files'
-        'init:scaffold a new stryke project'
+        'init:scaffold project in cwd (stryke.toml + dirs)'
+        'new:scaffold a new project at ./NAME/'
+        'install:resolve deps + write stryke.lock'
+        'add:add a dep to stryke.toml'
+        'remove:drop a dep from stryke.toml'
+        'tree:print resolved dep graph from stryke.lock'
+        'info:show lockfile entry + store path for a dep'
+        'pkg:package-manager subcommand dispatcher'
         'repl:start interactive REPL'
         'lsp:start Language Server Protocol'
         'completions:emit shell completions'
@@ -285,6 +456,13 @@ _stryke() {
         bench)     _stryke_bench ;;
         test)      _stryke_test ;;
         init)      _stryke_init ;;
+        new)       _stryke_new ;;
+        install)   _stryke_install ;;
+        add)       _stryke_add ;;
+        remove)    _stryke_remove ;;
+        tree)      _stryke_tree ;;
+        info)      _stryke_info ;;
+        pkg)       _stryke_pkg ;;
         repl)      _stryke_repl ;;
         run)       _stryke_run ;;
         prun)      _stryke_prun ;;
