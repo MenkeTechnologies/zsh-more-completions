@@ -16,42 +16,54 @@
 }
 
 @test 'man src' {
-    for f in "$pluginDir/man_src/"*; do
+    local f
+    for f in "$pluginDir/man_src/"*(.); do
+        [[ ${f:e} == zwc ]] && continue
         run zsh -n "$f"
         assert $state equals 0
     done
 }
 
 @test 'src' {
-    for f in "$pluginDir/src/"*; do
+    local f
+    for f in "$pluginDir/src/"*(.); do
+        [[ ${f:e} == zwc ]] && continue
         run zsh -n "$f"
         assert $state equals 0
     done
 }
 
 @test 'override_src' {
-    for f in "$pluginDir/override_src/"*; do
+    local f
+    for f in "$pluginDir/override_src/"*(.); do
+        [[ ${f:e} == zwc ]] && continue
         run zsh -n "$f"
         assert $state equals 0
     done
 }
 
 @test 'more_src' {
-    for f in "$pluginDir/more_src/"_*; do
+    local f
+    for f in "$pluginDir/more_src/"_*(.); do
+        [[ ${f:e} == zwc ]] && continue
         run zsh -n "$f"
         assert $state equals 0
     done
 }
 
 @test 'architecture_src' {
-    for f in "$pluginDir/architecture_src/"*; do
+    local f
+    for f in "$pluginDir/architecture_src/"*(.); do
+        [[ ${f:e} == zwc ]] && continue
         run zsh -n "$f"
         assert $state equals 0
     done
 }
 
 @test 'plugin *.zsh' {
-    for f in "$pluginDir/"*.zsh; do
+    local f
+    for f in "$pluginDir/"*.zsh(.); do
+        [[ ${f:e} == zwc ]] && continue
         run zsh -n "$f"
         assert $state equals 0
     done
