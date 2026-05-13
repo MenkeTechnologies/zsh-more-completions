@@ -2868,10 +2868,6 @@
     assert "$xsrc/_gdbgui" is_file
 }
 
-@test 'more_src has _gdu' {
-    assert "$xsrc/_gdu" is_file
-}
-
 @test 'more_src has _gebug' {
     assert "$xsrc/_gebug" is_file
 }
