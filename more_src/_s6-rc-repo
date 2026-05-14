@@ -1,0 +1,117 @@
+# Source: https://github.com/capezotte/s6-shell-completion/blob/a6242fd1c8aa3ee5716428550c142b5479caabbc/zsh/s6-rc/_s6-rc-repo
+# Repository: capezotte/s6-shell-completion (zsh/s6-rc/_s6-rc-repo)
+#compdef s6-rc-set-change s6-rc-set-commit s6-rc-set-fix s6-rc-set-install s6-rc-set-status s6-rc-set-delete s6-rc-set-new s6-rc-set-copy s6-rc-repo-init s6-rc-repo-sync s6-rc-repo-list
+
+# boilerplate
+local context state state_descr line
+typeset -A opt_args
+
+local -a s6_args setcmds=(
+	'masked:services will not be included in the database, and will not be startable'
+	'disabled:services included in the database, not started by default'
+	'enabled:service started by default'
+	'essential:service must always be up'
+)
+
+if [[ "$service" == *-set-* ]] && [[ "$service" != *-new ]]; then
+	s6_args=( '1:set:->set' )
+fi
+
+case "${service#s6-rc-(set|repo)-}" in
+	init)
+		s6_args+=(
+			'*:service stores:path-files -/'
+			'(force)'{-f,--force}'[ignore existing repo (DANGEROUS)]'
+			'(fdhuser)'{-h,--fdhuser=-}'[(advanced) setuidgid fd holder daemon]:fdhuser:_users'
+			'(update)'{-U,--update}'[update existing repository instead of creating new one]'
+			'(bare)'{-B,--bare}'[skip compiling reference database]'
+		)
+		;;
+	sync)
+		s6_args+=( '(fdhuser)'{-h,--fdhuser=-}'[(advanced) setuidgid fd holder daemon]:fdhuser:_users' )
+		;;
+	list)
+		s6_args+=( '*'{-x,--exclude=-}'[exclude sets]:set:->set' )
+		;;
+	commit)
+		s6_args+=(
+			'(dbundle)'{-D,--default-bundle=-}'[Use this name for the configured bundle instead of "default"]:: '
+			'(fdhuser)'{-h,--fdhuser=-}'[(advanced) setuidgid fd holder daemon]:fdhuser:_users'
+			'(keep)'{-K,--keep-old}'[print path of old database backup after commit]'
+			'(force)'{-f,--force}'[commit set even if compile database is already up to date]'
+		)
+		;;
+	change)
+		s6_args+=(
+			'2:action:->action' \
+			'*: :->services' \
+			'(dryrun)'{-n,--dry-run}'[check whether command would succeeded, but do not actually do anything]'
+			+ '(onessential)'
+				'(noessential)'{-E,--no-force-essential}'[report error if service must become "essential"/always on]'
+				'(essential)'{-e,--force-essential}'[allow services to become essential despite not being so in the sources]'
+			+ '(ondep)'
+				'(force)'{-f,--force}'[ignore dependencies when applying prescription]'
+				'(act)'{-I,--if-dependencies-found=-}'[what to do with dependencies when service is added]:if-dependencies-found:((fail warn\:print\ warning\ and\ proceed pull\:act\ on\ dependencies\ similarly))'
+		)
+		;;
+	fix)
+		s6_args+=(
+			'*:set:->set'
+			'(dryrun)'{-n,--dry-run}'[only report what would be done]'
+			+ '(moreless)'
+				'(fixup)'{-u,--fix-up}'[fix inconsistencies by adding services]'
+				'(fixdown)'{-d,--fix-down}'[fix inconsistencies by removing services]'
+			+ '(onessential)'
+				'(noessential)'{-E,--no-force-essential}'[report error if service must become "essential"/always on (default)]'
+				'(essential)'{-e,--force-essential}'[allow services to become essential despite not being so in the sources]'
+		)
+		;;
+	install)
+		s6_args+=(
+			'(compiled)'{-c,--bootdb=-}'[boot-time database path]:bootdb:_path_files -/'
+			'(live)'{-l,--livedir=-}'[s6-rc runtime database path]:livedir:_path_files -/'
+			'(convfile)'{-f,--conversion-file=-}'[s6-rc-update conversion file]:convfile:_path_files'
+			'(block)'{-b,--block}'[wait if another service is locking the database instead of failing]'
+			'(keep)'{-K,--keep-old}'[print path of old database backup after commit]'
+			'--no-update[update boot-time database, not the live one (DANGEROUS, do not use)]'
+			+ '(want-stop-essential)'
+				'(noessential)'{-E,--no-force-essentials}'[do not stop essential services, even if needed to update]'
+				'(essential)'{-e,--force-essentials}'[stop essential services if necessary (default)]'
+		)
+		;;
+	status)
+		s6_args+=(
+			'*: :->services' \
+			'(svc-only)'{-L,--list}'[do not print prescription, only services]'
+			+ '(ls-essentials)'
+				'(essential)'{-E,--with-essentials}'[print essential services (default)]'
+				'(noessential)'{-e,--without-essentials}'[skip listing essential services]'
+		)
+		;;
+	delete|new)
+		s6_args+=()
+		;;
+	copy)
+		s6_args+=( '(force)'{-f,--force}'[overwrite existing set]' )
+		;;
+esac
+
+
+_arguments -A '-*' -S -s : \
+	'(verbosity)'{-v,--verbosity=-}'[verbosity (numerical)]:verbosity:(0 1 2 3)' \
+	'(repository)'{-r,--repository=-}'[choose s6-rc repository folder]:repository:_path_files -/' \
+	${s6_args[@]}
+
+local repo=${opt_args[-r]-${opt_args[--repository]}}
+
+case $state in
+	set)
+		compadd -- ${(f)"$(s6-rc-repo-list -r ${repo:-/var/lib/s6-rc/repository} 2>/dev/null)"}
+		;;
+	action)
+		_describe -t commands command setcmds
+		;;
+	services)
+		compadd -- ${(f)"$(s6-rc-db -c ${repo:-/var/lib/s6-rc/repository}/compiled/.ref list all)"}
+		;;
+esac

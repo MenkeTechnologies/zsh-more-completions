@@ -1,0 +1,606 @@
+# Source: https://github.com/pseyfert/advixe-cl-completion/blob/38220f551d56af4ace34b4759db4163ad76f90da/_advixe-cl
+# Repository: pseyfert/advixe-cl-completion (_advixe-cl)
+#compdef advixe-cl
+
+# Copyright 2018 CERN for the benefit of the LHCb Collaboration.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# In applying this licence, CERN does not waive the privileges and immunities
+# granted to it by virtue of its status as an Intergovernmental Organization
+# or submit itself to any jurisdiction.
+
+local advixe_actions;advixe_actions=(
+'--collect[Collect specified data]: : _advixe_cl_collect_data'
+'--command[Send a command to a running data collection]: : _advixe_cl_command_command'
+'--help[Print help message (global one, or for an action)]: : _advixe_help'
+'--import-dir[Import previously collected data from the given directory]: : _path_files -/'
+'--mark-up-loops[Select loops for deeper analysis]: : _advixe_cl_mark_up_loops'
+'--report[Report the results that were previously gathered]: :_reporttype'
+'--snapshot[Create a result snapshot]: : _advixe_cl_snapshot'
+'--version[Print version number]: : _message "no more arguments"'
+'--workflow[Display explanation of advisor workflows]: : _message "no more arguments"')
+
+_conditional_normal() {
+  # NB: the current word is in words, and I don't want to trigger here on --<tab>
+  # _message "CURRENT is $CURRENT"
+  # _message "while shift_by is ${words[(i)--]}"
+  # _message "words lenght is ${#words}"
+  local shift_by
+  shift_by=${words[(i)--]}
+  if [[ ( ${shift_by} -lt ${#words} ) && ( $CURRENT -gt ${shift_by} ) ]]; then
+    shift $shift_by words
+    (( CURRENT -= $shift_by ))
+
+    #for ((i = 1 ; i <= ${#words} ; i++))
+    #do
+    #  _message "word $i is $words[i]"
+    #done
+    _normal
+  else
+    # there is no -- in the current line
+    return 33
+  fi
+}
+
+_reporttype() {
+    local -a reports
+    reports=(
+    survey:"shows results of the survey analysis"
+    annotations:"lists the annotations in the sources"
+    custom:"enables using custom report"
+    dependencies:"shows possible dependencies"
+    hotspots:""
+    issues:""
+    joined:""
+    map:"reports memory access patterns"
+    roofs:""
+    suitability:"shows possible performance gains"
+    summary:"shows the collection summary"
+    threads:"shows the list of threads"
+    top-down:"shows the report in a top-down view"
+    tripcounts:"shows survey report with tripcounts data added"
+    )
+    _describe -t reports 'data to collect' reports $*
+    return 0
+}
+
+_advixe_cl_report() {
+  local reporttype
+  if [[ $CURRENT = 3 ]]; then
+    _reporttype
+    return $?
+  else
+    # quick hack, to get the command out of the command line
+    # TODO: fix that 'advixe-cl --collect string -<TAB>' does not complete w/o this hack
+    if [[ $CURRENT -gt 3 ]]; then
+      if [[ $words[2] = '--collect' ]]; then
+        reporttype=$words[3]
+      fi
+      shift 2 words
+      (( CURRENT -= 2 ))
+    fi
+  fi
+  local test_normal
+  _conditional_normal
+  test_normal=$?
+  if [[ $test_normal -ne 33 ]]; then
+    return 0
+  fi
+  local report_options;report_options=(
+  '(--bottom-up --no-bottom-up)--bottom-up[Use bottom-up mode for report]'
+  '(--bottom-up --no-bottom-up)--no-bottom-up[Do not use bottom-up mode for report]'
+  '--top-down[Display report in top-down mode]'
+  '--mpi-rank=[MPI rank of the result to be imported]:MPI rank: _message\"MPI rank of the result to be imported\"'
+  '--project-dir[Project directory - top-level directory of data collection]:project directory:_path_files -/'
+  '--option-file[Path of an option file]:option file:_path_files'
+  '--search-dir=[specify search directories]'
+  '(--format=text --format=csv --format=xml)--format=text[Output report as text]'
+  '(--format=text --format=csv --format=xml)--format=csv[Output report as csv]'
+  '(--format=text --format=csv --format=xml)--format=xml[Output report as xml]'
+  '(--show-functions --no-show-functions)--show-functions[Show functions in bottom-up mode]'
+  '(--show-functions --no-show-functions)--no-show-functions[Do not show functions in bottom-up mode]'
+  '(--show-loops --no-show-loops)--show-loops[Show loops in bottom-up mode]'
+  '(--show-loops --no-show-loops)--no-show-loops[Do not show loops in bottom-up mode]'
+  '(--show-not-executed --no-show-not-executed)--show-not-executed [Show not executed and fully unrolled loops]'
+  '(--show-not-executed --no-show-not-executed)--no-show-not-executed[Do not show executed and fully unrolled loops]'
+  '(--dynamic --no-dynamic)--dynamic[Show dynamic instruction mix]'
+  '(--dynamic --no-dynamic)--no-dynamic[Show static instruction mix]'
+  '(--show-all-columns --no-show-all-columns)--show-all-columns[Print all available columns]'
+  '(--show-all-columns --no-show-all-columns)--no-show-all-columns[Do not print all available columns]'
+  '(--show-all-rows --no-show-all-rows)--show-all-rows[Print all available rows]'
+  '(--show-all-rows --no-show-all-rows)--no-show-all-rows[Do not print all available rows]'
+  '--display-callstack[Display the call stacks for each function call]'
+  '(--refinalize-survey --no-refinalize-survey)--refinalize-survey[Refinalize survey]'
+  '(--refinalize-survey --no-refinalize-survey)--no-refinalize-survey[Do not refinalize survey]'
+  '(--mix --no-mix)--mix[Show instruction mix columns]'
+  '(--mix --no-mix)--no-mix[Do not show instruction mix columns]'
+  '(--recalculate-time --no-recalculate-time)--recalculate-time[Recalculate time after filtering]'
+  '(--recalculate-time --no-recalculate-time)--no-recalculate-time[Do not recalculate time after filtering]'
+  '(-q --quiet -v --verbose)'{-q,--quiet}'[Suppress non-essential messages]'
+  '(-v --verbose -q --quiet)'{-v,--verbose}'[Print additional information]'
+  '(--threading-model=tbb --threading-model=cilk --threading-model=openmp --threading-model=other)--threading-model=tbb[Threading model for evaluation]'
+  '(--threading-model=tbb --threading-model=cilk --threading-model=openmp --threading-model=other)--threading-model=cilk[Threading model for evaluation]'
+  '(--threading-model=tbb --threading-model=cilk --threading-model=openmp --threading-model=other)--threading-model=openmp[Threading model for evaluation]'
+  '(--threading-model=tbb --threading-model=cilk --threading-model=openmp --threading-model=other)--threading-model=other[Threading model for evaluation]'
+  '(--target-system=cpu --target-system=xeon-phi --target-system=offload-to-xeon-phi)--target-system=cpu[Target system for evaluation]'
+  '(--target-system=cpu --target-system=xeon-phi --target-system=offload-to-xeon-phi)--target-system=xeon-phi[Target system for evaluation]'
+  '(--target-system=cpu --target-system=xeon-phi --target-system=offload-to-xeon-phi)--target-system=offload-to-xeon-phi[Target system for evaluation]'
+  '--report-template=[set template file for report]: :_path_files'
+  '--report-output=[set output file for report]: :_path_files'
+  "--limit=[set number of items to print]: : _message \"items to print (unsigned int)\""
+  )
+  if [[ $reporttype = "survey" ]]; then
+    if [[ ${words[(i)--sort*]} -gt ${#words} ]]; then
+      report_options+=(
+      '(-s -S)'{--sort-asc=,-s}="[sort data ascending by column name]: : _message \"column name\""
+      '(-s -S)'{--sort-desc=,-S}="[sort data descending by column name]: : _message \"column name\""
+      )
+    fi
+    report_options+=(
+    "--filter=[filter data by by column name]: : _message \"column name\""
+    )
+  fi
+  _csv_delimiters() {
+    _wanted arguments expl "csv separator" compadd -- "comma" "tab" "semicolon"
+  }
+  report_options+=(
+  '--csv-delimiter=[Identify a delimiter string for the CSV]: :_csv_delimiters'
+  )
+  local reduce_text
+  reduce_text="Comma-separated list of sites"
+  report_options+=(
+  "--reduce-lock-contention=[Sites where to reduce lock contention]: : _message \"$reduce_text\""
+  "--reduce-lock-overhead=[Sites where to reduce lock overhead]: : _message \"$reduce_text\""
+  "--reduce-site-overhead=[Sites where to reduce site overhead]: : _message \"$reduce_text\""
+  "--reduce-task-overhead=[Sites where to reduce task overhead]: : _message \"$reduce_text\""
+  "--enable-task-chunking=[Sites where to task chunking will be enabled]: : _message \"$reduce_text\""
+  )
+
+  _arguments -C "$report_options[@]"
+}
+
+_advixe_cl_import_dir() {
+  if [[ $CURRENT = 3 ]]; then
+    _path_files -/
+    return 0
+  fi
+  # quick hack
+  # TODO: fix that 'advixe-cl --import somepath -<TAB>' does not complete w/o this hack
+  if [[ $CURRENT -gt 3 ]]; then
+    shift 2 words
+    (( CURRENT -= 2 ))
+  fi
+  local import_options;import_options=(
+  '(-q --quiet -v --verbose)'{-q,--quiet}'[Suppress non-essential messages]'
+  '(-v --verbose -q --quiet)'{-v,--verbose}'[Print additional information]'
+  '--project-dir[Project directory - top-level directory of data collection]:project directory:_path_files -/'
+  '--mpi-rank=[MPI rank of the result to be imported]:MPI rank: _message\"MPI rank of the result to be imported\"'
+  '--search-dir=[specify search directories]'
+  )
+  _arguments -C "$import_options[@]"
+}
+
+_advixe_cl_collect_data() {
+  local -a advixe_collect_data
+  advixe_collect_data=(
+  survey:"Explore where to add efficient vectorization and/or threading."
+  dependencies:"Identify and explore loop-carried dependencies for marked loops."
+  map:"Identify and explore complex memory accesses for marked loops."
+  suitability:"Analyze the annotated program to check its predicted parallel performance."
+  tripcounts:"Find how many iterations are executed."
+  )
+  _describe -t collect-datas 'data to collect' advixe_collect_data $*
+  return 0
+}
+
+_advixe_cl_collect() {
+  if [[ $CURRENT = 3 ]]; then
+    _advixe_cl_collect_data
+    return $?
+  fi
+  local test_normal
+  _conditional_normal
+  test_normal=$?
+  if [[ $test_normal -ne 33 ]]; then
+    return 0
+  fi
+  # quick hack, to get the command out of the command line
+  # TODO: fix that 'advixe-cl --collect string -<TAB>' does not complete w/o this hack
+  local collection
+  if [[ $CURRENT -gt 3 ]]; then
+    if [[ $words[2] = '--collect' ]]; then
+      collection=$words[3]
+    fi
+    shift 2 words
+    (( CURRENT -= 2 ))
+  fi
+
+  __cache_config() {
+    local -i nowat
+    local retval
+    nowat=0
+    retval=""
+    for i in ${(s.:.)"$(lscpu --parse=CACHE|tail -1)"}; do
+      (( j=i+1 ))
+      (( nowat++ == 1 )) && continue
+      (( nowat-- ))
+      retval+=$j
+      retval+=":"
+      retval+=$(cat /sys/devices/system/cpu/cpu0/cache/index$nowat/ways_of_associativity)
+      retval+="w"
+      retval+=":"
+      retval+=${(L)$(cat /sys/devices/system/cpu/cpu0/cache/index$nowat/size)}
+      (( nowat++ ))
+      (( nowat != 4 )) && retval+="/"
+    done
+    local -a suggestions
+    suggestions=($retval)
+    _wanted arguments expl "[num L1]:[L1 connect]:[L1 size]/[num L2]:[L2 connect]:[L2 size]/[num L3]:[L3 connect]:[L3 size]" compadd -- "${retval}"
+  }
+
+
+  local collect_options;collect_options=(
+  '(-q --quiet -v --verbose)'{-q,--quiet}'[Suppress non-essential messages]'
+  '(-v --verbose -q --quiet)'{-v,--verbose}'[Print additional information]'
+  '(--benchmarks-sync --no-benchmarks-sync)--benchmarks-sync[Only one of concurrently executing Advisor instances runs benchmarks.]'
+  '(--benchmarks-sync --no-benchmarks-sync)--no-benchmarks-sync[All concurrently executing Advisor instances run benchmarks.]'
+  '(--stack-stitching --no-stack-stitching)--stack-stitching[Restruct call flow to point introducing parallel workload]'
+  '(--stack-stitching --no-stack-stitching)--no-stack-stitching[Do not restruct call flow to point introducing parallel workload]'
+  '(--stacks --no-stacks)--stacks[Enable advanced collection of call stacks]'
+  '(--stacks --no-stacks)--no-stacks[Disable advanced collection of call stacks]'
+  '(--filter-by-scope --no-filter-by-scope)--filter-by-scope[filter reported stack variables by scope]'
+  '(--filter-by-scope --no-filter-by-scope)--no-filter-by-scope[do not filter reported stack variables by scope]'
+  '(--filter-reductions --no-filter-reductions)--filter-reductions[potential reductions should be marked by specific diagnostic]'
+  '(--filter-reductions --no-filter-reductions)--no-filter-reductions[do not mark potential reductions]'
+  '(--flop --no-flop)--flop[collect data about floating-point operations, L1 memory traffic, utilization metric]'
+  '(--flop --no-flop)--no-flop[no collection of data about floating-point operations, ...]'
+  '(--ignore-app-mismatch --no-ignore-app-mismatch)--ignore-app-mismatch[ignore mismatched target or application parameters errors]'
+  '(--ignore-app-mismatch --no-ignore-app-mismatch)--no-ignore-app-mismatch[do not ignore mismatched target or application parameters errors]'
+  '(--ignore-checksums --no-ignore-checksums)--ignore-checksums[ignore mismatched modules checksums]'
+  '(--ignore-checksums --no-ignore-checksums)--no-ignore-checksums[do not ignore mismatched modules checksums]'
+  '(--delete-tripcounts --no-delete-tripcounts)--delete-tripcounts'
+  '(--delete-tripcounts --no-delete-tripcounts)--no-delete-tripcounts'
+  '(--mkl-user-mode --no-mkl-user-mode)--mkl-user-mode[show MKL loops and functions]'
+  '(--mkl-user-mode --no-mkl-user-mode)--no-mkl-user-mode[do not show MKL loops and functions]'
+  '(--profile-intel-perf-libs --no-profile-intel-perf-libs)--profile-intel-perf-libs[Select to show Intel performance libraries loops and functions in Advisor reports]'
+  '(--profile-intel-perf-libs --no-profile-intel-perf-libs)--no-profile-intel-perf-libs[Do not select to show Intel performance libraries loops and functions in Advisor reports]'
+  '(--profile-jit --no-profile-jit)--profile-jit[Collect metrics for dynamic loops and functions]'
+  '(--profile-jit --no-profile-jit)--no-profile-jit[Do not collect metrics for dynamic loops and functions]'
+  '(--profile-python --no-profile-python)--profile-python[show Python loops and functions]'
+  '(--profile-python --no-profile-python)--no-profile-python[do not show Python loops and functions]'
+  '(--spill-analysis --no-spill-analysis)--spill-analysis[enable register flow analysis]'
+  '(--spill-analysis --no-spill-analysis)--no-spill-analysis[disable register flow analysis]'
+  '(--trace-mpi --no-trace-mpi)--trace-mpi[Trace MPI code, and determine MPI rank IDs]'
+  '(--trace-mpi --no-trace-mpi)--no-trace-mpi[Do not trace MPI code, and determine MPI rank IDs]'
+  '(--stackwalk-mode=online --stackwalk-mode=offline)--stackwalk-mode=online[Analyze stacks during collection]'
+  '(--stackwalk-mode=online --stackwalk-mode=offline)--stackwalk-mode=offline[Analyze stacks after collection]'
+  '(--static-instruction-mix --no-static-instruction-mix)--static-instruction-mix[Calculate number of specific instructions]'
+  '(--static-instruction-mix --no-static-instruction-mix)--no-static-instruction-mix[Do not calculate number of specific instructions]'
+  '(--support-multi-isa-binaries --no-support-multi-isa-binaries)--support-multi-isa-binaries[Collect data for non-executed loops]'
+  '(--support-multi-isa-binaries --no-support-multi-isa-binaries)--no-support-multi-isa-binaries[Do not collect data for non-executed loops]'
+  '(--track-heap-objects --no-track-heap-objects)--track-heap-objects[Attribute heap-allocated objects to the analyzed loops that accessed the objects.]'
+  '(--track-heap-objects --no-track-heap-objects)--no-track-heap-objects[Do not attribute heap-allocated objects to the analyzed loops that accessed the objects.]'
+  '(--track-stack-variables --no-track-stack-variables)--track-stack-variables[Analyse stack variable parallel data sharing]'
+  '(--track-stack-variables --no-track-stack-variables)--no-track-stack-variables[Do not analyse stack variable parallel data sharing]'
+  '(--enable-cache-simulation --no-enable-cache-simulation)--enable-cache-simulation[Model CPU cache behaviour on]'
+  '(--enable-cache-simulation --no-enable-cache-simulation)--no-enable-cache-simulation[Do not model CPU cache behaviour on]'
+  '(--enable-data-transfer-analysis --no-enable-data-transfer-analysis)--enable-data-transfer-analysis[Enable the simulator to model data transfer between host memory and device memory.]'
+  '(--enable-data-transfer-analysis --no-enable-data-transfer-analysis)--no-enable-data-transfer-analysis[Disable the simulator to model data transfer between host memory and device memory.]'
+  '(--cache-sources --no-cache-sources)--cache-sources[Enable source code visibility in a read-only snapshot]'
+  '(--cache-sources --no-cache-sources)--no-cache-sources[Disable source code visibility in a read-only snapshot]'
+  '--cache-config=[Specify cache hierarchy]:cache hierarchy:__cache_config'
+  '(--trip-counts --no-trip-counts)--trip-counts[Collect loop trip counts]'
+  '(--trip-counts --no-trip-counts)--no-trip-counts[Do not collect loop trip counts]'
+  '(--return-app-exitcode --no-return-app-exitcode)--return-app-exitcode[Return target exit code]'
+  '(--return-app-exitcode --no-return-app-exitcode)--no-return-app-exitcode[Return command line interface exit code]'
+  '(--auto-finalize --no-auto-finalize)--auto-finalize[Finalize collected data]'
+  '(--auto-finalize --no-auto-finalize)--no-auto-finalize[Do not run finalization of collected data]'
+  '(--record-mem-allocations --no-record-mem-allocations)--record-mem-allocations[Report access strides to heap variables]'
+  '(--record-mem-allocations --no-record-mem-allocations)--no-record-mem-allocations[No reports about access strides to heap variables]'
+  '(--record-stack-frame --no-record-stack-frame)--record-stack-frame[Report access strides to stack variables]'
+  '(--record-stack-frame --no-record-stack-frame)--no-record-stack-frame[No reports about access strides to stack variables]'
+  '(--refinalize-survey --no-refinalize-survey)--refinalize-survey[Refinalize survey result collected with a previous Advisor version]'
+  '(--refinalize-survey --no-refinalize-survey)--no-refinalize-survey[Do not refinalize survey result]'
+  '(--module-filter-mode=include --module-filter-mode=exclude)--module-filter-mode=include[Limit module filter by inclusion]'
+  '(--module-filter-mode=include --module-filter-mode=exclude)--module-filter-mode=exclude[Limit module filter by exclusion]'
+  '--option-file[Path of an option file]:option file:_path_files'
+  '--project-dir[Project directory - top-level directory of data collection]:project directory:_path_files -/'
+  '--app-working-dir[directory where the application will be run]:working directory:_path_files -/'
+  '--target-pid[attach to running process by process ID]:processes:_pids'
+  '--search-dir=[specify search directories]'
+  '(--trace-mode=full --trace-mode=linear --trace-mode=fibo)--trace-mode=full["full" trace of loop iterations]'
+  '(--trace-mode=full --trace-mode=linear --trace-mode=fibo)--trace-mode=linear["linear" trace of loop iterations]'
+  '(--trace-mode=full --trace-mode=linear --trace-mode=fibo)--trace-mode=fibo["fibo" trace of loop iterations]'
+  '(--mrte-mode=auto --mrte-mode=native --mrte-mode=mixed --mrte-mode=managed)--mrte-mode=auto'
+  '(--mrte-mode=auto --mrte-mode=native --mrte-mode=mixed --mrte-mode=managed)--mrte-mode=native[Do not attribute to managed sources]'
+  '(--mrte-mode=auto --mrte-mode=native --mrte-mode=mixed --mrte-mode=managed)--mrte-mode=mixed[Attribute data to managed sources where appropriate]'
+  '(--mrte-mode=auto --mrte-mode=native --mrte-mode=mixed --mrte-mode=managed)--mrte-mode=managed[Limit attribution to managed sources if available]'
+  '(--cachesim-mode=cache-misses --cachesim-mode=footprint --cachesim-mode=utilization)--cachesim-mode=cache-misses[model cache misses only]'
+  '(--cachesim-mode=cache-misses --cachesim-mode=footprint --cachesim-mode=utilization)--cachesim-mode=footprint[model cache misses and memory footprint]'
+  '(--cachesim-mode=cache-misses --cachesim-mode=footprint --cachesim-mode=utilization)--cachesim-mode=utilization[model cache misses and cache utilization]'
+  '--exclude-files=[Comma-separated list of files to exclude from annotation scanning]'
+
+  '-- [continue with target and target options]'
+  )
+
+  local module_filter_text
+  module_filter_text="modules to include in / exclude from inspection, just 'libSomething.so' w/o path"
+  collect_options+=(
+  "*--module-filter=[modules (.so files) to include in / exclude from inspection]: : _message \"$module_filter_text\""
+  )
+  _executable_of_interest_text() {
+    _message "name of the executable of interest"
+  }
+  collect_options+=(
+  '--executable-of-interest=[Inspect an application that is not the starting application]: :_executable_of_interest_text'
+  )
+  _stop_after_text() {
+    _message "Duration of data collection in seconds"
+  }
+  collect_options+=(
+  '--stop-after=[Duration of data collection in seconds]: :_stop_after_text'
+  )
+  _duration_text() {
+    _message "Duration in seconds (for system-wide collection), can be 'unlimited'"
+  }
+  collect_options+=(
+  '(-d --duration)'{-d,--duration=}'[Specify a duration for collection]: :_duration_text'
+  )
+  local interval_text;
+  interval_text="Time to wait before each collection"
+  collect_options+=(
+  "--interval=[$interval_text]: : _message \"$interval_text\""
+  )
+  _target_process_text() {
+    _message "Process name to attach to"
+  }
+  collect_options+=(
+  '--target-process=[Attach collection to a running process by process name]: :_target_process_text'
+  )
+  local data_limit_text
+  data_limit_text="Limit raw data to be collected"
+  collect_options+=(
+  "--data-limit=[$data_limit_text]: : _message \"$data_limit_text (integer)\""
+  )
+  _loop_count_text() {
+    _message "Maximum number of loop analyses (integer). 0=all instances"
+  }
+  collect_options+=(
+  '--loop-call-count-limit=[Set maximum number of loop instance analyses]: :_loop_count_text'
+  )
+  local cachesimassoctext
+  cachesimassoctext="Set cache associativity (depth) for modelling"
+  collect_options+=(
+  "--cachesim-associativity=[$cachesimassoctext]: : _message \"$cachesimassoctext (power of 2)\""
+  )
+  local datatransferpagesizetext
+  datatransferpagesizetext="Set the traffic measurement granularity in the data transfer simulator."
+  collect_options+=(
+  "--data-transfer-page-size=[$datatransferpagesizetext]: : _message \"$datatransferpagesizetext (power of 2 from 4 to 8192)\""
+  )
+  local cachesimlinesizetext
+  cachesimlinesizetext="Set cache line size for modelling"
+  collect_options+=(
+  "--cachesim-cacheline-size=[$cachesimlinesizetext]: : _message \"$cachesimlinesizetext (power of 2, <65536)\""
+  )
+  local cachesimsetstext
+  cachesimsetstext="Set number of sets (length) for modelling"
+  collect_options+=(
+  "--cachesim-sets=[$cachesimsetstext]: : _message \"$cachesimsetstext (power of 2)\""
+  )
+  _strategy_text() {
+    _message "details for parent and child processes analyses"
+    _message "Format:"
+    _message "<process_name1>:<profiling_mode>,<process_name2>:<profiling_mode>,..."
+    _message "Profiling mode values are trace:trace, trace:notrace, notrace:notrace, notrace:trace"
+  }
+  collect_options+=(
+  '--strategy=[Specify details for parent and child process analysis]: :_strategy_text'
+  )
+  _loops_criteria() {
+    _values , criteria 'scalar' 'total-time>N' 'has-source' 'has-issue' 'loop-height=N'
+  }
+  collect_options+=(
+  '--loops=[Select loops for deeper analysis]: :_loops_criteria'
+  )
+  _mark_up_text() {
+    _message "comma separated N1,N5,file:line, where 'Nx' is loop ID from survey report"
+  }
+  collect_options+=(
+  '--mark-up-list=[Specify loops for deeper analysis]: :_mark_up_text'
+  )
+
+  # if --resume-after=<number> is not in the current line, --start-paused still makes sense to add
+  # https://unix.stackexchange.com/a/411307
+  if [[ ${words[(i)--resume-after*]} -gt ${#words} ]]; then
+    collect_options+=(
+    '(--start-paused)--start-paused[Start data collection paused]'
+    )
+  fi
+
+  # mark-up is applicable to --collect map and --collect dependencies, but I only blacklist
+  # the others to have a chance of catching detection mistakes
+  if [[ $collection != survey || $collection != suitability || $collection != tripcounts ]] ; then
+    collect_options+=(
+    '(--mark-up --no-mark-up)--mark-up[source annotation only]'
+    '(--mark-up --no-mark-up)--no-mark-up')
+  fi
+  # --resume-after is applicable to --collect survey and --collect suitability, but I only blacklist
+  # the others to have a chance of catching detection mistakes
+  if [[ $collection != dependencies || $collection != map || $collection != tripcounts ]] ; then
+    collect_options+=(
+    '--resume-after=[Specify time in ms to delay collection]'
+    )
+  fi
+  _arguments "$collect_options[@]"
+}
+
+_advixe_cl_command_command() {
+  local -a advixe_command_commands
+  advixe_command_commands=(
+  'detach'
+  'pause'
+  'resume'
+  'cancel'
+  'stop'
+  'status'
+  )
+  _wanted arguments expl 'command' compadd -- "$advixe_command_commands[@]"
+}
+
+_advixe_cl_command() {
+  if [[ $CURRENT = 3 ]]; then
+    __advixe_cl_command_command
+  else
+    local test_normal
+    _conditional_normal
+    test_normal=$?
+    if [[ $test_normal -ne 33 ]]; then
+      return 0
+    else
+      # quick hack, to get the command out of the command line
+      # TODO: fix that 'advixe-cl --command status -<TAB>' does not complete w/o this hack
+      if [[ $CURRENT -gt 3 ]]; then
+        shift 2 words
+        (( CURRENT -= 2 ))
+      fi
+
+      local command_options;command_options=(
+      '(-q --quiet -v --verbose)'{-q,--quiet}'[Suppress non-essential messages]'
+      '(-v --verbose -q --quiet)'{-v,--verbose}'[Print additional information]'
+      '--result-dir=[specify result directories]: :_path_files -/'
+      '-- [continue with target and target options]'
+      )
+      _arguments "$command_options[@]"
+    fi
+  fi
+}
+
+_advixe_cl_mark_up_loops() {
+  _mark_up_text() {
+    _message "comma separated N1,N5,N42, where 'Nx' is loop ID from survey report"
+  }
+  local markup_options;markup_options=(
+  '(-q --quiet -v --verbose)'{-q,--quiet}'[Suppress non-essential messages]'
+  '(-v --verbose -q --quiet)'{-v,--verbose}'[Print additional information]'
+  '--project-dir[Project directory - top-level directory of data collection]:project directory:_path_files -/'
+  '--mpi-rank=[MPI rank of the result to be imported]:MPI rank: _message\"MPI rank of the result to be imported\"'
+  '--append=[Add loops to list of selections]:_mark_up_text'
+  '--remove=[Remove loops from list of selections]:_mark_up_text'
+  '--select=[Select specified loops only]:_mark_up_text'
+  )
+  _loops_criteria() {
+    _values , criteria 'scalar' 'total-time>N' 'has-source' 'has-issue' 'loop-height=N'
+  }
+  markup_options+=(
+  '--loops=[Select loops for deeper analysis]: :_loops_criteria'
+  )
+  _arguments -C "$markup_options[@]"
+}
+
+_advixe_help() {
+  _values 'actions' ${${advixe_actions[@]/--/}/:*} && return 0
+}
+
+_advixe_cl_snapshot() {
+  if [[ $words[(($CURRENT - 1))] = -- ]] ; then
+    _files -X 'snapshot filename' -g '*.advixeexpz'
+    return 0
+  fi
+  local snapshot_options;snapshot_options=(
+  '(--cache-binaries --no-cache-binaries)--cache-binaries[Cache binaries into snapshot]'
+  '(--cache-binaries --no-cache-binaries)--no-cache-binaries[Do not cache binaries into snapshot]'
+  '(--cache-sources --no-cache-sources)--cache-sources[Cache sources into snapshot]'
+  '(--cache-sources --no-cache-sources)--no-cache-sources[Do not cache sources into snapshot]'
+  '(--pack --no-pack)--pack[Pack snapshot into archive]'
+  '(--pack --no-pack)--no-pack[Do not pack snapshot into archive]'
+  '--project-dir[Project directory - top-level directory of data collection]:project directory:_path_files -/'
+  '(-q --quiet -v --verbose)'{-q,--quiet}'[Suppress non-essential messages]'
+  '(-v --verbose -q --quiet)'{-v,--verbose}'[Print additional information]'
+  '-- [Snapshot filename]:snapshot file:_files -g \*.advixeexpz'
+  '--mpi-rank=[MPI rank of the result to be imported]:MPI rank: _message\"MPI rank of the result to be imported\"'
+  '--search-dir=[specify search directories]'
+  )
+  _arguments -C "$snapshot_options[@]"
+}
+
+if [ $CURRENT -le 3 ] ; then
+  # suggest <action>
+  _arguments ${advixe_actions} && return 0
+elif [[ $words[2] = --help ]] ; then
+  # suggest 'advixe-cl --help <action>'
+  # 'help' and 'version' are still valid actions
+  # leading -- need to be stripped off
+  if [ $CURRENT -eq 3 ]
+  then
+    _advixe_help && return 0
+  else
+    # no further completion after 'advixe-cl --help <action>'
+    return 0
+  fi
+elif [[ $words[2] = --version ]] ; then
+  return 0
+elif [[ $words[2] = --command ]] ; then
+  _advixe_cl_command
+  return 0
+elif [[ $words[2] = --mark-up-loops ]] ; then
+  _advixe_cl_mark_up_loops
+  return 0
+elif [[ $words[2] = --workflow ]] ; then
+  _message "no more arguments"
+  return 0
+fi
+
+
+#the remaining (snapshot, collect, import-dir, and report all support --search-dir=...
+if compset -P '*-search-dir=*='; then
+  _path_files -/
+  return 0
+elif compset -P '*-search-dir='; then
+  local -a search_categories
+  search_categories=(
+  'all'
+  'bin'
+  'src'
+  'sym'
+  'all:r'
+  'bin:r'
+  'src:r'
+  'sym:r'
+  'all:p'
+  'bin:p'
+  'src:p'
+  'sym:p'
+  'all:rp'
+  'bin:rp'
+  'src:rp'
+  'sym:rp'
+  )
+  _wanted arguments expl "search categories" compadd -S '=' -- "$search_categories[@]"
+  return 0
+fi
+
+if [[ $words[2] = --snapshot ]] ; then
+  _advixe_cl_snapshot
+  return 0
+elif [[ $words[2] = --collect ]] ; then
+  _advixe_cl_collect
+  return 0
+elif [[ $words[2] = --import-dir ]] ; then
+  _advixe_cl_import_dir
+  return 0
+elif [[ $words[2] = --report ]] ; then
+  _advixe_cl_report
+  return 0
+fi
