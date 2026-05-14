@@ -1,0 +1,246 @@
+# Source: https://github.com/shkumagai/my-zsh-completions/blob/ad5f4ffbd98b502daa57d5eeeda0264f9ecb62eb/src/_riak-admin
+# Repository: shkumagai/my-zsh-completions (src/_riak-admin)
+#compdef riak-admin
+
+typeset -g riak_root riak_app_config riak_http
+
+(( $+functions[__riak-admin_get_root] )) ||
+__riak-admin_get_root () {
+  riak_root=(${(f)"$(command ps -ef \
+                   | command grep beam \
+                   | command grep -v grep \
+                   | command sed 's/^.* -root \(.*\) -progname.*$/\1/')"})
+  if (( $#riak_root > 1 )); then
+    riak_root=(${riak_root[1]})
+  fi
+}
+
+(( $+functions[__riak-admin_get_app_config] )) ||
+__riak-admin_get_app_config () {
+  riak_app_config=(${(f)"$(command ps -ef \
+                         | command grep beam \
+                         | command grep -v grep \
+                         | command sed 's/^.* -config \(.*app.config\) .*$/\1/')"})
+  if (( $#riak_app_config == 1 )); then
+    riak_app_config=($(echo "${riak_root}/etc/app.config"))
+  fi
+}
+
+(( $+functions[__riak-admin_get_config_http])) ||
+__riak-admin_get_config_http () {
+  local expl
+
+  [[ -z "$riak_app_config" ]] && __riak-admin_get_app_config
+
+  riak_http=(${(s.,.)${(f)"$(command grep -E '[^%]\{http, .*},$' ${riak_app_config} \
+                           | command sed 's/.*\"\(.*\)\", \([0-9]*\) }.*$/\1,\2/')"}})
+  if (( $#riak_http != 2 )); then
+    riak_http=(
+      127.0.0.1
+      8091
+    )
+  fi
+}
+
+(( $+functions[_riak-admin_nodes] )) ||
+_riak-admin_nodes () {
+  local expl
+  local -a riak_nodes
+
+  [[ -z "$riak_root" ]] && __riak-admin_get_root
+
+  if [[ -f "${riak_root}/bin/riak-admin" ]]; then
+    riak_nodes=(${(s.,.)${${${${(f)"$(command ${riak_root}/bin/riak-admin status \
+                                    | command grep ring_members)"}%\]}##*?\[}//\'/}})
+  else
+    riak_nodes=()
+  fi
+
+  _wanted nodes expl 'riak nodes' compadd -- $riak_nodes
+}
+
+(( $+functions[_riak-admin_cookies] )) ||
+_riak-admin_cookies () {
+  local expl
+  local -a riak_cookies
+
+  if [[ -z "$riak_root" ]]; then
+    __riak-admin_get_root
+  fi
+
+  riak_cookies=(${(f)"$(command ps -ef \
+                      | command grep beam \
+                      | command grep -v grep \
+                      | command sed 's/^.* -name \(.*\) -setcookie \(.*\) --.*$/\2:\1/')"})
+
+  _describe -t riak-cookies 'riak cookies' riak_cookies
+}
+
+(( $+functions[_riak-admin_cluster] )) ||
+_riak-admin_cluster () {
+  local _2nd_arguments
+  _2nd_arguments=(
+    join:'Joins the running node to another running node'
+    leave:'Causes the node to leave the cluster in which it participates'
+    force-remove:'Remove <node> from the cluster without first handing off data partitions'
+    replace:'Instruct <node1> to transfer all data partitions to <node2>'
+    force-replace:'Reassign all partitions owned by <node1> to <node2> without first handing off data'
+    plan:'Display the currently staged cluster changes'
+    clear:'Clear the currently staged cluster changes'
+    commit:'Commit the currently staged cluster changes'
+  )
+
+  local context state line expl
+
+  _arguments \
+    '*:: :->cluster-subcommands' && return 0
+
+  if (( CURRENT == 1 )); then
+    _describe -t cluster-commands 'riak-admin cluster commands' _2nd_arguments
+  fi
+
+  case "$words[1]" in
+    join|leave|force-remove)
+      _riak-admin_nodes
+      ;;
+    replace|force-replace)
+      _arguments \
+        '1: :->nodes' \
+        '2: :->nodes' && return 0
+      [[ "$state" == "nodes" ]] && _riak-admin_nodes
+      ;;
+    plan|clear|commit)
+      # no more argument
+      ;;
+  esac
+}
+
+(( $+functions[_riak-admin_cluster_join] )) ||
+_riak-admin_cluster_join () {
+  echo "Called."
+  _arguments \
+    '*: :->_riak-admin_nodes'
+}
+
+_riak-admin () {
+  local -a _1st_arguments
+  _1st_arguments=(
+    cluster:'provides a multi-phased approach to cluster administration'
+    join:'Joins the running node to another running node'
+    leave:'Causes the node to leave the cluster in which it participates'
+    backup:'Backs up the data from the node or entire cluster into a file'
+    restore:'Restores data to the node or cluster from a previous backup'
+    test:'Runs a test of a few standard Riak operations against the running node'
+    reip:'Renames a node'
+    js-reload:'Forces the embedded Javascript virtual machines to be restarted'
+    services:'Lists available services on the node'
+    wait-for-service:'Waits on a specific watchable service to be available'
+    ringready:'Checks whether all nodes in the cluster agree on the ring state'
+    transfers:'Identifies nodes that are awaiting transfer of one or more partitions'
+    transfer-limit:'Change the handoff_concurrency limit'
+    force-remove:'Immediately removes a node from the cluster without ensuring handoff'
+    down:'Marks a node as down'
+    cluster-info:'Output system information from a Riak cluster'
+    member-status:'Prints the current status of all cluster members'
+    ring-status:'Outputs the current ring status'
+    vnode-status:'Outputs the status of all vnodes the are running on the local node'
+    diag:'Run diagnostic checks against <node>'
+    status:'Prints status information'
+    top:'Top provides information about what the Erlang processes inside of Riak are doing'
+    # aae-status:'Prints the current status of Active Anti Entropy on the local node'
+  )
+
+  local context state line expl
+
+  _arguments \
+    '*:: :->subcommands' && return 0
+
+  if (( CURRENT == 1 )); then
+    _describe -t commands 'riak-admin subcommands' _1st_arguments
+    return
+  fi
+
+  case "$words[1]" in
+    cluster)
+      _riak-admin_cluster
+      ;;
+    leave|join|force-remove)
+      local -a _opts_args
+      _opts_args=(
+        ': :(-f)'
+        ':: :->nodes'
+      )
+      if [[ "$words[1]" == "leave" ]]; then
+        _arguments $_opts_args[1] && return 0
+      else
+        _arguments $_opts_args && return 0
+        [[ "$state" == "nodes" ]] && _riak-admin_nodes
+      fi
+      ;;
+    backup|restore)
+      _arguments \
+        '1: :->nodes' \
+        '2: :->cookies' \
+        '3: :->filename' && return 0
+
+      case "$state" in
+        nodes)    _riak-admin_nodes ;;
+        cookies)  _riak-admin_cookies ;;
+        filename) _files ;;
+      esac
+
+      [[ "$words[1]" == "backup" ]] &&  _arguments '4: :(node all)' && return 0
+      ;;
+    reip|down)
+      local -a _opts_args
+      _opts_args=(
+        '1: :->nodes'
+        '2: :->nodes'
+      )
+      if [[ "$words[1]" == "down" ]]; then
+        _arguments $_opts_args[1] && return 0
+      else
+        _arguments $_opts_args && return 0
+      fi
+      [[ "$state" == "nodes" ]] && _riak-admin_nodes
+      ;;
+    wait-for-service)
+      # not implemented
+      ;;
+    transfer-limit)
+      # not implemented
+      ;;
+    cluster-info)
+      # not implemented
+      ;;
+    diag)
+      # not implemented
+      ;;
+    test|js-reload|services|ringready|transfars)
+      # no more argument
+      ;;
+    member-status|ring-status|vnode-status|aae-status)
+      # no more argument
+      ;;
+    top)
+      _arguments \
+        -interval'[refresh interval second(s)]: :(1 5 10 30 60)' \
+        -lines'[number of line(s) to display]: :(1 5 10 30 60)' \
+        -sort'[sort key]:sort keys:(reductions memory msg_q)' \
+        && return 0
+      ;;
+    *)
+      _message 'unknown subcommand: ${words[1]}'
+      ;;
+  esac
+}
+
+_riak-admin "$@"
+
+# Local variables:
+# mode: shell-script
+# sh-basic-offset: 2
+# sh-indent-comment: t
+# indent-tabs-mode: nil
+# End:
+# ex: sw=2 ts=2 et filetype=sh

@@ -108,6 +108,7 @@ def skip_path(path: str) -> bool:
         "/ohmyzsh/",
         "/test/out/",
         "/tests/out/",
+        "/examples/zsh/",
         "/tests/",
         "/test/",
         "/spec/",
@@ -387,6 +388,9 @@ JUNK_COMPDEF_STEMS = frozenset(
         "baz",
         "qux",
         "HEAD",
+        "myapp",
+        "mysimpleapp",
+        "nometa",
     }
 )
 
@@ -400,6 +404,13 @@ def gh_repo_search_seed_slugs(max_total: int) -> list[str]:
         "zsh site-functions NOT mirror",
         "compdef zsh NOT mirror",
         "zsh-completions NOT template",
+        "zsh compdef in:readme NOT mirror",
+        "cobra zsh completion NOT mirror",
+        "shell-completion zsh NOT mirror",
+        "cli zsh _arguments NOT mirror",
+        "fpath zsh completion NOT mirror",
+        "homebrew zsh completion NOT mirror",
+        "nix zsh completion NOT mirror",
     )
     seen: set[str] = set()
     out: list[str] = []
@@ -407,7 +418,7 @@ def gh_repo_search_seed_slugs(max_total: int) -> list[str]:
     for q in queries:
         if len(out) >= max_total:
             break
-        for page in range(1, 5):
+        for page in range(1, 7):
             if len(out) >= max_total:
                 break
             path_q = "/search/repositories?" + urllib.parse.urlencode(
@@ -467,6 +478,7 @@ def harvest_github_trees_from_file(
         and max_seed > 0
     ):
         seed_slugs = gh_repo_search_seed_slugs(max_seed)
+        random.shuffle(seed_slugs)
     random.shuffle(file_slugs)
     slugs = list(dict.fromkeys(seed_slugs + file_slugs))
     for slug in slugs[:max_repos]:

@@ -1,0 +1,109 @@
+# Source: https://github.com/shkumagai/my-zsh-completions/blob/ad5f4ffbd98b502daa57d5eeeda0264f9ecb62eb/src/_search-cmd
+# Repository: shkumagai/my-zsh-completions (src/_search-cmd)
+#compdef search-cmd
+
+typeset -g riak_root riak_app_config riak_http
+
+(( $+functions[__riak-admin_get_root] )) ||
+__riak-admin_get_root () {
+  riak_root=(${(f)"$(command ps -ef \
+                   | command grep beam \
+                   | command grep -v grep \
+                   | command sed 's/^.* -root \(.*\) -progname.*$/\1/')"})
+  if (( $#riak_root > 1 )); then
+    riak_root=(${riak_root[1]})
+  fi
+}
+
+(( $+functions[__riak-admin_get_app_config] )) ||
+__riak-admin_get_app_config () {
+  riak_app_config=(${(f)"$(command ps -ef \
+                         | command grep beam \
+                         | command grep -v grep \
+                         | command sed 's/^.* -config \([^ ]*\) .*$/\1/')"})
+  # print "<$riak_app_config>"
+  if (( $#riak_app_config != 1 )); then
+    riak_app_config=($(echo "${riak_root}/etc/app.config"))
+  fi
+}
+
+(( $+functions[__riak-admin_get_config_http])) ||
+__riak-admin_get_config_http () {
+  local expl app_config
+
+  [[ -z "$riak_app_config" ]] && __riak-admin_get_app_config
+
+  app_config=${(F)"$(command cat ${riak_app_config})"}
+  riak_http=(${(s., .)${${${(f)${app_config#*?http, \[}%%\]*?}//[ \"{}]/}/,/:}})
+  # print "<$riak_http> <$#riak_http>"
+
+  if (( $#riak_http == 0 )); then
+    riak_http=(
+      127.0.0.1:8091
+    )
+  fi
+}
+
+(( $+functions[_riak-admin_buckets] )) ||
+_riak-admin_buckets () {
+  local url expl
+  local -a riak_buckets
+
+  [[ -z "$riak_http" ]] && __riak-admin_get_config_http
+
+  url="http://${riak_http[1]}/buckets?buckets=true"
+
+  riak_buckets=(${(s.,.)${${${${(f)"$(command curl -q -G ${url} 2>/dev/null)"}//*?\[/}//\]*?}//\"/}})
+
+  _describe -t riak-buckets 'riak buckets' riak_buckets
+}
+
+(( $+functions[_search-cmd_commands] )) ||
+_search-cmd () {
+  local -a _1st_arguments
+  _1st_arguments=(
+    set-schema:'Set the schema for a given index'
+    show-schema:'Show the schema for a given index'
+    clear-schema-cache:'Clear the schema cache on a local node'
+    search:'Execute the given query on the index returning the document id, properties, and score.'
+    search-doc:'Much like "search" but also returns all the fields too'
+    explain:'Outputs the query plan for the specified index query'
+    index:'Index the document at the given path'
+    delete:'Used to delete a document from the index'
+    solr:'Index solr documents'
+    install:'Install the Search precommit hook on the given bucket'
+    uninstall:'Uninstall the Search precommit hook on the given bucket'
+    test:'Run the Search test script at the given path'
+  )
+
+  local context state line expl
+  _arguments \
+    '*:: :->commands' && return 0
+
+  if (( CURRENT == 1 )); then
+    _describe -t search-cmd-commands 'search-cmd command' _1st_arguments
+    return
+  fi
+
+  case "$words[1]" in
+    set-schema|index|delete|solr|test)
+      _files
+      ;;
+    install|uninstall)
+      _riak-admin_buckets
+      ;;
+    *)
+      # nothing to do
+      ;;
+  esac
+}
+
+_search-cmd "$@"
+
+# Local variables:
+# mode: shell-script
+# sh-basic-offset: 2
+# sh-indent-comment: t
+# indent-tabs-mode: nil
+# End:
+# ex: sw=2 ts=2 et filetype=sh
