@@ -1,0 +1,1764 @@
+# Source: https://github.com/patrickespake/ai_cli_management/blob/1fbce20441e0b37870d150d112619dea13d8a450/ai_global_installer.sh
+# Repository: patrickespake/ai_cli_management (ai_global_installer.sh)
+#!/bin/bash
+# ai_global_installer.sh - AI Parallel Systems Global Installer
+# Version 1.0 (Fixed)
+# Assumes existing CLI clients: codex, claude, gemini
+
+set -euo pipefail
+
+# Global variables
+INSTALL_DIR="/opt/ai-parallel-systems"
+CONFIG_DIR="$HOME/.config/ai-parallel"
+DATA_DIR="$HOME/.local/share/ai-parallel"
+LOG_FILE="/tmp/ai-installer.log"
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Logging functions
+log_info() {
+    echo -e "${BLUE}[INFO]${NC} $1" | tee -a "$LOG_FILE"
+}
+
+log_success() {
+    echo -e "${GREEN}[SUCCESS]${NC} $1" | tee -a "$LOG_FILE"
+}
+
+log_warn() {
+    echo -e "${YELLOW}[WARN]${NC} $1" | tee -a "$LOG_FILE"
+}
+
+log_error() {
+    echo -e "${RED}[ERROR]${NC} $1" | tee -a "$LOG_FILE"
+}
+
+log_header() {
+    echo -e "${BLUE}$1${NC}" | tee -a "$LOG_FILE"
+}
+
+# Function to detect Linux distribution
+detect_distro() {
+    if [ -f /etc/manjaro-release ]; then
+        echo "manjaro"
+    elif [ -f /etc/ubuntu-release ] || [ -f /etc/lsb-release ]; then
+        echo "ubuntu"
+    elif [ -f /etc/debian_version ]; then
+        echo "debian"
+    else
+        echo "unknown"
+    fi
+}
+
+# Function to verify existing CLI clients
+verify_existing_clients() {
+    log_header "=== VERIFYING EXISTING CLI CLIENTS ==="
+
+    local missing_clients=()
+
+    for client in gemini claude codex; do
+        if command -v "$client" >/dev/null 2>&1; then
+            log_success "✓ $client CLI found"
+        else
+            log_error "✗ $client CLI not found"
+            missing_clients+=("$client")
+        fi
+    done
+
+    if [ ${#missing_clients[@]} -gt 0 ]; then
+        log_error "Missing CLI clients: ${missing_clients[*]}"
+        echo
+        echo "Please install the missing CLI clients before proceeding:"
+        for client in "${missing_clients[@]}"; do
+            case $client in
+                gemini)
+                    echo "  - Gemini: Install from Google AI Studio"
+                    ;;
+                claude)
+                    echo "  - Claude: Install from Anthropic"
+                    ;;
+                codex)
+                    echo "  - Codex: Install from OpenAI"
+                    ;;
+            esac
+        done
+        exit 1
+    fi
+
+    log_success "All required CLI clients are installed"
+}
+
+# Function to install system dependencies
+install_system_dependencies() {
+    log_header "=== INSTALLING SYSTEM DEPENDENCIES ==="
+
+    local distro=$(detect_distro)
+    log_info "Detected distribution: $distro"
+
+    case $distro in
+        manjaro)
+            log_info "Installing dependencies for Manjaro..."
+            sudo pacman -Sy --noconfirm jq curl wget git python python-pip sqlite tmux screen
+            ;;
+        ubuntu|debian)
+            log_info "Installing dependencies for Ubuntu/Debian..."
+            sudo apt update
+            sudo apt install -y jq curl wget git python3 python3-pip sqlite3 tmux screen
+            ;;
+        *)
+            log_warn "Unknown distribution, attempting generic installation..."
+            # Try to install with common package managers
+            if command -v apt >/dev/null 2>&1; then
+                sudo apt update && sudo apt install -y jq curl wget git python3 python3-pip sqlite3 tmux screen
+            elif command -v pacman >/dev/null 2>&1; then
+                sudo pacman -Sy --noconfirm jq curl wget git python python-pip sqlite tmux screen
+            else
+                log_error "Could not determine package manager"
+                exit 1
+            fi
+            ;;
+    esac
+
+    log_success "System dependencies installed"
+}
+
+# Function to create directory structure
+create_directory_structure() {
+    log_header "=== CREATING DIRECTORY STRUCTURE ==="
+
+    # Create system directories
+    sudo mkdir -p "$INSTALL_DIR"/{bin,lib,templates,logs}
+    sudo chown -R "$USER:$USER" "$INSTALL_DIR"
+
+    # Create user directories
+    mkdir -p "$CONFIG_DIR"
+    mkdir -p "$DATA_DIR"/{logs,cache,backups}
+
+    log_success "Directory structure created"
+}
+
+# Function to create AI wrapper scripts
+create_ai_wrappers() {
+    log_header "=== CREATING AI WRAPPER SCRIPTS ==="
+
+    # Create ai-gemini wrapper
+    log_info "Creating ai-gemini wrapper..."
+    sudo tee /usr/local/bin/ai-gemini << 'EOF'
+#!/bin/bash
+# ai-gemini - Gemini AI wrapper for parallel execution with worktree isolation
+# Version 1.0
+
+set -euo pipefail
+
+# Configuration
+PROJECT_ROOT="$(pwd)"
+TASKS_FILE="$PROJECT_ROOT/tasks.json"
+WORKTREE_DIR="$PROJECT_ROOT/.ai-worktrees"
+LOG_DIR="$PROJECT_ROOT/.ai-logs"
+MAX_PARALLEL=5
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Logging functions
+log_info() {
+    echo -e "${BLUE}[GEMINI-INFO]${NC} $1"
+}
+
+log_success() {
+    echo -e "${GREEN}[GEMINI-SUCCESS]${NC} $1"
+}
+
+log_warn() {
+    echo -e "${YELLOW}[GEMINI-WARN]${NC} $1"
+}
+
+log_error() {
+    echo -e "${RED}[GEMINI-ERROR]${NC} $1"
+}
+
+# Function to report status to dashboard
+report_status() {
+    local task_id="$1"
+    local status="$2"
+    local title="$3"
+    local pr_url="${4:-}"
+    local message="${5:-}"
+    
+    curl -s -X POST http://localhost:8081/api/update \
+    -H "Content-Type: application/json" \
+    -d @- <<CURL_DATA
+{
+    "taskId": "$task_id",
+    "status": "$status",
+    "title": "$title",
+    "pr_url": "$pr_url",
+    "message": "$message"
+}
+CURL_DATA
+}
+
+# Check prerequisites
+check_prerequisites() {
+    if [ ! -f "$TASKS_FILE" ]; then
+        log_error "tasks.json not found in current directory"
+        log_info "Use: ai-manager init gemini"
+        exit 1
+    fi
+
+    if ! command -v gemini >/dev/null 2>&1; then
+        log_error "gemini CLI not found. Please install it first."
+        exit 1
+    fi
+
+    if ! command -v jq >/dev/null 2>&1; then
+        log_error "jq not found. Please install jq for JSON parsing."
+        exit 1
+    fi
+
+    if ! git rev-parse --git-dir >/dev/null 2>&1; then
+        log_error "Not in a git repository. Please initialize git first."
+        exit 1
+    fi
+}
+
+# Setup directories
+setup_directories() {
+    mkdir -p "$WORKTREE_DIR"
+    mkdir -p "$LOG_DIR"
+}
+
+# Parse tasks from JSON
+parse_tasks() {
+    if ! jq empty "$TASKS_FILE" 2>/dev/null; then
+        log_error "Invalid JSON in tasks.json"
+        exit 1
+    fi
+
+    jq -r '.tasks[] | @base64' "$TASKS_FILE"
+}
+
+# Create worktree for task
+create_worktree() {
+    local task_id="$1"
+    local timestamp=$(date +%s)
+    local branch_name="gemini-task-${task_id}-${timestamp}"
+    local worktree_path="$WORKTREE_DIR/${task_id}-${timestamp}"
+
+    {
+        log_info "Creating worktree for task: $task_id"
+
+        # Create new worktree
+        git worktree add "$worktree_path" -b "$branch_name"
+    } >&2
+
+    # Return just the path on stdout
+    echo "$worktree_path"
+}
+
+# Execute task in worktree
+execute_task() {
+    local task_data="$1"
+    local task_json
+    task_json=$(echo "$task_data" | base64 -d)
+
+    local task_id
+    local task_title
+    local task_prompt
+    local task_files
+
+    task_id=$(echo "$task_json" | jq -r '.id // "unknown"')
+    task_title=$(echo "$task_json" | jq -r '.title // "Untitled Task"')
+    task_prompt=$(echo "$task_json" | jq -r '.prompt // .description // "No description provided"')
+    task_files=$(echo "$task_json" | jq -r '.files[]? // empty' | tr '\n' ' ')
+
+    report_status "$task_id" "RUNNING" "$task_title" "" "Starting task..."
+
+    local worktree_path
+    worktree_path=$(create_worktree "$task_id")
+
+    local log_file="$LOG_DIR/gemini-$task_id.log"
+
+    log_info "Starting task: $task_title (ID: $task_id)"
+
+    # Change to worktree directory
+    cd "$worktree_path"
+
+    # Prepare full prompt
+    local full_prompt="Task: $task_title\n\nDescription: $task_prompt\n\nFiles to focus on: $task_files\n\nPlease implement this task completely. Make all necessary changes to achieve the goal."
+
+    # Execute gemini with proper flags
+    {
+        echo "=== GEMINI TASK EXECUTION ==="
+        echo "Task ID: $task_id"
+        echo "Title: $task_title"
+        echo "Timestamp: $(date)"
+        echo "Worktree: $worktree_path"
+        echo "========================="
+        echo
+
+        # Run gemini with auto-accept mode
+        gemini -m gemini-2.5-pro -y -p "$full_prompt"
+
+    } > "$log_file" 2>&1
+
+    local exit_code=$?
+
+    # Return to project root
+    cd "$PROJECT_ROOT"
+
+    if [ $exit_code -eq 0 ]; then
+        log_success "Task completed: $task_title"
+        report_status "$task_id" "COMPLETED" "$task_title" "" "Task finished, creating pull request..."
+        create_pull_request "$task_id" "$task_title" "$worktree_path"
+    else
+        log_error "Task failed: $task_title (see $log_file)"
+        report_status "$task_id" "FAILED" "$task_title" "" "Task failed. See logs for details."
+    fi
+
+    return $exit_code
+}
+
+# Create pull request
+create_pull_request() {
+    local task_id="$1"
+    local task_title="$2"
+    local worktree_path="$3"
+
+    cd "$worktree_path"
+
+    local branch_name
+    branch_name=$(git rev-parse --abbrev-ref HEAD)
+
+    # Refresh the git index to detect changes
+    git add -N .
+
+    # Check if there are changes
+    if git diff --quiet && git diff --cached --quiet; then
+        log_warn "No changes detected for task: $task_title"
+        report_status "$task_id" "COMPLETED" "$task_title" "" "No changes detected."
+        cd "$PROJECT_ROOT"
+        return
+    fi
+
+    # Stage all changes
+    git add -A
+
+    # Create commit
+    git commit -m "feat: $task_title
+
+Implemented by Gemini AI
+Task ID: $task_id
+
+🤖 Generated with AI Parallel Systems
+Co-Authored-By: Gemini <noreply@google.com>"
+
+    # Push branch
+    git push origin "$branch_name"
+
+    # Create PR if gh CLI is available
+    if command -v gh >/dev/null 2>&1; then
+        cd "$PROJECT_ROOT"
+        local pr_url
+        pr_url=$(gh pr create --title "feat: $task_title" --body "## Task Implementation
+
+**Task ID:** $task_id
+**Implemented by:** Gemini AI
+**Branch:** $branch_name
+
+### Description
+$task_title
+
+### Changes
+This PR implements the requested functionality using Gemini AI.
+
+🤖 **Generated with AI Parallel Systems**
+
+**Co-Authored-By:** Gemini <noreply@google.com>" --head "$branch_name")
+
+        log_success "Pull request created for: $task_title"
+        report_status "$task_id" "PR_CREATED" "$task_title" "$pr_url" "Pull request created."
+    else
+        log_info "Branch pushed: $branch_name (install gh CLI for automatic PR creation)"
+        report_status "$task_id" "COMPLETED" "$task_title" "" "Branch pushed. Install gh CLI for automatic PR creation."
+    fi
+
+    cd "$PROJECT_ROOT"
+}
+
+# Cleanup function
+cleanup() {
+    log_info "Cleaning up..."
+    # Kill any background processes
+    jobs -p | xargs -r kill 2>/dev/null || true
+}
+
+# Set trap for cleanup
+trap cleanup EXIT
+
+# Main execution
+main() {
+    log_info "Starting Gemini AI Parallel Task Execution"
+
+    check_prerequisites
+    setup_directories
+
+    local tasks
+    tasks=$(parse_tasks)
+
+    if [ -z "$tasks" ]; then
+        log_warn "No tasks found in tasks.json"
+        exit 0
+    fi
+
+    local task_count
+    task_count=$(echo "$tasks" | wc -l)
+    log_info "Found $task_count tasks to execute"
+
+    local running_jobs=0
+    local pids=()
+
+    while IFS= read -r task_data; do
+        # Wait if we've reached max parallel limit
+        while [ $running_jobs -ge $MAX_PARALLEL ]; do
+            sleep 2
+            # Check for completed jobs
+            for i in "${!pids[@]}"; do
+                if ! kill -0 "${pids[i]}" 2>/dev/null; then
+                    wait "${pids[i]}"
+                    unset 'pids[i]'
+                    # Decrement running_jobs safely (avoid non-zero exit with set -e)
+                    running_jobs=$(( running_jobs - 1 ))
+                fi
+            done
+        done
+
+        # Start new task in background
+        execute_task "$task_data" < /dev/null &
+        local pid=$!
+        pids+=("$pid")
+        # Increment running_jobs safely
+        running_jobs=$(( running_jobs + 1 ))
+
+        log_info "Started task (PID: $pid), running jobs: $running_jobs"
+        sleep 1
+    done <<< "$tasks"
+
+    # Wait for all remaining jobs
+    log_info "Waiting for all tasks to complete..."
+    for pid in "${pids[@]}"; do
+        wait "$pid"
+    done
+
+    log_success "All Gemini tasks completed!"
+    log_info "Logs available in: $LOG_DIR"
+    log_info "Worktrees available in: $WORKTREE_DIR"
+}
+
+# Execute main function
+main "$@"
+EOF
+
+    # Create ai-claude wrapper
+    log_info "Creating ai-claude wrapper..."
+    sudo tee /usr/local/bin/ai-claude << 'EOF'
+#!/bin/bash
+# ai-claude - Claude AI wrapper for parallel execution with worktree isolation
+# Version 1.0
+
+set -euo pipefail
+
+# Configuration
+PROJECT_ROOT="$(pwd)"
+TASKS_FILE="$PROJECT_ROOT/tasks.json"
+WORKTREE_DIR="$PROJECT_ROOT/.ai-worktrees"
+LOG_DIR="$PROJECT_ROOT/.ai-logs"
+MAX_PARALLEL=5
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Logging functions
+log_info() {
+    echo -e "${BLUE}[CLAUDE-INFO]${NC} $1"
+}
+
+log_success() {
+    echo -e "${GREEN}[CLAUDE-SUCCESS]${NC} $1"
+}
+
+log_warn() {
+    echo -e "${YELLOW}[CLAUDE-WARN]${NC} $1"
+}
+
+log_error() {
+    echo -e "${RED}[CLAUDE-ERROR]${NC} $1"
+}
+
+# Function to report status to dashboard
+report_status() {
+    local task_id="$1"
+    local status="$2"
+    local title="$3"
+    local pr_url="${4:-}"
+    local message="${5:-}"
+    
+    curl -s -X POST http://localhost:8081/api/update \
+    -H "Content-Type: application/json" \
+    -d @- <<CURL_DATA
+{
+    "taskId": "$task_id",
+    "status": "$status",
+    "title": "$title",
+    "pr_url": "$pr_url",
+    "message": "$message"
+}
+CURL_DATA
+}
+
+# Check prerequisites
+check_prerequisites() {
+    if [ ! -f "$TASKS_FILE" ]; then
+        log_error "tasks.json not found in current directory"
+        log_info "Use: ai-manager init claude"
+        exit 1
+    fi
+
+    if ! command -v claude >/dev/null 2>&1; then
+        log_error "claude CLI not found. Please install it first."
+        exit 1
+    fi
+
+    if ! command -v jq >/dev/null 2>&1; then
+        log_error "jq not found. Please install jq for JSON parsing."
+        exit 1
+    fi
+
+    if ! git rev-parse --git-dir >/dev/null 2>&1; then
+        log_error "Not in a git repository. Please initialize git first."
+        exit 1
+    fi
+}
+
+# Setup directories
+setup_directories() {
+    mkdir -p "$WORKTREE_DIR"
+    mkdir -p "$LOG_DIR"
+}
+
+# Parse tasks from JSON
+parse_tasks() {
+    if ! jq empty "$TASKS_FILE" 2>/dev/null; then
+        log_error "Invalid JSON in tasks.json"
+        exit 1
+    fi
+
+    jq -r '.tasks[] | @base64' "$TASKS_FILE"
+}
+
+# Create worktree for task
+create_worktree() {
+    local task_id="$1"
+    local timestamp=$(date +%s)
+    local branch_name="claude-task-${task_id}-${timestamp}"
+    local worktree_path="$WORKTREE_DIR/${task_id}-${timestamp}"
+
+    {
+        log_info "Preparing worktree for task: $task_id"
+
+        # Create new worktree
+        log_info "Creating new worktree at '$worktree_path'"
+        if ! git worktree add "$worktree_path" -b "$branch_name"; then
+            log_error "Failed to create worktree for task: $task_id"
+            exit 1
+        fi
+    } >&2
+
+    echo "$worktree_path"
+}
+
+# Execute task in worktree
+execute_task() {
+    local task_data="$1"
+    local task_json
+    task_json=$(echo "$task_data" | base64 -d)
+
+    local task_id
+    local task_title
+    local task_prompt
+    local task_files
+
+    task_id=$(echo "$task_json" | jq -r '.id // "unknown"')
+    task_title=$(echo "$task_json" | jq -r '.title // "Untitled Task"')
+    task_prompt=$(echo "$task_json" | jq -r '.prompt // .description // "No description provided"')
+    task_files=$(echo "$task_json" | jq -r '.files[]? // empty' | tr '\n' ' ')
+
+    report_status "$task_id" "RUNNING" "$task_title" "" "Starting task..."
+
+    local worktree_path
+    worktree_path=$(create_worktree "$task_id")
+
+    local log_file="$LOG_DIR/claude-$task_id.log"
+
+    log_info "Starting task: $task_title (ID: $task_id)"
+
+    # Change to worktree directory
+    cd "$worktree_path"
+
+    # Prepare full prompt
+    local full_prompt="Task: $task_title\n\nDescription: $task_prompt\n\nFiles to focus on: $task_files\n\nPlease implement this task completely. Make all necessary changes to achieve the goal."
+
+    # Create a temporary file for the prompt
+    local temp_prompt="/tmp/claude-prompt-$task_id.txt"
+    printf "%b\n" "$full_prompt" > "$temp_prompt"
+
+    # Execute claude with proper flags
+    {
+        echo "=== CLAUDE TASK EXECUTION ==="
+        echo "Task ID: $task_id"
+        echo "Title: $task_title"
+        echo "Timestamp: $(date)"
+        echo "Worktree: $worktree_path"
+        echo "========================="
+        echo
+
+        # Run claude with skip permissions and prompt file
+        claude --print --dangerously-skip-permissions "$full_prompt"
+
+    } > "$log_file" 2>&1
+
+    local exit_code=$?
+
+    # Cleanup temp file
+    rm -f "$temp_prompt"
+
+    # Return to project root
+    cd "$PROJECT_ROOT"
+
+    if [ $exit_code -eq 0 ]; then
+        log_success "Task completed: $task_title"
+        report_status "$task_id" "COMPLETED" "$task_title" "" "Task finished, creating pull request..."
+        create_pull_request "$task_id" "$task_title" "$worktree_path"
+    else
+        log_error "Task failed: $task_title (see $log_file)"
+        report_status "$task_id" "FAILED" "$task_title" "" "Task failed. See logs for details."
+    fi
+
+    return $exit_code
+}
+
+# Create pull request
+create_pull_request() {
+    local task_id="$1"
+    local task_title="$2"
+    local worktree_path="$3"
+
+    cd "$worktree_path"
+
+    local branch_name
+    branch_name=$(git rev-parse --abbrev-ref HEAD)
+
+    # Refresh the git index to detect changes
+    git add -N .
+
+    # Check if there are changes
+    if git diff --quiet && git diff --cached --quiet; then
+        log_warn "No changes detected for task: $task_title"
+        report_status "$task_id" "COMPLETED" "$task_title" "" "No changes detected."
+        cd "$PROJECT_ROOT"
+        return
+    fi
+
+    # Stage all changes
+    git add -A
+
+    # Create commit
+    git commit -m "feat: $task_title
+
+Implemented by Claude AI
+Task ID: $task_id
+
+🤖 Generated with AI Parallel Systems
+Co-Authored-By: Claude <noreply@anthropic.com>"
+
+    # Push branch
+    git push origin "$branch_name"
+
+    # Create PR if gh CLI is available
+    if command -v gh >/dev/null 2>&1; then
+        cd "$PROJECT_ROOT"
+        local pr_url
+        pr_url=$(gh pr create --title "feat: $task_title" --body "## Task Implementation
+
+**Task ID:** $task_id
+**Implemented by:** Claude AI
+**Branch:** $branch_name
+
+### Description
+$task_title
+
+### Changes
+This PR implements the requested functionality using Claude AI.
+
+🤖 **Generated with AI Parallel Systems**
+
+**Co-Authored-By:** Claude <noreply@anthropic.com>" --head "$branch_name")
+
+        log_success "Pull request created for: $task_title"
+        report_status "$task_id" "PR_CREATED" "$task_title" "$pr_url" "Pull request created."
+    else
+        log_info "Branch pushed: $branch_name (install gh CLI for automatic PR creation)"
+        report_status "$task_id" "COMPLETED" "$task_title" "" "Branch pushed. Install gh CLI for automatic PR creation."
+    fi
+
+    cd "$PROJECT_ROOT"
+}
+
+# Cleanup function
+cleanup() {
+    log_info "Cleaning up..."
+    # Kill any background processes
+    jobs -p | xargs -r kill 2>/dev/null || true
+}
+
+# Set trap for cleanup
+trap cleanup EXIT
+
+# Main execution
+main() {
+    log_info "Starting Claude AI Parallel Task Execution"
+
+    check_prerequisites
+    setup_directories
+
+    local tasks
+    tasks=$(parse_tasks)
+
+    if [ -z "$tasks" ]; then
+        log_warn "No tasks found in tasks.json"
+        exit 0
+    fi
+
+    local task_count
+    task_count=$(echo "$tasks" | wc -l)
+    log_info "Found $task_count tasks to execute"
+
+    local running_jobs=0
+    local pids=()
+
+    while IFS= read -r task_data; do
+        # Wait if we've reached max parallel limit
+        while [ $running_jobs -ge $MAX_PARALLEL ]; do
+            sleep 2
+            # Check for completed jobs
+            for i in "${!pids[@]}"; do
+                if ! kill -0 "${pids[i]}" 2>/dev/null; then
+                    wait "${pids[i]}"
+                    unset 'pids[i]'
+                    running_jobs=$(( running_jobs - 1 ))
+                fi
+            done
+        done
+
+        # Start new task in background
+        execute_task "$task_data" < /dev/null &
+        local pid=$!
+        pids+=("$pid")
+        running_jobs=$(( running_jobs + 1 ))
+
+        log_info "Started task (PID: $pid), running jobs: $running_jobs"
+        sleep 1
+    done <<< "$tasks"
+
+    # Wait for all remaining jobs
+    log_info "Waiting for all tasks to complete..."
+    for pid in "${pids[@]}"; do
+        wait "$pid"
+    done
+
+    log_success "All Claude tasks completed!"
+    log_info "Logs available in: $LOG_DIR"
+    log_info "Worktrees available in: $WORKTREE_DIR"
+}
+
+# Execute main function
+main "$@"
+EOF
+
+    # Create ai-codex wrapper
+    log_info "Creating ai-codex wrapper..."
+    sudo tee /usr/local/bin/ai-codex << 'EOF'
+#!/bin/bash
+# ai-codex - Codex AI wrapper for parallel execution with worktree isolation
+# Version 1.0
+
+set -euo pipefail
+
+# Configuration
+PROJECT_ROOT="$(pwd)"
+TASKS_FILE="$PROJECT_ROOT/tasks.json"
+WORKTREE_DIR="$PROJECT_ROOT/.ai-worktrees"
+LOG_DIR="$PROJECT_ROOT/.ai-logs"
+MAX_PARALLEL=5
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Logging functions
+log_info() {
+    echo -e "${BLUE}[CODEX-INFO]${NC} $1"
+}
+
+log_success() {
+    echo -e "${GREEN}[CODEX-SUCCESS]${NC} $1"
+}
+
+log_warn() {
+    echo -e "${YELLOW}[CODEX-WARN]${NC} $1"
+}
+
+log_error() {
+    echo -e "${RED}[CODEX-ERROR]${NC} $1"
+}
+
+# Function to report status to dashboard
+report_status() {
+    local task_id="$1"
+    local status="$2"
+    local title="$3"
+    local pr_url="${4:-}"
+    local message="${5:-}"
+    
+    curl -s -X POST http://localhost:8081/api/update \
+    -H "Content-Type: application/json" \
+    -d @- <<CURL_DATA
+{
+    "taskId": "$task_id",
+    "status": "$status",
+    "title": "$title",
+    "pr_url": "$pr_url",
+    "message": "$message"
+}
+CURL_DATA
+}
+
+# Check prerequisites
+check_prerequisites() {
+    if [ ! -f "$TASKS_FILE" ]; then
+        log_error "tasks.json not found in current directory"
+        log_info "Use: ai-manager init codex"
+        exit 1
+    fi
+
+    if ! command -v codex >/dev/null 2>&1; then
+        log_error "codex CLI not found. Please install it first."
+        exit 1
+    fi
+
+    if ! command -v jq >/dev/null 2>&1; then
+        log_error "jq not found. Please install jq for JSON parsing."
+        exit 1
+    fi
+
+    if ! git rev-parse --git-dir >/dev/null 2>&1; then
+        log_error "Not in a git repository. Please initialize git first."
+        exit 1
+    fi
+}
+
+# Setup directories
+setup_directories() {
+    mkdir -p "$WORKTREE_DIR"
+    mkdir -p "$LOG_DIR"
+}
+
+# Parse tasks from JSON
+parse_tasks() {
+    if ! jq empty "$TASKS_FILE" 2>/dev/null; then
+        log_error "Invalid JSON in tasks.json"
+        exit 1
+    fi
+
+    jq -r '.tasks[] | @base64' "$TASKS_FILE"
+}
+
+# Create worktree for task
+create_worktree() {
+    local task_id="$1"
+    local timestamp=$(date +%s)
+    local branch_name="codex-task-${task_id}-${timestamp}"
+    local worktree_path="$WORKTREE_DIR/${task_id}-${timestamp}"
+
+    # All logging and commands inside this block are redirected to stderr
+    # to prevent polluting the command substitution output.
+    {
+        log_info "Preparing worktree for task: $task_id"
+
+        # Prune any stale worktree metadata from .git
+        git worktree prune
+
+        # Now, create the new worktree and branch.
+        log_info "Creating new worktree at '$worktree_path' with branch '$branch_name'"
+        if ! git worktree add "$worktree_path" -b "$branch_name"; then
+            log_error "Failed to create worktree for task: $task_id"
+            exit 1
+        fi
+    } >&2
+
+    # This is the ONLY output that goes to stdout.
+    echo "$worktree_path"
+}
+
+# Execute task in worktree
+execute_task() {
+    local task_data="$1"
+    local task_json
+    task_json=$(echo "$task_data" | base64 -d)
+
+    local task_id
+    local task_title
+    local task_prompt
+    local task_files
+
+    task_id=$(echo "$task_json" | jq -r '.id // "unknown"')
+    task_title=$(echo "$task_json" | jq -r '.title // "Untitled Task"')
+    task_prompt=$(echo "$task_json" | jq -r '.prompt // .description // "No description provided"')
+    task_files=$(echo "$task_json" | jq -r '.files[]? // empty' | tr '\n' ' ')
+
+    report_status "$task_id" "RUNNING" "$task_title" "" "Starting task..."
+
+    local worktree_path
+    worktree_path=$(create_worktree "$task_id")
+
+    local log_file="$LOG_DIR/codex-$task_id.log"
+
+    log_info "Starting task: $task_title (ID: $task_id)"
+
+    # Change to worktree directory
+    cd "$worktree_path"
+
+    # Prepare full prompt
+    local full_prompt="Task: $task_title\n\nDescription: $task_prompt\n\nFiles to focus on: $task_files\n\nPlease implement this task completely. Make all necessary changes to achieve the goal."
+
+    # Execute codex with proper flags
+    {
+        echo "=== CODEX TASK EXECUTION ==="
+        echo "Task ID: $task_id"
+        echo "Title: $task_title"
+        echo "Timestamp: $(date)"
+        echo "Worktree: $worktree_path"
+        echo "========================="
+        echo
+
+        # Run codex with auto-edit and full-auto flags
+        codex -q --full-auto --auto-edit -m o3-2025-04-16 "$full_prompt"
+
+    } > "$log_file" 2>&1
+
+    local exit_code=$?
+
+    # Return to project root
+    cd "$PROJECT_ROOT"
+
+    if [ $exit_code -eq 0 ]; then
+        log_success "Task completed: $task_title"
+        report_status "$task_id" "COMPLETED" "$task_title" "" "Task finished, creating pull request..."
+        create_pull_request "$task_id" "$task_title" "$worktree_path"
+    else
+        log_error "Task failed: $task_title (see $log_file)"
+        report_status "$task_id" "FAILED" "$task_title" "" "Task failed. See logs for details."
+    fi
+
+    return $exit_code
+}
+
+# Create pull request
+create_pull_request() {
+    local task_id="$1"
+    local task_title="$2"
+    local worktree_path="$3"
+
+    cd "$worktree_path"
+
+    local branch_name
+    branch_name=$(git rev-parse --abbrev-ref HEAD)
+
+    # Refresh the git index to detect changes
+    git add -N .
+
+    # Check if there are changes
+    if git diff --quiet && git diff --cached --quiet; then
+        log_warn "No changes detected for task: $task_title"
+        report_status "$task_id" "COMPLETED" "$task_title" "" "No changes detected."
+        cd "$PROJECT_ROOT"
+        return
+    fi
+
+    # Stage all changes
+    git add -A
+
+    # Create commit
+    git commit -m "feat: $task_title
+
+Implemented by Codex AI
+Task ID: $task_id
+
+🤖 Generated with AI Parallel Systems
+Co-Authored-By: Codex <noreply@openai.com>"
+
+    # Push branch
+    git push origin "$branch_name"
+
+    # Create PR if gh CLI is available
+    if command -v gh >/dev/null 2>&1; then
+        cd "$PROJECT_ROOT"
+        local pr_url
+        pr_url=$(gh pr create --title "feat: $task_title" --body "## Task Implementation
+
+**Task ID:** $task_id
+**Implemented by:** Codex AI
+**Branch:** $branch_name
+
+### Description
+$task_title
+
+### Changes
+This PR implements the requested functionality using Codex AI.
+
+🤖 **Generated with AI Parallel Systems**
+
+**Co-Authored-By:** Codex <noreply@openai.com>" --head "$branch_name")
+
+        log_success "Pull request created for: $task_title"
+        report_status "$task_id" "PR_CREATED" "$task_title" "$pr_url" "Pull request created."
+    else
+        log_info "Branch pushed: $branch_name (install gh CLI for automatic PR creation)"
+        report_status "$task_id" "COMPLETED" "$task_title" "" "Branch pushed. Install gh CLI for automatic PR creation."
+    fi
+
+    cd "$PROJECT_ROOT"
+}
+
+# Cleanup function
+cleanup() {
+    log_info "Cleaning up..."
+    # Kill any background processes
+    jobs -p | xargs -r kill 2>/dev/null || true
+}
+
+# Set trap for cleanup
+trap cleanup EXIT
+
+# Main execution
+main() {
+    log_info "Starting Codex AI Parallel Task Execution"
+
+    check_prerequisites
+    setup_directories
+
+    local tasks
+    tasks=$(parse_tasks)
+
+    if [ -z "$tasks" ]; then
+        log_warn "No tasks found in tasks.json"
+        exit 0
+    fi
+
+    local task_count
+    task_count=$(echo "$tasks" | wc -l)
+    log_info "Found $task_count tasks to execute"
+
+    local running_jobs=0
+    local pids=()
+
+    while IFS= read -r task_data; do
+        # Wait if we've reached max parallel limit
+        while [ $running_jobs -ge $MAX_PARALLEL ]; do
+            sleep 2
+            # Check for completed jobs
+            for i in "${!pids[@]}"; do
+                if ! kill -0 "${pids[i]}" 2>/dev/null; then
+                    wait "${pids[i]}"
+                    unset 'pids[i]'
+                    running_jobs=$(( running_jobs - 1 ))
+                fi
+            done
+        done
+
+        # Start new task in background
+        execute_task "$task_data" < /dev/null &
+        local pid=$!
+        pids+=("$pid")
+        running_jobs=$(( running_jobs + 1 ))
+
+        log_info "Started task (PID: $pid), running jobs: $running_jobs"
+        sleep 1
+    done <<< "$tasks"
+
+    # Wait for all remaining jobs
+    log_info "Waiting for all tasks to complete..."
+    for pid in "${pids[@]}"; do
+        wait "$pid"
+    done
+
+    log_success "All Codex tasks completed!"
+    log_info "Logs available in: $LOG_DIR"
+    log_info "Worktrees available in: $WORKTREE_DIR"
+}
+
+# Execute main function
+main "$@"
+EOF
+
+    # Make all wrappers executable
+    sudo chmod +x /usr/local/bin/ai-{gemini,claude,codex}
+
+    log_success "AI wrapper scripts created"
+}
+
+# Function to create management commands
+create_management_commands() {
+    log_header "=== CREATING MANAGEMENT COMMANDS ==="
+
+    # Main ai-manager command
+    log_info "Creating ai-manager command..."
+    sudo tee /usr/local/bin/ai-manager << 'EOF'
+#!/bin/bash
+# ai-manager - Main AI Systems Manager
+# Version 1.0
+
+CONFIG_DIR="$HOME/.config/ai-parallel"
+DATA_DIR="$HOME/.local/share/ai-parallel"
+
+show_help() {
+    cat << 'HELP'
+AI Parallel Systems Manager - Version 1.0
+
+USAGE:
+  ai-manager <command> [options]
+
+COMMANDS:
+  init <system>     Initialize project with AI system (gemini|claude|codex)
+  status           Show system status and health
+  config           Configure API keys and settings
+  update           Update system components
+  help             Show this help message
+
+EXAMPLES:
+  ai-manager init gemini     # Initialize with Gemini (recommended)
+  ai-manager status          # Check system status
+  ai-manager config          # Configure API keys
+
+COST COMPARISON:
+  🏆 Gemini: $0.0035/1K tokens (RECOMMENDED - 85% savings)
+  ⚖️ Claude: $0.015/1K tokens
+  🔧 Codex: $0.03/1K tokens
+
+For more information, visit: https://github.com/envixo/ai_cli_management
+HELP
+}
+
+init_project() {
+    local system="${1:-gemini}"
+
+    echo "Initializing AI project with $system..."
+
+    # Create tasks.json template
+    cat > tasks.json << 'TASKS'
+{
+  "project_info": {
+    "name": "Sample Medical Lab Website",
+    "description": "React-based website project for a medical laboratory specializing in blood tests with comprehensive documentation and best practices",
+    "base_branch": "master"
+  },
+  "tasks": [
+    {
+      "id": "create-readme",
+      "title": "Create README.md",
+      "prompt": "Create a README.md file explaining that this will be a website project for a medical laboratory specializing in blood tests, built with React",
+      "files": [],
+      "priority": 1
+    },
+    {
+      "id": "react-best-practices",
+      "title": "React Best Practices Documentation",
+      "prompt": "Generate a markdown document explaining the best practices for developing in React",
+      "files": [],
+      "priority": 2
+    }
+  ]
+}
+TASKS
+
+    # Create project configuration
+    mkdir -p .ai-parallel
+    cat > .ai-parallel/config.json << 'CONFIG'
+{
+  "project": {
+    "name": "My AI Project",
+    "default_system": "gemini",
+    "max_parallel_tasks": 3,
+    "timeout_minutes": 30
+  },
+  "systems": {
+    "gemini": {
+      "enabled": true,
+      "max_tokens": 65535
+    },
+    "claude": {
+      "enabled": true,
+      "max_tokens": 64000
+    },
+    "codex": {
+      "enabled": true,
+      "max_tokens": 100000
+    }
+  }
+}
+CONFIG
+
+    # Add directories to .gitignore
+    echo ".ai-logs" >> .gitignore
+    echo ".ai-parallel" >> .gitignore
+    echo ".ai-worktrees" >> .gitignore
+    echo "tasks.json" >> .gitignore
+
+    echo "✅ Project initialized with $system!"
+    echo
+    echo "Next steps:"
+    echo "  1. Edit tasks.json to define your tasks"
+    echo "  2. Run: ai-$system"
+
+    if [ "$system" = "gemini" ]; then
+        echo
+        echo "🏆 Excellent choice! Gemini saves 85% vs other systems"
+    fi
+}
+
+show_status() {
+    echo "=== AI SYSTEMS STATUS ==="
+    echo
+
+    # Check CLI clients
+    echo "CLI Clients:"
+    for client in gemini claude codex; do
+        if command -v "$client" >/dev/null 2>&1; then
+            echo "  ✓ $client"
+        else
+            echo "  ✗ $client (not found)"
+        fi
+    done
+
+    echo
+    echo "System Commands:"
+    for cmd in ai-manager ai-status ai-costs ai-gemini ai-claude ai-codex; do
+        if command -v "$cmd" >/dev/null 2>&1; then
+            echo "  ✓ $cmd"
+        else
+            echo "  ✗ $cmd (not installed)"
+        fi
+    done
+
+    echo
+    echo "Configuration:"
+    if [ -d "$CONFIG_DIR" ]; then
+        echo "  ✓ Config directory: $CONFIG_DIR"
+    else
+        echo "  ✗ Config directory missing"
+    fi
+
+    if [ -d "$DATA_DIR" ]; then
+        echo "  ✓ Data directory: $DATA_DIR"
+    else
+        echo "  ✗ Data directory missing"
+    fi
+
+    echo
+    echo "Current Project:"
+    if [ -f "tasks.json" ]; then
+        echo "  ✓ tasks.json found"
+        local task_count=$(jq '.tasks | length' tasks.json 2>/dev/null || echo "0")
+        echo "  📋 Tasks defined: $task_count"
+    else
+        echo "  ✗ No project initialized"
+        echo "    Use: ai-manager init gemini"
+    fi
+}
+
+configure_apis() {
+    echo "=== API KEYS CONFIGURATION ==="
+    echo
+    echo "This will help you configure API keys for AI systems."
+    echo "Keys will be stored securely in your system."
+    echo
+
+    # Create config directory
+    mkdir -p "$CONFIG_DIR"
+
+    local config_file="$CONFIG_DIR/api_keys.env"
+
+    echo "# AI Systems API Keys" > "$config_file"
+    echo "# Generated on $(date)" >> "$config_file"
+    echo "" >> "$config_file"
+
+    # Configure each system
+    for system in GEMINI CLAUDE CODEX; do
+        echo "Configuring $system API key..."
+        echo -n "Enter $system API key (or press Enter to skip): "
+        read -r api_key
+
+        if [ -n "$api_key" ]; then
+            echo "export ${system}_API_KEY=\"$api_key\"" >> "$config_file"
+            echo "✓ $system API key configured"
+        else
+            echo "⚠ $system API key skipped"
+        fi
+        echo
+    done
+
+    # Set secure permissions
+    chmod 600 "$config_file"
+
+    echo "✅ Configuration saved to: $config_file"
+    echo
+    echo "To load the configuration in your shell:"
+    echo "source \"$config_file\""
+    echo
+    echo "Or add to your ~/.bashrc:"
+    echo "echo 'source \"$config_file\"' >> ~/.bashrc"
+    echo
+    echo "Or load now:"
+    echo "source \"$config_file\""
+}
+
+update_system() {
+    echo "=== UPDATING SYSTEM ==="
+    echo
+
+    # Update system packages
+    local distro=$(detect_distro)
+    case $distro in
+        manjaro)
+            echo "Updating Manjaro packages..."
+            sudo pacman -Syu --noconfirm
+            ;;
+        ubuntu|debian)
+            echo "Updating Ubuntu/Debian packages..."
+            sudo apt update && sudo apt upgrade -y
+            ;;
+    esac
+
+    # Update AI wrapper scripts (re-run installer)
+    echo "Updating AI wrapper scripts..."
+    curl -fsSL https://raw.githubusercontent.com/envixo/ai_cli_management/main/ai_global_installer.sh | bash
+
+    echo
+    echo "✅ System updated!"
+}
+
+# Detect distribution function
+detect_distro() {
+    if [ -f /etc/manjaro-release ]; then
+        echo "manjaro"
+    elif [ -f /etc/ubuntu-release ] || [ -f /etc/lsb-release ]; then
+        echo "ubuntu"
+    elif [ -f /etc/debian_version ]; then
+        echo "debian"
+    else
+        echo "unknown"
+    fi
+}
+
+# Process commands
+case "${1:-help}" in
+    init)
+        init_project "${2:-gemini}"
+        ;;
+    status)
+        show_status
+        ;;
+    config)
+        configure_apis
+        ;;
+    update)
+        update_system
+        ;;
+    help|--help|-h)
+        show_help
+        ;;
+    *)
+        echo "Unknown command: ${1:-}"
+        echo "Use 'ai-manager help' for available commands"
+        exit 1
+        ;;
+esac
+EOF
+
+    # ai-status command
+    sudo tee /usr/local/bin/ai-status << 'EOF'
+#!/bin/bash
+# ai-status - Quick status check
+# Version 1.0
+
+case "${1:-}" in
+    --quick|-q)
+        echo "AI Systems Quick Status:"
+        for client in gemini claude codex; do
+            if command -v "$client" >/dev/null 2>&1; then
+                echo "✓ $client"
+            else
+                echo "✗ $client"
+            fi
+        done
+        ;;
+    *)
+        ai-manager status
+        ;;
+esac
+EOF
+
+    # ai-costs command
+    sudo tee /usr/local/bin/ai-costs << 'EOF'
+#!/bin/bash
+# ai-costs - Cost analysis tool
+# Version 1.0
+
+show_cost_analysis() {
+    cat << 'COSTS'
+=== AI SYSTEMS COST ANALYSIS ===
+
+PRICING (per 1K tokens):
+  🏆 Gemini:  $0.0035 (RECOMMENDED)
+  ⚖️ Claude:  $0.015
+  🔧 Codex:   $0.03
+
+COST COMPARISON (1000 tasks):
+  Gemini:  ~$21
+  Claude:  ~$90
+  Codex:   ~$180
+
+SAVINGS WITH GEMINI:
+  vs Claude: 77% savings (~$69)
+  vs Codex:  88% savings (~$159)
+
+ANNUAL PROJECTION (10K tasks):
+  Gemini:  ~$210
+  Claude:  ~$900  (329% more expensive)
+  Codex:   ~$1800 (757% more expensive)
+
+RECOMMENDATION:
+🏆 Use Gemini as primary system for maximum savings
+⚖️ Use Claude for complex reasoning tasks
+🔧 Use Codex for specialized code generation
+
+RATE LIMITS:
+  Gemini: 60 req/min
+  Claude: 30 req/min
+  Codex:  20 req/min
+COSTS
+}
+
+case "${1:-analysis}" in
+    analysis|--analysis|-a)
+        show_cost_analysis
+        ;;
+    help|--help|-h)
+        echo "ai-costs - Cost analysis tool"
+        echo "Usage: ai-costs [analysis]"
+        ;;
+    *)
+        show_cost_analysis
+        ;;
+esac
+EOF
+
+    # Make all commands executable
+    sudo chmod +x /usr/local/bin/ai-{manager,status,costs}
+
+    log_success "Management commands created"
+}
+
+# Function to configure shell completion
+configure_shell_completion() {
+    log_header "=== CONFIGURING SHELL COMPLETION ==="
+
+    # Configure bash completion
+    sudo tee /etc/bash_completion.d/ai-systems << 'EOF'
+# Bash completion for AI Systems
+# Version 1.0
+
+_ai_manager_complete() {
+    local cur prev opts
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+
+    case $prev in
+        ai-manager)
+            opts="init status config update help"
+            COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
+            return 0
+            ;;
+        init)
+            opts="gemini claude codex"
+            COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
+            return 0
+            ;;
+    esac
+}
+
+complete -F _ai_manager_complete ai-manager
+
+# Simple completion for other commands
+complete -W "analysis help" ai-costs
+complete -W "--quick" ai-status
+EOF
+
+    # Configure zsh completion
+    sudo mkdir -p /usr/local/share/zsh/site-functions
+    sudo tee /usr/local/share/zsh/site-functions/_ai-systems << 'EOF'
+#compdef ai-manager ai-status ai-costs ai-gemini ai-claude ai-codex
+
+# Zsh completion for AI Systems
+# Version 1.0
+
+_ai_manager() {
+    local context state line
+    _arguments \
+        '1: :_ai_manager_commands' \
+        '2: :_ai_manager_systems'
+}
+
+_ai_manager_commands() {
+    local commands
+    commands=(
+        'init:Initialize project with AI system'
+        'status:Show system status and health'
+        'config:Configure API keys and settings'
+        'update:Update system components'
+        'help:Show help message'
+    )
+    _describe 'commands' commands
+}
+
+_ai_manager_systems() {
+    if [[ $words[2] == "init" ]]; then
+        local systems
+        systems=(
+            'gemini:Google Gemini (recommended - 85% cheaper)'
+            'claude:Anthropic Claude (complex reasoning)'
+            'codex:OpenAI Codex (code optimization)'
+        )
+        _describe 'systems' systems
+    fi
+}
+
+_ai_status() {
+    _arguments \
+        '(--quick -q)'{--quick,-q}'[Quick status check]'
+}
+
+_ai_costs() {
+    local commands
+    commands=(
+        'analysis:Show cost analysis'
+        'help:Show help message'
+    )
+    _describe 'commands' commands
+}
+
+# Set up completions
+compdef _ai_manager ai-manager
+compdef _ai_status ai-status
+compdef _ai_costs ai-costs
+EOF
+
+    log_success "Shell completion configured (Bash and Zsh)"
+}
+
+# Function to create example tasks
+create_example_tasks() {
+    log_header "=== CREATING EXAMPLE TASKS ==="
+
+    # Gemini example
+    cat > "$INSTALL_DIR/templates/gemini_example.json" << 'EOF'
+{
+  "project_info": {
+    "name": "Gemini AI Project",
+    "description": "Cost-effective AI development with Gemini",
+    "base_branch": "main"
+  },
+  "tasks": [
+    {
+      "id": "gemini-web-app",
+      "title": "Create Modern Web Application",
+      "prompt": "Create a modern, responsive web application with the following features:\n\n1. Clean, professional UI using modern CSS frameworks\n2. Interactive components with smooth animations\n3. Mobile-first responsive design\n4. Accessibility features (ARIA labels, keyboard navigation)\n5. Performance optimizations (lazy loading, code splitting)\n6. SEO-friendly structure\n\nTechnical requirements:\n- Use semantic HTML5\n- Modern CSS (Grid, Flexbox, Custom Properties)\n- Vanilla JavaScript or lightweight framework\n- Progressive Web App features\n- Cross-browser compatibility\n\nPlease create a complete, production-ready application with proper file structure, documentation, and deployment instructions.",
+      "branch_name": "feature/gemini-web-app",
+      "pr_title": "feat: Add modern web application with Gemini AI",
+      "labels": ["feature", "web", "gemini", "frontend"],
+      "priority": 1,
+      "language": "javascript",
+      "framework": "vanilla",
+      "files_to_focus": ["src/", "public/", "styles/", "scripts/"]
+    }
+  ]
+}
+EOF
+
+    # Claude example
+    cat > "$INSTALL_DIR/templates/claude_example.json" << 'EOF'
+{
+  "project_info": {
+    "name": "Claude AI Project",
+    "description": "Complex reasoning and analysis with Claude",
+    "base_branch": "main"
+  },
+  "tasks": [
+    {
+      "id": "claude-analysis-system",
+      "title": "Advanced Data Analysis System",
+      "prompt": "Design and implement a comprehensive data analysis system with advanced reasoning capabilities:\n\n1. Data Processing Pipeline\n   - Multi-format data ingestion (CSV, JSON, XML, APIs)\n   - Data validation and cleaning algorithms\n   - Statistical analysis and pattern recognition\n   - Anomaly detection and outlier identification\n\n2. Machine Learning Integration\n   - Feature engineering and selection\n   - Model training and evaluation\n   - Hyperparameter optimization\n   - Cross-validation and performance metrics\n\n3. Visualization and Reporting\n   - Interactive dashboards\n   - Statistical charts and graphs\n   - Automated report generation\n   - Export capabilities (PDF, Excel, PowerPoint)\n\n4. Advanced Features\n   - Real-time data streaming\n   - Predictive analytics\n   - Natural language insights\n   - API endpoints for integration\n\nPlease create a robust, scalable system with comprehensive documentation, unit tests, and deployment guides.",
+      "branch_name": "feature/claude-analysis-system",
+      "pr_title": "feat: Implement advanced data analysis system with Claude AI",
+      "labels": ["feature", "analysis", "claude", "ml"],
+      "priority": 1,
+      "language": "python",
+      "framework": "pandas",
+      "files_to_focus": ["src/", "data/", "models/", "reports/"]
+    }
+  ]
+}
+EOF
+
+    # Codex example
+    cat > "$INSTALL_DIR/templates/codex_example.json" << 'EOF'
+{
+  "project_info": {
+    "name": "Codex AI Project",
+    "description": "Specialized code generation and optimization with Codex",
+    "base_branch": "main"
+  },
+  "tasks": [
+    {
+      "id": "codex-optimization-suite",
+      "title": "Performance Optimization Suite",
+      "prompt": "Create a comprehensive performance optimization suite for software applications:\n\n1. Code Analysis Tools\n   - Static code analysis for performance bottlenecks\n   - Memory usage profiling and optimization\n   - CPU usage analysis and optimization\n   - Database query optimization\n\n2. Automated Optimization\n   - Code refactoring for better performance\n   - Algorithm optimization suggestions\n   - Memory leak detection and fixes\n   - Caching strategy implementation\n\n3. Benchmarking and Testing\n   - Performance benchmark suite\n   - Load testing frameworks\n   - Stress testing tools\n   - Performance regression detection\n\n4. Monitoring and Alerting\n   - Real-time performance monitoring\n   - Performance metrics dashboard\n   - Automated alerting system\n   - Performance trend analysis\n\nImplement with best practices for code quality, maintainability, and extensibility. Include comprehensive test coverage and documentation.",
+      "branch_name": "feature/codex-optimization-suite",
+      "pr_title": "feat: Add performance optimization suite with Codex AI",
+      "labels": ["feature", "optimization", "codex", "performance"],
+      "priority": 1,
+      "language": "python",
+      "framework": "pytest",
+      "files_to_focus": ["src/", "tests/", "benchmarks/", "monitoring/"]
+    }
+  ]
+}
+EOF
+
+    log_success "Example tasks created"
+}
+
+# Main installation function
+main() {
+    echo
+    log_header "🤖 AI Parallel Systems - Global Installer"
+    log_header "Version 1.0"
+    log_header "Assumes existing CLI clients: codex, claude, gemini"
+    echo
+
+    # Check if running as root
+    if [ "$EUID" -eq 0 ]; then
+        log_error "Please do not run this script as root"
+        exit 1
+    fi
+
+    # Installation steps
+    verify_existing_clients
+    install_system_dependencies
+    create_directory_structure
+    create_ai_wrappers
+    create_management_commands
+    configure_shell_completion
+    create_example_tasks
+
+    # Final setup
+    log_header "=== FINAL SETUP ==="
+
+    # Add to PATH if needed
+    if ! echo "$PATH" | grep -q "/usr/local/bin"; then
+        log_warn "Adding /usr/local/bin to PATH"
+        if [ -f ~/.zshrc ]; then
+            echo 'export PATH="/usr/local/bin:$PATH"' >> ~/.zshrc
+            log_info "PATH added to ~/.zshrc"
+        elif [ -f ~/.bashrc ]; then
+            echo 'export PATH="/usr/local/bin:$PATH"' >> ~/.bashrc
+            log_info "PATH added to ~/.bashrc"
+        fi
+    fi
+
+    echo
+    log_success "=== INSTALLATION COMPLETED SUCCESSFULLY ==="
+    echo
+    echo "🎉 AI Parallel Systems installed successfully!"
+    echo
+    echo "📋 What was installed:"
+    echo "  ✅ AI wrapper scripts (ai-gemini, ai-claude, ai-codex)"
+    echo "  ✅ Management commands (ai-manager, ai-status, ai-costs)"
+    echo "  ✅ Directory structure and configuration"
+    echo "  ✅ Bash completion support"
+    echo "  ✅ Example task templates"
+    echo
+    echo "🚀 Quick start:"
+    echo "  1. Configure API keys: ai-manager config"
+    echo "  2. Create a project: mkdir my-project && cd my-project"
+    echo "  3. Initialize: ai-manager init gemini"
+    echo "  4. Execute: ai-gemini"
+    echo
+    echo "💡 Recommendations:"
+    echo "  🏆 Use Gemini as primary system (85% cheaper)"
+    echo "  ⚖️ Use Claude for complex reasoning"
+    echo "  🔧 Use Codex for specialized code tasks"
+    echo
+    echo "📚 Available commands:"
+    echo "  ai-manager help    - Main help"
+    echo "  ai-status          - Quick status check"
+    echo "  ai-costs           - Cost analysis"
+    echo "  ai-gemini --help   - Gemini help"
+    echo
+    echo "🔧 Next steps:"
+    if [ -f ~/.zshrc ]; then
+        echo "  1. Restart your terminal or run: source ~/.zshrc"
+    else
+        echo "  1. Restart your terminal or run: source ~/.bashrc"
+    fi
+    echo "  2. Configure API keys: ai-manager config"
+    echo "  3. Check status: ai-status"
+    echo
+    echo "💰 Cost savings with Gemini:"
+    echo "  - 85% cheaper than Claude/Codex"
+    echo "  - Faster execution (60 req/min)"
+    echo "  - Larger context (1M tokens)"
+    echo
+    log_success "Installation complete! Happy coding with AI! 🤖"
+}
+
+# Run main function if script is executed directly
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    main "$@"
+fi

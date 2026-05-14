@@ -1,0 +1,245 @@
+# Source: https://github.com/remenoscodes/git-native-issue/blob/f1d8d6e02fd340699a0f9a23f70796b947750aa4/contrib/completion/git-issue.zsh
+# Repository: remenoscodes/git-native-issue (contrib/completion/git-issue.zsh)
+#compdef git-issue
+#
+# Zsh completion for git-issue -- distributed issue tracking embedded in Git.
+#
+# Installation:
+#
+#   Option 1 - Place in your fpath:
+#     cp git-issue.zsh ~/.zsh/completions/_git-issue
+#     # Ensure ~/.zsh/completions is in your fpath (add to .zshrc before compinit):
+#     #   fpath=(~/.zsh/completions $fpath)
+#     #   autoload -Uz compinit && compinit
+#
+#   Option 2 - Integration with "git issue" (as a git subcommand):
+#     Copy or symlink this file as _git-issue somewhere on your fpath.
+#     Zsh's git completion will dispatch "git issue <TAB>" to _git-issue.
+#
+#   Option 3 - Source directly (less robust, but works):
+#     source /path/to/git-issue.zsh
+
+# ---------------------------------------------------------------------------
+# Helper: list issue short IDs with their titles for descriptive completion
+# ---------------------------------------------------------------------------
+__git_issue_ids() {
+    local -a issues
+    local ref uuid short_id title
+
+    git for-each-ref --format='%(refname)' refs/issues/ 2>/dev/null | \
+        while IFS= read -r ref; do
+            uuid="${ref#refs/issues/}"
+            short_id="${uuid[1,7]}"
+            # Get title from root commit
+            local root
+            root="$(git rev-list --max-parents=0 "$ref" 2>/dev/null)" || continue
+            title="$(git log -1 --format='%s' "$root" 2>/dev/null)" || continue
+            printf '%s:%s\n' "$short_id" "$title"
+        done
+}
+
+# ---------------------------------------------------------------------------
+# Helper: list git remotes
+# ---------------------------------------------------------------------------
+__git_issue_remotes() {
+    local -a remotes
+    remotes=( ${(f)"$(git remote 2>/dev/null)"} )
+    _describe -t remotes 'git remote' remotes
+}
+
+# ---------------------------------------------------------------------------
+# Subcommand completion functions
+# ---------------------------------------------------------------------------
+
+_git-issue-create() {
+    _arguments -s \
+        '(-m --message)'{-m,--message}'[Issue description (body)]:message text: ' \
+        '*'{-l,--label}'[Add a label (repeatable)]:label: ' \
+        '(-a --assignee)'{-a,--assignee}'[Assign to someone]:assignee email: ' \
+        '(-p --priority)'{-p,--priority}'[Set priority level]:priority:(low medium high critical)' \
+        '--milestone[Set milestone]:milestone name: ' \
+        '(-h --help)'{-h,--help}'[Show help]' \
+        ':title: '
+}
+
+_git-issue-ls() {
+    _arguments -s \
+        '(-s --state)'{-s,--state}'[Filter by state]:state:(open closed all)' \
+        '(-l --label)'{-l,--label}'[Filter by label]:label: ' \
+        '--assignee[Filter by assignee]:assignee email: ' \
+        '--priority[Filter by priority]:priority:(low medium high critical)' \
+        '(-a --all)'{-a,--all}'[Show all issues (same as --state all)]' \
+        '(-f --format)'{-f,--format}'[Output format]:format:(short full oneline)' \
+        '--sort[Sort by field]:sort field:(created updated priority state)' \
+        '--reverse[Reverse sort order]' \
+        '(-h --help)'{-h,--help}'[Show help]'
+}
+
+_git-issue-show() {
+    _arguments -s \
+        '(-h --help)'{-h,--help}'[Show help]' \
+        ':issue ID:_git_issue_complete_ids'
+}
+
+_git-issue-comment() {
+    _arguments -s \
+        '(-m --message)'{-m,--message}'[Comment text (required)]:message text: ' \
+        '(-h --help)'{-h,--help}'[Show help]' \
+        ':issue ID:_git_issue_complete_ids'
+}
+
+_git-issue-edit() {
+    _arguments -s \
+        '(-t --title)'{-t,--title}'[Change the issue title]:new title: ' \
+        '*'{-l,--label}'[Set labels (replaces all; repeatable)]:label: ' \
+        '*--add-label[Add a label to existing labels]:label: ' \
+        '*--remove-label[Remove a label from existing labels]:label: ' \
+        '(-a --assignee)'{-a,--assignee}'[Change assignee]:assignee email: ' \
+        '(-p --priority)'{-p,--priority}'[Change priority]:priority:(low medium high critical)' \
+        '--milestone[Change milestone]:milestone name: ' \
+        '(-m --message)'{-m,--message}'[Custom commit message for the edit]:message text: ' \
+        '(-h --help)'{-h,--help}'[Show help]' \
+        ':issue ID:_git_issue_complete_ids'
+}
+
+_git-issue-state() {
+    _arguments -s \
+        '--open[Set state to open]' \
+        '--close[Set state to closed]' \
+        '--state[Set state to a custom value]:state value:(open closed)' \
+        '(-m --message)'{-m,--message}'[Add a message with the state change]:message text: ' \
+        '--fixed-by[Record the commit that fixes this issue]:commit SHA: ' \
+        '--release[Record the release version]:version: ' \
+        '--reason[Reason for closing]:reason:(duplicate wontfix invalid completed)' \
+        '(-h --help)'{-h,--help}'[Show help]' \
+        ':issue ID:_git_issue_complete_ids'
+}
+
+_git-issue-search() {
+    _arguments -s \
+        '(-s --state)'{-s,--state}'[Filter by state]:state:(open closed all)' \
+        '(-i --ignore-case)'{-i,--ignore-case}'[Case-insensitive search]' \
+        '(-h --help)'{-h,--help}'[Show help]' \
+        ':search pattern: '
+}
+
+_git-issue-import() {
+    _arguments -s \
+        '--state[Filter by state]:state:(open closed all)' \
+        '--dry-run[Show what would be imported without importing]' \
+        '(-h --help)'{-h,--help}'[Show help]' \
+        ':provider (github\:owner/repo): '
+}
+
+_git-issue-export() {
+    _arguments -s \
+        '--dry-run[Show what would be exported without exporting]' \
+        '(-h --help)'{-h,--help}'[Show help]' \
+        ':provider (github\:owner/repo): '
+}
+
+_git-issue-sync() {
+    _arguments -s \
+        '--state[Import filter state]:state:(open closed all)' \
+        '--dry-run[Show what would happen without making changes]' \
+        '(-h --help)'{-h,--help}'[Show help]' \
+        ':provider (github\:owner/repo): '
+}
+
+_git-issue-merge() {
+    _arguments -s \
+        '--check[Detect divergences without merging]' \
+        '--no-fetch[Skip fetch, use existing remote tracking refs]' \
+        '(-h --help)'{-h,--help}'[Show help]' \
+        ':remote:__git_issue_remotes'
+}
+
+_git-issue-fsck() {
+    _arguments -s \
+        '--quiet[Only show errors (no OK messages)]' \
+        '(-h --help)'{-h,--help}'[Show help]'
+}
+
+_git-issue-init() {
+    _arguments -s \
+        '(-h --help)'{-h,--help}'[Show help]' \
+        ':remote:__git_issue_remotes'
+}
+
+# ---------------------------------------------------------------------------
+# Helper: complete issue IDs with descriptions
+# ---------------------------------------------------------------------------
+_git_issue_complete_ids() {
+    local -a issue_list
+    local line
+
+    while IFS= read -r line; do
+        [[ -z "$line" ]] && continue
+        local id="${line%%:*}"
+        local desc="${line#*:}"
+        issue_list+=( "${id}:${desc}" )
+    done < <(__git_issue_ids)
+
+    _describe -t issues 'issue ID' issue_list
+}
+
+# ---------------------------------------------------------------------------
+# Main entry point
+# ---------------------------------------------------------------------------
+_git-issue() {
+    local -a subcommands
+    subcommands=(
+        'create:Create a new issue'
+        'ls:List issues'
+        'show:Show issue details and comments'
+        'comment:Add a comment to an issue'
+        'edit:Edit issue metadata (labels, assignee, priority, milestone)'
+        'state:Change the state of an issue'
+        'search:Search issues by text pattern'
+        'import:Import issues from an external provider'
+        'export:Export issues to an external provider'
+        'sync:Two-way sync (import + export)'
+        'merge:Merge issues from a remote'
+        'fsck:Validate issue data integrity'
+        'init:Configure the current repo for issue tracking'
+        'version:Print version information'
+    )
+
+    # If a subcommand has already been typed, dispatch to its handler
+    local curcontext="$curcontext" ret=1
+    if (( CURRENT > 2 )); then
+        local cmd="${words[2]}"
+        curcontext="${curcontext%:*:*}:git-issue-${cmd}:"
+
+        case "$cmd" in
+            create)  _git-issue-create  && ret=0 ;;
+            ls)      _git-issue-ls      && ret=0 ;;
+            show)    _git-issue-show    && ret=0 ;;
+            comment) _git-issue-comment && ret=0 ;;
+            edit)    _git-issue-edit    && ret=0 ;;
+            state)   _git-issue-state   && ret=0 ;;
+            search)  _git-issue-search  && ret=0 ;;
+            import)  _git-issue-import  && ret=0 ;;
+            export)  _git-issue-export  && ret=0 ;;
+            sync)    _git-issue-sync    && ret=0 ;;
+            merge)   _git-issue-merge   && ret=0 ;;
+            fsck)    _git-issue-fsck    && ret=0 ;;
+            init)    _git-issue-init    && ret=0 ;;
+            version) ;;  # no further completions
+            *)
+                _message "unknown subcommand: $cmd"
+                ;;
+        esac
+        return ret
+    fi
+
+    # First argument: complete subcommand name or top-level flags
+    _describe -t subcommands 'git-issue command' subcommands && ret=0
+    _arguments -s \
+        '(-h --help)'{-h,--help}'[Show help]' \
+        '(--version -v)'{--version,-v}'[Print version]' && ret=0
+
+    return ret
+}
+
+_git-issue "$@"

@@ -1,0 +1,255 @@
+# Source: https://github.com/Moon9t/IRIS/blob/7f5cd201f7a708163c8672b6198d71472a0976c9/installer/macos/build-pkg.sh
+# Repository: Moon9t/IRIS (installer/macos/build-pkg.sh)
+#!/usr/bin/env bash
+# ──────────────────────────────────────────────────────────────────────────
+# build-pkg.sh — Build a macOS .pkg installer for IRIS Language
+# ──────────────────────────────────────────────────────────────────────────
+# Usage:
+#   ./installer/macos/build-pkg.sh [--version 0.3.0] [--arch arm64]
+#
+# Produces: installer/dist/IRIS-<version>-macos-<arch>.pkg
+# Requires: macOS with pkgbuild and productbuild
+# ──────────────────────────────────────────────────────────────────────────
+set -euo pipefail
+
+VERSION="0.3.0"
+ARCH="$(uname -m)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --version) VERSION="$2"; shift 2 ;;
+        --arch)    ARCH="$2";    shift 2 ;;
+        *)         echo "Unknown argument: $1"; exit 1 ;;
+    esac
+done
+
+# Normalize arch
+case "$ARCH" in
+    x86_64|amd64) ARCH_LABEL="x64"   ;;
+    aarch64|arm64) ARCH_LABEL="arm64" ;;
+    *) echo "Unsupported arch: $ARCH"; exit 1 ;;
+esac
+
+echo "Building IRIS macOS .pkg v${VERSION} (${ARCH_LABEL})"
+
+# ── Paths ─────────────────────────────────────────────────────────────────
+DIST_DIR="$ROOT/installer/dist"
+STAGE_DIR="$DIST_DIR/pkg-staging"
+SCRIPTS_DIR="$DIST_DIR/pkg-scripts"
+RESOURCES_DIR="$DIST_DIR/pkg-resources"
+PKG_ID="dev.moon9t.iris"
+PKG_FILE="IRIS-${VERSION}-macos-${ARCH_LABEL}.pkg"
+COMP_PKG="$DIST_DIR/iris-component.pkg"
+
+# ── Clean ─────────────────────────────────────────────────────────────────
+rm -rf "$STAGE_DIR" "$SCRIPTS_DIR" "$RESOURCES_DIR" "$COMP_PKG"
+mkdir -p "$STAGE_DIR/usr/local/bin"
+mkdir -p "$STAGE_DIR/usr/local/share/iris/stdlib"
+mkdir -p "$STAGE_DIR/usr/local/share/iris/examples"
+mkdir -p "$STAGE_DIR/usr/local/share/iris/toolchain"
+mkdir -p "$STAGE_DIR/usr/local/share/doc/iris"
+mkdir -p "$SCRIPTS_DIR"
+mkdir -p "$RESOURCES_DIR"
+mkdir -p "$DIST_DIR"
+
+# ── Build release binary ─────────────────────────────────────────────────
+IRIS_BIN="$ROOT/target/release/iris"
+if [[ ! -f "$IRIS_BIN" ]]; then
+    echo "[1/6] Building release binary..."
+    (cd "$ROOT" && cargo build --release)
+else
+    echo "[1/6] Using existing release binary."
+fi
+
+# ── Stage files ───────────────────────────────────────────────────────────
+echo "[2/6] Staging files..."
+
+cp "$IRIS_BIN" "$STAGE_DIR/usr/local/bin/iris"
+chmod 755 "$STAGE_DIR/usr/local/bin/iris"
+strip "$STAGE_DIR/usr/local/bin/iris" 2>/dev/null || true
+
+# Strip quarantine
+xattr -cr "$STAGE_DIR/usr/local/bin/iris" 2>/dev/null || true
+
+# Stdlib
+cp -R "$ROOT/stdlib/"* "$STAGE_DIR/usr/local/share/iris/stdlib/" 2>/dev/null || true
+
+# Examples
+cp -R "$ROOT/examples/"* "$STAGE_DIR/usr/local/share/iris/examples/" 2>/dev/null || true
+
+# Bundled LLVM toolchain
+TOOLCHAIN_SRC="$ROOT/toolchain"
+if [[ -d "$TOOLCHAIN_SRC" ]]; then
+    cp -R "$TOOLCHAIN_SRC"/* "$STAGE_DIR/usr/local/share/iris/toolchain/" 2>/dev/null || true
+    echo "  Bundled LLVM toolchain"
+fi
+
+# Docs
+cp "$ROOT/LICENSE" "$STAGE_DIR/usr/local/share/doc/iris/"
+cp "$ROOT/README.md" "$STAGE_DIR/usr/local/share/doc/iris/"
+
+# ── Post-install script ──────────────────────────────────────────────────
+echo "[3/6] Creating installer scripts..."
+
+cat > "$SCRIPTS_DIR/postinstall" << 'POSTEOF'
+#!/bin/bash
+# Post-install: ensure /usr/local/bin is in PATH
+echo ""
+echo "  ✅ IRIS Language installed successfully!"
+echo ""
+echo "  The iris command is available at /usr/local/bin/iris"
+echo "  Run: iris --version"
+echo ""
+
+# Create shell completion for zsh
+COMP_DIR="/usr/local/share/zsh/site-functions"
+if [[ -d "$(dirname "$COMP_DIR")" ]]; then
+    mkdir -p "$COMP_DIR"
+    cat > "$COMP_DIR/_iris" << 'COMPEOF'
+#compdef iris
+_iris() {
+    local -a commands
+    commands=(
+        'run:Run an IRIS source file'
+        'build:Compile to native binary'
+        'repl:Start interactive REPL'
+        'lsp:Start Language Server'
+        'dap:Start Debug Adapter'
+        'bench:Run benchmarks'
+        'check:Check source for errors'
+        'fmt:Format source files'
+    )
+    _arguments \
+        '--version[Print version]' \
+        '--help[Print help]' \
+        '--emit[Emit type]:emit type:(ir llvm asm jit eval)' \
+        '-o[Output file]:output file:_files' \
+        '1:command:->cmds' \
+        '*:file:_files -g "*.iris"'
+    case "$state" in
+        cmds) _describe 'command' commands ;;
+    esac
+}
+_iris
+COMPEOF
+fi
+POSTEOF
+chmod 755 "$SCRIPTS_DIR/postinstall"
+
+# ── Resources (welcome, license, readme) ──────────────────────────────────
+echo "[4/6] Creating package resources..."
+
+cat > "$RESOURCES_DIR/welcome.html" << EOF
+<html>
+<body style="font-family: -apple-system, Helvetica, Arial; padding: 20px;">
+<h1>IRIS Language v${VERSION}</h1>
+<p><strong>Intermediate Representation for Intelligent Systems</strong></p>
+<p>This installer will install the IRIS programming language toolchain to
+<code>/usr/local</code>:</p>
+<ul>
+  <li><strong>iris</strong> — compiler, REPL, LSP, and DAP server</li>
+  <li><strong>stdlib</strong> — standard library modules</li>
+  <li><strong>examples</strong> — example IRIS programs</li>
+</ul>
+<p>After installation, open a terminal and run:</p>
+<pre>  iris --version</pre>
+<p>For native compilation (optional), install Xcode Command Line Tools:</p>
+<pre>  xcode-select --install</pre>
+</body>
+</html>
+EOF
+
+cp "$ROOT/LICENSE" "$RESOURCES_DIR/license.txt"
+
+cat > "$RESOURCES_DIR/conclusion.html" << EOF
+<html>
+<body style="font-family: -apple-system, Helvetica, Arial; padding: 20px;">
+<h1>Installation Complete! 🎉</h1>
+<p>IRIS has been installed to <code>/usr/local/bin/iris</code>.</p>
+<h3>Quick Start</h3>
+<pre>
+  iris --version                    # verify install
+  iris run hello.iris               # run a program
+  iris build hello.iris -o hello    # compile native binary
+  iris repl                         # interactive REPL
+</pre>
+<h3>VSCode Extension</h3>
+<p>Install the IRIS extension for syntax highlighting, diagnostics, and debugging:</p>
+<ol>
+  <li>Open VSCode</li>
+  <li>Search for "IRIS" in the Extensions Marketplace</li>
+  <li>Or install from terminal: <code>code --install-extension iris-lang-*.vsix</code></li>
+</ol>
+<p>Documentation: <a href="https://github.com/moon9t/iris">github.com/moon9t/iris</a></p>
+</body>
+</html>
+EOF
+
+# ── Build component package ──────────────────────────────────────────────
+echo "[5/6] Building component package..."
+
+pkgbuild \
+    --root "$STAGE_DIR" \
+    --identifier "$PKG_ID" \
+    --version "$VERSION" \
+    --scripts "$SCRIPTS_DIR" \
+    --install-location "/" \
+    "$COMP_PKG"
+
+# ── Build distribution package ───────────────────────────────────────────
+echo "[6/6] Building distribution package..."
+
+cat > "$DIST_DIR/distribution.xml" << EOF
+<?xml version="1.0" encoding="utf-8"?>
+<installer-gui-script minSpecVersion="2">
+    <title>IRIS Language v${VERSION}</title>
+    <organization>${PKG_ID}</organization>
+    <domains enable_localSystem="true" enable_currentUserHome="false"/>
+    <options customize="never" require-scripts="false" hostArchitectures="x86_64,arm64"/>
+
+    <welcome    file="welcome.html"/>
+    <license    file="license.txt"/>
+    <conclusion file="conclusion.html"/>
+
+    <choices-outline>
+        <line choice="default">
+            <line choice="iris"/>
+        </line>
+    </choices-outline>
+
+    <choice id="default"/>
+    <choice id="iris" visible="false">
+        <pkg-ref id="${PKG_ID}"/>
+    </choice>
+
+    <pkg-ref id="${PKG_ID}"
+             version="${VERSION}"
+             onConclusion="none">iris-component.pkg</pkg-ref>
+</installer-gui-script>
+EOF
+
+productbuild \
+    --distribution "$DIST_DIR/distribution.xml" \
+    --resources "$RESOURCES_DIR" \
+    --package-path "$DIST_DIR" \
+    "$DIST_DIR/$PKG_FILE"
+
+# ── Cleanup ───────────────────────────────────────────────────────────────
+rm -rf "$STAGE_DIR" "$SCRIPTS_DIR" "$RESOURCES_DIR" "$COMP_PKG" "$DIST_DIR/distribution.xml"
+
+echo ""
+echo "  Package ready: $DIST_DIR/$PKG_FILE"
+if [[ -f "$DIST_DIR/$PKG_FILE" ]]; then
+    SIZE_MB=$(du -m "$DIST_DIR/$PKG_FILE" | awk '{print $1}')
+    echo "  Size: ${SIZE_MB} MB"
+fi
+echo ""
+echo "  Install with:"
+echo "    sudo installer -pkg $PKG_FILE -target /"
+echo "    # or double-click the .pkg file in Finder"
+echo ""
+echo "  To sign for distribution (optional):"
+echo "    productsign --sign 'Developer ID Installer: ...' $PKG_FILE signed-$PKG_FILE"
+echo ""

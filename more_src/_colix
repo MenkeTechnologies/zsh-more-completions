@@ -1,0 +1,484 @@
+# Source: https://github.com/IAmRadek/macos-setup/blob/6554832b397b327a79f3106e8ac3414ac46eeee1/tools/colima/colix.sh
+# Repository: IAmRadek/macos-setup (tools/colima/colix.sh)
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_NAME="colix"
+
+# ────────────────────────────────────────────────────────────────────────────
+# Helper functions
+# ────────────────────────────────────────────────────────────────────────────
+
+_parse_hsize() {
+    local s="${1,,}" # lowercase
+    s="${s// /}"     # trim spaces
+
+    if [[ "$s" =~ ^([0-9.]+)gb$ ]]; then
+        echo "${BASH_REMATCH[1]} * 1024 * 1024 * 1024" | bc
+    elif [[ "$s" =~ ^([0-9.]+)mb$ ]]; then
+        echo "${BASH_REMATCH[1]} * 1024 * 1024" | bc
+    elif [[ "$s" =~ ^([0-9.]+)kb$ ]]; then
+        echo "${BASH_REMATCH[1]} * 1024" | bc
+    elif [[ "$s" =~ ^([0-9.]+)b?$ ]]; then
+        echo "${BASH_REMATCH[1]}"
+    else
+        echo "0"
+    fi
+}
+
+_command_exists() {
+    command -v "$1" >/dev/null 2>&1
+}
+
+# ────────────────────────────────────────────────────────────────────────────
+# Commands
+# ────────────────────────────────────────────────────────────────────────────
+
+cmd_help() {
+    cat <<EOF
+Usage: $SCRIPT_NAME <command> [options]
+
+Commands:
+  help              Show this help message
+  start             Start Colima and set Docker/K8s contexts
+  stop              Stop Colima
+  restart           Restart Colima
+  status            Show Colima status and Docker/K8s contexts
+  prune             Docker prune (incl. volumes) + builder prune
+  nuke              STOP and DELETE the Colima profile (DANGEROUS)
+  ssh               SSH into the Colima VM
+  images            List Docker images by size (desc)
+  ports             Show forwarded ports as proto://host:port
+  completions       Output shell completions
+
+Run '$SCRIPT_NAME <command> --help' for command-specific options.
+EOF
+}
+
+cmd_start() {
+    local profile="default"
+    local cpu=4
+    local mem=6
+    local disk=5
+    local vm="vz"
+    local k8s=false
+    local rosetta=false
+    local arch=""
+    local dns=""
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --profile=*) profile="${1#*=}"; shift ;;
+            --profile) profile="$2"; shift 2 ;;
+            --cpu=*) cpu="${1#*=}"; shift ;;
+            --cpu) cpu="$2"; shift 2 ;;
+            --mem=*) mem="${1#*=}"; shift ;;
+            --mem) mem="$2"; shift 2 ;;
+            --disk=*) disk="${1#*=}"; shift ;;
+            --disk) disk="$2"; shift 2 ;;
+            --vm=*) vm="${1#*=}"; shift ;;
+            --vm) vm="$2"; shift 2 ;;
+            --k8s) k8s=true; shift ;;
+            --rosetta) rosetta=true; shift ;;
+            --arch=*) arch="${1#*=}"; shift ;;
+            --arch) arch="$2"; shift 2 ;;
+            --dns=*) dns="${1#*=}"; shift ;;
+            --dns) dns="$2"; shift 2 ;;
+            --help|-h)
+                cat <<EOF
+Usage: $SCRIPT_NAME start [options]
+
+Start Colima and set Docker/K8s contexts.
+
+Options:
+  --profile=NAME    Colima profile name (default: default)
+  --cpu=N           vCPUs (default: 4)
+  --mem=N           Memory in GB (default: 6)
+  --disk=N          Disk in GB (default: 5)
+  --vm=TYPE         VM backend: vz|qemu (default: vz)
+  --k8s             Enable Kubernetes
+  --rosetta         Enable Rosetta for amd64 emulation (vz only)
+  --arch=ARCH       Guest arch: x86_64|aarch64
+  --dns=SERVER      Custom DNS server
+EOF
+                return 0
+                ;;
+            *) echo "Unknown option: $1" >&2; return 1 ;;
+        esac
+    done
+
+    local -a args=(
+        colima start
+        --profile "$profile"
+        --cpus "$cpu"
+        --memory "$mem"
+        --disk "$disk"
+        --vm-type "$vm"
+    )
+
+    [[ -n "$arch" ]] && args+=(--arch "$arch")
+    [[ "$k8s" == true ]] && args+=(--kubernetes)
+    [[ "$rosetta" == true ]] && args+=(--vz-rosetta)
+    [[ -n "$dns" ]] && args+=(--dns "$dns")
+
+    echo "→ ${args[*]}"
+    "${args[@]}"
+
+    if _command_exists docker; then
+        docker context use "colima-${profile}" 2>/dev/null || true
+        docker context use colima 2>/dev/null || true
+    fi
+
+    if _command_exists kubectl && [[ "$k8s" == true ]]; then
+        kubectl config use-context "colima-${profile}" 2>/dev/null || true
+    fi
+
+    cmd_status --profile="$profile"
+}
+
+cmd_stop() {
+    local profile="default"
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --profile=*) profile="${1#*=}"; shift ;;
+            --profile) profile="$2"; shift 2 ;;
+            --help|-h)
+                cat <<EOF
+Usage: $SCRIPT_NAME stop [options]
+
+Stop Colima.
+
+Options:
+  --profile=NAME    Colima profile name (default: default)
+EOF
+                return 0
+                ;;
+            *) echo "Unknown option: $1" >&2; return 1 ;;
+        esac
+    done
+
+    echo "→ colima stop --profile $profile"
+    colima stop --profile "$profile"
+}
+
+cmd_restart() {
+    local profile="default"
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --profile=*) profile="${1#*=}"; shift ;;
+            --profile) profile="$2"; shift 2 ;;
+            --help|-h)
+                cat <<EOF
+Usage: $SCRIPT_NAME restart [options]
+
+Restart Colima.
+
+Options:
+  --profile=NAME    Colima profile name (default: default)
+EOF
+                return 0
+                ;;
+            *) echo "Unknown option: $1" >&2; return 1 ;;
+        esac
+    done
+
+    echo "→ colima restart --profile $profile"
+    colima restart --profile "$profile"
+}
+
+cmd_status() {
+    local profile="default"
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --profile=*) profile="${1#*=}"; shift ;;
+            --profile) profile="$2"; shift 2 ;;
+            --help|-h)
+                cat <<EOF
+Usage: $SCRIPT_NAME status [options]
+
+Show Colima status and Docker/K8s contexts.
+
+Options:
+  --profile=NAME    Colima profile name (default: default)
+EOF
+                return 0
+                ;;
+            *) echo "Unknown option: $1" >&2; return 1 ;;
+        esac
+    done
+
+    colima status --profile "$profile" || true
+
+    if _command_exists docker; then
+        local ctx
+        ctx=$(docker context show 2>/dev/null) || ctx="n/a"
+        echo "Docker context: $ctx"
+    fi
+
+    if _command_exists kubectl; then
+        local k8s_ctx
+        k8s_ctx=$(kubectl config current-context 2>/dev/null) || true
+        [[ -n "$k8s_ctx" ]] && echo "K8s context: $k8s_ctx"
+    fi
+}
+
+cmd_prune() {
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --help|-h)
+                cat <<EOF
+Usage: $SCRIPT_NAME prune
+
+Docker prune (incl. volumes) + builder prune.
+EOF
+                return 0
+                ;;
+            *) echo "Unknown option: $1" >&2; return 1 ;;
+        esac
+    done
+
+    echo "→ docker system prune -f --volumes"
+    docker system prune -f --volumes || true
+
+    echo "→ docker builder prune -f"
+    docker builder prune -f || true
+}
+
+cmd_nuke() {
+    local profile=""
+    local yes=false
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --profile=*) profile="${1#*=}"; shift ;;
+            --profile) profile="$2"; shift 2 ;;
+            --yes|-y) yes=true; shift ;;
+            --help|-h)
+                cat <<EOF
+Usage: $SCRIPT_NAME nuke --profile=NAME [options]
+
+STOP and DELETE the Colima profile (DANGEROUS).
+
+Options:
+  --profile=NAME    Colima profile name (REQUIRED)
+  --yes, -y         Skip confirmation
+EOF
+                return 0
+                ;;
+            *) echo "Unknown option: $1" >&2; return 1 ;;
+        esac
+    done
+
+    if [[ -z "$profile" ]]; then
+        echo "Error: --profile is required" >&2
+        return 1
+    fi
+
+    if [[ "$yes" != true ]]; then
+        read -rp "This will STOP and DELETE Colima profile '$profile'. Continue? (y/N) " ans
+        if [[ "${ans,,}" != "y" ]]; then
+            echo "Aborted."
+            return 0
+        fi
+    fi
+
+    colima stop --profile "$profile" || true
+    colima delete --profile "$profile"
+}
+
+cmd_ssh() {
+    local profile="default"
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --profile=*) profile="${1#*=}"; shift ;;
+            --profile) profile="$2"; shift 2 ;;
+            --help|-h)
+                cat <<EOF
+Usage: $SCRIPT_NAME ssh [options]
+
+SSH into the Colima VM.
+
+Options:
+  --profile=NAME    Colima profile name (default: default)
+EOF
+                return 0
+                ;;
+            *) echo "Unknown option: $1" >&2; return 1 ;;
+        esac
+    done
+
+    colima ssh --profile "$profile"
+}
+
+cmd_images() {
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --help|-h)
+                cat <<EOF
+Usage: $SCRIPT_NAME images
+
+List Docker images by size (descending).
+EOF
+                return 0
+                ;;
+            *) echo "Unknown option: $1" >&2; return 1 ;;
+        esac
+    done
+
+    local output
+    output=$(docker images --format "{{.Repository}}:{{.Tag}}\t{{.Size}}" 2>/dev/null) || return 0
+
+    # Parse and sort by size
+    local -a rows=()
+    while IFS=$'\t' read -r name size; do
+        [[ -z "$name" ]] && continue
+        local bytes
+        bytes=$(_parse_hsize "$size")
+        rows+=("$bytes|$name|$size")
+    done <<< "$output"
+
+    # Sort numerically descending and print
+    printf '%s\n' "${rows[@]}" | sort -t'|' -k1 -rn | while IFS='|' read -r _ name size; do
+        printf '%s\t%s\n' "$name" "$size"
+    done
+}
+
+cmd_ports() {
+    local profile="default"
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --profile=*) profile="${1#*=}"; shift ;;
+            --profile) profile="$2"; shift 2 ;;
+            --help|-h)
+                cat <<EOF
+Usage: $SCRIPT_NAME ports [options]
+
+Show forwarded ports as proto://host:port.
+
+Options:
+  --profile=NAME    Colima profile name (default: default)
+EOF
+                return 0
+                ;;
+            *) echo "Unknown option: $1" >&2; return 1 ;;
+        esac
+    done
+
+    local json_output
+    json_output=$(colima list --json 2>/dev/null) || return 0
+    [[ -z "$json_output" ]] && return 0
+
+    if ! _command_exists jq; then
+        echo "Error: jq is required for ports command" >&2
+        return 1
+    fi
+
+    # Extract ports for the specified profile using jq
+    echo "$json_output" | jq -r --arg profile "$profile" '
+        .. | objects | select(.name == $profile or .profile == $profile) |
+        .. | objects | select(.host and .port and .proto) |
+        "\(.proto)://\(.host):\(.port)"
+    ' 2>/dev/null | sort -u
+}
+
+cmd_completions() {
+    cat <<'EOF'
+#compdef colix
+
+_colix() {
+    local -a commands
+    commands=(
+        'help:Show help message'
+        'start:Start Colima and set Docker/K8s contexts'
+        'stop:Stop Colima'
+        'restart:Restart Colima'
+        'status:Show Colima status and Docker/K8s contexts'
+        'prune:Docker prune (incl. volumes) + builder prune'
+        'nuke:STOP and DELETE the Colima profile (DANGEROUS)'
+        'ssh:SSH into the Colima VM'
+        'images:List Docker images by size (desc)'
+        'ports:Show forwarded ports'
+        'completions:Output shell completions'
+    )
+
+    _arguments -C \
+        '1:command:->command' \
+        '*::arg:->args'
+
+    case "$state" in
+        command)
+            _describe -t commands 'colix commands' commands
+            ;;
+        args)
+            case "$words[1]" in
+                start)
+                    _arguments \
+                        '--profile=[Colima profile name]:profile:' \
+                        '--cpu=[vCPUs]:cpus:' \
+                        '--mem=[Memory in GB]:memory:' \
+                        '--disk=[Disk in GB]:disk:' \
+                        '--vm=[VM backend]:vm:(vz qemu)' \
+                        '--k8s[Enable Kubernetes]' \
+                        '--rosetta[Enable Rosetta for amd64 emulation]' \
+                        '--arch=[Guest architecture]:arch:(x86_64 aarch64)' \
+                        '--dns=[Custom DNS server]:dns:' \
+                        '--help[Show help]'
+                    ;;
+                stop|restart|status|ssh|ports)
+                    _arguments \
+                        '--profile=[Colima profile name]:profile:' \
+                        '--help[Show help]'
+                    ;;
+                nuke)
+                    _arguments \
+                        '--profile=[Colima profile name]:profile:' \
+                        '--yes[Skip confirmation]' \
+                        '--help[Show help]'
+                    ;;
+                prune|images|help|completions)
+                    _arguments \
+                        '--help[Show help]'
+                    ;;
+            esac
+            ;;
+    esac
+}
+
+_colix "$@"
+EOF
+}
+
+# ────────────────────────────────────────────────────────────────────────────
+# Main dispatch
+# ────────────────────────────────────────────────────────────────────────────
+
+main() {
+    local cmd="${1:-help}"
+    shift || true
+
+    case "$cmd" in
+        help|--help|-h) cmd_help ;;
+        start) cmd_start "$@" ;;
+        stop) cmd_stop "$@" ;;
+        restart) cmd_restart "$@" ;;
+        status) cmd_status "$@" ;;
+        prune) cmd_prune "$@" ;;
+        nuke) cmd_nuke "$@" ;;
+        ssh) cmd_ssh "$@" ;;
+        images) cmd_images "$@" ;;
+        ports) cmd_ports "$@" ;;
+        completions) cmd_completions "$@" ;;
+        *)
+            echo "Unknown command: $cmd" >&2
+            echo "Run '$SCRIPT_NAME help' for usage." >&2
+            return 1
+            ;;
+    esac
+}
+
+main "$@"

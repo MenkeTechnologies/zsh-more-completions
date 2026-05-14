@@ -1,0 +1,1318 @@
+# Source: https://github.com/jv-k/macup/blob/80d59f9200fb690f7dd99585b51d853c6f1a463f/bin/macos-updatetool
+# Repository: jv-k/macup (bin/macos-updatetool)
+#!/bin/zsh
+
+# This script manages the installation & updates of my apps and packages on macOS.
+#
+# It's designed to be used in a Zsh environment and can be sourced or executed directly.
+#
+# Author:
+#   John Valai <git@jvk.to>
+#
+# License:
+#   MIT License
+#
+# It can upgrade or install applications from multiple sources:
+#   * App Store (using mas)
+#   * npm
+#   * Homebrew (both formulas and casks)
+#
+# Configuration:
+#   * It relies on a file named `applist` (located in the same directory) to know which
+#     specific applications and packages to manage.
+#
+# Dependencies:
+#   * Homebrew: For managing formulas and casks.
+#   * mas-cli: For managing Mac App Store applications.
+#   * npm: For managing global Node.js packages.
+#   * Oh My Zsh & zinit: For managing Zsh configuration.
+#   * pip3: For managing python packages.
+#   * Xcode Command Line Tools: MacOS tool for compiling and installing software.`
+#   * softwareupdate: Built-in MacOS tool for system updates.
+#
+# Usage:
+#   * Run it with different flags to perform specific actions, for example:
+#     -h, --help: To see all available options.
+#     -l, --list, --list-all: To list all the apps.
+#     --list-npm: Lists all npm packages.
+#     --list-brew-formulas, --list-formulas: Lists all brew formulas.
+#     --list-brew-casks, --list-casks: Lists all brew casks.
+#     --list-appstore Lists all App Store applications.
+#     --list-xcode: Lists Xcode info.
+#     --list-xcode-tools: Lists Xcode Command Line Tools info.
+#     --outdated: Use with --list-* to show only outdated packages.
+#     --upgrade-brew: Upgrade Homebrew formulas.
+#     --upgrade-npm: Upgrade npm packages.
+#     --upgrade-casks: Upgrade Homebrew casks.
+#     --upgrade-appstore: Upgrade Mac App Store apps.
+#     --upgrade-xcode: Upgrade Xcode.
+#     --upgrade-xcode-tools: Upgrade Xcode Command Line Tools.
+#     --install-brew: Install Homebrew formulas.
+#     --install-npm: Install npm packages.
+#     --install-casks: Install Homebrew casks.
+#     --install-appstore: Install Mac App Store apps.
+#     --install-xcode: Install Xcode.
+#     --install-xcode-tools: Install Xcode Command Line Tools.
+#     --update-all: Perform ALL updates in sequence.
+#     --install-all: Perform ALL installations in sequence.
+#     --completion: Generate zsh completion script.
+#     -a, --add <app> <category>: Add an app to the applist.
+#     -r, --remove <app> <category>: Remove an app from the applist.
+
+# Source the styles file for colors, text formatting, and symbols
+source "${0:A:h}/styles.zsh"
+
+# Define the path to the applist file, which should contain the lists of apps to be managed.
+APPLIST="$HOME/.config/macos-updatetool/applist.yaml"
+
+# Generates the shell completion script for this utility.
+shell_completion() {
+  cat <<'EOF'
+autoload -Uz compinit bashcompinit
+compinit
+bashcompinit
+
+#‑completion start
+#compdef update-my-stuff
+
+_update_my_stuff() {
+  local -a cats
+  cats=('appstore:AppStore apps' \
+        'npm:NPM packages' \
+        'brew:Homebrew formulae' \
+        'cask:Homebrew casks')
+  
+  _arguments -C -s -S \
+    '1:options:->opt' \
+    '*: : ->args'
+
+  case $state in
+    opt)
+      _values 'options' \
+        '--help[-h]' \
+        '--list[-l]' \
+        '--list-npm' '--list-brew-formulas' '--list-formulas' '--list-brew-casks' '--list-casks' '--list-appstore' '--list-xcode' '--list-xcode-tools' \
+        '--outdated' \
+        '--update-all' \
+        '--upgrade-npm' '--upgrade-brew' '--upgrade-casks' '--upgrade-appstore' \
+        '--upgrade-xcode' '--upgrade-xcode-tools' \
+        '--install-all' '--install-npm' '--install-brew' '--install-casks' '--install-appstore' \
+        '--install-xcode' '--install-xcode-tools' \
+        '--completion' \
+        '--add[-a]' \
+        '--remove[-r]'
+      ;;
+    args)
+      case "${words[2]}" in
+        -a|--add|-r|--remove)
+          if (( CURRENT == 3 )); then
+            # show placeholder for app name
+            _describe 'app name' ''
+          elif (( CURRENT == 4 )); then
+            # List categories with descriptions
+            _describe 'category' cats
+            # compadd "${cats[@]}"
+          else
+            compstate[nolist]=1
+          fi
+          ;;
+        *)
+          compstate[nolist]=1
+          ;;
+      esac
+      ;;
+  esac
+}
+
+compdef _update_my_stuff update-my-stuff
+#‑completion end
+EOF
+}
+
+# Displays the help message with all available options.
+show_help() {
+  printf "\nUsage:\n\nupdate-my-stuff [options]\n\n"
+  printf "This script manages the installation & updates of my apps and packages on macOS."
+  printf "\n\nOptions:"
+  printf "\n  -h,--help \t\t Show this help message."
+  printf "\n  -l,--list,--list-all \t Lists all apps with status indicators."
+  printf "\n  --list-npm \t\t Lists all npm packages with status."
+  printf "\n  --list-brew-formulas \t Lists all brew formulas with status."
+  printf "\n  --list-brew-casks \t Lists all brew casks with status."
+  printf "\n  --list-appstore \t Lists all App Store applications with status."
+  printf "\n  --list-xcode \t\t Lists Xcode info with status."
+  printf "\n  --list-xcode-tools \t Lists Xcode Command Line Tools info with status."
+  printf "\n  --outdated \t\t Use with --list-* to show only outdated packages.\n"
+  printf "\n  Status indicators:"
+  printf "\n    ✔ Up-to-date    ! Outdated    ✖ Not installed\n"
+  printf "\n  -a,--add <app> <category>\n\t\t\t Adds an app to a category (npm, appstore, brew, cask)."
+  printf "\n  -r,--remove <app> <category>\n\t\t\t Removes an app from a category.\n"
+  printf "\n  --update-all\t\t Performs all updates in sequence."
+  printf "\n  --upgrade-npm \t Upgrades all global npm packages."
+  printf "\n  --upgrade-brew \t Upgrades all brew formulas."
+  printf "\n  --upgrade-casks \t Upgrades all brew casks."
+  printf "\n  --upgrade-appstore \t Upgrades all App Store applications."
+  printf "\n  --upgrade-xcode \t Upgrades Xcode."
+  printf "\n  --upgrade-xcode-tools\t Upgrades Xcode Command Line Tools.\n"
+  printf "\n  --install-all\t\t Installs all applications and packages."
+  printf "\n  --install-npm\t\t Installs all global npm packages."
+  printf "\n  --install-brew\t Installs all brew formulas."
+  printf "\n  --install-casks\t Installs all brew casks."
+  printf "\n  --install-appstore\t Installs all App Store applications."
+  printf "\n  --install-xcode\t Installs Xcode."
+  printf "\n  --install-xcode-tools\t Installs Xcode Command Line Tools.\n"
+  printf "\n  --completion\t\t Generate zsh completion script.\n"
+  printf "\nExamples:"
+  printf "\n  update-my-stuff --list-all"
+  printf "\n  update-my-stuff --list-npm --outdated"
+  printf "\n  update-my-stuff --list-formulas --outdated"
+  printf "\n  update-my-stuff --upgrade-brew\n"
+}
+
+# Output utilities for clean messages
+
+# @param {...string} args - Message text to display
+# @param --color - Optional flag to make the entire message text colored
+msg_info() {
+  local message=""
+  local indent=""
+  local text_color=""
+  # Check for --color flag
+  if [[ "$1" == "--color" ]]; then
+    text_color="${COLORS[CYAN]}"
+    shift
+  fi
+  message="$*"
+  # if two spaces present at the start of $message, then remove it from $message:
+  if [[ $message == "  "* ]]; then
+    message="${message:2}"
+    indent="  "
+  fi
+  echo -e "$indent${COLORS[CYAN]}${SYMBOLS[INFO]}${COLORS[RESET]} ${text_color}${TEXT[ITALIC]}${message## }${TEXT[RESET]}"
+}
+
+# @param {...string} args - Message text to display
+msg_header() {
+  local message=""
+  local indent=""
+  local text_color=""
+  # Check for --color flag
+  if [[ "$1" == "--color" ]]; then
+    text_color="${COLORS[LIGHT_CYAN]}"
+    shift
+  fi
+  message="$*"
+  # if two spaces present at the start of $message, then remove it from $message:
+  if [[ $message == "  "* ]]; then
+    message="${message:2}"
+    indent="  "
+  fi
+  echo -e "$indent${COLORS[LIGHT_CYAN]}${TEXT[UNDERLINE]}${TEXT[BOLD]}${text_color}${message## }${TEXT[RESET]}"
+}
+
+# @param {...string} args - Message text to display
+# @param --color - Optional flag to make the entire message text colored
+msg_muted() {
+  local message=""
+  local indent=""
+  local text_color=""
+  # Check for --color flag
+  if [[ "$1" == "--color" ]]; then
+    text_color="${COLORS[LIGHT_GRAY]}"
+    shift
+  fi
+  message="$*"
+  # if two spaces present at the start of $message, then remove it from $message:
+  if [[ $message == "  "* ]]; then
+    message="${message:2}"
+    indent="  "
+  fi
+  echo -e "$indent${COLORS[LIGHT_GRAY]}${TEXT[UNDERLINE]}${text_color}${message## }${TEXT[RESET]}"
+}
+
+# @param {...string} args - Message text to display
+# @param --color - Optional flag to make the entire message text colored
+msg_success() {
+  local message=""
+  local indent=""
+  local text_color=""
+  # Check for --color flag
+  if [[ "$1" == "--color" ]]; then
+    text_color="${COLORS[GREEN]}"
+    shift
+  fi
+  message="$*"
+  # if two spaces present at the start of $message, then remove it from $message:
+  if [[ $message == "  "* ]]; then
+    message="${message:2}"
+    indent="  "
+  fi
+  echo -e "$indent${COLORS[GREEN]}${SYMBOLS[SUCCESS]}${COLORS[RESET]} ${text_color}${message## }${TEXT[RESET]}"
+}
+
+# @param {...string} args - Message text to display
+# @param --color - Optional flag to make the entire message text colored
+msg_warning() {
+  local message=""
+  local indent=""
+  local text_color=""
+  # Check for --color flag
+  if [[ "$1" == "--color" ]]; then
+    text_color="${COLORS[YELLOW]}"
+    shift
+  fi  
+  message="$*"
+  # if two spaces present at the start of $message, then remove it from $message:
+  if [[ $message == "  "* ]]; then
+    message="${message:2}"
+    indent="  "
+  fi
+  echo -e "$indent${COLORS[YELLOW]}${SYMBOLS[WARNING]}${COLORS[RESET]} ${text_color}${message## }${TEXT[RESET]}"
+}
+
+# @param {...string} args - Message text to display
+# @param --color - Optional flag to make the entire message text colored
+msg_error() {
+  local message=""
+  local indent=""
+  local text_color=""
+  # Check for --color flag
+  if [[ "$1" == "--color" ]]; then
+    text_color="${COLORS[RED]}"
+    shift
+  fi
+  message="$*"
+  # if two spaces present at the start of $message, then remove it from $message:
+  if [[ $message == "  "* ]]; then
+    message="${message:2}"
+    indent="  "
+  fi
+  echo -e "$indent${COLORS[RED]}${SYMBOLS[DANGER]}${COLORS[RESET]} ${text_color}${message## }${TEXT[RESET]}"
+}
+
+# @param {...string} args - Message text to display
+msg_bullet() {
+  local message=""
+  local indent=""
+  local text_color=""
+  # Check for --color flag
+  if [[ "$1" == "--color" ]]; then
+    text_color="${COLORS[MAGENTA]}"
+    shift
+  fi
+  message="$*"
+  # if two spaces present at the start of $message, then remove it from $message:
+  if [[ $message == "  "* ]]; then
+    message="${message:2}"
+    indent="  "
+  fi
+  echo -e "$indent${COLORS[MAGENTA]}${SYMBOLS[BULLET]}${COLORS[RESET]} ${text_color}${message## }${TEXT[RESET]}"
+}
+
+# @param {...string} args - Message text to display
+# @param --color - Optional flag to make the entire message text colored
+msg_question() {
+  local message=""
+  local indent=""
+  local text_color=""
+  # Check for --color flag
+  if [[ "$1" == "--color" ]]; then
+    text_color="${COLORS[YELLOW]}"
+    shift
+  fi
+  message="$*"
+  # if two spaces present at the start of $message, then remove it from $message:
+  if [[ $message == "  "* ]]; then
+    message="${message:2}"
+    indent="  "
+  fi
+  echo -e "$indent${COLORS[YELLOW]}${SYMBOLS[QUESTION]}${COLORS[RESET]} ${text_color}${message## }${TEXT[RESET]}"
+}
+
+# Shows a spinner while a background command is running
+# @param {string} message - Message to display with spinner
+# @param {string} command - Command to run in background
+# @param {string} [timeout] - Optional timeout in seconds (default: 30)
+show_spinner() {
+  local message="$1"
+  local command="$2"
+  local timeout="${3:-30}"
+  local spinner_chars="⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+  local temp_file=$(mktemp)
+  local temp_err=$(mktemp)
+  local pid
+
+  # Start command in background
+  eval "$command" > "$temp_file" 2> "$temp_err" &
+  pid=$!
+
+  # Show spinner while command runs
+  local i=0
+  while kill -0 $pid 2>/dev/null; do
+    local spinner_char=${spinner_chars:$((i % ${#spinner_chars})):1}
+    printf "\r  ${COLORS[CYAN]}$spinner_char${COLORS[RESET]} $message"
+    sleep 0.1
+    ((i++))
+    
+    # Check for timeout
+    if [[ $((i / 10)) -gt $timeout ]]; then
+      kill $pid 2>/dev/null
+      printf "\r  ${COLORS[RED]}✗${COLORS[RESET]} $message (timeout)\n"
+      rm -f "$temp_file" "$temp_err"
+      return 1
+    fi
+  done
+
+  # Wait for command to finish and get exit code
+  wait $pid
+  local exit_code=$?
+
+  # Clear spinner line and show result
+  printf "\r"
+  if [[ $exit_code -eq 0 ]]; then
+    msg_success --color "  $message"
+    cat "$temp_file"
+  else
+    msg_error --color "  $message (failed)"
+    cat "$temp_err" >&2
+  fi
+
+  rm -f "$temp_file" "$temp_err"
+  return $exit_code
+}
+
+# Manages the applist.yaml file.
+# Acceptable categories are: appstore_apps, npm_apps, brew_formulas, brew_casks
+# @param {string} action - The action to perform ("add" or "remove")
+# @param {string} app_name - The name of the application
+# @param {string} category - The category ("appstore", "npm", "brew", "cask")
+# @returns {number} 0 on success, 1 on error
+manage_applist() {
+  local action="$1" app_name="$2" category="$3"
+  local valid_categories=("appstore" "npm" "brew" "cask")
+  local key="${category}_apps"
+
+  # Validate action
+  if [[ "$action" != "add" && "$action" != "remove" ]]; then
+    msg_error "Invalid action '$action' — use 'add' or 'remove'." >&2
+    return 1
+  fi
+
+  # Validate category
+  if [[ ! " ${valid_categories[*]} " =~ " ${category} " ]]; then
+    msg_error --color "Invalid category '$category'. Must be one of: ${valid_categories[*]}." >&2
+    return 1
+  fi
+
+  # Existence check (strip quotes from YAML output)
+  if yq ".${key}[]" "$APPLIST" \
+     | sed "s/^['\"]//; s/['\"]$//" \
+     | grep -Fxq "$app_name"; then
+    if [[ "$action" == "add" ]]; then
+      msg_warning "'$app_name' already exists in '$category'. Skipping."
+      return 0
+    fi
+  else
+    if [[ "$action" == "remove" ]]; then
+      msg_warning "'$app_name' not found in '$category'. Nothing to remove."
+      return 0
+    fi
+  fi
+
+  # Perform action with proper quoting
+  if [[ "$action" == "add" ]]; then
+    yq -i '
+      .'"${key}"' += ["'"${app_name}"'"] |
+      .'"${key}"'[-1] style="single"
+    ' "$APPLIST" \
+    && msg_success "Added '$app_name' to '$category'."
+  else
+    yq -i '
+      del(.'"${key}"'[] | select(. == "'"${app_name}"'"))
+    ' "$APPLIST" \
+    && msg_success "Removed '$app_name' from '$category'."
+  fi
+}
+
+# Creates a default applist.yaml file with common applications
+# @returns {number} 0 on success, 1 on error
+create_default_applist() {
+  local applist_dir="$(dirname "$APPLIST")"
+  
+  # Create directory if it doesn't exist
+  if [ ! -d "$applist_dir" ]; then
+    if ! mkdir -p "$applist_dir"; then
+      msg_error "Failed to create directory: $applist_dir"
+      return 1
+    fi
+  fi
+
+  # Create default applist.yaml
+  cat > "$APPLIST" << 'EOF'
+---
+# macOS Application and Package List
+# This file defines the apps and packages to be managed by macos-updatetool
+
+# Mac App Store applications (use app names as they appear in the store)
+appstore_apps:
+# - 'Color Picker'
+# - 'Command X'
+
+# Global npm packages
+npm_apps:
+# - '@anthropic-ai/claude-code'
+# - 'gemini-cli'
+
+# Homebrew formulas (command-line tools)
+brew_formulas:
+# - 'git'
+# - 'gh'
+# - 'git-credential-manager'
+# - 'python'
+
+# Homebrew casks (GUI applications)
+brew_casks:
+#  - 'warp'
+#  - 'iterm2'
+EOF
+
+  if [ $? -eq 0 ]; then
+    msg_success "  Created default applist.yaml at: $APPLIST\n"
+    msg_info "  You can now edit this file to customize your application list.\n"
+    return 0
+  else
+    msg_error "Failed to create default applist.yaml\n"
+    return 1
+  fi
+}
+
+# Checks the applist file for existence, YAML validity, and required sections.
+# @returns {number} 0 if all checks pass, 1 if any check fails
+check_applist_file() {
+  # Check for applist file existence
+  if [ ! -f "$APPLIST" ]; then
+    msg_error --color "Config Error: Applist file not found at <$APPLIST>" >&2
+    echo
+    msg_question --color "Would you like to create a default applist.yaml file? (y/N)"
+    read -r response
+    case "$response" in
+      [yY][eE][sS]|[yY])
+        if create_default_applist; then
+          msg_success --color "Default applist.yaml created successfully!"
+          echo
+        else
+          msg_error "Failed to create applist file. Exiting."
+          exit 1
+        fi
+        ;;
+      *)
+        msg_info "Skipping applist creation. You can create it manually later.\n"
+        msg_error --color "Cannot proceed without applist file. Exiting."
+        exit 1
+        ;;
+    esac
+  fi
+
+  # Validate applist.yaml using yamllint
+  if ! yamllint "$APPLIST" &> /dev/null; then
+    msg_error --color "Config Error: Applist file at \`$APPLIST\` is not a valid YAML file. Please fix it." >&2
+    exit 1
+  fi
+
+  # 3. Check if yq can parse the applist file and if required keys exist
+  local -a required_keys=("appstore_apps" "npm_apps" "brew_formulas" "brew_casks")
+  local -a missing_keys
+  for key in "${required_keys[@]}"; do
+    if ! yq -e ".${key}" "$APPLIST" &> /dev/null; then
+      missing_keys+=("$key")
+    fi
+  done
+
+  if [[ ${#missing_keys[@]} -gt 0 ]]; then
+    msg_error "Config Error: The following keys are not defined or are empty in the applist file:" >&2
+    for key in "${missing_keys[@]}"; do
+      msg_bullet "  $key" >&2
+    done
+    exit 1
+  fi
+  msg_success --color "YAML Config <$APPLIST> checks OK."
+}
+
+# Checks for all required dependencies, including the Zsh environment.
+# If any are missing, it prints an error and exits.
+# @returns {number} 0 if all dependencies are available, 1 if any are missing
+check_dependencies() {
+  # Check for Zsh environment
+  if [ -z "$ZSH_VERSION" ]; then
+    msg_error "Error: This script is designed to be run with Zsh.\n" >&2
+    return 1
+  fi
+
+  # Check required CLI tools
+  local -a missing_deps
+  local -a dependencies=("brew" "mas" "npm" "omz" "zinit" "pip3" "xcode-select" "yq")
+
+  for dep in "${dependencies[@]}"; do
+    if ! command -v "$dep" &> /dev/null; then
+      missing_deps+=("$dep")
+    fi
+  done
+
+  if [[ ${#missing_deps[@]} -gt 0 ]]; then
+    msg_error --color "Missing required command-line tools. Please install the following:" >&2
+    for dep in "${missing_deps[@]}"; do
+      msg_bullet "  $dep" >&2
+    done
+    echo
+    return 1
+  fi
+
+  msg_success "Dependencies check OK."
+}
+
+# Wrapper function for 'brew upgrade'.
+# It prints a header and then executes the brew upgrade command.
+br_upgrade() {
+  printf "🚀 Running: brew upgrade %s\n\n" "$*"
+  brew -v upgrade $1 $2 $3 $4 $5 $6; _hr
+}
+
+# Wrapper function for 'brew install'.
+# It prints a header and then executes the brew install command.
+br_install() {
+  printf "🚀 Running: brew install %s\n\n" "$*"
+  brew -v install $1 $2 $3 $4 $5 $6; _hr
+}
+
+# Generic command runner.
+# It prints the command being run and then executes it using eval.
+cmd_run() {
+  printf "🚀 Running: %s\n\n" "$*"
+  eval "$1 $2 $3 $4 $5 $6"; _hr
+}
+
+# Prints a horizontal rule to visually separate sections of the output.
+_hr() {
+  echo -e "\n\e[1;34m$(printf '%*s\n\n' "${COLUMNS:-$(tput cols)}" '' | tr ' ' -)\e[0m\n"
+}
+# Checks if App Store apps need updates and upgrades them
+# @returns {number} 0 on success, 1 on error
+upgrade_appstore_apps() {
+  msg_bullet "Checking for App Store app updates...\n"
+
+  br_upgrade mas && \
+
+  local -a appstore_apps=("${(@f)$(yq -r '.appstore_apps[]' "$APPLIST")}")
+  for app in "${appstore_apps[@]}"; do
+    cmd_run mas upgrade "\"${app}\"" && \
+  done
+
+  # FINISH UP: Check for any remaining outdated apps and system updates.
+  # --------
+  cmd_run mas outdated && \
+  cmd_run softwareupdate --list
+  
+  echo
+}
+
+# Installs applications from the Mac App Store.
+# @returns {number} 0 on success, 1 on error
+install_appstore_apps() {
+  local -a appstore_apps=("${(@f)$(yq -r '.appstore_apps[]' "$APPLIST")}")
+  msg_bullet "Installing App Store apps...\n"
+  for app in "${appstore_apps[@]}"; do
+    cmd_run mas install "\"${app}\"" && \
+  done
+}
+
+# Upgrades globally installed npm packages.
+# @returns {number} 0 on success, 1 on error
+upgrade_npm_apps() {
+  # Update npm itself
+  cmd_run npm update -g npm
+  local -a npm_apps=("${(@f)$(yq -r '.npm_apps[]' "$APPLIST")}")
+  msg_bullet "Checking for npm package updates...\n"
+  for app in "${npm_apps[@]}"; do
+    cmd_run npm update -g "${app}" && \
+  done
+  
+  echo
+}
+
+# Installs globally installed npm packages.
+# It sources the app list and then installs each package.
+install_npm_apps() {
+  printf "📦 Install NPM packages... \n" && _hr
+  local -a npm_apps=("${(@f)$(yq -r '.npm_apps[]' "$APPLIST")}")
+  for app in "${npm_apps[@]}"; do
+    cmd_run npm install -g "${app}" && \
+  done
+  
+  echo
+}
+
+# Upgrades Homebrew formulas.
+# @returns {number} 0 on success, 1 on error
+upgrade_brew_formulas() {
+  printf "📦 Upgrading Brew formulas... \n" && _hr
+  cmd_run brew update && \
+  local -a brew_apps=("${(@f)$(yq -r '.brew_formulas[]' "$APPLIST")}")
+  for app in "${brew_apps[@]}"; do
+  	br_upgrade "${app}" && \
+  done
+  
+  echo
+}
+
+# Installs Homebrew formulas.
+# @returns {number} 0 on success, 1 on error
+install_brew_formulas() {
+  printf "📦 Install Brew formulas... \n" && _hr
+  cmd_run brew update && \
+  local -a brew_apps=("${(@f)$(yq -r '.brew_formulas[]' "$APPLIST")}")
+  for app in "${brew_apps[@]}"; do
+  	br_install "${app}" && \
+  done
+  
+  echo
+}
+
+# Upgrades Homebrew Casks.
+# @returns {number} 0 on success, 1 on error
+upgrade_brew_casks() {
+  printf "📦 Upgrading Brew casks (⚠️ you need to close the apps)... \n" && _hr
+  local -a cask_apps=("${(@f)$(yq -r '.brew_casks[]' "$APPLIST")}")
+  for app in "${cask_apps[@]}"; do
+  	br_upgrade --cask "${app}" && \
+  done
+  
+  echo
+}
+
+# Installs Homebrew Casks.
+# @returns {number} 0 on success, 1 on error
+install_brew_casks() {
+  msg_bullet "Installing Homebrew casks...\n"
+  
+  local -a cask_apps=($(yq -r '.brew_casks[]' "$APPLIST"))
+  for app in "${cask_apps[@]}"; do
+  	br_install --cask "${app}" && \
+  done
+  
+  echo
+}
+
+# Upgrades Command Line Tools for Xcode
+# @returns {number} 0 on success, 1 on error
+upgrade_xcode_tools() {
+  printf "📦 Upgrading Xcode Command Line Tools... \n" && _hr
+  
+  # Check if Command Line Tools are installed
+  if ! xcode-select -p &> /dev/null; then
+    printf "⚠️  Command Line Tools not installed. Installing...\n"
+    cmd_run xcode-select --install
+    return $?
+  fi
+  
+  # Check for and install any Command Line Tools updates
+  local xcode_update_label
+  xcode_update_label=$(softwareupdate --list 2>/dev/null | grep -i "command line tools" | grep "Label:" | sed 's/^[[:space:]]*\*[[:space:]]*Label:[[:space:]]*//')
+
+  if [[ -n "$xcode_update_label" ]]; then
+    msg_info "Found Command Line Tools to update: $xcode_update_label"
+    # Install the specific Command Line Tools update
+    softwareupdate --install "$xcode_update_label" --verbose
+  else
+    msg_success "Command Line Tools are already up to date"
+  fi
+  
+  # Show current version info
+  cmd_run xcode-select --version
+  cmd_run xcode-select --print-path
+  echo
+}
+
+# Upgrades Xcode
+# @returns {number} 0 on success, 1 on error
+upgrade_xcode() {
+  msg_bullet "Upgrading Xcode...\n"
+  mas upgrade 497799835
+  mas info 497799835
+  echo
+}
+
+# Installs Xcode
+# @returns {number} 0 on success, 1 on error
+install_xcode() {
+  msg_bullet "Installing Xcode...\n"
+  mas install 497799835
+  mas info 497799835
+}
+
+# Performs all updates of packages and applications.
+# This includes brew, npm, zsh, pip, and macOS specific updates.
+# @returns {number} 0 on success, 1 on error
+update_all() {
+  msg_bullet "Performing All Updates...\n"
+
+  upgrade_brew_formulas && \
+  upgrade_npm_apps && \
+
+  # ZSH
+  omz update  # it returns false even when success, so no &&
+  zinit update
+
+  # PIP
+  pip3 install --upgrade pip
+
+  # MACOS
+  # -----
+  # CLI Tools without full Xcode
+  if [[ "$OSTYPE" == "darwin"* ]]; then
+    upgrade_xcode_tools && \
+    upgrade_brew_casks && \
+    upgrade_appstore_apps && \
+  fi
+}
+
+# Performs all installations of packages and applications.
+# This includes brew, npm, and macOS specific installations.
+# @returns {number} 0 on success, 1 on error
+install_all() {
+  msg_bullet "Performing All Installations...\n"
+
+  install_brew_formulas && \
+  install_npm_apps && \
+
+  # MACOS
+  # -----
+  if [[ "$OSTYPE" == "darwin"* ]]; then
+    install_xcode_tools && \
+    install_brew_casks && \
+    install_appstore_apps && \
+  fi
+}
+
+# Lists App Store packages with status
+# @param {boolean} show_outdated - Whether to show only outdated packages
+list_appstore() {
+  local show_outdated="$1"
+  local -a appstore_apps=($(yq -r '.appstore_apps[]' "$APPLIST"))
+  
+  msg_header "\nApp Store Apps${COLORS[RESET]} (${#appstore_apps[@]}):\n"
+
+  # Check if there are any appstore apps defined
+  if [[ ${#appstore_apps[@]} -eq 0 ]]; then
+    msg_warning --color "  No App Store apps defined in applist.yaml"
+    return 0
+  fi
+
+  # Get all installed and outdated apps at once with spinner
+  local installed_list outdated_list
+  local temp_installed=$(mktemp)
+  local temp_outdated=$(mktemp)
+
+  # Fetch installed apps
+  show_spinner "Getting installed App Store apps..." "mas list > '$temp_installed' 2>/dev/null || true" 10
+  installed_list=$(cat "$temp_installed")
+  rm -f "$temp_installed"
+
+  # Fetch outdated apps
+  show_spinner "Checking for outdated App Store apps..." "mas outdated > '$temp_outdated' 2>/dev/null || true" 10
+  outdated_list=$(cat "$temp_outdated")
+  rm -f "$temp_outdated"
+
+  # Arrays to group packages by status
+  local -a uptodate_packages=()
+  local -a outdated_packages=()
+  local -a not_installed_packages=()
+
+  # Categorize packages
+  for app in "${appstore_apps[@]}"; do
+    local installed_info=""
+    installed_info=$(grep -i " ${app} " <<< "$installed_list" || true)
+
+    if [[ -n "$installed_info" ]]; then
+      local current_version="" is_outdated="" latest_version=""
+      current_version=$(awk -F'[()]' '{print $2}' <<< "$installed_info")      
+      is_outdated=$(grep -i " ${app} " <<< "$outdated_list" || true)
+
+      if [[ -n "$is_outdated" ]]; then
+        latest_version=$(awk -F'->' '{gsub(/[() ]/, "", $2); print $2}' <<< "$is_outdated")
+        # Outdated
+        outdated_packages+=("$app ${COLORS[YELLOW]}$current_version${COLORS[RESET]} ${SYMBOLS[ARROW]} ${COLORS[LIGHT_GREEN]}$latest_version${COLORS[RESET]}")
+      else
+        # Up to date
+        uptodate_packages+=("$app ${COLORS[LIGHT_GREEN]}$current_version${COLORS[RESET]}")
+      fi
+    else
+      # Not installed
+      not_installed_packages+=("$app")
+    fi
+  done
+
+  echo
+
+  # Display packages grouped by status
+  if [[ "$show_outdated" != true ]]; then
+    # Show up-to-date packages
+    if [[ ${#uptodate_packages[@]} -gt 0 ]]; then
+      msg_header "  Up-to-date ${TEXT[RESET]} (${#uptodate_packages[@]}):\n"
+      for package in "${uptodate_packages[@]}"; do
+        msg_success "  $package"
+      done
+      echo
+    fi
+  fi
+
+  # Show outdated packages
+  if [[ ${#outdated_packages[@]} -gt 0 ]]; then
+    msg_header "  Outdated Apps${TEXT[RESET]} (${#outdated_packages[@]}):\n"
+    for package in "${outdated_packages[@]}"; do
+      msg_warning "  $package"
+    done
+    echo
+  elif [[ "$show_outdated" == true ]]; then
+    msg_success --color "  All App Store apps are up-to-date!"
+    echo
+  fi
+
+  # Show not installed packages
+  if [[ "$show_outdated" != true && ${#not_installed_packages[@]} -gt 0 ]]; then
+    msg_header "  Not installed${TEXT[RESET]} (${#not_installed_packages[@]}):\n"
+    for package in "${not_installed_packages[@]}"; do
+      msg_error "  $package"
+    done
+  fi
+}
+
+# Lists npm packages with status
+# @param {boolean} show_outdated - Whether to show only outdated packages
+list_npm() {
+  local show_outdated="$1"
+  local -a npm_apps=($(yq -r '.npm_apps[]' "$APPLIST"))
+  msg_header "\nNPM Packages${COLORS[RESET]} (${#npm_apps[@]}):\n"
+
+  # Check if there are any npm packages defined
+  if [[ ${#npm_apps[@]} -eq 0 ]]; then
+    msg_warning --color "  No npm packages defined in applist.yaml"
+    return 0
+  fi
+
+  # Get all npm packages info with spinners
+  local installed_list outdated_list
+  local temp_installed=$(mktemp)
+  local temp_outdated=$(mktemp)
+
+  # Fetch installed packages
+  show_spinner "Getting installed npm packages..." "npm list -g > '$temp_installed' 2>/dev/null || true" 10
+  installed_list=$(cat "$temp_installed")
+  rm -f "$temp_installed"
+
+  # Fetch outdated packages
+  show_spinner "Checking for outdated npm packages..." "npm outdated -g > '$temp_outdated' 2>/dev/null || true" 10
+  outdated_list=$(cat "$temp_outdated")
+  rm -f "$temp_outdated"
+
+  # Arrays to group packages by status
+  local -a uptodate_packages=()
+  local -a outdated_packages=()
+  local -a not_installed_packages=()
+
+  # Categorize packages
+  for app in "${npm_apps[@]}"; do
+    local installed_info=""
+    installed_info=$(echo "$installed_list" | grep " ${app}@" || true)
+
+    if [[ -n "$installed_info" ]]; then
+      local current_version="" is_outdated="" latest_version=""
+      # More robust version extraction for scoped and regular packages
+      current_version=$(echo "$installed_info" | sed -n "s|.*${app}@\([^[:space:]]*\).*|\1|p" || true)
+      is_outdated=$(echo "$outdated_list" | grep "^${app} " || true)
+
+      if [[ -n "$is_outdated" ]]; then
+        latest_version=$(echo "$is_outdated" | awk '{print $4}' || true)
+        # Outdated
+        outdated_packages+=("$app ${COLORS[RED]}$current_version${COLORS[RESET]} ${SYMBOLS[ARROW]} ${COLORS[YELLOW]}$latest_version${COLORS[RESET]}")
+      else
+        # Up to date
+        uptodate_packages+=("$app ${COLORS[GREEN]}$current_version${COLORS[RESET]}")
+      fi
+    else
+      # Not installed
+      not_installed_packages+=("$app")
+    fi
+  done
+
+  echo
+
+  # Display packages grouped by status
+  if [[ "$show_outdated" != true ]]; then
+    # Show up-to-date packages
+    if [[ ${#uptodate_packages[@]} -gt 0 ]]; then
+      msg_header "  Up-to-date${TEXT[RESET]} (${#uptodate_packages[@]}):"
+      for package in "${uptodate_packages[@]}"; do
+        msg_success "  $package"
+      done
+      echo
+    fi
+  fi
+
+  # Show outdated packages
+  if [[ ${#outdated_packages[@]} -gt 0 ]]; then
+    msg_header "  Outdated${TEXT[RESET]} (${#outdated_packages[@]}):"
+    for package in "${outdated_packages[@]}"; do
+      msg_warning "  $package"
+    done
+    echo
+  elif [[ "$show_outdated" == true ]]; then
+    msg_success "  All npm packages are up-to-date!"
+    echo
+  fi
+
+  # Show not installed packages
+  if [[ "$show_outdated" != true && ${#not_installed_packages[@]} -gt 0 ]]; then
+    msg_header "  Not installed${TEXT[RESET]} (${#not_installed_packages[@]}):"
+    for package in "${not_installed_packages[@]}"; do
+      msg_error "  $package"
+    done
+  fi  
+}
+
+# Lists brew formulas and casks with status
+# @param {string} package_type - Type of package ("formulas" or "casks")
+# @param {boolean} show_outdated - Whether to show only outdated packages
+list_brew() {
+  local package_type="$1" # "formula" or "cask"
+  local show_outdated="$2"
+  
+  # Determine which app list to use and set appropriate variables
+  local -a brew_apps
+  if [[ "$package_type" == "cask" ]]; then
+    brew_apps=($(yq -r '.brew_casks[]' "$APPLIST"))
+  else
+    brew_apps=($(yq -r '.brew_formulas[]' "$APPLIST"))
+  fi
+
+  local app_key
+  local display_name
+  app_key="brew_${package_type}s"
+  display_name="Brew ${(C)package_type}s"
+
+  msg_header "\n${display_name}${COLORS[RESET]} (${#brew_apps[@]}):\n"
+
+  # Check if there are any packages defined
+  if [[ ${#brew_apps[@]} -eq 0 ]]; then
+    msg_warning --color "  No ${display_name} defined in applist.yaml"
+    return 0
+  fi
+
+  # Get outdated packages info with spinner
+  local outdated_apps installed_apps
+  local temp_outdated=$(mktemp)
+  local temp_installed=$(mktemp)
+
+  # Fetch outdated packages
+  show_spinner "Checking for outdated ${package_type}s..." "brew outdated --${package_type} > '$temp_outdated' 2>/dev/null || true" 10
+  outdated_apps=$(cat "$temp_outdated")
+  rm -f "$temp_outdated"
+
+  # Fetch installed packages
+  if [[ "$package_type" == "cask" ]]; then
+    show_spinner "Getting installed ${package_type}..." "brew list --cask --versions > '$temp_installed' 2>/dev/null || true" 10
+  else
+    show_spinner "Getting installed ${package_type}..." "brew list --versions > '$temp_installed' 2>/dev/null || true" 10
+  fi
+  installed_apps=$(cat "$temp_installed")
+  rm -f "$temp_installed"
+  
+  # Pre-fetch JSON data for all outdated packages that are in our list
+  local brew_json=""
+  if [[ -n "$outdated_apps" ]]; then
+    local -a outdated_in_list=()
+    for app in "${brew_apps[@]}"; do
+      if echo "$outdated_apps" | grep -q "^${app}$"; then
+        outdated_in_list+=("$app")
+      fi
+    done
+    
+    # Fetch JSON for all outdated packages at once with spinner
+    if [[ ${#outdated_in_list[@]} -gt 0 ]]; then
+      local temp_json=$(mktemp)
+      local brew_info_cmd
+      brew_info_cmd="brew info --json=v2 --${package_type} $(printf '%s ' "${outdated_in_list[@]}") > '$temp_json' 2>/dev/null || true"
+      show_spinner "Fetching version info for ${#outdated_in_list[@]} outdated ${package_type}s..." "$brew_info_cmd" 15
+      brew_json=$(cat "$temp_json")
+      rm -f "$temp_json"
+    fi
+  fi
+
+  # Arrays to group packages by status
+  local -a uptodate_packages=()
+  local -a outdated_packages=()
+  local -a not_installed_packages=()
+
+  # Categorize packages
+  for app in "${brew_apps[@]}"; do
+    # Extract current version (if installed)
+    local app_info='' current_version=''
+    app_info=$(echo "$installed_apps" | grep "^${app} " || true)
+    current_version=$(echo "$app_info" | awk '{print $2}' || true)
+
+    if [[ -n "$app_info" ]]; then
+      # Check if it's outdated
+      local latest_version='' is_outdated=''
+      is_outdated=$(echo "$outdated_apps" | grep "^${app}$" || true)
+      
+      if [[ -n "$is_outdated" && -n "$brew_json" ]]; then
+        # Extract latest version from pre-fetched JSON data
+        if [[ "$package_type" == "cask" ]]; then
+          latest_version=$(echo "$brew_json" | yq -r ".casks[] | select(.token == \"$app\") | .version" 2>/dev/null || true)
+        else
+          latest_version=$(echo "$brew_json" | yq -r ".formulae[] | select(.name == \"$app\") | .versions.stable" 2>/dev/null || true)
+        fi
+      fi
+
+      if [[ -n "$latest_version" ]]; then
+        # Outdated
+        outdated_packages+=("$app ${COLORS[YELLOW]}$current_version${COLORS[RESET]} ${SYMBOLS[ARROW]} ${COLORS[LIGHT_GREEN]}$latest_version${COLORS[RESET]}")
+      else
+        # Up to date
+        uptodate_packages+=("$app ${COLORS[LIGHT_GREEN]}$current_version${COLORS[RESET]}")
+      fi
+    else
+      # Not installed
+      not_installed_packages+=("$app")
+    fi
+  done
+
+  echo
+
+  # Display packages grouped by status
+  if [[ "$show_outdated" != true ]]; then
+    # Show up-to-date packages
+    if [[ ${#uptodate_packages[@]} -gt 0 ]]; then
+      msg_header "  Up-to-date ${TEXT[RESET]} (${#uptodate_packages[@]}):\n"
+      for package in "${uptodate_packages[@]}"; do
+        msg_success "  $package"
+      done
+      echo
+    fi
+  fi
+
+  # Show outdated packages
+  if [[ ${#outdated_packages[@]} -gt 0 ]]; then
+    msg_header "  Outdated ${(C)package_type}s${TEXT[RESET]} (${#outdated_packages[@]}):\n"
+    for package in "${outdated_packages[@]}"; do
+      msg_warning "  $package"
+    done
+    echo
+  elif [[ "$show_outdated" == true ]]; then
+    msg_success --color "  All ${display_name} are up-to-date!"
+    echo
+  fi
+
+  # Show not installed packages
+  if [[ "$show_outdated" != true && ${#not_installed_packages[@]} -gt 0 ]]; then
+    msg_header "  Not installed${TEXT[RESET]} (${#not_installed_packages[@]}):\n"
+    for package in "${not_installed_packages[@]}"; do
+      msg_error "  $package"
+    done
+  fi
+}
+
+# Lists Xcode with status
+# @param {boolean} show_outdated - Whether to show only outdated packages
+list_xcode() {
+  msg_header "\nXcode:\n"
+  
+  local installed_info
+  installed_info=$(mas list | grep "^497799835 " || true)
+  if [[ -n "$installed_info" ]]; then
+    local current_version is_outdated
+    current_version=$(echo "$installed_info" | grep -o '([^)]*)' | sed 's/[()]//g')
+    is_outdated=$(mas outdated | grep "^497799835 " || true)
+    
+    if [[ -n "$is_outdated" ]]; then
+      msg_warning "  Xcode ${COLORS[YELLOW]}$current_version"
+    else
+      msg_success "  Xcode ${COLORS[CYAN]}$current_version"
+    fi
+  else
+    # Not installed
+    msg_error --color "  Xcode is not installed."
+  fi
+}
+
+# Lists Xcode Command Line Tools with status
+# @param {boolean} show_outdated - Whether to show only outdated packages
+list_xcode_tools() {
+  msg_header "\nXcode Command Line Tools:\n"
+
+  local is_installed=false
+  local current_version=""
+  xcode-select -p &>/dev/null && is_installed=true
+  
+  if [[ "$is_installed" == true ]]; then
+    current_version=$(pkgutil --pkg-info=com.apple.pkg.CLTools_Executables 2>/dev/null | grep version | awk '{print $2}' || true)
+    local update_available
+    update_available=$(softwareupdate --list 2>/dev/null | grep -i "command line tools" || true)
+    
+    if [[ -n "$update_available" ]]; then
+      msg_warning "  Xcode Command Line Tools ${COLORS[CYAN]}$current_version${COLORS[RESET]} → ${COLORS[GREEN]}update available${COLORS[RESET]}"
+    else
+      msg_success "  Xcode Command Line Tools ${COLORS[CYAN]}$current_version${COLORS[RESET]}"
+    fi
+  else
+    msg_error --color "  Xcode Command Line Tools is not installed."
+  fi
+}
+
+# Main script execution function.
+# It parses command-line arguments and calls the corresponding functions.
+# If no arguments are provided, it displays the help message.
+main() {
+  # Run dependency check at the start of execution.
+  if [[ "$1" != "--completion" ]]; then
+    echo
+    check_dependencies
+    check_applist_file
+  fi
+
+  local show_outdated=false
+  if [[ "$2" == "--outdated" ]]; then
+    show_outdated=true
+  fi
+
+  if [ "$#" != 0 ]; then
+    # If applist file is missing or invalid, exit early.
+    [ ! -f "$APPLIST" ] && return 1
+
+    case "$1" in
+      -a|--add)
+        if [ "$#" -ne 3 ]; then
+          msg_error "Add requires an <app name> and a <category>."
+          return 1
+        fi
+        manage_applist "add" "$2" "$3"
+        return 0
+        ;;
+      -r|--remove)
+        if [ "$#" -ne 3 ]; then
+          msg_error "Remove requires an <app name> and a <category>."
+          return 1
+        fi
+        manage_applist "remove" "$2" "$3"
+        return 0
+        ;;
+    esac
+
+    for arg in "$@"; do
+      case "$arg" in
+        "-h"|"--help")
+          show_help
+          return 0
+          ;;
+        "-l"|"--list"|"--list-all")
+          list_npm "$show_outdated"
+          list_brew "formula" "$show_outdated"
+          list_brew "cask" "$show_outdated"
+          list_appstore "$show_outdated"
+          list_xcode "$show_outdated"
+          list_xcode_tools "$show_outdated"
+          return 0
+          ;;
+        "--list-npm")
+          list_npm "$show_outdated"
+          return 0
+          ;;
+        "--list-brew-formulas"|"--list-formulas")
+          list_brew "formula" "$show_outdated"
+          return 0
+          ;;
+        "--list-brew-casks"|"--list-casks")
+          list_brew "cask" "$show_outdated"
+          return 0
+          ;;
+        "--list-appstore")
+          list_appstore "$show_outdated"
+          return 0
+          ;;
+        "--list-xcode")
+          list_xcode "$show_outdated"
+          return 0
+          ;;
+        "--list-xcode-tools")
+          list_xcode_tools "$show_outdated"
+          return 0
+          ;;
+        "--update-all")
+          echo; update_all
+        ;;
+        "--upgrade-npm")
+          echo; upgrade_npm_apps
+          ;;
+        "--upgrade-brew")
+          echo; upgrade_brew_formulas
+          ;;
+        "--upgrade-casks")
+          echo; upgrade_brew_casks
+          ;;
+        "--upgrade-appstore")
+          echo; upgrade_appstore_apps
+          return 0
+          ;;
+        "--upgrade-xcode-tools")
+          echo; upgrade_xcode_tools
+          return 0
+          ;;
+        "--upgrade-xcode")
+          echo; upgrade_xcode
+          return 0
+          ;;
+        "--install-all")
+          echo; install_all
+          ;;
+        "--install-npm")
+          echo; install_npm_apps
+          ;;
+        "--install-brew")
+          echo; install_brew_formulas
+          ;;
+        "--install-casks")
+          echo; install_brew_casks
+          ;;
+        "--install-appstore")
+          echo; install_appstore_apps
+          return 0
+          ;;
+        "--install-xcode-tools")
+          echo; install_xcode_tools
+          return 0
+          ;;
+        "--install-xcode")
+          echo; install_xcode
+          return 0
+          ;;
+        "--completion")
+          shell_completion
+          return 0
+          ;;
+        *)
+          msg_error "Invalid option"
+          return 1
+          ;;
+      esac
+
+      # FINISH UP: Run brew doctor to check for any issues.
+      # ---------
+      brew doctor
+      echo
+      msg_success "DONE."
+    done
+  else 
+    show_help
+  fi
+}
+
+main "$@"

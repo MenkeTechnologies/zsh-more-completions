@@ -1,0 +1,1704 @@
+# Source: https://github.com/BLTGV/claude-mcp-manager/blob/f4b67916b64568bc1a2fa7105f8021fe5340595c/src/claude-mcp-manager
+# Repository: BLTGV/claude-mcp-manager (src/claude-mcp-manager)
+#!/usr/bin/env bash
+
+# === Configuration ===
+CONFIG_DIR="${HOME}/.config/claude"
+PROFILES_DIR="${CONFIG_DIR}/profiles"
+SERVERS_DIR="${CONFIG_DIR}/servers"
+LOADED_FILE="${CONFIG_DIR}/loaded"
+ENV_FILE="${CONFIG_DIR}/.env"
+LAST_CONFIG_FILE="${CONFIG_DIR}/last.json"
+
+SCRIPT_VERSION="0.1.0" # Placeholder version
+
+# Source utility functions
+# Resolve the real script path, following symlinks
+SOURCE_PATH="${BASH_SOURCE[0]}"
+while [ -h "$SOURCE_PATH" ]; do # While $SOURCE_PATH is a symlink
+  DIR="$( cd -P "$( dirname "$SOURCE_PATH" )" && pwd )"
+  SOURCE_PATH="$(readlink "$SOURCE_PATH")"
+  # If $SOURCE_PATH was a relative symlink, resolve it relative to the symlink's directory
+  [[ $SOURCE_PATH != /* ]] && SOURCE_PATH="$DIR/$SOURCE_PATH"
+done
+SCRIPT_DIR="$( cd -P "$( dirname "$SOURCE_PATH" )" && pwd )"
+
+UTILS_SCRIPT="${SCRIPT_DIR}/utils.sh"
+if [ -f "$UTILS_SCRIPT" ]; then
+   # shellcheck source=utils.sh
+   source "$UTILS_SCRIPT"
+else
+   echo "ERROR: Utilities script not found at ${UTILS_SCRIPT}" >&2
+   exit 1
+fi
+
+# === Load Utils ===
+# Ensure utils script exists
+if [ ! -f "$SCRIPT_DIR/utils.sh" ]; then
+    echo "Error: utils.sh not found in $SCRIPT_DIR" >&2
+    exit 1
+fi
+source "$SCRIPT_DIR/utils.sh"
+
+# Ensure jq is available
+if ! command -v jq &> /dev/null; then
+    print_color "$COLOR_RED" "Error: jq is not installed or not in PATH. Please install jq." >&2
+    exit 1
+fi
+
+# === Help ===
+print_server_help() {
+    echo "Usage: $(basename "$0") server <subcommand> [options]"
+    echo ""
+    print_bold "Server Subcommands:"
+    echo "  list          List available server definitions"
+    echo "  show <name>   Show a specific server definition"
+    echo "  add <name>    Add a new server definition (--file <path> or --json "{}")"
+    echo "  edit <name>   Edit a server definition in $EDITOR"
+    echo "  remove <name> Remove a server definition (prompts for confirmation)"
+    echo "  extract [--profile <name>] Extract servers from main config into individual files"
+    echo "                Optionally creates/updates profile <name> with extracted server list"
+    echo ""
+}
+
+print_profile_help() {
+    echo "Usage: $(basename "$0") profile <subcommand> [options]"
+    echo ""
+    print_bold "Profile Subcommands:"
+    echo "  list         List available profiles"
+    echo "  show <name>  Show servers listed in a specific profile (checks server file existence)"
+    echo "  create <name> Create a new, empty profile"
+    echo "  copy <src> <dest> Copy an existing profile to a new name"
+    echo "  edit <name>  Edit a profile's server list in $EDITOR"
+    echo "  add <profile> <server...> Add one or more server names to a profile's list"
+    echo "  remove <profile> <server...> Remove one or more server names from a profile's list"
+    echo "  delete <name> Delete a profile file (prompts for confirmation)"
+    echo ""
+}
+
+print_help() {
+   echo "Usage: $(basename "$0") [command | profile_name | option]"
+   echo ""
+   print_bold "Primary Commands:"
+   echo "  <profile_name>       Activate the specified profile by loading its servers into the main config"
+   echo "  last                 Restore the last used configuration before the most recent activation"
+   echo "  server <subcommand>  Manage server definitions (run '$0 server help' for details)"
+   echo "  profile <subcommand> Manage profiles (run '$0 profile help' for details)"
+   echo "  import --file <path> [--create-profile] [--profile-name <name>]"
+   echo "                       Import servers from an old MCP JSON config file"
+   echo "  export <profile> --output <file>"
+   echo "                       Export a profile's servers (with secrets resolved) to a file"
+   echo "  uninstall [--remove-config] [--yes]"
+   echo "                       Remove the claude-mcp-manager script and symlink"
+   echo "                       (--remove-config also deletes the ~/.config/claude directory, requires prompt)"
+   echo "                       (--yes skips the script/symlink removal confirmation)"
+   echo "  completion <shell>   Output shell completion script (e.g., bash, zsh)"
+   echo ""
+   # Call specific help sections
+   # print_server_help # Optionally include full details here?
+   # print_profile_help
+   # For now, keep main help concise and point to sub-help
+
+   print_bold "Options:"
+   echo "  help, --help, -h     Show this help message"
+   echo "  version, --version, -v Show script version"
+   echo ""
+   print_bold "Configuration Directory:"
+   echo "  ${CONFIG_DIR}"
+}
+
+# === Dependency Check ===
+check_dependencies() {
+    local missing_deps=0
+    if ! command -v jq &> /dev/null; then
+        log_error "Dependency 'jq' not found. Please install it (e.g., 'brew install jq')."
+        missing_deps=1
+    fi
+    if ! command -v pgrep &> /dev/null; then
+        log_error "Dependency 'pgrep' not found. It should be part of standard macOS utilities."
+        missing_deps=1
+    fi
+    # Check for Bash regex support (required for secrets resolution)
+    if ! echo "test" | ( [[ "test" =~ ^test$ ]] ) > /dev/null 2>&1; then
+        log_error "Bash regex operator '=~' failed. A compatible Bash version (>= 3.2) is required."
+        missing_deps=1
+    fi
+
+    if [ "$missing_deps" -ne 0 ]; then
+        log_error "Exiting due to missing dependencies."
+        exit 1
+    fi
+}
+
+# === Setup ===
+# Ensures configuration directories and files exist
+setup_config_dirs() {
+    mkdir -p "${PROFILES_DIR}" || { log_error "Failed to create profiles directory: ${PROFILES_DIR}"; exit 1; }
+    chmod 700 "${PROFILES_DIR%/*}" "${PROFILES_DIR}" # Ensure parent ~/.config/claude and profiles dir are 700
+    mkdir -p "${SERVERS_DIR}" || { log_error "Failed to create servers directory: ${SERVERS_DIR}"; exit 1; }
+    chmod 700 "${SERVERS_DIR}"
+    touch "${LOADED_FILE}" || { log_error "Failed to create loaded file: ${LOADED_FILE}"; exit 1; }
+    chmod 600 "${LOADED_FILE}"
+    # Create .env only if it doesn't exist, don't overwrite
+    if [ ! -e "${ENV_FILE}" ]; then
+        touch "${ENV_FILE}" || { log_error "Failed to create .env file: ${ENV_FILE}"; exit 1; }
+        chmod 600 "${ENV_FILE}" || { log_error "Failed to set permissions on .env file: ${ENV_FILE}"; exit 1; }
+    fi
+    # Create last.json only if it doesn't exist
+    if [ ! -e "${LAST_CONFIG_FILE}" ]; then
+        echo "{}" > "${LAST_CONFIG_FILE}" || { log_error "Failed to create last config file: ${LAST_CONFIG_FILE}"; exit 1; }
+        chmod 600 "${LAST_CONFIG_FILE}" || { log_error "Failed to set permissions on last config file: ${LAST_CONFIG_FILE}"; exit 1; }
+    fi
+}
+
+# === Main Logic ===
+main() {
+    log_debug "Script started. Arguments: $*"
+    # Ensure config directories are set up
+    setup_config_dirs
+
+    # Check for required dependencies
+    check_dependencies
+
+    # Handle simple options like help and version before parsing commands
+    if [[ $# -eq 0 || "$1" == "--help" || "$1" == "-h" || "$1" == "help" ]]; then
+        print_help
+        exit 0
+    fi
+    if [[ "$1" == "--version" || "$1" == "-v" || "$1" == "version" ]]; then
+        echo "claude-mcp-manager version ${SCRIPT_VERSION}"
+        exit 0
+    fi
+
+    local command="$1"
+    log_debug "Processing command: ${command}"
+    shift # Remove command from arguments
+
+    case "${command}" in
+        server)
+            # --- Server Subcommands ---
+            if [ $# -eq 0 ]; then
+                exit_with_error "Missing server command. Use '-h' for help."
+            fi
+            local server_command="$1"
+            shift
+            log_debug "Server command: ${server_command}"
+            case "${server_command}" in
+                list)
+                    log_debug "Listing server definitions from: ${SERVERS_DIR}"
+                    if [ ! -d "${SERVERS_DIR}" ]; then
+                        print_info "Servers directory not found: ${SERVERS_DIR}"
+                        exit 0
+                    fi
+                    
+                    local found_any=0 # Flag to track if we found any servers
+                    
+                    print_bold "Available Servers:"
+                    # Use process substitution to avoid subshell for the loop
+                    while IFS= read -r -d $'\0' file; do
+                        base_name=$(basename "$file")
+                        server_name="${base_name%.json}"
+                        echo "  ${server_name}"
+                        found_any=1 # Mark that we found at least one
+                    done < <(find "${SERVERS_DIR}" -maxdepth 1 -type f -name '*.json' -print0)
+                    
+                    # Check if we found any servers after the loop
+                    if [ "$found_any" -eq 0 ]; then
+                         # If no servers were found, overwrite the header with a message
+                         # Move cursor up one line, clear line, print message
+                         # Note: This ANSI escape might not work on all terminals
+                         echo -e "\033[1A\033[KNo server definitions found in ${SERVERS_DIR}"
+                    fi
+                    ;;
+                show)
+                    if [ -z "$1" ]; then exit_with_error "Missing server name for 'show'"; fi
+                    local server_name="$1"
+                    log_debug "Showing server definition for '${server_name}'"
+                    local server_file="${SERVERS_DIR}/${server_name}.json"
+
+                    # Validate file exists and is readable JSON
+                    check_file_readable "$server_file"
+                    validate_json_file "$server_file"
+
+                    print_bold "Server Definition: ${server_name}"
+                    # Pretty-print the JSON content using jq
+                    jq . "$server_file"
+                    if [ $? -ne 0 ]; then
+                         # This shouldn't happen if validate_json_file passed, but handle defensively
+                         exit_with_error "Failed to display server definition using jq for: ${server_file}"
+                    fi
+                    ;;
+                add)
+                    local server_name="$1"
+                    shift
+                    if [ -z "$server_name" ]; then exit_with_error "Missing server name for 'add'"; fi
+                    local file_path=""
+                    local json_string=""
+                    while [ $# -gt 0 ]; do
+                        case "$1" in
+                            --file)
+                                if [ -z "$2" ]; then exit_with_error "Missing file path for --file"; fi
+                                file_path="$2"; shift 2 ;;
+                            --json)
+                                if [ -z "$2" ]; then exit_with_error "Missing JSON string for --json"; fi
+                                json_string="$2"; shift 2 ;;
+                            *)
+                                exit_with_error "Unknown argument for server add: $1" ;;
+                        esac
+                    done
+                    if [ -n "$file_path" ] && [ -n "$json_string" ]; then
+                        exit_with_error "Cannot use both --file and --json for server add"
+                    elif [ -z "$file_path" ] && [ -z "$json_string" ]; then
+                        exit_with_error "Must provide either --file or --json for server add"
+                    fi
+
+                    local target_server_file="${SERVERS_DIR}/${server_name}.json"
+
+                    # Check if server file already exists
+                    if [ -e "$target_server_file" ]; then
+                        exit_with_error "Server definition '${server_name}' already exists at ${target_server_file}"
+                    fi
+
+                    if [ -n "$file_path" ]; then
+                        log_info "Adding server '${server_name}' from file: ${file_path}"
+                        # Validate source file
+                        check_file_readable "$file_path"
+                        validate_json_file "$file_path"
+
+                        # Copy file content
+                        if cp "$file_path" "$target_server_file"; then
+                            chmod 600 "$target_server_file" || log_warn "Failed to set permissions on ${target_server_file}"
+                            print_success "Server definition '${server_name}' added successfully."
+                        else
+                            exit_with_error "Failed to copy server definition from ${file_path} to ${target_server_file}"
+                        fi
+                    elif [ -n "$json_string" ]; then
+                        log_info "Adding server '${server_name}' from JSON string..."
+                        # Validate the JSON string
+                        log_debug "Validating provided JSON string..."
+                        if ! echo "$json_string" | jq -e . > /dev/null 2>&1; then
+                            exit_with_error "Provided --json string is not valid JSON."
+                        fi
+                        log_debug "JSON string is valid."
+
+                        # Write JSON string to file
+                        if echo "$json_string" > "$target_server_file"; then
+                            chmod 600 "$target_server_file" || log_warn "Failed to set permissions on ${target_server_file}"
+                            print_success "Server definition '${server_name}' added successfully from JSON string."
+                        else
+                            # Attempt cleanup
+                            rm -f "$target_server_file" &>/dev/null
+                            exit_with_error "Failed to write JSON string to server definition file: ${target_server_file}"
+                        fi
+                    fi
+                    ;;
+                edit)
+                    if [ -z "$1" ]; then exit_with_error "Missing server name for 'edit'"; fi
+                    local server_name="$1"
+                    log_debug "Editing server definition for '$server_name'"
+                    local server_file="${SERVERS_DIR}/${server_name}.json"
+
+                    # Validate file exists
+                    check_file_readable "$server_file"
+
+                    # Get editor (or default)
+                    local editor=${EDITOR:-vim} # Default to vim if EDITOR is not set
+                    if ! command -v "$editor" > /dev/null; then
+                        editor=nano # Fallback to nano if default (vim) not found
+                        if ! command -v "$editor" > /dev/null; then
+                             exit_with_error "No editor found (checked \$EDITOR, vim, nano). Please set your EDITOR environment variable."
+                        fi
+                    fi
+                    log_debug "Using editor: $editor"
+
+                    # Open file in editor
+                    print_info "Opening $server_file in $editor..."
+                    "$editor" "$server_file"
+                    local edit_status=$?
+
+                    if [ $edit_status -ne 0 ]; then
+                        log_warn "Editor exited with status $edit_status for $server_file"
+                    fi
+
+                    # Validate JSON after edit
+                    log_info "Validating JSON in $server_file after edit..."
+                    if validate_json_file "$server_file"; then
+                        print_success "Server definition '$server_name' saved and validated successfully."
+                    else
+                        print_error "Server definition '$server_name' at $server_file is invalid JSON after editing. Please fix it manually."
+                        # Optionally, could offer to re-open editor here
+                    fi
+                    ;;
+                remove)
+                    if [ -z "$1" ]; then exit_with_error "Missing server name for 'remove'"; fi
+                    local server_name="$1"
+                    local server_file="${SERVERS_DIR}/${server_name}.json"
+                    log_debug "Attempting to remove server definition for '${server_name}' (${server_file})"
+
+                    # Check if file exists before prompting
+                    check_file_readable "$server_file"
+
+                    # Ask for confirmation
+                    local confirm
+                    read -p "Are you sure you want to permanently remove the server definition '${server_name}'? [y/N] " confirm
+
+                    if [[ "$confirm" =~ ^[Yy]$ ]]; then
+                        log_info "Removing server definition file: ${server_file}"
+                        if rm "$server_file"; then
+                            print_success "Server definition '${server_name}' removed successfully."
+                            # Optionally: Should we remove this server from profiles that use it?
+                            # This could be a separate command or an option.
+                        else
+                            exit_with_error "Failed to remove server definition file: ${server_file}"
+                        fi
+                    else
+                        print_info "Server removal cancelled."
+                    fi
+                    ;;
+                extract)
+                    local target_profile_name=""
+                    # Parse options like --profile
+                    while [ $# -gt 0 ]; do
+                        case "$1" in
+                            --profile)
+                                if [ -z "$2" ]; then exit_with_error "Missing profile name for --profile"; fi
+                                target_profile_name="$2"; shift 2 ;;
+                            *)
+                                exit_with_error "Unknown argument for server extract: $1" ;;
+                        esac
+                    done
+
+                    log_info "Extracting servers from main Claude config..."
+                    local target_config="${HOME}/Library/Application Support/Claude/claude_desktop_config.json"
+
+                    # Validate main config file
+                    check_file_readable "$target_config"
+                    validate_json_file "$target_config"
+
+                    # Extract the mcpServers object, default to empty object if null
+                    local mcp_servers_block
+                    mcp_servers_block=$(jq -c '.mcpServers // {}' "$target_config")
+
+                    # Check if the block is empty
+                    if [ "$(echo "$mcp_servers_block" | jq 'length')" -eq 0 ]; then
+                        print_info "The mcpServers block in ${target_config} is empty. No servers to extract."
+                        exit 0
+                    fi
+
+                    local extracted_server_names=()
+                    local skipped_servers=()
+                    local server_name server_definition target_server_file confirm
+
+                    log_debug "Iterating through servers found in mcpServers block..."
+                    # Use process substitution and mapfile/read -a for robust key handling
+                    local server_keys
+                    mapfile -t server_keys < <(echo "$mcp_servers_block" | jq -r 'keys_unsorted[]')
+
+                    for server_name in "${server_keys[@]}"; do
+                        target_server_file="${SERVERS_DIR}/${server_name}.json"
+                        log_debug "Processing server '${server_name}' -> ${target_server_file}"
+
+                        server_definition=$(echo "$mcp_servers_block" | jq --arg name "$server_name" '.[$name]')
+
+                        # Check for overwrite
+                        if [ -e "$target_server_file" ]; then
+                            log_warn "Server definition file '${target_server_file}' already exists."
+                            read -p "  Overwrite? [y/N] " confirm
+                            if ! [[ "$confirm" =~ ^[Yy]$ ]]; then
+                                log_info "Skipping overwrite for '${server_name}'."
+                                skipped_servers+=("$server_name")
+                                continue
+                            fi
+                            log_info "Overwriting existing file: ${target_server_file}"
+                        fi
+
+                        # Write the server definition
+                        log_debug "Writing definition for '${server_name}' to ${target_server_file}"
+                        if echo "$server_definition" | jq . > "$target_server_file"; then # Pretty print with jq
+                            chmod 600 "$target_server_file" || log_warn "Failed to set permissions on ${target_server_file}"
+                            log_debug "Successfully wrote and set permissions for ${target_server_file}"
+                            extracted_server_names+=("$server_name")
+                        else
+                            log_error "Failed to write server definition file: ${target_server_file}"
+                            # Optionally attempt cleanup
+                            rm -f "$target_server_file" &>/dev/null
+                            skipped_servers+=("$server_name") # Mark as skipped due to error
+                        fi
+                    done
+
+                    # --- Summary --- 
+                    local extracted_count=${#extracted_server_names[@]}
+                    local skipped_count=${#skipped_servers[@]}
+
+                    if [ "$extracted_count" -gt 0 ]; then
+                        print_success "Successfully extracted ${extracted_count} server definition(s)."
+                    else
+                        print_info "No server definitions were extracted."
+                    fi
+                    if [ "$skipped_count" -gt 0 ]; then
+                        print_info "Skipped ${skipped_count} server definition(s) (due to error or user choice): ${skipped_servers[*]}.
+"
+                    fi
+
+                    # --- Update Profile if Requested --- 
+                    if [ -n "$target_profile_name" ] && [ "$extracted_count" -gt 0 ]; then
+                        log_info "Updating profile '${target_profile_name}' with extracted servers..."
+                        local target_profile_file="${PROFILES_DIR}/${target_profile_name}.json"
+                        local profile_json='{"servers": []}' # Default for new profile
+                        local profile_action="created"
+
+                        if [ -e "$target_profile_file" ]; then
+                            log_debug "Profile '${target_profile_name}' exists. Will update."
+                            check_file_readable "$target_profile_file"
+                            validate_json_file "$target_profile_file"
+                            profile_json=$(<"$target_profile_file")
+                            profile_action="updated"
+                        else
+                            log_debug "Profile '${target_profile_name}' does not exist. Will create."
+                        fi
+
+                        # Build the JSON array of server names
+                        local servers_json_array
+                        servers_json_array=$(printf '%s\n' "${extracted_server_names[@]}" | jq -R . | jq -s .)
+                        log_debug "Constructed servers array JSON: ${servers_json_array}"
+
+                        # Update the profile JSON with the new servers array
+                        local updated_profile_json
+                        updated_profile_json=$(echo "$profile_json" | jq --argjson names "$servers_json_array" '.servers = $names')
+
+                        if [ $? -ne 0 ]; then
+                             log_error "Failed to construct updated JSON for profile '${target_profile_name}'."
+                        else
+                             # Write using temp file for safety
+                             local temp_prof_file
+                             temp_prof_file=$(mktemp)
+                             if [ -z "$temp_prof_file" ]; then
+                                 log_error "Failed to create temporary file for profile update."
+                             else
+                                 echo "$updated_profile_json" | jq . > "$temp_prof_file" # Pretty print
+                                 if mv "$temp_prof_file" "$target_profile_file"; then
+                                     chmod 600 "$target_profile_file" || log_warn "Failed to set permissions on ${target_profile_file}"
+                                     print_success "Profile '${target_profile_name}' ${profile_action} successfully with extracted servers."
+                                 else
+                                     rm "$temp_prof_file" &>/dev/null
+                                     log_error "Failed to update profile file: ${target_profile_file}"
+                                 fi
+                             fi
+                        fi
+                    elif [ -n "$target_profile_name" ]; then
+                         log_info "No servers were extracted, so profile '${target_profile_name}' was not created or updated."
+                    fi
+                    ;;
+                help|-h|--help)
+                    print_server_help
+                    exit 0
+                    ;;
+                *)
+                    exit_with_error "Unknown server command: ${server_command}"
+                    ;;
+            esac
+            ;;
+        profile)
+            # --- Profile Subcommands ---
+            if [ $# -eq 0 ]; then
+                exit_with_error "Missing profile command. Use '-h' for help."
+            fi
+            local profile_command="$1"
+            shift
+            log_debug "Profile command: ${profile_command}"
+            case "${profile_command}" in
+                list)
+                    log_debug "Listing profile definitions from: ${PROFILES_DIR}"
+                    if [ ! -d "${PROFILES_DIR}" ]; then
+                        print_info "Profiles directory not found: ${PROFILES_DIR}"
+                        exit 0
+                    fi
+
+                    local found_any=0 # Flag to track if we found any profiles
+
+                    print_bold "Available Profiles:"
+                    # Use process substitution to avoid subshell for the loop
+                    while IFS= read -r -d $'\0' file; do
+                        base_name=$(basename "$file")
+                        profile_name="${base_name%.json}"
+                        echo "  ${profile_name}"
+                        found_any=1 # Mark that we found at least one
+                    done < <(find "${PROFILES_DIR}" -maxdepth 1 -type f -name '*.json' -print0)
+
+                    # Check if we found any profiles after the loop
+                    if [ "$found_any" -eq 0 ]; then
+                         # If no profiles were found, overwrite the header with a message
+                         echo -e "\033[1A\033[KNo profile definitions found in ${PROFILES_DIR}"
+                    fi
+                    ;;
+                show)
+                    if [ -z "$1" ]; then exit_with_error "Missing profile name for 'show'"; fi
+                    local profile_name="$1"
+                    log_debug "Showing servers for profile '${profile_name}'"
+                    local profile_file="${PROFILES_DIR}/${profile_name}.json"
+                    
+                    # Validate profile file
+                    check_file_readable "$profile_file"
+                    validate_json_file "$profile_file"
+                    
+                    print_bold "Servers in Profile: ${profile_name}"
+                    
+                    # Check if servers array exists and has items
+                    if ! jq -e '.servers | length > 0' "$profile_file" > /dev/null; then
+                        print_info "  (Profile contains no servers)"
+                        exit 0
+                    fi
+                    
+                    # Loop through server names and check existence
+                    local server_in_profile
+                    while IFS= read -r server_in_profile; do
+                        if [ -z "$server_in_profile" ]; then continue; fi # Skip empty lines if jq outputs them
+                        local server_def_file="${SERVERS_DIR}/${server_in_profile}.json"
+                        if [ -f "$server_def_file" ]; then
+                            # Server definition exists
+                            # Use printf for consistent spacing
+                            printf "  %b %s\n" "${COLOR_GREEN}[✓]${COLOR_RESET}" "${server_in_profile}"
+                        else
+                            # Server definition does not exist
+                            printf "  %b %s %b(Definition Missing)%b\n" "${COLOR_YELLOW}[!]${COLOR_RESET}" "${server_in_profile}" "${COLOR_YELLOW}" "${COLOR_RESET}"
+                        fi
+                    done < <(jq -r '.servers[]? // empty' "$profile_file")
+                    ;;
+                create)
+                    local profile_name="$1"
+                    if [ -z "$profile_name" ]; then exit_with_error "Missing profile name for 'create'"; fi
+                    log_info "Creating profile '${profile_name}'"
+
+                    local target_profile_file="${PROFILES_DIR}/${profile_name}.json"
+
+                    # Check if profile already exists
+                    if [ -e "$target_profile_file" ]; then
+                        exit_with_error "Profile '${profile_name}' already exists at ${target_profile_file}"
+                    fi
+
+                    # Create the profile file
+                    if echo '{"servers": []}' > "$target_profile_file"; then
+                        chmod 600 "$target_profile_file" || log_warn "Failed to set permissions on ${target_profile_file}"
+                        print_success "Profile '${profile_name}' created successfully."
+                    else
+                        # Attempt to remove potentially partially created file
+                        rm -f "$target_profile_file" &> /dev/null
+                        exit_with_error "Failed to create profile file: ${target_profile_file}"
+                    fi
+                    ;;
+                copy)
+                    if [ -z "$1" ] || [ -z "$2" ]; then exit_with_error "Missing arguments for 'profile copy <src> <dest>'"; fi
+                    local src_profile_name="$1"
+                    local dest_profile_name="$2"
+
+                    if [ "$src_profile_name" == "$dest_profile_name" ]; then
+                        exit_with_error "Source and destination profile names cannot be the same."
+                    fi
+
+                    local src_profile_file="${PROFILES_DIR}/${src_profile_name}.json"
+                    local dest_profile_file="${PROFILES_DIR}/${dest_profile_name}.json"
+                    log_info "Copying profile '${src_profile_name}' to '${dest_profile_name}'"
+
+                    # Validate source exists
+                    check_file_readable "$src_profile_file"
+
+                    # Check destination does not exist
+                    if [ -e "$dest_profile_file" ]; then
+                        exit_with_error "Destination profile '${dest_profile_name}' already exists at ${dest_profile_file}"
+                    fi
+
+                    # Perform the copy
+                    if cp "$src_profile_file" "$dest_profile_file"; then
+                        chmod 600 "$dest_profile_file" || log_warn "Failed to set permissions on new profile file: ${dest_profile_file}"
+                        print_success "Profile '${src_profile_name}' copied successfully to '${dest_profile_name}'."
+                    else
+                        exit_with_error "Failed to copy profile from ${src_profile_file} to ${dest_profile_file}"
+                    fi
+                    ;;
+                edit)
+                    if [ -z "$1" ]; then exit_with_error "Missing profile name for 'edit'"; fi
+                    local profile_name="$1"
+                    log_debug "Editing profile '$profile_name'"
+                    local profile_file="${PROFILES_DIR}/${profile_name}.json"
+
+                    # Validate file exists
+                    check_file_readable "$profile_file"
+
+                    # Get editor (or default)
+                    local editor=${EDITOR:-vim} # Default to vim if EDITOR is not set
+                    if ! command -v "$editor" > /dev/null; then
+                        editor=nano # Fallback to nano if default (vim) not found
+                        if ! command -v "$editor" > /dev/null; then
+                             exit_with_error "No editor found (checked \$EDITOR, vim, nano). Please set your EDITOR environment variable."
+                        fi
+                    fi
+                    log_debug "Using editor: $editor"
+
+                    # Open file in editor
+                    print_info "Opening $profile_file in $editor..."
+                    "$editor" "$profile_file"
+                    local edit_status=$?
+
+                    if [ $edit_status -ne 0 ]; then
+                        log_warn "Editor exited with status $edit_status for $profile_file"
+                    fi
+
+                    # Validate JSON after edit
+                    log_info "Validating JSON in $profile_file after edit..."
+                    if validate_json_file "$profile_file"; then
+                        print_success "Profile '$profile_name' saved and validated successfully."
+                    else
+                        print_error "Profile '$profile_name' at $profile_file is invalid JSON after editing. Please fix it manually."
+                    fi
+                    ;;
+                add)
+                    local profile_name="$1"
+                    if [ -z "$profile_name" ]; then exit_with_error "Missing profile name for 'add'"; fi
+                    shift # Consume profile name
+                    if [ $# -eq 0 ]; then exit_with_error "Missing server name(s) to add to profile '${profile_name}'"; fi
+
+                    local target_profile_file="${PROFILES_DIR}/${profile_name}.json"
+                    log_info "Adding servers to profile '${profile_name}' (${target_profile_file})"
+
+                    # Validate profile file
+                    check_file_readable "$target_profile_file"
+                    validate_json_file "$target_profile_file"
+
+                    local servers_added_count=0
+                    local servers_skipped_count=0
+                    local current_json
+                    current_json=$(<"$target_profile_file")
+
+                    # Create a temporary file for jq output
+                    local temp_file
+                    temp_file=$(mktemp)
+                    if [ -z "$temp_file" ]; then
+                        exit_with_error "Failed to create temporary file."
+                    fi
+
+                    # Process each server name provided
+                    for server_name in "$@"; do
+                        # Check if server name is already in the array
+                        if echo "$current_json" | jq -e --arg name "$server_name" '.servers[] | select(. == $name)' > /dev/null; then
+                            log_info "Server '${server_name}' already in profile '${profile_name}'. Skipping."
+                            ((servers_skipped_count++))
+                        else
+                            # Check if the server definition file actually exists
+                            local server_def_file="${SERVERS_DIR}/${server_name}.json"
+                            if [ ! -f "$server_def_file" ]; then
+                                print_warning "Server definition for '${server_name}' not found at '${server_def_file}'. Activation will fail later if not created."
+                            fi
+
+                            log_debug "Adding server '${server_name}' to profile '${profile_name}'"
+                            # Add the server name to the array using jq
+                            current_json=$(echo "$current_json" | jq --arg name "$server_name" '.servers += [$name]')
+                            if [ $? -ne 0 ]; then
+                                rm "$temp_file" # Clean up temp file on error
+                                exit_with_error "jq command failed while adding server '${server_name}'"
+                            fi
+                            ((servers_added_count++))
+                        fi
+                    done
+
+                    # Write the final JSON to the temporary file
+                    echo "$current_json" > "$temp_file"
+
+                    # Replace the original file with the temporary file
+                    if mv "$temp_file" "$target_profile_file"; then
+                        chmod 600 "$target_profile_file" || log_warn "Failed to set permissions on ${target_profile_file}"
+                        if [ "$servers_added_count" -gt 0 ]; then
+                            print_success "Successfully added ${servers_added_count} server(s) to profile '${profile_name}'."
+                        fi
+                        if [ "$servers_skipped_count" -gt 0 ]; then
+                            print_info "Skipped ${servers_skipped_count} server(s) already present in profile '${profile_name}'."
+                        fi
+                    else
+                        rm "$temp_file" # Clean up temp file on error
+                        exit_with_error "Failed to update profile file: ${target_profile_file}"
+                    fi
+                    ;;
+                remove)
+                    if [ -z "$1" ]; then exit_with_error "Missing profile name for 'remove'"; fi
+                    local profile_name="$1"; shift
+                    if [ $# -eq 0 ]; then exit_with_error "Missing server name(s) to remove from profile '${profile_name}'"; fi
+                    local servers_to_remove=("$@")
+
+                    local target_profile_file="${PROFILES_DIR}/${profile_name}.json"
+                    log_info "Removing servers from profile '${profile_name}' (${target_profile_file})"
+
+                    # Validate profile file
+                    check_file_readable "$target_profile_file"
+                    validate_json_file "$target_profile_file"
+
+                    local servers_removed_count=0
+                    local servers_skipped_count=0
+                    local current_json
+                    current_json=$(<"$target_profile_file")
+
+                    # Create a temporary file for jq output
+                    local temp_file
+                    temp_file=$(mktemp)
+                    if [ -z "$temp_file" ]; then
+                        exit_with_error "Failed to create temporary file."
+                    fi
+
+                    # Process each server name to remove
+                    for server_name in "${servers_to_remove[@]}"; do
+                        # Check if server name exists in the array
+                        if echo "$current_json" | jq -e --arg name "$server_name" '.servers[] | select(. == $name)' > /dev/null; then
+                            log_debug "Removing server '${server_name}' from profile '${profile_name}'"
+                            # Remove the server name from the array using jq
+                            current_json=$(echo "$current_json" | jq --arg name "$server_name" '.servers -= [$name]')
+                            if [ $? -ne 0 ]; then
+                                rm "$temp_file" # Clean up temp file on error
+                                exit_with_error "jq command failed while removing server '${server_name}'"
+                            fi
+                            ((servers_removed_count++))
+                        else
+                            log_info "Server '${server_name}' not found in profile '${profile_name}'. Skipping."
+                            ((servers_skipped_count++))
+                        fi
+                    done
+
+                    # Write the final JSON to the temporary file
+                    echo "$current_json" > "$temp_file"
+
+                    # Replace the original file with the temporary file
+                    if mv "$temp_file" "$target_profile_file"; then
+                        chmod 600 "$target_profile_file" || log_warn "Failed to set permissions on ${target_profile_file}"
+                        if [ "$servers_removed_count" -gt 0 ]; then
+                            print_success "Successfully removed ${servers_removed_count} server(s) from profile '${profile_name}'."
+                        fi
+                        if [ "$servers_skipped_count" -gt 0 ]; then
+                            print_info "Skipped ${servers_skipped_count} server(s) not found in profile '${profile_name}'."
+                        fi
+                    else
+                        rm "$temp_file" # Clean up temp file on error
+                        exit_with_error "Failed to update profile file: ${target_profile_file}"
+                    fi
+                    ;;
+                delete)
+                    local profile_name="$1"
+                    if [ -z "$profile_name" ]; then exit_with_error "Missing profile name for 'delete'"; fi
+                    local profile_file="${PROFILES_DIR}/${profile_name}.json"
+                    log_debug "Attempting to delete profile '${profile_name}' (${profile_file})"
+
+                    # Check if file exists before prompting
+                    check_file_readable "$profile_file"
+
+                    # Ask for confirmation
+                    local confirm
+                    read -p "Are you sure you want to permanently delete the profile '${profile_name}'? [y/N] " confirm
+
+                    if [[ "$confirm" =~ ^[Yy]$ ]]; then
+                        log_info "Deleting profile file: ${profile_file}"
+                        if rm "$profile_file"; then
+                            print_success "Profile '${profile_name}' deleted successfully."
+                        else
+                            exit_with_error "Failed to delete profile file: ${profile_file}"
+                        fi
+                    else
+                        print_info "Profile deletion cancelled."
+                    fi
+                    ;;
+                help|-h|--help)
+                    print_profile_help
+                    exit 0
+                    ;;
+                *)
+                    exit_with_error "Unknown profile command: ${profile_command}"
+                    ;;
+            esac
+            ;;
+        last)
+            log_info "Restoring last configuration..."
+            local target_config="${HOME}/Library/Application Support/Claude/claude_desktop_config.json"
+            
+            # Validate last config file
+            log_debug "Validating last backup file: ${LAST_CONFIG_FILE}"
+            check_file_readable "${LAST_CONFIG_FILE}"
+            validate_json_file "${LAST_CONFIG_FILE}"
+            log_debug "Last backup file validation successful."
+            
+            # Validate target config file
+            log_debug "Validating target config file: ${target_config}"
+            check_file_writable "$target_config"
+            validate_json_file "$target_config"
+            log_debug "Target config file validation successful."
+            
+            # Read the last saved mcpServers block
+            local last_servers
+            last_servers=$(<"${LAST_CONFIG_FILE}")
+            log_debug "Read previous mcpServers block from ${LAST_CONFIG_FILE}"
+            log_debug "Previous block content:
+$(echo "$last_servers" | jq '.')"
+            
+            # Create temp file for safe update
+            local temp_config_file
+            temp_config_file=$(mktemp)
+            if [ -z "$temp_config_file" ]; then
+                exit_with_error "Failed to create temporary config file."
+            fi
+            log_debug "Temporary file created: ${temp_config_file}"
+            
+            # Update target config file using jq and the restored mcpServers object
+            log_debug "Updating target config ${target_config} with restored servers."
+            jq --argjson restored_servers "$last_servers" '.mcpServers = $restored_servers' "$target_config" > "$temp_config_file"
+            if [ $? -ne 0 ]; then
+                rm "$temp_config_file" # Clean up temp file
+                exit_with_error "jq failed while updating target configuration with restored servers."
+            fi
+            log_debug "jq update command successful."
+            
+            # Replace original config with updated temp file
+            log_debug "Moving temp file ${temp_config_file} to ${target_config}"
+            if mv "$temp_config_file" "$target_config"; then
+                log_debug "Move successful. Target configuration file restored: ${target_config}"
+                
+                # Update loaded file to indicate restored state
+                log_debug "Updating loaded file to '(restored_previous)': ${LOADED_FILE}"
+                echo "(restored_previous)" > "${LOADED_FILE}" || log_warn "Failed to update loaded file: ${LOADED_FILE}"
+                log_debug "Updated loaded file: ${LOADED_FILE}"
+                
+                print_success "Successfully restored the last configuration."
+                restart_claude
+            else
+                rm "$temp_config_file" # Clean up temp file
+                exit_with_error "Failed to move temporary config file to target: ${target_config}"
+            fi
+            ;;
+        import)
+            # --- Import Command ---
+            handle_import_command "$@"
+            ;;
+        export)
+            # --- Export Command ---
+            handle_export_command "$@"
+            ;;
+        uninstall)
+            # --- Uninstall Command ---
+            handle_uninstall_command "$@"
+            ;;
+        completion)
+            # --- Completion Command ---
+            handle_completion_command "$@"
+            ;;
+        *)
+            # --- Try Profile Activation or Error ---
+            local profile_file="${PROFILES_DIR}/${command}.json"
+            if [ -f "$profile_file" ]; then
+                log_info "Attempting to activate profile: ${command}"
+                local target_config="${HOME}/Library/Application Support/Claude/claude_desktop_config.json"
+
+                # --- Load .env file --- 
+                load_dotenv # Load secrets from .env into environment
+
+                # --- Validation (Basic for this task) ---
+                log_debug "STEP 1: Validating profile file: ${profile_file}"
+                check_file_readable "$profile_file"
+                validate_json_file "$profile_file"
+                log_debug "STEP 2: Profile file validation successful."
+
+                log_debug "STEP 3: Validating target config file: ${target_config}"
+                check_file_writable "$target_config" # Check if exists and writable
+                validate_json_file "$target_config" # Check if it's valid JSON
+                log_debug "STEP 4: Target config file validation successful."
+
+                # --- Pre-activation Validation (Task 10) ---
+                log_info "Validating profile servers and secrets..."
+                if jq -e '.servers | length > 0' "$profile_file" > /dev/null; then
+                    log_debug "Pre-validation: Looping through servers in profile '${command}'"
+                    local server_name_validate
+                    local validation_failed=0
+                    while IFS= read -r server_name_validate; do
+                        if [ -z "$server_name_validate" ]; then continue; fi
+                        log_debug "Validating server: ${server_name_validate}"
+                        local server_file_validate="${SERVERS_DIR}/${server_name_validate}.json"
+
+                        # 1. Check server file existence and readability
+                        if ! check_file_readable "$server_file_validate" >&2; then 
+                            # check_file_readable already calls exit_with_error, but capture output just in case
+                            validation_failed=1
+                            break # No need to continue validation for this profile
+                        fi
+
+                        # 2. Validate server file JSON
+                        if ! validate_json_file "$server_file_validate" >&2; then
+                            # validate_json_file already calls exit_with_error
+                            validation_failed=1
+                            break
+                        fi
+
+                        # 3. Check placeholders/secrets
+                        local server_content_raw
+                        server_content_raw=$(<"$server_file_validate")
+                        local placeholder_validate
+                        local all_placeholders_validate
+                        all_placeholders_validate=$(echo "$server_content_raw" | grep -Eo '\\{\\{(ENV|DOTENV):([a-zA-Z0-9_]+)\\}\\}' | tr '\\n' '|')
+
+                        if [ -n "$all_placeholders_validate" ]; then
+                             log_debug "Found placeholders in ${server_name_validate}. Checking resolution..."
+                             local OLD_IFS_VALIDATE="$IFS"
+                             IFS='|'
+                             for placeholder_validate in $all_placeholders_validate; do
+                                 if [ -z "$placeholder_validate" ]; then continue; fi
+                                 local type_validate key_validate value_validate
+                                 type_validate=$(echo "$placeholder_validate" | sed -n 's/^{{\(ENV\\|DOTENV\\):.*/\\\\1/p')
+                                 key_validate=$(echo "$placeholder_validate" | sed -n 's/^{{[A-Z_]*:\\([a-zA-Z0-9_]*\\)}}/\\\\1/p')
+                                 
+                                 if [ -z "$type_validate" ] || [ -z "$key_validate" ]; then
+                                      log_warn "Could not parse placeholder '${placeholder_validate}' in ${server_file_validate}. Skipping validation for this placeholder."
+                                      continue
+                                 fi
+
+                                 # Check if value is set and non-empty
+                                 value_validate=""
+                                 eval "value_validate=\"\\${$key_validate:-}\"" # Uses env var loaded by load_dotenv
+
+                                 if [ -z "$value_validate" ]; then
+                                     log_error "Unresolved or empty secret for placeholder '${placeholder_validate}' in server '${server_name_validate}' (${server_file_validate})."
+                                     validation_failed=1
+                                     # Don't break inner loop, report all missing secrets for this file
+                                 else
+                                     log_debug "Placeholder '${placeholder_validate}' resolved successfully (value non-empty)."
+                                     # DO NOT log value_validate
+                                 fi
+                             done
+                             IFS="$OLD_IFS_VALIDATE"
+                        fi # End placeholder check
+
+                        if [ "$validation_failed" -ne 0 ]; then
+                            break # Exit outer server loop if inner validation failed
+                        fi
+                        log_debug "Server '${server_name_validate}' validation passed."
+                    done < <(jq -r '.servers[]? // empty' "$profile_file")
+
+                    if [ "$validation_failed" -ne 0 ]; then
+                        exit_with_error "Profile activation failed due to validation errors."
+                    fi
+                    log_debug "All servers in profile '${command}' passed pre-validation."
+                else
+                    log_info "Profile '${command}' has no servers to validate."
+                fi
+                log_info "Profile validation successful."
+
+                # --- Construction ---
+                log_info "Constructing new mcpServers block..."
+                log_debug "STEP 5: Initializing new_mcp_servers variable."
+                local new_mcp_servers="{}" # Start with an empty JSON object
+
+                # Check if profile has any servers defined
+                log_debug "STEP 6: Checking if profile '${command}' has servers."
+                if ! jq -e '.servers | length > 0' "$profile_file" > /dev/null; then
+                    log_info "Profile '${command}' contains no servers or .servers is not an array. Clearing mcpServers block."
+                else
+                    log_debug "STEP 7: Profile has servers. Looping through server list."
+                    # Use while read loop for portability (instead of mapfile)
+                    local server_name
+                    while IFS= read -r server_name; do
+                        if [ -z "$server_name" ]; then continue; fi # Skip empty lines if any
+                        log_debug "STEP 7a: Processing server: ${server_name}"
+                        local server_file="${SERVERS_DIR}/${server_name}.json"
+
+                        # Basic check - full validation comes later (Task 10)
+                        log_debug "STEP 7b: Checking server definition file existence: ${server_file}"
+                        if [ ! -f "$server_file" ]; then
+                            exit_with_error "Server definition file not found for '${server_name}': ${server_file}"
+                        fi
+                        log_debug "STEP 7c: Validating server definition JSON: ${server_file}"
+                        validate_json_file "$server_file" # Ensure server def is valid JSON
+
+                        # Read server definition content (value)
+                        log_debug "STEP 7d: Reading server definition content from ${server_file}"
+                        local server_value_raw
+                        server_value_raw=$(<"$server_file")
+                        log_debug "STEP 7e: Raw server definition content read successfully."
+
+                        # Resolve placeholders
+                        log_debug "STEP 7e-resolve: Resolving placeholders in server definition for ${server_name}"
+                        local server_value_resolved
+                        server_value_resolved=$(resolve_placeholders "$server_value_raw")
+                        # Add validation check for the resolved JSON
+                        if ! echo "$server_value_resolved" | jq -e . > /dev/null 2>&1; then
+                             log_error "Internal Error: resolve_placeholders returned invalid JSON for server '${server_name}'."
+                             log_debug "Invalid JSON content: $server_value_resolved"
+                             # Decide whether to exit or just skip this server
+                             exit_with_error "Activation failed due to internal error processing server '${server_name}'."
+                        fi
+                        # DO NOT LOG server_value_resolved normally as it contains secrets
+                        log_debug "STEP 7e-resolve: Placeholders resolved for ${server_name}. Output validated as JSON."
+                        
+                        # Add server key and RESOLVED value to the mcpServers object using jq
+                        # Note: Using --argjson requires jq 1.5+
+                        log_debug "STEP 7f: Adding server '${server_name}' (with resolved value) to new_mcp_servers JSON object."
+                        new_mcp_servers=$(echo "$new_mcp_servers" | jq --arg key "$server_name" --argjson val "$server_value_resolved" '. + {($key): $val}')
+                        if [ $? -ne 0 ]; then
+                            exit_with_error "jq failed while constructing mcpServers object for server '${server_name}'"
+                        fi
+                        log_debug "STEP 7g: Server '${server_name}' added successfully to JSON object."
+                    done < <(jq -r '.servers[]? // empty' "$profile_file") # Use ? and // empty for safety
+                    log_debug "STEP 8: Finished looping through servers."
+                fi
+
+                log_debug "STEP 9: Final constructed mcpServers block (Secrets Redacted):"
+                # Censor secrets before logging the final block
+                # Basic redaction: replaces string values of objects whose key contains common secret names
+                local redacted_json
+                redacted_json=$(echo "$new_mcp_servers" | jq 'with_entries(if (.key | test("key|token|secret"; "i")) and (.value | type == "string") then .value = "<REDACTED>" else . end)')
+                if [ $? -ne 0 ]; then
+                    log_warn "jq redaction failed. Logging raw structure (may contain secrets if DEBUG level is high)."
+                    redacted_json="$new_mcp_servers" # Fallback to unredacted if jq fails
+                fi
+                log_debug "${redacted_json}"
+
+                # --- Backup and Update --- 
+                log_info "Backing up existing configuration and applying changes..."
+                log_debug "STEP 10: Backing up existing mcpServers from ${target_config} to ${LAST_CONFIG_FILE}"
+
+                # Backup current mcpServers block to last.json
+                # Use '// {}' to default to empty object if mcpServers doesn't exist
+                jq '.mcpServers // {}' "$target_config" > "$LAST_CONFIG_FILE" || {
+                    log_debug "ERROR: Failed during backup jq command."
+                    exit_with_error "Failed to backup existing mcpServers to ${LAST_CONFIG_FILE}"
+                }
+                log_debug "STEP 11: Backup successful."
+
+                # Create temp file for safe update
+                log_debug "STEP 12: Creating temporary file for config update."
+                local temp_config_file
+                temp_config_file=$(mktemp)
+                if [ -z "$temp_config_file" ]; then
+                    log_debug "ERROR: Failed to create temp file."
+                    exit_with_error "Failed to create temporary config file."
+                fi
+                log_debug "STEP 13: Temporary file created: ${temp_config_file}"
+
+                # Update target config file using jq and the new mcpServers object
+                log_debug "STEP 14: Updating target config using jq and temp file."
+                jq --argjson new_servers "$new_mcp_servers" '.mcpServers = $new_servers' "$target_config" > "$temp_config_file"
+                if [ $? -ne 0 ]; then
+                    log_debug "ERROR: Failed during config update jq command."
+                    rm "$temp_config_file" # Clean up temp file
+                    exit_with_error "jq failed while updating target configuration."
+                fi
+                log_debug "STEP 15: jq update command successful."
+
+                # Replace original config with updated temp file
+                log_debug "STEP 16: Moving temp file ${temp_config_file} to ${target_config}"
+                if mv "$temp_config_file" "$target_config"; then
+                    log_debug "STEP 17: Move successful. Target configuration file updated: ${target_config}"
+
+                    # Update loaded file
+                    log_debug "STEP 18: Updating loaded file: ${LOADED_FILE}"
+                    echo "$command" > "$LOADED_FILE" || log_warn "Failed to update loaded file: ${LOADED_FILE}"
+                    log_debug "STEP 19: Updated loaded file: ${LOADED_FILE}"
+
+                    print_success "Profile '${command}' activated successfully."
+                    restart_claude
+                else
+                    log_debug "ERROR: Failed to move temp file to target."
+                    rm "$temp_config_file" # Clean up temp file
+                    exit_with_error "Failed to move temporary config file to target: ${target_config}"
+                fi
+            else
+                exit_with_error "Profile '${command}' not found."
+            fi
+            ;;
+    esac
+    log_debug "main function finished successfully."
+}
+
+# === Convert Command Logic ===
+handle_import_command() {
+    log_debug "handle_import_command started with args: $@"
+    local input_file=""
+    local create_profile=0
+    local custom_profile_name=""
+
+    # Parse arguments
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --file)
+                if [ -z "$2" ]; then exit_with_error "Missing file path for --file"; fi
+                input_file="$2"
+                shift 2
+                ;;
+            --create-profile)
+                create_profile=1
+                shift
+                ;;
+            --profile-name)
+                if [ -z "$2" ]; then exit_with_error "Missing profile name for --profile-name"; fi
+                custom_profile_name="$2"
+                shift 2
+                ;;
+            *)
+                exit_with_error "Unknown argument for import: $1" ;;
+        esac
+    done
+
+    if [ -z "$input_file" ]; then
+        exit_with_error "Missing required argument: --file <path>"
+    fi
+
+    log_info "Importing servers from input file: $input_file"
+    check_file_readable "$input_file"
+    validate_json_file "$input_file"
+
+    # Ensure servers directory exists
+    mkdir -p "$SERVERS_DIR" || exit_with_error "Failed to ensure servers directory exists: $SERVERS_DIR"
+
+    local server_names=()
+    local server_name
+    local server_config
+    local target_server_file
+
+    # Check if .mcpServers key exists and is an object
+    if ! jq -e '.mcpServers | (type == "object")' "$input_file" > /dev/null; then
+        exit_with_error "Input file '$input_file' does not contain a valid '.mcpServers' object."
+    fi
+
+    # Extract server names and configurations
+    log_debug "Extracting server configurations..."
+    while IFS= read -r server_name; do
+        log_debug "Processing server: $server_name"
+        # Safely extract the config for the current server name
+        server_config=$(jq -c --arg name "$server_name" '.mcpServers[$name]' "$input_file")
+        target_server_file="${SERVERS_DIR}/${server_name}.json"
+
+        if [ -e "$target_server_file" ]; then
+            log_warn "Server definition '${server_name}' already exists. Overwriting: ${target_server_file}"
+        fi
+
+        log_info "Saving server definition: ${server_name}.json"
+        # Write the extracted JSON object, pretty-printed
+        echo "$server_config" | jq '.' > "$target_server_file"
+        if [ $? -ne 0 ]; then
+            log_error "Failed to write server definition for '${server_name}' to ${target_server_file}"
+            # Consider whether to continue or exit
+        else
+            chmod 600 "$target_server_file" # Set permissions
+            server_names+=("$server_name") # Add to list for potential profile creation
+        fi
+    done <<< "$(jq -r '.mcpServers | keys[]' "$input_file")" # Get list of server names
+
+    if [ ${#server_names[@]} -eq 0 ]; then
+        log_info "No servers found in .mcpServers object in '$input_file'."
+        exit 0
+    fi
+
+    print_success "Extracted ${#server_names[@]} server definitions."
+
+    # Handle profile creation if requested
+    if [ $create_profile -eq 1 ]; then
+        # Ensure profiles directory exists
+        mkdir -p "$PROFILES_DIR" || exit_with_error "Failed to ensure profiles directory exists: $PROFILES_DIR"
+
+        local profile_name=""
+        if [ -n "$custom_profile_name" ]; then
+             profile_name="$custom_profile_name"
+             log_debug "Using provided profile name: $profile_name"
+        else
+             local input_basename=$(basename "$input_file")
+             profile_name="${input_basename%.json}" # Use filename without extension as default
+             log_debug "Using default profile name derived from input file: $profile_name"
+        fi
+
+        local target_profile_file="${PROFILES_DIR}/${profile_name}.json"
+
+        log_info "Creating profile '${profile_name}' with imported servers..."
+
+        if [ -e "$target_profile_file" ]; then
+            log_warn "Profile '${profile_name}' already exists. Overwriting: ${target_profile_file}"
+        fi
+
+        # Create the profile JSON { "servers": ["name1", "name2"] }
+        local profile_json
+        profile_json=$(printf '%s\n' "${server_names[@]}" | jq -R '.' | jq -s '{servers: .}')
+
+        echo "$profile_json" > "$target_profile_file"
+        if [ $? -ne 0 ]; then
+            exit_with_error "Failed to write profile file: ${target_profile_file}"
+        fi
+        chmod 600 "$target_profile_file"
+        print_success "Profile '${profile_name}' created successfully at ${target_profile_file}"
+    fi
+
+    log_debug "handle_import_command finished."
+}
+
+# === Export Command Logic ===
+handle_export_command() {
+    log_debug "handle_export_command started with args: $@"
+    local profile_name="$1"
+    shift # Consume profile name
+    local output_file=""
+
+    if [ -z "$profile_name" ]; then
+        exit_with_error "Missing required argument: <profile_name>"
+    fi
+
+    # Parse --output argument
+    if [[ "$1" == "--output" && -n "$2" ]]; then
+        output_file="$2"
+        shift 2
+    elif [ $# -gt 0 ]; then # Check if there are any other unexpected args
+        exit_with_error "Unknown argument for export: $1. Expected --output <file>"
+    else
+        exit_with_error "Missing required argument: --output <file>"
+    fi
+
+    log_info "Exporting profile '${profile_name}' to file: ${output_file}"
+
+    # --- Load Secrets --- 
+    load_dotenv # Load secrets from .env into environment
+
+    # --- Validate Profile --- 
+    local profile_file="${PROFILES_DIR}/${profile_name}.json"
+    log_debug "Validating profile file: ${profile_file}"
+    check_file_readable "$profile_file"
+    validate_json_file "$profile_file"
+    log_debug "Profile file validation successful."
+
+    # --- Validate Output Path --- 
+    local output_dir
+    output_dir=$(dirname "$output_file")
+    log_debug "Checking output directory: ${output_dir}"
+    # Ensure output directory exists and is writable
+    if [ ! -d "$output_dir" ]; then
+        log_info "Output directory does not exist. Attempting to create: ${output_dir}"
+        if ! mkdir -p "$output_dir"; then
+             exit_with_error "Failed to create output directory: ${output_dir}"
+        fi
+        log_debug "Output directory created successfully."
+    fi
+    if [ ! -w "$output_dir" ]; then
+        exit_with_error "Output directory is not writable: ${output_dir}"
+    fi
+    # Warn if output file exists
+    if [ -e "$output_file" ]; then
+        log_warn "Output file already exists and will be overwritten: ${output_file}"
+    fi
+    log_debug "Output path validation successful."
+
+    # --- Build Export Object --- 
+    log_info "Building exported configuration..."
+    local export_servers="{}" # Start with an empty JSON object for servers
+    local server_count=0
+
+    # Check if profile has any servers defined
+    if ! jq -e '.servers | length > 0' "$profile_file" > /dev/null; then
+        log_info "Profile '${profile_name}' contains no servers to export."
+    else
+        log_debug "Processing servers listed in profile '${profile_name}'"
+        # Loop through server names in the profile
+        local server_name
+        while IFS= read -r server_name; do
+            if [ -z "$server_name" ]; then continue; fi # Skip empty lines if any
+            log_debug "Processing server for export: ${server_name}"
+            local server_file="${SERVERS_DIR}/${server_name}.json"
+
+            # Validate server definition file
+            log_debug "Validating server definition: ${server_file}"
+            check_file_readable "$server_file"
+            validate_json_file "$server_file"
+
+            # Read server definition content (raw)
+            log_debug "Reading raw server definition content from ${server_file}"
+            local server_value_raw
+            server_value_raw=$(<"$server_file")
+
+            # Resolve placeholders
+            log_debug "Resolving placeholders in server definition for ${server_name}"
+            local server_value_resolved
+            server_value_resolved=$(resolve_placeholders "$server_value_raw")
+            # Validate the resolved JSON
+            if ! echo "$server_value_resolved" | jq -e . > /dev/null 2>&1; then
+                 log_error "Internal Error: resolve_placeholders returned invalid JSON for server '${server_name}'. Skipping this server."
+                 log_debug "Invalid JSON content: $server_value_resolved"
+                 continue # Skip this server and proceed with the next
+            fi
+            log_debug "Placeholders resolved successfully for ${server_name}."
+            
+            # Add server key and RESOLVED value to the export_servers object
+            log_debug "Adding resolved server '${server_name}' to export object."
+            export_servers=$(echo "$export_servers" | jq --arg key "$server_name" --argjson val "$server_value_resolved" '. + {($key): $val}')
+            if [ $? -ne 0 ]; then
+                exit_with_error "jq failed while constructing export object for server '${server_name}'"
+            fi
+            ((server_count++))
+            log_debug "Server '${server_name}' added successfully to export object."
+        done < <(jq -r '.servers[]? // empty' "$profile_file") # Use ? and // empty for safety
+        log_debug "Finished processing servers listed in profile."
+    fi # End server processing loop
+
+    # --- Wrap and Write Output --- 
+    log_info "Writing final exported configuration to: ${output_file}"
+    # Wrap the collected servers under the "mcpServers" key
+    local final_export_json
+    final_export_json=$(echo "{}" | jq --argjson servers "$export_servers" '.mcpServers = $servers')
+
+    # Pretty-print and write to output file
+    echo "$final_export_json" | jq '.' > "$output_file"
+    if [ $? -ne 0 ]; then
+        # Attempt cleanup? Maybe not, user might want the partial file.
+        exit_with_error "Failed to write final export JSON to: ${output_file}"
+    fi
+
+    # Set permissions (consistent with others, though secrets are resolved)
+    chmod 600 "$output_file" || log_warn "Failed to set permissions on output file: ${output_file}"
+
+    print_success "Successfully exported ${server_count} server(s) from profile '${profile_name}' to ${output_file}"
+    log_debug "handle_export_command finished."
+}
+
+# === Uninstall Command Logic ===
+handle_uninstall_command() {
+    log_debug "handle_uninstall_command started with args: $@"
+    local remove_config=0
+    local skip_confirmation=0 # New flag
+
+    # Parse arguments
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --remove-config)
+                remove_config=1
+                shift
+                ;;
+            --yes) # New argument
+                skip_confirmation=1
+                shift
+                ;;
+            *)
+                exit_with_error "Unknown argument for uninstall: $1" ;;
+        esac
+    done
+
+    log_info "Preparing to uninstall claude-mcp-manager..."
+
+    # Find the actual script path and the symlink path
+    local script_library_path="$SCRIPT_DIR" # SCRIPT_DIR is determined at the start
+    local symlink_path
+    symlink_path=$(command -v claude-mcp-manager) # Find the command in PATH
+
+    if [ -z "$symlink_path" ] && [ ! -L "$symlink_path" ]; then
+        log_warn "Could not find the command symlink 'claude-mcp-manager' in PATH. It might have been removed already."
+        symlink_path="" # Ensure it's empty if not found or not a symlink
+    else
+         log_debug "Found command symlink at: ${symlink_path}"
+    fi
+
+    if [ ! -d "$script_library_path" ]; then
+        log_warn "Script library directory not found: ${script_library_path}. It might have been removed already."
+        script_library_path="" # Ensure it's empty if not found
+    else
+        log_debug "Found script library directory at: ${script_library_path}"
+    fi
+
+    if [ -z "$symlink_path" ] && [ -z "$script_library_path" ]; then
+        print_info "Nothing to remove (symlink and library directory not found)."
+        # Still check for config removal if requested
+    else
+        # --- Primary Confirmation --- 
+        local confirm
+        if [ $skip_confirmation -eq 0 ]; then # Only ask if --yes is NOT set
+            print_bold "This will remove the following:"
+            if [ -n "$symlink_path" ]; then
+                echo "  - Symlink: ${symlink_path}"
+            fi
+            if [ -n "$script_library_path" ]; then
+                echo "  - Script Library: ${script_library_path}"
+            fi
+            read -p "Are you sure you want to proceed with uninstalling the script? [y/N] " confirm
+            
+            if ! [[ "$confirm" =~ ^[Yy]$ ]]; then
+                print_info "Uninstall cancelled by user."
+                exit 0
+            fi
+        else
+            log_info "--yes flag specified, skipping script/symlink removal confirmation."
+        fi
+
+        # --- Perform Removal --- 
+        local removal_failed=0
+
+        if [ -n "$symlink_path" ]; then
+            log_info "Removing symlink: ${symlink_path}"
+            if ! rm -f "$symlink_path"; then
+                 log_error "Failed to remove symlink: ${symlink_path}. Manual removal might be needed."
+                 removal_failed=1
+            else
+                 log_debug "Symlink removed successfully."
+            fi
+        fi
+
+        if [ -n "$script_library_path" ]; then
+            log_info "Removing script library directory: ${script_library_path}"
+            if ! rm -rf "$script_library_path"; then
+                 log_error "Failed to remove script library directory: ${script_library_path}. Manual removal might be needed."
+                 removal_failed=1
+            else
+                 log_debug "Script library directory removed successfully."
+            fi
+        fi
+        
+        if [ $removal_failed -eq 0 ]; then
+            print_success "claude-mcp-manager script and symlink removed successfully."
+        else
+             print_warning "Some errors occurred during script/symlink removal. Please check logs."
+        fi
+    fi # End primary removal block
+
+    # --- Configuration Removal --- 
+    if [ $remove_config -eq 1 ]; then
+        log_info "Configuration removal requested (--remove-config)."
+        if [ ! -d "$CONFIG_DIR" ]; then
+            print_info "Configuration directory not found: ${CONFIG_DIR}. Nothing to remove."
+        else
+            # Explicit confirmation for config removal (ALWAYS requires confirmation)
+            local confirm_config
+            print_warning "This will permanently delete the entire configuration directory:"
+            print_warning "  ${CONFIG_DIR}"
+            print_warning "This includes all profiles, server definitions, logs, and the .env file!"
+            read -p "Are you absolutely sure you want to remove the configuration directory? [y/N] " confirm_config
+            
+            if [[ "$confirm_config" =~ ^[Yy]$ ]]; then
+                log_info "Removing configuration directory: ${CONFIG_DIR}"
+                if rm -rf "$CONFIG_DIR"; then
+                    print_success "Configuration directory removed successfully: ${CONFIG_DIR}"
+                else
+                    exit_with_error "Failed to remove configuration directory: ${CONFIG_DIR}. Manual removal might be needed."
+                fi
+            else
+                print_info "Configuration directory removal cancelled."
+            fi
+        fi
+    else
+        print_info "Configuration directory removal not requested. It remains at: ${CONFIG_DIR}"
+    fi
+
+    print_info "Uninstall process complete."
+    log_debug "handle_uninstall_command finished."
+}
+
+# === Shell Completion Logic ===
+
+_generate_bash_completion() {
+  # Using a heredoc to output the completion script
+  cat << EOF
+# bash completion for claude-mcp-manager                               -*- shell-script -*-\n\n_claude_mcp_manager_list_profiles() {\n    # Use the installed command to list profiles, skipping header\n    command claude-mcp-manager profile list 2>/dev/null | tail -n +2 | sed 's/^[[:space:]]*//'\n}\n\n_claude_mcp_manager_list_servers() {\n    # Use the installed command to list servers, skipping header\n    command claude-mcp-manager server list 2>/dev/null | tail -n +2 | sed 's/^[[:space:]]*//'\n}\n\n_claude_mcp_manager_completions()\n{\n    local cur prev words cword\n    _get_comp_words_by_ref -n : cur prev words cword\n\n    # Top-level commands and profile names\n    if [[ \${cword} -eq 1 ]]; then\n        local profiles=\$(_claude_mcp_manager_list_profiles)\n        local commands=\"server profile import export last uninstall completion help\"\n        COMPREPLY=( \$(compgen -W \"\${commands} \${profiles}\" -- \"\${cur}\") )\n        return 0\n    fi\n\n    local command=\"\${words[1]}\"\n    case \"\${command}\" in\n        server)\n            local server_commands=\"list show add edit remove extract help\"\n            if [[ \${cword} -eq 2 ]]; then\n                COMPREPLY=( \$(compgen -W \"\${server_commands}\" -- \"\${cur}\") )\n                return 0\n            fi\n\n            local server_action=\"\${words[2]}\"\n            case \"\${server_action}\" in\n                show|edit|remove)\n                    # Complete with server names\n                    if [[ \${cword} -eq 3 ]]; then\n                         local servers=\$(_claude_mcp_manager_list_servers)\n                         COMPREPLY=( \$(compgen -W \"\${servers}\" -- \"\${cur}\") )\n                    fi\n                    ;;\n                add)\n                    # Complete options like --file, --json\n                    if [[ \"\${cur}\" == -* ]]; then\n                        COMPREPLY=( \$(compgen -W \"--file --json\" -- \"\${cur}\") )\n                    elif [[ \"\${prev}\" == \"--file\" ]]; then\n                         _filedir # Complete file paths\n                    fi\n                    # No completion for server name (arg 3) or json string (arg 5)\n                    ;;\n                extract)\n                    # Complete options like --profile\n                     if [[ \"\${cur}\" == -* ]]; then\n                        COMPREPLY=( \$(compgen -W \"--profile\" -- \"\${cur}\") )\n                    elif [[ \"\${prev}\" == \"--profile\" ]]; then\n                        # Complete with profile names (optional)\n                        local profiles=\$(_claude_mcp_manager_list_profiles)\n                        COMPREPLY=( \$(compgen -W \"\${profiles}\" -- \"\${cur}\") )\n                    fi\n                    ;;\n            esac\n            ;;\n        profile)\n            local profile_commands=\"list show create copy edit add remove delete help\"\n            if [[ \${cword} -eq 2 ]]; then\n                COMPREPLY=( \$(compgen -W \"\${profile_commands}\" -- \"\${cur}\") )\n                return 0\n            fi\n\n            local profile_action=\"\${words[2]}\"\n            case \"\${profile_action}\" in\n                show|edit|delete)\n                    # Complete with profile names\n                    if [[ \${cword} -eq 3 ]]; then\n                         local profiles=\$(_claude_mcp_manager_list_profiles)\n                         COMPREPLY=( \$(compgen -W \"\${profiles}\" -- \"\${cur}\") )\n                    fi\n                    ;;\n                copy)\n                     # Complete source profile (arg 3), then dest profile (arg 4)\n                    if [[ \${cword} -eq 3 || \${cword} -eq 4 ]]; then\n                         local profiles=\$(_claude_mcp_manager_list_profiles)\n                         COMPREPLY=( \$(compgen -W \"\${profiles}\" -- \"\${cur}\") )\n                    fi\n                    ;;\n                add|remove)\n                    # Complete profile name (arg 3), then server names (arg 4+)\n                    if [[ \${cword} -eq 3 ]]; then\n                        local profiles=\$(_claude_mcp_manager_list_profiles)\n                        COMPREPLY=( \$(compgen -W \"\${profiles}\" -- \"\${cur}\") )\n                    elif [[ \${cword} -ge 4 ]]; then\n                        # Complete with available server names\n                        local servers=\$(_claude_mcp_manager_list_servers)\n                        COMPREPLY=( \$(compgen -W \"\${servers}\" -- \"\${cur}\") )\n                    fi\n                    ;;\n                create)\n                    # No completion for new profile name (arg 3)\n                    ;;\n            esac\n            ;;\n        import)\n             # Complete options like --file, --create-profile, --profile-name\n             if [[ \"\${cur}\" == -* ]]; then\n                COMPREPLY=( \$(compgen -W \"--file --create-profile --profile-name\" -- \"\${cur}\") )\n            elif [[ \"\${prev}\" == \"--file\" ]]; then\n                 _filedir # Complete file paths\n            fi\n             # No completion for profile name after --profile-name\n             ;;\n        export)\n             # Complete profile name (arg 2), then options like --output\n             if [[ \${cword} -eq 2 ]]; then\n                 local profiles=\$(_claude_mcp_manager_list_profiles)\n                 COMPREPLY=( \$(compgen -W \"\${profiles}\" -- \"\${cur}\") )\n             elif [[ \"\${cur}\" == -* ]]; then\n                 COMPREPLY=( \$(compgen -W \"--output\" -- \"\${cur}\") )\n             elif [[ \"\${prev}\" == \"--output\" ]]; then\n                 _filedir # Complete file paths\n             fi\n            ;;\n        uninstall)\n            # Complete options like --remove-config, --yes\n             if [[ \"\${cur}\" == -* ]]; then\n                COMPREPLY=( \$(compgen -W \"--remove-config --yes\" -- \"\${cur}\") )\n            fi\n            ;;\n        completion)\n             # Complete shell types\n             if [[ \${cword} -eq 2 ]]; then\n                COMPREPLY=( \$(compgen -W \"bash zsh\" -- \"\${cur}\") )\n             fi\n            ;;\n        *)\n            # If first arg is not a known command, assume it\'s a profile name\n            # No further completion in this case\n            ;;\n    esac\n\n    return 0\n} &&\ncomplete -F _claude_mcp_manager_completions claude-mcp-manager\n\n# ex: filetype=sh\nEOF\n}
+
+# ... (End of _generate_bash_completion function) ...
+EOF
+}
+
+_generate_zsh_completion() {
+  # Using a heredoc to output the Zsh completion script
+  # IMPORTANT: Use simple quotes for the heredoc marker to prevent parameter expansion inside
+  cat << 'EOF'
+#compdef claude-mcp-manager
+
+# Zsh completion for claude-mcp-manager
+
+# Function to get profile names
+_claude_mcp_manager_profiles() {
+    local -a profiles
+    # Use the installed command, skip header, remove leading space
+    profiles=("${(@f)$(command claude-mcp-manager profile list 2>/dev/null | tail -n +2 | sed 's/^[[:space:]]*//')}")
+    _describe 'profile' profiles
+}
+
+# Function to get server names
+_claude_mcp_manager_servers() {
+    local -a servers
+    servers=("${(@f)$(command claude-mcp-manager server list 2>/dev/null | tail -n +2 | sed 's/^[[:space:]]*//')}")
+    _describe 'server' servers
+}
+
+# Main completion function
+_claude_mcp_manager() {
+    local context state state_descr line
+    typeset -A opt_args
+
+    # General options
+    local -a global_opts
+    global_opts=(
+        '(-h --help)'{-h,--help}'[Show help message]'
+        '(-v --version)'{-v,--version}'[Show script version]'
+    )
+
+    # Subcommands
+    local -a commands
+    commands=(
+        'server:Manage server definitions'
+        'profile:Manage profiles'
+        'import:Import servers from an old MCP JSON config file'
+        'export:Export a profile\'s servers (with secrets resolved) to a file'
+        'last:Restore the last used configuration'
+        'uninstall:Remove the claude-mcp-manager script and symlink'
+        'completion:Output shell completion script'
+        'help:Show help message'
+    )
+
+    _arguments -C \
+        $global_opts \
+        '1:command or profile:_alternative \
+            "command: _describe \'\' commands" \
+            "profile: _claude_mcp_manager_profiles"' \
+        '*: :_claude_mcp_manager_subcommands' && return 0
+}
+
+# Handle subcommands
+_claude_mcp_manager_subcommands() {
+    local curcontext="$curcontext"
+
+    case $words[1] in
+        server)
+            local -a server_cmds server_opts
+            server_cmds=(
+                'list:List available server definitions'
+                'show:Show a specific server definition'
+                'add:Add a new server definition'
+                'edit:Edit a server definition'
+                'remove:Remove a server definition'
+                'extract:Extract servers from main config into individual files'
+                'help:Show server help'
+            )
+            server_opts=(
+                # Options for add
+                '(--file)'--file'[Path to JSON file containing server definition]:_files'
+                '(--json)'--json'[JSON string containing server definition]'
+                # Options for extract
+                '(--profile)'--profile'[Profile name to create/update with extracted servers]:_claude_mcp_manager_profiles'
+            )
+
+            case $words[2] in
+                list|help)
+                    _arguments -s $server_opts && return 0
+                    ;;
+                show|edit|remove)
+                    _arguments -s $server_opts \
+                        '1:server name:_claude_mcp_manager_servers' && return 0
+                    ;;
+                add)
+                     _arguments -s \
+                        '1:new server name' \
+                        $server_opts && return 0
+                     ;;
+                extract)
+                    _arguments -s $server_opts && return 0
+                    ;;
+                *) # Default case for 'server' command itself
+                    _arguments -s \
+                        '1: :_describe "server command" server_cmds' \
+                        $server_opts && return 0
+                    ;;
+            esac
+            ;;
+        profile)
+            local -a profile_cmds profile_opts
+            profile_cmds=(
+                'list:List available profiles'
+                'show:Show servers listed in a specific profile'
+                'create:Create a new, empty profile'
+                'copy:Copy an existing profile'
+                'edit:Edit a profile\'s server list'
+                'add:Add server(s) to a profile'
+                'remove:Remove server(s) from a profile'
+                'delete:Delete a profile file'
+                'help:Show profile help'
+            )
+
+            case $words[2] in
+                list|help)
+                     _arguments -s && return 0
+                    ;;
+                show|edit|delete)
+                    _arguments -s \
+                        '1:profile name:_claude_mcp_manager_profiles' && return 0
+                    ;;
+                 create)
+                     _arguments -s \
+                         '1:new profile name' && return 0
+                    ;;
+                copy)
+                    _arguments -s \
+                        '1:source profile name:_claude_mcp_manager_profiles' \
+                        '2:destination profile name' && return 0
+                    ;;
+                add|remove)
+                    _arguments -s \
+                        '1:profile name:_claude_mcp_manager_profiles' \
+                        '*:server name:_claude_mcp_manager_servers' && return 0
+                    ;;
+                 *) # Default case for 'profile' command itself
+                     _arguments -s \
+                         '1: :_describe "profile command" profile_cmds' && return 0
+                    ;;
+            esac
+        import)
+            _arguments -s \
+                '--file[Path to old MCP JSON config file]:_files' \
+                '--create-profile[Generate a profile from imported servers]' \
+                '--profile-name[Specify name for generated profile]:' && return 0
+            ;;
+        export)
+            _arguments -s \
+                '1:profile name:_claude_mcp_manager_profiles' \
+                '--output[Output file path]:_files' && return 0
+            ;;
+        uninstall)
+            _arguments -s \
+                '--remove-config[Also deletes the ~/.config/claude directory]' \
+                '--yes[Skips the script/symlink removal confirmation]' && return 0
+             ;;
+        completion)
+             _arguments -s \
+                '1:shell type:(bash zsh)' && return 0
+            ;;
+        help|last)
+             # These commands take no arguments
+             return 0
+            ;;
+        *) # If first word is not a known command, assume it's a profile for activation
+           # No further arguments expected
+           return 0
+           ;;
+    esac
+}
+
+# Register the completion function
+_claude_mcp_manager "$@"
+
+EOF
+}
+
+handle_completion_command() {
+    log_debug "handle_completion_command started with args: $@"
+    local shell_type="$1"
+
+    if [ -z "$shell_type" ]; then
+        exit_with_error "Missing required argument: <shell_type> (e.g., bash, zsh)"
+    fi
+
+    case "$shell_type" in
+        bash)
+            _generate_bash_completion
+            ;;
+        zsh)
+            # Call the Zsh generation function
+            _generate_zsh_completion
+            ;;
+        *)
+            exit_with_error "Unsupported shell type: '$shell_type'. Supported types: bash, zsh"
+            ;;
+    esac
+    log_debug "Completion script generated for $shell_type."
+    exit 0 # Important: Exit successfully after printing script
+}
+
+# === Script Entry Point ===
+main "$@"
+
+log_debug "Script execution finished naturally."
+exit 0 

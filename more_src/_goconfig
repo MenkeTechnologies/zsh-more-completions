@@ -1,0 +1,1165 @@
+# Source: https://github.com/rpsene/goconfig/blob/d0ee4a6e8a06c617f3f0a081fff4318add3e80e9/go.sh
+# Repository: rpsene/goconfig (go.sh)
+#!/usr/bin/env bash
+
+: '
+Copyright (C) 2018, 2023, 2025
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+    Contributors:
+        * Rafael Sene <rpsene@gmail.com>
+        * Hiro Miyamoto <miyamotoh@fuji.waseda.jp>
+
+    This script installs and configures a Go development environment on Linux
+    and macOS running on x86_64/amd64, arm64, ppc64le, and s390x.
+'
+
+set -euo pipefail
+
+# Script metadata
+readonly GOCONFIG_VERSION="2.0.0"
+readonly GOCONFIG_REPO="https://raw.githubusercontent.com/rpsene/goconfig/master/go.sh"
+
+# Default configuration
+readonly DEFAULT_INSTALL_DIR="/usr/local"
+readonly DEFAULT_WORKSPACE="$HOME/go"
+readonly DEFAULT_VERSIONS_DIR="$HOME/.go/versions"
+readonly DEFAULT_CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/goconfig"
+readonly CONFIG_FILE="$HOME/.goconfig"
+
+# URLs
+readonly GO_DOWNLOAD_URL="https://go.dev/dl"
+readonly GO_DOWNLOAD_BASE="https://dl.google.com/go"
+
+# Supported architectures
+readonly SUPPORTED_ARCHS=("amd64" "arm64" "ppc64le" "s390x")
+
+# Global options (can be overridden by config file or env vars)
+QUIET_MODE=false
+VERBOSE_MODE=false
+GO_INSTALL_DIR=""
+GO_WORKSPACE=""
+GO_VERSIONS_DIR=""
+GO_CACHE_DIR=""
+
+# Colors for output (disabled if not a terminal or quiet mode)
+setup_colors() {
+    if [[ -t 1 ]] && [[ "$QUIET_MODE" != true ]]; then
+        readonly RED=$'\033[0;31m'
+        readonly GREEN=$'\033[0;32m'
+        readonly YELLOW=$'\033[0;33m'
+        readonly BLUE=$'\033[0;34m'
+        readonly CYAN=$'\033[0;36m'
+        readonly BOLD=$'\033[1m'
+        readonly NC=$'\033[0m'
+    else
+        readonly RED=''
+        readonly GREEN=''
+        readonly YELLOW=''
+        readonly BLUE=''
+        readonly CYAN=''
+        readonly BOLD=''
+        readonly NC=''
+    fi
+}
+
+# Logging functions
+log_info() {
+    [[ "$QUIET_MODE" == true ]] && return
+    echo -e "${BLUE}[INFO]${NC} $*"
+}
+
+log_success() {
+    [[ "$QUIET_MODE" == true ]] && return
+    echo -e "${GREEN}[OK]${NC} $*"
+}
+
+log_warn() {
+    [[ "$QUIET_MODE" == true ]] && return
+    echo -e "${YELLOW}[WARN]${NC} $*" >&2
+}
+
+log_error() {
+    echo -e "${RED}[ERROR]${NC} $*" >&2
+}
+
+log_debug() {
+    [[ "$VERBOSE_MODE" != true ]] && return
+    echo -e "${CYAN}[DEBUG]${NC} $*" >&2
+}
+
+# Load configuration file
+load_config() {
+    if [[ -f "$CONFIG_FILE" ]]; then
+        log_debug "Loading config from $CONFIG_FILE"
+        # shellcheck source=/dev/null
+        source "$CONFIG_FILE"
+    fi
+
+    # Set defaults (env vars override config file)
+    GO_INSTALL_DIR="${GO_INSTALL_DIR:-$DEFAULT_INSTALL_DIR}"
+    GO_WORKSPACE="${GO_WORKSPACE:-$DEFAULT_WORKSPACE}"
+    GO_VERSIONS_DIR="${GO_VERSIONS_DIR:-$DEFAULT_VERSIONS_DIR}"
+    GO_CACHE_DIR="${GO_CACHE_DIR:-$DEFAULT_CACHE_DIR}"
+}
+
+# Save configuration
+save_config() {
+    cat > "$CONFIG_FILE" << EOF
+# goconfig configuration file
+# Generated on $(date)
+
+GO_INSTALL_DIR="$GO_INSTALL_DIR"
+GO_WORKSPACE="$GO_WORKSPACE"
+GO_VERSIONS_DIR="$GO_VERSIONS_DIR"
+GO_CACHE_DIR="$GO_CACHE_DIR"
+EOF
+    log_success "Configuration saved to $CONFIG_FILE"
+}
+
+# Cleanup function for failed downloads
+cleanup() {
+    local file="$1"
+    if [[ -f "$file" ]]; then
+        rm -f "$file"
+    fi
+}
+
+# Detect the operating system
+detect_os() {
+    local os
+    os="$(uname -s | tr '[:upper:]' '[:lower:]')"
+
+    case "$os" in
+        linux)  echo "linux" ;;
+        darwin) echo "darwin" ;;
+        *)
+            log_error "Unsupported operating system: $os"
+            return 1
+            ;;
+    esac
+}
+
+# Detect and normalize the architecture
+detect_arch() {
+    local arch
+    arch="$(uname -m)"
+
+    case "$arch" in
+        x86_64)  echo "amd64" ;;
+        amd64)   echo "amd64" ;;
+        aarch64) echo "arm64" ;;
+        arm64)   echo "arm64" ;;
+        ppc64le) echo "ppc64le" ;;
+        s390x)   echo "s390x" ;;
+        *)
+            log_error "Unsupported architecture: $arch"
+            log_error "Supported architectures: ${SUPPORTED_ARCHS[*]}"
+            return 1
+            ;;
+    esac
+}
+
+# Check if a command exists
+command_exists() {
+    command -v "$1" &>/dev/null
+}
+
+# Check for required dependencies
+check_dependencies() {
+    local missing=()
+
+    if ! command_exists wget && ! command_exists curl; then
+        missing+=("wget or curl")
+    fi
+
+    if ! command_exists tar; then
+        missing+=("tar")
+    fi
+
+    if [[ ${#missing[@]} -gt 0 ]]; then
+        log_error "Missing required dependencies: ${missing[*]}"
+        return 1
+    fi
+}
+
+# Download a file using wget or curl (with proxy support)
+download_file() {
+    local url="$1"
+    local output="$2"
+
+    log_debug "Downloading $url to $output"
+
+    # Proxy environment variables are automatically used by wget/curl
+    if [[ -n "${HTTP_PROXY:-}" ]] || [[ -n "${HTTPS_PROXY:-}" ]]; then
+        log_debug "Using proxy: HTTP_PROXY=${HTTP_PROXY:-} HTTPS_PROXY=${HTTPS_PROXY:-}"
+    fi
+
+    if command_exists wget; then
+        if [[ "$QUIET_MODE" == true ]]; then
+            wget -q -O "$output" "$url"
+        else
+            wget -q --show-progress -O "$output" "$url"
+        fi
+    elif command_exists curl; then
+        if [[ "$QUIET_MODE" == true ]]; then
+            curl -fsSL -o "$output" "$url"
+        else
+            curl -fL --progress-bar -o "$output" "$url"
+        fi
+    else
+        log_error "Neither wget nor curl is available"
+        return 1
+    fi
+}
+
+# Fetch content from a URL
+fetch_content() {
+    local url="$1"
+
+    log_debug "Fetching content from $url"
+
+    if command_exists wget; then
+        wget -q -O - "$url"
+    elif command_exists curl; then
+        curl -fsSL "$url"
+    else
+        log_error "Neither wget nor curl is available"
+        return 1
+    fi
+}
+
+# Get all available Go versions for the given OS and architecture
+get_all_versions() {
+    local os="$1"
+    local arch="$2"
+
+    log_debug "Fetching available Go versions for ${os}/${arch}"
+
+    local content
+    if ! content=$(fetch_content "$GO_DOWNLOAD_URL/"); then
+        log_error "Failed to fetch versions from $GO_DOWNLOAD_URL"
+        return 1
+    fi
+
+    echo "$content" | \
+        grep -Eoi 'href="[^"]*go[0-9]+\.[0-9]+(\.[0-9]+)?\.'"${os}"'-'"${arch}"'\.tar\.gz"' | \
+        grep -v -E '(beta|rc)' | \
+        sed -E 's/.*go([0-9]+\.[0-9]+(\.[0-9]+)?)\..*/\1/' | \
+        sort -t. -k1,1n -k2,2n -k3,3n | \
+        uniq
+}
+
+# Get the latest Go version
+get_latest_version() {
+    local os="$1"
+    local arch="$2"
+
+    get_all_versions "$os" "$arch" | tail -1
+}
+
+# Get currently installed Go version
+get_installed_version() {
+    local go_bin="${GO_INSTALL_DIR}/go/bin/go"
+
+    if [[ -x "$go_bin" ]]; then
+        "$go_bin" version 2>/dev/null | awk '{print $3}' | sed 's/go//'
+    else
+        echo ""
+    fi
+}
+
+# List locally installed versions (for multi-version support)
+get_local_versions() {
+    if [[ -d "$GO_VERSIONS_DIR" ]]; then
+        find "$GO_VERSIONS_DIR" -maxdepth 1 -mindepth 1 -type d -exec basename {} \; 2>/dev/null | sort -t. -k1,1n -k2,2n -k3,3n
+    fi
+}
+
+# Verify the SHA256 checksum of a downloaded file
+verify_checksum() {
+    local file="$1"
+    local expected_checksum="$2"
+
+    log_debug "Verifying checksum for $file"
+
+    local actual_checksum
+    if command_exists sha256sum; then
+        actual_checksum=$(sha256sum "$file" | awk '{print $1}')
+    elif command_exists shasum; then
+        actual_checksum=$(shasum -a 256 "$file" | awk '{print $1}')
+    else
+        log_warn "No checksum tool available, skipping verification"
+        return 0
+    fi
+
+    if [[ "$actual_checksum" != "$expected_checksum" ]]; then
+        log_error "Checksum verification failed!"
+        log_error "Expected: $expected_checksum"
+        log_error "Got:      $actual_checksum"
+        return 1
+    fi
+
+    log_success "Checksum verified"
+}
+
+# Get the SHA256 checksum for a Go release
+get_checksum() {
+    local filename="$1"
+
+    log_debug "Fetching checksum for $filename"
+
+    local checksums
+    if ! checksums=$(fetch_content "${GO_DOWNLOAD_URL}/?mode=json&include=all" 2>/dev/null); then
+        log_warn "Could not fetch checksums, skipping verification"
+        echo ""
+        return 0
+    fi
+
+    echo "$checksums" | grep -A1 "\"filename\": \"${filename}\"" | grep '"sha256"' | sed -E 's/.*"sha256": "([^"]+)".*/\1/' | head -1
+}
+
+# Download Go tarball (with caching)
+download_go_tarball() {
+    local version="$1"
+    local os="$2"
+    local arch="$3"
+
+    local filename="go${version}.${os}-${arch}.tar.gz"
+    local download_url="${GO_DOWNLOAD_BASE}/${filename}"
+    local cache_file="${GO_CACHE_DIR}/${filename}"
+
+    # Create cache directory
+    mkdir -p "$GO_CACHE_DIR"
+
+    # Check cache first
+    if [[ -f "$cache_file" ]]; then
+        log_info "Using cached tarball: $cache_file"
+        echo "$cache_file"
+        return 0
+    fi
+
+    log_info "Downloading Go ${version} for ${os}/${arch}..."
+
+    # Set up cleanup trap
+    trap 'cleanup "$cache_file"' EXIT
+
+    if ! download_file "$download_url" "$cache_file"; then
+        log_error "Failed to download Go ${version}"
+        return 1
+    fi
+
+    # Verify checksum
+    local checksum
+    checksum=$(get_checksum "$filename")
+    if [[ -n "$checksum" ]]; then
+        if ! verify_checksum "$cache_file" "$checksum"; then
+            rm -f "$cache_file"
+            return 1
+        fi
+    fi
+
+    trap - EXIT
+    echo "$cache_file"
+}
+
+# Install Go to a specific directory
+install_go_to() {
+    local tarball="$1"
+    local target_dir="$2"
+
+    log_info "Installing Go to ${target_dir}..."
+
+    mkdir -p "$target_dir"
+
+    if ! tar -C "$target_dir" --strip-components=1 -xzf "$tarball"; then
+        log_error "Failed to extract Go archive"
+        return 1
+    fi
+
+    log_success "Go installed to ${target_dir}"
+}
+
+# Download and install Go (main install path)
+download_go() {
+    local version="$1"
+    local os="$2"
+    local arch="$3"
+
+    local install_path="${GO_INSTALL_DIR}/go"
+
+    # Check if Go is already installed
+    if [[ -d "$install_path" ]]; then
+        local current_version
+        current_version=$(get_installed_version)
+        if [[ "$current_version" == "$version" ]]; then
+            log_info "Go ${version} is already installed"
+            return 0
+        fi
+        log_warn "Go ${current_version} is already installed at ${install_path}"
+        read -rp "Do you want to replace it with ${version}? [y/N] " response
+        if [[ ! "$response" =~ ^[Yy]$ ]]; then
+            log_info "Installation cancelled"
+            return 0
+        fi
+        log_info "Removing existing Go installation..."
+        rm -rf "$install_path"
+    fi
+
+    local tarball
+    tarball=$(download_go_tarball "$version" "$os" "$arch") || return 1
+
+    mkdir -p "$GO_INSTALL_DIR"
+    if ! tar -C "$GO_INSTALL_DIR" -xzf "$tarball"; then
+        log_error "Failed to extract Go archive"
+        return 1
+    fi
+
+    log_success "Go ${version} installed successfully to ${install_path}"
+}
+
+# Install a specific version to versions directory (multi-version support)
+install_version() {
+    local version="$1"
+    local os="$2"
+    local arch="$3"
+
+    local version_dir="${GO_VERSIONS_DIR}/${version}"
+
+    if [[ -d "$version_dir" ]]; then
+        log_info "Go ${version} is already installed in ${version_dir}"
+        return 0
+    fi
+
+    local tarball
+    tarball=$(download_go_tarball "$version" "$os" "$arch") || return 1
+
+    install_go_to "$tarball" "$version_dir"
+}
+
+# Switch to a specific Go version
+switch_version() {
+    local version="$1"
+    local version_dir="${GO_VERSIONS_DIR}/${version}"
+    local install_path="${GO_INSTALL_DIR}/go"
+
+    if [[ ! -d "$version_dir" ]]; then
+        log_error "Go ${version} is not installed"
+        log_info "Install it first with: $0 install ${version}"
+        return 1
+    fi
+
+    # Remove current symlink/installation
+    if [[ -L "$install_path" ]]; then
+        rm -f "$install_path"
+    elif [[ -d "$install_path" ]]; then
+        log_warn "Current Go installation is not managed by goconfig"
+        read -rp "Replace it with managed version? [y/N] " response
+        if [[ ! "$response" =~ ^[Yy]$ ]]; then
+            return 1
+        fi
+        rm -rf "$install_path"
+    fi
+
+    # Create symlink
+    ln -s "$version_dir" "$install_path"
+    log_success "Switched to Go ${version}"
+}
+
+# Get shell config file path
+get_shell_config() {
+    case "${SHELL:-/bin/bash}" in
+        */zsh)  echo "$HOME/.zshrc" ;;
+        */bash)
+            if [[ -f "$HOME/.bash_profile" ]]; then
+                echo "$HOME/.bash_profile"
+            else
+                echo "$HOME/.bashrc"
+            fi
+            ;;
+        *)      echo "$HOME/.profile" ;;
+    esac
+}
+
+# Set up the Go environment
+setup_environment() {
+    local shell_config
+    shell_config=$(get_shell_config)
+    local go_bin="${GO_INSTALL_DIR}/go/bin"
+
+    log_info "Setting up Go environment..."
+
+    # Create Go workspace directory
+    mkdir -p "$GO_WORKSPACE"
+
+    # Environment lines to add
+    local env_block
+    env_block=$(cat << EOF
+
+# Go environment (added by goconfig)
+export GOPATH="$GO_WORKSPACE"
+export PATH="\$PATH:${go_bin}:\$GOPATH/bin"
+EOF
+)
+
+    # Check if already configured
+    if grep -q "# Go environment (added by goconfig)" "$shell_config" 2>/dev/null; then
+        log_info "Go environment already configured in $shell_config"
+    else
+        echo "$env_block" >> "$shell_config"
+        log_success "Added Go environment to $shell_config"
+    fi
+
+    # Export for current session
+    export GOPATH="$GO_WORKSPACE"
+    export PATH="$PATH:${go_bin}:$GOPATH/bin"
+
+    # Verify installation
+    if command_exists go; then
+        log_success "Go environment ready!"
+        [[ "$QUIET_MODE" != true ]] && echo ""
+        [[ "$QUIET_MODE" != true ]] && go version
+        [[ "$QUIET_MODE" != true ]] && echo ""
+        log_info "GOPATH: $GOPATH"
+        log_info "Run 'source $shell_config' or start a new terminal to use Go"
+    else
+        log_warn "Go binary not found in PATH (will be available after sourcing shell config)"
+    fi
+}
+
+# Remove Go environment from shell config
+remove_environment() {
+    local shell_config
+    shell_config=$(get_shell_config)
+
+    if ! grep -q "# Go environment (added by goconfig)" "$shell_config" 2>/dev/null; then
+        log_info "No goconfig environment found in $shell_config"
+        return 0
+    fi
+
+    log_info "Removing Go environment from $shell_config..."
+
+    # Create backup
+    cp "$shell_config" "${shell_config}.goconfig.bak"
+
+    # Remove the goconfig block (from comment to next blank line or EOF)
+    sed -i.tmp '/# Go environment (added by goconfig)/,/^$/d' "$shell_config"
+    rm -f "${shell_config}.tmp"
+
+    log_success "Removed Go environment from $shell_config"
+    log_info "Backup saved to ${shell_config}.goconfig.bak"
+}
+
+# Remove Go installation
+remove_go() {
+    local install_path="${GO_INSTALL_DIR}/go"
+    local remove_env=false
+
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --env) remove_env=true; shift ;;
+            *) shift ;;
+        esac
+    done
+
+    if [[ ! -d "$install_path" ]] && [[ ! -L "$install_path" ]]; then
+        log_warn "Go is not installed at ${install_path}"
+    else
+        local current_version
+        current_version=$(get_installed_version)
+
+        read -rp "Remove Go ${current_version:-unknown} from ${install_path}? [y/N] " response
+        if [[ "$response" =~ ^[Yy]$ ]]; then
+            rm -rf "$install_path"
+            log_success "Go removed from ${install_path}"
+        fi
+    fi
+
+    if [[ "$remove_env" == true ]]; then
+        remove_environment
+    else
+        log_info "Environment variables were not removed (use --env to remove)"
+    fi
+}
+
+# Update Go to the latest version
+update_go() {
+    local os="$1"
+    local arch="$2"
+
+    local current_version
+    current_version=$(get_installed_version)
+
+    if [[ -z "$current_version" ]]; then
+        log_error "Go is not currently installed"
+        log_info "Use '$0 install' to install Go"
+        return 1
+    fi
+
+    log_info "Current version: ${current_version}"
+    log_info "Checking for updates..."
+
+    local latest_version
+    latest_version=$(get_latest_version "$os" "$arch")
+
+    if [[ -z "$latest_version" ]]; then
+        log_error "Could not determine the latest Go version"
+        return 1
+    fi
+
+    if [[ "$current_version" == "$latest_version" ]]; then
+        log_success "Go is already at the latest version (${current_version})"
+        return 0
+    fi
+
+    log_info "New version available: ${latest_version}"
+    read -rp "Update from ${current_version} to ${latest_version}? [Y/n] " response
+    if [[ "$response" =~ ^[Nn]$ ]]; then
+        log_info "Update cancelled"
+        return 0
+    fi
+
+    # Remove old installation
+    rm -rf "${GO_INSTALL_DIR}/go"
+
+    # Install new version
+    download_go "$latest_version" "$os" "$arch"
+}
+
+# Show status information
+show_status() {
+    local os="$1"
+    local arch="$2"
+
+    echo -e "${BOLD}goconfig Status${NC}"
+    echo "==============="
+    echo ""
+
+    # Installed version
+    local installed_version
+    installed_version=$(get_installed_version)
+    if [[ -n "$installed_version" ]]; then
+        echo -e "Installed Version: ${GREEN}${installed_version}${NC}"
+
+        # Check for updates
+        local latest_version
+        latest_version=$(get_latest_version "$os" "$arch" 2>/dev/null)
+        if [[ -n "$latest_version" ]] && [[ "$installed_version" != "$latest_version" ]]; then
+            echo -e "Latest Version:    ${YELLOW}${latest_version}${NC} (update available)"
+        else
+            echo -e "Latest Version:    ${GREEN}${latest_version}${NC} (up to date)"
+        fi
+    else
+        echo -e "Installed Version: ${RED}Not installed${NC}"
+    fi
+    echo ""
+
+    # Installation path
+    echo -e "Install Directory: ${GO_INSTALL_DIR}/go"
+    if [[ -L "${GO_INSTALL_DIR}/go" ]]; then
+        echo -e "                   (symlink to $(readlink "${GO_INSTALL_DIR}/go"))"
+    fi
+    echo ""
+
+    # Workspace
+    echo -e "Workspace (GOPATH): ${GO_WORKSPACE}"
+    if [[ -d "$GO_WORKSPACE" ]]; then
+        echo -e "                    ${GREEN}exists${NC}"
+    else
+        echo -e "                    ${YELLOW}not created${NC}"
+    fi
+    echo ""
+
+    # Local versions
+    local local_versions
+    local_versions=$(get_local_versions)
+    if [[ -n "$local_versions" ]]; then
+        echo "Installed Versions:"
+        while IFS= read -r v; do
+            if [[ "$v" == "$installed_version" ]]; then
+                echo -e "  ${GREEN}* ${v}${NC} (active)"
+            else
+                echo "    ${v}"
+            fi
+        done <<< "$local_versions"
+        echo ""
+    fi
+
+    # Cache info
+    if [[ -d "$GO_CACHE_DIR" ]]; then
+        local cache_size
+        cache_size=$(du -sh "$GO_CACHE_DIR" 2>/dev/null | awk '{print $1}')
+        echo -e "Cache Directory:   ${GO_CACHE_DIR} (${cache_size})"
+    fi
+    echo ""
+
+    # Environment check
+    echo "Environment Check:"
+    local shell_config
+    shell_config=$(get_shell_config)
+    if grep -q "# Go environment (added by goconfig)" "$shell_config" 2>/dev/null; then
+        echo -e "  Shell config:    ${GREEN}configured${NC} ($shell_config)"
+    else
+        echo -e "  Shell config:    ${YELLOW}not configured${NC}"
+    fi
+
+    if [[ -n "${GOPATH:-}" ]]; then
+        echo -e "  GOPATH:          ${GREEN}set${NC} ($GOPATH)"
+    else
+        echo -e "  GOPATH:          ${YELLOW}not set${NC}"
+    fi
+
+    if command_exists go; then
+        echo -e "  go command:      ${GREEN}available${NC} ($(which go))"
+    else
+        echo -e "  go command:      ${RED}not in PATH${NC}"
+    fi
+    echo ""
+}
+
+# Clear download cache
+clear_cache() {
+    if [[ ! -d "$GO_CACHE_DIR" ]]; then
+        log_info "Cache directory does not exist"
+        return 0
+    fi
+
+    local cache_size
+    cache_size=$(du -sh "$GO_CACHE_DIR" 2>/dev/null | awk '{print $1}')
+
+    read -rp "Clear cache (${cache_size})? [y/N] " response
+    if [[ "$response" =~ ^[Yy]$ ]]; then
+        rm -rf "$GO_CACHE_DIR"
+        log_success "Cache cleared"
+    fi
+}
+
+# Self-update the script
+self_update() {
+    log_info "Checking for goconfig updates..."
+
+    local tmp_file
+    tmp_file=$(mktemp)
+    trap 'rm -f "$tmp_file"' EXIT
+
+    if ! download_file "$GOCONFIG_REPO" "$tmp_file"; then
+        log_error "Failed to download latest version"
+        return 1
+    fi
+
+    local remote_version
+    remote_version=$(grep -E '^readonly GOCONFIG_VERSION=' "$tmp_file" | cut -d'"' -f2)
+
+    if [[ -z "$remote_version" ]]; then
+        log_error "Could not determine remote version"
+        return 1
+    fi
+
+    if [[ "$remote_version" == "$GOCONFIG_VERSION" ]]; then
+        log_success "goconfig is already at the latest version (${GOCONFIG_VERSION})"
+        return 0
+    fi
+
+    log_info "New version available: ${remote_version} (current: ${GOCONFIG_VERSION})"
+    read -rp "Update goconfig? [Y/n] " response
+    if [[ "$response" =~ ^[Nn]$ ]]; then
+        log_info "Update cancelled"
+        return 0
+    fi
+
+    local script_path
+    script_path=$(realpath "$0")
+
+    cp "$tmp_file" "$script_path"
+    chmod +x "$script_path"
+
+    log_success "goconfig updated to version ${remote_version}"
+}
+
+# Generate shell completions
+generate_completions() {
+    local shell="${1:-bash}"
+
+    case "$shell" in
+        bash)
+            cat << 'EOF'
+# goconfig bash completion
+_goconfig() {
+    local cur prev commands
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+    commands="install remove update env versions status use list cache config self-update completions help"
+
+    case "$prev" in
+        install|use)
+            # Complete with available versions
+            local versions
+            versions=$(goconfig versions 2>/dev/null)
+            COMPREPLY=($(compgen -W "$versions" -- "$cur"))
+            return 0
+            ;;
+        remove)
+            COMPREPLY=($(compgen -W "--env" -- "$cur"))
+            return 0
+            ;;
+        completions)
+            COMPREPLY=($(compgen -W "bash zsh" -- "$cur"))
+            return 0
+            ;;
+        goconfig|go.sh)
+            COMPREPLY=($(compgen -W "$commands" -- "$cur"))
+            return 0
+            ;;
+    esac
+
+    COMPREPLY=($(compgen -W "$commands" -- "$cur"))
+}
+complete -F _goconfig goconfig
+complete -F _goconfig go.sh
+EOF
+            ;;
+        zsh)
+            cat << 'EOF'
+#compdef goconfig go.sh
+
+_goconfig() {
+    local -a commands
+    commands=(
+        'install:Install Go (latest or specific version)'
+        'remove:Remove Go installation'
+        'update:Update Go to the latest version'
+        'env:Set up Go environment variables'
+        'versions:List available Go versions'
+        'status:Show installation status'
+        'use:Switch to a specific Go version'
+        'list:List locally installed versions'
+        'cache:Manage download cache'
+        'config:Show or save configuration'
+        'self-update:Update goconfig itself'
+        'completions:Generate shell completions'
+        'help:Show help message'
+    )
+
+    _arguments -C \
+        '-q[Quiet mode]' \
+        '-v[Verbose mode]' \
+        '--quiet[Quiet mode]' \
+        '--verbose[Verbose mode]' \
+        '--version[Show version]' \
+        '1:command:->command' \
+        '*::arg:->args'
+
+    case "$state" in
+        command)
+            _describe -t commands 'goconfig commands' commands
+            ;;
+        args)
+            case "$words[1]" in
+                install|use)
+                    local versions
+                    versions=(${(f)"$(goconfig versions 2>/dev/null)"})
+                    _describe -t versions 'Go versions' versions
+                    ;;
+                remove)
+                    _arguments '--env[Also remove environment configuration]'
+                    ;;
+                completions)
+                    _arguments '1:shell:(bash zsh)'
+                    ;;
+            esac
+            ;;
+    esac
+}
+
+_goconfig "$@"
+EOF
+            ;;
+        *)
+            log_error "Unknown shell: $shell (supported: bash, zsh)"
+            return 1
+            ;;
+    esac
+}
+
+# Display help message
+show_help() {
+    cat << EOF
+${BOLD}goconfig${NC} - Go installation and version manager
+
+${BOLD}USAGE${NC}
+    $0 [OPTIONS] <COMMAND> [ARGS]
+
+${BOLD}OPTIONS${NC}
+    -q, --quiet       Suppress non-error output
+    -v, --verbose     Enable verbose/debug output
+    --version         Show goconfig version
+
+${BOLD}COMMANDS${NC}
+    install [VERSION]   Install Go (latest version if not specified)
+    remove [--env]      Remove Go installation (--env also removes shell config)
+    update              Update Go to the latest version
+    env                 Set up Go environment variables
+    versions            List all available Go versions (remote)
+
+    ${BOLD}Multi-version management:${NC}
+    use <VERSION>       Switch to a specific installed version
+    list                List locally installed versions
+
+    ${BOLD}Maintenance:${NC}
+    status              Show installation status and health check
+    cache               Manage download cache (clear)
+    config              Show or save configuration
+    self-update         Update goconfig to the latest version
+    completions [SHELL] Generate shell completions (bash/zsh)
+    help                Show this help message
+
+${BOLD}EXAMPLES${NC}
+    $0 install              Install the latest Go version
+    $0 install 1.21.5       Install a specific version
+    $0 update               Update to latest version
+    $0 use 1.20.0           Switch to Go 1.20.0
+    $0 status               Check installation status
+    $0 completions bash     Generate bash completions
+
+${BOLD}ENVIRONMENT VARIABLES${NC}
+    GO_INSTALL_DIR      Installation directory (default: /usr/local)
+    GO_WORKSPACE        Workspace directory (default: \$HOME/go)
+    GO_VERSIONS_DIR     Multi-version storage (default: \$HOME/.go/versions)
+    GO_CACHE_DIR        Download cache (default: \$HOME/.cache/goconfig)
+    HTTP_PROXY          HTTP proxy for downloads
+    HTTPS_PROXY         HTTPS proxy for downloads
+
+${BOLD}VERSION${NC}
+    goconfig ${GOCONFIG_VERSION}
+
+EOF
+}
+
+# Parse global options
+parse_options() {
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -q|--quiet)
+                QUIET_MODE=true
+                shift
+                ;;
+            -v|--verbose)
+                VERBOSE_MODE=true
+                shift
+                ;;
+            --version)
+                echo "goconfig ${GOCONFIG_VERSION}"
+                exit 0
+                ;;
+            -*)
+                log_error "Unknown option: $1"
+                exit 1
+                ;;
+            *)
+                # Return remaining arguments
+                echo "$@"
+                return 0
+                ;;
+        esac
+    done
+}
+
+# Main function
+main() {
+    # Parse global options first
+    local args
+    args=$(parse_options "$@")
+    set -- $args
+
+    # Setup colors (after parsing quiet mode)
+    setup_colors
+
+    # Load configuration
+    load_config
+
+    # Check dependencies first
+    check_dependencies || exit 1
+
+    # Detect OS and architecture
+    local os arch
+    os=$(detect_os) || exit 1
+    arch=$(detect_arch) || exit 1
+
+    log_debug "Detected: ${os}/${arch}"
+
+    # Check for arguments
+    if [[ $# -lt 1 ]]; then
+        show_help
+        exit 0
+    fi
+
+    local command="$1"
+    shift
+
+    case "$command" in
+        install)
+            # Check for root/sudo on Linux for /usr/local installation
+            if [[ "$os" == "linux" && "$GO_INSTALL_DIR" == "/usr/local" && $EUID -ne 0 ]]; then
+                log_error "Root privileges required to install to ${GO_INSTALL_DIR}"
+                log_info "Run with sudo or set GO_INSTALL_DIR to a user-writable location"
+                exit 1
+            fi
+
+            local version="${1:-}"
+
+            if [[ -z "$version" ]]; then
+                log_info "Fetching available Go versions..."
+                version=$(get_latest_version "$os" "$arch")
+                if [[ -z "$version" ]]; then
+                    log_error "Could not determine the latest Go version"
+                    exit 1
+                fi
+                log_info "Latest version: ${version}"
+            else
+                # Validate the requested version exists
+                local available
+                available=$(get_all_versions "$os" "$arch")
+                if ! echo "$available" | grep -qx "$version"; then
+                    log_error "Version ${version} is not available for ${os}/${arch}"
+                    log_info "Run '$0 versions' to see available versions"
+                    exit 1
+                fi
+            fi
+
+            download_go "$version" "$os" "$arch" || exit 1
+            setup_environment || exit 1
+            ;;
+
+        remove)
+            if [[ "$GO_INSTALL_DIR" == "/usr/local" && $EUID -ne 0 ]]; then
+                log_error "Root privileges required to remove from ${GO_INSTALL_DIR}"
+                exit 1
+            fi
+            remove_go "$@"
+            ;;
+
+        update)
+            if [[ "$GO_INSTALL_DIR" == "/usr/local" && $EUID -ne 0 ]]; then
+                log_error "Root privileges required to update in ${GO_INSTALL_DIR}"
+                exit 1
+            fi
+            update_go "$os" "$arch"
+            ;;
+
+        env)
+            setup_environment
+            ;;
+
+        versions)
+            log_info "Fetching available Go versions..."
+            local versions
+            versions=$(get_all_versions "$os" "$arch")
+            if [[ -z "$versions" ]]; then
+                log_error "Could not fetch available versions"
+                exit 1
+            fi
+            echo "$versions"
+            ;;
+
+        use)
+            if [[ -z "${1:-}" ]]; then
+                log_error "Version required. Usage: $0 use <version>"
+                exit 1
+            fi
+            if [[ "$GO_INSTALL_DIR" == "/usr/local" && $EUID -ne 0 ]]; then
+                log_error "Root privileges required for ${GO_INSTALL_DIR}"
+                exit 1
+            fi
+            switch_version "$1"
+            ;;
+
+        list)
+            local local_versions
+            local_versions=$(get_local_versions)
+            local current
+            current=$(get_installed_version)
+
+            if [[ -z "$local_versions" ]]; then
+                log_info "No local versions installed"
+                log_info "Install versions with: $0 install <version>"
+            else
+                echo "$local_versions" | while read -r v; do
+                    if [[ "$v" == "$current" ]]; then
+                        echo -e "${GREEN}* ${v}${NC}"
+                    else
+                        echo "  ${v}"
+                    fi
+                done
+            fi
+            ;;
+
+        status)
+            show_status "$os" "$arch"
+            ;;
+
+        cache)
+            local subcmd="${1:-clear}"
+            case "$subcmd" in
+                clear) clear_cache ;;
+                *)
+                    log_error "Unknown cache command: $subcmd"
+                    log_info "Usage: $0 cache clear"
+                    ;;
+            esac
+            ;;
+
+        config)
+            local subcmd="${1:-show}"
+            case "$subcmd" in
+                show)
+                    echo "Configuration:"
+                    echo "  GO_INSTALL_DIR=$GO_INSTALL_DIR"
+                    echo "  GO_WORKSPACE=$GO_WORKSPACE"
+                    echo "  GO_VERSIONS_DIR=$GO_VERSIONS_DIR"
+                    echo "  GO_CACHE_DIR=$GO_CACHE_DIR"
+                    echo ""
+                    echo "Config file: $CONFIG_FILE"
+                    ;;
+                save)
+                    save_config
+                    ;;
+                *)
+                    log_error "Unknown config command: $subcmd"
+                    log_info "Usage: $0 config [show|save]"
+                    ;;
+            esac
+            ;;
+
+        self-update)
+            self_update
+            ;;
+
+        completions)
+            generate_completions "${1:-bash}"
+            ;;
+
+        help|--help|-h)
+            show_help
+            ;;
+
+        *)
+            log_error "Unknown command: $command"
+            echo ""
+            show_help
+            exit 1
+            ;;
+    esac
+}
+
+main "$@"

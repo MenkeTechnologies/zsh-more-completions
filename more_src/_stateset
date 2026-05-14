@@ -1,0 +1,535 @@
+# Source: https://github.com/stateset/icommerce-quickstart/blob/cd3aef95d85ebf6134dd9f6e6f275dbe7f379e44/stack/stateset
+# Repository: stateset/icommerce-quickstart (stack/stateset)
+#!/usr/bin/env bash
+# stateset — local-stack orchestrator for the icommerce-quickstart repo.
+#
+#   stateset up            anvil + deploy + seed FX + bridges → ready
+#   stateset down          stop anvil + bridges
+#   stateset status        what's running, what's stale
+#   stateset deploy        forge script DeployLocal --broadcast
+#   stateset seed-fx       post EUR/GBP/JPY/MXN quotes to FxOracle
+#   stateset bridges       start both bridges in the background
+#   stateset bridges:stop  stop them
+#   stateset demo <name>   lifecycle | realmoney | verify
+#   stateset test          contracts (forge) + bridges (node --test) + demos (syntax)
+#   stateset doctor        health check; --fix to auto-remediate
+#
+# Most commands are thin wrappers around forge / node / curl. The point is
+# discoverability + a single entry point, not novel behavior.
+
+set -uo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+RPC="${RPC:-http://localhost:8545}"
+PIDDIR="$ROOT/stack/.run"
+mkdir -p "$PIDDIR"
+
+# Colors (only for terminal)
+if [ -t 1 ]; then
+  G=$'\033[32m'; R=$'\033[31m'; Y=$'\033[33m'; C=$'\033[36m'; D=$'\033[2m'; B=$'\033[1m'; X=$'\033[0m'
+else
+  G= R= Y= C= D= B= X=
+fi
+
+usage() {
+  cat <<EOF
+${B}stateset${X} — local-stack orchestrator
+
+  ${C}up${X}                start anvil + deploy + seed FX + bridges
+  ${C}down${X}              stop anvil + bridges
+  ${C}status${X}            what's running, what's stale (process state)
+  ${C}show${X}              on-chain state (SSDC supply, NAV, FX freshness)
+
+  ${C}deploy${X}            forge script DeployLocal --broadcast (anvil)
+  ${C}deploy:sepolia${X}    forge script DeploySepolia --broadcast --verify (testnet/mainnet)
+  ${C}seed-fx${X}           refresh EUR/GBP/JPY/MXN quotes on FxOracle
+  ${C}bridges${X}           start on-ramp + off-ramp bridges (background)
+  ${C}bridges:stop${X}      stop them
+  ${C}demo <name>${X}       lifecycle | realmoney | verify
+  ${C}audit [path]${X}      verify-receipt against a path (default: bundled fixture)
+  ${C}receipts${X}          list every receipt JSON in the repo (schema + size + date)
+
+  ${C}test${X}              contracts + bridges + demos
+  ${C}gates${X}             run every non-chain CI gate locally (preview a push)
+  ${C}bench${X}             forge gas reports for the deployed contracts
+  ${C}bench:snapshot${X}    regenerate contracts/.gas-snapshot (commit to record)
+  ${C}bench:diff${X}        diff current gas usage against committed snapshot
+  ${C}doctor${X} [--fix]    health check; --fix auto-remediates
+  ${C}version${X}           print versions of forge, node, cast, this CLI
+  ${C}clean${X}             remove cache/, out/, broadcast/, node_modules/, run/
+  ${C}completion <shell>${X} emit shell completion (bash | zsh) to stdout
+
+Env: RPC=${RPC}
+EOF
+}
+
+ok()  { echo -e "  ${G}✓${X} $*"; }
+bad() { echo -e "  ${R}✗${X} $*"; }
+warn(){ echo -e "  ${Y}!${X} $*"; }
+info(){ echo -e "  ${C}→${X} $*"; }
+
+# ─── primitives ──────────────────────────────────────────────────────────
+anvil_up()    { curl -s -o /dev/null -w '%{http_code}' -X POST "$RPC" -H 'Content-Type: application/json' --data '{"jsonrpc":"2.0","method":"eth_chainId","id":1}' --max-time 2 | grep -q '^200$'; }
+port_busy()   { lsof -i ":$1" -sTCP:LISTEN -t >/dev/null 2>&1; }
+running_pid() { [ -f "$PIDDIR/$1.pid" ] && kill -0 "$(cat "$PIDDIR/$1.pid")" 2>/dev/null; }
+
+# ─── commands ────────────────────────────────────────────────────────────
+case "${1:-}" in
+  ""|-h|--help|help) usage ;;
+
+  clean)
+    # Remove all build/runtime artifacts so a fresh setup runs from scratch.
+    # Does NOT remove `lib/` (Solidity deps) — `forge install` is heavy enough
+    # that we leave them; pass `--all` to remove those too.
+    all=0; [ "${2:-}" = "--all" ] && all=1
+    info "removing forge cache + out + broadcast"
+    rm -rf "$ROOT/contracts/cache" "$ROOT/contracts/out" "$ROOT/contracts/broadcast" "$ROOT/contracts/foundry.lock"
+    info "removing bridges/ + demos/ node_modules"
+    rm -rf "$ROOT/bridges/node_modules" "$ROOT/demos/node_modules"
+    info "removing stack runtime state (.run/ pidfiles + logs)"
+    rm -rf "$PIDDIR"
+    if [ $all -eq 1 ]; then
+      info "removing contracts/lib (forge-std + OpenZeppelin)"
+      rm -rf "$ROOT/contracts/lib"
+    fi
+    ok "clean. next: ${B}bash stack/setup.sh${X}"
+    ;;
+
+  completion)
+    shell="${2:-}"
+    case "$shell" in
+      bash)
+        cat <<'EOF'
+# stateset bash completion
+# Install: eval "$(stateset completion bash)" in your ~/.bashrc
+# or:      stateset completion bash > /etc/bash_completion.d/stateset
+_stateset_completions() {
+  local cur="${COMP_WORDS[COMP_CWORD]}"
+  local prev="${COMP_WORDS[COMP_CWORD-1]}"
+  local subs="up down status show deploy deploy:sepolia seed-fx bridges bridges:stop demo audit receipts test gates bench bench:snapshot bench:diff doctor version clean completion help"
+  if [ "$COMP_CWORD" = 1 ]; then
+    COMPREPLY=( $(compgen -W "$subs" -- "$cur") )
+  elif [ "$prev" = "demo" ]; then
+    COMPREPLY=( $(compgen -W "lifecycle realmoney verify" -- "$cur") )
+  elif [ "$prev" = "completion" ]; then
+    COMPREPLY=( $(compgen -W "bash zsh" -- "$cur") )
+  elif [ "$prev" = "audit" ] || [ "$prev" = "demo verify" ]; then
+    COMPREPLY=( $(compgen -f -X '!*.json' -- "$cur") )
+  fi
+}
+complete -F _stateset_completions stateset
+EOF
+        ;;
+      zsh)
+        cat <<'EOF'
+# stateset zsh completion
+# Install: stateset completion zsh > ~/.zsh/completion/_stateset
+# (and ensure ~/.zsh/completion is on $fpath before compinit)
+#compdef stateset
+_stateset() {
+  local -a subs
+  subs=(
+    'up:start anvil + deploy + bridges'
+    'down:stop anvil + bridges'
+    'status:process state'
+    'show:on-chain state (SSDC supply, NAV, FX)'
+    'deploy:forge script DeployLocal --broadcast'
+    'deploy\:sepolia:forge script DeploySepolia --broadcast --verify'
+    'seed-fx:refresh FX quotes'
+    'bridges:start bridges'
+    'bridges\:stop:stop bridges'
+    'demo:lifecycle | realmoney | verify'
+    'audit:verify-receipt against a path'
+    'receipts:list every receipt JSON'
+    'test:contracts + bridges + demos'
+    'gates:non-chain CI preview'
+    'bench:gas reports'
+    'bench\:snapshot:regenerate .gas-snapshot'
+    'bench\:diff:diff against committed snapshot'
+    'doctor:health check'
+    'version:tool versions'
+    'clean:remove artifacts'
+    'completion:emit completion'
+  )
+  _describe 'stateset commands' subs
+}
+_stateset "$@"
+EOF
+        ;;
+      *)
+        echo "usage: stateset completion {bash|zsh}" >&2
+        exit 2
+        ;;
+    esac
+    ;;
+
+  version|--version|-v)
+    echo "stateset (icommerce-quickstart) v0.1.0"
+    echo "  RPC=$RPC"
+    echo "  ROOT=$ROOT"
+    command -v forge >/dev/null && echo "  forge: $(forge --version 2>&1 | head -1)" || echo "  forge: ${R}not installed${X}"
+    command -v node  >/dev/null && echo "  node:  $(node --version)" || echo "  node:  ${R}not installed${X}"
+    command -v cast  >/dev/null && echo "  cast:  installed" || echo "  cast:  ${Y}not installed (only needed for seed-fx + audit-with-cast)${X}"
+    ;;
+
+  up)
+    if anvil_up; then ok "anvil already up"
+    else
+      info "starting anvil…"
+      anvil --chain-id 84532001 >"$PIDDIR/anvil.log" 2>&1 &
+      echo $! > "$PIDDIR/anvil.pid"
+      for _ in $(seq 1 20); do anvil_up && break; sleep 0.2; done
+      anvil_up && ok "anvil started (chain 84532001)" || { bad "anvil failed to start"; exit 1; }
+    fi
+    "$0" deploy
+    "$0" seed-fx
+    "$0" bridges
+    echo
+    ok "stack is up. try: ${B}$0 demo lifecycle${X}"
+    ;;
+
+  down)
+    "$0" bridges:stop
+    if running_pid anvil; then info "stopping anvil…"; kill "$(cat "$PIDDIR/anvil.pid")"; rm -f "$PIDDIR/anvil.pid"; ok "anvil stopped"; fi
+    ;;
+
+  status)
+    anvil_up        && ok "anvil $RPC" || bad "anvil $RPC"
+    running_pid on-ramp  && ok "on-ramp bridge :4242"  || warn "on-ramp bridge down"
+    running_pid off-ramp && ok "off-ramp bridge :4243" || warn "off-ramp bridge down"
+    [ -f "$ROOT/contracts/broadcast/DeployLocal.s.sol/84532001/run-latest.json" ] \
+      && ok "contracts deployed"  || warn "contracts not deployed (run: $0 deploy)"
+    ;;
+
+  audit)
+    # Tighter alias for `stateset demo verify <path>`. Defaults to the
+    # bundled fixture if no path given. Useful when you receive a receipt
+    # over the wire and want a one-liner check.
+    target="${2:-$ROOT/demos/fixtures/agent-receipt.json}"
+    if [ ! -f "$target" ]; then bad "no file at $target"; exit 1; fi
+    cd "$ROOT/demos"
+    [ -d node_modules ] || npm install --silent
+    exec node verify-receipt.mjs "$target"
+    ;;
+
+  receipts)
+    # List every JSON receipt in the repo with its schema discriminator,
+    # size, and mtime. Pairs with `stateset audit <path>`. Only looks in
+    # places real receipts live — never in node_modules / lib / cache.
+    echo -e "${B}Receipts in $ROOT${X}"
+    found=0
+    # Search roots: demos/fixtures (bundled), repo root + ves-demo-style
+    # patterns at any depth EXCEPT node_modules + contracts/lib + caches.
+    while IFS= read -r f; do
+      [ -f "$f" ] || continue
+      # Filter to *receipt-shaped* JSONs (have a stateset.* schema field)
+      schema=$(python3 -c "import json,sys;d=json.load(open(sys.argv[1]));s=d.get('schema','');print(s if s.startswith('stateset.') else '')" "$f" 2>/dev/null)
+      [ -z "$schema" ] && continue
+      size=$(stat -c%s "$f" 2>/dev/null || stat -f%z "$f" 2>/dev/null || echo '?')
+      mtime=$(stat -c%y "$f" 2>/dev/null | cut -d. -f1 || stat -f%Sm -t '%Y-%m-%d %H:%M' "$f" 2>/dev/null || echo '?')
+      relpath=${f#$ROOT/}
+      printf "  ${C}%-50s${X} ${D}%s${X}  %s  ${D}%sB${X}\n" "$relpath" "$mtime" "$schema" "$size"
+      found=$((found+1))
+    done < <(find "$ROOT" \
+      \( -path '*/node_modules' -o -path '*/lib' -o -path '*/cache' -o -path '*/out' -o -path '*/broadcast' \) -prune \
+      -o -name '*.json' -print 2>/dev/null)
+    [ $found -eq 0 ] && warn "no receipt-shaped JSONs found (need 'schema' field starting with 'stateset.')"
+    ;;
+
+  show)
+    # Pretty-print on-chain state — what the protocol THINKS (vs status,
+    # which only checks whether the daemons are up). Useful for debugging
+    # "demo failed" → was the FX quote stale? Did NAV update? Etc.
+    bcast="$ROOT/contracts/broadcast/DeployLocal.s.sol/84532001/run-latest.json"
+    if ! anvil_up; then bad "anvil down — start it first ($0 up)"; exit 1; fi
+    if [ ! -f "$bcast" ]; then bad "contracts not deployed"; exit 1; fi
+    if ! command -v cast >/dev/null; then bad "cast not on PATH"; exit 1; fi
+
+    # Pull addresses
+    fx=$(python3 -c "import json;d=json.load(open('$bcast'));print([t['contractAddress'] for t in d['transactions'] if t['contractName']=='FxOracle'][0])")
+    nav=$(python3 -c "import json;d=json.load(open('$bcast'));print([t['contractAddress'] for t in d['transactions'] if t['contractName']=='NAVOracle'][0])")
+    proxies=$(python3 -c "import json;d=json.load(open('$bcast'));print(' '.join([t['contractAddress'] for t in d['transactions'] if t['contractName']=='ERC1967Proxy']))")
+    ssdc=$(echo "$proxies" | awk '{print $4}')
+
+    echo -e "${B}Chain state${X} ${D}@ $RPC${X}"
+    echo -e "  ${C}block${X}             $(cast block-number --rpc-url "$RPC" 2>/dev/null || echo '?')"
+
+    # SSDC supply + NAV
+    if [ -n "$ssdc" ]; then
+      total=$(cast call "$ssdc" "totalSupply()(uint256)" --rpc-url "$RPC" 2>/dev/null | head -1)
+      echo -e "  ${C}SSDC${X}              $ssdc"
+      echo -e "    ${D}totalSupply${X}     $(cast --to-unit "$total" 18 2>/dev/null || echo '?') SSDC"
+    fi
+    if [ -n "$nav" ]; then
+      navper=$(cast call "$nav" "getCurrentNAVPerShare()(uint256)" --rpc-url "$RPC" 2>/dev/null | head -1)
+      echo -e "  ${C}NAVOracle${X}         $nav"
+      echo -e "    ${D}NAV/share${X}       \$$(cast --to-unit "$navper" 18 2>/dev/null || echo '?')"
+    fi
+
+    # FX freshness per pair
+    if [ -n "$fx" ]; then
+      echo -e "  ${C}FxOracle${X}          $fx"
+      for pair in EUR/ssUSD GBP/ssUSD JPY/ssUSD MXN/ssUSD; do
+        pid=$(cast keccak "$pair")
+        fresh=$(cast call "$fx" "isFresh(bytes32)(bool)" "$pid" --rpc-url "$RPC" 2>/dev/null)
+        if [ "$fresh" = "true" ]; then
+          rate_raw=$(cast call "$fx" "getQuote(bytes32)(uint256,uint64)" "$pid" --rpc-url "$RPC" 2>/dev/null | head -1)
+          rate=$(cast --to-unit "$rate_raw" 18 2>/dev/null || echo '?')
+          echo -e "    ${G}✓${X} ${pair} → $rate ssUSD/unit"
+        else
+          echo -e "    ${Y}!${X} ${pair} ${D}stale or unset${X}"
+        fi
+      done
+    fi
+    ;;
+
+  deploy)
+    cd "$ROOT/contracts"
+    [ -d lib/forge-std ] || { info "installing forge-std + openzeppelin libs…"; forge install --no-git foundry-rs/forge-std OpenZeppelin/openzeppelin-contracts OpenZeppelin/openzeppelin-contracts-upgradeable >/dev/null 2>&1; }
+    info "deploying contracts to $RPC…"
+    forge script script/DeployLocal.s.sol --rpc-url "$RPC" --broadcast --skip-simulation >"$PIDDIR/deploy.log" 2>&1 \
+      && ok "contracts deployed (see contracts/broadcast/)" \
+      || { bad "deploy failed; tail of log:"; tail -20 "$PIDDIR/deploy.log"; exit 1; }
+    ;;
+
+  deploy:sepolia|deploy-sepolia)
+    # Production-shape testnet/mainnet deploy. Requires every role address
+    # to be set explicitly via env so an ops team can hand each role to a
+    # multi-sig. We refuse to proceed without confirmation since this spends
+    # real ETH and (on mainnet) exposes the contracts publicly.
+    cd "$ROOT/contracts"
+    REQUIRED=(DEPLOYER_PRIVATE_KEY OWNER_ADDRESS SEQUENCER_ADDRESS ESCROW_OPERATOR_ADDRESS FX_OPERATOR_ADDRESS NAV_ATTESTOR_ADDRESS TREASURY_ADDRESS SEPOLIA_RPC_URL ETHERSCAN_API_KEY)
+    missing=()
+    for v in "${REQUIRED[@]}"; do
+      if [ -z "${!v:-}" ]; then missing+=("$v"); fi
+    done
+    if [ ${#missing[@]} -gt 0 ]; then
+      bad "missing required env vars:"
+      for v in "${missing[@]}"; do echo "      $v"; done
+      info "see contracts/script/DeploySepolia.s.sol header for descriptions"
+      exit 1
+    fi
+    # Refuse to deploy if OWNER == DEPLOYER — production safety: the role
+    # that authorizes upgrades must NOT be the same EOA that deploys.
+    deployer_addr=$(cast wallet address --private-key "$DEPLOYER_PRIVATE_KEY" 2>/dev/null || echo "")
+    if [ -n "$deployer_addr" ] && [ "${deployer_addr,,}" = "${OWNER_ADDRESS,,}" ]; then
+      bad "OWNER_ADDRESS == deployer address ($deployer_addr)"
+      info "production deploys must hand the OWNER role to a multi-sig, not the deployer EOA"
+      exit 1
+    fi
+    echo
+    echo -e "${B}About to deploy to Sepolia.${X}"
+    echo -e "  RPC URL:           ${SEPOLIA_RPC_URL}"
+    echo -e "  Deployer:          ${deployer_addr}"
+    echo -e "  Owner (admin):     ${OWNER_ADDRESS}"
+    echo -e "  Sequencer:         ${SEQUENCER_ADDRESS}"
+    echo -e "  Escrow operator:   ${ESCROW_OPERATOR_ADDRESS}"
+    echo -e "  FX operator:       ${FX_OPERATOR_ADDRESS}"
+    echo -e "  NAV attestor:      ${NAV_ATTESTOR_ADDRESS}"
+    echo -e "  Treasury:          ${TREASURY_ADDRESS}"
+    echo
+    read -p "Type 'deploy' to confirm, anything else to abort: " confirm
+    if [ "$confirm" != "deploy" ]; then bad "aborted"; exit 1; fi
+
+    info "running forge script DeploySepolia…"
+    forge script script/DeploySepolia.s.sol:DeploySepolia \
+      --rpc-url "$SEPOLIA_RPC_URL" --broadcast --verify \
+    && ok "Sepolia deploy submitted; check Etherscan for verification" \
+    || { bad "Sepolia deploy failed"; exit 1; }
+    ;;
+
+  seed-fx)
+    # Re-post the 4 default FX quotes (EUR/GBP/JPY/MXN per ssUSD). Quotes
+    # have a 1h TTL on chain — the canonical "refresh quotes" op when the
+    # off-ramp's `--currency JPY` etc. starts failing with "FX quote stale".
+    bcast="$ROOT/contracts/broadcast/DeployLocal.s.sol/84532001/run-latest.json"
+    if [ ! -f "$bcast" ]; then bad "contracts not deployed; run: $0 deploy"; exit 1; fi
+    fx=$(python3 -c "import json;d=json.load(open('$bcast'));print([t['contractAddress'] for t in d['transactions'] if t['contractName']=='FxOracle'][0])")
+    SEQ_KEY="${SEQUENCER_KEY:-0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d}"
+    info "re-seeding FX quotes on $fx"
+    posted=0
+    # rates: EUR=1.0625 GBP=1.2700 JPY=0.0064 MXN=0.0590 (ssUSD per unit foreign), 18-decimal scaled
+    for entry in "EUR/ssUSD:1062500000000000000" "GBP/ssUSD:1270000000000000000" "JPY/ssUSD:6400000000000000" "MXN/ssUSD:59000000000000000"; do
+      pair="${entry%:*}"; rate="${entry##*:}"
+      pid=$(cast keccak "$pair")
+      if cast send "$fx" "postQuote(bytes32,uint256,uint64)" "$pid" "$rate" 3600 \
+           --rpc-url "$RPC" --private-key "$SEQ_KEY" >/dev/null 2>&1; then
+        ok "$pair → rate $(cast --to-unit "$rate" 18) ssUSD/unit, TTL 1h"
+        posted=$((posted+1))
+      else
+        bad "$pair failed"
+      fi
+    done
+    [ "$posted" -eq 4 ] && ok "posted $posted/4 quotes" || warn "posted only $posted/4"
+    ;;
+
+  bridges)
+    cd "$ROOT/bridges"
+    [ -d node_modules ] || { info "installing bridge deps…"; npm install --silent; }
+    if running_pid on-ramp; then ok "on-ramp already running"; else
+      info "starting on-ramp…"
+      RPC_URL="$RPC" PORT=4242 nohup node on-ramp.mjs >"$PIDDIR/on-ramp.log" 2>&1 &
+      echo $! > "$PIDDIR/on-ramp.pid"
+      sleep 1; running_pid on-ramp && ok "on-ramp started :4242" || { bad "on-ramp failed"; tail -10 "$PIDDIR/on-ramp.log"; }
+    fi
+    if running_pid off-ramp; then ok "off-ramp already running"; else
+      info "starting off-ramp…"
+      RPC_URL="$RPC" PORT=4243 nohup node off-ramp.mjs >"$PIDDIR/off-ramp.log" 2>&1 &
+      echo $! > "$PIDDIR/off-ramp.pid"
+      sleep 1; running_pid off-ramp && ok "off-ramp started :4243" || { bad "off-ramp failed"; tail -10 "$PIDDIR/off-ramp.log"; }
+    fi
+    ;;
+
+  bridges:stop)
+    for b in on-ramp off-ramp; do
+      if running_pid "$b"; then info "stopping $b…"; kill "$(cat "$PIDDIR/$b.pid")" 2>/dev/null; rm -f "$PIDDIR/$b.pid"; ok "$b stopped"; fi
+    done
+    ;;
+
+  demo)
+    name="${2:-}"; [ -z "$name" ] && { echo "usage: stateset demo {lifecycle|realmoney|verify}"; exit 2; }
+    cd "$ROOT/demos"
+    [ -d node_modules ] || { info "installing demo deps…"; npm install --silent; }
+    case "$name" in
+      lifecycle) exec node escrow-lifecycle.mjs ;;
+      realmoney) exec node realmoney-loop.mjs ;;
+      verify)    exec node verify-receipt.mjs "${@:3}" ;;
+      *)         echo "unknown demo: $name (lifecycle|realmoney|verify)"; exit 2 ;;
+    esac
+    ;;
+
+  test)
+    info "contracts (forge test)…"
+    (cd "$ROOT/contracts" && forge test 2>&1 | tail -10)
+    info "bridges (node --test)…"
+    (cd "$ROOT/bridges" && npm test 2>&1 | tail -8)
+    info "demo syntax check…"
+    (cd "$ROOT/demos" && node --check escrow-lifecycle.mjs && node --check realmoney-loop.mjs && node --check verify-receipt.mjs && ok "demos syntax OK")
+    ;;
+
+  bench)
+    # forge gas reports for the contracts named in foundry.toml's gas_reports
+    # list. Useful when tuning a contract change — diff the table against the
+    # previous run to see if you regressed.
+    info "running forge test --gas-report (this is slower than 'test')…"
+    (cd "$ROOT/contracts" && forge test --gas-report --no-match-path 'lib/**' 2>&1 | grep -E "^\| (src/|contracts/|test/|│ )" | head -120 || true)
+    ok "bench complete (above tables are gas usage per function call)"
+    ;;
+
+  bench:snapshot|bench-snapshot)
+    # Regenerate contracts/.gas-snapshot — commit the result so PR diffs
+    # show per-test gas-usage changes line by line. Run this any time you
+    # tune a contract's gas profile and want the diff to be visible.
+    info "regenerating .gas-snapshot…"
+    (cd "$ROOT/contracts" && forge snapshot --no-match-path 'lib/**' >/dev/null 2>&1) \
+      && ok "snapshot regenerated; commit contracts/.gas-snapshot to record"
+    ;;
+
+  bench:diff|bench-diff)
+    # Diff current gas usage against the committed .gas-snapshot. Reports
+    # tests that got cheaper/more expensive — non-failing, just informational.
+    if [ ! -f "$ROOT/contracts/.gas-snapshot" ]; then
+      bad "no contracts/.gas-snapshot to diff against; run: $0 bench:snapshot"
+      exit 1
+    fi
+    info "diffing gas usage against committed .gas-snapshot…"
+    (cd "$ROOT/contracts" && forge snapshot --diff --no-match-path 'lib/**' 2>&1 | head -40)
+    ;;
+
+  gates)
+    # Local preview of CI's non-chain gates. Run this before `git push` to
+    # catch failures locally instead of waiting 5 min for the CI round-trip.
+    # Mirrors `.github/workflows/ci.yml` exactly:
+    #   contracts: forge fmt --check + forge build --sizes + forge test
+    #   bridges:   npm test
+    #   demos:     syntax + validate-fixture (e2e steps need anvil; skipped here)
+    failed=0
+
+    info "[1/5] forge fmt --check"
+    if (cd "$ROOT/contracts" && forge fmt --check >/dev/null 2>&1); then ok "forge fmt clean"
+    else bad "forge fmt has diffs (run: cd contracts && forge fmt)"; failed=$((failed+1)); fi
+
+    info "[2/5] forge build --sizes"
+    if (cd "$ROOT/contracts" && forge build --skip test --sizes >/dev/null 2>&1); then ok "forge build clean"
+    else bad "forge build failed"; failed=$((failed+1)); fi
+
+    info "[3/5] forge test"
+    if (cd "$ROOT/contracts" && forge test --no-match-path 'lib/**' 2>&1 | tail -1 | grep -qE "^Ran .* test suites? in"); then
+      passed=$(cd "$ROOT/contracts" && forge test --no-match-path 'lib/**' 2>&1 | grep -oE "[0-9]+ tests? passed" | tail -1 || echo "?")
+      ok "forge test: $passed"
+    else bad "forge test failed"; failed=$((failed+1)); fi
+
+    info "[4/5] bridges: npm test"
+    bridge_log="$PIDDIR/gates-bridges.log"
+    if (cd "$ROOT/bridges" && { [ -d node_modules ] || npm install --silent; } && npm test >"$bridge_log" 2>&1); then
+      ok "bridges npm test passed"
+    else
+      bad "bridges npm test failed"
+      tail -12 "$bridge_log" 2>/dev/null || true
+      failed=$((failed+1))
+    fi
+
+    info "[5/5] demos: syntax + validate-fixture"
+    if (cd "$ROOT/demos" && { [ -d node_modules ] || npm install --silent; } && \
+        node --check escrow-lifecycle.mjs && \
+        node --check realmoney-loop.mjs && \
+        node --check verify-receipt.mjs && \
+        node --check validate-fixture.mjs && \
+        bash -n audit-with-cast.sh && \
+        node validate-fixture.mjs >/dev/null 2>&1); then ok "demos syntax + fixture clean"
+    else bad "demos syntax or fixture failed"; failed=$((failed+1)); fi
+
+    echo
+    if [ $failed -eq 0 ]; then
+      ok "all 5 non-chain gates pass — your push should land green"
+      info "(e2e demos with anvil still need to run on the runner; '$0 test' covers them locally)"
+    else
+      bad "$failed gate(s) failed — fix locally before pushing"
+      exit 1
+    fi
+    ;;
+
+  doctor)
+    fix=0; [ "${2:-}" = "--fix" ] && fix=1
+    # Tooling
+    command -v forge >/dev/null && ok "forge $(forge --version 2>&1 | head -1 | cut -d' ' -f2)" || bad "forge not installed (https://book.getfoundry.sh)"
+    command -v node  >/dev/null && ok "node $(node --version)" || bad "node not installed"
+    command -v cast  >/dev/null && ok "cast available" || warn "cast not on PATH (needed for seed-fx + audit-with-cast)"
+    # Solidity deps
+    [ -d "$ROOT/contracts/lib/forge-std" ] && ok "forge-std installed" || { warn "forge-std missing (cd contracts && forge install foundry-rs/forge-std)"; }
+    [ -d "$ROOT/contracts/lib/openzeppelin-contracts" ] && ok "openzeppelin-contracts installed" \
+      || warn "openzeppelin-contracts missing (forge install OpenZeppelin/openzeppelin-contracts@v5.0.0)"
+    # Runtime
+    anvil_up && ok "anvil $RPC" || { bad "anvil down"; [ $fix = 1 ] && warn "doctor --fix can't start anvil (privileged); run: $0 up"; }
+    [ -f "$ROOT/contracts/broadcast/DeployLocal.s.sol/84532001/run-latest.json" ] \
+      && ok "contracts deployed" || { warn "contracts not deployed"; [ $fix = 1 ] && "$0" deploy; }
+    running_pid on-ramp  && ok "on-ramp"  || { warn "on-ramp down"; [ $fix = 1 ] && "$0" bridges; }
+    running_pid off-ramp && ok "off-ramp" || warn "off-ramp down"
+    # FX freshness — quotes have a 1h TTL on chain; bridges fail with
+    # "FX quote stale" if any non-USD demo runs against a stale oracle.
+    bcast="$ROOT/contracts/broadcast/DeployLocal.s.sol/84532001/run-latest.json"
+    if [ -f "$bcast" ] && anvil_up && command -v cast >/dev/null; then
+      fx=$(python3 -c "import json;d=json.load(open('$bcast'));print([t['contractAddress'] for t in d['transactions'] if t['contractName']=='FxOracle'][0])" 2>/dev/null)
+      if [ -n "$fx" ]; then
+        stale_pairs=()
+        for pair in EUR/ssUSD GBP/ssUSD JPY/ssUSD MXN/ssUSD; do
+          pid=$(cast keccak "$pair")
+          fresh=$(cast call "$fx" "isFresh(bytes32)(bool)" "$pid" --rpc-url "$RPC" 2>/dev/null)
+          [ "$fresh" != "true" ] && stale_pairs+=("$pair")
+        done
+        if [ ${#stale_pairs[@]} -eq 0 ]; then
+          ok "FX quotes fresh (4/4 pairs)"
+        else
+          warn "FX quotes stale: ${stale_pairs[*]}"
+          if [ $fix = 1 ]; then "$0" seed-fx >/dev/null 2>&1 && ok "FX quotes re-seeded (auto-fix)" || warn "auto-seed failed"; fi
+        fi
+      fi
+    fi
+    # Schemas + verifier
+    [ -d "$ROOT/schemas" ] && ok "schemas/ present ($(ls "$ROOT/schemas/"*.schema.json 2>/dev/null | wc -l | tr -d ' ') files)" || bad "schemas/ missing"
+    [ -n "${STARK_BIN:-}" ] && [ -x "$STARK_BIN" ] && ok "STARK_BIN=$STARK_BIN" \
+      || (command -v ves-stark >/dev/null && ok "ves-stark on PATH" || warn "ves-stark not on PATH (set STARK_BIN if you have it; only needed for compliance bundles)")
+    ;;
+
+  *) echo "unknown command: $1"; usage; exit 2 ;;
+esac

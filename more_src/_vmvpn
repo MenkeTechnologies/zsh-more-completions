@@ -1,0 +1,744 @@
+# Source: https://github.com/carrerfe/vm-vpn/blob/38d8fad5aaa83425ff8a26269c95d5c30b377b32/vmvpn
+# Repository: carrerfe/vm-vpn (vmvpn)
+#!/bin/bash
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VM_NAME="vmvpn"
+VM_CONFIG="$SCRIPT_DIR/vmvpn.yaml"
+VPN_CONFIG="${VPN_CONFIG:-$SCRIPT_DIR/vpn-config.json}"
+CERT_FINGERPRINT_FILE="$SCRIPT_DIR/.vpn-cert-fingerprint"
+FIREFOX_PROFILE_NAME="vmvpn"
+
+COMMANDS="start stop restart shell ssh status delete vpn-connect vpn-disconnect vpn-status firefox firefox-profile completion"
+
+usage() {
+    echo "vmvpn - VM VPN CLI"
+    echo ""
+    echo "Usage: vmvpn <command> [options]"
+    echo ""
+    echo "VM Commands:"
+    echo "  start           Create and start the VM"
+    echo "  stop            Stop the VM"
+    echo "  restart         Restart the VM"
+    echo "  shell           Open a shell in the VM"
+    echo "  ssh             Connect via SSH"
+    echo "  status          Show VM status"
+    echo "  delete          Delete the VM completely"
+    echo ""
+    echo "VPN Commands:"
+    echo "  vpn-connect     Connect to VPN (auto-starts VM and proxies per config)"
+    echo "  vpn-disconnect  Disconnect from VPN (stops proxies)"
+    echo "  vpn-status      Show VPN and proxy status"
+    echo ""
+    echo "Browser Commands:"
+    echo "  firefox         Launch Firefox with VPN proxy profile"
+    echo "  firefox-profile Show Firefox profile info and deletion command"
+    echo ""
+    echo "Shell Completion:"
+    echo "  completion bash   Output bash completion script"
+    echo "  completion zsh    Output zsh completion script"
+    echo ""
+    echo "Environment variables:"
+    echo "  VPN_CONFIG      Path to VPN config JSON file (default: ./vpn-config.json)"
+    exit 1
+}
+
+check_lima() {
+    if ! command -v limactl &> /dev/null; then
+        echo "Error: Lima is not installed."
+        echo ""
+        echo "Install Lima:"
+        echo "  Linux:  curl -fsSL https://lima-vm.io/install.sh | bash"
+        echo "  macOS:  brew install lima"
+        echo ""
+        echo "See: https://lima-vm.io/"
+        exit 1
+    fi
+}
+
+check_jq() {
+    if ! command -v jq &> /dev/null; then
+        echo "Error: jq is not installed (required to parse VPN config)."
+        echo ""
+        echo "Install jq:"
+        echo "  Ubuntu/Debian: sudo apt install jq"
+        echo "  macOS:         brew install jq"
+        exit 1
+    fi
+}
+
+start() {
+    check_lima
+    if limactl list -q | grep -q "^${VM_NAME}$"; then
+        echo "Starting existing VM..."
+        limactl start "$VM_NAME"
+    else
+        echo "Creating and starting VM..."
+        limactl start --name="$VM_NAME" "$VM_CONFIG"
+    fi
+    echo ""
+    echo "VM is ready. Use '$0 shell' to access it."
+}
+
+stop() {
+    check_lima
+    echo "Stopping VM..."
+    limactl stop "$VM_NAME" 2>/dev/null || echo "VM is not running."
+}
+
+restart() {
+    stop
+    start
+}
+
+shell() {
+    check_lima
+    limactl shell "$VM_NAME"
+}
+
+ssh_connect() {
+    check_lima
+    ssh -F ~/.lima/"$VM_NAME"/ssh.config lima-"$VM_NAME"
+}
+
+status() {
+    check_lima
+    echo "VM status:"
+    limactl list | grep -E "^NAME|^${VM_NAME}"
+    echo ""
+    if limactl list -q | grep -q "^${VM_NAME}$"; then
+        echo "VM info:"
+        limactl info "$VM_NAME" 2>/dev/null || true
+    fi
+}
+
+delete() {
+    check_lima
+    echo "This will delete the VM and all its data."
+    read -p "Are you sure? [y/N] " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        limactl delete -f "$VM_NAME" 2>/dev/null || echo "VM does not exist."
+        echo "VM deleted."
+    else
+        echo "Cancelled."
+    fi
+}
+
+check_vpn_config() {
+    if [[ ! -f "$VPN_CONFIG" ]]; then
+        echo "Error: VPN config file not found: $VPN_CONFIG"
+        echo ""
+        echo "Create a vpn-config.json file with:"
+        echo '{'
+        echo '  "gateway": "vpn.example.com",'
+        echo '  "port": 443,'
+        echo '  "username": "your-username",'
+        echo '  "password": "your-password"'
+        echo '}'
+        echo ""
+        echo "Or copy the example: cp vpn-config.json.example vpn-config.json"
+        exit 1
+    fi
+}
+
+read_proxy_config() {
+    check_jq
+    check_vpn_config
+    
+    # Proxy settings from config
+    SOCKS_PROXY_ENABLED=$(jq -r '.socks_proxy.enabled // true' "$VPN_CONFIG")
+    SOCKS_PROXY_PORT=$(jq -r '.socks_proxy.port // 1080' "$VPN_CONFIG")
+    SOCKS_PROXY_AUTO_START=$(jq -r '.socks_proxy.auto_start // true' "$VPN_CONFIG")
+    SOCKS_PROXY_AUTO_STOP=$(jq -r '.socks_proxy.auto_stop // true' "$VPN_CONFIG")
+    HTTP_PROXY_ENABLED=$(jq -r '.http_proxy.enabled // false' "$VPN_CONFIG")
+    HTTP_PROXY_PORT=$(jq -r '.http_proxy.port // 3128' "$VPN_CONFIG")
+    HTTP_PROXY_AUTO_START=$(jq -r '.http_proxy.auto_start // false' "$VPN_CONFIG")
+    HTTP_PROXY_AUTO_STOP=$(jq -r '.http_proxy.auto_stop // false' "$VPN_CONFIG")
+}
+
+read_vpn_config() {
+    read_proxy_config
+    
+    VPN_GATEWAY=$(jq -r '.gateway' "$VPN_CONFIG")
+    VPN_PORT=$(jq -r '.port // 443' "$VPN_CONFIG")
+    VPN_USERNAME=$(jq -r '.username' "$VPN_CONFIG")
+    VPN_PASSWORD=$(jq -r '.password // empty' "$VPN_CONFIG")
+
+    if [[ -z "$VPN_GATEWAY" || "$VPN_GATEWAY" == "null" ]]; then
+        echo "Error: 'gateway' is required in $VPN_CONFIG"
+        exit 1
+    fi
+    if [[ -z "$VPN_USERNAME" || "$VPN_USERNAME" == "null" ]]; then
+        echo "Error: 'username' is required in $VPN_CONFIG"
+        exit 1
+    fi
+    # If password is not in config, prompt for it interactively
+    if [[ -z "$VPN_PASSWORD" ]]; then
+        read -s -p "VPN Password for $VPN_USERNAME: " VPN_PASSWORD
+        echo ""
+        if [[ -z "$VPN_PASSWORD" ]]; then
+            echo "Error: Password cannot be empty"
+            exit 1
+        fi
+    fi
+}
+
+check_certificate_fingerprint() {
+    local new_fingerprint="$1"
+    local saved_fingerprint=""
+
+    if [[ -f "$CERT_FINGERPRINT_FILE" ]]; then
+        saved_fingerprint=$(cat "$CERT_FINGERPRINT_FILE")
+    fi
+
+    if [[ -z "$saved_fingerprint" ]]; then
+        echo ""
+        echo "New VPN server certificate detected:"
+        echo "  Fingerprint (SHA1): $new_fingerprint"
+        echo ""
+        read -p "Trust this certificate and save fingerprint? (y/n) [n]: " response
+        if [[ "$response" =~ ^[Yy]$ ]]; then
+            echo "$new_fingerprint" > "$CERT_FINGERPRINT_FILE"
+            echo "Certificate fingerprint saved."
+            return 0
+        else
+            echo "Certificate rejected. Aborting connection."
+            return 1
+        fi
+    elif [[ "$saved_fingerprint" != "$new_fingerprint" ]]; then
+        echo ""
+        echo "WARNING: VPN server certificate has CHANGED!"
+        echo "  Saved fingerprint:  $saved_fingerprint"
+        echo "  New fingerprint:    $new_fingerprint"
+        echo ""
+        echo "This could indicate a man-in-the-middle attack or a legitimate certificate update."
+        read -p "Accept the new certificate? (y/n) [n]: " response
+        if [[ "$response" =~ ^[Yy]$ ]]; then
+            echo "$new_fingerprint" > "$CERT_FINGERPRINT_FILE"
+            echo "New certificate fingerprint saved."
+            return 0
+        else
+            echo "Certificate rejected. Aborting connection."
+            return 1
+        fi
+    else
+        echo "Certificate fingerprint verified."
+        return 0
+    fi
+}
+
+ensure_vm_running() {
+    check_lima
+    
+    # Check if VM exists and is running
+    if ! limactl list -q 2>/dev/null | grep -q "^${VM_NAME}$"; then
+        echo "VM not found. Creating and starting..."
+        limactl start --name="$VM_NAME" "$VM_CONFIG"
+    elif ! limactl list 2>/dev/null | grep "^${VM_NAME}" | grep -q "Running"; then
+        echo "Starting VM..."
+        limactl start "$VM_NAME"
+    fi
+}
+
+vpn_connect() {
+    read_vpn_config
+    ensure_vm_running
+
+    echo "Connecting to VPN: $VPN_GATEWAY:$VPN_PORT as $VPN_USERNAME..."
+
+    # Create/update VPN profile using expect (VPN-only version doesn't have import command)
+    local edit_script="
+set timeout 30
+spawn /opt/forticlient/forticlient-cli vpn edit vpn-tunnel
+expect {
+    \"Remote Gateway:\" {
+        send \"${VPN_GATEWAY}:${VPN_PORT}\r\"
+        exp_continue
+    }
+    \"Authentication\" {
+        send \"1\r\"
+        exp_continue
+    }
+    \"Certificate Type\" {
+        send \"3\r\"
+        exp_continue
+    }
+    eof
+}
+"
+    echo "$edit_script" | limactl shell "$VM_NAME" -- expect -f - >/dev/null 2>&1
+
+    # First attempt to connect and capture certificate info
+    local connect_output
+    local connect_script="
+set timeout 60
+log_user 1
+spawn /opt/forticlient/forticlient-cli vpn connect vpn-tunnel --user=${VPN_USERNAME} -p
+expect {
+    \"Password:\" {
+        send \"${VPN_PASSWORD}\r\"
+        exp_continue
+    }
+    \"Please input password\" {
+        send \"${VPN_PASSWORD}\r\"
+        exp_continue
+    }
+    -re \"Fingerprint \\\\(SHA1\\\\): (\[0-9A-Fa-f:\]+)\" {
+        set fingerprint \$expect_out(1,string)
+        puts \"CERT_FINGERPRINT::\$fingerprint\"
+        exp_continue
+    }
+    \"Confirm (y/n)\" {
+        send \"n\r\"
+    }
+    eof
+}
+"
+    connect_output=$(echo "$connect_script" | limactl shell "$VM_NAME" -- expect -f - 2>&1)
+
+    # Extract fingerprint from output
+    local cert_fingerprint
+    cert_fingerprint=$(echo "$connect_output" | grep -oP 'CERT_FINGERPRINT::\K[0-9A-Fa-f:]+' || true)
+
+    if [[ -n "$cert_fingerprint" ]]; then
+        # Certificate confirmation was requested - verify fingerprint
+        if ! check_certificate_fingerprint "$cert_fingerprint"; then
+            return 1
+        fi
+
+        # Disconnect the stuck connection from first attempt before reconnecting
+        limactl shell "$VM_NAME" -- /opt/forticlient/forticlient-cli vpn disconnect 2>/dev/null || true
+        sleep 1
+
+        # Reconnect and accept the certificate
+        local reconnect_script="
+set timeout 60
+spawn /opt/forticlient/forticlient-cli vpn connect vpn-tunnel --user=${VPN_USERNAME} -p
+expect {
+    \"Password:\" {
+        send \"${VPN_PASSWORD}\r\"
+        exp_continue
+    }
+    \"Please input password\" {
+        send \"${VPN_PASSWORD}\r\"
+        exp_continue
+    }
+    \"Confirm (y/n)\" {
+        send \"y\r\"
+        exp_continue
+    }
+    eof
+}
+"
+        connect_output=$(echo "$reconnect_script" | limactl shell "$VM_NAME" -- expect -f - 2>&1)
+        echo "$connect_output"
+    else
+        # No certificate prompt - just show the output
+        echo "$connect_output"
+    fi
+
+    # Check if login failed
+    if echo "$connect_output" | grep -q "Login failed"; then
+        echo ""
+        echo "ERROR: VPN login failed. Please check your credentials."
+        return 1
+    fi
+
+    # Verify VPN is actually connected
+    sleep 2
+    local vpn_status
+    vpn_status=$(limactl shell "$VM_NAME" -- /opt/forticlient/forticlient-cli vpn status 2>&1 || true)
+    
+    if ! echo "$vpn_status" | grep -q "Status: Connected"; then
+        echo ""
+        echo "ERROR: VPN connection failed."
+        echo "$vpn_status"
+        return 1
+    fi
+
+    # Start proxies if configured
+    start_proxies
+
+    echo ""
+    echo "VPN connected."
+    if [[ "$SOCKS_PROXY_ENABLED" == "true" ]]; then
+        echo "  SOCKS5 proxy: localhost:$SOCKS_PROXY_PORT"
+    fi
+    if [[ "$HTTP_PROXY_ENABLED" == "true" ]]; then
+        echo "  HTTP proxy:   localhost:$HTTP_PROXY_PORT"
+    fi
+}
+
+vpn_disconnect() {
+    read_proxy_config
+    check_lima
+    
+    # Stop proxies
+    echo "Stopping proxies..."
+    stop_proxies
+    
+    echo "Disconnecting from VPN..."
+    limactl shell "$VM_NAME" -- /opt/forticlient/forticlient-cli vpn disconnect 2>/dev/null || true
+    echo "VPN disconnected."
+}
+
+vpn_status() {
+    read_proxy_config
+    check_lima
+    
+    echo "VPN:"
+    limactl shell "$VM_NAME" -- /opt/forticlient/forticlient-cli vpn status 2>/dev/null | sed 's/^/  /' || echo "  Not connected"
+    
+    show_proxy_status
+}
+
+start_socks_proxy() {
+    local port="$1"
+    
+    # Check if SOCKS proxy is already running
+    if pgrep -f "ssh.*-D.*127.0.0.1:$port.*lima-$VM_NAME" > /dev/null 2>&1; then
+        return 0
+    fi
+    
+    local ssh_config="$HOME/.lima/$VM_NAME/ssh.config"
+    ssh -F "$ssh_config" -D "127.0.0.1:$port" -N -f lima-$VM_NAME 2>/dev/null
+}
+
+stop_socks_proxy() {
+    local port="$1"
+    pkill -f "ssh.*-D.*127.0.0.1:$port.*lima-$VM_NAME" 2>/dev/null || true
+}
+
+start_proxies() {
+    if [[ "$SOCKS_PROXY_ENABLED" == "true" && "$SOCKS_PROXY_AUTO_START" == "true" ]]; then
+        echo "Starting SOCKS5 proxy on localhost:$SOCKS_PROXY_PORT..."
+        start_socks_proxy "$SOCKS_PROXY_PORT"
+    fi
+    
+    # HTTP proxy (Squid) is already running in the VM, just report if enabled and auto_start
+    if [[ "$HTTP_PROXY_ENABLED" == "true" && "$HTTP_PROXY_AUTO_START" == "true" ]]; then
+        echo "HTTP proxy available on localhost:$HTTP_PROXY_PORT"
+    fi
+}
+
+stop_proxies() {
+    if [[ "$SOCKS_PROXY_ENABLED" == "true" && "$SOCKS_PROXY_AUTO_STOP" == "true" ]]; then
+        stop_socks_proxy "$SOCKS_PROXY_PORT"
+    fi
+}
+
+show_proxy_status() {
+    echo ""
+    echo "Proxy status:"
+    
+    if [[ "$SOCKS_PROXY_ENABLED" == "true" ]]; then
+        if pgrep -f "ssh.*-D.*127.0.0.1:$SOCKS_PROXY_PORT.*lima-$VM_NAME" > /dev/null 2>&1; then
+            echo "  SOCKS5 proxy: running on localhost:$SOCKS_PROXY_PORT"
+        else
+            echo "  SOCKS5 proxy: not running (configured on port $SOCKS_PROXY_PORT)"
+        fi
+    else
+        echo "  SOCKS5 proxy: disabled"
+    fi
+    
+    if [[ "$HTTP_PROXY_ENABLED" == "true" ]]; then
+        echo "  HTTP proxy:   available on localhost:$HTTP_PROXY_PORT"
+    else
+        echo "  HTTP proxy:   disabled"
+    fi
+}
+
+get_firefox_profile_path() {
+    local profiles_dir="$HOME/.mozilla/firefox"
+    if [[ ! -d "$profiles_dir" ]]; then
+        return 0
+    fi
+    
+    # Find profile by profiles.ini
+    local profile_ini="$profiles_dir/profiles.ini"
+    if [[ -f "$profile_ini" ]]; then
+        local rel_path
+        rel_path=$(awk -v name="$FIREFOX_PROFILE_NAME" '
+            /^\[Profile/ { in_profile=1; path=""; found_name=0 }
+            in_profile && /^Name=/ { sub(/^Name=/, ""); if ($0 == name) found_name=1 }
+            in_profile && /^Path=/ { sub(/^Path=/, ""); path=$0 }
+            in_profile && /^\[/ { if (found_name && path != "") { print path; exit } }
+            END { if (found_name && path != "") print path }
+        ' "$profile_ini")
+        if [[ -n "$rel_path" ]]; then
+            echo "$profiles_dir/$rel_path"
+            return 0
+        fi
+    fi
+    
+    # Fallback: look for directory ending with profile name
+    local dir
+    for dir in "$profiles_dir"/*."$FIREFOX_PROFILE_NAME"; do
+        if [[ -d "$dir" ]]; then
+            echo "$dir"
+            return 0
+        fi
+    done
+}
+
+create_firefox_profile() {
+    read_proxy_config
+    
+    # Check if Firefox is installed
+    if ! command -v firefox &> /dev/null; then
+        echo "Error: Firefox is not installed."
+        exit 1
+    fi
+    
+    # Create profile if it doesn't exist (without making it default)
+    # Using -CreateProfile with just the name creates it without setting as default
+    # We avoid using -P during creation as that can affect default profile selection
+    if ! firefox -no-remote -headless -CreateProfile "$FIREFOX_PROFILE_NAME" 2>/dev/null; then
+        # Profile might already exist, that's fine
+        true
+    fi
+    
+    # Find the profile path
+    local profile_path
+    profile_path=$(get_firefox_profile_path)
+    
+    if [[ -z "$profile_path" || ! -d "$profile_path" ]]; then
+        # Create profile explicitly (without -P to avoid making it default)
+        firefox -no-remote -CreateProfile "$FIREFOX_PROFILE_NAME" 2>/dev/null || true
+        sleep 1
+        profile_path=$(get_firefox_profile_path)
+    fi
+    
+    if [[ -z "$profile_path" || ! -d "$profile_path" ]]; then
+        echo "Error: Could not find or create Firefox profile directory"
+        exit 1
+    fi
+    
+    # Configure proxy settings in user.js
+    local user_js="$profile_path/user.js"
+    
+    # Determine which proxy to use (prefer SOCKS if enabled)
+    local proxy_type proxy_host proxy_port
+    if [[ "$SOCKS_PROXY_ENABLED" == "true" ]]; then
+        proxy_type=1  # Manual proxy
+        proxy_host="127.0.0.1"
+        proxy_port="$SOCKS_PROXY_PORT"
+        cat > "$user_js" << EOF
+// Ubuntu VPN Proxy Configuration (auto-generated)
+user_pref("network.proxy.type", 1);
+user_pref("network.proxy.socks", "$proxy_host");
+user_pref("network.proxy.socks_port", $proxy_port);
+user_pref("network.proxy.socks_version", 5);
+user_pref("network.proxy.socks_remote_dns", true);
+user_pref("network.proxy.no_proxies_on", "");
+EOF
+    elif [[ "$HTTP_PROXY_ENABLED" == "true" ]]; then
+        proxy_host="127.0.0.1"
+        proxy_port="$HTTP_PROXY_PORT"
+        cat > "$user_js" << EOF
+// Ubuntu VPN Proxy Configuration (auto-generated)
+user_pref("network.proxy.type", 1);
+user_pref("network.proxy.http", "$proxy_host");
+user_pref("network.proxy.http_port", $proxy_port);
+user_pref("network.proxy.ssl", "$proxy_host");
+user_pref("network.proxy.ssl_port", $proxy_port);
+user_pref("network.proxy.no_proxies_on", "");
+EOF
+    else
+        echo "Warning: No proxy enabled in config. Firefox will use direct connection."
+        cat > "$user_js" << EOF
+// Ubuntu VPN Proxy Configuration (auto-generated)
+user_pref("network.proxy.type", 0);
+EOF
+    fi
+    
+    echo "$profile_path"
+}
+
+launch_firefox() {
+    local profile_path
+    profile_path=$(create_firefox_profile)
+    
+    echo "Launching Firefox with profile '$FIREFOX_PROFILE_NAME'..."
+    if [[ "$SOCKS_PROXY_ENABLED" == "true" ]]; then
+        echo "  Using SOCKS5 proxy: localhost:$SOCKS_PROXY_PORT"
+    elif [[ "$HTTP_PROXY_ENABLED" == "true" ]]; then
+        echo "  Using HTTP proxy: localhost:$HTTP_PROXY_PORT"
+    fi
+    
+    # Launch Firefox with the profile (in background, detached)
+    nohup firefox -P "$FIREFOX_PROFILE_NAME" -no-remote "$@" >/dev/null 2>&1 &
+    disown
+    
+    echo "Firefox launched."
+}
+
+show_firefox_profile() {
+    read_proxy_config
+    
+    local profile_path
+    profile_path=$(get_firefox_profile_path)
+    
+    echo "Firefox VPN Profile"
+    echo "==================="
+    echo ""
+    echo "Profile name: $FIREFOX_PROFILE_NAME"
+    
+    if [[ -n "$profile_path" && -d "$profile_path" ]]; then
+        echo "Profile path: $profile_path"
+        echo ""
+        echo "Proxy configuration:"
+        if [[ -f "$profile_path/user.js" ]]; then
+            grep -E "network.proxy" "$profile_path/user.js" | sed 's/^/  /'
+        else
+            echo "  (no user.js found)"
+        fi
+    else
+        echo "Profile path: (not created yet - run 'firefox' command first)"
+    fi
+    
+    echo ""
+    echo "To delete this profile, run:"
+    echo "  firefox -P  # Opens profile manager, select '$FIREFOX_PROFILE_NAME' and click 'Delete Profile'"
+    echo ""
+    echo "Or manually delete:"
+    if [[ -n "$profile_path" && -d "$profile_path" ]]; then
+        echo "  rm -rf \"$profile_path\""
+    else
+        echo "  rm -rf ~/.mozilla/firefox/*.$FIREFOX_PROFILE_NAME"
+    fi
+}
+
+generate_completion() {
+    local shell_type="$1"
+    
+    case "$shell_type" in
+        bash)
+            cat << 'EOF'
+# vmvpn bash completion
+# Add to ~/.bashrc: eval "$(vmvpn completion bash)"
+# Or save to: /etc/bash_completion.d/vmvpn
+
+_vmvpn_completions() {
+    local cur="${COMP_WORDS[COMP_CWORD]}"
+    local prev="${COMP_WORDS[COMP_CWORD-1]}"
+    
+    case "$prev" in
+        vmvpn)
+            COMPREPLY=($(compgen -W "start stop restart shell ssh status delete vpn-connect vpn-disconnect vpn-status firefox firefox-profile completion" -- "$cur"))
+            ;;
+        completion)
+            COMPREPLY=($(compgen -W "bash zsh" -- "$cur"))
+            ;;
+        *)
+            COMPREPLY=()
+            ;;
+    esac
+}
+
+complete -F _vmvpn_completions vmvpn
+EOF
+            ;;
+        zsh)
+            cat << 'EOF'
+#compdef vmvpn
+# vmvpn zsh completion
+# Add to ~/.zshrc: eval "$(vmvpn completion zsh)"
+# Or save to a file in your $fpath
+
+_vmvpn() {
+    local -a commands
+    commands=(
+        'start:Create and start the VM'
+        'stop:Stop the VM'
+        'restart:Restart the VM'
+        'shell:Open a shell in the VM'
+        'ssh:Connect via SSH'
+        'status:Show VM status'
+        'delete:Delete the VM completely'
+        'vpn-connect:Connect to VPN (auto-starts VM and proxies)'
+        'vpn-disconnect:Disconnect from VPN (stops proxies)'
+        'vpn-status:Show VPN and proxy status'
+        'firefox:Launch Firefox with VPN proxy profile'
+        'firefox-profile:Show Firefox profile info'
+        'completion:Generate shell completion script'
+    )
+    
+    local -a completion_shells
+    completion_shells=(
+        'bash:Generate bash completion'
+        'zsh:Generate zsh completion'
+    )
+    
+    case "$words[2]" in
+        completion)
+            _describe 'shell' completion_shells
+            ;;
+        *)
+            _describe 'command' commands
+            ;;
+    esac
+}
+
+_vmvpn "$@"
+EOF
+            ;;
+        *)
+            echo "Usage: vmvpn completion {bash|zsh}"
+            echo ""
+            echo "Generate shell completion script."
+            echo ""
+            echo "Examples:"
+            echo "  eval \"\$(vmvpn completion bash)\"  # Add to ~/.bashrc"
+            echo "  eval \"\$(vmvpn completion zsh)\"   # Add to ~/.zshrc"
+            exit 1
+            ;;
+    esac
+}
+
+case "${1:-}" in
+    start)
+        start
+        ;;
+    stop)
+        stop
+        ;;
+    restart)
+        restart
+        ;;
+    shell)
+        shell
+        ;;
+    ssh)
+        ssh_connect
+        ;;
+    status)
+        status
+        ;;
+    delete)
+        delete
+        ;;
+    vpn-connect)
+        vpn_connect
+        ;;
+    vpn-disconnect)
+        vpn_disconnect
+        ;;
+    vpn-status)
+        vpn_status
+        ;;
+    firefox)
+        launch_firefox "${@:2}"
+        ;;
+    firefox-profile)
+        show_firefox_profile
+        ;;
+    completion)
+        generate_completion "${2:-}"
+        ;;
+    *)
+        usage
+        ;;
+esac
