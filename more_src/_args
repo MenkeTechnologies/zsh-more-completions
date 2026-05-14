@@ -1,0 +1,1204 @@
+# Source: https://github.com/andronics/dotfiles/blob/64c934e2a6bedd0472baf2ae69719b34e55c54d9/shell/.local/share/dotlib/_args
+# Repository: andronics/dotfiles (shell/.local/share/dotlib/_args)
+#!/usr/bin/env zsh
+
+# _args - Modern argument parsing extension
+# Part of the dotfiles library v2.0
+# Version: 1.0.0
+#
+# Usage:
+#   source "${DOTLIB}/_args"
+#   args-define-flag "verbose" "v" "Enable verbose output"
+#   args-define-option "output" "o" "file" "Output file"
+#   args-parse "$@"
+#
+# Features:
+#   - Declarative argument definition
+#   - Type validation (string, integer, boolean, enum, path, file, directory, url, email)
+#   - Automatic help generation
+#   - Short and long option support (-v, --verbose)
+#   - Positional argument handling
+#   - Required argument validation
+#   - Subcommand support (git-style)
+#   - Shell completion generation (bash, zsh)
+#
+# Dependencies:
+#   - _common (required)
+
+# ------------------------------
+# Source Guard
+# ------------------------------
+
+[[ -n "${ARGS_LOADED:-}" ]] && return 0
+
+# ------------------------------
+# Version
+# ------------------------------
+
+declare -gr ARGS_VERSION="1.0.0"
+declare -g ARGS_LOADED=1
+
+# ------------------------------
+# Load Dependencies
+# ------------------------------
+
+# Load _common (required)
+if ! source "${DOTLIB}/_common" 2>/dev/null; then
+    echo "[ERROR] _args requires _common - cannot load" >&2
+    return 1
+fi
+
+# ------------------------------
+# Configuration Variables
+# ------------------------------
+
+# XDG-compliant configuration paths
+declare -g ARGS_CONFIG_DIR="$(common-xdg-config-home)/args"
+declare -g ARGS_DATA_DIR="$(common-lib-data-dir)/args"
+declare -g ARGS_CACHE_DIR="$(common-lib-cache-dir)/args"
+
+# Parser configuration
+declare -g ARGS_STRICT="${ARGS_STRICT:-true}"
+declare -g ARGS_HELP_ON_ERROR="${ARGS_HELP_ON_ERROR:-true}"
+declare -g ARGS_PROGRAM_NAME="${ARGS_PROGRAM_NAME:-$(basename ${0})}"
+declare -g ARGS_DESCRIPTION="${ARGS_DESCRIPTION:-}"
+declare -g ARGS_VERBOSE="${ARGS_VERBOSE:-false}"
+declare -g ARGS_DEBUG="${ARGS_DEBUG:-false}"
+
+# Subcommand support
+declare -g ARGS_ENABLE_SUBCOMMANDS="${ARGS_ENABLE_SUBCOMMANDS:-false}"
+
+# ------------------------------
+# Internal State
+# ------------------------------
+
+# Argument definitions
+declare -g -A _ARGS_FLAGS=()           # name => short_option
+declare -g -A _ARGS_OPTIONS=()         # name => short_option
+declare -g -A _ARGS_REQUIRED=()        # name => true/false
+declare -g -A _ARGS_DEFAULTS=()        # name => default_value
+declare -g -A _ARGS_TYPES=()           # name => type
+declare -g -A _ARGS_ENUMS=()           # name => enum_values
+declare -g -A _ARGS_DESCRIPTIONS=()    # name => description
+declare -g -a _ARGS_POSITIONAL=()      # Positional argument definitions
+declare -g -A _ARGS_POSITIONAL_DESC=() # Positional descriptions
+declare -g -A _ARGS_POSITIONAL_REQ=()  # Positional required flags
+
+# Parse results
+declare -g -A _ARGS_PARSED=()          # name => parsed_value
+declare -g -a _ARGS_POSITIONAL_VALUES=() # Parsed positional values
+declare -g _ARGS_PARSE_ERROR=""        # Last parse error message
+
+# Help text components
+declare -g _ARGS_HELP_HEADER=""        # Custom help header
+declare -g _ARGS_HELP_FOOTER=""        # Custom help footer
+
+# Subcommand support
+declare -g -A _ARGS_SUBCOMMANDS=()     # name => description
+declare -g _ARGS_CURRENT_SUBCOMMAND="" # Currently executing subcommand
+
+# Statistics
+declare -g _ARGS_TOTAL_PARSES=0
+declare -g _ARGS_TOTAL_ERRORS=0
+
+# ------------------------------
+# Color Constants
+# ------------------------------
+
+declare -gr _ARGS_COLOR_INFO="$COLOR_BLUE"
+declare -gr _ARGS_COLOR_SUCCESS="$COLOR_GREEN"
+declare -gr _ARGS_COLOR_WARNING="$COLOR_YELLOW"
+declare -gr _ARGS_COLOR_ERROR="$COLOR_RED"
+
+# ------------------------------
+# Internal Logging Functions
+# ------------------------------
+
+_args-log-debug() {
+    [[ "$ARGS_DEBUG" == "true" ]] || return 0
+    echo "[DEBUG] args: $*" >&2
+}
+
+_args-log-verbose() {
+    [[ "$ARGS_VERBOSE" == "true" ]] || return 0
+    echo "[INFO] args: $*" >&2
+}
+
+_args-log-error() {
+    echo -e "${_ARGS_COLOR_ERROR}[ERROR] args: $*${COLOR_RESET}" >&2
+    ((_ARGS_TOTAL_ERRORS++))
+}
+
+_args-log-warning() {
+    echo -e "${_ARGS_COLOR_WARNING}[WARNING] args: $*${COLOR_RESET}" >&2
+}
+
+# ------------------------------
+# Type Validators
+# ------------------------------
+
+_args-validate-string() {
+    [[ -n "$1" ]]
+}
+
+_args-validate-integer() {
+    [[ "$1" =~ ^-?[0-9]+$ ]]
+}
+
+_args-validate-positive-integer() {
+    [[ "$1" =~ ^[0-9]+$ ]] && [[ "$1" -gt 0 ]]
+}
+
+_args-validate-boolean() {
+    [[ "$1" == "true" ]] || [[ "$1" == "false" ]] || [[ "$1" == "1" ]] || [[ "$1" == "0" ]] || [[ "$1" == "yes" ]] || [[ "$1" == "no" ]]
+}
+
+_args-validate-path() {
+    # Valid if exists or is absolute/relative path
+    [[ -e "$1" ]] || [[ "$1" == /* ]] || [[ "$1" == ~/* ]] || [[ "$1" == ./* ]] || [[ "$1" == ../* ]]
+}
+
+_args-validate-file() {
+    [[ -f "$1" ]]
+}
+
+_args-validate-directory() {
+    [[ -d "$1" ]]
+}
+
+_args-validate-url() {
+    [[ "$1" =~ ^https?:// ]]
+}
+
+_args-validate-email() {
+    [[ "$1" =~ ^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$ ]]
+}
+
+_args-validate-enum() {
+    local value="$1"
+    local enum_values="$2"
+
+    IFS='|' read -r -A allowed <<< "$enum_values"
+    for val in "${allowed[@]}"; do
+        [[ "$value" == "$val" ]] && return 0
+    done
+
+    return 1
+}
+
+_args-validate-json() {
+    if common-command-exists "jq"; then
+        echo "$1" | jq empty 2>/dev/null
+    else
+        # Basic JSON validation
+        [[ "$1" =~ ^\{.*\}$ ]] || [[ "$1" =~ ^\[.*\]$ ]]
+    fi
+}
+
+_args-validate-ip() {
+    [[ "$1" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]
+}
+
+_args-validate-port() {
+    [[ "$1" =~ ^[0-9]+$ ]] && [[ "$1" -ge 1 ]] && [[ "$1" -le 65535 ]]
+}
+
+# ------------------------------
+# Argument Definition Functions
+# ------------------------------
+
+# Define a flag (boolean, no value)
+# Usage: args-define-flag <name> [short] [description]
+args-define-flag() {
+    local name="$1"
+    local short="${2:-}"
+    local desc="${3:-}"
+
+    common-validate-required "$name" "name" || return 2
+
+    _ARGS_FLAGS[$name]="$short"
+    _ARGS_TYPES[$name]="boolean"
+    _ARGS_DEFAULTS[$name]="false"
+    [[ -n "$desc" ]] && _ARGS_DESCRIPTIONS[$name]="$desc"
+
+    _args-log-debug "Defined flag: --$name${short:+ (-$short)}"
+    return 0
+}
+
+# Define an option (takes a value)
+# Usage: args-define-option <name> [short] [type] [description] [default] [enum_values]
+args-define-option() {
+    local name="$1"
+    local short="${2:-}"
+    local type="${3:-string}"
+    local desc="${4:-}"
+    local default="${5:-}"
+    local enum="${6:-}"
+
+    common-validate-required "$name" "name" || return 2
+
+    _ARGS_OPTIONS[$name]="$short"
+    _ARGS_TYPES[$name]="$type"
+    [[ -n "$default" ]] && _ARGS_DEFAULTS[$name]="$default"
+    [[ -n "$desc" ]] && _ARGS_DESCRIPTIONS[$name]="$desc"
+    [[ -n "$enum" ]] && _ARGS_ENUMS[$name]="$enum"
+
+    _args-log-debug "Defined option: --$name${short:+ (-$short)} <$type>"
+    return 0
+}
+
+# Define required argument
+# Usage: args-define-required <name> [short] [type] [description] [enum_values]
+args-define-required() {
+    local name="$1"
+    local short="${2:-}"
+    local type="${3:-string}"
+    local desc="${4:-}"
+    local enum="${5:-}"
+
+    common-validate-required "$name" "name" || return 2
+
+    _ARGS_OPTIONS[$name]="$short"
+    _ARGS_TYPES[$name]="$type"
+    _ARGS_REQUIRED[$name]="true"
+    [[ -n "$desc" ]] && _ARGS_DESCRIPTIONS[$name]="$desc"
+    [[ -n "$enum" ]] && _ARGS_ENUMS[$name]="$enum"
+
+    _args-log-debug "Defined required option: --$name${short:+ (-$short)} <$type>"
+    return 0
+}
+
+# Define positional argument
+# Usage: args-define-positional <name> [description] [required]
+args-define-positional() {
+    local name="$1"
+    local desc="${2:-}"
+    local required="${3:-false}"
+
+    common-validate-required "$name" "name" || return 2
+
+    _ARGS_POSITIONAL+=("$name")
+    [[ -n "$desc" ]] && _ARGS_POSITIONAL_DESC[$name]="$desc"
+    [[ "$required" == "true" ]] && _ARGS_POSITIONAL_REQ[$name]="true"
+
+    _args-log-debug "Defined positional: $name${required:+ (required)}"
+    return 0
+}
+
+# Clear all argument definitions
+args-clear() {
+    _ARGS_FLAGS=()
+    _ARGS_OPTIONS=()
+    _ARGS_REQUIRED=()
+    _ARGS_DEFAULTS=()
+    _ARGS_TYPES=()
+    _ARGS_ENUMS=()
+    _ARGS_DESCRIPTIONS=()
+    _ARGS_POSITIONAL=()
+    _ARGS_POSITIONAL_DESC=()
+    _ARGS_POSITIONAL_REQ=()
+    _ARGS_PARSED=()
+    _ARGS_POSITIONAL_VALUES=()
+    _ARGS_PARSE_ERROR=""
+    _ARGS_SUBCOMMANDS=()
+    _ARGS_CURRENT_SUBCOMMAND=""
+
+    _args-log-debug "Cleared all argument definitions"
+    return 0
+}
+
+# ------------------------------
+# Subcommand Support
+# ------------------------------
+
+# Define a subcommand
+# Usage: args-define-subcommand <name> <description>
+args-define-subcommand() {
+    local name="$1"
+    local desc="${2:-}"
+
+    common-validate-required "$name" "name" || return 2
+
+    _ARGS_SUBCOMMANDS[$name]="$desc"
+    ARGS_ENABLE_SUBCOMMANDS="true"
+
+    _args-log-debug "Defined subcommand: $name"
+    return 0
+}
+
+# Get current subcommand
+# Usage: args-get-subcommand
+args-get-subcommand() {
+    echo "$_ARGS_CURRENT_SUBCOMMAND"
+}
+
+# Check if specific subcommand is active
+# Usage: args-is-subcommand <name>
+args-is-subcommand() {
+    local name="$1"
+    [[ "$_ARGS_CURRENT_SUBCOMMAND" == "$name" ]]
+}
+
+# ------------------------------
+# Parsing Functions
+# ------------------------------
+
+# Set and validate argument value
+_args-set-value() {
+    local key="$1"
+    local value="$2"
+    local type="${_ARGS_TYPES[$key]:-string}"
+    local enum="${_ARGS_ENUMS[$key]:-}"
+
+    # Validate enum first
+    if [[ -n "$enum" ]]; then
+        if ! _args-validate-enum "$value" "$enum"; then
+            _ARGS_PARSE_ERROR="Invalid value for --${key}: '$value' (allowed: ${enum//|/, })"
+            return 1
+        fi
+    fi
+
+    # Validate type
+    case "$type" in
+        string)
+            _args-validate-string "$value" || {
+                _ARGS_PARSE_ERROR="Invalid string value for --${key}"
+                return 1
+            }
+            ;;
+        integer)
+            _args-validate-integer "$value" || {
+                _ARGS_PARSE_ERROR="Invalid integer value for --${key}: '$value'"
+                return 1
+            }
+            ;;
+        positive-integer)
+            _args-validate-positive-integer "$value" || {
+                _ARGS_PARSE_ERROR="Invalid positive integer value for --${key}: '$value'"
+                return 1
+            }
+            ;;
+        boolean)
+            _args-validate-boolean "$value" || {
+                _ARGS_PARSE_ERROR="Invalid boolean value for --${key}: '$value' (use true/false/yes/no/1/0)"
+                return 1
+            }
+            ;;
+        path)
+            _args-validate-path "$value" || {
+                _ARGS_PARSE_ERROR="Invalid path for --${key}: '$value'"
+                return 1
+            }
+            ;;
+        file)
+            _args-validate-file "$value" || {
+                _ARGS_PARSE_ERROR="File not found for --${key}: '$value'"
+                return 1
+            }
+            ;;
+        directory)
+            _args-validate-directory "$value" || {
+                _ARGS_PARSE_ERROR="Directory not found for --${key}: '$value'"
+                return 1
+            }
+            ;;
+        url)
+            _args-validate-url "$value" || {
+                _ARGS_PARSE_ERROR="Invalid URL for --${key}: '$value'"
+                return 1
+            }
+            ;;
+        email)
+            _args-validate-email "$value" || {
+                _ARGS_PARSE_ERROR="Invalid email for --${key}: '$value'"
+                return 1
+            }
+            ;;
+        json)
+            _args-validate-json "$value" || {
+                _ARGS_PARSE_ERROR="Invalid JSON for --${key}: '$value'"
+                return 1
+            }
+            ;;
+        ip)
+            _args-validate-ip "$value" || {
+                _ARGS_PARSE_ERROR="Invalid IP address for --${key}: '$value'"
+                return 1
+            }
+            ;;
+        port)
+            _args-validate-port "$value" || {
+                _ARGS_PARSE_ERROR="Invalid port number for --${key}: '$value' (must be 1-65535)"
+                return 1
+            }
+            ;;
+        enum)
+            # Already checked above
+            ;;
+    esac
+
+    _ARGS_PARSED[$key]="$value"
+    return 0
+}
+
+# Parse short options
+_args-parse-short() {
+    local shorts="$1"
+    local args_var="$2"
+    local i_var="$3"
+
+    # Get current index value (1-based in ZSH)
+    # IMPORTANT: Use different variable name to avoid shadowing parent's variable
+    local current_index=${(P)i_var}
+
+    # Get args array indirectly
+    local -a args_array
+    args_array=("${(@P)args_var}")
+
+    local len=${#shorts}
+    local j=0
+
+    while [[ $j -lt $len ]]; do
+        local short="${shorts:$j:1}"
+        local found=false
+
+        # Check flags
+        for name in "${(@k)_ARGS_FLAGS}"; do
+            if [[ "${_ARGS_FLAGS[$name]}" == "$short" ]]; then
+                _ARGS_PARSED[$name]="true"
+                found=true
+                break
+            fi
+        done
+
+        if $found; then
+            j=$((j + 1))
+            continue
+        fi
+
+        # Check options
+        for name in "${(@k)_ARGS_OPTIONS}"; do
+            if [[ "${_ARGS_OPTIONS[$name]}" == "$short" ]]; then
+                # If not last char, rest is value
+                if [[ $j -lt $((len - 1)) ]]; then
+                    local value="${shorts:$((j + 1))}"
+                    _args-set-value "$name" "$value" || return 1
+                    eval "${i_var}=\$((${i_var} + 1))"
+                    return 0
+                fi
+
+                # Next arg is value
+                current_index=$((current_index + 1))
+                if [[ $current_index -gt ${#args_array[@]} ]]; then
+                    _ARGS_PARSE_ERROR="Option -${short} requires a value"
+                    return 1
+                fi
+                local value="${args_array[$current_index]}"
+                _args-set-value "$name" "$value" || return 1
+                eval "${i_var}=\$((${i_var} + 1))"
+                return 0
+            fi
+        done
+
+        # Unknown short option
+        if [[ "$ARGS_STRICT" == "true" ]]; then
+            _ARGS_PARSE_ERROR="Unknown option: -${short}"
+            return 1
+        fi
+
+        j=$((j + 1))
+    done
+
+    eval "${i_var}=\$((${i_var} + 1))"
+    return 0
+}
+
+# Main parse function
+# Usage: args-parse "$@"
+args-parse() {
+    local args=("$@")
+    local i=1  # ZSH arrays are 1-based
+
+    _ARGS_PARSE_ERROR=""
+    _ARGS_POSITIONAL_VALUES=()
+    ((_ARGS_TOTAL_PARSES++))
+
+    # Apply defaults
+    for name in "${(@k)_ARGS_DEFAULTS}"; do
+        _ARGS_PARSED[$name]="${_ARGS_DEFAULTS[$name]}"
+    done
+
+    # Check for subcommand (if enabled)
+    if [[ "$ARGS_ENABLE_SUBCOMMANDS" == "true" ]] && [[ ${#args[@]} -gt 0 ]]; then
+        local first_arg="${args[1]}"  # ZSH arrays are 1-based
+        # If first arg is not an option and is a defined subcommand
+        if [[ "$first_arg" != -* ]] && [[ -n "${_ARGS_SUBCOMMANDS[$first_arg]}" ]]; then
+            _ARGS_CURRENT_SUBCOMMAND="$first_arg"
+            _args-log-debug "Detected subcommand: $first_arg"
+            # Remove subcommand from args (shift array)
+            shift args
+        fi
+    fi
+
+    # Parse arguments
+    while [[ $i -le ${#args[@]} ]]; do
+        local arg="${args[$i]}"
+
+        # End of options marker
+        if [[ "$arg" == "--" ]]; then
+            i=$((i + 1))
+            # Rest are positional
+            while [[ $i -le ${#args[@]} ]]; do
+                _ARGS_POSITIONAL_VALUES+=("${args[$i]}")
+                i=$((i + 1))
+            done
+            break
+        fi
+
+        # Long option with value (--key=value)
+        if [[ "$arg" == --*=* ]]; then
+            local key="${arg%%=*}"
+            key="${key#--}"
+            key="${key//-/_}"
+            local value="${arg#*=}"
+
+            if ! _args-set-value "$key" "$value"; then
+                _args-log-error "$_ARGS_PARSE_ERROR"
+                [[ "$ARGS_HELP_ON_ERROR" == "true" ]] && args-show-help >&2
+                return 1
+            fi
+            i=$((i + 1))
+            continue
+        fi
+
+        # Long option or flag
+        if [[ "$arg" == --* ]]; then
+            local key="${arg#--}"
+            key="${key//-/_}"
+
+            # Check if it's a flag
+            if [[ -n "${_ARGS_FLAGS[$key]}" ]]; then
+                _ARGS_PARSED[$key]="true"
+                i=$((i + 1))
+                continue
+            fi
+
+            # Option with value
+            if [[ -n "${_ARGS_OPTIONS[$key]}" ]]; then
+                i=$((i + 1))
+                if [[ $i -gt ${#args[@]} ]]; then
+                    _ARGS_PARSE_ERROR="Option --${key} requires a value"
+                    _args-log-error "$_ARGS_PARSE_ERROR"
+                    [[ "$ARGS_HELP_ON_ERROR" == "true" ]] && args-show-help >&2
+                    return 1
+                fi
+                local value="${args[$i]}"
+                if ! _args-set-value "$key" "$value"; then
+                    _args-log-error "$_ARGS_PARSE_ERROR"
+                    [[ "$ARGS_HELP_ON_ERROR" == "true" ]] && args-show-help >&2
+                    return 1
+                fi
+                i=$((i + 1))
+                continue
+            fi
+
+            # Unknown option
+            if [[ "$ARGS_STRICT" == "true" ]]; then
+                _ARGS_PARSE_ERROR="Unknown option: --${key}"
+                _args-log-error "$_ARGS_PARSE_ERROR"
+                [[ "$ARGS_HELP_ON_ERROR" == "true" ]] && args-show-help >&2
+                return 1
+            fi
+            i=$((i + 1))
+            continue
+        fi
+
+        # Short options
+        if [[ "$arg" == -* ]] && [[ "$arg" != "-" ]]; then
+            _args-parse-short "${arg#-}" "args" "i" || {
+                _args-log-error "$_ARGS_PARSE_ERROR"
+                [[ "$ARGS_HELP_ON_ERROR" == "true" ]] && args-show-help >&2
+                return 1
+            }
+            continue
+        fi
+
+        # Positional argument
+        _ARGS_POSITIONAL_VALUES+=("$arg")
+        i=$((i + 1))
+    done
+
+    # Validate required arguments
+    for name in "${(@k)_ARGS_REQUIRED}"; do
+        [[ -z "$name" ]] && continue  # Skip empty keys (ZSH array iteration quirk)
+        if [[ -z "${_ARGS_PARSED[$name]}" ]]; then
+            _ARGS_PARSE_ERROR="Required argument missing: --${name}"
+            _args-log-error "$_ARGS_PARSE_ERROR"
+            [[ "$ARGS_HELP_ON_ERROR" == "true" ]] && args-show-help >&2
+            return 1
+        fi
+    done
+
+    # Validate required positionals
+    local pos_index=0
+    for pos_name in "${_ARGS_POSITIONAL[@]}"; do
+        [[ -z "$pos_name" ]] && continue  # Skip empty entries
+        if [[ "${_ARGS_POSITIONAL_REQ[$pos_name]}" == "true" ]]; then
+            if [[ $pos_index -ge ${#_ARGS_POSITIONAL_VALUES[@]} ]]; then
+                _ARGS_PARSE_ERROR="Required positional argument missing: $pos_name"
+                _args-log-error "$_ARGS_PARSE_ERROR"
+                [[ "$ARGS_HELP_ON_ERROR" == "true" ]] && args-show-help >&2
+                return 1
+            fi
+        fi
+        pos_index=$((pos_index + 1))
+    done
+
+    _args-log-verbose "Successfully parsed ${#args[@]} arguments"
+    return 0
+}
+
+# ------------------------------
+# Accessor Functions
+# ------------------------------
+
+# Get parsed value
+# Usage: args-get <name> [default]
+args-get() {
+    local name="$1"
+    local default="${2:-}"
+    echo "${_ARGS_PARSED[$name]:-$default}"
+}
+
+# Check if flag is set
+# Usage: args-is-set <name>
+args-is-set() {
+    local name="$1"
+    [[ "${_ARGS_PARSED[$name]}" == "true" ]]
+}
+
+# Get positional argument by index (0-based from user perspective)
+# Usage: args-get-positional <index>
+args-get-positional() {
+    local index="$1"
+    local actual_index=$((index + 1))  # Convert to 1-based ZSH array index
+    if [[ $actual_index -le ${#_ARGS_POSITIONAL_VALUES[@]} ]]; then
+        echo "${_ARGS_POSITIONAL_VALUES[$actual_index]}"
+    fi
+}
+
+# Get all positional arguments
+# Usage: args-get-all-positional
+args-get-all-positional() {
+    echo "${_ARGS_POSITIONAL_VALUES[@]}"
+}
+
+# Check if positional argument exists (0-based from user perspective)
+# Usage: args-has-positional <index>
+args-has-positional() {
+    local index="$1"
+    local actual_index=$((index + 1))  # Convert to 1-based ZSH array index
+    [[ $actual_index -le ${#_ARGS_POSITIONAL_VALUES[@]} ]]
+}
+
+# Get positional count
+# Usage: args-positional-count
+args-positional-count() {
+    echo ${#_ARGS_POSITIONAL_VALUES[@]}
+}
+
+# Export all parsed args as environment variables
+# Usage: args-export
+args-export() {
+    for name in "${(@k)_ARGS_PARSED}"; do
+        export "${name}=${_ARGS_PARSED[$name]}"
+    done
+}
+
+# Get all parsed arguments as associative array keys
+# Usage: args-keys
+args-keys() {
+    echo "${(@k)_ARGS_PARSED}"
+}
+
+# Dump all parsed arguments
+# Usage: args-dump
+args-dump() {
+    echo "Parsed Arguments:"
+    for name in "${(@k)_ARGS_PARSED}"; do
+        echo "  $name = ${_ARGS_PARSED[$name]}"
+    done
+
+    if [[ ${#_ARGS_POSITIONAL_VALUES[@]} -gt 0 ]]; then
+        echo "Positional Arguments:"
+        local i=0
+        for val in "${_ARGS_POSITIONAL_VALUES[@]}"; do
+            echo "  [$i] = $val"
+            i=$((i + 1))
+        done
+    fi
+}
+
+# ------------------------------
+# Help Generation Functions
+# ------------------------------
+
+# Set custom help header
+# Usage: args-set-help-header "Usage: myapp [OPTIONS] <file>"
+args-set-help-header() {
+    _ARGS_HELP_HEADER="$1"
+}
+
+# Set custom help footer
+# Usage: args-set-help-footer "Report bugs to: bugs@example.com"
+args-set-help-footer() {
+    _ARGS_HELP_FOOTER="$1"
+}
+
+# Generate and show help
+# Usage: args-show-help
+args-show-help() {
+    # Header
+    if [[ -n "$_ARGS_HELP_HEADER" ]]; then
+        echo "$_ARGS_HELP_HEADER"
+    else
+        echo "Usage: ${ARGS_PROGRAM_NAME}"
+        [[ "$ARGS_ENABLE_SUBCOMMANDS" == "true" ]] && [[ ${#_ARGS_SUBCOMMANDS[@]} -gt 0 ]] && echo -n " <COMMAND>"
+        echo -n " [OPTIONS]"
+        [[ ${#_ARGS_POSITIONAL[@]} -gt 0 ]] && echo -n " <ARGS...>"
+        echo ""
+    fi
+
+    # Description
+    [[ -n "$ARGS_DESCRIPTION" ]] && echo -e "\n$ARGS_DESCRIPTION"
+
+    # Subcommands
+    if [[ "$ARGS_ENABLE_SUBCOMMANDS" == "true" ]] && [[ ${#_ARGS_SUBCOMMANDS[@]} -gt 0 ]]; then
+        echo -e "\nCOMMANDS:"
+        for name in "${(@ko)_ARGS_SUBCOMMANDS}"; do
+            local desc="${_ARGS_SUBCOMMANDS[$name]:-}"
+            printf "  %-26s  %s\n" "$name" "$desc"
+        done
+    fi
+
+    # Options section
+    if [[ ${#_ARGS_FLAGS[@]} -gt 0 ]] || [[ ${#_ARGS_OPTIONS[@]} -gt 0 ]]; then
+        echo -e "\nOPTIONS:"
+
+        # Collect and sort all options
+        local -a all_options=()
+
+        # Flags
+        for name in "${(@k)_ARGS_FLAGS}"; do
+            local short="${_ARGS_FLAGS[$name]}"
+            local desc="${_ARGS_DESCRIPTIONS[$name]:-}"
+            local line=""
+
+            if [[ -n "$short" ]]; then
+                line="-${short}, --${name}"
+            else
+                line="    --${name}"
+            fi
+
+            # Pad to 28 chars
+            printf -v line "  %-26s  %s" "$line" "$desc"
+            all_options+=("$line")
+        done
+
+        # Options
+        for name in "${(@k)_ARGS_OPTIONS}"; do
+            local short="${_ARGS_OPTIONS[$name]}"
+            local desc="${_ARGS_DESCRIPTIONS[$name]:-}"
+            local type="${_ARGS_TYPES[$name]:-STRING}"
+            local default="${_ARGS_DEFAULTS[$name]:-}"
+            local required="${_ARGS_REQUIRED[$name]:-false}"
+            local enum="${_ARGS_ENUMS[$name]:-}"
+            local line=""
+
+            if [[ -n "$short" ]]; then
+                line="-${short}, --${name} <${type:u}>"
+            else
+                line="    --${name} <${type:u}>"
+            fi
+
+            # Build description
+            local full_desc="$desc"
+            [[ "$required" == "true" ]] && full_desc+=" (required)"
+            [[ -n "$default" ]] && full_desc+=" [default: $default]"
+            [[ -n "$enum" ]] && full_desc+=" [${enum//|/, }]"
+
+            # Pad to 28 chars
+            printf -v line "  %-26s  %s" "$line" "$full_desc"
+            all_options+=("$line")
+        done
+
+        # Print sorted options
+        for opt in "${all_options[@]}"; do
+            echo "$opt"
+        done
+    fi
+
+    # Positional arguments
+    if [[ ${#_ARGS_POSITIONAL[@]} -gt 0 ]]; then
+        echo -e "\nARGUMENTS:"
+        for pos_name in "${_ARGS_POSITIONAL[@]}"; do
+            local desc="${_ARGS_POSITIONAL_DESC[$pos_name]:-}"
+            local required="${_ARGS_POSITIONAL_REQ[$pos_name]:-false}"
+
+            [[ "$required" == "true" ]] && desc+=" (required)"
+
+            printf "  %-26s  %s\n" "$pos_name" "$desc"
+        done
+    fi
+
+    # Footer
+    [[ -n "$_ARGS_HELP_FOOTER" ]] && echo -e "\n$_ARGS_HELP_FOOTER"
+
+    return 0
+}
+
+# ------------------------------
+# Shell Completion Generation
+# ------------------------------
+
+# Generate bash completion script
+# Usage: args-generate-completion "bash" "myapp"
+args-generate-completion-bash() {
+    local prog="${1:-$ARGS_PROGRAM_NAME}"
+
+    cat <<EOF
+# bash completion for $prog
+
+_${prog}_completion() {
+    local cur prev opts
+    COMPREPLY=()
+    cur="\${COMP_WORDS[COMP_CWORD]}"
+    prev="\${COMP_WORDS[COMP_CWORD-1]}"
+
+    # Subcommands
+    local subcommands="${(@k)_ARGS_SUBCOMMANDS}"
+
+    # Options
+    opts="--help"
+EOF
+
+    # Add flags
+    for name in "${(@k)_ARGS_FLAGS}"; do
+        echo "    opts=\"\$opts --${name}\""
+        local short="${_ARGS_FLAGS[$name]}"
+        [[ -n "$short" ]] && echo "    opts=\"\$opts -${short}\""
+    done
+
+    # Add options
+    for name in "${(@k)_ARGS_OPTIONS}"; do
+        echo "    opts=\"\$opts --${name}\""
+        local short="${_ARGS_OPTIONS[$name]}"
+        [[ -n "$short" ]] && echo "    opts=\"\$opts -${short}\""
+    done
+
+    cat <<'EOF'
+
+    # Handle subcommands
+    if [[ ${COMP_CWORD} == 1 ]] && [[ -n "$subcommands" ]]; then
+        COMPREPLY=( $(compgen -W "$subcommands $opts" -- "$cur") )
+        return 0
+    fi
+
+    # Handle options
+    if [[ "$cur" == -* ]]; then
+        COMPREPLY=( $(compgen -W "$opts" -- "$cur") )
+        return 0
+    fi
+
+    # File completion for remaining args
+    COMPREPLY=( $(compgen -f -- "$cur") )
+}
+
+complete -F _${prog}_completion $prog
+EOF
+}
+
+# Generate zsh completion script
+# Usage: args-generate-completion-zsh "myapp"
+args-generate-completion-zsh() {
+    local prog="${1:-$ARGS_PROGRAM_NAME}"
+
+    cat <<EOF
+#compdef $prog
+
+# zsh completion for $prog
+
+_$prog() {
+    local -a options
+    local -a subcommands
+
+EOF
+
+    # Add subcommands
+    if [[ ${#_ARGS_SUBCOMMANDS[@]} -gt 0 ]]; then
+        echo "    subcommands=("
+        for name in "${(@k)_ARGS_SUBCOMMANDS}"; do
+            local desc="${_ARGS_SUBCOMMANDS[$name]:-}"
+            echo "        '$name:$desc'"
+        done
+        echo "    )"
+    fi
+
+    # Add options
+    echo "    options=("
+    echo "        '(-h --help)'{-h,--help}'[Show help message]'"
+
+    for name in "${(@k)_ARGS_FLAGS}"; do
+        local short="${_ARGS_FLAGS[$name]}"
+        local desc="${_ARGS_DESCRIPTIONS[$name]:-}"
+        if [[ -n "$short" ]]; then
+            echo "        '(-$short --$name)'{-$short,--$name}'[$desc]'"
+        else
+            echo "        '--$name[$desc]'"
+        fi
+    done
+
+    for name in "${(@k)_ARGS_OPTIONS}"; do
+        local short="${_ARGS_OPTIONS[$name]}"
+        local desc="${_ARGS_DESCRIPTIONS[$name]:-}"
+        local type="${_ARGS_TYPES[$name]:-string}"
+        if [[ -n "$short" ]]; then
+            echo "        '(-$short --$name)'{-$short,--$name}'[$desc]:$type:'"
+        else
+            echo "        '--$name[$desc]:$type:'"
+        fi
+    done
+
+    echo "    )"
+
+    cat <<'EOF'
+
+    if [[ ${#subcommands[@]} -gt 0 ]]; then
+        _arguments \
+            "$options[@]" \
+            '1: :->command' \
+            '*:: :->args'
+
+        case $state in
+            command)
+                _describe 'command' subcommands
+                ;;
+            args)
+                _files
+                ;;
+        esac
+    else
+        _arguments "$options[@]" '*:file:_files'
+    fi
+}
+
+_$prog "$@"
+EOF
+}
+
+# Generate completion for specified shell
+# Usage: args-generate-completion "bash"|"zsh" [program_name]
+args-generate-completion() {
+    local shell="${1:-bash}"
+    local prog="${2:-$ARGS_PROGRAM_NAME}"
+
+    case "$shell" in
+        bash)
+            args-generate-completion-bash "$prog"
+            ;;
+        zsh)
+            args-generate-completion-zsh "$prog"
+            ;;
+        *)
+            _args-log-error "Unsupported shell: $shell (use 'bash' or 'zsh')"
+            return 1
+            ;;
+    esac
+}
+
+# ------------------------------
+# Statistics
+# ------------------------------
+
+args-stats() {
+    echo "Arguments Parser Statistics:"
+    echo "  Version: $ARGS_VERSION"
+    echo "  Total Parses: $_ARGS_TOTAL_PARSES"
+    echo "  Total Errors: $_ARGS_TOTAL_ERRORS"
+    echo "  Defined Flags: ${#_ARGS_FLAGS[@]}"
+    echo "  Defined Options: ${#_ARGS_OPTIONS[@]}"
+    echo "  Defined Positional: ${#_ARGS_POSITIONAL[@]}"
+    echo "  Parsed Arguments: ${#_ARGS_PARSED[@]}"
+    echo "  Positional Values: ${#_ARGS_POSITIONAL_VALUES[@]}"
+    echo "  Subcommands Enabled: $ARGS_ENABLE_SUBCOMMANDS"
+    [[ -n "$_ARGS_CURRENT_SUBCOMMAND" ]] && echo "  Current Subcommand: $_ARGS_CURRENT_SUBCOMMAND"
+
+    return 0
+}
+
+# ------------------------------
+# Configuration Helpers
+# ------------------------------
+
+# Enable strict mode (error on unknown arguments)
+args-enable-strict() {
+    ARGS_STRICT="true"
+}
+
+# Disable strict mode (ignore unknown arguments)
+args-disable-strict() {
+    ARGS_STRICT="false"
+}
+
+# Enable automatic help on parse errors
+args-enable-help-on-error() {
+    ARGS_HELP_ON_ERROR="true"
+}
+
+# Disable automatic help on parse errors
+args-disable-help-on-error() {
+    ARGS_HELP_ON_ERROR="false"
+}
+
+# Set program name for help text
+args-set-program-name() {
+    ARGS_PROGRAM_NAME="$1"
+}
+
+# Set program description for help text
+args-set-description() {
+    ARGS_DESCRIPTION="$1"
+}
+
+# ------------------------------
+# Help and Documentation
+# ------------------------------
+
+args-help() {
+    cat <<'EOF'
+args - Modern argument parsing extension
+Version: 1.0.0
+
+Usage:
+  source "${DOTLIB}/_args"
+
+  # Define arguments
+  args-define-flag "verbose" "v" "Enable verbose output"
+  args-define-option "output" "o" "file" "Output file"
+  args-define-required "input" "i" "file" "Input file"
+  args-define-positional "target" "Target to process" "true"
+
+  # Parse arguments
+  args-parse "$@" || exit 1
+
+  # Access values
+  verbose=$(args-is-set "verbose" && echo "yes" || echo "no")
+  output=$(args-get "output" "/dev/stdout")
+  input=$(args-get "input")
+  target=$(args-get-positional 0)
+
+Core Commands:
+  args-define-flag <name> [short] [desc]              Define boolean flag
+  args-define-option <name> [short] [type] [desc]     Define option with value
+  args-define-required <name> [short] [type] [desc]   Define required option
+  args-define-positional <name> [desc] [required]     Define positional argument
+  args-clear                                           Clear all definitions
+
+Subcommands:
+  args-define-subcommand <name> <description>         Define a subcommand
+  args-get-subcommand                                  Get current subcommand
+  args-is-subcommand <name>                           Check if subcommand active
+
+Parsing:
+  args-parse "$@"                                     Parse arguments
+
+Accessors:
+  args-get <name> [default]                           Get parsed value
+  args-is-set <name>                                  Check if flag set
+  args-get-positional <index>                         Get positional by index
+  args-get-all-positional                             Get all positional args
+  args-positional-count                               Get count of positional args
+  args-export                                          Export args as env vars
+  args-dump                                            Dump all parsed arguments
+
+Help:
+  args-show-help                                      Show help text
+  args-set-help-header <text>                         Set custom help header
+  args-set-help-footer <text>                         Set custom help footer
+
+Completion:
+  args-generate-completion "bash"|"zsh" [program]     Generate shell completion
+
+Utilities:
+  args-stats                                          Show parser statistics
+  args-enable-strict                                  Enable strict mode
+  args-disable-strict                                 Disable strict mode
+
+Supported Types:
+  string, integer, positive-integer, boolean, path, file, directory,
+  url, email, json, ip, port, enum
+
+Configuration Variables:
+  ARGS_STRICT=true/false                              Error on unknown arguments
+  ARGS_HELP_ON_ERROR=true/false                       Show help on parse errors
+  ARGS_PROGRAM_NAME=name                              Program name for help
+  ARGS_DESCRIPTION=desc                               Program description
+  ARGS_VERBOSE=true/false                             Verbose output
+  ARGS_DEBUG=true/false                               Debug output
+
+Examples:
+  # Simple flag and option
+  args-define-flag "verbose" "v" "Verbose output"
+  args-define-option "output" "o" "file" "Output file" "out.txt"
+  args-parse "$@"
+
+  # Required argument with validation
+  args-define-required "port" "p" "port" "Server port"
+  args-parse "$@"
+
+  # Enum values
+  args-define-option "format" "f" "enum" "Output format" "json" "json|yaml|xml"
+
+  # Subcommands (git-style)
+  args-define-subcommand "init" "Initialize repository"
+  args-define-subcommand "push" "Push changes"
+  args-parse "$@"
+  if args-is-subcommand "init"; then
+      # Handle init command
+  fi
+
+For complete documentation:
+  cat $(common-lib-docs-dir)/extensions/_args.md
+
+EOF
+}
+
+# ------------------------------
+# Script Execution Detection
+# ------------------------------
+
+# Use ZSH_EVAL_CONTEXT to reliably detect if sourced vs executed
+if [[ "${ZSH_EVAL_CONTEXT}" == *:file || "${ZSH_EVAL_CONTEXT}" == "file" ]]; then
+    # Sourced, don't run anything
+    :
+elif [[ "${ZSH_EVAL_CONTEXT}" == "" || "${(%):-%x}" == "$0" ]]; then
+    # Executed directly
+    case "${1:-help}" in
+        help|--help|-h)
+            args-help
+            exit 0
+            ;;
+        *)
+            echo "Error: Extension must be sourced, not executed directly" >&2
+            echo "Usage: source \"\${DOTLIB}/_args\"" >&2
+            echo "For help: $0 help" >&2
+            exit 1
+            ;;
+    esac
+fi
+
+# ------------------------------
+# Extension Loaded
+# ------------------------------
+
+_args-log-debug "Extension loaded successfully"
