@@ -1,0 +1,5912 @@
+# Source: https://github.com/sakebomb/scaffold/blob/29d53583c6f929b972ce6106d38d1ecb9267894c/scaffold
+# Repository: sakebomb/scaffold (scaffold)
+#!/usr/bin/env bash
+# =============================================================================
+# scaffold — Project initializer for Claude Code
+# =============================================================================
+# Sets up a project optimized for Claude Code with:
+#   - CLAUDE.md agent constitution + language-specific conventions
+#   - .claude/ settings, skills (slash commands), and hooks
+#   - Tiered test structure + Makefile
+#   - Task management (todo, lessons, tests)
+#   - Agent specifications
+#   - Optional Ralph Wiggum autonomous loop
+#
+# Usage:
+#   ./scaffold                  Interactive setup
+#   ./scaffold --help           Show help
+#   ./scaffold --keep           Don't remove scaffold artifacts after init
+#   ./scaffold --non-interactive Use defaults for all prompts
+#   ./scaffold --dry-run        Preview what would be created
+#   ./scaffold --completions    Output bash completion script
+#   ./scaffold --version        Print scaffold version
+#   ./scaffold --migrate        Add scaffold to an existing project
+#   ./scaffold --add <lang>     Layer a second language into existing project
+# =============================================================================
+set -eEuo pipefail
+
+# ---------------------------------------------------------------------------
+# Globals
+# ---------------------------------------------------------------------------
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$PWD"
+
+# Template resolution: local repo → installed location
+if [[ -d "$SCRIPT_DIR/templates" ]]; then
+  TEMPLATE_DIR="$SCRIPT_DIR/templates"
+elif [[ -d "${SCAFFOLD_HOME:-$HOME/.scaffold}/templates" ]]; then
+  TEMPLATE_DIR="${SCAFFOLD_HOME:-$HOME/.scaffold}/templates"
+else
+  TEMPLATE_DIR="$SCRIPT_DIR/templates"  # fallback (may not exist)
+fi
+
+SAVE_DEFAULTS=false
+KEEP_ARTIFACTS=false
+NON_INTERACTIVE=false
+DRY_RUN=false
+PROJECT_NAME=""
+PROJECT_DESC=""
+LANGUAGE=""
+ENABLE_RALPH=false
+GIT_REMOTE=""
+ALLOW_COMMIT=false
+ALLOW_PUSH=false
+ALLOW_PKG_MANAGER=false
+ALLOW_DOCKER=false
+SETUP_LABELS=false
+SETUP_KANBAN=false
+ENABLE_DOCKER=false
+ENABLE_VSCODE=false
+ARCHETYPE="none"
+ADD_LANGUAGE=""
+ADD_DIR=""
+ADD_MODE=false
+VERIFY_MODE=false
+MIGRATE_MODE=false
+SCAFFOLD_VERSION="1.0.0"
+
+# Rollback tracking
+PRE_SNAPSHOT=""
+
+# Colors (disabled if not a terminal)
+if [[ -t 1 ]]; then
+  BOLD='\033[1m'
+  DIM='\033[2m'
+  GREEN='\033[0;32m'
+  YELLOW='\033[0;33m'
+  CYAN='\033[0;36m'
+  RED='\033[0;31m'
+  RESET='\033[0m'
+else
+  BOLD='' DIM='' GREEN='' YELLOW='' CYAN='' RED='' RESET=''
+fi
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+info()    { echo -e "${CYAN}▸${RESET} $*"; }
+success() { echo -e "${GREEN}✓${RESET} $*"; }
+warn()    { echo -e "${YELLOW}⚠${RESET} $*"; }
+error()   { echo -e "${RED}✗${RESET} $*" >&2; }
+header()  { echo -e "\n${BOLD}═══ $* ═══${RESET}\n"; }
+
+# Snapshot all files that exist before scaffold modifies anything
+snapshot_pre_existing() {
+  PRE_SNAPSHOT="$(mktemp)"
+  find "$PROJECT_DIR" -not -path "$PROJECT_DIR/.git/*" -not -name '.git' | sort > "$PRE_SNAPSHOT"
+}
+
+# Rollback handler — called on ERR if trap is set
+rollback_on_failure() {
+  local exit_code=$?
+  echo ""
+  error "Scaffold failed (exit code: $exit_code)"
+  echo ""
+
+  # Find files created since snapshot
+  local post_snapshot
+  post_snapshot="$(mktemp)"
+  find "$PROJECT_DIR" -not -path "$PROJECT_DIR/.git/*" -not -name '.git' | sort > "$post_snapshot"
+  local new_files
+  new_files="$(comm -13 "$PRE_SNAPSHOT" "$post_snapshot" || true)"
+  rm -f "$post_snapshot"
+
+  if [[ -z "$new_files" ]]; then
+    warn "No new files were created before the failure."
+    rm -f "$PRE_SNAPSHOT"
+    exit "$exit_code"
+  fi
+
+  warn "The following files were created before the failure:"
+  echo "$new_files" | while IFS= read -r f; do
+    echo "  ${f#"$PROJECT_DIR"/}"
+  done
+  echo ""
+
+  if [[ "$NON_INTERACTIVE" == true ]]; then
+    warn "Non-interactive mode: cleaning up created files automatically."
+    perform_rollback "$new_files"
+    rm -f "$PRE_SNAPSHOT"
+    exit "$exit_code"
+  fi
+
+  local answer="n"
+  read -rp "Roll back created files? [y/N]: " answer
+  if [[ "$(to_lower "$answer")" == "y" || "$(to_lower "$answer")" == "yes" ]]; then
+    perform_rollback "$new_files"
+  else
+    warn "Partial files left in place. Review manually."
+  fi
+  rm -f "$PRE_SNAPSHOT"
+  exit "$exit_code"
+}
+
+# Remove files created during the run, deepest first
+perform_rollback() {
+  local new_files="$1"
+  local removed=0
+  # Sort in reverse so deeper paths are removed first
+  echo "$new_files" | sort -r | while IFS= read -r f; do
+    if [[ -f "$f" ]]; then
+      rm -f "$f"
+      removed=$((removed + 1))
+    elif [[ -d "$f" ]] && [[ -z "$(ls -A "$f" 2>/dev/null)" ]]; then
+      rmdir "$f" 2>/dev/null || true
+      removed=$((removed + 1))
+    fi
+  done
+  success "Rolled back created files."
+}
+
+# Lowercase a string (bash 3.2 compatible — avoids ${var,,})
+to_lower() {
+  printf '%s' "$1" | tr '[:upper:]' '[:lower:]'
+}
+
+# Portable sed in-place edit (BSD sed requires -i '', GNU sed uses -i)
+sed_inplace() {
+  if sed --version >/dev/null 2>&1; then
+    sed -i "$@"
+  else
+    sed -i '' "$@"
+  fi
+}
+
+# Escape string for use as sed replacement (handles /, &, \, newlines)
+sed_escape() {
+  printf '%s' "$1" | sed -e 's/[\/&\\]/\\&/g'
+}
+
+# Replace {{PROJECT_NAME}} and {{PROJECT_DESCRIPTION}} placeholders in a file (in-place)
+replace_placeholders() {
+  local file="$1"
+  local escaped_name escaped_desc
+  escaped_name="$(sed_escape "$PROJECT_NAME")"
+  escaped_desc="$(sed_escape "$PROJECT_DESC")"
+  sed_inplace "s/{{PROJECT_NAME}}/${escaped_name}/g; s/{{PROJECT_DESCRIPTION}}/${escaped_desc}/g" "$file"
+}
+
+prompt() {
+  local var_name="$1" prompt_text="$2" default="$3"
+  if [[ "$NON_INTERACTIVE" == true ]]; then
+    printf -v "$var_name" '%s' "$default"
+    return
+  fi
+  local display_default=""
+  if [[ -n "$default" ]]; then
+    display_default=" ${DIM}[$default]${RESET}"
+  fi
+  echo -ne "${CYAN}?${RESET} ${prompt_text}${display_default}: "
+  local input
+  read -r input
+  if [[ -z "$input" ]]; then
+    printf -v "$var_name" '%s' "$default"
+  else
+    printf -v "$var_name" '%s' "$input"
+  fi
+}
+
+prompt_yn() {
+  local var_name="$1" prompt_text="$2" default="$3"
+  if [[ "$NON_INTERACTIVE" == true ]]; then
+    # Keep value from .scaffoldrc if it was explicitly set
+    if [[ "$_RC_KEYS" != *":${var_name}:"* ]]; then
+      printf -v "$var_name" '%s' "$default"
+    fi
+    return
+  fi
+  local yn_hint="y/n"
+  if [[ "$default" == true ]]; then yn_hint="Y/n"; fi
+  if [[ "$default" == false ]]; then yn_hint="y/N"; fi
+  echo -ne "${CYAN}?${RESET} ${prompt_text} ${DIM}[$yn_hint]${RESET}: "
+  local input
+  read -r input
+  case "$(to_lower "$input")" in
+    y|yes) printf -v "$var_name" '%s' "true" ;;
+    n|no)  printf -v "$var_name" '%s' "false" ;;
+    *)     printf -v "$var_name" '%s' "$default" ;;
+  esac
+}
+
+prompt_choice() {
+  local var_name="$1" prompt_text="$2"
+  shift 2
+  local options=("$@")
+
+  if [[ "$NON_INTERACTIVE" == true ]]; then
+    # Keep value from .scaffoldrc if it was explicitly set
+    if [[ "$_RC_KEYS" != *":${var_name}:"* ]]; then
+      printf -v "$var_name" '%s' "${options[0]}"
+    fi
+    return
+  fi
+
+  echo -e "${CYAN}?${RESET} ${prompt_text}"
+  local i=1
+  for opt in "${options[@]}"; do
+    echo -e "  ${BOLD}$i)${RESET} $opt"
+    i=$((i + 1))
+  done
+  echo -ne "${DIM}  Enter number [1]: ${RESET}"
+  local input
+  read -r input
+  if [[ -z "$input" || "$input" -lt 1 || "$input" -gt ${#options[@]} ]] 2>/dev/null; then
+    printf -v "$var_name" '%s' "${options[0]}"
+  else
+    printf -v "$var_name" '%s' "${options[$((input - 1))]}"
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# Parse CLI flags
+# ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Update mode — pull latest skills, agents, hooks from scaffold repo
+# ---------------------------------------------------------------------------
+SCAFFOLD_REPO="https://raw.githubusercontent.com/sakebomb/scaffold/main"
+
+run_update() {
+  header "Scaffold Update"
+
+  # Show project's scaffold version if available
+  if [[ -f "$PROJECT_DIR/.scaffold-version" ]]; then
+    local proj_ver proj_date
+    proj_ver="$(grep '^version=' "$PROJECT_DIR/.scaffold-version" 2>/dev/null | cut -d= -f2)"
+    proj_date="$(grep '^date=' "$PROJECT_DIR/.scaffold-version" 2>/dev/null | cut -d= -f2)"
+    info "Project scaffolded with: v${proj_ver:-unknown} (${proj_date:-unknown})"
+    info "Current scaffold:        v$SCAFFOLD_VERSION"
+  fi
+
+  info "Checking for updates from scaffold repo..."
+  echo ""
+
+  if ! command -v curl &>/dev/null; then
+    error "curl is required for updates. Install it and try again."
+    exit 1
+  fi
+
+  # Directories to update
+  local update_dirs=(".claude/skills" ".claude/hooks" "agents")
+  local update_files=()
+  local changed=0
+
+  # Discover files to update
+  for dir in "${update_dirs[@]}"; do
+    if [[ ! -d "$PROJECT_DIR/$dir" ]]; then
+      info "Skipping $dir (directory not found)"
+      continue
+    fi
+    while IFS= read -r -d '' file; do
+      local rel_path="${file#"$PROJECT_DIR"/}"
+      update_files+=("$rel_path")
+    done < <(find "$PROJECT_DIR/$dir" -type f \( -name "*.md" -o -name "*.sh" -o -name "*.json" \) -print0 2>/dev/null | sort -z)
+  done
+
+  # Check each file for changes
+  local tmp_dir
+  tmp_dir="$(mktemp -d)"
+  trap 'rm -rf "$tmp_dir"' EXIT
+
+  for rel_path in "${update_files[@]}"; do
+    local url="$SCAFFOLD_REPO/$rel_path"
+    local tmp_file="$tmp_dir/$rel_path"
+    mkdir -p "$(dirname "$tmp_file")"
+
+    if curl -sf "$url" -o "$tmp_file" 2>/dev/null; then
+      if [[ -f "$PROJECT_DIR/$rel_path" ]]; then
+        if ! diff -q "$PROJECT_DIR/$rel_path" "$tmp_file" &>/dev/null; then
+          changed=$((changed + 1))
+          echo -e "  ${YELLOW}Changed:${RESET} $rel_path"
+        fi
+      else
+        changed=$((changed + 1))
+        echo -e "  ${GREEN}New:${RESET} $rel_path"
+      fi
+    fi
+  done
+
+  if [[ $changed -eq 0 ]]; then
+    success "Everything is up to date."
+    exit 0
+  fi
+
+  echo ""
+  info "$changed file(s) have updates available."
+  echo ""
+
+  # Show diffs
+  for rel_path in "${update_files[@]}"; do
+    local tmp_file="$tmp_dir/$rel_path"
+    if [[ -f "$tmp_file" && -f "$PROJECT_DIR/$rel_path" ]]; then
+      if ! diff -q "$PROJECT_DIR/$rel_path" "$tmp_file" &>/dev/null; then
+        echo -e "\n${BOLD}--- $rel_path ---${RESET}"
+        diff --color=auto -u "$PROJECT_DIR/$rel_path" "$tmp_file" || true
+      fi
+    fi
+  done
+
+  echo ""
+  local apply="n"
+  read -rp "Apply these updates? [y/N]: " apply
+  if [[ "$apply" != "y" && "$apply" != "Y" ]]; then
+    info "Update cancelled."
+    exit 0
+  fi
+
+  # Apply updates
+  for rel_path in "${update_files[@]}"; do
+    local tmp_file="$tmp_dir/$rel_path"
+    if [[ -f "$tmp_file" ]]; then
+      if [[ ! -f "$PROJECT_DIR/$rel_path" ]] || ! diff -q "$PROJECT_DIR/$rel_path" "$tmp_file" &>/dev/null; then
+        mkdir -p "$(dirname "$PROJECT_DIR/$rel_path")"
+        cp "$tmp_file" "$PROJECT_DIR/$rel_path"
+      fi
+    fi
+  done
+
+  success "Updated $changed file(s)."
+  info "Review changes with: git diff"
+}
+
+# ---------------------------------------------------------------------------
+# Shell completions
+# ---------------------------------------------------------------------------
+print_completions() {
+  cat <<'COMP'
+# Bash completion for scaffold
+# Enable: source <(./scaffold --completions)
+# Persist: ./scaffold --completions >> ~/.bashrc
+
+_scaffold_completions() {
+  local cur="${COMP_WORDS[COMP_CWORD]}"
+  local prev="${COMP_WORDS[COMP_CWORD-1]}"
+
+  # Complete language after --add
+  if [[ "$prev" == "--add" ]]; then
+    COMPREPLY=($(compgen -W "python typescript go rust" -- "$cur"))
+    return
+  fi
+
+  # Complete shell after --completions
+  if [[ "$prev" == "--completions" ]]; then
+    COMPREPLY=($(compgen -W "bash zsh" -- "$cur"))
+    return
+  fi
+
+  # Complete flags
+  local flags="--help --keep --non-interactive --dry-run --update --completions --version --migrate --add --dir --save-defaults --verify --install-template --list-templates"
+  COMPREPLY=($(compgen -W "$flags" -- "$cur"))
+}
+
+complete -F _scaffold_completions ./scaffold
+complete -F _scaffold_completions scaffold
+COMP
+}
+
+print_zsh_completions() {
+  cat <<'ZCOMP'
+#compdef scaffold
+
+# Zsh completion for scaffold
+# Enable: source <(scaffold --completions zsh)
+# Persist: scaffold --completions zsh >> ~/.zshrc
+
+_scaffold() {
+  local -a flags languages shells
+  flags=(
+    '--help[Show help message]'
+    '--keep[Keep scaffold artifacts after init]'
+    '--non-interactive[Use defaults for all prompts]'
+    '--dry-run[Preview without writing anything]'
+    '--update[Update skills, agents, and hooks]'
+    '--completions[Output completion script]:shell:(bash zsh)'
+    '--version[Print scaffold version]'
+    '--migrate[Add scaffold to an existing project]'
+    '--add[Layer a second language]:language:(python typescript go rust)'
+    '--dir[Place language files in subdirectory]:directory:_directories'
+    '--save-defaults[Save choices to ~/.scaffoldrc]'
+    '--verify[Validate a scaffolded project]'
+    '--install-template[Install a community template]:source:_files'
+    '--list-templates[List available language templates]'
+  )
+  _arguments -s $flags
+}
+
+_scaffold "$@"
+ZCOMP
+}
+
+# ---------------------------------------------------------------------------
+# .scaffoldrc — persistent user defaults
+# ---------------------------------------------------------------------------
+# Track which variables were set by .scaffoldrc
+_RC_KEYS=""
+
+load_scaffoldrc() {
+  local rc_file="${SCAFFOLDRC:-$HOME/.scaffoldrc}"
+  [[ -f "$rc_file" ]] || return 0
+
+  local key value
+  while IFS='=' read -r key value; do
+    # Skip comments and blank lines
+    [[ -z "$key" || "$key" =~ ^[[:space:]]*# ]] && continue
+    # Trim whitespace
+    key="$(echo "$key" | xargs)"
+    value="$(echo "$value" | xargs)"
+    case "$key" in
+      LANGUAGE)           LANGUAGE="$value"; _RC_KEYS="${_RC_KEYS}:LANGUAGE:" ;;
+      ARCHETYPE)          ARCHETYPE="$value"; _RC_KEYS="${_RC_KEYS}:ARCHETYPE:" ;;
+      ENABLE_DOCKER)      ENABLE_DOCKER="$value"; _RC_KEYS="${_RC_KEYS}:ENABLE_DOCKER:" ;;
+      ENABLE_VSCODE)      ENABLE_VSCODE="$value"; _RC_KEYS="${_RC_KEYS}:ENABLE_VSCODE:" ;;
+      ENABLE_RALPH)       ENABLE_RALPH="$value"; _RC_KEYS="${_RC_KEYS}:ENABLE_RALPH:" ;;
+      ALLOW_COMMIT)       ALLOW_COMMIT="$value"; _RC_KEYS="${_RC_KEYS}:ALLOW_COMMIT:" ;;
+      ALLOW_PUSH)         ALLOW_PUSH="$value"; _RC_KEYS="${_RC_KEYS}:ALLOW_PUSH:" ;;
+      ALLOW_PKG_MANAGER)  ALLOW_PKG_MANAGER="$value"; _RC_KEYS="${_RC_KEYS}:ALLOW_PKG_MANAGER:" ;;
+      ALLOW_DOCKER)       ALLOW_DOCKER="$value"; _RC_KEYS="${_RC_KEYS}:ALLOW_DOCKER:" ;;
+      KEEP_ARTIFACTS)     KEEP_ARTIFACTS="$value"; _RC_KEYS="${_RC_KEYS}:KEEP_ARTIFACTS:" ;;
+      *) ;; # ignore unknown keys
+    esac
+  done < "$rc_file"
+}
+
+save_scaffoldrc() {
+  local rc_file="${SCAFFOLDRC:-$HOME/.scaffoldrc}"
+  cat > "$rc_file" <<RCEOF
+# ~/.scaffoldrc — scaffold defaults
+# Generated by: scaffold --save-defaults
+# These values are used as defaults. CLI flags override them.
+LANGUAGE=$LANGUAGE
+ARCHETYPE=$ARCHETYPE
+ENABLE_DOCKER=$ENABLE_DOCKER
+ENABLE_VSCODE=$ENABLE_VSCODE
+ENABLE_RALPH=$ENABLE_RALPH
+ALLOW_COMMIT=$ALLOW_COMMIT
+ALLOW_PUSH=$ALLOW_PUSH
+ALLOW_PKG_MANAGER=$ALLOW_PKG_MANAGER
+ALLOW_DOCKER=$ALLOW_DOCKER
+KEEP_ARTIFACTS=$KEEP_ARTIFACTS
+RCEOF
+  success "Defaults saved to $rc_file"
+}
+
+parse_flags() {
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --help|-h)
+        show_help
+        exit 0
+        ;;
+      --keep)
+        KEEP_ARTIFACTS=true
+        shift
+        ;;
+      --non-interactive)
+        NON_INTERACTIVE=true
+        shift
+        ;;
+      --dry-run)
+        DRY_RUN=true
+        shift
+        ;;
+      --update)
+        run_update
+        exit 0
+        ;;
+      --completions)
+        local shell_arg="${2:-}"
+        if [[ "$shell_arg" == "bash" || "$shell_arg" == "zsh" ]]; then
+          shift
+        else
+          # Auto-detect from $SHELL
+          if [[ "${SHELL:-}" == */zsh ]]; then
+            shell_arg="zsh"
+          else
+            shell_arg="bash"
+          fi
+        fi
+        if [[ "$shell_arg" == "zsh" ]]; then
+          print_zsh_completions
+        else
+          print_completions
+        fi
+        exit 0
+        ;;
+      --version)
+        echo "scaffold $SCAFFOLD_VERSION"
+        exit 0
+        ;;
+      --migrate)
+        MIGRATE_MODE=true
+        shift
+        ;;
+      --add)
+        ADD_MODE=true
+        if [[ -n "${2:-}" && ! "$2" =~ ^-- ]]; then
+          local user_tpl="${SCAFFOLD_HOME:-$HOME/.scaffold}/templates"
+          if [[ -d "$TEMPLATE_DIR/$2" || -d "$user_tpl/$2" ]]; then
+            ADD_LANGUAGE="$2"
+          else
+            error "Unsupported language: $2"
+            info "Run --list-templates to see available languages"
+            exit 1
+          fi
+          shift 2
+        else
+          shift
+        fi
+        ;;
+      --dir)
+        if [[ -z "${2:-}" ]]; then
+          error "--dir requires a path argument"
+          exit 1
+        fi
+        ADD_DIR="$2"
+        shift 2
+        ;;
+      --verify)
+        VERIFY_MODE=true
+        shift
+        ;;
+      --install-template)
+        if [[ -z "${2:-}" ]]; then
+          error "--install-template requires a URL or path argument"
+          exit 1
+        fi
+        install_template "$2"
+        exit $?
+        ;;
+      --list-templates)
+        list_templates
+        exit 0
+        ;;
+      --save-defaults)
+        SAVE_DEFAULTS=true
+        shift
+        ;;
+      *)
+        error "Unknown flag: $1"
+        echo "Run './scaffold --help' for usage."
+        exit 1
+        ;;
+    esac
+  done
+
+  # --dir is only valid with --add
+  if [[ -n "$ADD_DIR" && "$ADD_MODE" != true ]]; then
+    error "--dir can only be used with --add"
+    exit 1
+  fi
+}
+
+show_help() {
+  cat <<'HELP'
+scaffold — Project initializer for Claude Code
+
+Usage:
+  ./scaffold [OPTIONS]
+
+Options:
+  --help, -h          Show this help message
+  --keep              Don't remove scaffold artifacts after init
+  --non-interactive   Use defaults for all prompts (for CI/automation)
+  --dry-run           Preview what would be created without writing anything
+  --update            Update skills, agents, and hooks from scaffold repo
+  --completions [sh]  Output completion script (bash or zsh, auto-detects)
+  --version           Print scaffold version
+  --migrate           Add scaffold to an existing project (auto-detects language)
+  --add [lang]        Layer a second language into an existing project
+                      Supported: python, typescript, go, rust
+                      Omit language for interactive selection
+  --dir <path>        With --add: place language files in subdirectory (monorepo)
+  --verify            Validate a scaffolded project (check files, placeholders, JSON)
+  --install-template <url>  Install a community language template
+  --list-templates    List built-in and installed language templates
+  --save-defaults     Save current choices to ~/.scaffoldrc for future runs
+
+What it does:
+  1. Asks for project name, description, language, and archetype
+  2. Configures Claude Code permissions based on your preferences
+  3. Sets up language-specific tooling (linter, formatter, test runner)
+  4. Generates archetype structure (CLI, API, or library starter files)
+  5. Optionally integrates Ralph Wiggum autonomous loop
+  6. Helps you create or load a project plan
+  7. Initializes git with a clean first commit
+  8. Removes scaffold artifacts (unless --keep is used)
+
+After running, your project is ready for Claude Code from session one.
+
+Non-interactive defaults:
+  Project name:    directory name
+  Language:        python
+  Permissions:     safe defaults only
+  Ralph Wiggum:    disabled
+  Project plan:    template only
+HELP
+}
+
+# ---------------------------------------------------------------------------
+# Dry-run report — show what would be created without writing anything
+# ---------------------------------------------------------------------------
+dry_run_report() {
+  echo ""
+  header "Dry Run Preview"
+  echo ""
+  echo -e "  ${BOLD}Project:${RESET}     $PROJECT_NAME"
+  echo -e "  ${BOLD}Description:${RESET} $PROJECT_DESC"
+  echo -e "  ${BOLD}Language:${RESET}    $LANGUAGE"
+  echo -e "  ${BOLD}Archetype:${RESET}  $ARCHETYPE"
+  echo -e "  ${BOLD}Docker:${RESET}      $ENABLE_DOCKER"
+  echo -e "  ${BOLD}VS Code:${RESET}    $ENABLE_VSCODE"
+  echo -e "  ${BOLD}Ralph:${RESET}       $ENABLE_RALPH"
+  echo ""
+  echo -e "${BOLD}Files that would be created:${RESET}"
+  echo ""
+
+  # Common files (always created)
+  echo "  CLAUDE.md"
+  echo "  README.md"
+  echo "  GETTING_STARTED.md"
+  echo "  LICENSE"
+  echo "  Makefile"
+  echo "  .gitignore"
+  echo "  .env.example"
+  echo "  CHANGELOG.md"
+  echo "  SECURITY.md"
+  echo "  .pre-commit-config.yaml"
+  echo "  .scaffold-version"
+  echo "  .claude/settings.json"
+  echo "  .claude/hooks/protect-main-branch.sh"
+
+  # Skills
+  local skills=(plan review test lesson checkpoint status simplify index save load backlog doctor start)
+  for s in "${skills[@]}"; do
+    echo "  .claude/skills/$s/SKILL.md"
+  done
+
+  # GitHub
+  echo "  .github/ISSUE_TEMPLATE/bug.yml"
+  echo "  .github/ISSUE_TEMPLATE/feature.yml"
+  echo "  .github/ISSUE_TEMPLATE/task.yml"
+  echo "  .github/ISSUE_TEMPLATE/config.yml"
+  echo "  .github/pull_request_template.md"
+  echo "  .github/workflows/ci.yml"
+  echo "  .github/workflows/release.yml"
+
+  # Agents
+  local agents=(plan-agent research-agent code-review-agent test-runner-agent build-validator-agent code-architect-agent code-simplifier-agent verify-agent)
+  echo "  agents/README.md"
+  for a in "${agents[@]}"; do
+    echo "  agents/$a.md"
+  done
+
+  # Tasks
+  echo "  tasks/todo.md"
+  echo "  tasks/lessons.md"
+  echo "  tasks/tests.md"
+  echo "  tasks/session.md"
+
+  # Test dirs
+  echo "  tests/unit/"
+  echo "  tests/integration/"
+  echo "  tests/agent/"
+  echo "  scratch/.gitkeep"
+
+  # Language-specific files
+  local pkg_name="${PROJECT_NAME//-/_}"
+  case "$LANGUAGE" in
+    python)
+      echo "  pyproject.toml"
+      echo "  ruff.toml"
+      echo "  conftest.py"
+      echo "  src/${pkg_name}/__init__.py"
+      case "$ARCHETYPE" in
+        cli)      echo "  src/${pkg_name}/cli.py"; echo "  src/${pkg_name}/__main__.py" ;;
+        api)      echo "  src/${pkg_name}/app.py"; echo "  src/${pkg_name}/routes/health.py" ;;
+        library)  echo "  src/${pkg_name}/lib.py" ;;
+      esac
+      ;;
+    typescript)
+      echo "  package.json"
+      echo "  tsconfig.json"
+      echo "  eslint.config.mjs"
+      case "$ARCHETYPE" in
+        cli)      echo "  src/cli.ts" ;;
+        api)      echo "  src/app.ts"; echo "  src/routes/health.ts" ;;
+        *)        echo "  src/index.ts" ;;
+      esac
+      ;;
+    go)
+      echo "  go.mod"
+      case "$ARCHETYPE" in
+        api)      echo "  cmd/${PROJECT_NAME}/main.go"; echo "  internal/routes/health.go" ;;
+        library)  echo "  ${pkg_name}.go" ;;
+        *)        echo "  cmd/${PROJECT_NAME}/main.go" ;;
+      esac
+      ;;
+    rust)
+      echo "  Cargo.toml"
+      case "$ARCHETYPE" in
+        library)  echo "  src/lib.rs" ;;
+        *)        echo "  src/main.rs" ;;
+      esac
+      ;;
+  esac
+
+  # Docker
+  if [[ "$ENABLE_DOCKER" == true ]]; then
+    echo "  Dockerfile"
+    echo "  docker-compose.yml"
+  fi
+
+  # VS Code
+  if [[ "$ENABLE_VSCODE" == true ]]; then
+    echo "  .vscode/settings.json"
+    echo "  .vscode/extensions.json"
+  fi
+
+  # Ralph
+  if [[ "$ENABLE_RALPH" == true ]]; then
+    echo "  scripts/ralph-loop.sh"
+    echo "  PROMPT_build.md"
+    echo "  PROMPT_plan.md"
+  fi
+
+  echo ""
+  echo -e "${GREEN}No files were written. Run without --dry-run to scaffold.${RESET}"
+}
+
+# ---------------------------------------------------------------------------
+# Step 1: Project basics
+# ---------------------------------------------------------------------------
+step_project_basics() {
+  header "Project Setup"
+
+  local dir_name
+  dir_name="$(basename "$PROJECT_DIR")"
+
+  prompt PROJECT_NAME "Project name" "$dir_name"
+  prompt PROJECT_DESC "Short description" "A project built with Claude Code"
+
+  success "Project: $PROJECT_NAME"
+}
+
+# ---------------------------------------------------------------------------
+# Step 2: Language selection
+# ---------------------------------------------------------------------------
+step_language() {
+  header "Language Selection"
+
+  info "Choose your primary language. This configures:"
+  info "  - Language-specific conventions appended to CLAUDE.md"
+  info "  - Linter, formatter, type checker, and test runner"
+  info "  - Project config files (pyproject.toml, package.json, etc.)"
+  echo ""
+
+  prompt_choice LANGUAGE "Select primary language:" \
+    "python    — pytest, ruff, mypy" \
+    "typescript — vitest, eslint, tsc" \
+    "go        — go test, golangci-lint" \
+    "rust      — cargo test, clippy" \
+    "none      — language-agnostic (configure later)"
+
+  # Extract just the language name (before the spaces/dash)
+  LANGUAGE="${LANGUAGE%% *}"
+
+  if [[ "$LANGUAGE" == "none" ]]; then
+    info "No language selected. You can add language support later by copying from templates/."
+  else
+    success "Language: $LANGUAGE"
+
+    # Show recommendation
+    echo ""
+    case "$LANGUAGE" in
+      python)
+        info "${DIM}Recommendation: Use 'uv' or 'pip' with a virtual environment.${RESET}"
+        info "${DIM}Run: python -m venv .venv && source .venv/bin/activate && pip install -e '.[dev]'${RESET}"
+        ;;
+      typescript)
+        info "${DIM}Recommendation: Use Node.js 20+ with npm or pnpm.${RESET}"
+        info "${DIM}Run: npm install${RESET}"
+        ;;
+      go)
+        info "${DIM}Recommendation: Use Go 1.22+. Install golangci-lint for linting.${RESET}"
+        info "${DIM}Run: go mod tidy${RESET}"
+        info "${DIM}Note: Update go.mod module path to your full path (e.g., github.com/user/${PROJECT_NAME})${RESET}"
+        ;;
+      rust)
+        info "${DIM}Recommendation: Use the latest stable Rust via rustup.${RESET}"
+        info "${DIM}Run: cargo build${RESET}"
+        ;;
+    esac
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# Step 2b: Project archetype
+# ---------------------------------------------------------------------------
+step_archetype() {
+  # Skip if no language selected — archetypes need language context
+  if [[ "$LANGUAGE" == "none" ]]; then
+    return
+  fi
+
+  header "Project Archetype"
+
+  info "Choose an archetype to generate starter project structure."
+  info "  This creates entry points, routes, or module layout based on your project type."
+  echo ""
+
+  prompt_choice ARCHETYPE "Select project archetype:" \
+    "none      — blank project (just language tooling)" \
+    "cli       — command-line tool with argument parsing" \
+    "api       — web API with routes and health check" \
+    "library   — reusable library with public API"
+
+  ARCHETYPE="${ARCHETYPE%% *}"
+
+  if [[ "$ARCHETYPE" == "none" ]]; then
+    info "No archetype selected. Starting with a blank project."
+  else
+    success "Archetype: $ARCHETYPE"
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# Step 3: Permissions
+# ---------------------------------------------------------------------------
+step_permissions() {
+  header "Claude Code Permissions"
+
+  info "Safe defaults are always auto-approved:"
+  info "  File read/write, searches, git status/diff/log, make targets"
+  echo ""
+  info "The following need your preference:"
+  echo ""
+
+  prompt_yn ALLOW_COMMIT "Auto-approve git commit? (no = Claude asks each time)" true
+  prompt_yn ALLOW_PUSH "Auto-approve git push? (no = Claude asks each time)" false
+  prompt_yn ALLOW_PKG_MANAGER "Auto-approve package manager commands? (pip/npm/cargo/go)" false
+  prompt_yn ALLOW_DOCKER "Auto-approve docker commands?" false
+
+  success "Permissions configured"
+}
+
+# ---------------------------------------------------------------------------
+# Step 4: Ralph Wiggum
+# ---------------------------------------------------------------------------
+step_ralph() {
+  header "Ralph Wiggum (Autonomous Loop)"
+
+  info "Ralph Wiggum runs Claude Code in iterative cycles:"
+  info "  plan → build → test → commit → repeat"
+  info "Each iteration gets a fresh context window."
+  info "Progress persists via tasks/todo.md."
+  echo ""
+
+  prompt_yn ENABLE_RALPH "Enable Ralph Wiggum autonomous loop?" false
+
+  if [[ "$ENABLE_RALPH" == true ]]; then
+    success "Ralph Wiggum enabled"
+  else
+    info "Skipped. You can add Ralph later from templates/ralph/."
+  fi
+}
+
+step_docker() {
+  header "Docker (Optional)"
+
+  prompt_yn ENABLE_DOCKER "Include Dockerfile and docker-compose.yml?" false
+
+  if [[ "$ENABLE_DOCKER" == true ]]; then
+    success "Docker enabled"
+  else
+    info "Skipped. You can add Docker later."
+  fi
+}
+
+step_vscode() {
+  header "VS Code Settings (Optional)"
+
+  prompt_yn ENABLE_VSCODE "Include .vscode/ settings and recommended extensions?" false
+
+  if [[ "$ENABLE_VSCODE" == true ]]; then
+    success "VS Code settings enabled"
+  else
+    info "Skipped. You can add .vscode/ settings later."
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# Step 5: Project planning
+# ---------------------------------------------------------------------------
+step_planning() {
+  header "Project Plan"
+
+  info "A structured plan helps Claude Code understand your project from session one."
+  echo ""
+
+  # In dry-run mode, skip file writes — just collect info for the report
+  if [[ "$DRY_RUN" == true ]]; then
+    info "Using blank template. Run '/plan' in Claude Code to create one later."
+    return
+  fi
+
+  # Ensure tasks/ directory exists before any plan writes
+  mkdir -p "$PROJECT_DIR/tasks"
+
+  prompt_choice PLAN_CHOICE "How would you like to set up your project plan?" \
+    "Build one now   — answer a few questions to generate a plan" \
+    "Load from file  — import an existing plan (markdown)" \
+    "Skip            — use the blank template"
+
+  PLAN_CHOICE="${PLAN_CHOICE%% *}"
+
+  case "$PLAN_CHOICE" in
+    Build)
+      build_plan_interactive
+      ;;
+    Load)
+      load_plan_from_file
+      ;;
+    Skip)
+      info "Using blank template. Run '/plan' in Claude Code to create one later."
+      local today
+      today=$(date +%Y-%m-%d)
+      cat > "$PROJECT_DIR/tasks/todo.md" <<PLAN
+# Task Plan — ${PROJECT_NAME}
+
+> Created: ${today}
+> Status: Not started
+
+## Objective
+
+_Define your project objective here, or run \`/plan\` in Claude Code._
+
+## Plan
+
+- [ ] 1. First task
+- [ ] 2. Second task
+
+## Decisions & Context
+
+_Capture architectural decisions and tradeoffs here as you go._
+
+## Results
+
+_Filled in after completion._
+PLAN
+      ;;
+  esac
+}
+
+build_plan_interactive() {
+  echo ""
+  info "Let's build your project plan."
+  echo ""
+
+  local objective components milestone risks
+
+  prompt objective "What are you building? (one sentence)" ""
+  prompt components "What are the major components or features? (comma-separated)" ""
+  prompt milestone "What's the first milestone? (what should work first)" ""
+  prompt risks "Any known risks or unknowns?" "None identified yet"
+
+  # Generate structured plan
+  local plan_file="$PROJECT_DIR/tasks/todo.md"
+  local today
+  today=$(date +%Y-%m-%d)
+
+  cat > "$plan_file" <<PLAN
+# Task Plan — ${PROJECT_NAME}
+
+> Updated: ${today}
+> Branch: \`feat/initial-setup\`
+> Status: 🟡 Planning
+
+---
+
+## Objective
+
+${objective}
+
+## Plan
+
+PLAN
+
+  # Parse components into checkboxes
+  local step=1
+  if [[ -n "$components" ]]; then
+    IFS=',' read -ra COMP_ARRAY <<< "$components"
+    for comp in "${COMP_ARRAY[@]}"; do
+      comp="$(echo "$comp" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+      if [[ -n "$comp" ]]; then
+        echo "- [ ] ${step}. ${comp}" >> "$plan_file"
+        step=$((step + 1))
+      fi
+    done
+  fi
+
+  cat >> "$plan_file" <<PLAN
+
+### Checkpoints
+
+- [ ] **Checkpoint 1**: ${milestone}
+
+## Decisions & Context
+
+_Capture architectural decisions and tradeoffs here as you go._
+
+## Risks
+
+- ${risks}
+
+## Results
+
+_Filled in after completion._
+PLAN
+
+  success "Plan written to tasks/todo.md"
+}
+
+load_plan_from_file() {
+  echo ""
+  local plan_path
+  prompt plan_path "Path to your plan file" ""
+
+  if [[ -z "$plan_path" ]]; then
+    warn "No path provided. Using blank template."
+    return
+  fi
+
+  # Expand ~ to home directory
+  plan_path="${plan_path/#\~/$HOME}"
+
+  if [[ ! -f "$plan_path" ]]; then
+    warn "File not found: $plan_path. Using blank template."
+    return
+  fi
+
+  cp "$plan_path" "$PROJECT_DIR/tasks/todo.md"
+  success "Plan loaded from $plan_path"
+}
+
+# ---------------------------------------------------------------------------
+# Step 6: Git remote
+# ---------------------------------------------------------------------------
+step_git_remote() {
+  header "Git Remote (Optional)"
+
+  prompt GIT_REMOTE "Git remote URL (leave blank to skip)" ""
+
+  if [[ -n "$GIT_REMOTE" ]]; then
+    success "Remote: $GIT_REMOTE"
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# Step 7: GitHub Project Management
+# ---------------------------------------------------------------------------
+step_github_pm() {
+  header "GitHub Project Management"
+
+  info "Issue templates and PR template are included in .github/"
+
+  if [[ -z "$GIT_REMOTE" ]]; then
+    info "No git remote set. Run 'make setup-github' when your remote is ready."
+    return
+  fi
+
+  if ! command -v gh &>/dev/null; then
+    info "GitHub CLI (gh) not found. Install it and run 'make setup-github' to set up labels."
+    return
+  fi
+
+  if ! gh auth status &>/dev/null 2>&1; then
+    info "GitHub CLI not authenticated. Run 'gh auth login' then 'make setup-github'."
+    return
+  fi
+
+  prompt_yn SETUP_LABELS "Create issue labels (type, priority, status)?" true
+  prompt_yn SETUP_KANBAN "Create a GitHub Projects kanban board?" false
+}
+
+extract_repo_from_remote() {
+  local url="$GIT_REMOTE"
+  # Handle SSH: git@github.com:user/repo.git
+  if [[ "$url" == git@github.com:* ]]; then
+    url="${url#git@github.com:}"
+    url="${url%.git}"
+    echo "$url"
+    return
+  fi
+  # Handle HTTPS: https://github.com/user/repo.git
+  if [[ "$url" == https://github.com/* ]]; then
+    url="${url#https://github.com/}"
+    url="${url%.git}"
+    echo "$url"
+    return
+  fi
+  echo ""
+}
+
+create_github_labels() {
+  info "Creating issue labels..."
+  local repo
+  repo="$(extract_repo_from_remote)"
+  if [[ -z "$repo" ]]; then
+    warn "Could not determine GitHub repo from remote URL."
+    return
+  fi
+
+  # Type labels
+  gh label create "bug" --color "d73a4a" --description "Something isn't working" --repo "$repo" --force 2>/dev/null || true
+  gh label create "feature" --color "0075ca" --description "New feature or enhancement" --repo "$repo" --force 2>/dev/null || true
+  gh label create "task" --color "0e8a16" --description "Development task or chore" --repo "$repo" --force 2>/dev/null || true
+  gh label create "chore" --color "e4e669" --description "Maintenance or cleanup" --repo "$repo" --force 2>/dev/null || true
+  gh label create "refactor" --color "d4c5f9" --description "Code restructuring, no behavior change" --repo "$repo" --force 2>/dev/null || true
+
+  # Priority labels
+  gh label create "P0-critical" --color "b60205" --description "Drop everything" --repo "$repo" --force 2>/dev/null || true
+  gh label create "P1-high" --color "d93f0b" --description "Fix this sprint" --repo "$repo" --force 2>/dev/null || true
+  gh label create "P2-medium" --color "fbca04" --description "Plan for next sprint" --repo "$repo" --force 2>/dev/null || true
+  gh label create "P3-low" --color "c5def5" --description "Nice to have" --repo "$repo" --force 2>/dev/null || true
+
+  # Status labels
+  gh label create "needs-triage" --color "f9d0c4" --description "Needs review and prioritization" --repo "$repo" --force 2>/dev/null || true
+  gh label create "ready" --color "0e8a16" --description "Ready to be picked up" --repo "$repo" --force 2>/dev/null || true
+  gh label create "blocked" --color "b60205" --description "Waiting on external dependency" --repo "$repo" --force 2>/dev/null || true
+  gh label create "in-progress" --color "1d76db" --description "Currently being worked on" --repo "$repo" --force 2>/dev/null || true
+
+  success "Labels created (type, priority, status)"
+}
+
+create_github_project() {
+  info "Creating GitHub Projects kanban board..."
+  local repo
+  repo="$(extract_repo_from_remote)"
+  local owner="${repo%%/*}"
+
+  local project_url
+  project_url="$(gh project create --title "${PROJECT_NAME}" --owner "$owner" 2>/dev/null)" || true
+
+  if [[ -n "$project_url" ]]; then
+    success "Kanban board created: $project_url"
+  else
+    warn "Could not create project board. Create one manually at https://github.com/${repo}/projects"
+  fi
+}
+
+apply_github_pm() {
+  if [[ "$SETUP_LABELS" != true && "$SETUP_KANBAN" != true ]]; then
+    return
+  fi
+
+  header "Setting Up GitHub Project Management"
+
+  # Push to remote first so labels can be created
+  if [[ -n "$GIT_REMOTE" ]]; then
+    info "Pushing to remote..."
+    git -C "$PROJECT_DIR" push -u origin main 2>/dev/null || true
+  fi
+
+  if ! command -v gh &>/dev/null || ! gh auth status &>/dev/null 2>&1; then
+    info "GitHub CLI not available. Run 'make setup-github' to create labels and project board."
+    return
+  fi
+
+  if [[ "$SETUP_LABELS" == true ]]; then
+    create_github_labels
+  fi
+
+  if [[ "$SETUP_KANBAN" == true ]]; then
+    create_github_project
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# Apply: Archetype-specific project structure
+# ---------------------------------------------------------------------------
+apply_archetype() {
+  local escaped_name="$1"
+  local pkg_name="${PROJECT_NAME//-/_}"
+
+  info "Creating project structure (archetype: $ARCHETYPE)..."
+
+  case "$LANGUAGE" in
+    python)
+      mkdir -p "$PROJECT_DIR/src/$pkg_name"
+      touch "$PROJECT_DIR/src/$pkg_name/__init__.py"
+
+      case "$ARCHETYPE" in
+        cli)
+          cat > "$PROJECT_DIR/src/$pkg_name/__main__.py" <<PYEOF
+"""Allow running as: python -m $pkg_name"""
+from ${pkg_name}.cli import main
+
+if __name__ == "__main__":
+    main()
+PYEOF
+          cat > "$PROJECT_DIR/src/$pkg_name/cli.py" <<'PYEOF'
+"""Command-line interface for {{PROJECT_NAME}}."""
+import argparse
+import sys
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="{{PROJECT_NAME}}",
+        description="{{PROJECT_DESC}}",
+    )
+    parser.add_argument("--version", action="version", version="%(prog)s 0.1.0")
+
+    subparsers = parser.add_subparsers(dest="command", help="Available commands")
+
+    # Example subcommand — replace with your own
+    run_parser = subparsers.add_parser("run", help="Run the main task")
+    run_parser.add_argument("target", nargs="?", default="world", help="Target to process")
+
+    return parser
+
+
+def main(argv: list[str] | None = None) -> None:
+    parser = build_parser()
+    args = parser.parse_args(argv)
+
+    if args.command is None:
+        parser.print_help()
+        sys.exit(0)
+
+    if args.command == "run":
+        print(f"Running with target: {args.target}")
+PYEOF
+          sed_inplace "s/{{PROJECT_NAME}}/${escaped_name}/g" "$PROJECT_DIR/src/$pkg_name/cli.py"
+          sed_inplace "s/{{PROJECT_DESC}}/${PROJECT_DESC//\//\\/}/g" "$PROJECT_DIR/src/$pkg_name/cli.py"
+          success "  Created CLI archetype: src/$pkg_name/cli.py, __main__.py"
+          ;;
+        api)
+          mkdir -p "$PROJECT_DIR/src/$pkg_name/routes"
+          touch "$PROJECT_DIR/src/$pkg_name/routes/__init__.py"
+          cat > "$PROJECT_DIR/src/$pkg_name/app.py" <<'PYEOF'
+"""{{PROJECT_NAME}} — API application."""
+from http.server import HTTPServer
+
+from {{PKG_NAME}}.routes.health import HealthHandler
+
+
+def create_app(host: str = "0.0.0.0", port: int = 8000) -> HTTPServer:
+    """Create and return the HTTP server."""
+    server = HTTPServer((host, port), HealthHandler)
+    return server
+
+
+def main() -> None:
+    """Start the development server."""
+    server = create_app()
+    print(f"Server running on http://localhost:{server.server_address[1]}")
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("\nShutting down.")
+        server.server_close()
+
+
+if __name__ == "__main__":
+    main()
+PYEOF
+          cat > "$PROJECT_DIR/src/$pkg_name/routes/health.py" <<'PYEOF'
+"""Health check endpoint."""
+import json
+from http.server import BaseHTTPRequestHandler
+
+
+class HealthHandler(BaseHTTPRequestHandler):
+    """Handle HTTP requests."""
+
+    def do_GET(self) -> None:
+        if self.path == "/health":
+            self._json_response(200, {"status": "ok"})
+        else:
+            self._json_response(404, {"error": "not found"})
+
+    def _json_response(self, status: int, body: dict) -> None:
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        self.wfile.write(json.dumps(body).encode())
+PYEOF
+          sed_inplace "s/{{PROJECT_NAME}}/${escaped_name}/g" "$PROJECT_DIR/src/$pkg_name/app.py"
+          sed_inplace "s/{{PKG_NAME}}/${pkg_name}/g" "$PROJECT_DIR/src/$pkg_name/app.py"
+          success "  Created API archetype: src/$pkg_name/app.py, routes/health.py"
+          ;;
+        library)
+          cat > "$PROJECT_DIR/src/$pkg_name/lib.py" <<'PYEOF'
+"""{{PROJECT_NAME}} — public API."""
+
+
+def hello(name: str = "world") -> str:
+    """Return a greeting. Replace with your library's public API."""
+    return f"Hello, {name}!"
+PYEOF
+          sed_inplace "s/{{PROJECT_NAME}}/${escaped_name}/g" "$PROJECT_DIR/src/$pkg_name/lib.py"
+          success "  Created library archetype: src/$pkg_name/lib.py"
+          ;;
+        *)
+          success "  Created src/$pkg_name/"
+          ;;
+      esac
+      ;;
+
+    typescript)
+      mkdir -p "$PROJECT_DIR/src"
+
+      case "$ARCHETYPE" in
+        cli)
+          cat > "$PROJECT_DIR/src/cli.ts" <<'TSEOF'
+/**
+ * CLI entry point for {{PROJECT_NAME}}.
+ */
+
+interface ParsedArgs {
+  command: string | null;
+  target: string;
+  flags: Record<string, boolean>;
+}
+
+function parseArgs(argv: string[]): ParsedArgs {
+  const args = argv.slice(2);
+  const flags: Record<string, boolean> = {};
+  const positional: string[] = [];
+
+  for (const arg of args) {
+    if (arg.startsWith("--")) {
+      flags[arg.slice(2)] = true;
+    } else {
+      positional.push(arg);
+    }
+  }
+
+  return {
+    command: positional[0] ?? null,
+    target: positional[1] ?? "world",
+    flags,
+  };
+}
+
+function main(): void {
+  const { command, target, flags } = parseArgs(process.argv);
+
+  if (flags.version) {
+    console.log("{{PROJECT_NAME}} 0.1.0");
+    return;
+  }
+
+  if (flags.help || command === null) {
+    console.log("Usage: {{PROJECT_NAME}} <command> [target]");
+    console.log("");
+    console.log("Commands:");
+    console.log("  run [target]  Run the main task");
+    return;
+  }
+
+  if (command === "run") {
+    console.log(`Running with target: ${target}`);
+  }
+}
+
+main();
+TSEOF
+          sed_inplace "s/{{PROJECT_NAME}}/${escaped_name}/g" "$PROJECT_DIR/src/cli.ts"
+          success "  Created CLI archetype: src/cli.ts"
+          ;;
+        api)
+          mkdir -p "$PROJECT_DIR/src/routes"
+          cat > "$PROJECT_DIR/src/app.ts" <<'TSEOF'
+/**
+ * {{PROJECT_NAME}} — API application.
+ */
+import { createServer, IncomingMessage, ServerResponse } from "node:http";
+import { healthHandler } from "./routes/health.js";
+
+const PORT = parseInt(process.env.PORT ?? "3000", 10);
+
+function router(req: IncomingMessage, res: ServerResponse): void {
+  if (req.url === "/health" && req.method === "GET") {
+    healthHandler(req, res);
+  } else {
+    res.writeHead(404, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "not found" }));
+  }
+}
+
+const server = createServer(router);
+
+server.listen(PORT, () => {
+  console.log(`Server running on http://localhost:${PORT}`);
+});
+TSEOF
+          cat > "$PROJECT_DIR/src/routes/health.ts" <<'TSEOF'
+/**
+ * Health check endpoint.
+ */
+import { IncomingMessage, ServerResponse } from "node:http";
+
+export function healthHandler(_req: IncomingMessage, res: ServerResponse): void {
+  res.writeHead(200, { "Content-Type": "application/json" });
+  res.end(JSON.stringify({ status: "ok" }));
+}
+TSEOF
+          sed_inplace "s/{{PROJECT_NAME}}/${escaped_name}/g" "$PROJECT_DIR/src/app.ts"
+          success "  Created API archetype: src/app.ts, src/routes/health.ts"
+          ;;
+        library)
+          cat > "$PROJECT_DIR/src/index.ts" <<'TSEOF'
+/**
+ * {{PROJECT_NAME}} — public API.
+ */
+
+/**
+ * Return a greeting. Replace with your library's public API.
+ */
+export function hello(name: string = "world"): string {
+  return `Hello, ${name}!`;
+}
+TSEOF
+          sed_inplace "s/{{PROJECT_NAME}}/${escaped_name}/g" "$PROJECT_DIR/src/index.ts"
+          success "  Created library archetype: src/index.ts"
+          ;;
+        *)
+          cat > "$PROJECT_DIR/src/index.ts" <<'TSEOF'
+export function main(): void {
+  console.log("Hello from {{PROJECT_NAME}}");
+}
+TSEOF
+          sed_inplace "s/{{PROJECT_NAME}}/${escaped_name}/g" "$PROJECT_DIR/src/index.ts"
+          success "  Created src/index.ts"
+          ;;
+      esac
+      ;;
+
+    go)
+      case "$ARCHETYPE" in
+        cli)
+          mkdir -p "$PROJECT_DIR/cmd/$PROJECT_NAME"
+          cat > "$PROJECT_DIR/cmd/$PROJECT_NAME/main.go" <<'GOEOF'
+package main
+
+import (
+	"fmt"
+	"os"
+)
+
+func main() {
+	if len(os.Args) < 2 {
+		printUsage()
+		os.Exit(0)
+	}
+
+	switch os.Args[1] {
+	case "run":
+		target := "world"
+		if len(os.Args) > 2 {
+			target = os.Args[2]
+		}
+		fmt.Printf("Running with target: %s\n", target)
+	case "--version":
+		fmt.Println("{{PROJECT_NAME}} 0.1.0")
+	case "--help":
+		printUsage()
+	default:
+		fmt.Fprintf(os.Stderr, "Unknown command: %s\n", os.Args[1])
+		os.Exit(1)
+	}
+}
+
+func printUsage() {
+	fmt.Println("Usage: {{PROJECT_NAME}} <command> [target]")
+	fmt.Println("")
+	fmt.Println("Commands:")
+	fmt.Println("  run [target]  Run the main task")
+}
+GOEOF
+          sed_inplace "s/{{PROJECT_NAME}}/${escaped_name}/g" "$PROJECT_DIR/cmd/$PROJECT_NAME/main.go"
+          success "  Created CLI archetype: cmd/$PROJECT_NAME/main.go"
+          ;;
+        api)
+          mkdir -p "$PROJECT_DIR/cmd/$PROJECT_NAME"
+          mkdir -p "$PROJECT_DIR/internal/routes"
+          cat > "$PROJECT_DIR/cmd/$PROJECT_NAME/main.go" <<'GOEOF'
+package main
+
+import (
+	"fmt"
+	"log"
+	"net/http"
+	"os"
+
+	"{{PROJECT_NAME}}/internal/routes"
+)
+
+func main() {
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /health", routes.HealthHandler)
+
+	fmt.Printf("Server running on http://localhost:%s\n", port)
+	log.Fatal(http.ListenAndServe(":"+port, mux))
+}
+GOEOF
+          cat > "$PROJECT_DIR/internal/routes/health.go" <<'GOEOF'
+package routes
+
+import (
+	"encoding/json"
+	"net/http"
+)
+
+// HealthHandler returns the health status of the service.
+func HealthHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+}
+GOEOF
+          sed_inplace "s/{{PROJECT_NAME}}/${escaped_name}/g" "$PROJECT_DIR/cmd/$PROJECT_NAME/main.go"
+          success "  Created API archetype: cmd/$PROJECT_NAME/main.go, internal/routes/health.go"
+          ;;
+        library)
+          cat > "$PROJECT_DIR/${pkg_name}.go" <<'GOEOF'
+// Package {{PKG_NAME}} provides the public API.
+package {{PKG_NAME}}
+
+// Hello returns a greeting. Replace with your library's public API.
+func Hello(name string) string {
+	if name == "" {
+		name = "world"
+	}
+	return "Hello, " + name + "!"
+}
+GOEOF
+          sed_inplace "s/{{PKG_NAME}}/${pkg_name}/g" "$PROJECT_DIR/${pkg_name}.go"
+          success "  Created library archetype: ${pkg_name}.go"
+          ;;
+        *)
+          mkdir -p "$PROJECT_DIR/cmd/$PROJECT_NAME"
+          cat > "$PROJECT_DIR/cmd/$PROJECT_NAME/main.go" <<'GOEOF'
+package main
+
+import "fmt"
+
+func main() {
+	fmt.Println("Hello from {{PROJECT_NAME}}")
+}
+GOEOF
+          sed_inplace "s/{{PROJECT_NAME}}/${escaped_name}/g" "$PROJECT_DIR/cmd/$PROJECT_NAME/main.go"
+          success "  Created cmd/$PROJECT_NAME/main.go"
+          ;;
+      esac
+      ;;
+
+    rust)
+      mkdir -p "$PROJECT_DIR/src"
+
+      case "$ARCHETYPE" in
+        cli)
+          cat > "$PROJECT_DIR/src/main.rs" <<'RSEOF'
+//! CLI entry point for {{PROJECT_NAME}}.
+use std::env;
+use std::process;
+
+fn main() {
+    let args: Vec<String> = env::args().collect();
+
+    if args.len() < 2 {
+        print_usage();
+        process::exit(0);
+    }
+
+    match args[1].as_str() {
+        "run" => {
+            let target = args.get(2).map(|s| s.as_str()).unwrap_or("world");
+            println!("Running with target: {target}");
+        }
+        "--version" => println!("{{PROJECT_NAME}} 0.1.0"),
+        "--help" => print_usage(),
+        cmd => {
+            eprintln!("Unknown command: {cmd}");
+            process::exit(1);
+        }
+    }
+}
+
+fn print_usage() {
+    println!("Usage: {{PROJECT_NAME}} <command> [target]");
+    println!();
+    println!("Commands:");
+    println!("  run [target]  Run the main task");
+}
+RSEOF
+          sed_inplace "s/{{PROJECT_NAME}}/${escaped_name}/g" "$PROJECT_DIR/src/main.rs"
+          success "  Created CLI archetype: src/main.rs"
+          ;;
+        api)
+          cat > "$PROJECT_DIR/src/main.rs" <<'RSEOF'
+//! {{PROJECT_NAME}} — API server.
+use std::io::Write;
+use std::net::TcpListener;
+
+fn main() {
+    let port = std::env::var("PORT").unwrap_or_else(|_| "8080".to_string());
+    let addr = format!("0.0.0.0:{port}");
+    let listener = TcpListener::bind(&addr).expect("Failed to bind");
+    println!("Server running on http://localhost:{port}");
+
+    for stream in listener.incoming() {
+        if let Ok(mut stream) = stream {
+            let response = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n{\"status\":\"ok\"}";
+            let _ = stream.write_all(response.as_bytes());
+        }
+    }
+}
+RSEOF
+          sed_inplace "s/{{PROJECT_NAME}}/${escaped_name}/g" "$PROJECT_DIR/src/main.rs"
+          success "  Created API archetype: src/main.rs"
+          ;;
+        library)
+          cat > "$PROJECT_DIR/src/lib.rs" <<'RSEOF'
+//! {{PROJECT_NAME}} — public API.
+
+/// Return a greeting. Replace with your library's public API.
+pub fn hello(name: &str) -> String {
+    if name.is_empty() {
+        return "Hello, world!".to_string();
+    }
+    format!("Hello, {name}!")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_hello_with_name() {
+        assert_eq!(hello("Rust"), "Hello, Rust!");
+    }
+
+    #[test]
+    fn test_hello_empty() {
+        assert_eq!(hello(""), "Hello, world!");
+    }
+}
+RSEOF
+          sed_inplace "s/{{PROJECT_NAME}}/${escaped_name}/g" "$PROJECT_DIR/src/lib.rs"
+          # Remove default main.rs for library archetype
+          success "  Created library archetype: src/lib.rs"
+          ;;
+        *)
+          cat > "$PROJECT_DIR/src/main.rs" <<'RSEOF'
+fn main() {
+    println!("Hello from {{PROJECT_NAME}}");
+}
+RSEOF
+          sed_inplace "s/{{PROJECT_NAME}}/${escaped_name}/g" "$PROJECT_DIR/src/main.rs"
+          success "  Created src/main.rs"
+          ;;
+      esac
+      ;;
+  esac
+}
+
+# ---------------------------------------------------------------------------
+# Apply: Language-specific configuration
+# ---------------------------------------------------------------------------
+apply_language_config() {
+  # --- Append language conventions to CLAUDE.md (before placeholder replacement) ---
+  if [[ "$LANGUAGE" != "none" && -f "$TEMPLATE_DIR/$LANGUAGE/CONVENTIONS.md" ]]; then
+    info "Appending $LANGUAGE conventions to CLAUDE.md..."
+    { echo ""; echo "---"; echo ""; cat "$TEMPLATE_DIR/$LANGUAGE/CONVENTIONS.md"; } >> "$PROJECT_DIR/CLAUDE.md"
+    success "CLAUDE.md updated with $LANGUAGE conventions"
+  fi
+
+  # --- Replace placeholders in CLAUDE.md (after conventions are appended) ---
+  info "Customizing CLAUDE.md..."
+  replace_placeholders "$PROJECT_DIR/CLAUDE.md"
+
+  # --- Place language-specific config files ---
+  if [[ "$LANGUAGE" != "none" ]]; then
+    info "Installing $LANGUAGE config files..."
+
+    local tmpl_dir="$TEMPLATE_DIR/$LANGUAGE"
+    local escaped_name escaped_desc
+    escaped_name="$(sed_escape "$PROJECT_NAME")"
+    escaped_desc="$(sed_escape "$PROJECT_DESC")"
+
+    # Process .tmpl files (replace placeholders, remove .tmpl extension)
+    for tmpl in "$tmpl_dir"/*.tmpl; do
+      if [[ -f "$tmpl" ]]; then
+        local dest_name
+        dest_name="$(basename "$tmpl" .tmpl)"
+        sed "s/{{PROJECT_NAME}}/${escaped_name}/g; s/{{PROJECT_DESCRIPTION}}/${escaped_desc}/g" \
+          "$tmpl" > "$PROJECT_DIR/$dest_name"
+        success "  Created $dest_name"
+      fi
+    done
+
+    # Copy non-template config files (not CONVENTIONS.md, not .tmpl, not gitignore.append)
+    for cfg in "$tmpl_dir"/*; do
+      local basename
+      basename="$(basename "$cfg")"
+      if [[ "$basename" != "CONVENTIONS.md" && \
+            "$basename" != "gitignore.append" && \
+            "$basename" != *.tmpl && \
+            -f "$cfg" ]]; then
+        cp "$cfg" "$PROJECT_DIR/$basename"
+        success "  Created $basename"
+      fi
+    done
+
+    # Append language-specific gitignore entries
+    if [[ -f "$tmpl_dir/gitignore.append" ]]; then
+      cat "$tmpl_dir/gitignore.append" >> "$PROJECT_DIR/.gitignore"
+      success "  Updated .gitignore with $LANGUAGE entries"
+    fi
+
+    # Create src directory + archetype files
+    apply_archetype "$escaped_name"
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# Apply: Common project files
+# ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Generate: Makefile (embedded — no template dependency)
+# ---------------------------------------------------------------------------
+generate_makefile() {
+  local file="$PROJECT_DIR/Makefile"
+  if [[ -f "$file" ]]; then
+    info "Makefile already exists — skipping"
+    return
+  fi
+  info "Generating Makefile..."
+  cat > "$file" <<'MKEOF'
+# =============================================================================
+# Makefile — Generic Test Runner & Development Tasks
+# =============================================================================
+# Designed to work with the CLAUDE.md testing framework (Section 5).
+# Detects project language automatically. Override with: make test LANG=python
+#
+# Supported languages: python, typescript, go, rust
+#
+# Usage:
+#   make test              Run full suite (all tiers, fail-fast)
+#   make test-unit         Tier 1 — Unit tests only
+#   make test-integration  Tier 2 — Integration tests only
+#   make test-agent        Tier 3 — Agent behavior tests only
+#   make test-file FILE=x  Run a single test file
+#   make test-coverage     Full suite + coverage report
+#   make lint              Run linter
+#   make fmt               Run formatter
+#   make typecheck         Run type checker
+#   make build             Compile / build the project
+#   make check             Lint + typecheck + full test suite (pre-PR gate)
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# Language Detection (override with LANG=python|typescript|go|rust)
+# ---------------------------------------------------------------------------
+LANG ?= auto
+
+ifeq ($(LANG),auto)
+  ifneq (,$(wildcard Cargo.toml))
+    DETECTED_LANG := rust
+  else ifneq (,$(wildcard go.mod))
+    DETECTED_LANG := go
+  else ifneq (,$(wildcard tsconfig.json))
+    DETECTED_LANG := typescript
+  else ifneq (,$(wildcard package.json))
+    DETECTED_LANG := typescript
+  else ifneq (,$(wildcard pyproject.toml setup.py setup.cfg requirements.txt))
+    DETECTED_LANG := python
+  else
+    DETECTED_LANG := python
+  endif
+else
+  DETECTED_LANG := $(LANG)
+endif
+
+# ---------------------------------------------------------------------------
+# Python Configuration
+# ---------------------------------------------------------------------------
+PYTHON_TEST_CMD     := python -m pytest
+PYTHON_UNIT_DIR     := tests/unit
+PYTHON_INT_DIR      := tests/integration
+PYTHON_AGENT_DIR    := tests/agent
+PYTHON_LINT_CMD     := python -m ruff check .
+PYTHON_FMT_CMD      := python -m ruff format .
+PYTHON_TYPE_CMD     := python -m mypy .
+PYTHON_BUILD_CMD    := @echo "Python: no compilation needed"
+PYTHON_COV_FLAGS    := --cov --cov-report=term-missing --cov-report=html:coverage_html
+PYTHON_FILE_CMD     := python -m pytest
+PYTHON_SETUP_CMD    := python -m venv .venv && . .venv/bin/activate && pip install -e '.[dev]' 2>/dev/null || pip install -e .
+
+# ---------------------------------------------------------------------------
+# TypeScript Configuration
+# ---------------------------------------------------------------------------
+TS_TEST_CMD         := npx vitest run
+TS_UNIT_DIR         := tests/unit
+TS_INT_DIR          := tests/integration
+TS_AGENT_DIR        := tests/agent
+TS_LINT_CMD         := npx eslint .
+TS_FMT_CMD          := npx eslint . --fix
+TS_TYPE_CMD         := npx tsc --noEmit
+TS_BUILD_CMD        := npx tsc
+TS_COV_FLAGS        := --coverage
+TS_FILE_CMD         := npx vitest run
+TS_SETUP_CMD        := npm install
+
+# ---------------------------------------------------------------------------
+# Go Configuration
+# ---------------------------------------------------------------------------
+GO_TEST_CMD         := go test
+GO_UNIT_DIR         := ./tests/unit/...
+GO_INT_DIR          := ./tests/integration/...
+GO_AGENT_DIR        := ./tests/agent/...
+GO_LINT_CMD         := golangci-lint run
+GO_FMT_CMD          := gofmt -w .
+GO_TYPE_CMD         := @echo "Go: type checking included in build"
+GO_BUILD_CMD        := go build ./...
+GO_COV_FLAGS        := -coverprofile=coverage.out
+GO_FILE_CMD         := go test
+GO_SETUP_CMD        := go mod download
+
+# ---------------------------------------------------------------------------
+# Rust Configuration
+# ---------------------------------------------------------------------------
+RUST_TEST_CMD       := cargo test
+RUST_UNIT_DIR       :=
+RUST_INT_DIR        :=
+RUST_AGENT_DIR      :=
+RUST_LINT_CMD       := cargo clippy -- -D warnings
+RUST_FMT_CMD        := cargo fmt
+RUST_TYPE_CMD       := @echo "Rust: type checking included in build"
+RUST_BUILD_CMD      := cargo build
+RUST_COV_FLAGS      :=
+RUST_FILE_CMD       := cargo test
+RUST_SETUP_CMD      := cargo fetch
+
+# ---------------------------------------------------------------------------
+# Resolve commands based on detected language
+# ---------------------------------------------------------------------------
+ifeq ($(DETECTED_LANG),python)
+  TEST_CMD     := $(PYTHON_TEST_CMD)
+  UNIT_DIR     := $(PYTHON_UNIT_DIR)
+  INT_DIR      := $(PYTHON_INT_DIR)
+  AGENT_DIR    := $(PYTHON_AGENT_DIR)
+  LINT_CMD     := $(PYTHON_LINT_CMD)
+  FMT_CMD      := $(PYTHON_FMT_CMD)
+  TYPE_CMD     := $(PYTHON_TYPE_CMD)
+  BUILD_CMD    := $(PYTHON_BUILD_CMD)
+  COV_FLAGS    := $(PYTHON_COV_FLAGS)
+  FILE_CMD     := $(PYTHON_FILE_CMD)
+  SETUP_CMD    := $(PYTHON_SETUP_CMD)
+else ifeq ($(DETECTED_LANG),typescript)
+  TEST_CMD     := $(TS_TEST_CMD)
+  UNIT_DIR     := $(TS_UNIT_DIR)
+  INT_DIR      := $(TS_INT_DIR)
+  AGENT_DIR    := $(TS_AGENT_DIR)
+  LINT_CMD     := $(TS_LINT_CMD)
+  FMT_CMD      := $(TS_FMT_CMD)
+  TYPE_CMD     := $(TS_TYPE_CMD)
+  BUILD_CMD    := $(TS_BUILD_CMD)
+  COV_FLAGS    := $(TS_COV_FLAGS)
+  FILE_CMD     := $(TS_FILE_CMD)
+  SETUP_CMD    := $(TS_SETUP_CMD)
+else ifeq ($(DETECTED_LANG),go)
+  TEST_CMD     := $(GO_TEST_CMD)
+  UNIT_DIR     := $(GO_UNIT_DIR)
+  INT_DIR      := $(GO_INT_DIR)
+  AGENT_DIR    := $(GO_AGENT_DIR)
+  LINT_CMD     := $(GO_LINT_CMD)
+  FMT_CMD      := $(GO_FMT_CMD)
+  TYPE_CMD     := $(GO_TYPE_CMD)
+  BUILD_CMD    := $(GO_BUILD_CMD)
+  COV_FLAGS    := $(GO_COV_FLAGS)
+  FILE_CMD     := $(GO_FILE_CMD)
+  SETUP_CMD    := $(GO_SETUP_CMD)
+else ifeq ($(DETECTED_LANG),rust)
+  TEST_CMD     := $(RUST_TEST_CMD)
+  UNIT_DIR     := $(RUST_UNIT_DIR)
+  INT_DIR      := $(RUST_INT_DIR)
+  AGENT_DIR    := $(RUST_AGENT_DIR)
+  LINT_CMD     := $(RUST_LINT_CMD)
+  FMT_CMD      := $(RUST_FMT_CMD)
+  TYPE_CMD     := $(RUST_TYPE_CMD)
+  BUILD_CMD    := $(RUST_BUILD_CMD)
+  COV_FLAGS    := $(RUST_COV_FLAGS)
+  FILE_CMD     := $(RUST_FILE_CMD)
+  SETUP_CMD    := $(RUST_SETUP_CMD)
+endif
+
+# ---------------------------------------------------------------------------
+# Common flags
+# ---------------------------------------------------------------------------
+VERBOSE ?=
+ifeq ($(VERBOSE),1)
+  V_FLAG := -v
+else
+  V_FLAG :=
+endif
+
+# ---------------------------------------------------------------------------
+# Targets
+# ---------------------------------------------------------------------------
+
+.PHONY: test test-unit test-integration test-agent test-file test-coverage \
+        lint fmt typecheck build check setup setup-github help
+
+## Run full test suite: unit → integration → agent (fail-fast)
+## For Rust: cargo test runs all tests; tiers are filtered by test name prefix
+test:
+	@echo "═══ Running Full Test Suite ($(DETECTED_LANG)) ═══"
+ifeq ($(DETECTED_LANG),rust)
+	@echo "--- Running all Rust tests ---"
+	@$(TEST_CMD) $(V_FLAG) || (echo "❌ Tests failed." && exit 1)
+else
+	@echo "--- Tier 1: Unit Tests ---"
+	@$(TEST_CMD) $(UNIT_DIR) $(V_FLAG) || (echo "❌ Unit tests failed — stopping." && exit 1)
+	@echo "--- Tier 2: Integration Tests ---"
+	@$(TEST_CMD) $(INT_DIR) $(V_FLAG) || (echo "❌ Integration tests failed — stopping." && exit 1)
+	@echo "--- Tier 3: Agent Behavior Tests ---"
+	@$(TEST_CMD) $(AGENT_DIR) $(V_FLAG) || (echo "❌ Agent behavior tests failed — stopping." && exit 1)
+endif
+	@echo "✅ All tiers passed."
+
+## Tier 1: Unit tests only
+test-unit:
+	@echo "--- Tier 1: Unit Tests ($(DETECTED_LANG)) ---"
+ifeq ($(DETECTED_LANG),rust)
+	$(TEST_CMD) --lib $(V_FLAG)
+else
+	$(TEST_CMD) $(UNIT_DIR) $(V_FLAG)
+endif
+
+## Tier 2: Integration tests only
+test-integration:
+	@echo "--- Tier 2: Integration Tests ($(DETECTED_LANG)) ---"
+ifeq ($(DETECTED_LANG),rust)
+	$(TEST_CMD) --test '*' $(V_FLAG)
+else
+	$(TEST_CMD) $(INT_DIR) $(V_FLAG)
+endif
+
+## Tier 3: Agent behavior tests only
+test-agent:
+	@echo "--- Tier 3: Agent Behavior Tests ($(DETECTED_LANG)) ---"
+ifeq ($(DETECTED_LANG),rust)
+	$(TEST_CMD) --test 'agent_*' $(V_FLAG)
+else
+	$(TEST_CMD) $(AGENT_DIR) $(V_FLAG)
+endif
+
+## Run a single test file (usage: make test-file FILE=tests/unit/test_foo.py)
+test-file:
+ifndef FILE
+	@echo "Usage: make test-file FILE=path/to/test_file"
+	@exit 1
+endif
+	$(FILE_CMD) $(FILE) $(V_FLAG)
+
+## Full suite with coverage report
+test-coverage:
+	@echo "═══ Running Full Suite + Coverage ($(DETECTED_LANG)) ═══"
+ifeq ($(DETECTED_LANG),rust)
+	$(TEST_CMD) $(COV_FLAGS) $(V_FLAG)
+else
+	$(TEST_CMD) $(UNIT_DIR) $(INT_DIR) $(AGENT_DIR) $(COV_FLAGS) $(V_FLAG)
+endif
+
+## Run linter
+lint:
+	@echo "--- Linting ($(DETECTED_LANG)) ---"
+	$(LINT_CMD)
+
+## Run formatter
+fmt:
+	@echo "--- Formatting ($(DETECTED_LANG)) ---"
+	$(FMT_CMD)
+
+## Run type checker
+typecheck:
+	@echo "--- Type Checking ($(DETECTED_LANG)) ---"
+	$(TYPE_CMD)
+
+## Compile / build the project
+build:
+	@echo "--- Building ($(DETECTED_LANG)) ---"
+	$(BUILD_CMD)
+
+## Pre-PR gate: lint + typecheck + full test suite
+check: lint typecheck test
+	@echo "✅ All checks passed — ready for PR."
+
+## Bootstrap dev environment: install deps, set up pre-commit
+setup:
+	@echo "═══ Setting up development environment ($(DETECTED_LANG)) ═══"
+	@echo "--- Installing dependencies ---"
+	$(SETUP_CMD)
+	@if [ -f .pre-commit-config.yaml ]; then \
+		echo "--- Setting up pre-commit hooks ---"; \
+		pre-commit install 2>/dev/null || echo "⚠️  pre-commit not found — install with: pip install pre-commit"; \
+	fi
+	@echo ""
+	@echo "✅ Setup complete. Run 'make check' to verify everything works."
+
+## Set up GitHub labels and project management
+setup-github:
+	@echo "═══ Setting up GitHub project management ═══"
+	@echo "Creating labels..."
+	@gh label create "bug" --color "d73a4a" --description "Something isn't working" --force 2>/dev/null || true
+	@gh label create "feature" --color "0075ca" --description "New feature or enhancement" --force 2>/dev/null || true
+	@gh label create "task" --color "0e8a16" --description "Development task or chore" --force 2>/dev/null || true
+	@gh label create "chore" --color "e4e669" --description "Maintenance or cleanup" --force 2>/dev/null || true
+	@gh label create "refactor" --color "d4c5f9" --description "Code restructuring, no behavior change" --force 2>/dev/null || true
+	@gh label create "P0-critical" --color "b60205" --description "Drop everything" --force 2>/dev/null || true
+	@gh label create "P1-high" --color "d93f0b" --description "Fix this sprint" --force 2>/dev/null || true
+	@gh label create "P2-medium" --color "fbca04" --description "Plan for next sprint" --force 2>/dev/null || true
+	@gh label create "P3-low" --color "c5def5" --description "Nice to have" --force 2>/dev/null || true
+	@gh label create "needs-triage" --color "f9d0c4" --description "Needs review and prioritization" --force 2>/dev/null || true
+	@gh label create "ready" --color "0e8a16" --description "Ready to be picked up" --force 2>/dev/null || true
+	@gh label create "blocked" --color "b60205" --description "Waiting on external dependency" --force 2>/dev/null || true
+	@gh label create "in-progress" --color "1d76db" --description "Currently being worked on" --force 2>/dev/null || true
+	@echo "✅ Labels created"
+
+## Show available targets
+help:
+	@echo "Available targets:"
+	@echo "  make test              Full suite (unit → integration → agent, fail-fast)"
+	@echo "  make test-unit         Tier 1 — Unit tests"
+	@echo "  make test-integration  Tier 2 — Integration tests"
+	@echo "  make test-agent        Tier 3 — Agent behavior tests"
+	@echo "  make test-file FILE=x  Single test file"
+	@echo "  make test-coverage     Full suite + coverage report"
+	@echo "  make lint              Run linter"
+	@echo "  make fmt               Run formatter"
+	@echo "  make typecheck         Run type checker"
+	@echo "  make build             Compile / build"
+	@echo "  make check             Lint + typecheck + full suite (pre-PR gate)"
+	@echo "  make setup             Bootstrap dev environment (deps + pre-commit)"
+	@echo "  make setup-github      Create GitHub labels (requires gh CLI)"
+	@echo ""
+	@echo "Options:"
+	@echo "  LANG=python|typescript|go|rust  Override language detection"
+	@echo "  VERBOSE=1                       Verbose test output"
+	@echo ""
+	@echo "Detected language: $(DETECTED_LANG)"
+MKEOF
+  success "Makefile generated"
+}
+
+
+# ---------------------------------------------------------------------------
+# Generate: Agent specifications (embedded — no template dependency)
+# ---------------------------------------------------------------------------
+generate_agents() {
+  if [[ -d "$PROJECT_DIR/agents" ]] && [[ -f "$PROJECT_DIR/agents/README.md" ]]; then
+    info "agents/ already exists — skipping"
+    return
+  fi
+  info "Generating agent specifications..."
+  mkdir -p "$PROJECT_DIR/agents"
+
+  cat > "$PROJECT_DIR/agents/README.md" <<'_EMBED_EOF_1'
+# /agents
+
+Agent specifications for Claude Code subagents. Each agent has a focused purpose, defined inputs/outputs, and a context budget to prevent window bloat.
+
+## Agent Roster
+
+### Core Agents (workflow essentials)
+
+| Agent | File | Purpose | Context Budget | Slash Command |
+|-------|------|---------|---------------|---------------|
+| **Plan** | `plan-agent.md` | Break down tasks into checkpointed implementation plans | 30% | `/plan` |
+| **Research** | `research-agent.md` | Deep-dive investigation, library evaluation, context gathering | 40% | — |
+| **Code Review** | `code-review-agent.md` | Pre-commit diff review for bugs, style, and security | 20% | `/review` |
+| **Test Runner** | `test-runner-agent.md` | Run tests, analyze failures, propose fixes | 25% | `/test` |
+
+### Extended Agents (specialized capabilities)
+
+| Agent | File | Purpose | Context Budget | Slash Command |
+|-------|------|---------|---------------|---------------|
+| **Build Validator** | `build-validator-agent.md` | Compile, type-check, lint — "does it build?" | 15% | — |
+| **Code Architect** | `code-architect-agent.md` | System design, architecture decisions, tradeoff analysis | 35% | — |
+| **Code Simplifier** | `code-simplifier-agent.md` | Find unnecessary complexity, suggest simplifications | 25% | `/simplify` |
+| **Verify** | `verify-agent.md` | Full pre-merge pipeline (build + test + review) | 30% | — |
+
+## When to Use Which Agent
+
+```
+Task received
+├── Complex? (5+ steps, unclear scope)
+│   └── Plan Agent → structured plan in tasks/todo.md
+│
+├── Need context? (unfamiliar code, new library, API docs)
+│   └── Research Agent → findings in scratch/research_*.md
+│
+├── Architecture question? (system design, technology choice)
+│   └── Code Architect → analysis in scratch/architecture_*.md
+│
+├── Code written → pre-commit checks:
+│   ├── Build Validator → compile + type-check + lint
+│   ├── Test Runner → unit → integration → agent tests
+│   └── Code Review → diff review for bugs & security
+│
+├── Something feel over-engineered?
+│   └── Code Simplifier → complexity report in scratch/simplify_*.md
+│
+└── Ready to merge?
+    └── Verify Agent → full pipeline (build + test + review + summary)
+```
+
+## Orchestration Rules
+
+1. **Parallelize when independent**: Research + Code Review can run simultaneously. Build Validator must finish before Test Runner starts.
+2. **Context budget enforcement**: If a subtask would consume >20% of remaining context, delegate to a subagent.
+3. **Output hygiene**: Agents write detailed output to `scratch/`. Only summaries (≤10 lines) return to the main context.
+4. **Don't chain unnecessarily**: If a task only needs one agent, use one agent. Don't run the full pipeline for a typo fix.
+
+## Spec Convention
+
+Each agent spec follows this structure:
+
+```markdown
+# Agent: <Name>
+
+## Purpose
+What this agent does and when to use it.
+
+## When to Use
+Trigger conditions and scenarios.
+
+## Inputs
+What information it needs to operate.
+
+## Outputs
+What it produces, where it writes, and what it returns to main context.
+
+## Context Budget
+Maximum percentage of context window it should consume.
+
+## Rules
+Constraints, behavioral guidelines, and edge cases.
+```
+
+## Adding New Agents
+
+1. Create `agents/<name>-agent.md` following the convention above.
+2. Add the agent to the roster table in this README.
+3. Update the "When to Use" decision tree if applicable.
+4. If the agent has a slash command, create a corresponding skill in `.claude/skills/`.
+5. Update CLAUDE.md Section 4.2 with a summary reference.
+_EMBED_EOF_1
+
+  cat > "$PROJECT_DIR/agents/build-validator-agent.md" <<'_EMBED_EOF_2'
+# Agent: Build Validator
+
+## Purpose
+
+Verify that the project compiles, type-checks, and passes linting. Catches structural errors (missing imports, type mismatches, syntax errors, lint violations) before tests even run. This is the "does it build?" check.
+
+## When to Use
+
+- After writing or modifying code, before running tests
+- When refactoring (changing signatures, moving files, renaming)
+- After adding or updating dependencies
+- Called by the Verify Agent as the first step in the pre-merge pipeline
+
+## Inputs
+
+- Language/build system (detected from project config: pyproject.toml, package.json, go.mod, Cargo.toml)
+- Scope of changes (optional — full build or incremental)
+
+## Outputs
+
+Results written to `scratch/build_validation_latest.md` with:
+
+```
+## Build Validation Report
+
+### Compilation: PASS / FAIL
+- [details if failed]
+
+### Type Checking: PASS / FAIL / SKIPPED
+- [details if failed]
+
+### Linting: PASS / FAIL
+- [violation count by severity]
+- [details for errors, summary for warnings]
+
+### Verdict: BUILD OK / BUILD BROKEN
+```
+
+Returns ≤5 line summary to main context.
+
+## Context Budget
+
+≤15% of available window (build output is usually compact).
+
+## Build Commands by Language
+
+| Language | Compile | Type Check | Lint |
+|----------|---------|-----------|------|
+| Python | N/A (interpreted) | `mypy .` or `pyright .` | `ruff check .` |
+| TypeScript | `npx tsc --noEmit` | (included in tsc) | `npx eslint .` |
+| Go | `go build ./...` | (included in build) | `golangci-lint run` |
+| Rust | `cargo build` | (included in build) | `cargo clippy` |
+
+Use `make lint` if available — it should be configured for the project's language.
+
+## Rules
+
+- Always run lint before reporting — even if compilation succeeds, lint violations block.
+- Parse error output to identify the specific file and line causing the failure.
+- For type errors: show the expected vs. actual type and the offending expression.
+- For lint errors: distinguish between errors (must fix) and warnings (should fix).
+- If the build fails due to a missing dependency, flag it — don't try to install it.
+- Don't attempt fixes — report findings and let the developer or another agent handle fixes.
+- If the project has no type checker configured, note it as SKIPPED, not FAIL.
+_EMBED_EOF_2
+
+  cat > "$PROJECT_DIR/agents/code-architect-agent.md" <<'_EMBED_EOF_3'
+# Agent: Code Architect
+
+## Purpose
+
+System-level design agent for architecture decisions, technology evaluation, and structural planning. Thinks about system boundaries, data flow, component responsibility, and long-term maintainability. This is the "how should this be structured?" agent — higher-level than the Plan Agent.
+
+## When to Use
+
+- Designing a new system or major feature from scratch
+- Evaluating whether to add a new dependency, service, or infrastructure component
+- Deciding between fundamentally different approaches (monolith vs. microservice, SQL vs. NoSQL, etc.)
+- Refactoring that changes system boundaries or data flow
+- When the Plan Agent identifies architectural decisions that need deeper analysis
+
+## Inputs
+
+- Problem description (what capability is needed)
+- Constraints (performance requirements, budget, team size, timeline)
+- Current architecture context (relevant file paths, existing patterns)
+- Specific question to answer (if scoped — e.g., "should we use WebSockets or SSE?")
+
+## Outputs
+
+Analysis written to `scratch/architecture_<topic>.md` with:
+
+```
+## Architecture Decision: <topic>
+
+### Context
+What problem are we solving and what constraints exist.
+
+### Options Evaluated
+#### Option A: <name>
+- How it works: ...
+- Pros: ...
+- Cons: ...
+- Effort: low / medium / high
+- Risk: low / medium / high
+
+#### Option B: <name>
+- (same structure)
+
+### Recommendation
+Which option and why. What tradeoffs are we accepting.
+
+### Migration Path
+How to get from current state to recommended state.
+
+### Decision Record
+If approved, this section captures the final decision for future reference.
+```
+
+Returns path + ≤10 line summary to main context.
+
+## Context Budget
+
+≤35% of available window (architecture analysis requires broad context).
+
+## Rules
+
+- Always present at least 2 options with honest tradeoffs — never recommend without comparison.
+- Include effort and risk estimates for each option.
+- Consider the team/project's current capabilities — don't recommend Kubernetes for a solo dev project.
+- Evaluate options against the project's stated principles (CLAUDE.md Section 1: simplicity first, minimal impact).
+- Flag irreversible decisions explicitly — technology choices that are expensive to undo.
+- Don't over-architect — "the simplest thing that works" is often the right answer.
+- If the question is too narrow for architecture-level analysis, defer to the Plan Agent.
+- Include a migration path — how do we get from here to there incrementally?
+- Reference existing code patterns — don't propose structures that conflict with the codebase's style.
+_EMBED_EOF_3
+
+  cat > "$PROJECT_DIR/agents/code-review-agent.md" <<'_EMBED_EOF_4'
+# Agent: Code Review
+
+## Purpose
+
+Pre-commit diff review — catch bugs, style issues, security concerns, and missed edge cases before code is committed. Acts as an automated first-pass reviewer.
+
+## When to Use
+
+- Before every commit on non-trivial changes
+- **Mandatory** for changes touching: auth, data pipelines, agent behavior logic, payment processing, database migrations
+- Triggered via `/review [scope]`
+- Called by the Verify Agent as part of the pre-merge pipeline
+
+## Inputs
+
+- Git diff or specific file paths of changed files
+- Description of the intended change (what should this diff accomplish?)
+- Context on the broader task (optional, helps catch misalignment)
+
+## Outputs
+
+Review written to `scratch/review_<branch>.md` with:
+
+```
+## Review: <branch or scope>
+### Critical (must fix before commit)
+- [file:line] description of issue
+
+### Warning (should fix)
+- [file:line] description of issue
+
+### Nit (optional improvement)
+- [file:line] description
+
+### Verdict: APPROVE / NEEDS CHANGES
+```
+
+Returns path + ≤5 line summary to main context.
+
+## Context Budget
+
+≤20% of available window.
+
+## Rules
+
+- Read the actual diff — don't review based on assumptions about what changed.
+- Focus on correctness and security first, style second.
+- Don't flag style issues that a linter would catch — let the linter handle those.
+- Every critical finding must include: what's wrong, why it matters, and how to fix it.
+- If unsure whether something is a bug, flag it as a warning with your reasoning.
+- Check for common vulnerability patterns:
+  - SQL injection (string concatenation in queries)
+  - Command injection (user input in shell commands)
+  - XSS (unescaped user content in HTML)
+  - Path traversal (unsanitized file paths)
+  - Hardcoded secrets (API keys, passwords, tokens)
+- Verify that new code paths have corresponding tests.
+- Don't block on nitpicks — reserve "NEEDS CHANGES" for critical and warning-level issues.
+- If the change is a one-line fix with no security implications, keep the review brief.
+
+## Four Questions Validation
+
+After reviewing code, verify the change with evidence — not assumptions:
+
+1. **Are tests passing?** — Show actual test output. "Tests pass" without output is a red flag.
+2. **Are requirements met?** — List each requirement and confirm it's addressed in the diff.
+3. **Are assumptions verified?** — Cite documentation, existing code, or specs. Don't assume APIs, configs, or behaviors.
+4. **Is there evidence?** — Provide concrete results (test output, build logs, diff excerpts). Claims without evidence must be flagged.
+
+### Hallucination Red Flags
+
+Flag the review if you observe any of these in the code or its description:
+
+- Claiming "tests pass" without showing test output
+- "Probably works" or "should be fine" language without verification
+- Referencing APIs, configs, or behaviors that weren't checked against actual source
+- Fabricated identifiers (made-up function names, non-existent modules, invented error codes)
+- Confidence in code paths that weren't actually traced through
+- Assuming backwards compatibility without checking callers
+- "No side effects" claims without checking for shared state, globals, or event listeners
+_EMBED_EOF_4
+
+  cat > "$PROJECT_DIR/agents/code-simplifier-agent.md" <<'_EMBED_EOF_5'
+# Agent: Code Simplifier
+
+## Purpose
+
+Analyze code for unnecessary complexity and recommend simplifications. Enforces the "elegance" principle (CLAUDE.md Section 4.6) — finding the simplest solution that doesn't create future burden. This is the "is there a simpler way?" agent.
+
+## When to Use
+
+- After implementing a feature — pause and ask "is there a more elegant way?"
+- During code review when something feels over-engineered
+- Periodic codebase health checks
+- When a module has grown unwieldy
+- Triggered via `/simplify [path]`
+
+## Inputs
+
+- File path(s) or directory to analyze
+- Context on what the code does (optional — agent will infer from reading)
+- Specific concern (optional — e.g., "this function feels too complex")
+
+## Outputs
+
+Report written to `scratch/simplify_<scope>.md` with:
+
+```
+## Simplification Report: <scope>
+
+### High Impact (significant complexity reduction)
+- [file:line] What to simplify. Why it's complex. Suggested approach. ~X lines removed.
+
+### Medium Impact
+- [file:line] Description.
+
+### Low Impact / Nitpicks
+- [file:line] Description.
+
+### Summary
+- Opportunities found: N
+- Estimated net line reduction: X
+- Recommendation: act now / defer / skip
+```
+
+Returns path + ≤5 line summary to main context.
+
+## Context Budget
+
+≤25% of available window.
+
+## Complexity Signals
+
+Look for these patterns:
+
+1. **Premature abstractions** — Wrappers, helpers, or utilities used only once. Three similar lines are better than a premature abstraction.
+2. **Over-engineering** — Feature flags nobody toggles, backwards-compatibility shims for removed code, configurability that isn't configured.
+3. **Dead code** — Unused imports, unreachable branches, commented-out blocks, TODO comments older than the current task.
+4. **Unnecessary indirection** — Layers that just pass through, factories that build one thing, interfaces with one implementation.
+5. **Complex conditionals** — Deeply nested if/else (>3 levels), long boolean chains, switches with fallthrough.
+6. **God functions/classes** — Functions >50 lines, classes with >10 methods, files with >500 lines.
+7. **Duplicated logic** — Copy-paste code appearing 3+ times (don't flag 2 occurrences — premature DRY is its own complexity).
+
+## Rules
+
+- **Don't suggest changes that would break existing tests.** If tests would need updating, note it.
+- **Don't remove code that handles real edge cases** — only remove genuinely dead paths.
+- **Don't optimize for fewer characters** — optimize for clarity and maintainability.
+- **Simplicity ≠ cleverness.** A clear 10-line function beats a clever 3-line one-liner.
+- **Present options, don't apply changes.** The developer decides what to simplify.
+- **Respect existing patterns.** If the codebase uses a pattern consistently, don't flag it as unnecessary complexity — flag the pattern itself if it's genuinely problematic.
+- **Consider the change cost.** A simplification that requires touching 20 files is not simple. Factor in the blast radius.
+- **Don't flag test code for complexity** unless it's actively making tests harder to maintain.
+_EMBED_EOF_5
+
+  cat > "$PROJECT_DIR/agents/plan-agent.md" <<'_EMBED_EOF_6'
+# Agent: Plan
+
+## Purpose
+
+Break down complex tasks into ordered, checkpointed implementation plans. Transforms vague requirements into concrete, actionable steps with risk assessment and dependency mapping.
+
+## When to Use
+
+- Tasks with 5+ steps
+- Unclear scope or multiple possible approaches
+- Architectural decisions that need to be made before implementation
+- Triggered via `/plan <task description>`
+
+## Inputs
+
+- Task description (what needs to be accomplished)
+- Relevant file paths (where the work will happen)
+- Constraints (time, dependencies, backward compatibility, etc.)
+- Current state of `tasks/todo.md` (to avoid duplicating existing plans)
+
+## Outputs
+
+Written plan in `tasks/todo.md` with:
+- **Objective**: one-sentence summary
+- **Numbered steps** with checkboxes (`- [ ]`)
+- **Complexity estimate** per step (trivial / moderate / complex)
+- **Checkpoints** for tasks >5 steps (explicit user check-in points)
+- **Risks and dependencies** — what could block progress
+- **Decisions & context** — architectural tradeoffs and rationale
+
+Returns a ≤10 line summary to the main context.
+
+## Context Budget
+
+≤30% of available window.
+
+## Rules
+
+- Read relevant code before planning — never plan in a vacuum.
+- Reference `tasks/lessons.md` for patterns relevant to the current task.
+- Plans must be concrete enough that another developer (or agent) could follow them without asking clarifying questions.
+- Don't start implementing — the plan must be approved before any code is written.
+- If a task is under 3 steps, skip planning and recommend direct execution.
+- For tasks >7 steps, include at least 2 checkpoints.
+- Flag any step that touches auth, payments, migrations, or production config as requiring explicit approval.
+
+## Example Output
+
+```markdown
+## Objective
+Add rate limiting to the API gateway.
+
+## Plan
+- [ ] 1. Research existing middleware patterns (moderate)
+- [ ] 2. Add rate limiter dependency to pyproject.toml (trivial)
+- [ ] **Checkpoint**: Verify dependency installs and is compatible.
+- [ ] 3. Implement rate limit middleware (moderate)
+- [ ] 4. Add configuration to .env.example (trivial)
+- [ ] 5. Write unit tests for rate limiter (moderate)
+- [ ] 6. Write integration test with API endpoints (moderate)
+- [ ] **Checkpoint**: All tests pass locally.
+- [ ] 7. Update README with rate limit documentation (trivial)
+
+## Risks
+- Rate limiter choice affects Redis dependency (step 1 decision)
+- Must not break existing API tests
+```
+_EMBED_EOF_6
+
+  cat > "$PROJECT_DIR/agents/research-agent.md" <<'_EMBED_EOF_7'
+# Agent: Research
+
+## Purpose
+
+Deep-dive investigation — reading docs, exploring APIs, analyzing codebases, evaluating libraries, and gathering technical context. Produces written summaries that inform implementation decisions.
+
+## When to Use
+
+- Need to understand unfamiliar code before modifying it
+- Evaluating a library, framework, or tool for adoption
+- Investigating a bug with unclear root cause
+- Gathering context on an API, protocol, or standard
+- CVE or security vulnerability assessment
+
+## Inputs
+
+- Research question (specific and scoped)
+- Relevant file paths or URLs to start from
+- What decisions depend on findings (so research stays focused)
+- Time/scope constraints (if any)
+
+## Outputs
+
+Summary written to `scratch/research_<topic>.md` with:
+- **Key findings** — bullet points, most important first
+- **Recommendations** — what to do based on findings
+- **Sources** — where information came from (file paths, URLs, docs)
+- **Open questions** — what couldn't be determined and needs user input
+
+Returns path + ≤10 line summary to main context.
+
+## Context Budget
+
+≤40% of available window (research is read-heavy).
+
+## Rules
+
+- Stay focused on the research question — don't rabbit-hole into tangents.
+- Cite sources for all factual claims. If something can't be verified, flag it as uncertain.
+- Never fabricate information. If you can't find an answer, say so explicitly.
+- Compare alternatives when evaluating options — don't just describe one path.
+- Include tradeoffs and downsides, not just benefits.
+- If research reveals a security concern, flag it immediately — don't bury it in the summary.
+- Recommend a clear course of action, not just raw information.
+- If the research question is too broad, narrow it and document what was scoped out.
+
+## Example Summary
+
+```
+Findings written to scratch/research_rate_limiting.md
+
+Summary:
+- Three viable options: redis-based (best for distributed), in-memory (simplest), token bucket (most flexible)
+- Recommendation: in-memory for MVP, migrate to redis when scaling past single instance
+- Key risk: in-memory state lost on restart — acceptable for MVP, not for production
+- Open question: expected request volume needed to size the limiter correctly
+```
+_EMBED_EOF_7
+
+  cat > "$PROJECT_DIR/agents/test-runner-agent.md" <<'_EMBED_EOF_8'
+# Agent: Test Runner
+
+## Purpose
+
+Run tests, interpret results, and propose fixes for failures. Handles the full test lifecycle from execution through analysis to actionable fix recommendations.
+
+## When to Use
+
+- After implementation, before commit
+- Investigating CI failures
+- Verifying a bug fix resolves the issue
+- Triggered via `/test [tier]`
+- Called by the Verify Agent as part of the pre-merge pipeline
+
+## Inputs
+
+- Test command(s) to run (or "all" for full suite)
+- Expected behavior (what should pass, what might fail)
+- Relevant file paths (code under test, test files)
+
+## Outputs
+
+Results written to `scratch/test_results_<timestamp>.md` with:
+- **Pass/fail counts** per tier (unit / integration / agent)
+- **Failure details**: test name, error message, stack trace excerpt, relevant code
+- **Root cause analysis** for each failure
+- **Proposed fixes** if the cause is identifiable
+
+Returns path + ≤5 line summary to main context.
+
+## Context Budget
+
+≤25% of available window.
+
+## Rules
+
+- Run tests in tier order: unit → integration → agent. Stop at first tier with failures (fail-fast).
+- Use `make test-unit`, `make test-integration`, `make test-agent` — respect the project's Makefile.
+- For single-file testing: `make test-file FILE=<path>`.
+- Read the failing test code AND the code under test before proposing a fix.
+- Distinguish between:
+  - **Test bugs** (test is wrong) — fix the test
+  - **Code bugs** (implementation is wrong) — fix the code
+  - **Environment issues** (missing dependency, wrong config) — fix the environment
+- Don't apply fixes automatically — propose them for approval.
+- If a test is flaky (passes sometimes, fails others): flag it for quarantine, don't normalize it.
+- Track test count changes — if tests were added or removed, note it.
+- Never mark a test as "expected failure" — either fix it or quarantine it.
+_EMBED_EOF_8
+
+  cat > "$PROJECT_DIR/agents/verify-agent.md" <<'_EMBED_EOF_9'
+# Agent: Verify
+
+## Purpose
+
+Full pre-merge validation pipeline. Orchestrates build validation, testing, linting, and code review into a single "is this ready to merge?" check. This is the final gate before a PR is created or a branch is pushed.
+
+## When to Use
+
+- Before creating a pull request
+- Before pushing a branch that will trigger CI
+- As a final check after completing all planned work
+- When the user asks "is this ready?"
+
+## Inputs
+
+- Branch name (defaults to current branch)
+- Base branch for comparison (defaults to main)
+- Scope: "full" (everything) or "quick" (build + unit tests only)
+
+## Outputs
+
+Report written to `scratch/verify_<branch>.md` with:
+
+```
+## Pre-Merge Verification: <branch>
+
+### 1. Build Validation
+- Compilation: PASS / FAIL
+- Type checking: PASS / FAIL / SKIPPED
+- Linting: PASS / FAIL (X errors, Y warnings)
+
+### 2. Test Suite
+- Unit tests: PASS (X/X) / FAIL (X/Y)
+- Integration tests: PASS (X/X) / FAIL (X/Y)
+- Agent behavior tests: PASS (X/X) / FAIL (X/Y)
+
+### 3. Code Review
+- Critical issues: N
+- Warnings: N
+- Nits: N
+
+### 4. Change Summary
+- Files changed: N
+- Lines added: +X
+- Lines removed: -Y
+- Commits: N
+
+### Verdict: READY TO MERGE / NOT READY
+Blocking issues:
+- [list of items that must be fixed]
+
+Recommendations (non-blocking):
+- [list of suggested improvements]
+```
+
+Returns ≤5 line summary to main context.
+
+## Context Budget
+
+≤30% of available window (orchestrates other agents, but summarizes their output).
+
+## Pipeline Order
+
+The verify agent runs checks in this order, stopping at the first blocking failure:
+
+1. **Build Validator** — Does it compile and pass linting?
+2. **Test Runner** — Do all test tiers pass? (fail-fast: unit → integration → agent)
+3. **Code Review** — Any critical issues in the diff?
+4. **Change summary** — Git stats for the branch vs. base.
+
+## Rules
+
+- **Fail-fast**: If build validation fails, don't bother running tests. If tests fail, still run code review (reviewers should see all issues at once).
+- **Never report READY TO MERGE if any check fails.** Not even if "it's just a lint warning."
+- **Distinguish blocking vs. non-blocking.** Failures and critical review findings block. Warnings and nits are recommendations.
+- **Check for common merge hazards**:
+  - Uncommitted changes (should be staged/committed first)
+  - Merge conflicts with base branch
+  - `.env` files or secrets in the diff
+  - Large binary files accidentally staged
+  - Missing test coverage for new code paths
+- **Run against the full diff** (`main...HEAD`), not just the latest commit.
+- **Don't fix issues** — report them. The developer decides what to address.
+- **If all checks pass**: congratulate briefly and suggest creating the PR.
+- **Quick mode**: Only runs build validation + unit tests. Use for fast iteration during development.
+_EMBED_EOF_9
+
+  success "Agent specifications generated (agents/)"
+}
+
+# ---------------------------------------------------------------------------
+# Generate: Claude slash command skills (embedded — no template dependency)
+# ---------------------------------------------------------------------------
+generate_skills() {
+  if [[ -d "$PROJECT_DIR/.claude/skills/start" ]]; then
+    info ".claude/skills/ already exists — skipping"
+    return
+  fi
+  info "Generating Claude slash commands..."
+
+  mkdir -p "$PROJECT_DIR/.claude/skills/backlog"
+  cat > "$PROJECT_DIR/.claude/skills/backlog/SKILL.md" <<'_EMBED_EOF_10'
+---
+name: backlog
+description: Manage GitHub issues backlog — view, pick, or create work items
+argument-hint: "[show|new|pick #N|close #N]"
+user-invocable: true
+allowed-tools: "Read, Write, Edit, Bash(gh *), Bash(git checkout*), Bash(git branch*), Bash(git status*)"
+---
+
+Manage the GitHub issues backlog. Bridge between GitHub Issues and local task management.
+
+## Commands
+
+Parse `$ARGUMENTS` to determine the action:
+
+### `show` (default — when no argument or `show`)
+
+1. Run `gh issue list --state open --limit 20` to get open issues.
+2. Group by priority label (`P0-critical`, `P1-high`, `P2-medium`, `P3-low`, unlabeled).
+3. Present a summary:
+
+```
+## Open Issues
+
+### P0 — Critical
+- #12 Fix auth token expiration (bug, in-progress)
+
+### P1 — High
+- #8 Add rate limiting to API (feature, ready)
+- #11 Database migration fails on empty tables (bug, ready)
+
+### P2 — Medium
+- #3 Refactor config loader (refactor, needs-triage)
+
+### Unprioritized
+- #14 Update README examples (task)
+
+**Total**: 5 open issues
+```
+
+### `new`
+
+Create a new GitHub issue interactively:
+
+1. Ask the user for:
+   - **Title** (required)
+   - **Type** — bug, feature, task, chore, or refactor (maps to label)
+   - **Priority** — P0-P3 (maps to label)
+   - **Description** (required)
+   - **Acceptance criteria** (optional)
+2. Create with `gh issue create --title "..." --body "..." --label "type,priority,needs-triage"`
+3. Report the issue URL.
+
+### `pick #N`
+
+Start working on issue #N:
+
+1. Run `gh issue view N` to get the issue details.
+2. Create a branch: `git checkout -b <type>/<N>-<short-title>` (derive type from label, slugify the title).
+3. Add `in-progress` label, remove `ready` label: `gh issue edit N --add-label "in-progress" --remove-label "ready"`
+4. Write the issue description and acceptance criteria into `tasks/todo.md` as a plan.
+5. Present the plan and ask the user to confirm before starting implementation.
+
+### `close #N`
+
+Close issue #N:
+
+1. Run `gh issue view N` to get context.
+2. Ask the user for a brief summary of what was done.
+3. Add a closing comment with the summary: `gh issue comment N --body "..."`
+4. Close the issue: `gh issue close N --reason completed`
+5. Remove `in-progress` label if present.
+
+## Rules
+
+- Always show issue numbers so the user can reference them.
+- If `gh` is not available or not authenticated, say so and suggest `gh auth login`.
+- For `pick`, always verify there are no uncommitted changes before creating a branch.
+- For `pick`, use the branch naming convention: `<type>/<issue-number>-<short-slug>` (e.g., `feat/8-rate-limiting`, `fix/12-auth-token`).
+- Keep `tasks/todo.md` as the working plan — issues are the backlog, todo.md is the active session plan.
+_EMBED_EOF_10
+
+  mkdir -p "$PROJECT_DIR/.claude/skills/checkpoint"
+  cat > "$PROJECT_DIR/.claude/skills/checkpoint/SKILL.md" <<'_EMBED_EOF_11'
+---
+name: checkpoint
+description: Summarize current progress, commit working state, and update task tracking
+argument-hint: "[commit message or empty for auto-generated]"
+user-invocable: true
+allowed-tools: "Read, Edit, Bash(git status*), Bash(git diff*), Bash(git add *), Bash(git commit *), Bash(git log*)"
+---
+
+Create a checkpoint: summarize progress, commit the current working state, and update task tracking.
+
+## Process
+
+1. **Check state** — Run `git status` and `git diff --stat` to see what's changed.
+2. **Update tasks/todo.md** — Mark completed items, note any blockers or in-progress work.
+3. **Stage changes** — Add modified files (be specific, don't use `git add -A`).
+4. **Commit** — Use the provided message or auto-generate one from the changes:
+   - Follow conventional commits: `type(scope): description`
+   - Types: feat, fix, refactor, chore, docs, test
+5. **Report** — Summarize what was committed and what remains.
+
+## Rules
+
+- Never stage `.env` files, credentials, or secrets.
+- Never commit files that would fail linting — run `make lint` first if unsure.
+- If there are no changes to commit, say so — don't create empty commits.
+- If `$ARGUMENTS` is provided, use it as the commit message.
+- Always end the commit message with: `Co-Authored-By: Claude <noreply@anthropic.com>`
+_EMBED_EOF_11
+
+  mkdir -p "$PROJECT_DIR/.claude/skills/doctor"
+  cat > "$PROJECT_DIR/.claude/skills/doctor/SKILL.md" <<'_EMBED_EOF_12'
+---
+name: doctor
+description: Check project health — environment, dependencies, tools, and configuration
+argument-hint: ""
+user-invocable: true
+allowed-tools: "Read, Bash(python *), Bash(node *), Bash(npm *), Bash(go *), Bash(cargo *), Bash(make *), Bash(git *), Bash(gh *), Bash(which *), Bash(pip *), Bash(pre-commit *)"
+---
+
+Run a health check on the project environment. Report what's working and what needs attention.
+
+## Instructions
+
+Run each check below and report results using this format:
+
+```
+## Project Health Check
+
+| Check | Status | Details |
+|-------|--------|---------|
+| Git repo | ✅ | On branch main, 12 commits |
+| Language env | ⚠️ | Python 3.12 found, but no .venv active |
+| Dependencies | ❌ | Not installed — run `pip install -e '.[dev]'` |
+| ...  | ... | ... |
+```
+
+### Checks to Run
+
+#### 1. Git
+- Is this a git repo? (`git rev-parse --is-inside-work-tree`)
+- Current branch and commit count
+- Any uncommitted changes? (`git status --porcelain`)
+- Is a remote configured? (`git remote -v`)
+
+#### 2. Language Environment
+Detect language from config files (pyproject.toml, package.json, go.mod, Cargo.toml):
+
+- **Python**: Is Python installed? What version? Is a virtual environment active? (`$VIRTUAL_ENV`)
+- **TypeScript**: Is Node.js installed? What version? Is `node_modules/` present?
+- **Go**: Is Go installed? What version?
+- **Rust**: Is Rust installed? What version? (`rustc --version`)
+
+#### 3. Dependencies
+- Are project dependencies installed?
+  - Python: `pip list` shows project package
+  - TypeScript: `node_modules/` exists and `package-lock.json` matches
+  - Go: `go.sum` exists
+  - Rust: `Cargo.lock` exists
+
+#### 4. Development Tools
+- Linter available? (ruff, eslint, golangci-lint, clippy)
+- Formatter available? (ruff, eslint, gofmt, rustfmt)
+- Type checker available? (mypy, tsc, built-in)
+- `make` available?
+- `pre-commit` installed? Hooks active? (`pre-commit --version`, `.git/hooks/pre-commit`)
+
+#### 5. Claude Code
+- `.claude/settings.json` exists?
+- `.claude/skills/` directory has skills?
+- `CLAUDE.md` exists?
+- `tasks/todo.md` exists?
+
+#### 6. GitHub Integration
+- `gh` CLI installed? (`which gh`)
+- `gh` authenticated? (`gh auth status`)
+- Issue labels created? (check with `gh label list` if authenticated)
+
+#### 7. Tests
+- Does `make test-unit` work? (run it, report pass/fail)
+- If it fails, show the error summary (not full output)
+
+### After the Check
+
+1. Summarize: "X of Y checks passed"
+2. For any failures, show the exact command to fix it
+3. If everything passes: "Project is healthy — ready to build."
+
+## Rules
+
+- Run checks quickly — skip anything that would take >10 seconds
+- Don't install anything automatically — just report what's missing and how to fix it
+- If `make test-unit` has no tests yet, report as ⚠️ (warning), not ❌ (failure)
+- Group related issues together (e.g., "venv not active" and "deps not installed" are the same root cause)
+_EMBED_EOF_12
+
+  mkdir -p "$PROJECT_DIR/.claude/skills/index"
+  cat > "$PROJECT_DIR/.claude/skills/index/SKILL.md" <<'_EMBED_EOF_13'
+---
+name: index
+description: Generate or update a PROJECT_INDEX.md for fast session orientation
+argument-hint: "[update]"
+user-invocable: true
+allowed-tools: "Read, Glob, Grep, Bash(wc *), Bash(git log*), Bash(git rev-parse*), Bash(git remote*)"
+---
+
+Generate a `PROJECT_INDEX.md` at the project root that maps the entire codebase for fast session orientation. This eliminates the need for Claude to rediscover project structure each session.
+
+## When to Run
+
+- At project start (after initial setup)
+- After significant structural changes (new modules, renamed directories, added dependencies)
+- If `$ARGUMENTS` is "update": refresh the existing index rather than regenerating from scratch
+
+## What to Capture
+
+Scan the project and build a structured index covering:
+
+### 1. Project Overview
+- Project name and description (from README.md or CLAUDE.md)
+- Language/framework (detect from config files: pyproject.toml, package.json, go.mod, Cargo.toml)
+- Last indexed date
+
+### 2. Directory Structure
+- ASCII tree of the top-level layout (2 levels deep max)
+- Purpose annotation for each major directory
+
+### 3. Entry Points
+- Main executable / entry point files
+- CLI commands (if any)
+- API routes or server startup (if applicable)
+
+### 4. Core Modules
+For each significant module/package:
+- **Path**: where it lives
+- **Purpose**: one-line description
+- **Key exports**: main functions, classes, or types
+- **Dependencies**: what it imports from other modules
+
+### 5. Configuration Files
+- List all config files with their purpose (linter, formatter, build, CI, etc.)
+
+### 6. Test Commands
+- How to run tests (from Makefile or package scripts)
+- Test file locations
+- Coverage status (if known from tasks/tests.md)
+
+### 7. Dependencies
+- Core dependencies (from lock files or config)
+- Dev dependencies
+
+### 8. Key Decisions
+- Link to tasks/todo.md for architectural decisions
+- Link to tasks/lessons.md for accumulated knowledge
+
+## Output Format
+
+Write to `PROJECT_INDEX.md` at the project root:
+
+```markdown
+# Project Index — {project name}
+
+> Auto-generated by /index. Last updated: {date}
+> Read this file at session start for fast project orientation.
+
+## Overview
+{language} project — {description}
+
+## Structure
+{ascii tree}
+
+## Entry Points
+{entry points}
+
+## Modules
+{module table}
+
+## Configuration
+{config files table}
+
+## How to Run
+| Command | What It Does |
+|---------|-------------|
+| ... | ... |
+
+## Dependencies
+{dependency list}
+
+## Key References
+- Plan: tasks/todo.md
+- Lessons: tasks/lessons.md
+- Tests: tasks/tests.md
+```
+
+## Rules
+
+- Keep the index concise — this is a map, not documentation. One line per module, not paragraphs.
+- Don't include file contents — just paths, purposes, and relationships.
+- Skip generated files, build artifacts, and node_modules/venv/target directories.
+- If the project is small (<20 files), keep the index to under 100 lines.
+- If the project is large (>100 files), focus on the top-level architecture and key modules — don't index every file.
+- Update `tasks/tests.md` coverage summary if test structure has changed.
+_EMBED_EOF_13
+
+  mkdir -p "$PROJECT_DIR/.claude/skills/lesson"
+  cat > "$PROJECT_DIR/.claude/skills/lesson/SKILL.md" <<'_EMBED_EOF_14'
+---
+name: lesson
+description: Record a lesson learned in tasks/lessons.md — mistakes, positive patterns, troubleshooting, or insights
+argument-hint: "<what happened and the takeaway>"
+user-invocable: true
+allowed-tools: "Read, Edit"
+---
+
+Add a new entry to the appropriate section of `tasks/lessons.md`.
+
+## Instructions
+
+1. Read the current `tasks/lessons.md` to understand the existing format and entries.
+2. Determine which section the entry belongs in:
+
+   **Mistakes & Corrections** — Something went wrong, capture the preventive rule:
+   ```
+   Pattern: [short description]
+   Tags: [tag1, tag2]
+   Mistake: [what went wrong]
+   Rule: [preventive instruction — negative, clear]
+   Added: [YYYY-MM-DD]
+   ```
+
+   **What Works (Positive Patterns)** — Something worked well, capture what to repeat:
+   ```
+   Pattern: [short description]
+   Tags: [tag1, tag2]
+   Context: [when/where this was effective]
+   Why: [why it works]
+   Added: [YYYY-MM-DD]
+   ```
+
+   **Troubleshooting** — A recurring issue with a known fix:
+   ```
+   Symptom: [what you observe]
+   Tags: [tag1, tag2]
+   Cause: [root cause]
+   Solution: [how to fix it]
+   Added: [YYYY-MM-DD]
+   ```
+
+   **Project Insights** — A discovery about the project's architecture or domain:
+   ```
+   Insight: [what was discovered]
+   Tags: [tag1, tag2]
+   Impact: [how this affects decisions]
+   Added: [YYYY-MM-DD]
+   ```
+
+3. If `$ARGUMENTS` is provided, use it as context for the entry.
+4. If `$ARGUMENTS` is empty, ask what happened and determine the right category.
+
+## Rules
+
+- Write rules that ruthlessly prevent recurrence (for mistakes).
+- Be specific enough that a future session can understand and apply the entry without additional context.
+- Tags should be short, lowercase, and match the tag reference table.
+- Don't duplicate — check if a similar entry already exists before adding.
+- Positive patterns are just as valuable as mistakes. Capture what works.
+_EMBED_EOF_14
+
+  mkdir -p "$PROJECT_DIR/.claude/skills/load"
+  cat > "$PROJECT_DIR/.claude/skills/load/SKILL.md" <<'_EMBED_EOF_15'
+---
+name: load
+description: Restore session context from tasks/session.md and orient for resumed work
+argument-hint: ""
+user-invocable: true
+allowed-tools: "Read, Glob, Grep, Bash(git status*), Bash(git branch*), Bash(git log*), Bash(git diff --stat*)"
+---
+
+Restore context from a previous session and orient for resumed work.
+
+## Instructions
+
+Read the following files in this order (use Wave-Checkpoint-Wave — read in parallel, then synthesize):
+
+### Wave 1: Read all context files in parallel
+1. `tasks/session.md` — what was being worked on, decisions made, next steps
+2. `tasks/todo.md` — current plan and progress
+3. `tasks/lessons.md` — recent entries (last 3-5 relevant to current task)
+4. `tasks/tests.md` — coverage gaps and recent changes
+5. `PROJECT_INDEX.md` — project structure and entry points (if it exists)
+
+### Checkpoint: Synthesize and orient
+After reading, present a concise session resume to the user:
+
+```
+## Session Restored
+
+**Last session**: [date] on branch `[branch]`
+**Current focus**: [what was being worked on]
+**Progress**: [what was completed]
+**Next steps**:
+1. [first priority]
+2. [second priority]
+3. [third priority]
+
+**Open questions from last session**:
+- [any unresolved items]
+
+**Active files**: [list of files in play]
+```
+
+### Wave 2: Verify current state
+1. Run `git status` — check for uncommitted changes
+2. Run `git branch` — confirm branch
+3. Run `git log --oneline -5` — recent commits
+
+Report any discrepancies between the session state and actual git state (e.g., branch changed, uncommitted work not mentioned in session.md).
+
+## Rules
+
+- If `tasks/session.md` doesn't exist or is empty, say so and offer to run `/index` and `/status` instead.
+- If `PROJECT_INDEX.md` doesn't exist, note it and suggest running `/index`.
+- Don't start implementing immediately — present the resume and let the user confirm the direction.
+- Keep the resume under 20 lines. Reference file paths for details, don't dump contents.
+- Check `tasks/lessons.md` for entries tagged with the current task's domain — mention any relevant ones.
+_EMBED_EOF_15
+
+  mkdir -p "$PROJECT_DIR/.claude/skills/plan"
+  cat > "$PROJECT_DIR/.claude/skills/plan/SKILL.md" <<'_EMBED_EOF_16'
+---
+name: plan
+description: Create a structured implementation plan in tasks/todo.md with confidence assessment
+argument-hint: "<task description>"
+user-invocable: true
+allowed-tools: "Read, Write, Edit, Glob, Grep"
+---
+
+Create a structured implementation plan for the following task: $ARGUMENTS
+
+## Instructions
+
+1. **Explore first** — Read relevant files and understand the current codebase state before planning.
+2. **Assess confidence** — Before writing the plan, run a confidence check (see below).
+3. **Write the plan** to `tasks/todo.md` using this structure:
+   - Objective (one sentence)
+   - Confidence score and assessment summary
+   - Numbered steps with checkboxes (`- [ ]`)
+   - Checkpoints for tasks >5 steps (explicit user check-in points)
+   - Decisions & context section for architectural tradeoffs
+4. **Assess complexity** — Note estimated effort per step (trivial/moderate/complex).
+5. **Identify risks** — What could go wrong? What depends on external factors?
+6. **Present a summary** inline — don't make the user read the whole file.
+
+## Confidence Check
+
+Before planning, score your confidence (0.0 - 1.0) across these five dimensions:
+
+| Check | Weight | Question |
+|-------|--------|----------|
+| **No duplicates** | 25% | Has this already been built? Search the codebase for existing implementations. |
+| **Architecture fit** | 25% | Does this align with the project's existing patterns and structure? |
+| **Requirements clear** | 20% | Are the requirements specific enough to implement without guessing? |
+| **Approach verified** | 15% | Is the technical approach backed by documentation or working references? |
+| **Root cause known** | 15% | (For bug fixes) Is the root cause identified, not just symptoms? |
+
+**Thresholds**:
+- **>= 0.9** — Proceed with planning and implementation.
+- **0.7 - 0.89** — Plan, but flag uncertainties. Present alternative approaches. Get explicit approval before implementing.
+- **< 0.7** — Stop. List what's unclear. Ask targeted questions before planning further.
+
+Include the confidence score and a one-line assessment in the plan header:
+```
+> Confidence: 0.85 — Architecture fit clear, but API behavior needs verification.
+```
+
+## Milestone Prompt
+
+After writing the plan, if the plan has 2+ checkpoints, ask the user:
+
+> "This plan has [N] checkpoints. Would you like to create GitHub milestones for them?"
+
+If yes:
+1. Create milestones via `gh api repos/{owner}/{repo}/milestones` for each checkpoint.
+2. If issues exist for the work items, assign them to the appropriate milestone.
+3. Note the milestone names in `tasks/todo.md` next to each checkpoint.
+
+If `gh` is not available or the user declines, skip silently.
+
+## Rules
+
+- Tasks under 3 steps: skip the plan, just execute. Still run the confidence check mentally.
+- Tasks with 3+ steps: write the plan, present summary, wait for approval.
+- Reference `tasks/lessons.md` for relevant prior learnings.
+- Never start implementing before the plan is approved.
+- If confidence is below 0.7, do NOT write a full plan — write questions instead.
+_EMBED_EOF_16
+
+  mkdir -p "$PROJECT_DIR/.claude/skills/refactor"
+  cat > "$PROJECT_DIR/.claude/skills/refactor/SKILL.md" <<'_EMBED_EOF_17'
+---
+name: refactor
+description: Guided refactoring with before/after validation
+argument-hint: "<file path, module, or pattern>"
+user-invocable: true
+allowed-tools: "Read, Grep, Glob, Edit, Bash(make test*), Bash(git diff*), Bash(git stash*)"
+context: fork
+agent: general-purpose
+---
+
+Perform a guided refactoring of the specified code with validation at each step.
+
+## Scope
+
+- If `$ARGUMENTS` is a file: refactor that specific file.
+- If `$ARGUMENTS` is a module/directory: analyze and refactor across the module.
+- If `$ARGUMENTS` is empty: analyze recently changed files (`git diff --name-only main...HEAD`).
+
+## Workflow
+
+### 1. Analyze
+- Read the target code and identify refactoring opportunities.
+- Categorize: extract function, rename, simplify conditional, reduce duplication, improve types, restructure module.
+- Estimate risk level for each change (low/medium/high).
+
+### 2. Baseline
+- Run `make test` (or appropriate test command) to establish a passing baseline.
+- If tests fail before refactoring, stop and report — don't refactor broken code.
+- Record the baseline state: `git stash` or note current diff.
+
+### 3. Plan
+Present the refactoring plan to the user:
+
+```
+## Refactoring Plan: <target>
+
+| # | Change | Risk | Files |
+|---|--------|------|-------|
+| 1 | Description | low | file.py:20-35 |
+| 2 | Description | medium | file.py:50-80 |
+
+Estimated complexity reduction: X → Y (metric)
+```
+
+Wait for approval before proceeding.
+
+### 4. Apply
+- Apply changes **one at a time**, smallest and safest first.
+- After each change: run tests immediately.
+- If tests fail: revert that change, report the failure, and continue with remaining changes.
+- Never apply the next change until the current one passes tests.
+
+### 5. Report
+Write results to `scratch/refactor_latest.md`:
+
+```
+## Refactoring Report: <target>
+
+### Applied
+- [x] Change 1 — description (tests pass)
+- [x] Change 2 — description (tests pass)
+
+### Skipped
+- [ ] Change 3 — reason (tests failed / user declined)
+
+### Before/After
+- Lines: X → Y
+- Complexity: before → after
+- Tests: all passing
+```
+
+Return a ≤5 line summary to the main context.
+
+## Rules
+
+- **Never break tests.** If a change causes failures, revert it immediately.
+- **One change at a time.** Don't batch multiple refactors into one edit.
+- **Preserve behavior.** Refactoring changes structure, not functionality.
+- **No scope creep.** Don't add features, fix bugs, or change behavior during refactoring.
+- **Ask before high-risk changes.** Anything touching public APIs, shared interfaces, or core logic needs explicit approval.
+_EMBED_EOF_17
+
+  mkdir -p "$PROJECT_DIR/.claude/skills/review"
+  cat > "$PROJECT_DIR/.claude/skills/review/SKILL.md" <<'_EMBED_EOF_18'
+---
+name: review
+description: Review current code changes for bugs, style issues, and security concerns
+argument-hint: "[file path or 'staged' or 'branch']"
+user-invocable: true
+allowed-tools: "Read, Grep, Glob, Bash(git diff*), Bash(git status*), Bash(git log*)"
+context: fork
+agent: general-purpose
+---
+
+Review the current code changes for bugs, style issues, security concerns, and missed edge cases.
+
+## Scope
+
+- If `$ARGUMENTS` is empty: review all staged changes (`git diff --cached`) and unstaged changes (`git diff`).
+- If `$ARGUMENTS` is a file path: review only that file's changes.
+- If `$ARGUMENTS` is "branch": review all changes on the current branch vs. main (`git diff main...HEAD`).
+
+## Review Checklist
+
+For each changed file, evaluate:
+
+1. **Correctness** — Does the logic do what it claims? Are there off-by-one errors, null checks, or missing edge cases?
+2. **Security** — SQL injection, command injection, XSS, path traversal, hardcoded secrets, OWASP top 10.
+3. **Performance** — Unnecessary loops, N+1 queries, missing indexes, large allocations in hot paths.
+4. **Style** — Naming conventions, code organization, consistency with existing patterns.
+5. **Tests** — Are new code paths covered? Are edge cases tested? Would a regression test catch this bug?
+
+## Output Format
+
+Write findings to `scratch/review_latest.md` with this structure:
+
+```
+## Review: <branch or file>
+
+### Critical (must fix)
+- [file:line] description
+
+### Warning (should fix)
+- [file:line] description
+
+### Nit (optional)
+- [file:line] description
+
+### Verdict: APPROVE / NEEDS CHANGES
+```
+
+Return a ≤5 line summary to the main context.
+
+## Four Questions Validation
+
+After the review, verify the change against these evidence checks:
+
+1. **Are tests passing?** — Run relevant tests and show output. Never claim "tests pass" without proof.
+2. **Are requirements met?** — List each requirement from the task/ticket and confirm it's addressed.
+3. **Are assumptions verified?** — Cite docs, source code, or specs for any behavioral claims.
+4. **Is there evidence?** — Provide concrete results (test output, build logs, diff excerpts).
+
+Flag any of these red flags in your review:
+- Claims without evidence ("should work", "probably fine")
+- References to APIs or behaviors that weren't verified against source
+- Fabricated identifiers (invented function names, non-existent modules)
+- "No side effects" claims without checking callers and shared state
+_EMBED_EOF_18
+
+  mkdir -p "$PROJECT_DIR/.claude/skills/save"
+  cat > "$PROJECT_DIR/.claude/skills/save/SKILL.md" <<'_EMBED_EOF_19'
+---
+name: save
+description: Snapshot current session state to tasks/session.md for cross-session continuity
+argument-hint: "[optional note about current focus]"
+user-invocable: true
+allowed-tools: "Read, Write, Edit, Bash(git status*), Bash(git branch*), Bash(git diff --stat*), Bash(git log*)"
+---
+
+Save the current session state to `tasks/session.md` so a future session can resume with full context.
+
+## Philosophy
+
+**Compress often, persist the essentials, look up details on demand.**
+
+The session file captures *what you need to know* to resume — not a full transcript. Pair it with:
+- `tasks/todo.md` — what the plan is
+- `tasks/lessons.md` — what was learned
+- `tasks/tests.md` — what's tested
+- `PROJECT_INDEX.md` — what exists in the codebase
+
+Together these form the "always available" context layer. The actual code is the "look up when needed" layer.
+
+## When to Save
+
+- Before ending a session
+- At natural checkpoints (feature complete, before a risky change)
+- When context window is getting large (~60% capacity)
+- Before switching to a different task
+- If `$ARGUMENTS` is provided, use it as the "Current Focus" description
+
+## What to Capture
+
+Update `tasks/session.md` with:
+
+### 1. Current Focus
+What task or feature is actively being worked on. One sentence.
+
+### 2. Progress
+What has been completed in the current work stream. Bullet list of concrete accomplishments. Reference specific files or commits where relevant.
+
+### 3. Key Decisions
+Architectural or implementation decisions made during this session. Future sessions need these to avoid re-debating settled questions.
+
+### 4. Open Questions
+Unresolved questions or uncertainties. Be specific — "does the API support batch operations?" not "some things are unclear."
+
+### 5. Active Files
+Files currently being modified or that are critical context. This tells the next session where to start reading.
+
+### 6. Next Steps
+Concrete actions to take when resuming. Ordered by priority.
+
+### 7. Session Metadata
+- Last saved: today's date + time
+- Branch: current git branch
+- Context health: estimate how much of the context window is used (light/moderate/heavy)
+
+## Rules
+
+- Overwrite the previous session state — this is a snapshot, not a log.
+- Keep it concise. Each section should be 1-5 bullet points max.
+- Reference file paths, not file contents.
+- If `tasks/todo.md` is up to date, don't duplicate progress here — just note what's changed since the last todo update.
+- Always run `git status` and `git branch` to capture accurate git state.
+- Mark items in `tasks/todo.md` as complete if they were finished during this session.
+_EMBED_EOF_19
+
+  mkdir -p "$PROJECT_DIR/.claude/skills/simplify"
+  cat > "$PROJECT_DIR/.claude/skills/simplify/SKILL.md" <<'_EMBED_EOF_20'
+---
+name: simplify
+description: Analyze code for unnecessary complexity and suggest simplifications
+argument-hint: "<file path or directory>"
+user-invocable: true
+allowed-tools: "Read, Grep, Glob"
+context: fork
+agent: general-purpose
+---
+
+Analyze the specified code for unnecessary complexity and suggest simplifications.
+
+## Scope
+
+- If `$ARGUMENTS` is a file: analyze that specific file.
+- If `$ARGUMENTS` is a directory: scan for the most complex files and prioritize.
+- If `$ARGUMENTS` is empty: analyze recently changed files (`git diff --name-only main...HEAD`).
+
+## What to Look For
+
+1. **Premature abstractions** — Wrappers, helpers, or utilities used only once. Three similar lines are better than a premature abstraction.
+2. **Over-engineering** — Feature flags, backwards-compatibility shims, or configurability that isn't needed yet.
+3. **Dead code** — Unused imports, unreachable branches, commented-out blocks.
+4. **Unnecessary indirection** — Layers that just pass through, factories that build one thing, interfaces with one implementation.
+5. **Complex conditionals** — Deeply nested if/else, long boolean chains that could be simplified.
+6. **Duplicated logic** — Copy-paste code that should be a function (only if used 3+ times).
+
+## Output Format
+
+Write findings to `scratch/simplify_latest.md`:
+
+```
+## Simplification Report: <scope>
+
+### High Impact
+- [file:line] What to simplify and why. Estimated reduction: X lines.
+
+### Medium Impact
+- [file:line] Description.
+
+### Low Impact / Nitpicks
+- [file:line] Description.
+
+### Summary
+- Total opportunities: N
+- Estimated net line reduction: X
+- Recommendation: [act now / defer / skip]
+```
+
+Return a ≤5 line summary to the main context.
+
+## Rules
+
+- Don't suggest changes that would break existing tests.
+- Don't remove code that handles real edge cases — only remove genuinely dead paths.
+- Simplicity > cleverness. The goal is clarity, not fewer characters.
+- Present options — don't apply changes without approval.
+_EMBED_EOF_20
+
+  mkdir -p "$PROJECT_DIR/.claude/skills/start"
+  cat > "$PROJECT_DIR/.claude/skills/start/SKILL.md" <<'_EMBED_EOF_21'
+---
+name: start
+description: Guided first-session onboarding — helps you go from zero to your first plan and issue
+argument-hint: ""
+user-invocable: true
+allowed-tools: "Read, Write, Edit, Bash(gh *), Bash(git status*), Bash(git branch*)"
+---
+
+Guide the user through their first Claude Code session. This is a one-time onboarding command.
+
+## Instructions
+
+### Step 1: Orient
+
+1. Read `CLAUDE.md` (just the project name and description from the header).
+2. Read `tasks/todo.md` to check if a plan already exists.
+3. Read `GETTING_STARTED.md` if it exists, to understand what the user was told.
+4. Greet the user briefly:
+
+```
+Welcome to <project name>! Let's get you set up.
+```
+
+### Step 2: Environment Check
+
+1. Check if the language environment is ready:
+   - Python: check for `.venv/` or active virtual environment
+   - TypeScript: check for `node_modules/`
+   - Go: check for `go.sum`
+   - Rust: check for `target/`
+2. If not set up, show the setup command from the README and offer to run it.
+3. If already set up, skip with "Environment looks good."
+
+### Step 3: What Are You Building?
+
+Ask the user:
+
+> "What do you want to build? Describe it in a sentence or two — I'll help turn it into a plan."
+
+Wait for their response.
+
+### Step 4: Create the Plan
+
+1. Take the user's description and run the `/plan` workflow:
+   - Confidence check
+   - Write structured plan to `tasks/todo.md`
+   - Present summary for approval
+2. If the plan has 3+ steps, suggest checkpoints.
+
+### Step 5: Create First Issue (Optional)
+
+After the plan is approved, ask:
+
+> "Want me to create a GitHub issue to track this? (Requires `gh` CLI)"
+
+If yes:
+1. Create an issue via `gh issue create` with the plan's objective as the title and plan steps as the body.
+2. Pick the issue with `/backlog pick` workflow (create branch, set labels).
+
+If no or `gh` unavailable: skip gracefully.
+
+### Step 6: Summary
+
+Present what was set up:
+
+```
+You're ready to go! Here's what we set up:
+- Plan: tasks/todo.md (N steps)
+- Branch: feat/N-short-description (if issue was created)
+- First task: <first unchecked item from plan>
+
+Just tell me when you're ready to start on step 1.
+```
+
+## Rules
+
+- Keep it conversational and simple — this is for first-time users.
+- Don't overwhelm with information. Introduce concepts as they become relevant.
+- If the user already has a plan in `tasks/todo.md` (not the blank template), skip to Step 3 and ask if they want to refine it or start fresh.
+- If the user says they don't know what to build yet, suggest: "No problem — explore the project structure with `/status`, or just tell me when you have an idea."
+- This command is meant to be used once. After the first session, `/plan` and `/backlog` handle the workflow.
+_EMBED_EOF_21
+
+  mkdir -p "$PROJECT_DIR/.claude/skills/status"
+  cat > "$PROJECT_DIR/.claude/skills/status/SKILL.md" <<'_EMBED_EOF_22'
+---
+name: status
+description: Show current project progress from tasks/todo.md and what to work on next
+argument-hint: ""
+user-invocable: true
+allowed-tools: "Read, Bash(git status*), Bash(git branch*), Bash(git log*)"
+---
+
+Show the current project status — what's done, what's in progress, and what's next.
+
+## Process
+
+1. **Read `tasks/todo.md`** — Parse the plan and identify:
+   - Completed items (checked boxes)
+   - In-progress items
+   - Next unchecked items
+   - Any upcoming checkpoints
+2. **Check git state** — Current branch, uncommitted changes, recent commits.
+3. **Check `tasks/lessons.md`** — Any recent entries relevant to current work.
+
+## Output Format
+
+```
+## Project Status
+
+**Branch**: feat/current-branch
+**Plan status**: X/Y steps complete
+
+### Completed
+- [list of done items]
+
+### In Progress
+- [current work]
+
+### Up Next
+- [next 2-3 items]
+
+### Blockers
+- [any blocked items or concerns]
+
+### Recent Lessons
+- [relevant entries from lessons.md, if any]
+```
+
+Keep it concise — this is a quick status check, not a deep analysis.
+_EMBED_EOF_22
+
+  mkdir -p "$PROJECT_DIR/.claude/skills/test"
+  cat > "$PROJECT_DIR/.claude/skills/test/SKILL.md" <<'_EMBED_EOF_23'
+---
+name: test
+description: Run tests, analyze failures, and propose fixes
+argument-hint: "[unit|integration|agent|all|<file path>]"
+user-invocable: true
+allowed-tools: "Read, Grep, Glob, Bash(make test*), Bash(make lint*), Bash(make check*)"
+context: fork
+agent: general-purpose
+---
+
+Run the test suite, analyze results, and propose fixes for any failures.
+
+## Scope
+
+- `$ARGUMENTS` is empty or "all": run `make test` (full suite, fail-fast by tier).
+- `$ARGUMENTS` is "unit": run `make test-unit`.
+- `$ARGUMENTS` is "integration": run `make test-integration`.
+- `$ARGUMENTS` is "agent": run `make test-agent`.
+- `$ARGUMENTS` is a file path: run `make test-file FILE=<path>`.
+
+## Process
+
+1. Run the specified tests.
+2. If all pass: report success with a brief summary.
+3. If any fail:
+   - Parse the error output to identify the root cause.
+   - Read the failing test and the code under test.
+   - Propose a fix — explain what went wrong and how to resolve it.
+   - Do NOT apply the fix automatically — present it for approval.
+
+## Output
+
+Write detailed results to `scratch/test_results_latest.md` with:
+- Pass/fail counts per tier
+- Failure details (test name, error message, relevant code)
+- Proposed fixes if applicable
+
+Return a ≤5 line summary to the main context.
+_EMBED_EOF_23
+
+  success "Claude slash commands generated (.claude/skills/)"
+}
+
+# ---------------------------------------------------------------------------
+# Generate: Git safety hooks (embedded — no template dependency)
+# ---------------------------------------------------------------------------
+generate_hooks() {
+  if [[ -f "$PROJECT_DIR/.claude/hooks/protect-main-branch.sh" ]]; then
+    info ".claude/hooks/ already exists — skipping"
+    return
+  fi
+  info "Generating git hooks..."
+  mkdir -p "$PROJECT_DIR/.claude/hooks"
+
+  cat > "$PROJECT_DIR/.claude/hooks/protect-main-branch.sh" <<'_EMBED_EOF_24'
+#!/usr/bin/env bash
+# Hook: Prevent git commit and git push on main/master branches.
+# Enforces the "never commit to main directly" guardrail from CLAUDE.md Section 2.2.
+#
+# Exit codes:
+#   0 — allow the command
+#   2 — block the command (stderr fed to Claude as feedback)
+#
+# Output: JSON with permissionDecision when blocking.
+set -euo pipefail
+
+INPUT=$(cat)
+COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty')
+
+# Only check git commit and git push commands
+if [[ "$COMMAND" == *"git commit"* ]] || [[ "$COMMAND" == *"git push"* ]]; then
+  CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
+
+  if [[ "$CURRENT_BRANCH" == "main" ]] || [[ "$CURRENT_BRANCH" == "master" ]]; then
+    echo '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"Direct commits and pushes to the '"$CURRENT_BRANCH"' branch are blocked by project policy (CLAUDE.md Section 2.2). Create a feature branch first: git checkout -b feat/your-description"}}'
+    exit 0
+  fi
+fi
+
+# Allow everything else
+exit 0
+_EMBED_EOF_24
+
+  chmod +x "$PROJECT_DIR/.claude/hooks/protect-main-branch.sh"
+  success "Git hooks generated (.claude/hooks/)"
+}
+
+# ---------------------------------------------------------------------------
+# Generate: GitHub issue/PR templates (embedded — no template dependency)
+# ---------------------------------------------------------------------------
+generate_github_templates() {
+  if [[ -d "$PROJECT_DIR/.github/ISSUE_TEMPLATE" ]]; then
+    info ".github/ templates already exist — skipping"
+    return
+  fi
+  info "Generating GitHub templates..."
+  mkdir -p "$PROJECT_DIR/.github/ISSUE_TEMPLATE"
+
+  cat > "$PROJECT_DIR/.github/ISSUE_TEMPLATE/bug.yml" <<'_EMBED_EOF_25'
+name: Bug Report
+description: Report a bug or unexpected behavior
+labels: ["bug", "needs-triage"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: A clear description of the bug.
+      placeholder: What happened?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      description: How can we reproduce this?
+      placeholder: |
+        1. Run '...'
+        2. See error '...'
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What did you expect to happen?
+    validations:
+      required: true
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      options:
+        - "Low — cosmetic or minor inconvenience"
+        - "Medium — broken feature with workaround"
+        - "High — broken feature, no workaround"
+        - "Critical — data loss, security, or system down"
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, language version, relevant tool versions.
+      placeholder: "e.g., macOS 14.5, Python 3.12, Claude Code 1.x"
+_EMBED_EOF_25
+
+  cat > "$PROJECT_DIR/.github/ISSUE_TEMPLATE/config.yml" <<'_EMBED_EOF_26'
+blank_issues_enabled: true
+contact_links: []
+_EMBED_EOF_26
+
+  cat > "$PROJECT_DIR/.github/ISSUE_TEMPLATE/feature.yml" <<'_EMBED_EOF_27'
+name: Feature Request
+description: Suggest a new feature or enhancement
+labels: ["feature", "needs-triage"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What feature would you like?
+      placeholder: A clear description of the feature.
+    validations:
+      required: true
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Use Case
+      description: Why is this needed? What problem does it solve?
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance Criteria
+      description: How will we know this is done?
+      placeholder: |
+        - [ ] Criterion 1
+        - [ ] Criterion 2
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Estimated Scope
+      options:
+        - "Small — a few hours, single file"
+        - "Medium — a day or two, multiple files"
+        - "Large — a week+, architectural changes"
+_EMBED_EOF_27
+
+  cat > "$PROJECT_DIR/.github/ISSUE_TEMPLATE/task.yml" <<'_EMBED_EOF_28'
+name: Task
+description: A development task or chore
+labels: ["task"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What needs to be done?
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance Criteria
+      description: How will we know this is done?
+      placeholder: |
+        - [ ] Criterion 1
+        - [ ] Criterion 2
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context
+      description: Related issues, files, or background information.
+_EMBED_EOF_28
+
+  cat > "$PROJECT_DIR/.github/pull_request_template.md" <<'_EMBED_EOF_29'
+## What
+
+<!-- What does this PR do? One sentence. -->
+
+## Why
+
+<!-- Why is this change needed? Link to issue if applicable. -->
+
+Closes #
+
+## How
+
+<!-- How was this implemented? Key decisions or tradeoffs. -->
+
+## Test Plan
+
+- [ ] Tests pass locally (`make check`)
+- [ ] New tests added for new functionality
+- [ ] Manual verification:
+  -
+
+## Checklist
+
+- [ ] Code follows project conventions
+- [ ] No secrets or credentials in diff
+- [ ] Documentation updated if needed
+_EMBED_EOF_29
+
+  success "GitHub templates generated (.github/)"
+}
+
+# ---------------------------------------------------------------------------
+# Generate: .gitignore (embedded — no template dependency)
+# ---------------------------------------------------------------------------
+generate_gitignore() {
+  if [[ -f "$PROJECT_DIR/.gitignore" ]]; then
+    info ".gitignore already exists — skipping"
+    return
+  fi
+  info "Generating .gitignore..."
+
+  cat > "$PROJECT_DIR/.gitignore" <<'_EMBED_EOF_30'
+# =============================================================================
+# Scaffold — .gitignore
+# =============================================================================
+# Language-specific entries are appended during scaffold init.
+
+# Scratch / ephemeral workspace (subagent outputs, experiments)
+scratch/*
+!scratch/.gitkeep
+!scratch/README.md
+
+# Environment & secrets
+.env
+.env.*
+!.env.example
+
+# Coverage reports
+coverage_html/
+htmlcov/
+.coverage
+*.lcov
+coverage/
+
+# OS files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# IDE
+.vscode/
+.idea/
+*.iml
+
+# Build artifacts (generic)
+dist/
+build/
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+_EMBED_EOF_30
+
+  success ".gitignore generated"
+}
+
+
+# ---------------------------------------------------------------------------
+# Generate: Task management files (embedded templates)
+# ---------------------------------------------------------------------------
+generate_task_files() {
+  mkdir -p "$PROJECT_DIR/tasks"
+
+  # --- tasks/todo.md ---
+  if [[ ! -f "$PROJECT_DIR/tasks/todo.md" ]]; then
+    local today
+    today=$(date +%Y-%m-%d)
+    cat > "$PROJECT_DIR/tasks/todo.md" <<TODOEOF
+# Task Plan — ${PROJECT_NAME}
+
+> Created: ${today}
+> Status: Not started
+
+## Objective
+
+_Define your project objective here, or run \`/plan\` in Claude Code._
+
+## Plan
+
+- [ ] 1. First task
+- [ ] 2. Second task
+TODOEOF
+  fi
+
+  # --- tasks/lessons.md ---
+  if [[ ! -f "$PROJECT_DIR/tasks/lessons.md" ]]; then
+    cat > "$PROJECT_DIR/tasks/lessons.md" <<'_TASK_LESSONS_EOF'
+# Project Knowledge Base
+
+> This file accumulates across sessions. Review relevant sections at session start.
+> Filter by tags to find entries relevant to the current task.
+
+## Tag Reference
+
+| Tag | Domain |
+|-----|--------|
+| `git` | Version control, branching, merge conflicts |
+| `api` | External APIs, integrations, auth |
+| `testing` | Test failures, coverage gaps, flaky tests |
+| `agent` | Agent behavior, hallucination, prompt issues |
+| `pipeline` | Data pipelines, ETL, processing chains |
+| `config` | Environment, deployment, secrets, CI/CD |
+| `perf` | Performance, optimization, resource usage |
+| `security` | Vulnerabilities, credentials, access control |
+| `docs` | Documentation gaps, spec ambiguity |
+| `infra` | Infrastructure, networking, containers |
+
+> Add new tags as domains emerge. Keep tags short and lowercase.
+
+---
+
+## Mistakes & Corrections
+
+What went wrong and how to prevent it. Updated after any correction loop.
+
+<!--
+Pattern: [short description]
+Tags: [tag1, tag2]
+Mistake: [what went wrong]
+Rule: [preventive instruction — make it clear, negative if possible]
+Added: [YYYY-MM-DD]
+-->
+
+_No entries yet._
+
+---
+
+## What Works (Positive Patterns)
+
+Patterns, approaches, and techniques that proved effective. Capture what to repeat.
+
+<!--
+Pattern: [short description]
+Tags: [tag1, tag2]
+Context: [when/where this was effective]
+Why: [why it works — be specific]
+Added: [YYYY-MM-DD]
+-->
+
+_No entries yet._
+
+---
+
+## Troubleshooting
+
+Recurring issues with known fixes. Use the symptom-cause-solution format for fast diagnosis.
+
+<!--
+Symptom: [what you observe]
+Tags: [tag1, tag2]
+Cause: [root cause]
+Solution: [how to fix it]
+Added: [YYYY-MM-DD]
+-->
+
+_No entries yet._
+
+---
+
+## Project Insights
+
+Higher-level learnings about the project's architecture, dependencies, or domain. Things a new session needs to know.
+
+<!--
+Insight: [what was discovered]
+Tags: [tag1, tag2]
+Impact: [how this affects decisions or implementation]
+Added: [YYYY-MM-DD]
+-->
+
+_No entries yet._
+_TASK_LESSONS_EOF
+  fi
+
+  # --- tasks/tests.md ---
+  if [[ ! -f "$PROJECT_DIR/tasks/tests.md" ]]; then
+    cat > "$PROJECT_DIR/tasks/tests.md" <<'_TASK_TESTS_EOF'
+# Test Registry
+
+> Update when adding or removing tests. This is the living map of test coverage.
+
+## Coverage Summary
+
+| Module/Component | Unit | Integration | Agent Behavior | Priority Gap |
+|-----------------|------|-------------|----------------|--------------|
+| _example_       | ❌ 0 | ❌ 0        | ❌ 0            | —            |
+
+## How to Run
+
+| Command | Scope |
+|---------|-------|
+| `make test` | Full suite (unit → integration → agent, fail-fast) |
+| `make test-unit` | Tier 1 — Unit tests only |
+| `make test-integration` | Tier 2 — Integration tests only |
+| `make test-agent` | Tier 3 — Agent behavior tests only |
+| `make test-file FILE=x` | Single test file |
+| `make test-coverage` | Full suite + coverage report |
+| `make check` | lint + typecheck + test (pre-PR gate) |
+
+## Test Tiers
+
+### Tier 1: Unit Tests
+- **Scope**: Individual functions, utilities, parsers, transformers
+- **Speed**: Milliseconds per test
+- **Rules**: No network, no I/O, no database. Mock external deps.
+- **Naming**: `test_<function>_<scenario>_<expected>`
+
+### Tier 2: Integration Tests
+- **Scope**: API endpoints, pipelines, service interactions
+- **Speed**: Seconds per test
+- **Rules**: May use local services. No production endpoints.
+- **Naming**: `test_integration_<component>_<scenario>`
+
+### Tier 3: Agent Behavior Tests
+- **Scope**: End-to-end output validation, anti-hallucination checks
+- **Speed**: Seconds to minutes
+- **Rules**: Validate against expected schemas. Check for fabrications.
+- **Naming**: `test_agent_<agent>_<behavior>`
+
+## Recent Gaps / TODO
+
+- [ ] _Add entries as gaps are identified_
+_TASK_TESTS_EOF
+  fi
+
+  # --- tasks/session.md ---
+  if [[ ! -f "$PROJECT_DIR/tasks/session.md" ]]; then
+    cat > "$PROJECT_DIR/tasks/session.md" <<'_TASK_SESSION_EOF'
+# Session State
+
+> Managed by `/save` and `/load` slash commands.
+> This file captures context between Claude Code sessions.
+
+## Last Session
+
+- **Date**: _not yet saved_
+- **Branch**: _none_
+- **Status**: _new project_
+
+## Context
+
+_No session state saved yet. Use `/save` at the end of a session._
+
+## Open Questions
+
+_None yet._
+_TASK_SESSION_EOF
+  fi
+
+  success "Task management files generated (tasks/)"
+}
+
+# ---------------------------------------------------------------------------
+# Generate: Scratch workspace (ephemeral files)
+# ---------------------------------------------------------------------------
+generate_scratch() {
+  if [[ -d "$PROJECT_DIR/scratch" ]]; then
+    return
+  fi
+  mkdir -p "$PROJECT_DIR/scratch"
+  touch "$PROJECT_DIR/scratch/.gitkeep"
+}
+
+apply_common_files() {
+  # --- Generate project README (replaces scaffold README) ---
+  info "Generating project README..."
+  local getting_started=""
+  case "$LANGUAGE" in
+    python)
+      getting_started="# Set up virtual environment
+python -m venv .venv
+source .venv/bin/activate
+pip install -e '.[dev]'" ;;
+    typescript)
+      getting_started="# Install dependencies
+npm install" ;;
+    go)
+      getting_started="# Install dependencies
+go mod tidy" ;;
+    rust)
+      getting_started="# Build
+cargo build" ;;
+    *)
+      getting_started="# Install dependencies (configure for your language)" ;;
+  esac
+
+  # Build badges line
+  local badges=""
+  local lang_badge=""
+  case "$LANGUAGE" in
+    python)     lang_badge="![Python](https://img.shields.io/badge/python-3.12-blue.svg)" ;;
+    typescript) lang_badge="![TypeScript](https://img.shields.io/badge/typescript-5.x-blue.svg)" ;;
+    go)         lang_badge="![Go](https://img.shields.io/badge/go-1.22-blue.svg)" ;;
+    rust)       lang_badge="![Rust](https://img.shields.io/badge/rust-stable-blue.svg)" ;;
+  esac
+  badges="![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)"
+  if [[ -n "$lang_badge" ]]; then
+    badges="$badges $lang_badge"
+  fi
+  if [[ -n "$GIT_REMOTE" ]]; then
+    # Extract owner/repo from remote URL for CI badge
+    local repo_slug
+    repo_slug="$(echo "$GIT_REMOTE" | sed -E 's|.*[:/]([^/]+/[^/]+?)(\.git)?$|\1|')"
+    badges="![CI](https://github.com/${repo_slug}/actions/workflows/ci.yml/badge.svg) $badges"
+  fi
+
+  cat > "$PROJECT_DIR/README.md" <<README
+# ${PROJECT_NAME}
+
+${badges}
+
+${PROJECT_DESC}
+
+## Getting Started
+
+\`\`\`bash
+${getting_started}
+
+# Run tests
+make test
+\`\`\`
+
+## Development
+
+| Command | Description |
+|---------|-------------|
+| \`make test\` | Run all test tiers |
+| \`make lint\` | Run linter |
+| \`make fmt\` | Auto-format code |
+| \`make typecheck\` | Run type checker |
+| \`make build\` | Compile/build |
+| \`make check\` | lint + typecheck + test (pre-PR gate) |
+
+### Claude Code
+
+This project is configured for [Claude Code](https://docs.anthropic.com/en/docs/claude-code) with:
+
+- Agent constitution (\`CLAUDE.md\`)
+- 14 slash commands: \`/start\`, \`/plan\`, \`/review\`, \`/test\`, \`/refactor\`, \`/backlog\`, \`/doctor\`, \`/lesson\`, \`/checkpoint\`, \`/status\`, \`/simplify\`, \`/index\`, \`/save\`, \`/load\`
+- 8 agent specifications in \`agents/\`
+- Task management in \`tasks/\`
+
+## License
+
+[MIT](LICENSE)
+README
+  success "README.md generated for ${PROJECT_NAME}"
+
+  # --- Generate GETTING_STARTED.md (first-session onboarding guide) ---
+  info "Generating getting started guide..."
+  local env_setup=""
+  case "$LANGUAGE" in
+    python)
+      env_setup="### Set Up Your Environment
+
+\`\`\`bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -e '.[dev]'
+\`\`\`" ;;
+    typescript)
+      env_setup="### Set Up Your Environment
+
+\`\`\`bash
+npm install
+\`\`\`" ;;
+    go)
+      env_setup="### Set Up Your Environment
+
+\`\`\`bash
+go mod tidy
+\`\`\`" ;;
+    rust)
+      env_setup="### Set Up Your Environment
+
+\`\`\`bash
+cargo build
+\`\`\`" ;;
+    *)
+      env_setup="### Set Up Your Environment
+
+Install dependencies for your chosen language, then come back here." ;;
+  esac
+
+  cat > "$PROJECT_DIR/GETTING_STARTED.md" <<GUIDE
+# Getting Started with ${PROJECT_NAME}
+
+Welcome! This guide walks you through your first 10 minutes with Claude Code.
+
+## Step 1: Set Up
+
+${env_setup}
+
+## Step 2: Launch Claude Code
+
+\`\`\`bash
+claude
+\`\`\`
+
+## Step 3: Start Building
+
+The easiest way to get going is to type:
+
+\`\`\`
+/start
+\`\`\`
+
+This will walk you through creating your first plan and (optionally) your first GitHub issue.
+
+**Or, if you already know what you want to build**, just tell Claude:
+
+\`\`\`
+I want to build [your idea here]. Help me create a plan.
+\`\`\`
+
+Claude will create a structured plan in \`tasks/todo.md\` and ask for your approval before writing any code.
+
+## Step 4: Build
+
+Once your plan is approved, tell Claude to start:
+
+\`\`\`
+Let's start on step 1.
+\`\`\`
+
+Claude will work through the plan step by step, committing as it goes. You stay in control — it will check in at each step.
+
+## Your Toolkit
+
+Here are the commands you'll use most:
+
+| Command | What It Does | When to Use It |
+|---------|-------------|----------------|
+| \`/start\` | Guided first-session setup | Right now (first time only) |
+| \`/plan\` | Create or refine a project plan | Starting a new feature or task |
+| \`/status\` | See progress and what's next | Any time you lose track |
+| \`/backlog show\` | See open GitHub issues by priority | Picking what to work on |
+| \`/backlog pick #N\` | Start working on issue #N | Beginning a task |
+| \`/checkpoint\` | Commit progress and update plan | After completing a step |
+| \`/test\` | Run tests and analyze results | Before committing |
+| \`/save\` | Save session state for later | Ending a session |
+| \`/load\` | Restore previous session context | Starting a new session |
+| \`/lesson\` | Record what you learned | After fixing a tricky bug |
+
+## How It Works
+
+Your project has a few key files that Claude reads automatically:
+
+- **\`CLAUDE.md\`** — The "rules" for how Claude works in your project (commit conventions, testing requirements, safety guardrails)
+- **\`tasks/todo.md\`** — Your current plan and progress
+- **\`tasks/lessons.md\`** — Things Claude learned from past sessions (mistakes to avoid, patterns that work)
+
+You don't need to read these files — Claude uses them behind the scenes. But feel free to peek if you're curious.
+
+## Tips
+
+- **Be specific.** "Build a REST API for managing todos with CRUD endpoints" works better than "build something."
+- **Let Claude plan first.** It will create a step-by-step plan before writing code. Review and approve it.
+- **Commit often.** Use \`/checkpoint\` after each working piece. Small commits are easier to review and revert.
+- **Ask questions.** Claude will ask you when it needs clarification. You can also ask it anything about the code.
+GUIDE
+  success "GETTING_STARTED.md generated"
+
+  # --- Generate CI workflow ---
+  info "Generating CI workflow..."
+  mkdir -p "$PROJECT_DIR/.github/workflows"
+
+  local ci_setup=""
+  case "$LANGUAGE" in
+    python)
+      ci_setup="
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m venv .venv
+          source .venv/bin/activate
+          pip install -e '.[dev]'" ;;
+    typescript)
+      ci_setup="
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci" ;;
+    go)
+      ci_setup="
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'" ;;
+    rust)
+      ci_setup="
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt" ;;
+    *)
+      ci_setup="" ;;
+  esac
+
+  cat > "$PROJECT_DIR/.github/workflows/ci.yml" <<CIEOF
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  check:
+    name: Lint, typecheck, and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+${ci_setup}
+
+      - name: Run checks
+        run: make check
+CIEOF
+  success "CI workflow generated (.github/workflows/ci.yml)"
+
+  # --- Generate .env.example ---
+  info "Generating .env.example..."
+  cat > "$PROJECT_DIR/.env.example" <<'ENVEOF'
+# Environment variables for this project
+# Copy to .env and fill in values: cp .env.example .env
+# NEVER commit .env — it's in .gitignore
+
+# Example:
+# DATABASE_URL=postgresql://localhost:5432/mydb
+# API_KEY=your-api-key-here
+ENVEOF
+  success ".env.example generated"
+
+  # --- Generate CHANGELOG.md ---
+  info "Generating CHANGELOG.md..."
+  cat > "$PROJECT_DIR/CHANGELOG.md" <<CHLOG
+# Changelog
+
+All notable changes to ${PROJECT_NAME} will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/),
+and this project adheres to [Semantic Versioning](https://semver.org/).
+
+## [Unreleased]
+
+### Added
+- Initial project setup with scaffold framework
+CHLOG
+  success "CHANGELOG.md generated"
+
+  # --- Generate SECURITY.md ---
+  info "Generating SECURITY.md..."
+  cat > "$PROJECT_DIR/SECURITY.md" <<'SECEOF'
+# Security Policy
+
+## Supported Versions
+
+| Version | Supported |
+|---------|-----------|
+| latest  | Yes       |
+
+## Reporting a Vulnerability
+
+If you discover a security vulnerability, please report it responsibly:
+
+1. **Do not** open a public GitHub issue
+2. Email the maintainers or use [GitHub's private vulnerability reporting](https://docs.github.com/en/code-security/security-advisories/guidance-on-reporting-and-writing-information-about-vulnerabilities/privately-reporting-a-security-vulnerability)
+3. Include a description of the vulnerability, steps to reproduce, and potential impact
+4. Allow up to 72 hours for an initial response
+
+## Scope
+
+This policy applies to the latest version of this project. We take all security reports seriously and will investigate promptly.
+
+## Disclosure
+
+We follow coordinated disclosure. We will work with you to understand and address the issue before any public disclosure.
+SECEOF
+  success "SECURITY.md generated"
+
+  # --- Generate pre-commit config ---
+  info "Generating pre-commit config..."
+  local precommit_hooks=""
+  case "$LANGUAGE" in
+    python)
+      precommit_hooks="  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.4.4
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format" ;;
+    typescript)
+      precommit_hooks="  - repo: local
+    hooks:
+      - id: eslint
+        name: eslint
+        entry: npx eslint --fix
+        language: system
+        types: [ts, tsx, js, jsx]" ;;
+    go)
+      precommit_hooks="  - repo: https://github.com/golangci/golangci-lint
+    rev: v1.59.0
+    hooks:
+      - id: golangci-lint" ;;
+    rust)
+      precommit_hooks="  - repo: local
+    hooks:
+      - id: cargo-fmt
+        name: cargo fmt
+        entry: cargo fmt --
+        language: system
+        types: [rust]
+      - id: cargo-clippy
+        name: cargo clippy
+        entry: cargo clippy -- -D warnings
+        language: system
+        types: [rust]
+        pass_filenames: false" ;;
+    *)
+      precommit_hooks="" ;;
+  esac
+
+  cat > "$PROJECT_DIR/.pre-commit-config.yaml" <<PCEOF
+# Pre-commit hooks — run automatically before each commit
+# Install: pip install pre-commit && pre-commit install
+# Manual run: pre-commit run --all-files
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files
+        args: ['--maxkb=500']
+      - id: detect-private-key
+      - id: check-merge-conflict
+${precommit_hooks}
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.5.0
+    hooks:
+      - id: detect-secrets
+        args: ['--baseline', '.secrets.baseline']
+PCEOF
+  success "Pre-commit config generated (.pre-commit-config.yaml)"
+
+  # --- Generate release workflow ---
+  info "Generating release workflow..."
+  cat > "$PROJECT_DIR/.github/workflows/release.yml" <<'RLEOF'
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract changelog for this version
+        id: changelog
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          # Extract section for this version from CHANGELOG.md
+          NOTES=$(awk "/^## \[${VERSION}\]/{flag=1; next} /^## \[/{flag=0} flag" CHANGELOG.md)
+          if [ -z "$NOTES" ]; then
+            NOTES="Release ${GITHUB_REF_NAME}"
+          fi
+          {
+            echo 'notes<<EOF'
+            echo "$NOTES"
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ github.ref_name }}
+          RELEASE_NOTES: ${{ steps.changelog.outputs.notes }}
+        run: |
+          gh release create "$TAG_NAME" \
+            --title "$TAG_NAME" \
+            --notes "$RELEASE_NOTES"
+RLEOF
+  success "Release workflow generated (.github/workflows/release.yml)"
+
+  # --- Generate Makefile ---
+  generate_makefile
+
+  # --- Generate embedded project files ---
+  generate_gitignore
+  generate_agents
+  generate_skills
+  generate_hooks
+  generate_github_templates
+  generate_task_files
+  generate_scratch
+}
+
+# ---------------------------------------------------------------------------
+# Apply: Optional features (Ralph, Docker, VS Code)
+# ---------------------------------------------------------------------------
+apply_optional_features() {
+  # --- Ralph Wiggum ---
+  if [[ "$ENABLE_RALPH" == true ]]; then
+    info "Setting up Ralph Wiggum..."
+    mkdir -p "$PROJECT_DIR/scripts"
+    cp "$TEMPLATE_DIR/ralph/ralph-loop.sh" "$PROJECT_DIR/scripts/ralph-loop.sh"
+    chmod +x "$PROJECT_DIR/scripts/ralph-loop.sh"
+    cp "$TEMPLATE_DIR/ralph/PROMPT_build.md" "$PROJECT_DIR/PROMPT_build.md"
+    cp "$TEMPLATE_DIR/ralph/PROMPT_plan.md" "$PROJECT_DIR/PROMPT_plan.md"
+    success "Ralph Wiggum installed (scripts/ralph-loop.sh)"
+  fi
+
+  # --- Generate Docker files (if enabled) ---
+  if [[ "$ENABLE_DOCKER" == true ]]; then
+    info "Generating Docker files..."
+
+    case "$LANGUAGE" in
+      python)
+        cat > "$PROJECT_DIR/Dockerfile" <<'DKEOF'
+FROM python:3.12-slim AS base
+
+WORKDIR /app
+
+COPY pyproject.toml ./
+RUN pip install --no-cache-dir .
+
+COPY src/ ./src/
+
+EXPOSE 8000
+CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+DKEOF
+        ;;
+      typescript)
+        cat > "$PROJECT_DIR/Dockerfile" <<'DKEOF'
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY . .
+RUN npm run build
+
+FROM node:20-alpine
+WORKDIR /app
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package*.json ./
+
+EXPOSE 3000
+CMD ["node", "dist/index.js"]
+DKEOF
+        ;;
+      go)
+        cat > "$PROJECT_DIR/Dockerfile" <<'DKEOF'
+FROM golang:1.22-alpine AS builder
+
+WORKDIR /app
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=0 go build -o /bin/app ./cmd/
+
+FROM alpine:3.19
+RUN apk add --no-cache ca-certificates
+COPY --from=builder /bin/app /bin/app
+
+EXPOSE 8080
+CMD ["/bin/app"]
+DKEOF
+        ;;
+      rust)
+        cat > "$PROJECT_DIR/Dockerfile" <<'DKEOF'
+FROM rust:1.78-slim AS builder
+
+WORKDIR /app
+COPY Cargo.toml Cargo.lock ./
+RUN mkdir src && echo "fn main() {}" > src/main.rs && cargo build --release && rm -rf src
+COPY src/ ./src/
+RUN touch src/main.rs && cargo build --release
+
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
+COPY --from=builder /app/target/release/app /usr/local/bin/app
+
+EXPOSE 8080
+CMD ["app"]
+DKEOF
+        ;;
+      *)
+        cat > "$PROJECT_DIR/Dockerfile" <<'DKEOF'
+FROM ubuntu:22.04
+
+WORKDIR /app
+COPY . .
+
+# Configure for your language
+# RUN apt-get update && apt-get install -y ...
+
+EXPOSE 8080
+CMD ["echo", "Configure this Dockerfile for your project"]
+DKEOF
+        ;;
+    esac
+
+    cat > "$PROJECT_DIR/docker-compose.yml" <<DCEOF
+services:
+  app:
+    build: .
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    volumes:
+      - .:/app
+    # Uncomment for development with hot reload:
+    # command: ["your-dev-command-here"]
+
+  # Add services as needed:
+  # db:
+  #   image: postgres:16-alpine
+  #   environment:
+  #     POSTGRES_DB: ${PROJECT_NAME}
+  #     POSTGRES_USER: postgres
+  #     POSTGRES_PASSWORD: postgres
+  #   ports:
+  #     - "5432:5432"
+  #   volumes:
+  #     - db_data:/var/lib/postgresql/data
+
+# volumes:
+#   db_data:
+DCEOF
+    success "Docker files generated (Dockerfile, docker-compose.yml)"
+  fi
+
+  # --- Generate VS Code settings ---
+  if [[ "$ENABLE_VSCODE" == true ]]; then
+    info "Generating VS Code settings..."
+    mkdir -p "$PROJECT_DIR/.vscode"
+
+    # settings.json — per language
+    local vscode_settings=""
+    case "$LANGUAGE" in
+      python)
+        vscode_settings='{
+  "editor.formatOnSave": true,
+  "editor.rulers": [88],
+  "editor.tabSize": 4,
+  "[python]": {
+    "editor.defaultFormatter": "charliermarsh.ruff",
+    "editor.codeActionsOnSave": {
+      "source.fixAll.ruff": "explicit",
+      "source.organizeImports.ruff": "explicit"
+    }
+  },
+  "python.testing.pytestEnabled": true,
+  "python.testing.pytestArgs": ["tests"]
+}' ;;
+      typescript)
+        vscode_settings='{
+  "editor.formatOnSave": true,
+  "editor.rulers": [100],
+  "editor.tabSize": 2,
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "[typescript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[typescriptreact]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "typescript.preferences.importModuleSpecifier": "relative"
+}' ;;
+      go)
+        vscode_settings='{
+  "editor.formatOnSave": true,
+  "editor.rulers": [100],
+  "editor.tabSize": 4,
+  "[go]": {
+    "editor.defaultFormatter": "golang.go"
+  },
+  "go.lintTool": "golangci-lint",
+  "go.lintOnSave": "workspace",
+  "go.testFlags": ["-v"]
+}' ;;
+      rust)
+        vscode_settings='{
+  "editor.formatOnSave": true,
+  "editor.rulers": [100],
+  "editor.tabSize": 4,
+  "[rust]": {
+    "editor.defaultFormatter": "rust-lang.rust-analyzer"
+  },
+  "rust-analyzer.check.command": "clippy"
+}' ;;
+      *)
+        vscode_settings='{
+  "editor.formatOnSave": true,
+  "editor.rulers": [100],
+  "editor.tabSize": 2
+}' ;;
+    esac
+    echo "$vscode_settings" > "$PROJECT_DIR/.vscode/settings.json"
+
+    # extensions.json — per language
+    local vscode_extensions=""
+    case "$LANGUAGE" in
+      python)
+        vscode_extensions='{
+  "recommendations": [
+    "charliermarsh.ruff",
+    "ms-python.python",
+    "ms-python.vscode-pylance"
+  ]
+}' ;;
+      typescript)
+        vscode_extensions='{
+  "recommendations": [
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode"
+  ]
+}' ;;
+      go)
+        vscode_extensions='{
+  "recommendations": [
+    "golang.go"
+  ]
+}' ;;
+      rust)
+        vscode_extensions='{
+  "recommendations": [
+    "rust-lang.rust-analyzer"
+  ]
+}' ;;
+      *)
+        vscode_extensions='{
+  "recommendations": []
+}' ;;
+    esac
+    echo "$vscode_extensions" > "$PROJECT_DIR/.vscode/extensions.json"
+
+    success "VS Code settings generated (.vscode/)"
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# Apply: Template engine
+# ---------------------------------------------------------------------------
+apply_templates() {
+  header "Applying Configuration"
+
+  # Generate .gitignore BEFORE language config (which appends to it)
+  generate_gitignore
+
+  apply_language_config
+
+  # --- Configure permissions ---
+  info "Configuring Claude Code permissions..."
+  apply_permissions
+
+  apply_common_files
+  apply_optional_features
+}
+
+apply_permissions() {
+  local settings="$PROJECT_DIR/.claude/settings.json"
+  local tmp_settings
+  tmp_settings=$(mktemp)
+
+  # Start with existing settings or create base template
+  if [[ -f "$settings" ]]; then
+    cp "$settings" "$tmp_settings"
+  else
+    mkdir -p "$PROJECT_DIR/.claude"
+    cat > "$tmp_settings" <<'JSONEOF'
+{
+  "permissions": {
+    "allow": [
+      "Read",
+      "Write",
+      "Edit",
+      "Glob",
+      "Grep",
+      "NotebookEdit",
+      "Bash(git status)",
+      "Bash(git status *)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git branch*)",
+      "Bash(git add *)",
+      "Bash(git stash*)",
+      "Bash(git checkout -b *)",
+      "Bash(make test*)",
+      "Bash(make lint*)",
+      "Bash(make check*)",
+      "Bash(make help*)",
+      "Bash(ls)",
+      "Bash(ls *)",
+      "Bash(pwd)",
+      "Bash(which *)",
+      "Bash(find . *)",
+      "Bash(wc *)",
+      "Bash(mkdir *)"
+    ],
+    "deny": [
+      "Bash(rm -rf *)",
+      "Bash(git push --force*)",
+      "Bash(git push -f *)",
+      "Bash(git reset --hard*)",
+      "Bash(git clean -f*)",
+      "Bash(git branch -D *)",
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(./secrets/**)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/protect-main-branch.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
+JSONEOF
+  fi
+
+  # Build the additional allow rules
+  local additions=""
+
+  if [[ "$ALLOW_COMMIT" == true ]]; then
+    additions="$additions\"Bash(git commit *)\", \"Bash(git commit -m *)\", "
+  fi
+
+  if [[ "$ALLOW_PUSH" == true ]]; then
+    additions="$additions\"Bash(git push *)\", \"Bash(git push)\", "
+  fi
+
+  if [[ "$ALLOW_PKG_MANAGER" == true ]]; then
+    case "$LANGUAGE" in
+      python)    additions="$additions\"Bash(pip install *)\", \"Bash(pip install)\", \"Bash(uv *)\", " ;;
+      typescript) additions="$additions\"Bash(npm install *)\", \"Bash(npm install)\", \"Bash(npm ci)\", \"Bash(npx *)\", " ;;
+      go)        additions="$additions\"Bash(go get *)\", \"Bash(go mod *)\", " ;;
+      rust)      additions="$additions\"Bash(cargo build *)\", \"Bash(cargo add *)\", " ;;
+      none)      additions="$additions\"Bash(pip install *)\", \"Bash(npm install *)\", \"Bash(go get *)\", \"Bash(cargo add *)\", " ;;
+    esac
+  fi
+
+  if [[ "$ALLOW_DOCKER" == true ]]; then
+    additions="$additions\"Bash(docker build *)\", \"Bash(docker compose *)\", \"Bash(docker run *)\", "
+  fi
+
+  # If we have additions, insert them into the allow array
+  if [[ -n "$additions" ]]; then
+    # Remove trailing comma+space
+    additions="${additions%, }"
+    # Insert after the last existing allow entry (before the closing bracket)
+    # Use python/sed to safely modify JSON... but we're zero-dependency bash.
+    # Simple approach: replace the last entry in allow array with itself + new entries
+    local last_allow
+    last_allow=$(grep -n '"Bash(mkdir \*)' "$tmp_settings" | tail -1 | cut -d: -f1)
+    if [[ -n "$last_allow" ]]; then
+      sed_inplace "${last_allow}s|\"Bash(mkdir \*)\"|\"Bash(mkdir *)\",\n      ${additions}|" "$tmp_settings"
+    fi
+  fi
+
+  cp "$tmp_settings" "$settings"
+  rm -f "$tmp_settings"
+  success "  Permissions updated in .claude/settings.json"
+}
+
+# ---------------------------------------------------------------------------
+# Version tracking: stamp the scaffold version into the project
+# ---------------------------------------------------------------------------
+write_version_file() {
+  cat > "$PROJECT_DIR/.scaffold-version" <<VEOF
+version=$SCAFFOLD_VERSION
+date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+VEOF
+  success "  Created .scaffold-version ($SCAFFOLD_VERSION)"
+}
+
+# ---------------------------------------------------------------------------
+# Cleanup: Remove scaffold artifacts
+# ---------------------------------------------------------------------------
+cleanup_artifacts() {
+  if [[ "$KEEP_ARTIFACTS" == true ]]; then
+    info "Keeping scaffold artifacts (--keep flag)."
+    return
+  fi
+
+  header "Cleaning Up"
+
+  info "Removing scaffold artifacts..."
+  rm -rf "$PROJECT_DIR/templates"
+  success "  Removed templates/"
+
+  # Remove this script last
+  local self="$PROJECT_DIR/scaffold"
+  if [[ -f "$self" ]]; then
+    rm "$self"
+    success "  Removed scaffold"
+  fi
+
+  success "Project is clean — no scaffold artifacts remain."
+}
+
+# ---------------------------------------------------------------------------
+# Git initialization
+# ---------------------------------------------------------------------------
+init_git() {
+  header "Git Initialization"
+
+  # If cloned from scaffold repo, remove the cloned .git to start fresh
+  if [[ -d "$PROJECT_DIR/.git" ]]; then
+    local remote_url
+    remote_url="$(git -C "$PROJECT_DIR" remote get-url origin 2>/dev/null || echo "")"
+    if [[ "$remote_url" == *"sakebomb/scaffold"* ]]; then
+      info "Removing cloned scaffold git history..."
+      rm -rf "$PROJECT_DIR/.git"
+    fi
+  fi
+
+  # Initialize or verify git repo
+  if [[ -d "$PROJECT_DIR/.git" ]]; then
+    info "Git repo already exists."
+  else
+    info "Initializing git repository..."
+    git -C "$PROJECT_DIR" init -b main
+    success "Git repo initialized (main branch)"
+  fi
+
+  # Add remote if provided
+  if [[ -n "$GIT_REMOTE" ]]; then
+    git -C "$PROJECT_DIR" remote add origin "$GIT_REMOTE" 2>/dev/null || \
+      git -C "$PROJECT_DIR" remote set-url origin "$GIT_REMOTE"
+    success "Remote set: $GIT_REMOTE"
+  fi
+
+  # Stage and commit
+  info "Creating initial commit..."
+  git -C "$PROJECT_DIR" add -A
+  git -C "$PROJECT_DIR" commit -m "$(cat <<'EOF'
+feat: initialize project with scaffold framework
+
+- CLAUDE.md agent constitution with project conventions
+- .claude/ settings, skills (slash commands), and hooks
+- Tiered test structure (unit/integration/agent)
+- Task management (todo, lessons, tests)
+- Agent specifications
+- Language-aware Makefile
+
+Scaffolded with https://github.com/sakebomb/scaffold
+EOF
+  )"
+  success "Initial commit created"
+
+  # Show status
+  echo ""
+  info "Branch: $(git -C "$PROJECT_DIR" rev-parse --abbrev-ref HEAD)"
+  info "Commits: $(git -C "$PROJECT_DIR" rev-list --count HEAD)"
+}
+
+# ---------------------------------------------------------------------------
+# Summary
+# ---------------------------------------------------------------------------
+show_summary() {
+  header "Setup Complete"
+
+  echo -e "${GREEN}Your project '${PROJECT_NAME}' is ready for Claude Code.${RESET}"
+  echo ""
+  echo "What's configured:"
+  echo -e "  ${BOLD}CLAUDE.md${RESET}           Agent constitution + conventions"
+  echo -e "  ${BOLD}.claude/settings${RESET}    Tiered permissions"
+  echo -e "  ${BOLD}.claude/skills/${RESET}     14 slash commands (/start, /plan, /backlog, /save, /load, ...)"
+  echo -e "  ${BOLD}.claude/hooks/${RESET}      Main branch protection"
+  echo -e "  ${BOLD}.github/${RESET}            Issue templates, PR template, CI workflow"
+  echo -e "  ${BOLD}agents/${RESET}             8 agent specifications"
+  echo -e "  ${BOLD}tasks/${RESET}              Plan, lessons, test registry"
+  echo -e "  ${BOLD}Makefile${RESET}            test, lint, fmt, typecheck, build, check, setup, setup-github"
+  echo -e "  ${BOLD}.pre-commit${RESET}         Linting + secret scanning on commit"
+
+  if [[ "$LANGUAGE" != "none" ]]; then
+    echo -e "  ${BOLD}Language${RESET}            $LANGUAGE (conventions, configs, tooling)"
+  fi
+
+  if [[ "$ENABLE_DOCKER" == true ]]; then
+    echo -e "  ${BOLD}Docker${RESET}              Dockerfile + docker-compose.yml"
+  fi
+
+  if [[ "$ENABLE_RALPH" == true ]]; then
+    echo -e "  ${BOLD}Ralph Wiggum${RESET}       scripts/ralph-loop.sh (autonomous loop)"
+  fi
+
+  echo ""
+  echo "Next steps:"
+  echo "  1. Bootstrap dev environment: make setup"
+  echo "  2. Start Claude Code: claude"
+  echo "  3. Type: /start"
+  echo ""
+  echo -e "  ${DIM}Or skip /start and just tell Claude what to build:${RESET}"
+  echo "  \"I want to build [your idea]. Help me create a plan.\""
+
+  if [[ "$ENABLE_RALPH" == true ]]; then
+    echo ""
+    echo "  Ralph Wiggum (autonomous loop):"
+    echo "  ./scripts/ralph-loop.sh plan   — autonomous planning"
+    echo "  ./scripts/ralph-loop.sh build  — autonomous building"
+  fi
+
+  echo ""
+  echo -e "  ${DIM}Full walkthrough: GETTING_STARTED.md${RESET}"
+  echo ""
+}
+
+# ---------------------------------------------------------------------------
+# Migrate mode — add scaffold to an existing project
+# ---------------------------------------------------------------------------
+detect_language() {
+  # Detect language from existing config files
+  if [[ -f "$PROJECT_DIR/pyproject.toml" || -f "$PROJECT_DIR/setup.py" || -f "$PROJECT_DIR/setup.cfg" ]]; then
+    echo "python"
+  elif [[ -f "$PROJECT_DIR/package.json" || -f "$PROJECT_DIR/tsconfig.json" ]]; then
+    echo "typescript"
+  elif [[ -f "$PROJECT_DIR/go.mod" ]]; then
+    echo "go"
+  elif [[ -f "$PROJECT_DIR/Cargo.toml" ]]; then
+    echo "rust"
+  else
+    echo "none"
+  fi
+}
+
+run_migrate() {
+  header "Migrating Existing Project"
+
+  # Detect project name from directory
+  PROJECT_NAME="${PROJECT_NAME:-$(basename "$PROJECT_DIR")}"
+  PROJECT_DESC="${PROJECT_DESC:-A project built with Claude Code}"
+
+  # Detect language
+  LANGUAGE="$(detect_language)"
+  if [[ "$LANGUAGE" == "none" ]]; then
+    info "Could not detect language from config files."
+    if [[ "$NON_INTERACTIVE" == false ]]; then
+      prompt_choice LANGUAGE "Select primary language:" \
+        "python    — pytest, ruff, mypy" \
+        "typescript — vitest, eslint, tsc" \
+        "go        — go test, golangci-lint" \
+        "rust      — cargo test, clippy" \
+        "none      — language-agnostic"
+      LANGUAGE="${LANGUAGE%% *}"
+    else
+      info "Using language-agnostic mode. Re-run with --add <lang> later."
+    fi
+  else
+    success "Detected language: $LANGUAGE"
+  fi
+
+  # --- CLAUDE.md ---
+  if [[ -f "$PROJECT_DIR/CLAUDE.md" ]]; then
+    info "CLAUDE.md already exists — skipping"
+    # Still check for language conventions
+    if [[ "$LANGUAGE" != "none" ]]; then
+      local convention_header=""
+      case "$LANGUAGE" in
+        python)     convention_header="Python Conventions" ;;
+        typescript) convention_header="TypeScript Conventions" ;;
+        go)         convention_header="Go Conventions" ;;
+        rust)       convention_header="Rust Conventions" ;;
+      esac
+      if [[ -n "$convention_header" ]] && ! grep -q "$convention_header" "$PROJECT_DIR/CLAUDE.md" 2>/dev/null; then
+        if [[ -f "$TEMPLATE_DIR/$LANGUAGE/CONVENTIONS.md" ]]; then
+          info "Appending $LANGUAGE conventions to CLAUDE.md..."
+          { echo ""; echo "---"; echo ""; cat "$TEMPLATE_DIR/$LANGUAGE/CONVENTIONS.md"; } >> "$PROJECT_DIR/CLAUDE.md"
+          success "  CLAUDE.md updated with $LANGUAGE conventions"
+        fi
+      fi
+    fi
+  else
+    info "Creating CLAUDE.md..."
+    # Use the template CLAUDE.md if available, otherwise it should already be in PROJECT_DIR from install
+    if [[ -f "$PROJECT_DIR/CLAUDE.md" ]]; then
+      : # already exists (shouldn't reach here)
+    fi
+    # Apply language conventions
+    if [[ "$LANGUAGE" != "none" && -f "$TEMPLATE_DIR/$LANGUAGE/CONVENTIONS.md" ]]; then
+      { echo ""; echo "---"; echo ""; cat "$TEMPLATE_DIR/$LANGUAGE/CONVENTIONS.md"; } >> "$PROJECT_DIR/CLAUDE.md"
+    fi
+    # Replace placeholders
+    replace_placeholders "$PROJECT_DIR/CLAUDE.md"
+    success "  CLAUDE.md created"
+  fi
+
+  # --- .claude/ settings and hooks ---
+  if [[ -f "$PROJECT_DIR/.claude/settings.json" ]]; then
+    info ".claude/settings.json already exists — skipping"
+  else
+    info "Creating .claude/settings.json..."
+    mkdir -p "$PROJECT_DIR/.claude"
+    # Apply default permissions (safe defaults, commit allowed)
+    ALLOW_COMMIT=true
+    apply_permissions
+    success "  .claude/settings.json created with safe defaults"
+  fi
+
+  # --- Skills ---
+  generate_skills
+
+  # --- Hooks ---
+  generate_hooks
+
+  # --- Agents ---
+  generate_agents
+
+  # --- Tasks ---
+  generate_task_files
+
+  # --- Test directories ---
+  local test_dirs_created=0
+  for d in tests/unit tests/integration tests/agent; do
+    if [[ ! -d "$PROJECT_DIR/$d" ]]; then
+      mkdir -p "$PROJECT_DIR/$d"
+      test_dirs_created=$((test_dirs_created + 1))
+    fi
+  done
+  if [[ $test_dirs_created -gt 0 ]]; then
+    success "  Created $test_dirs_created test directories"
+  else
+    info "Test directories already exist — skipping"
+  fi
+
+  # --- Scratch ---
+  generate_scratch
+
+  # --- .gitignore ---
+  generate_gitignore
+
+  # --- Makefile (only if missing) ---
+  generate_makefile
+
+  # --- .github templates (only if missing) ---
+  generate_github_templates
+
+  # --- GETTING_STARTED.md ---
+  if [[ ! -f "$PROJECT_DIR/GETTING_STARTED.md" ]]; then
+    info "Creating GETTING_STARTED.md..."
+    cat > "$PROJECT_DIR/GETTING_STARTED.md" <<GUIDE
+# Getting Started with ${PROJECT_NAME}
+
+## Launch Claude Code
+
+\`\`\`bash
+claude
+\`\`\`
+
+Then type \`/start\` for a guided walkthrough, or just tell Claude what to build.
+
+## Useful Commands
+
+| Command | What It Does |
+|---------|-------------|
+| \`/start\` | Guided first-session setup |
+| \`/plan\` | Create a project plan |
+| \`/status\` | See progress |
+| \`/test\` | Run tests |
+| \`/checkpoint\` | Commit progress |
+| \`/save\` | Save session state |
+| \`/load\` | Restore session |
+GUIDE
+    success "  GETTING_STARTED.md created"
+  fi
+
+  echo ""
+  success "Migration complete!"
+  info "Your project now has Claude Code configuration."
+  info "Next: run 'claude' and type '/start'"
+}
+
+# ---------------------------------------------------------------------------
+# Add language mode — layer a second language into existing project
+# ---------------------------------------------------------------------------
+run_add_language() {
+  local lang="$ADD_LANGUAGE"
+  local target_dir="$PROJECT_DIR"
+  local dir_prefix=""
+
+  # Monorepo mode: place files in subdirectory
+  if [[ -n "$ADD_DIR" ]]; then
+    target_dir="$PROJECT_DIR/$ADD_DIR"
+    # Derive prefix from dir name for Makefile targets (e.g., backend/services → backend-services)
+    dir_prefix="$(echo "$ADD_DIR" | tr '/' '-' | sed 's/-$//')-"
+    mkdir -p "$target_dir"
+  fi
+
+  header "Adding $lang to existing project${ADD_DIR:+ (in $ADD_DIR/)}"
+
+  # Validate project has been scaffolded already
+  if [[ ! -f "$PROJECT_DIR/CLAUDE.md" ]]; then
+    error "No CLAUDE.md found. Run ./scaffold first to initialize the project."
+    exit 1
+  fi
+
+  if [[ ! -d "$TEMPLATE_DIR/$lang" ]]; then
+    error "Templates for $lang not found. Make sure scaffold templates are present (use --keep on initial run)."
+    exit 1
+  fi
+
+  # --- Append language conventions to CLAUDE.md (skip if already present) ---
+  local convention_header=""
+  case "$lang" in
+    python)     convention_header="Python Conventions" ;;
+    typescript) convention_header="TypeScript Conventions" ;;
+    go)         convention_header="Go Conventions" ;;
+    rust)       convention_header="Rust Conventions" ;;
+  esac
+
+  if grep -q "$convention_header" "$PROJECT_DIR/CLAUDE.md" 2>/dev/null; then
+    info "$convention_header already in CLAUDE.md — skipping"
+  elif [[ -f "$TEMPLATE_DIR/$lang/CONVENTIONS.md" ]]; then
+    info "Appending $lang conventions to CLAUDE.md..."
+    { echo ""; echo "---"; echo ""; cat "$TEMPLATE_DIR/$lang/CONVENTIONS.md"; } >> "$PROJECT_DIR/CLAUDE.md"
+    success "CLAUDE.md updated with $lang conventions"
+  fi
+
+  # --- Install language config files (don't overwrite existing) ---
+  info "Installing $lang config files..."
+  local tmpl_dir="$TEMPLATE_DIR/$lang"
+
+  # Detect project name from existing CLAUDE.md or directory name
+  PROJECT_NAME="${PROJECT_NAME:-$(basename "$PROJECT_DIR")}"
+  PROJECT_DESC="${PROJECT_DESC:-A project built with Claude Code}"
+  local escaped_name escaped_desc
+  escaped_name="$(sed_escape "$PROJECT_NAME")"
+  escaped_desc="$(sed_escape "$PROJECT_DESC")"
+
+  # Process .tmpl files (skip if target exists)
+  for tmpl in "$tmpl_dir"/*.tmpl; do
+    if [[ -f "$tmpl" ]]; then
+      local dest_name
+      dest_name="$(basename "$tmpl" .tmpl)"
+      if [[ -f "$target_dir/$dest_name" ]]; then
+        info "  Skipping $dest_name (already exists)"
+      else
+        sed "s/{{PROJECT_NAME}}/${escaped_name}/g; s/{{PROJECT_DESCRIPTION}}/${escaped_desc}/g" \
+          "$tmpl" > "$target_dir/$dest_name"
+        success "  Created ${ADD_DIR:+$ADD_DIR/}$dest_name"
+      fi
+    fi
+  done
+
+  # Copy non-template config files (skip if target exists)
+  for cfg in "$tmpl_dir"/*; do
+    local basename
+    basename="$(basename "$cfg")"
+    if [[ "$basename" != "CONVENTIONS.md" && \
+          "$basename" != "gitignore.append" && \
+          "$basename" != *.tmpl && \
+          -f "$cfg" ]]; then
+      if [[ -f "$target_dir/$basename" ]]; then
+        info "  Skipping $basename (already exists)"
+      else
+        cp "$cfg" "$target_dir/$basename"
+        success "  Created ${ADD_DIR:+$ADD_DIR/}$basename"
+      fi
+    fi
+  done
+
+  # --- Append to .gitignore (don't duplicate entries) ---
+  if [[ -f "$tmpl_dir/gitignore.append" ]]; then
+    info "Updating .gitignore with $lang entries..."
+    while IFS= read -r line; do
+      if [[ -n "$line" && "$line" != \#* ]]; then
+        if ! grep -qxF "$line" "$PROJECT_DIR/.gitignore" 2>/dev/null; then
+          echo "$line" >> "$PROJECT_DIR/.gitignore"
+        fi
+      elif [[ "$line" == \#* ]]; then
+        # Add comment headers if not already present
+        if ! grep -qxF "$line" "$PROJECT_DIR/.gitignore" 2>/dev/null; then
+          echo "$line" >> "$PROJECT_DIR/.gitignore"
+        fi
+      fi
+    done < "$tmpl_dir/gitignore.append"
+    success "  .gitignore updated"
+  fi
+
+  # --- Add prefixed Makefile targets ---
+  info "Adding $lang Makefile targets..."
+  local lang_short=""
+  local test_cmd="" lint_cmd="" fmt_cmd="" typecheck_cmd=""
+  case "$lang" in
+    python)
+      lang_short="py"
+      test_cmd="python -m pytest tests/ -v"
+      lint_cmd="ruff check ."
+      fmt_cmd="ruff format ."
+      typecheck_cmd="mypy src/"
+      ;;
+    typescript)
+      lang_short="ts"
+      test_cmd="npx vitest run"
+      lint_cmd="npx eslint src/"
+      fmt_cmd="npx prettier --write src/"
+      typecheck_cmd="npx tsc --noEmit"
+      ;;
+    go)
+      lang_short="go"
+      test_cmd="go test ./..."
+      lint_cmd="golangci-lint run"
+      fmt_cmd="gofmt -w ."
+      typecheck_cmd="go vet ./..."
+      ;;
+    rust)
+      lang_short="rs"
+      test_cmd="cargo test"
+      lint_cmd="cargo clippy -- -D warnings"
+      fmt_cmd="cargo fmt"
+      typecheck_cmd="cargo check"
+      ;;
+  esac
+
+  local mk_prefix="${dir_prefix}${lang_short}"
+  local cmd_prefix=""
+  if [[ -n "$ADD_DIR" ]]; then
+    cmd_prefix="cd $ADD_DIR && "
+  fi
+
+  if grep -q "^test-${mk_prefix}:" "$PROJECT_DIR/Makefile" 2>/dev/null; then
+    info "  Makefile targets for $lang${ADD_DIR:+ ($ADD_DIR)} already exist — skipping"
+  else
+    cat >> "$PROJECT_DIR/Makefile" <<MKEOF
+
+# --- ${lang} targets${ADD_DIR:+ ($ADD_DIR)} (added via --add) ---
+.PHONY: test-${mk_prefix} lint-${mk_prefix} fmt-${mk_prefix} typecheck-${mk_prefix}
+
+test-${mk_prefix}:
+	${cmd_prefix}${test_cmd}
+
+lint-${mk_prefix}:
+	${cmd_prefix}${lint_cmd}
+
+fmt-${mk_prefix}:
+	${cmd_prefix}${fmt_cmd}
+
+typecheck-${mk_prefix}:
+	${cmd_prefix}${typecheck_cmd}
+MKEOF
+    success "  Added test-${mk_prefix}, lint-${mk_prefix}, fmt-${mk_prefix}, typecheck-${mk_prefix}"
+  fi
+
+  # --- Update CI workflow to include second language ---
+  local ci_file="$PROJECT_DIR/.github/workflows/ci.yml"
+  if [[ -f "$ci_file" ]]; then
+    if grep -q "$lang" "$ci_file" 2>/dev/null; then
+      info "  CI already references $lang — skipping"
+    else
+      info "Updating CI workflow for $lang..."
+      local ci_step=""
+      case "$lang" in
+        python) ci_step="
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Python dependencies
+        run: |
+          python -m venv .venv
+          source .venv/bin/activate
+          pip install -e '.[dev]'
+
+      - name: Run Python checks
+        run: make test-${mk_prefix} && make lint-${mk_prefix}" ;;
+        typescript) ci_step="
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install TypeScript dependencies
+        run: npm ci
+
+      - name: Run TypeScript checks
+        run: make test-${mk_prefix} && make lint-${mk_prefix}" ;;
+        go) ci_step="
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Run Go checks
+        run: make test-${mk_prefix} && make lint-${mk_prefix}" ;;
+        rust) ci_step="
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Run Rust checks
+        run: make test-${mk_prefix} && make lint-${mk_prefix}" ;;
+      esac
+
+      # Insert new language steps before the final "Run checks" step
+      if [[ -n "$ci_step" ]]; then
+        local ci_tmp
+        ci_tmp="$(mktemp)"
+        AWK_STEPS="$ci_step" awk '
+          /- name: Run checks/ { print ENVIRON["AWK_STEPS"]; print ""; }
+          { print }
+        ' "$ci_file" > "$ci_tmp"
+        mv "$ci_tmp" "$ci_file"
+        success "  CI workflow updated with $lang steps"
+      fi
+    fi
+  fi
+
+  echo ""
+  success "Successfully added $lang to your project${ADD_DIR:+ (in $ADD_DIR/)}."
+  info "Review changes with: git diff"
+  info "New Makefile targets: test-${mk_prefix}, lint-${mk_prefix}, fmt-${mk_prefix}, typecheck-${mk_prefix}"
+}
+
+# ---------------------------------------------------------------------------
+# Verify mode — post-scaffold health check
+# ---------------------------------------------------------------------------
+run_verify() {
+  local checks=0 passed=0 failed=0
+
+  echo -e "${BOLD}Scaffold Verification${RESET}"
+  echo ""
+
+  # Check 1: Git repo initialized
+  checks=$((checks + 1))
+  if [[ -d ".git" ]]; then
+    echo -e "  ${GREEN}PASS${RESET} Git repository initialized"
+    passed=$((passed + 1))
+  else
+    echo -e "  ${RED}FAIL${RESET} Git repository not initialized (.git/ missing)"
+    failed=$((failed + 1))
+  fi
+
+  # Check 2: Required files exist
+  local required_files=("CLAUDE.md" ".claude/settings.json" "Makefile" ".gitignore")
+  for f in "${required_files[@]}"; do
+    checks=$((checks + 1))
+    if [[ -f "$f" ]]; then
+      echo -e "  ${GREEN}PASS${RESET} Required file exists: $f"
+      passed=$((passed + 1))
+    else
+      echo -e "  ${RED}FAIL${RESET} Required file missing: $f"
+      failed=$((failed + 1))
+    fi
+  done
+
+  # Check 3: .scaffold-version exists
+  checks=$((checks + 1))
+  if [[ -f ".scaffold-version" ]]; then
+    echo -e "  ${GREEN}PASS${RESET} Version file exists: .scaffold-version"
+    passed=$((passed + 1))
+  else
+    echo -e "  ${RED}FAIL${RESET} Version file missing: .scaffold-version"
+    failed=$((failed + 1))
+  fi
+
+  # Check 4: .claude/settings.json is valid JSON
+  checks=$((checks + 1))
+  if [[ -f ".claude/settings.json" ]]; then
+    if python3 -m json.tool ".claude/settings.json" > /dev/null 2>&1; then
+      echo -e "  ${GREEN}PASS${RESET} .claude/settings.json is valid JSON"
+      passed=$((passed + 1))
+    else
+      echo -e "  ${RED}FAIL${RESET} .claude/settings.json is not valid JSON"
+      failed=$((failed + 1))
+    fi
+  else
+    # Already counted as missing above; skip duplicate
+    passed=$((passed + 1))
+  fi
+
+  # Check 5: No leftover placeholders in project files
+  checks=$((checks + 1))
+  local placeholder_files
+  placeholder_files=$(grep -rl '{{PROJECT_NAME}}\|{{PROJECT_DESCRIPTION}}' --include='*.md' --include='*.json' --include='*.toml' --include='*.yaml' --include='*.yml' . 2>/dev/null | grep -v -e '.git/' -e 'templates/' -e 'scratch/' -e 'scaffold' -e 'docs/' || true)
+  if [[ -z "$placeholder_files" ]]; then
+    echo -e "  ${GREEN}PASS${RESET} No leftover {{placeholders}} found"
+    passed=$((passed + 1))
+  else
+    echo -e "  ${RED}FAIL${RESET} Leftover placeholders found in:"
+    echo "$placeholder_files" | while read -r pf; do
+      echo -e "         $pf"
+    done
+    failed=$((failed + 1))
+  fi
+
+  # Summary
+  echo ""
+  echo -e "${BOLD}Verification: $passed/$checks checks passed${RESET}"
+  if [[ $failed -gt 0 ]]; then
+    echo -e "${RED}$failed check(s) failed${RESET}"
+    return 1
+  else
+    echo -e "${GREEN}All checks passed${RESET}"
+    return 0
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# Template registry — install and list community templates
+# ---------------------------------------------------------------------------
+list_available_languages() {
+  local langs=()
+
+  # Built-in languages (stable order — python first as default)
+  local builtin_order=(python typescript go rust)
+  for name in "${builtin_order[@]}"; do
+    [[ -f "$TEMPLATE_DIR/$name/CONVENTIONS.md" ]] && langs+=("$name")
+  done
+
+  # Installed community templates
+  local user_templates="${SCAFFOLD_HOME:-$HOME/.scaffold}/templates"
+  if [[ -d "$user_templates" ]]; then
+    for dir in "$user_templates"/*/; do
+      [[ -d "$dir" ]] || continue
+      local name
+      name="$(basename "$dir")"
+      # Skip if same name as built-in
+      local is_builtin=false
+      for builtin in "${langs[@]}"; do
+        [[ "$builtin" == "$name" ]] && is_builtin=true && break
+      done
+      [[ "$is_builtin" == true ]] && continue
+      [[ -f "$dir/CONVENTIONS.md" ]] && langs+=("$name")
+    done
+  fi
+
+  printf '%s\n' "${langs[@]}"
+}
+
+validate_template() {
+  local template_dir="$1"
+  local errors=0
+
+  if [[ ! -f "$template_dir/CONVENTIONS.md" ]]; then
+    error "Template missing required file: CONVENTIONS.md"
+    errors=$((errors + 1))
+  fi
+
+  if [[ ! -f "$template_dir/gitignore.append" ]]; then
+    error "Template missing required file: gitignore.append"
+    errors=$((errors + 1))
+  fi
+
+  return $errors
+}
+
+install_template() {
+  local source="$1"
+  local user_templates="${SCAFFOLD_HOME:-$HOME/.scaffold}/templates"
+
+  # Determine template name from source
+  local name
+  if [[ -d "$source" ]]; then
+    # Local directory
+    name="$(basename "$source")"
+  else
+    # Git URL — extract repo name, strip .git suffix and scaffold-template- prefix
+    name="$(basename "$source" .git)"
+    name="${name#scaffold-template-}"
+    name="${name#scaffold-}"
+  fi
+
+  local target_dir="$user_templates/$name"
+
+  if [[ -d "$target_dir" ]]; then
+    warn "Template '$name' already installed at $target_dir"
+    info "Remove it first to reinstall: rm -rf $target_dir"
+    return 1
+  fi
+
+  mkdir -p "$user_templates"
+
+  if [[ -d "$source" ]]; then
+    # Local directory — copy
+    cp -r "$source" "$target_dir"
+  else
+    # Git URL — clone
+    info "Cloning template from $source..."
+    if ! git clone --depth 1 "$source" "$target_dir" 2>/dev/null; then
+      error "Failed to clone template from $source"
+      return 1
+    fi
+    # Remove .git from cloned template
+    rm -rf "$target_dir/.git"
+  fi
+
+  # Validate
+  if ! validate_template "$target_dir"; then
+    error "Template validation failed — removing $target_dir"
+    rm -rf "$target_dir"
+    return 1
+  fi
+
+  success "Template '$name' installed to $target_dir"
+  info "Use with: scaffold --add $name"
+}
+
+list_templates() {
+  echo -e "${BOLD}Available Language Templates${RESET}"
+  echo ""
+
+  echo -e "  ${BOLD}Built-in:${RESET}"
+  for dir in "$TEMPLATE_DIR"/*/; do
+    [[ -d "$dir" ]] || continue
+    local name
+    name="$(basename "$dir")"
+    case "$name" in
+      ralph) continue ;;
+    esac
+    [[ -f "$dir/CONVENTIONS.md" ]] || continue
+    echo -e "    $name"
+  done
+
+  local user_templates="${SCAFFOLD_HOME:-$HOME/.scaffold}/templates"
+  if [[ -d "$user_templates" ]]; then
+    local has_custom=false
+    for dir in "$user_templates"/*/; do
+      [[ -d "$dir" ]] || continue
+      local name
+      name="$(basename "$dir")"
+      [[ -f "$dir/CONVENTIONS.md" ]] || continue
+      if [[ "$has_custom" == false ]]; then
+        echo ""
+        echo -e "  ${BOLD}Installed:${RESET}"
+        has_custom=true
+      fi
+      echo -e "    $name"
+    done
+    if [[ "$has_custom" == false ]]; then
+      echo ""
+      echo -e "  ${DIM}No community templates installed.${RESET}"
+      echo -e "  ${DIM}Install with: scaffold --install-template <url-or-path>${RESET}"
+    fi
+  else
+    echo ""
+    echo -e "  ${DIM}No community templates installed.${RESET}"
+    echo -e "  ${DIM}Install with: scaffold --install-template <url-or-path>${RESET}"
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+main() {
+  load_scaffoldrc
+  parse_flags "$@"
+
+  # --verify mode: validate scaffolded project and exit
+  if [[ "$VERIFY_MODE" == true ]]; then
+    run_verify
+    exit $?
+  fi
+
+  # --add mode: layer a second language and exit
+  if [[ "$ADD_MODE" == true ]]; then
+    if [[ -z "$ADD_LANGUAGE" ]]; then
+      local available_langs=()
+      while IFS= read -r _lang; do
+        available_langs+=("$_lang")
+      done < <(list_available_languages)
+      prompt_choice ADD_LANGUAGE "Select language to add:" "${available_langs[@]}"
+    fi
+    run_add_language
+    exit 0
+  fi
+
+  # --migrate mode: add scaffold to existing project and exit
+  if [[ "$MIGRATE_MODE" == true ]]; then
+    run_migrate
+    exit 0
+  fi
+
+  echo ""
+  echo -e "${BOLD}╔═══════════════════════════════════════════════════╗${RESET}"
+  echo -e "${BOLD}║          Scaffold — Claude Code Setup            ║${RESET}"
+  echo -e "${BOLD}╚═══════════════════════════════════════════════════╝${RESET}"
+
+  step_project_basics
+  step_language
+  step_archetype
+  step_permissions
+  step_ralph
+  step_docker
+  step_vscode
+  step_planning
+  step_git_remote
+  step_github_pm
+
+  # Dry-run: show preview and exit without writing anything
+  if [[ "$DRY_RUN" == true ]]; then
+    dry_run_report
+    exit 0
+  fi
+
+  # Snapshot existing files and enable rollback on failure
+  snapshot_pre_existing
+  trap rollback_on_failure ERR
+
+  apply_templates
+  write_version_file
+  cleanup_artifacts
+  init_git
+  apply_github_pm
+
+  # Disable rollback trap — we succeeded
+  trap - ERR
+  rm -f "$PRE_SNAPSHOT"
+
+  show_summary
+
+  # Save defaults if requested
+  if [[ "$SAVE_DEFAULTS" == true ]]; then
+    save_scaffoldrc
+  fi
+}
+
+main "$@"

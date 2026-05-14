@@ -1,0 +1,1933 @@
+# Source: https://github.com/0xmachos/dotfiles/blob/0ae461055d8cd257f518f115e7e78c084fa7d20d/bittersweet
+# Repository: 0xmachos/dotfiles (bittersweet)
+#!/usr/bin/env zsh
+# dotfiles/bittersweet
+
+# bittersweet
+#   Configures macOS just the way I like it
+
+set -euo pipefail
+umask 077
+# -e exit if any command returns non-zero status code
+# -u prevent using undefined variables
+# -o pipefail force pipelines to fail on first non-zero status code
+
+IFS=$'\n\t'
+# Set Internal Field Separator to newlines and tabs
+# This makes bash consider newlines and tabs as separating words
+# See: http://redsymbol.net/articles/unofficial-bash-strict-mode/
+
+readonly SCRIPT_DIR="${0:A:h}"
+# Absolute path to the directory containing this script
+# $0  - path used to invoke the script (e.g. /usr/local/bin/bittersweet)
+# :A  - resolve symlinks to the real absolute path
+# :h  - take the head (parent directory), stripping the filename
+# This ensures paths resolve correctly regardless of $PWD
+
+if [[ ! -f "${SCRIPT_DIR}/bittersweet" ]]; then
+  echo "[❌] SCRIPT_DIR failed to resolve (got: ${SCRIPT_DIR})"
+  echo "    zsh :A cannot follow symlinks with restricted permissions."
+  echo "    Run directly from the repo: ~/Documents/Projects/dotfiles/bittersweet"
+  exit 1
+fi
+
+### Define Colours ###
+
+/usr/bin/tput sgr0;
+# reset colors
+RESET=$(/usr/bin/tput sgr0);
+readonly RESET
+BOLD=$(/usr/bin/tput bold);
+readonly BOLD
+RED=$(/usr/bin/tput setaf 1);
+readonly RED
+
+### END Colours ###
+
+
+### Subcommand Source of Truth ###
+# Ordered list of (subcommand:description) pairs in `_describe` format.
+# Single source of truth, consumed by:
+#   - usage()                          (help text)
+#   - _generate_bittersweet_completion (writes .completions/_bittersweet)
+#   - tests/completions                (parity check vs dispatch case arms)
+# Order is preserved in usage() output and zsh completion suggestions.
+# When adding a new subcommand: add an entry here AND a matching dispatch
+# arm at the bottom of main(). tests/completions enforces both sides match.
+#
+# shellcheck disable=SC2016
+# Description text contains literal `$HOME` — documentation, not a variable
+# reference. Disabling SC2016 array-wide; descriptions are user-facing strings.
+typeset -ra BITTERSWEET_SUBCOMMANDS=(
+  'defaults:Write new system and application default settings'
+  'dotfiles:Symlink various config files into $HOME'
+  'scripts:Symlink scripts in bin into /usr/local/bin'
+  'sudotouch:Enable TouchID to sudo'
+  'secretive:Install Secretive'
+  'sublimetext:Install Sublime Text'
+  'tower:Install Tower'
+  'deckset:Install Deckset'
+  'maccy:Install Maccy'
+  'texpad:Install Texpad (Texifier) and BasicTeX'
+  'basictex:Install MacTeX BasicTeX Distribution'
+  'latex:Install LaTeX packages via tlmgr'
+  'blockblock:Install BlockBlock'
+  'oversight:Install OverSight'
+  'dcg:Install Destructive Command Guard (dcg)'
+  'dcg-sync:Rotate dcg CDHash in Santa FAA policy after dcg upgrade'
+  'danger-verify:Build and install danger-verify Swift helper'
+  'herald:Build and install herald (Bonjour/mDNS browser for Matter/Thread debugging)'
+  'vault-guard:Build and install vault-guard DA mount approval daemon'
+  'santa-faa:Install Santa FAA policy for dotfiles protection'
+  'claude:Install Claude Code and dcg'
+  'brew:Install Homebrew'
+  'brewfile:Install Homebrew packages from Brewfile'
+  'compinit:Fix permissions on zsh completion directory'
+  'mdmprofile:Open System Preferences to install MDM Profile'
+  'launchagents:Install and load LaunchAgents and LaunchDaemon'
+  'completions:Regenerate .completions/_bittersweet from BITTERSWEET_SUBCOMMANDS'
+  'test:Run test suite'
+  'hailmary:Run every function in order'
+)
+### END Subcommand SOT ###
+
+
+function usage {
+
+  echo -e "\\nConfigures macOS just the way I like it 🤓\\n"
+  echo "Usage:"
+
+  local entry name desc
+  for entry in "${BITTERSWEET_SUBCOMMANDS[@]}"; do
+    name="${entry%%:*}"
+    desc="${entry#*:}"
+    if [[ "${name}" == "hailmary" ]]; then
+      echo -e "\\n  ${RED}${name}${RESET}              - ${BOLD}${desc}${RESET}"
+    else
+      printf '  %-22s- %s\n' "${name}" "${desc}"
+    fi
+  done
+
+  exit 0
+}
+
+
+### Utility Functions ###
+# check_os_compatibility
+# check_developer_tools
+# download_application
+# verify_sha
+# verify_signature
+# install_application
+# get_sudo
+# ctrl_c
+# run_test
+
+
+function check_os_compatibility {
+  # check_os_compatibility
+  #   Check if the host is darwin (i.e macOS)
+  #   Check if the host is ruuning macOS $supported_macos_version
+
+  local os
+  local current_macos_version
+  local -r supported_major_macos_version="26"
+  local -r supported_macos_name="Tahoe"
+  os="$(uname -s)"
+
+  if [[ "${os}" != "Darwin" ]]; then 
+    echo "[❌] This script was written for macOS"
+    exit 1
+  fi
+  
+  current_macos_version="$(sw_vers -productVersion | awk -F '.' '{print $1}')";
+  
+  if [[ "${current_macos_version}" != "${supported_major_macos_version}" ]]; then
+    echo "[⚠️ ] This scipt was written for macOS ${supported_macos_name} (${supported_major_macos_version})"
+    sleep 3
+  fi 
+}
+
+
+function check_developer_tools {
+  # check_developer_tools
+  #   Checks if xcode command line tools are installed
+
+  if ! xcode-select -p >/dev/null 2>&1; then 
+    echo "[❌] Command line developer tools required"
+    echo "[🍺] Install via: xcode-select --install"
+    exit 1
+  fi
+}
+
+
+function download_application {
+  # download_application
+  #   download_application "download_path" "url"
+  #   Download file using curl
+  #   curl will follow redirects (--location)
+
+  local download_path=${1:?download_path not passed to download_application}
+  local url=${2:?url not passed to download_application}
+  local file_name
+  file_name=$(awk -F '/' '{print $(NF)}' <<< "${download_path}")
+
+  echo "[🍺] Downloading ${file_name}"
+  
+  if curl --location --silent "${url}" --output "${download_path}"; then 
+  # Download 
+    echo "[✅] Successfully downloaded ${file_name}"
+  else
+    echo "[❌] Failed to download ${file_name}"
+    return 1
+  fi
+}
+
+
+function verify_sha {
+  # verify_sha
+  #   Uses shasum to check hash of file is what
+  #   we expect it to be
+
+  local file_name=${1:?file_name not passed to verify_sha}
+  local file_download_path=${2:?file_download_path not passed to verify_sha}
+  local file_sha_length=${3:?file_sha_length not passsed to verify_sha}
+  local file_sha=${4:?file_sha not passed to verify_sha}
+
+
+  echo "[🍺] Attempting to validate ${file_name} SHA${file_sha_length} hash"
+
+  echo "${file_sha}  ${file_name}" > "${file_download_path}.sha${file_sha_length}"
+
+  (
+    # Execute in a subshell so the working directory is not permanantly changed
+
+    cd "${HOME}/Downloads" || exit
+
+    if shasum -a "${file_sha_length}" -c "${file_download_path}.sha${file_sha_length}" >/dev/null; then 
+    # Attempt to validate the ZIPs SHA256 hash
+      echo "[✅] Successfully validated ${file_name} SHA${file_sha_length} hash"
+    else
+      echo "[❌] Failed to validate ${file_name} SHA${file_sha_length} hash"
+      exit 1
+    fi
+
+  )
+
+  rm "${file_download_path:?}.sha${file_sha_length:?}"
+}
+
+
+function verify_signature {
+  # verify_signature
+  #   Check that .app and .pkg files are signed, if not hard exit 
+  #   Check that .app and .pkg files are notarised, if not print warning
+  # Paramters: 
+  #   $file_path REQUIRED
+  #     Path to .app or .pkg file
+  #     e.g. $HOME/Downloads/Maccy.app
+  #   $application_name REQUIRED
+  #     Name of Application being installed
+  #     e.g Maccy
+
+  local file_path=${1:?file_path not passed to verify_signature}
+  local application_name=${2:?application_name not passed to verify_signature}
+
+  if [[ "${file_path}" =~ \.pkg$ ]]; then
+
+    local package_name
+    package_name="$(basename "${file_path}")"
+
+    echo "[🍺] Attempting to validated the signature on ${package_name}"
+    
+    if /usr/sbin/pkgutil --check-signature "${file_path}" >/dev/null; then 
+      echo "[✅] Successfully validated the signaturee on ${package_name}"
+    else
+      echo "[❌] Failed to validate the signature on ${package_name}"
+      exit 1
+    fi
+
+    if /usr/sbin/spctl --assess --type install "${file_path}"; then
+      echo "[✅] ${package_name} is notarised"
+      return 0
+    else
+      echo "[❌] ${package_name} is NOT notarised"
+      exit 1
+    fi
+  fi
+
+
+  if [[ "${file_path}" =~ \.app$ ]]; then
+
+    echo "[🍺] Attempting to validated the signature on ${application_name}.app"
+
+    if /usr/bin/codesign --verify --deep --strict "${file_path}"; then
+      # Check the .app is correctly signed
+      echo "[✅] Successfully validated the signaturee on ${application_name}.app"
+    else
+      echo "[❌] Failed to validate the signature on ${application_name}.app"
+      exit 1
+    fi
+
+    if /usr/sbin/spctl --assess --type execute "${file_path}"; then
+      echo "[✅] ${application_name}.app is notarised"
+      return 0
+    else
+      echo "[❌] ${application_name}.app is NOT notarised"
+      exit 1
+    fi
+
+  else
+    echo "[❌] ${file_path} is not a .app or .pkg file"
+    exit 1
+  fi
+}
+
+
+function install_application {
+  # install_application
+  #   Install Applications packaged as .dmg or .zip
+  #   Does not work for application which require an installer (.pkg)
+  #   Checks if .dmg or .zip then act accordingly
+  #   Checks signature on .app before installing
+
+  local application_name=${1:?application_name not passed}
+  local downloaded_file_path=${2:?downloaded_file_path not passed}
+  local downloaded_file_name
+  local dmg_mount_path
+  downloaded_file_name="$(awk -F '/' '{print $NF}' <<< "${downloaded_file_path}")"
+
+
+  if file "${downloaded_file_path}" | grep --quiet 'Zip'; then
+    # IF file is a Zip 
+
+    echo "[🍺] Attempting to unzip ${downloaded_file_name}"
+    if ditto -x -k "${downloaded_file_path}" "${HOME}/Downloads"; then
+      # Attempt to unzip
+      echo "[✅] Successfully unzipped ${downloaded_file_name}"
+    else
+      echo "[❌] Failed to unzip ${downloaded_file_name}"
+      exit 1
+    fi
+
+    verify_signature "${HOME}/Downloads/${application_name}.app" "${application_name}"
+
+    echo "[🍺] Attempting to copy ${application_name}.app into /Applications"
+    if cp -Ri "${HOME}/Downloads/${application_name}.app" "/Applications"; then
+      # Attempt to copy .app into /Applications 
+      echo "[✅] Successfully installed ${application_name}"
+    else
+      echo "[❌] Failed to install ${application_name}"
+      exit 1
+    fi
+
+    ## Cleanup
+    echo "[🍺] Deleting ${downloaded_file_path}"
+    # Delete the ZIP
+    rm "${downloaded_file_path:?}"
+
+    echo "[🍺] Deleting ${HOME}/Downloads/${application_name}.app"
+    # Delete the .app
+    rm -r "${HOME:?}/Downloads/${application_name:?}.app"
+
+
+  elif file "${downloaded_file_path}" | grep --quiet 'dmg'; then
+    # IF file is a dmg
+    
+    echo "[🍺] Attempting to mount ${downloaded_file_path}"
+    dmg_mount_path="$(hdiutil attach -nobrowse "${downloaded_file_path}" | grep -o '/Volumes/.*')"
+    # Parse the actual mount point from hdiutil output
+
+    if [[ -z "${dmg_mount_path}" ]]; then
+      echo "[❌] Failed to mount ${downloaded_file_path}"
+      exit 1
+    fi
+
+    echo "[✅] Successfully mounted ${downloaded_file_name} at ${dmg_mount_path}"
+
+    verify_signature "${dmg_mount_path}/${application_name}.app" "${application_name}"
+
+    echo "[🍺] Attempting to copy ${application_name}.app into /Applications"
+    if cp -Ri "${dmg_mount_path}/${application_name}.app" "/Applications"; then
+      # Attempt to copy .app into /Applications 
+      echo "[✅] Successfully installed ${application_name}"
+    else
+      echo "[❌] Failed to install ${application_name}"
+      exit 1
+    fi
+
+    ## Cleanup 
+    echo "[🍺] Unmounting ${dmg_mount_path}"
+    # Unmount the DMG
+    hdiutil detach -quiet "${dmg_mount_path}"
+    
+    echo "[🍺] Deleting ${downloaded_file_path}"
+    # Delete the DMG
+    rm "${downloaded_file_path:?}"
+
+  fi  
+}
+
+
+function get_sudo {
+
+  # Ask user to input password to get sudo privilege
+  # Update user's cached credentials, adds five (5)
+  #   minutes to sudo timeout (-v)
+  # Paramter: 
+  #  $purpose_string REQUIRED
+  #   Describe why sudo is needed 
+
+  local purpose_string=${1:?purpose_string not passed to get_sudo}
+  
+  if sudo --prompt="[⚠️ ] Password required ${purpose_string}: " -v; then
+    # !! SUDO !!
+    return 0
+  else 
+    return 1
+  fi
+}
+
+
+function ctrl_c {
+  # ctrl_c
+  #   If user hits CTRL + C exit 
+  echo -e "\\n[❌] ${USER} has chosen to quit!"
+  exit 1
+}
+
+
+function run_test {
+
+  "${SCRIPT_DIR}/test"
+}
+
+
+
+
+################################
+################################
+#### END Utility Functions #####
+################################
+################################
+
+
+
+
+function write_defaults {
+
+  echo "[🍺] Writing system & application defaults"
+
+  defaults write com.apple.TextEdit RichText -bool false
+  # TextEdit: Use Plain Text Mode as Default
+  # Default: com.apple.TextEdit RichText -bool true
+
+  defaults write com.apple.TextEdit TabWidth -int 4
+  # TextEdit: Set tab width to 4 spaces
+  # Default: n/a
+
+  defaults write -g NSNavPanelExpandedStateForSaveMode -bool true
+  defaults write -g NSNavPanelExpandedStateForSaveMode2 -bool true
+  # Save Panel: Show expanded version 
+  # Default: defaults write -g NSNavPanelExpandedStateForSaveMode -bool false && \
+  # defaults write -g NSNavPanelExpandedStateForSaveMode2 -bool false
+
+  defaults write com.apple.finder ShowStatusBar -bool true
+  # Finder: Show the status bar
+  # Default: defaults write com.apple.finder ShowStatusBar -bool false
+
+  defaults write com.apple.AppleMultitouchTrackpad TrackpadThreeFingerDrag -bool true
+  # Trackpad: Enable three finger drag
+  # Default: defaults write com.apple.AppleMultitouchTrackpad TrackpadThreeFingerDrag -bool false
+
+  defaults write com.apple.AppleMultitouchTrackpad Clicking -bool true
+  # Trackpad: Enable tap to click
+  # Default: defaults write com.apple.AppleMultitouchTrackpad Clicking -bool false
+
+  defaults write com.apple.menuextra.clock DateFormat -string "EEE d MMM  HH:mm"
+  # Clock: Set format to Sun 26 Nov 16:00 
+
+  defaults write com.apple.mail PreferPlainText -bool true
+  # Mail: Force emails to be opened in plain text
+  # Default: defaults write com.apple.mail PreferPlainText -bool false
+
+  defaults write com.apple.ActivityMonitor IconType -int 5
+  # Activity Monitor: Set dock icon to "Show CPU Usage"
+  # Default: n/a
+
+  defaults write com.apple.finder FXRemoveOldTrashItems -bool true
+  # Finder: Empty trash after 30 days
+  # Default: defaults write com.apple.finder FXRemoveOldTrashItems -bool false
+
+  defaults write com.apple.desktopservices DSDontWriteNetworkStores -bool true
+  # SMB: Don't write .DS_Store files on SMB shares
+  # Default: defaults write com.apple.desktopservices DSDontWriteNetworkStores -bool false
+
+  defaults write com.aone.keka SUAutomaticallyUpdate -bool false
+  # Keka: Disable Sparkle auto-updater (managed by Homebrew)
+  # Default: -bool true
+
+  defaults write com.aone.keka RemoveIncompleteExtraction -bool true
+  # Keka: Clean up partial extractions on failure
+  # Default: -bool false
+
+  defaults write com.aone.keka ApplyQuarantineAfterExtraction -bool true
+  # Keka: Preserve com.apple.quarantine on extracted files (Gatekeeper)
+  # Default: -bool true
+
+  defaults write com.aone.keka ZipUsingAES -bool true
+  # Keka: Use AES-256 for ZIP encryption instead of weak ZipCrypto
+  # Default: -bool true
+
+  defaults write com.aone.keka ExcludeMacForks -bool true
+  # Keka: Strip __MACOSX and ._ files when creating archives
+  # Default: -bool true
+
+  defaults write com.aone.keka VerifyCompression -bool true
+  # Keka: Verify archive integrity after creation
+  # Default: -bool true
+
+  defaults write com.aone.keka Encryption -bool true
+  # Keka: Enable encryption option by default for new archives
+  # Default: -bool true
+}
+
+
+### Dotfile Helpers ###
+# Internal helpers for install_dotfiles. Print only on failure.
+# Counters (_dir_count, _link_count, etc.) are declared in install_dotfiles.
+
+function _ensure_dir {
+  local dir=${1:?dir not passed to _ensure_dir}
+  local mode=${2:-}
+
+  if mkdir -p "${dir}"; then
+    (( _dir_count += 1 ))
+    [[ -n "${mode}" ]] && chmod "${mode}" "${dir}"
+  else
+    echo "[❌] Failed to create ${dir}"
+    (( _error_count += 1 ))
+  fi
+}
+
+function _symlink {
+  local src=${1:?src not passed to _symlink}
+  local dest=${2:?dest not passed to _symlink}
+
+  if [[ ! -e "${src}" ]]; then
+    echo "[❌] Source missing: ${src}"
+    (( _error_count += 1 ))
+    return 0
+  fi
+
+  # ln -sfn silently does the wrong thing when dest is a real directory:
+  # it creates the symlink *inside* dest instead of replacing it (exit 0).
+  if [[ -d "${dest}" && ! -L "${dest}" ]]; then
+    echo "[❌] Cannot symlink ${dest##*/}: real directory exists (remove it first)"
+    (( _error_count += 1 ))
+    return 0
+  fi
+
+  if ln -sfn "${src}" "${dest}"; then
+    (( _link_count += 1 ))
+  else
+    echo "[❌] Failed to link ${src} to ${dest}"
+    (( _error_count += 1 ))
+  fi
+}
+
+function _harden {
+  local file=${1:?file not passed to _harden}
+
+  if [[ ! -e "${file}" ]]; then
+    echo "[❌] Cannot harden (missing): ${file##*/}"
+    (( _error_count += 1 ))
+    return 0
+  fi
+
+  local mode=600
+  [[ -d "${file}" ]] && mode=700
+
+  if chmod "${mode}" "${file}"; then
+    (( _harden_count += 1 ))
+  else
+    echo "[❌] Failed to harden permissions on ${file##*/}"
+    (( _error_count += 1 ))
+  fi
+}
+
+### END Dotfile Helpers ###
+
+
+function install_dotfiles {
+  # install_dotfiles
+  #   Create directories in $HOME
+  #   Symlink config files from repo into $HOME
+  #   Config files for: zsh, git, ssh, Claude Code, VirusTotal, Ghostty, Xcode
+
+  local _dir_count=0
+  local _link_count=0
+  local _harden_count=0
+  local _error_count=0
+
+  local -ar dot_dirs=(.ssh .extra .config/git .config/uv .config/dcg .claude .claude/skills .claude/rules)
+  local -ar dot_files=(.zshrc .functions .completions .aliases)
+  local -ar ssh_configs=(config .extra_ssh)
+  local -ar git_configs=(config ignore allowed_signers)
+  local -ar claude_files=(
+    "claude/settings.json:settings.json"
+    "claude/statusline-command:statusline-command"
+    "claude/global-claude.md:CLAUDE.md"
+    "claude/lint-hook:lint-hook"
+  )
+  local -ar sensitive_files=(
+    "${SCRIPT_DIR}/.ssh/config"
+    "${SCRIPT_DIR}/.ssh/.extra_ssh"
+    "${SCRIPT_DIR}/.config/git/config"
+    "${SCRIPT_DIR}/.config/git/ignore"
+    "${SCRIPT_DIR}/.config/git/allowed_signers"
+    "${SCRIPT_DIR}/.functions"
+    "${SCRIPT_DIR}/.completions"
+    "${SCRIPT_DIR}/.zshrc"
+    "${SCRIPT_DIR}/.aliases"
+    "${SCRIPT_DIR}/claude/settings.json"
+    "${SCRIPT_DIR}/.config/1Password/ssh/agent.toml"
+  )
+
+  local dot_dir dot_file ssh_config git_config claude_file sensitive_file
+  local src dest
+
+  # Create required directories
+  for dot_dir in "${dot_dirs[@]}"; do
+    _ensure_dir "${HOME}/${dot_dir}"
+  done
+
+  _ensure_dir "${HOME}/.ssh/sockets" 700
+
+  # Symlink general dotfiles into $HOME
+  for dot_file in "${dot_files[@]}"; do
+    _symlink "${SCRIPT_DIR}/${dot_file}" "${HOME}/${dot_file}"
+  done
+
+  # Symlink SSH configs into $HOME/.ssh/
+  for ssh_config in "${ssh_configs[@]}"; do
+    _symlink "${SCRIPT_DIR}/.ssh/${ssh_config}" "${HOME}/.ssh/${ssh_config}"
+  done
+
+  # Symlink git configs into $HOME/.config/git/
+  for git_config in "${git_configs[@]}"; do
+    _symlink "${SCRIPT_DIR}/.config/git/${git_config}" "${HOME}/.config/git/${git_config}"
+  done
+
+  # Symlink uv config into $HOME/.config/uv/
+  _symlink "${SCRIPT_DIR}/.config/uv/uv.toml" "${HOME}/.config/uv/uv.toml"
+
+  # Symlink npm config into $HOME/.npmrc (npm hardcodes ~/.npmrc)
+  _symlink "${SCRIPT_DIR}/.config/npm/.npmrc" "${HOME}/.npmrc"
+
+  # Symlink dcg config into $HOME/.config/dcg/
+  _symlink "${SCRIPT_DIR}/.config/dcg/config.toml" "${HOME}/.config/dcg/config.toml"
+
+  # Copy 1Password SSH agent config (1Password doesn't follow symlinks)
+  _ensure_dir "${HOME}/.config/1Password/ssh"
+  cp "${SCRIPT_DIR}/.config/1Password/ssh/agent.toml" "${HOME}/.config/1Password/ssh/agent.toml"
+  chmod 600 "${HOME}/.config/1Password/ssh/agent.toml"
+
+  # Symlink Claude Code configs into $HOME/.claude/
+  for claude_file in "${claude_files[@]}"; do
+    src="${claude_file%%:*}"
+    dest="${claude_file##*:}"
+    _symlink "${SCRIPT_DIR}/${src}" "${HOME}/.claude/${dest}"
+  done
+
+  # Symlink custom skills into $HOME/.claude/skills/
+  local skill_dir skill_name
+  for skill_dir in "${SCRIPT_DIR}"/claude/skills/*/; do
+    skill_name="${skill_dir%/}"
+    skill_name="${skill_name##*/}"
+    _symlink "${skill_dir%/}" "${HOME}/.claude/skills/${skill_name}"
+  done
+
+  # Symlink Claude Code rules into $HOME/.claude/rules/
+  local rule_file rule_name
+  for rule_file in "${SCRIPT_DIR}"/claude/rules/*.md; do
+    [[ -f "${rule_file}" ]] || continue
+    rule_name="${rule_file##*/}"
+    _symlink "${rule_file}" "${HOME}/.claude/rules/${rule_name}"
+  done
+
+  # Symlink API wrapper scripts into ~/.local/bin/ (ahead of /opt/homebrew/bin
+  # on PATH, so wrappers shadow Homebrew binaries and inject 1Password keys)
+  _ensure_dir "${HOME}/.local/bin"
+  local -ar op_wrapper_scripts=(vt urlscan)
+  local wrapper
+  for wrapper in "${op_wrapper_scripts[@]}"; do
+    _symlink "${SCRIPT_DIR}/bin/${wrapper}" "${HOME}/.local/bin/${wrapper}"
+  done
+
+  # Symlink Ghostty config into macOS Application Support location
+  _ensure_dir "${HOME}/Library/Application Support/com.mitchellh.ghostty"
+  _symlink "${SCRIPT_DIR}/config" "${HOME}/Library/Application Support/com.mitchellh.ghostty/config"
+
+  # Symlink Xcode file header template into per-user global location
+  _ensure_dir "${HOME}/Library/Developer/Xcode/UserData"
+  _symlink "${SCRIPT_DIR}/IDETemplateMacros.plist" "${HOME}/Library/Developer/Xcode/UserData/IDETemplateMacros.plist"
+
+  # Enable pre-commit secret scanning via gitleaks
+  if git -C "${SCRIPT_DIR}" config --local core.hooksPath .githooks; then
+    echo "[✅] Enabled .githooks/pre-commit (gitleaks secret scanning)"
+  else
+    echo "[❌] Failed to set core.hooksPath"
+    (( _error_count += 1 ))
+  fi
+
+  # Harden file permissions
+  # git clone sets 644 by default; enforce 600 on sensitive files
+  # chmod follows symlinks so this works on both the source and linked paths
+  for sensitive_file in "${sensitive_files[@]}"; do
+    _harden "${sensitive_file}"
+  done
+
+  echo "[✅] Dotfiles installed (${_link_count} symlinks, ${_dir_count} dirs, ${_harden_count} hardened)"
+  if (( _error_count > 0 )); then
+    echo "[⚠️] ${_error_count} operations failed (see above)"
+  fi
+}
+
+
+function install_scripts {
+  # install_scripts
+  #   Symlink dotfiles/bin/ scripts into /usr/local/bin
+  #   Create /usr/local/bin
+  #   Symlink files in /usr/local/bin
+  
+  local -ar bin_files=(dns jump-user danger mdview npm-audit-check claude-session-audit)
+  local -ar macos_script_bin_files=(c0design)
+  
+  # Create /usr/local/bin
+  if ! [[ -d "/usr/local/bin/" ]]; then 
+    get_sudo "to create /usr/local/bin/"
+    if sudo mkdir -m 755 -p "/usr/local/bin/"; then
+      echo "[✅] Successfully created /usr/local/bin/"
+    else
+      echo "[❌] Failed to create /usr/local/bin/"
+    fi
+  fi
+
+  get_sudo "to symlink scripts into /usr/local/bin/"
+  
+  # Symlink files
+  # chmod -h fixes symlink mode after ln: umask 077 produces lrwx------ which
+  # blocks readlink(2) for non-root (XNU checks KAUTH_VNODE_READ_DATA on
+  # symlinks despite symlink(7) saying permissions are ignored)
+  for bin_file in "${bin_files[@]}"; do
+    if sudo ln -sfn "${SCRIPT_DIR}/bin/${bin_file}" "/usr/local/bin/${bin_file}"; then
+      sudo chmod -h 755 "/usr/local/bin/${bin_file}"
+      echo "[✅] Successfully linked ${bin_file} to /usr/local/bin/${bin_file}"
+    else
+      echo "[❌] Failed to link ${bin_file} to /usr/local/bin/${bin_file}"
+    fi
+  done
+
+  # Copy jump-system as root-owned (executed by LaunchDaemon, must not be
+  # user-writable — symlink would be a local privilege escalation)
+  sudo rm -f "/usr/local/bin/jump-system"
+  if sudo cp "${SCRIPT_DIR}/bin/jump-system" "/usr/local/bin/jump-system"; then
+    sudo chown root:wheel "/usr/local/bin/jump-system"
+    sudo chmod 700 "/usr/local/bin/jump-system"
+    echo "[✅] Successfully installed jump-system to /usr/local/bin/jump-system (root:wheel 700)"
+  else
+    echo "[❌] Failed to install jump-system to /usr/local/bin/jump-system"
+  fi
+
+  # Symlink bittersweet into /usr/local/bin
+  if sudo ln -sfn "${SCRIPT_DIR}/bittersweet" "/usr/local/bin"; then
+    sudo chmod -h 755 "/usr/local/bin/bittersweet"
+    echo "[✅] Successfully linked bittersweet to /usr/local/bin/bittersweet"
+  else
+    echo "[❌] Failed to link bittersweet to /usr/local/bin/bittersweet"
+  fi
+
+  # Symlink some files in macos-scripts repo into /usr/local/bin
+  for macos_script in "${macos_script_bin_files[@]}"; do
+    if sudo ln -sfn "$HOME/Documents/Projects/macos-scripts/${macos_script}" "/usr/local/bin/${macos_script}"; then
+      sudo chmod -h 755 "/usr/local/bin/${macos_script}"
+      echo "[✅] Successfully linked ${macos_script} to /usr/local/bin/${macos_script}"
+    else
+      echo "[❌] Failed to link ${macos_script} to /usr/local/bin/${macos_script}"
+    fi
+  done
+}
+
+
+function enable_touchid_sudo {
+  # enable_touchid_sudo
+  #   As of macOS Sonoma (14.0) this setting can persist OS updates when set in  
+  #     /etc/pam.d/sudo_local. See: https://support.apple.com/en-us/HT213893
+  #   Check if already enabled in /etc/pam.d/sudo and warn user
+  #   Check if /etc/pam.d/sudo_local exists, if not create it
+  #   Use vim to insert required text to enable TouchID for sudo into sudo_local
+  
+  if grep -q 'pam_tid.so' "/etc/pam.d/sudo"; then
+    logger -p user.warning -s "Enabling TouchID for sudo in /etc/pam.d/sudo does not persist across updates.\
+                              See https://support.apple.com/en-us/HT213893"
+  fi
+
+  if [[ -e "/etc/pam.d/sudo_local" ]]; then
+    if grep -q 'pam_tid.so' "/etc/pam.d/sudo_local"; then
+      logger -p user.info -s "TouchID for sudo already enabled"
+      return 0
+    fi
+  
+  else
+
+    get_sudo "to create /etc/pam.d/sudo_local"
+    
+    if sudo install -m "444" -g "wheel" -o "root" "/dev/null" "/etc/pam.d/sudo_local"; then
+      # Use install to create the file /etc/pam.d/sudo_local
+      # Copies from /dev/null which creates an empty file
+      # Set permissions to read only, group to wheel and owner to root 
+      logger -p user.info -s "Created /etc/pam.d/sudo_local"
+    else
+      logger -p user.error -s "Failed to create /etc/pam.d/sudo_local"
+      return 1
+    fi
+
+    if sudo ex -s -c '1i|auth       sufficient     pam_tid.so' -c x! -c x! "/etc/pam.d/sudo_local"; then
+      # Invoke Vim in ex mode
+      # Select line 1, enter insert mode, insert that text write changes and exit
+      # Need to exit twice to get passed the read only file warning
+
+      logger -p user.info -s "TouchID sudo Enabled"
+      return 0
+    else
+      logger -p user.error -s "Failed to enable TouchID sudo"
+      return 1
+  fi
+fi
+}
+
+
+function install_secretive {
+  # install_secretive
+  #   Installs Secretive via Homebrew cask
+
+  if [[ -d "/Applications/Secretive.app" ]]; then
+    echo "[🍺] Secretive already installed"
+    return 0
+  fi
+
+  echo "[🍺] Installing Secretive..."
+
+  if brew install --cask secretive; then
+    echo "[✅] Successfully installed Secretive"
+  else
+    echo "[❌] Failed to install Secretive"
+    return 1
+  fi
+}
+
+
+function _generate_zsh_sidebar_syntax {
+  # _generate_zsh_sidebar_syntax OUTPUT_FILE
+  #   Scans repo for extensionless zsh scripts and generates a .sublime-syntax
+  #   that registers their filenames for Sublime Text sidebar icons.
+  local output_file="${1}"
+  local -a names=()
+  local file basename first_line
+
+  while IFS= read -r -d '' file; do
+    basename="${file##*/}"
+    [[ "${basename}" == ?*.* ]] && continue
+    first_line="$(head -1 "${file}" 2>/dev/null)" || continue
+    if [[ "${first_line}" == *'#!'*zsh* ]] || \
+       [[ "${first_line}" == '#compdef '* ]] || \
+       [[ "${first_line}" == '#autoload'* ]]; then
+      names+=("${basename}")
+    fi
+  done < <(find "${SCRIPT_DIR}" -maxdepth 2 -type f -not -path '*/.git/*' -print0)
+
+  cat > "${output_file}" <<'EOF'
+%YAML 1.2
+---
+name: Zsh (Dotfiles)
+scope: source.shell.zsh
+version: 2
+hidden: true
+extends: Packages/ShellScript/Zsh.sublime-syntax
+
+hidden_file_extensions:
+EOF
+
+  printf '%s\n' "${names[@]}" | sort -u | while IFS= read -r name; do
+    printf '  - %s\n' "${name}" >> "${output_file}"
+  done
+}
+
+
+function _generate_bittersweet_completion {
+  # _generate_bittersweet_completion OUTPUT_FILE
+  #   Writes a #compdef file for bittersweet sourced from
+  #   BITTERSWEET_SUBCOMMANDS. Idempotent — safe to overwrite the existing
+  #   .completions/_bittersweet on every call. Uses heredocs (quoted EOF) so
+  #   every literal in the output passes through verbatim — no expansion, no
+  #   linter noise about single-quoted backticks or trailing backslashes.
+  local output_file="${1}"
+  local entry
+
+  cat > "${output_file}" <<'EOF'
+#compdef bittersweet
+
+# Auto-generated by `bittersweet completions` — do not edit by hand.
+# Source of truth: BITTERSWEET_SUBCOMMANDS in `bittersweet`.
+# Drift between this file and the dispatch case statement is caught
+# by `./test completions` and the .githooks/pre-commit hook.
+
+local -a subcommands
+subcommands=(
+EOF
+
+  for entry in "${BITTERSWEET_SUBCOMMANDS[@]}"; do
+    printf "  '%s'\n" "${entry}" >> "${output_file}"
+  done
+
+  cat >> "${output_file}" <<'EOF'
+)
+
+_arguments -C \
+  '1:subcommand:->subcmd'
+
+case "${state}" in
+  subcmd)
+    _describe 'subcommand' subcommands
+    ;;
+esac
+EOF
+}
+
+
+function install_sublime_text {
+  # install_sublime_text
+  #   Installs Sublime Text via Homebrew cask + symlinks settings files
+
+  if [[ -d "/Applications/Sublime Text.app" ]]; then
+    echo "[🍺] Sublime Text already installed"
+  else
+    echo "[🍺] Installing Sublime Text..."
+    if brew install --cask sublime-text; then
+      echo "[✅] Successfully installed Sublime Text"
+    else
+      echo "[❌] Failed to install Sublime Text"
+      return 1
+    fi
+  fi
+
+  # Detect live config directory (ST4 upgrades reuse ST3 dir name)
+  local live_st_dir=""
+  local candidate
+  for candidate in "Sublime Text 3" "Sublime Text"; do
+    if [[ -d "${HOME}/Library/Application Support/${candidate}" ]]; then
+      live_st_dir="${HOME}/Library/Application Support/${candidate}"
+      break
+    fi
+  done
+  # Fresh install: ST4 creates "Sublime Text/" on first launch
+  [[ -z "${live_st_dir}" ]] && live_st_dir="${HOME}/Library/Application Support/Sublime Text"
+
+  local _dir_count=0
+  local _link_count=0
+  local _error_count=0
+
+  _ensure_dir "${live_st_dir}/Packages/User"
+
+  echo "[🍺] Symlinking Sublime Text settings"
+  local settings_file filename
+  for settings_file in "${SCRIPT_DIR}/Sublime Text/Packages/User"/*.sublime-settings; do
+    [[ -f "${settings_file}" ]] || continue
+    filename="${settings_file##*/}"
+    _symlink "${settings_file}" "${live_st_dir}/Packages/User/${filename}"
+  done
+
+  # Generate sidebar icon syntax from repo contents (not symlinked)
+  local zsh_syntax="${live_st_dir}/Packages/User/Zsh (Dotfiles).sublime-syntax"
+  /bin/rm -f "${zsh_syntax}"
+  _generate_zsh_sidebar_syntax "${zsh_syntax}"
+  echo "[🍺] Generated Zsh sidebar syntax ($(grep -c '^ *- ' "${zsh_syntax}") files)"
+
+  echo "[✅] Sublime Text config installed (${_link_count} symlinks)"
+  if (( _error_count > 0 )); then
+    echo "[⚠️] ${_error_count} operations failed (see above)"
+  fi
+}
+
+
+function install_tower {
+  # install_tower
+  #   Installs Tower via Homebrew cask
+
+  if [[ -d "/Applications/Tower.app" ]]; then
+    echo "[🍺] Tower already installed"
+    return 0
+  fi
+
+  echo "[🍺] Installing Tower..."
+
+  if brew install --cask tower; then
+    echo "[✅] Successfully installed Tower"
+  else
+    echo "[❌] Failed to install Tower"
+    return 1
+  fi
+}
+
+
+function  install_deckset {
+  # install_deckset
+  #   Install deckset presentation software
+  #   $url prebuilt, getting $version and $build from the http location header. 
+  #   Grabbing $url directly from curl output does not work.
+  #     curl -sLI https://www.decksetapp.com/download | grep 'location: ' | awk 'END{print}'
+  #     Produces: 'location: https://dl.decksetapp.com/Deckset+2.0.16+(2578).dmg\C-M'
+  #     The "\C-M" string at the end is erroneous. It does not appear when run from
+  #     the command line, only when run in the script with set -x. 
+  #     It's apprently an ascci carriage return. 
+  #     Failed to remove with: tr -d '\C-M', tr -d '\n', tr -d '\r' 
+
+  if [[ -d "/Applications/Deckset.app" ]]; then
+    echo "[🍺] Deckset already installed"
+    return 0
+  fi
+  
+  echo "[🍺] Installing Deckset"
+  
+  local location_header
+  local version
+  local build
+  local url
+  local dmg_name
+  local dmg_download_path
+  
+  location_header="$(curl -sLI https://www.decksetapp.com/download | grep 'dl.decksetapp')"
+  version="$(awk -F '[+|+]' '{print $2}' <<< "${location_header}")"
+  build="$(awk -F '[(|)]' '{print $2}' <<< "${location_header}")"
+  url="https://dl.decksetapp.com/Deckset+${version}+(${build}).dmg"
+  dmg_name=$(basename "${url}")
+  dmg_download_path="${HOME}/Downloads/${dmg_name}"
+
+  download_application "${dmg_download_path}" "${url}"
+
+  install_application "Deckset" "${dmg_download_path}"
+}
+
+
+function install_maccy {
+  # install_maccy
+  #   Installs Maccy via Homebrew cask
+
+  if [[ -d "/Applications/Maccy.app" ]]; then
+    echo "[🍺] Maccy already installed"
+    return 0
+  fi
+
+  echo "[🍺] Installing Maccy..."
+
+  if brew install --cask maccy; then
+    echo "[✅] Successfully installed Maccy"
+  else
+    echo "[❌] Failed to install Maccy"
+    return 1
+  fi
+}
+
+
+function install_texpad {
+  # install_texpad
+  #   Installs Texpad via usual helpers
+
+if [[ -d "/Applications/Texifier.app" ]]; then
+  echo "[🍺] Texifier already installed"
+  return 0
+fi
+
+local dmg_download_url
+local dmg_name
+local dmg_download_path
+
+
+dmg_download_url="$(curl -s https://www.texifier.com/mac \
+                  | awk -F'href="' '{split($2, a, "\""); if(a[1] ~ /download\.texifier\.com/) print a[1]}')"
+dmg_name="$(basename "${dmg_download_url}")"
+dmg_download_path="${HOME}/Downloads/${dmg_name}"
+
+download_application "${dmg_download_path}" "${dmg_download_url}"
+
+install_application "Texifier" "${dmg_download_path}"
+}
+
+function install_basictex {
+  # install_basictex
+  #   Installs the MacTeX BasicTeX distribution via Homebrew cask
+
+  if [[ -x "$(command -v tlmgr)" ]]; then
+    echo "[🍺] MacTeX already installed"
+    return 0
+  fi
+
+  echo "[🍺] Installing BasicTeX via Homebrew..."
+
+  if brew install --cask basictex; then
+    echo "[✅] Successfully installed BasicTeX"
+  else
+    echo "[❌] Failed to install BasicTeX"
+    exit 1
+  fi
+}
+
+
+function install_latex_packages {
+  # install_latex_packages
+  #   Installs some LaTeX packages via tlmrg
+  #   Updates tlmgr and all currently installed packages first
+
+  echo "[🍺] Updating tlmgr, all installed packages and installing packages..."
+  sleep 2
+
+  get_sudo "to update tlmgr, update installed packages and install packages"
+
+  # GPG repo verification disabled: gnupg not installed, SHA-512 checksums
+  # and HTTPS transport still protect package integrity. See TODOs.md.
+
+  # Update tlmgr
+  if sudo tlmgr --verify-repo=none update --self >/dev/null; then
+    echo "[✅] Successfully updated tlmgr"
+  else
+    echo "[❌] Failed to update tlmgr"
+  fi
+
+  # Update packages installed via tlmgr
+  if sudo tlmgr --verify-repo=none update --all >/dev/null; then
+    echo "[✅] Successfully updated LaTeX packages via tlmgr"
+  else
+    echo "[❌] Failed to update LaTeX packages via tlmgr"
+  fi
+
+  local -ar PACKAGES=(sectsty helvetic)
+  # sectsty: Required for the Custom sectioning
+  # helvetic: Installs the helvetica font (phv) for the custom sectioning
+
+  for PACKAGE in "${PACKAGES[@]}"; do
+    if sudo tlmgr --verify-repo=none install "${PACKAGE}"; then
+      echo "[✅] Successfully installed LaTeX package ${PACKAGE} via tlmgr"
+    else
+      echo "[❌] Failed to install LaTeX package ${PACKAGE} via tlmgr"
+    fi
+  done
+}
+
+
+function install_blockblock {
+  # install_blockblock
+  #   Installs BlockBlock via Homebrew cask
+
+  if [[ -d "/Applications/BlockBlock Helper.app" ]]; then
+    echo "[🍺] BlockBlock already installed"
+    return 0
+  fi
+
+  echo "[🍺] Installing BlockBlock..."
+
+  if brew install --cask blockblock; then
+    echo "[✅] Successfully installed BlockBlock"
+  else
+    echo "[❌] Failed to install BlockBlock"
+    return 1
+  fi
+
+  echo "[⚠️] Remember to enable Full Disk Access for BlockBlock"
+
+  # Enable headless mode
+  defaults write com.objectiveSee.BlockBlock headlessMode -bool true
+}
+
+
+function install_oversight {
+  # install_oversight
+  #   Installs OverSight via Homebrew cask
+
+  if [[ -d "/Applications/OverSight.app" ]]; then
+    echo "[🍺] OverSight already installed"
+    return 0
+  fi
+
+  echo "[🍺] Installing OverSight..."
+
+  if brew install --cask oversight; then
+    echo "[✅] Successfully installed OverSight"
+  else
+    echo "[❌] Failed to install OverSight"
+    return 1
+  fi
+
+  # Enable headless mode, auto updates & start on login
+  defaults write com.objective-see.OverSight runHeadless   -bool true
+  defaults write com.objective-see.OverSight check4Updates -bool true
+  defaults write com.objective-see.OverSight startAtLogin  -bool true
+} 
+
+
+function sync_dcg_cdhash {
+  # sync_dcg_cdhash
+  #   Reads the installed dcg binary's CDHash and patches it into the
+  #   Santa FAA policy plist, redeploying if changed. No-op if dcg is
+  #   not installed or the plist is already in sync.
+  #
+  #   Why: dcg is Rust linker-signed ad-hoc — no TeamID, and its
+  #   SigningID (dcg-<hex>) is derived from LC_UUID so it rotates per
+  #   rebuild. The ClaudeCodeConfigResolved rule pins dcg by BinaryPath
+  #   + CDHash, so the CDHash must be refreshed after every fresh
+  #   install or `sudo dcg update --verify`.
+  #
+  #   Called from: install_dcg (end of fresh install / early-return
+  #   path), bittersweet dcg-sync subcommand (run by jump and
+  #   jump-system after `dcg update --verify`).
+
+  local -r dcg_binary="/usr/local/bin/dcg"
+  local -r plist="${SCRIPT_DIR}/profiles/santa-faa-policy.plist"
+  local -r rule_path=":WatchItems:ClaudeCodeConfigResolved:Processes"
+
+  if [[ ! -x "${dcg_binary}" ]]; then
+    return 0
+  fi
+
+  if [[ ! -f "${plist}" ]]; then
+    echo "[❌] santa-faa-policy.plist not found at ${plist}"
+    return 1
+  fi
+
+  local current_cdhash
+  current_cdhash="$(codesign -dvvv "${dcg_binary}" 2>&1 | awk -F= '/^CDHash=/{print $2; exit}')"
+  if [[ -z "${current_cdhash}" ]]; then
+    echo "[❌] Failed to extract CDHash from ${dcg_binary}"
+    return 1
+  fi
+
+  # Walk the Processes array via PlistBuddy (read-only) to locate the dcg
+  # entry and read its current CDHash. PlistBuddy's `Set` would re-serialise
+  # the whole file (stripping XML comments and normalising indentation), so
+  # the write path below uses `sed` instead.
+  local i=0
+  local binary_path
+  local plist_cdhash=""
+  local dcg_found=""
+  while /usr/libexec/PlistBuddy -c "Print ${rule_path}:${i}" "${plist}" &>/dev/null; do
+    binary_path="$(/usr/libexec/PlistBuddy -c "Print ${rule_path}:${i}:BinaryPath" "${plist}" 2>/dev/null || true)"
+    if [[ "${binary_path}" == "${dcg_binary}" ]]; then
+      dcg_found="1"
+      plist_cdhash="$(/usr/libexec/PlistBuddy -c "Print ${rule_path}:${i}:CDHash" "${plist}" 2>/dev/null || true)"
+      break
+    fi
+    (( i += 1 ))
+  done
+
+  if [[ -z "${dcg_found}" ]]; then
+    echo "[❌] No Process entry with BinaryPath=${dcg_binary} in ${plist}"
+    return 1
+  fi
+
+  if [[ "${plist_cdhash}" == "${current_cdhash}" ]]; then
+    echo "[🍺] dcg CDHash already current in FAA policy"
+    return 0
+  fi
+
+  echo "[🍺] Rotating dcg CDHash in FAA policy"
+  echo "      Old: ${plist_cdhash:-<none>}"
+  echo "      New: ${current_cdhash}"
+
+  # Comment-preserving in-place edit: restrict the substitution to the
+  # range from the BinaryPath string to the next </dict>, which bounds the
+  # dcg entry. Within that range, replace the 40-hex CDHash value. The
+  # BinaryPath line itself contains the path (not 40 hex) so the regex
+  # skips it; only the CDHash <string> line matches.
+  #   \|...|       — custom | delimiter for the address so path slashes
+  #                  don't need escaping
+  #   [a-f0-9]{40} — CDHash is SHA-256 truncated to 160 bits (40 hex)
+  if ! sed -E -i '' "\\|<string>${dcg_binary}</string>|,/<\\/dict>/{
+    s|(<string>)[a-f0-9]{40}(</string>)|\\1${current_cdhash}\\2|
+  }" "${plist}"; then
+    echo "[❌] Failed to update CDHash in ${plist}"
+    return 1
+  fi
+  echo "[✅] Updated CDHash in ${plist}"
+
+  install_santa_faa
+}
+
+
+function install_dcg {
+  # install_dcg
+  #   Installs Destructive Command Guard (dcg) via GitHub releases API
+  #   https://github.com/Dicklesworthstone/destructive_command_guard
+  #   Claude Code PreToolUse hook — blocks destructive Bash commands
+  #   Not Apple codesigned; verified via SHA256 + Sigstore/cosign
+
+  local -r dcg_binary="/usr/local/bin/dcg"
+
+  if [[ -x "${dcg_binary}" ]]; then
+    # Upgrades handled by: sudo dcg update --verify (run by jump/jump-system)
+    echo "[🍺] dcg already installed"
+    sync_dcg_cdhash
+    return 0
+  fi
+
+  echo "[🍺] Installing dcg (Destructive Command Guard)"
+
+  local api_response
+  local tarball_url
+  local tarball_name
+  local tarball_path
+  local sha_url
+  local sha_path
+  local sigstore_url
+  local sigstore_path
+
+  api_response="$(curl -s "https://api.github.com/repos/Dicklesworthstone/destructive_command_guard/releases/latest")"
+
+  # Find the aarch64-apple-darwin tarball asset
+  # plutil array indexing: walk assets to find the right filename
+  local i=0
+  local asset_name
+  tarball_url=""
+  while true; do
+    asset_name="$(plutil -extract "assets.${i}.name" raw -o - -- - <<< "${api_response}" 2>/dev/null)" || break
+    if [[ "${asset_name}" == "dcg-aarch64-apple-darwin.tar.xz" ]]; then
+      tarball_url="$(plutil -extract "assets.${i}.browser_download_url" raw -o - -- - <<< "${api_response}")"
+      break
+    fi
+    (( i += 1 ))
+  done
+
+  if [[ -z "${tarball_url}" ]]; then
+    echo "[❌] Failed to find dcg-aarch64-apple-darwin.tar.xz in GitHub release"
+    return 1
+  fi
+
+  tarball_name="$(basename "${tarball_url}")"
+  tarball_path="${HOME}/Downloads/${tarball_name}"
+  sha_url="${tarball_url}.sha256"
+  sha_path="${tarball_path}.sha256"
+  sigstore_url="${tarball_url}.sigstore.json"
+  sigstore_path="${tarball_path}.sigstore.json"
+
+  # Download tarball + SHA256 checksum
+  download_application "${tarball_path}" "${tarball_url}"
+  download_application "${sha_path}" "${sha_url}"
+
+  # Verify SHA256
+  echo "[🍺] Verifying SHA256 checksum"
+  if ! (cd "${HOME}/Downloads" && shasum -a 256 -c "${sha_path}" >/dev/null); then
+    echo "[❌] SHA256 verification failed for ${tarball_name}"
+    rm -f "${tarball_path}" "${sha_path}"
+    return 1
+  fi
+  echo "[✅] SHA256 checksum verified"
+
+  # Verify Sigstore bundle if cosign is available
+  if command -v cosign &>/dev/null; then
+    download_application "${sigstore_path}" "${sigstore_url}"
+    echo "[🍺] Verifying Sigstore bundle with cosign"
+    if ! cosign verify-blob "${tarball_path}" --bundle "${sigstore_path}" --certificate-oidc-issuer="https://token.actions.githubusercontent.com" --certificate-identity-regexp="github.com/Dicklesworthstone/destructive_command_guard"; then
+      echo "[❌] Sigstore verification failed for ${tarball_name}"
+      rm -f "${tarball_path}" "${sha_path}" "${sigstore_path}"
+      return 1
+    fi
+    echo "[✅] Sigstore verification passed"
+    rm -f "${sigstore_path}"
+  else
+    echo "[⚠️ ] cosign not found — skipping Sigstore verification (SHA256 OK)"
+  fi
+
+  # Extract and install
+  echo "[🍺] Extracting ${tarball_name}"
+  if ! tar -xf "${tarball_path}" -C "${HOME}/Downloads"; then
+    echo "[❌] Failed to extract ${tarball_name}"
+    rm -f "${tarball_path}" "${sha_path}"
+    return 1
+  fi
+
+  get_sudo "to install dcg to /usr/local/bin"
+  if sudo install -m 755 "${HOME}/Downloads/dcg" "${dcg_binary}"; then
+    echo "[✅] Successfully installed dcg to ${dcg_binary}"
+  else
+    echo "[❌] Failed to install dcg to ${dcg_binary}"
+    rm -f "${HOME}/Downloads/dcg" "${tarball_path}" "${sha_path}"
+    return 1
+  fi
+
+  # Cleanup
+  rm -f "${HOME}/Downloads/dcg" "${tarball_path}" "${sha_path}"
+
+  sync_dcg_cdhash
+}
+
+
+function install_danger_verify {
+  # install_danger_verify
+  #   Builds and installs the danger-verify Swift helper binary
+  #   Kernel-level mount verification for bin/danger (statfs, posix_spawn)
+  #   Source: ~/Documents/Projects/danger-verify/
+  #   Destination: /usr/local/bin/danger-verify
+
+  local -r src_dir="${HOME}/Documents/Projects/danger-verify"
+  local -r binary="/usr/local/bin/danger-verify"
+
+  if ! [[ -d "${src_dir}" ]]; then
+    echo "[❌] danger-verify source not found at ${src_dir}"
+    return 1
+  fi
+
+  echo "[🍺] Building danger-verify"
+
+  if ! swift build --package-path "${src_dir}" -c release --quiet 2>&1; then
+    echo "[❌] Failed to build danger-verify"
+    return 1
+  fi
+
+  echo "[✅] Successfully built danger-verify"
+
+  get_sudo "to install danger-verify to /usr/local/bin"
+
+  if sudo install -m 755 "${src_dir}/.build/release/danger-verify" "${binary}"; then
+    echo "[✅] Successfully installed danger-verify to ${binary}"
+  else
+    echo "[❌] Failed to install danger-verify to ${binary}"
+    return 1
+  fi
+}
+
+
+function install_herald {
+  # install_herald
+  #   Clones / updates / builds / installs the herald Bonjour/mDNS browser CLI
+  #   macOS companion to the Herald iOS app (jessedc/herald-ios-bonjour-browser)
+  #   Used by Claude for Matter/Thread debugging in ridleys-shooting-party
+  #   Source: ~/Documents/Projects/herald-cli/HeraldCLI (subdir Package.swift)
+  #   Destination: ~/.local/bin/herald (symlink → .build/release/herald)
+  #
+  #   Actively maintained upstream. Full update cycle: clone (if missing),
+  #   fetch, fast-forward pull (refused if local diverged), build, re-sign.
+  #   Upstream commit range is logged before each pull — check the output
+  #   for what actually landed. No Sigstore/Homebrew attestation available.
+
+  local -r repo_url="https://github.com/jessedc/herald-ios-bonjour-browser.git"
+  local -r src_dir="${HOME}/Documents/Projects/herald-cli"
+  local -r pkg_dir="${src_dir}/HeraldCLI"
+  local -r binary="${HOME}/.local/bin/herald"
+  local -r build_output="${pkg_dir}/.build/release/herald"
+
+  # Clone if missing, otherwise fetch + fast-forward pull
+  if ! [[ -d "${src_dir}" ]]; then
+    echo "[🍺] Cloning herald to ${src_dir}"
+    if ! git clone --quiet "${repo_url}" "${src_dir}"; then
+      echo "[❌] Failed to clone herald"
+      return 1
+    fi
+    echo "[✅] Cloned herald at $(git -C "${src_dir}" rev-parse --short HEAD)"
+  elif [[ -n "$(git -C "${src_dir}" status --porcelain)" ]]; then
+    echo "[⚠️ ] Local uncommitted changes in ${src_dir} — skipping upstream sync"
+  elif ! git -C "${src_dir}" fetch --quiet 2>/dev/null; then
+    echo "[⚠️ ] git fetch failed (offline?) — building current checkout"
+  else
+    local ahead
+    ahead="$(git -C "${src_dir}" rev-list --count 'HEAD..@{u}' 2>/dev/null || echo 0)"
+    if [[ "${ahead}" -gt 0 ]]; then
+      echo "[🍺] ${ahead} new commit(s) upstream:"
+      git -C "${src_dir}" log --oneline 'HEAD..@{u}'
+      if ! git -C "${src_dir}" pull --ff-only --quiet; then
+        echo "[❌] git pull --ff-only failed — local branch may have diverged"
+        return 1
+      fi
+      echo "[✅] Pulled to $(git -C "${src_dir}" rev-parse --short HEAD)"
+    else
+      echo "[✅] Already at upstream HEAD ($(git -C "${src_dir}" rev-parse --short HEAD))"
+    fi
+  fi
+
+  if ! [[ -d "${pkg_dir}" ]]; then
+    echo "[❌] herald package dir not found at ${pkg_dir}"
+    return 1
+  fi
+
+  local head_sha
+  head_sha="$(git -C "${src_dir}" rev-parse --short HEAD 2>/dev/null || echo 'unknown')"
+  echo "[🍺] Building herald (source at ${head_sha})"
+
+  if ! swift build --package-path "${pkg_dir}" -c release --quiet 2>&1; then
+    echo "[❌] Failed to build herald"
+    return 1
+  fi
+
+  echo "[✅] Successfully built herald"
+
+  mkdir -p "${HOME}/.local/bin"
+
+  if ln -sf "${build_output}" "${binary}"; then
+    echo "[✅] Symlinked ${binary} → ${build_output}"
+  else
+    echo "[❌] Failed to symlink ${binary}"
+    return 1
+  fi
+
+  # Ad-hoc re-sign after each rebuild — swift build produces ad-hoc signed
+  # binaries but rebuilds can leave macOS Gatekeeper caching a stale hash.
+  if codesign --sign - --force "${build_output}" 2>/dev/null; then
+    echo "[✅] Ad-hoc signed herald"
+  else
+    echo "[⚠️ ] codesign --sign - failed (non-fatal; binary remains usable)"
+  fi
+}
+
+
+function install_vault_guard {
+  # install_vault_guard
+  #   Builds and installs the vault-guard DA mount approval daemon
+  #   Blocks Finder-initiated SMB mounts to the research vault
+  #   Source: ~/Documents/Projects/danger-verify/ (vault-guard target)
+  #   Destination: /usr/local/bin/vault-guard
+
+  local -r src_dir="${HOME}/Documents/Projects/danger-verify"
+  local -r binary="/usr/local/bin/vault-guard"
+
+  if ! [[ -d "${src_dir}" ]]; then
+    echo "[❌] danger-verify source not found at ${src_dir}"
+    return 1
+  fi
+
+  echo "[🍺] Building vault-guard"
+
+  if ! swift build --package-path "${src_dir}" -c release --quiet 2>&1; then
+    echo "[❌] Failed to build vault-guard"
+    return 1
+  fi
+
+  echo "[✅] Successfully built vault-guard"
+
+  get_sudo "to install vault-guard to /usr/local/bin"
+
+  if sudo install -m 755 "${src_dir}/.build/release/vault-guard" "${binary}"; then
+    echo "[✅] Successfully installed vault-guard to ${binary}"
+  else
+    echo "[❌] Failed to install vault-guard to ${binary}"
+    return 1
+  fi
+}
+
+
+function install_santa_faa {
+  # install_santa_faa
+  #   Installs Santa FAA policy plist to /Library/Santa/
+  #   Root-owned so non-root processes cannot modify the policy itself
+  #   Referenced by com.northpolesec.santa.vault.mobileconfig via FileAccessPolicyPlist
+
+  local -r src="${SCRIPT_DIR}/profiles/santa-faa-policy.plist"
+  local -r dest="/Library/Santa/faa-policy.plist"
+
+  if ! [[ -f "${src}" ]]; then
+    echo "[❌] santa-faa-policy.plist not found at ${src}"
+    return 1
+  fi
+
+  get_sudo "to install Santa FAA policy to /Library/Santa"
+
+  if ! sudo mkdir -m 755 -p /Library/Santa; then
+    echo "[❌] Failed to create /Library/Santa/"
+    return 1
+  fi
+
+  if sudo install -m 644 -o root -g wheel "${src}" "${dest}"; then
+    echo "[✅] Successfully installed FAA policy to ${dest}"
+  else
+    echo "[❌] Failed to install FAA policy to ${dest}"
+    return 1
+  fi
+}
+
+
+
+function install_claude {
+  # install_claude
+  #   Installs Claude Code via the official native installer
+  #   https://claude.ai/install.sh
+  #   Downloads the installer to ~/Downloads, executes it, then cleans up
+  #   Always calls install_dcg — DCG must be present when Claude Code is
+
+  local -r claude_binary="${HOME}/.local/bin/claude"
+
+  if [[ -x "${claude_binary}" ]]; then
+    echo "[🍺] Claude Code already installed"
+    install_dcg
+    return 0
+  fi
+
+  echo "[🍺] Installing Claude Code"
+
+  local -r installer_path="${HOME}/Downloads/claude-install.sh"
+  local -r installer_url="https://claude.ai/install.sh"
+
+  download_application "${installer_path}" "${installer_url}"
+
+  echo "[🍺] Running Claude Code installer"
+  if bash "${installer_path}"; then
+    echo "[✅] Successfully installed Claude Code"
+  else
+    echo "[❌] Failed to install Claude Code"
+    rm -f "${installer_path}"
+    install_dcg
+    return 1
+  fi
+
+  rm -f "${installer_path}"
+
+  # DCG must always be installed alongside Claude Code
+  install_dcg
+}
+
+
+function install_brew {
+
+  # Install Homebrew
+
+  if ! [[ -x "$(command -v brew)" ]]; then
+
+    echo "[🍺] Installing Homebrew"
+    echo -e "[⚠️ ] \\033[0;31mStick around\\033[0m - Requires you to press RETURN and input your password"
+    sleep 5
+
+    if /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install.sh)"; then
+      echo "[✅] Successfully installed Homebrew 🍻"
+    else
+      echo "[❌] Failed to install Homebrew 😢"
+      exit 1
+    fi    
+
+  else
+
+    echo "[🍺] Updating Homebrew"
+    sleep 2
+    
+    brew update
+    brew upgrade
+    brew cleanup
+  fi
+}
+
+
+function install_brewfile {
+
+  # Install Homebrew packages from dotfiles/.extra/Brewfile
+  # Will install programs from the Mac AppStore if user is logged in
+
+ if ! [[ -x "$(command -v mas)" ]]; then
+
+    echo "[🍺] Installing mas"
+
+    if brew install mas 2>/dev/null; then
+      echo "[✅] Installed mas"
+    else
+      echo "[❌] Failed to install mas"
+      return 1
+    fi
+
+  else
+    echo "[🍺] mas already installed"
+  fi 
+
+
+  echo "[🍺] Installing Homebrew packages from Brewfile"
+  get_sudo "to install software via Homebrew"
+
+  if brew bundle install --file="${SCRIPT_DIR}/.extra/Brewfile"; then
+    echo "[✅] Successfully installed packages from Brewfile"
+    return 0
+  else
+    echo "[❌] Failed to install packages from Brewfile"
+    return 1
+  fi
+}
+
+
+function zsh_compinit_fix {
+  # zsh_compinit_fix
+  #   Secure permissions on zsh completion files at /opt/homebrew/share
+  #   https://stackoverflow.com/a/43544733
+  #   https://docs.brew.sh/Shell-Completion#configuring-completions-in-zsh
+  #   Remove group/other write/execite permissions
+  #   Change ownership to $USER:staff
+
+  local -r completions_dir="$(brew --prefix)/share"
+  
+  echo "[🍺] Fixing zsh completions permissions"
+
+  if ! chmod -R go-wx "${completions_dir}"; then
+    echo "[❌] Failed to remove r/x for group & others on /usr/local/share/zsh"
+    return 1
+  fi
+  
+  if ! chown -R "${USER}:staff" "${completions_dir}"; then
+    echo "[❌] Failed to change owners of ${completions_dir} to ${USER}:staff"
+    return 1
+  fi
+
+  echo "[✅] Fixed zsh completions permissions"
+}
+
+
+function open_system_preferences_mdm_profile {
+  # open_system_preferences_mdm_profile
+  # As of macOS Big Sur (11) /usr/bin/profiles can no longer install .mobileconfig profiles
+  # MDM Profiles must be installed via the GUI via System Preferences > Profiles
+  # However we can semi automate this process
+  #   See: https://www.alansiu.net/2021/01/06/semi-automating-profile-installation-in-big-sur/
+
+  for profile in "${SCRIPT_DIR}"/profiles/*.mobileconfig; do
+    if ! open "/System/Library/PreferencePanes/Profiles.prefPane" "${profile:?}"; then
+      echo "[❌] Failed to open System Preferences > Profiles with ${profile:?}"
+      return 1
+    fi
+
+    profile_name=$(basename "${profile}")
+    echo "[⚠️ ] Go to System Preferences > Profiles and install ${profile_name}"
+  done
+
+}
+
+
+function install_launchagents {
+  # install_launchagents
+  #   Copy LaunchAgent plists to ~/Library/LaunchAgents/
+  #   Copy LaunchDaemon plist to /Library/LaunchDaemons/ (must be owned by root:wheel 644)
+  #
+  #   Plists are copied, not symlinked. Since macOS Sonoma 14.0, launchd's
+  #   automatic login scan of ~/Library/LaunchAgents/ does not follow symlinks.
+  #   Symlinked plists are silently skipped — RunAtLoad never fires.
+  #   Explicit `launchctl bootstrap` still follows symlinks, but doesn't
+  #   survive reboot. Copying is the only reliable approach.
+
+  local -ar launchagent_plists=(
+    com.0xmachos.jump-user
+    com.0xmachos.vault-guard
+    com.0xmachos.imageio-oop
+  )
+
+  # LaunchAgents: copy into ~/Library/LaunchAgents/
+  if mkdir -p "${HOME}/Library/LaunchAgents"; then
+    for plist in "${launchagent_plists[@]}"; do
+      if cp "${SCRIPT_DIR}/LaunchAgents/${plist}.plist" "${HOME}/Library/LaunchAgents/${plist}.plist"; then
+        chmod 644 "${HOME}/Library/LaunchAgents/${plist}.plist"
+        echo "[✅] Successfully installed ${plist}.plist to ~/Library/LaunchAgents/"
+      else
+        echo "[❌] Failed to install ${plist}.plist"
+      fi
+    done
+  else
+    echo "[❌] Failed to create ~/Library/LaunchAgents/"
+  fi
+
+  # LaunchDaemon: copy to /Library/LaunchDaemons/ with root:wheel 644
+  get_sudo "to install LaunchDaemon"
+
+  if sudo cp "${SCRIPT_DIR}/LaunchDaemons/com.0xmachos.jump-system.plist" "/Library/LaunchDaemons/com.0xmachos.jump-system.plist"; then
+    sudo chown root:wheel "/Library/LaunchDaemons/com.0xmachos.jump-system.plist"
+    sudo chmod 644 "/Library/LaunchDaemons/com.0xmachos.jump-system.plist"
+    echo "[✅] Successfully installed com.0xmachos.jump-system.plist to /Library/LaunchDaemons/"
+  else
+    echo "[❌] Failed to install com.0xmachos.jump-system.plist"
+  fi
+}
+
+
+function load_launchagents {
+  # load_launchagents
+  #   Load LaunchAgents and LaunchDaemon via launchctl bootstrap/bootout
+
+  local -r uid=$(id -u)
+
+  local -ar launchagent_plists=(
+    com.0xmachos.jump-user
+    com.0xmachos.vault-guard
+    com.0xmachos.imageio-oop
+  )
+
+  for plist in "${launchagent_plists[@]}"; do
+    launchctl bootout "gui/${uid}/${plist}" 2>/dev/null || true
+    if launchctl bootstrap "gui/${uid}" "${HOME}/Library/LaunchAgents/${plist}.plist"; then
+      echo "[✅] Successfully loaded ${plist} LaunchAgent"
+    else
+      echo "[❌] Failed to load ${plist} LaunchAgent"
+    fi
+  done
+
+  # Verify imageio-oop env var took effect
+  if [[ "$(launchctl getenv IIOEnableOOP)" != "1" ]]; then
+    echo "[❌] com.0xmachos.imageio-oop loaded but IIOEnableOOP not set in launchd"
+  fi
+
+  # LaunchDaemon
+  get_sudo "to load LaunchDaemon"
+
+  sudo launchctl bootout "system/com.0xmachos.jump-system" 2>/dev/null || true
+  if sudo launchctl bootstrap "system" "/Library/LaunchDaemons/com.0xmachos.jump-system.plist"; then
+    echo "[✅] Successfully loaded com.0xmachos.jump-system LaunchDaemon"
+  else
+    echo "[❌] Failed to load com.0xmachos.jump-system LaunchDaemon"
+  fi
+}
+
+
+function main {
+
+  check_os_compatibility
+  check_developer_tools
+
+  local cmd=${1:-"usage"}
+
+  trap ctrl_c SIGINT
+  # Detect and react to the user hitting CTRL + C
+
+  case "${cmd}" in
+
+    defaults)
+      write_defaults
+      ;;
+    dotfiles)
+      install_dotfiles
+      ;;
+    scripts)
+      install_scripts
+      ;;
+    sudotouch)
+      enable_touchid_sudo
+      ;;
+    secretive)
+      install_secretive
+      ;;
+    sublimetext)
+      install_sublime_text
+      ;;
+    tower)
+      install_tower
+      ;;
+    deckset)
+      install_deckset
+      ;;
+    maccy)
+      install_maccy
+      ;;
+    texpad)
+      install_texpad
+      install_basictex
+      install_latex_packages
+      ;;
+    basictex)
+      install_basictex
+      install_latex_packages
+      ;;
+    latex)
+      install_latex_packages
+      ;;
+    blockblock)
+      install_blockblock
+      ;;
+    oversight)
+      install_oversight
+      ;;
+    dcg)
+      install_dcg
+      ;;
+    dcg-sync)
+      sync_dcg_cdhash
+      ;;
+    danger-verify)
+      install_danger_verify
+      ;;
+    herald)
+      install_herald
+      ;;
+    vault-guard)
+      install_vault_guard
+      ;;
+    santa-faa)
+      install_santa_faa
+      ;;
+    claude)
+      install_claude
+      ;;
+    brew)
+      install_brew
+      ;;
+    brewfile)
+      install_brewfile
+      zsh_compinit_fix
+      ;;
+    compinit)
+      zsh_compinit_fix
+      ;;
+    mdmprofile)
+      open_system_preferences_mdm_profile
+      ;;
+    launchagents)
+      install_launchagents
+      load_launchagents
+      ;;
+    completions)
+      # Optional second arg: alternate output path (used by tests/completions
+      # to generate into $TMPDIR without mutating the tracked file).
+      local out_path="${2:-${SCRIPT_DIR}/.completions/_bittersweet}"
+      _generate_bittersweet_completion "${out_path}"
+      echo "[✅] Regenerated ${out_path}"
+      ;;
+    test)
+      run_test
+      ;;
+    hailmary)
+      # Execute all the functions
+      # Order matters!
+      # - System config (no dependencies)
+      # - Security tools (curl + plutil, no brew needed)
+      # - Homebrew + Brewfile (installs shellcheck, etc.)
+      # - Everything else...
+      echo -e "[🍺] ${RED}Hailmary${RESET} engaged"
+      sleep 3
+
+      write_defaults
+      install_dotfiles
+      install_danger_verify
+      install_vault_guard
+      install_santa_faa
+      install_scripts
+      enable_touchid_sudo
+      install_blockblock
+      install_oversight
+      install_claude
+      install_brew
+      install_brewfile
+      zsh_compinit_fix
+      install_secretive
+      install_maccy
+      install_sublime_text
+      install_tower
+      install_deckset
+      install_texpad
+      install_basictex
+      install_latex_packages
+      open_system_preferences_mdm_profile
+      install_launchagents
+      load_launchagents
+      ;;
+    *)
+      usage
+      ;;
+  esac
+
+}
+
+main "$@"

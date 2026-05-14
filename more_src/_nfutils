@@ -1,0 +1,1306 @@
+# Source: https://github.com/neflalabs/nfutils/blob/d295a65f161db35cdeb10dca555f4693a53a5cf8/nfutils.sh
+# Repository: neflalabs/nfutils (nfutils.sh)
+#!/usr/bin/env bash
+# =========================================================
+# NFUTILS INSTALLER / UNINSTALLER / UPDATER
+# Auto setup Dev Utilities for Laravel + Docker
+# Author: NeflaLabs
+# =========================================================
+
+set -eo pipefail
+
+NF_DIR="$HOME/bin"
+NF_PATH="$NF_DIR/nfutils"
+BASHRC="$HOME/.bashrc"
+ZSHRC="$HOME/.zshrc"
+ZSH_COMPLETION_DIR="$HOME/.zsh/completions"
+ZSH_COMPLETION_PATH="$ZSH_COMPLETION_DIR/_nfutils"
+NF_REPO_URL="https://raw.githubusercontent.com/neflalabs/nfutils/main/nfutils.sh"
+NF_VERSION="v2025-12-08T15:27:47Z-g6d228d3"
+
+bold() { echo -e "\033[1m$1\033[0m"; }
+green() { echo -e "\033[32m$1\033[0m"; }
+yellow() { echo -e "\033[33m$1\033[0m"; }
+red() { echo -e "\033[31m$1\033[0m"; }
+
+
+ensure_rc_file() {
+  local file="$1"
+  if [ ! -f "$file" ]; then
+    touch "$file"
+  fi
+}
+
+ensure_bashrc() { ensure_rc_file "$BASHRC"; }
+ensure_zshrc() { ensure_rc_file "$ZSHRC"; }
+
+cache_busted_url() {
+  local base="$1"
+  local sep="?"
+  [[ "$base" == *\?* ]] && sep="&"
+  printf "%s%scb=%s" "$base" "$sep" "$(date +%s%N)"
+}
+
+reload_current_shell_rc() {
+  local rc=""
+  if [ -n "${ZSH_VERSION:-}" ]; then
+    rc="$ZSHRC"
+  elif [ -n "${BASH_VERSION:-}" ]; then
+    rc="$BASHRC"
+  else
+    case "$(basename "${SHELL:-}")" in
+      zsh) rc="$ZSHRC" ;;
+      bash) rc="$BASHRC" ;;
+    esac
+  fi
+  if [ -n "$rc" ] && [ -f "$rc" ]; then
+    # shellcheck disable=SC1090
+    . "$rc"
+  fi
+}
+
+detect_shell_rc() {
+  local shell_name=""
+  if [[ "${SHELL:-}" == *"zsh"* ]]; then
+    shell_name="zsh"
+  elif [[ "${SHELL:-}" == *"bash"* ]]; then
+    shell_name="bash"
+  elif [ -n "${ZSH_VERSION:-}" ]; then
+    shell_name="zsh"
+  elif [ -n "${BASH_VERSION:-}" ]; then
+    shell_name="bash"
+  else
+    case "$(basename "${SHELL:-}")" in
+      zsh) shell_name="zsh" ;;
+      bash) shell_name="bash" ;;
+    esac
+  fi
+  case "$shell_name" in
+    zsh) echo "$ZSHRC" ;;
+    bash) echo "$BASHRC" ;;
+    *) 
+      if [ -f "$ZSHRC" ]; then
+        echo "$ZSHRC"
+      elif [ -f "$BASHRC" ]; then
+        echo "$BASHRC"
+      fi
+      ;;
+  esac
+}
+
+prompt_source_rc() {
+  local rc_file ans human_path
+  rc_file=$(detect_shell_rc)
+  if [ -z "$rc_file" ]; then
+    echo "$(yellow "ℹ Could not detect your shell. Reload your shell manually (source ~/.bashrc or ~/.zshrc).")"
+    return
+  fi
+
+  human_path="~/${rc_file#$HOME/}"
+  if [ -t 0 ]; then
+    read -r -p "Source ${human_path} now to load nfutils? (y/N): " ans
+  elif [ -r /dev/tty ]; then
+    read -r -p "Source ${human_path} now to load nfutils? (y/N): " ans </dev/tty
+  else
+    echo "$(yellow "ℹ To load nfutils now, run: source ${human_path}")"
+    return
+  fi
+
+  if [[ "$ans" =~ ^[Yy]$ ]]; then
+    set +e
+    # shellcheck disable=SC1090
+    . "$rc_file"
+    set -e
+    echo "$(green "✅ Sourced ${human_path}")"
+  else
+    echo "Skipped. Run: source ${human_path}"
+  fi
+}
+
+ensure_spacing_before_append() {
+  local file="$1"
+  [ -s "$file" ] || return 0
+  if [ "$(tail -c1 "$file" 2>/dev/null)" != $'\n' ]; then
+    printf '\n' >> "$file"
+  fi
+  local last_line
+  last_line=$(tail -n1 "$file")
+  if [ -n "$last_line" ]; then
+    printf '\n' >> "$file"
+  fi
+}
+
+ensure_line_block_spacing() {
+  local file="$1"
+  local line="$2"
+  [ -f "$file" ] || return 0
+  local tmp
+  tmp=$(mktemp)
+  if awk -v target="$line" '
+    BEGIN { prev_blank=1; changed=0 }
+    {
+      if ($0 == target) {
+        if (!prev_blank) {
+          print ""
+          prev_blank=1
+          changed=1
+        }
+        print $0
+        prev_blank=0
+      } else {
+        print $0
+        prev_blank = ($0 == "") ? 1 : 0
+      }
+    }
+    END { exit(changed ? 0 : 1) }
+  ' "$file" > "$tmp"; then
+    mv "$tmp" "$file"
+  else
+    rm -f "$tmp"
+  fi
+}
+
+append_unique_line() {
+  local file="$1"
+  local line="$2"
+  local spacing="${3:-with_spacing}"
+  ensure_rc_file "$file"
+  if ! grep -Fxq "$line" "$file"; then
+    if [ "$spacing" = "with_spacing" ]; then
+      ensure_spacing_before_append "$file"
+    fi
+    printf '%s\n' "$line" >> "$file"
+  fi
+  if [ "$spacing" = "with_spacing" ]; then
+    ensure_line_block_spacing "$file" "$line"
+  fi
+}
+
+strip_line_from_file() {
+  local file="$1"
+  local substring="$2"
+  [ -f "$file" ] || return 0
+  local tmp
+  tmp=$(mktemp)
+  if grep -F -v "$substring" "$file" > "$tmp"; then
+    mv "$tmp" "$file"
+  else
+    rm -f "$tmp"
+    : > "$file"
+  fi
+}
+
+strip_block_between_markers() {
+  local file="$1"
+  local start="$2"
+  local end="$3"
+  [ -f "$file" ] || return 0
+  local tmp
+  tmp=$(mktemp)
+  awk -v start="$start" -v end="$end" '
+    $0 == start {skip=1; next}
+    $0 == end {skip=0; next}
+    skip {next}
+    {print}
+  ' "$file" > "$tmp"
+  mv "$tmp" "$file"
+}
+
+version_key() {
+  local ver="$1"
+  if [[ "$ver" =~ ^v([0-9]+)(\.[0-9]+){0,2}$ ]]; then
+    local raw="${ver#v}"
+    IFS='.' read -r major minor patch <<<"$raw"
+    major=${major:-0}
+    minor=${minor:-0}
+    patch=${patch:-0}
+    printf "0%04d%04d%04d" "$major" "$minor" "$patch"
+  elif [[ "$ver" =~ ^v([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2})(Z)?(-g[0-9a-fA-F]+)?(-local)?$ ]]; then
+    local year="${BASH_REMATCH[1]}"
+    local month_dec=$((10#${BASH_REMATCH[2]}))
+    local day_dec=$((10#${BASH_REMATCH[3]}))
+    local hour_dec=$((10#${BASH_REMATCH[4]}))
+    local minute_dec=$((10#${BASH_REMATCH[5]}))
+    local second_dec=$((10#${BASH_REMATCH[6]}))
+    local sha="${BASH_REMATCH[8]}"
+    local dirty="${BASH_REMATCH[9]}"
+    sha="${sha#-g}"
+    printf "1%04d%02d%02d%02d%02d%02d%s%s" "$year" "$month_dec" "$day_dec" "$hour_dec" "$minute_dec" "$second_dec" "${dirty:+d}" "$sha"
+  else
+    printf "9%s" "$ver"
+  fi
+}
+
+version_newer() {
+  [[ "$(version_key "$1")" > "$(version_key "$2")" ]]
+}
+
+# ---------------------------------------------
+# UNINSTALL FUNCTION
+# ---------------------------------------------
+uninstall_nfutils() {
+  echo ""
+  red "⚠️  Uninstalling nfutils from your system..."
+  read -p "Are you sure you want to continue? (y/N): " ans
+  [[ "$ans" == "y" ]] || { echo "Aborted."; exit 0; }
+
+  if [ -f "$NF_PATH" ]; then
+    rm -f "$NF_PATH"
+    echo "$(green "✔ Removed:") $NF_PATH"
+  else
+    echo "$(yellow "ℹ nfutils not found in:") $NF_PATH"
+  fi
+
+  if [ -f "$BASHRC" ] && grep -q 'HOME/bin' "$BASHRC"; then
+    strip_line_from_file "$BASHRC" "HOME/bin"
+    echo "$(green "✔ Cleaned PATH entry from .bashrc")"
+  fi
+  if [ -f "$BASHRC" ]; then
+    strip_line_from_file "$BASHRC" ".bash_completion.d/nfutils"
+  fi
+
+  if [ -f "$ZSHRC" ] && grep -q 'HOME/bin' "$ZSHRC"; then
+    strip_line_from_file "$ZSHRC" "HOME/bin"
+    echo "$(green "✔ Cleaned PATH entry from .zshrc")"
+  fi
+  strip_block_between_markers "$ZSHRC" "# nfutils zsh completion start" "# nfutils zsh completion end"
+  rm -f "$ZSH_COMPLETION_PATH"
+
+  echo "$(green "✅ nfutils uninstalled successfully!")"
+  echo "You can reload your shell with: source ~/.bashrc"
+  exit 0
+}
+
+# ---------------------------------------------
+# UPDATE FUNCTION
+# ---------------------------------------------
+update_nfutils() {
+  echo ""
+  bold "🔍 Downloading latest nfutils..."
+  local tmp install_url remote_version ans
+  tmp=$(mktemp)
+  install_url=$(cache_busted_url "$NF_REPO_URL")
+  if ! curl -fsSL "$install_url" -o "$tmp" 2>/dev/null; then
+    rm -f "$tmp"
+    echo "$(red "❌ Failed to download nfutils (network or GitHub issue).")"
+    exit 1
+  fi
+  remote_version=$(grep -m1 'NF_VERSION="v' "$tmp" | cut -d'"' -f2)
+  echo "$(yellow "⬇️ Installing nfutils ${remote_version:-}...")"
+  bash "$tmp"
+  reload_current_shell_rc
+  echo "$(green "✅ nfutils updated to ${remote_version:-latest}")"
+  rm -f "$tmp"
+  exit 0
+}
+
+# ---------------------------------------------
+# HANDLE FLAGS
+# ---------------------------------------------
+if [[ "$1" == "uninstall" ]]; then
+  uninstall_nfutils
+elif [[ "$1" == "update" ]]; then
+  update_nfutils
+fi
+
+# ---------------------------------------------
+# INSTALL FUNCTION
+# ---------------------------------------------
+echo ""
+bold "🧰 Installing nfutils $NF_VERSION ..."
+mkdir -p "$NF_DIR"
+cat > "$NF_PATH" <<'EOF'
+#!/usr/bin/env bash
+set -eo pipefail
+
+NF_VERSION="v2025-12-08T15:27:47Z-g6d228d3"
+NF_REPO_URL="https://raw.githubusercontent.com/neflalabs/nfutils/main/nfutils.sh"
+
+BASHRC="$HOME/.bashrc"
+ZSHRC="$HOME/.zshrc"
+ZSH_COMPLETION_DIR="$HOME/.zsh/completions"
+ZSH_COMPLETION_PATH="$ZSH_COMPLETION_DIR/_nfutils"
+
+bold() { echo -e "\033[1m$1\033[0m"; }
+green() { echo -e "\033[32m$1\033[0m"; }
+red() { echo -e "\033[31m$1\033[0m"; }
+yellow() { echo -e "\033[33m$1\033[0m"; }
+
+ensure_rc_file() {
+  local file="$1"
+  if [ ! -f "$file" ]; then
+    touch "$file"
+  fi
+}
+
+ensure_bashrc() { ensure_rc_file "$BASHRC"; }
+ensure_zshrc() { ensure_rc_file "$ZSHRC"; }
+
+cache_busted_url() {
+  local base="$1"
+  local sep="?"
+  [[ "$base" == *\?* ]] && sep="&"
+  printf "%s%scb=%s" "$base" "$sep" "$(date +%s%N)"
+}
+
+reload_current_shell_rc() {
+  local rc=""
+  if [ -n "${ZSH_VERSION:-}" ]; then
+    rc="$ZSHRC"
+  elif [ -n "${BASH_VERSION:-}" ]; then
+    rc="$BASHRC"
+  else
+    case "$(basename "${SHELL:-}")" in
+      zsh) rc="$ZSHRC" ;;
+      bash) rc="$BASHRC" ;;
+    esac
+  fi
+  if [ -n "$rc" ] && [ -f "$rc" ]; then
+    # shellcheck disable=SC1090
+    . "$rc"
+  fi
+}
+
+ensure_spacing_before_append() {
+  local file="$1"
+  [ -s "$file" ] || return 0
+  if [ "$(tail -c1 "$file" 2>/dev/null)" != $'\n' ]; then
+    printf '\n' >> "$file"
+  fi
+  local last_line
+  last_line=$(tail -n1 "$file")
+  if [ -n "$last_line" ]; then
+    printf '\n' >> "$file"
+  fi
+}
+
+ensure_line_block_spacing() {
+  local file="$1"
+  local line="$2"
+  [ -f "$file" ] || return 0
+  local tmp
+  tmp=$(mktemp)
+  if awk -v target="$line" '
+    BEGIN { prev_blank=1; changed=0 }
+    {
+      if ($0 == target) {
+        if (!prev_blank) {
+          print ""
+          prev_blank=1
+          changed=1
+        }
+        print $0
+        prev_blank=0
+      } else {
+        print $0
+        prev_blank = ($0 == "") ? 1 : 0
+      }
+    }
+    END { exit(changed ? 0 : 1) }
+  ' "$file" > "$tmp"; then
+    mv "$tmp" "$file"
+  else
+    rm -f "$tmp"
+  fi
+}
+
+append_unique_line() {
+  local file="$1"
+  local line="$2"
+  local spacing="${3:-with_spacing}"
+  ensure_rc_file "$file"
+  if ! grep -Fxq "$line" "$file"; then
+    if [ "$spacing" = "with_spacing" ]; then
+      ensure_spacing_before_append "$file"
+    fi
+    printf '%s\n' "$line" >> "$file"
+  fi
+  if [ "$spacing" = "with_spacing" ]; then
+    ensure_line_block_spacing "$file" "$line"
+  fi
+}
+
+has_cmd() {
+  command -v "$1" >/dev/null 2>&1
+}
+
+docker_install_hint() {
+  if [ -f /etc/os-release ]; then
+    . /etc/os-release
+    case "$ID" in
+      ubuntu|debian)
+        echo "  sudo apt-get update && sudo apt-get install docker.io docker-compose-plugin"
+        ;;
+      arch|manjaro)
+        echo "  sudo pacman -S docker docker-compose"
+        ;;
+      fedora)
+        echo "  sudo dnf install docker docker-compose-plugin"
+        ;;
+      centos|rhel)
+        echo "  sudo yum install docker docker-compose-plugin"
+        ;;
+      opensuse*|sles)
+        echo "  sudo zypper install docker docker-compose"
+        ;;
+      *)
+        echo "  (see official Docker documentation for $ID)"
+        ;;
+    esac
+  else
+    echo "  (see official Docker documentation for installation)"
+  fi
+}
+
+has_docker_compose() {
+  docker compose version >/dev/null 2>&1 || docker-compose --version >/dev/null 2>&1
+}
+
+ensure_docker() {
+  if ! has_cmd docker; then
+    echo "$(red "❌ Docker CLI not found.")"
+    echo "Install Docker using a command like:"
+    docker_install_hint
+    echo "Documentation: https://docs.docker.com/engine/install/"
+    exit 1
+  fi
+
+  if ! docker info >/dev/null 2>&1; then
+    echo "$(red "❌ Docker daemon is not running.")"
+    echo "Make sure Docker service is active, e.g.: sudo systemctl start docker"
+    exit 1
+  fi
+
+  if ! has_docker_compose; then
+    echo "$(red "❌ Docker Compose is not available.")"
+    echo "Install docker compose plugin (docker compose) or docker-compose CLI."
+    exit 1
+  fi
+
+  if ! id -Gn "$USER" | tr ' ' '\n' | grep -qx docker; then
+    echo "$(yellow "ℹ Add user to docker group to avoid sudo: sudo usermod -aG docker $USER")"
+  fi
+}
+
+ensure_python() {
+  if ! has_cmd python3; then
+    echo "$(red "❌ python3 is required for database configuration.")"
+    echo "Install with:"
+    if [ -f /etc/os-release ]; then
+      # shellcheck disable=SC1091
+      . /etc/os-release
+      case "$ID" in
+        ubuntu|debian)
+          echo "  sudo apt-get install python3"
+          ;;
+        arch|manjaro)
+          echo "  sudo pacman -S python"
+          ;;
+        fedora)
+          echo "  sudo dnf install python3"
+          ;;
+        *)
+          echo "  (use your distro's package manager)"
+          ;;
+      esac
+    else
+      echo "  (install python3 using your package manager)"
+    fi
+    exit 1
+  fi
+}
+
+strip_line_from_file() {
+  local file="$1"
+  local substring="$2"
+  [ -f "$file" ] || return 0
+  local tmp
+  tmp=$(mktemp)
+  if grep -F -v "$substring" "$file" > "$tmp"; then
+    mv "$tmp" "$file"
+  else
+    rm -f "$tmp"
+    : > "$file"
+  fi
+}
+
+strip_block_between_markers() {
+  local file="$1"
+  local start="$2"
+  local end="$3"
+  [ -f "$file" ] || return 0
+  local tmp
+  tmp=$(mktemp)
+  awk -v start="$start" -v end="$end" '
+    $0 == start {skip=1; next}
+    $0 == end {skip=0; next}
+    skip {next}
+    {print}
+  ' "$file" > "$tmp"
+  mv "$tmp" "$file"
+}
+
+version_key() {
+  local ver="$1"
+  if [[ "$ver" =~ ^v([0-9]+)(\.[0-9]+){0,2}$ ]]; then
+    local raw="${ver#v}"
+    IFS='.' read -r major minor patch <<<"$raw"
+    major=${major:-0}
+    minor=${minor:-0}
+    patch=${patch:-0}
+    printf "0%04d%04d%04d" "$major" "$minor" "$patch"
+  elif [[ "$ver" =~ ^v([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2})(Z)?(-g[0-9a-fA-F]+)?(-local)?$ ]]; then
+    local year="${BASH_REMATCH[1]}"
+    local month_dec=$((10#${BASH_REMATCH[2]}))
+    local day_dec=$((10#${BASH_REMATCH[3]}))
+    local hour_dec=$((10#${BASH_REMATCH[4]}))
+    local minute_dec=$((10#${BASH_REMATCH[5]}))
+    local second_dec=$((10#${BASH_REMATCH[6]}))
+    local sha="${BASH_REMATCH[8]}"
+    local dirty="${BASH_REMATCH[9]}"
+    sha="${sha#-g}"
+    printf "1%04d%02d%02d%02d%02d%02d%s%s" "$year" "$month_dec" "$day_dec" "$hour_dec" "$minute_dec" "$second_dec" "${dirty:+d}" "$sha"
+  else
+    printf "9%s" "$ver"
+  fi
+}
+
+version_newer() {
+  [[ "$(version_key "$1")" > "$(version_key "$2")" ]]
+}
+
+show_help() {
+  echo ""
+  bold "NFUTILS - Laravel inside Docker Script Helper ($NF_VERSION)"
+  echo "by NeflaLabs - https://npx.my.id"
+  echo ""
+  echo "Usage: nfutils <command> [options]"
+  echo ""
+  echo "Commands:"
+  echo "  laravel create <dir|.>                      - Create new Laravel project"
+  echo "  laravel init [-p PORT] [-db|--database DB]  - Initialize Sail in existing project"
+  echo "  composer <args>                             - Run Composer in Docker"
+  echo "  destroyer                                   - ⚠️ Delete all files in current dir"
+  echo "  nuke                                        - ☢️  Stop Docker, remove containers/images, wipe folder"
+  echo "  update                                      - Update nfutils from GitHub"
+  echo "  uninstall                                   - Remove nfutils from your system"
+  echo "  version / -v                                - Show nfutils version"
+  echo ""
+}
+# --- Laravel Tools ---
+laravel_create() {
+  ensure_docker
+  local target="${1:-}"
+  if [ -z "$target" ]; then
+    echo "$(red "❌ Project directory is required (use '.' for current directory).")"
+    laravel_show_usage
+    exit 1
+  fi
+  shift || true
+  docker run --rm -u "$(id -u):$(id -g)" \
+    -v "$(pwd):/app" \
+    -v composer_cache:/tmp/cache \
+    -e COMPOSER_CACHE_DIR=/tmp/cache \
+    composer create-project laravel/laravel "$target" "$@"
+}
+
+laravel_sail() {
+  ensure_docker
+  ensure_python
+
+  local port=""
+  local sail_args=()
+  local db="mysql"
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      -p|--port)
+        if [[ -n "${2:-}" && "$2" =~ ^[0-9]+$ ]]; then
+          port="$2"
+          shift 2
+          continue
+        else
+          echo "$(red "❌ Invalid port value for -p/--port.")"
+          exit 1
+        fi
+        ;;
+      --port=*)
+        local value="${1#--port=}"
+        if [[ "$value" =~ ^[0-9]+$ ]]; then
+          port="$value"
+          shift
+          continue
+        else
+          echo "$(red "❌ Invalid port value for --port.")"
+          exit 1
+        fi
+        ;;
+      -db|--db|--database)
+        local value="${2:-}"
+        if [[ -n "$value" && "$value" =~ ^(mysql|pgsql|sqlite)$ ]]; then
+          db="$value"
+          shift 2
+          continue
+        else
+          echo "$(red "❌ Invalid database driver for -db/--database (use mysql|pgsql|sqlite).")"
+          exit 1
+        fi
+        ;;
+      --db=*|--database=*)
+        local value="${1#--db=}"
+        value="${value#--database=}"
+        if [[ "$value" =~ ^(mysql|pgsql|sqlite)$ ]]; then
+          db="$value"
+          shift
+          continue
+        else
+          echo "$(red "❌ Invalid database driver for --database (use mysql|pgsql|sqlite).")"
+          exit 1
+        fi
+        ;;
+      --)
+        shift
+        sail_args+=("$@")
+        break
+        ;;
+      *)
+        sail_args+=("$1")
+        shift
+        ;;
+    esac
+  done
+
+  if [ "$db" = "pgsql" ]; then
+    local has_pgsql="false"
+    for arg in "${sail_args[@]}"; do
+      if [[ "$arg" == --with=* && "$arg" == *pgsql* ]]; then
+        has_pgsql="true"
+        break
+      fi
+    done
+    if [ "$has_pgsql" != "true" ]; then
+      sail_args+=("--with=pgsql")
+    fi
+  fi
+
+  set -- "${sail_args[@]}"
+
+  if [ ! -f "artisan" ]; then
+    echo "$(red "❌ This is not a Laravel project (artisan not found).")"
+    exit 1
+  fi
+  echo "$(yellow "🚀 Initializing Laravel Sail...")"
+  if ! grep -q "laravel/sail" composer.json 2>/dev/null; then
+    echo "$(yellow "🧩 Installing laravel/sail via composer...")"
+    docker run --rm -u "$(id -u):$(id -g)" \
+      -v "$(pwd):/app" \
+      -v composer_cache:/tmp/cache \
+      -e COMPOSER_CACHE_DIR=/tmp/cache \
+      composer require laravel/sail --dev
+  fi
+  docker run --rm -u "$(id -u):$(id -g)" \
+    -v "$(pwd):/var/www/html" \
+    -w /var/www/html \
+    laravelsail/php84-composer:latest php artisan sail:install "$@"
+  echo "$(green "✅ Laravel Sail installed successfully!")"
+  local alias_line="alias sail='sh \$([ -f sail ] && echo sail || echo vendor/bin/sail)'"
+  append_unique_line "$BASHRC" "$alias_line"
+  echo "$(green "✅ Alias 'sail' is now available in your shell profile (bash & zsh).")"
+  if [ -f ".env" ]; then
+    python3 - <<'PY_ENV'
+from pathlib import Path
+
+env_path = Path('.env')
+lines = env_path.read_text().splitlines()
+out = []
+inserted_mysql = False
+
+for line in lines:
+    if line.startswith('MYSQL_EXTRA_OPTIONS='):
+        if not inserted_mysql:
+            out.append('MYSQL_EXTRA_OPTIONS=null')
+            inserted_mysql = True
+        continue
+    out.append(line)
+    if line.startswith('APP_FAKER_LOCALE=') and not inserted_mysql:
+        out.append('MYSQL_EXTRA_OPTIONS=null')
+        inserted_mysql = True
+
+if not inserted_mysql:
+    out.append('MYSQL_EXTRA_OPTIONS=null')
+
+env_path.write_text("\n".join(out) + "\n")
+PY_ENV
+  fi
+
+  if [ -n "$port" ] && [ -f ".env" ]; then
+    python3 - "$port" <<'PY'
+import sys
+from pathlib import Path
+
+port = sys.argv[1]
+env_path = Path(".env")
+if not env_path.exists():
+    raise SystemExit(0)
+lines = env_path.read_text().splitlines()
+out = []
+inserted = False
+for line in lines:
+    if line.startswith("APP_PORT="):
+        if not inserted:
+            out.append(f"APP_PORT={port}")
+            inserted = True
+        else:
+            continue
+    else:
+        out.append(line)
+    if line.startswith("APP_URL=") and not inserted:
+        out.append(f"APP_PORT={port}")
+        inserted = True
+if not inserted:
+    out.append(f"APP_PORT={port}")
+env_path.write_text("\n".join(out) + "\n")
+PY
+    echo "$(green "✅ APP_PORT=$port written to .env")"
+  elif [ -n "$port" ]; then
+    echo "$(yellow "ℹ .env not found, APP_PORT not changed.")"
+  fi
+
+  if [ ! -f ".env" ] && [ -f ".env.example" ]; then
+    cp ".env.example" ".env"
+    echo "$(yellow "ℹ .env not found, copied from .env.example")"
+  fi
+
+  local sqlite_path=""
+  if [ "$db" = "sqlite" ]; then
+    mkdir -p database
+    sqlite_path="database/database.sqlite"
+    [ -f "$sqlite_path" ] || touch "$sqlite_path"
+  fi
+
+  if [ -f ".env" ]; then
+    python3 - "$db" "$sqlite_path" <<'PY'
+import sys
+from pathlib import Path
+import re
+
+driver = sys.argv[1]
+sqlite_path = sys.argv[2] if len(sys.argv) > 2 else ""
+
+env_path = Path(".env")
+lines = env_path.read_text().splitlines()
+
+updates = {
+    "mysql": {
+        "DB_CONNECTION": "mysql",
+        "DB_HOST": "mysql",
+        "DB_PORT": "3306",
+        "DB_DATABASE": "laravel",
+        "DB_USERNAME": "sail",
+        "DB_PASSWORD": "password",
+        "DB_SCHEMA": "",
+    },
+    "pgsql": {
+        "DB_CONNECTION": "pgsql",
+        "DB_HOST": "pgsql",
+        "DB_PORT": "5432",
+        "DB_DATABASE": "laravel",
+        "DB_USERNAME": "sail",
+        "DB_PASSWORD": "password",
+        "DB_SCHEMA": "public",
+    },
+    "sqlite": {
+        "DB_CONNECTION": "sqlite",
+        "DB_HOST": "",
+        "DB_PORT": "",
+        "DB_DATABASE": sqlite_path or "database/database.sqlite",
+        "DB_USERNAME": "",
+        "DB_PASSWORD": "",
+        "DB_SCHEMA": "",
+    },
+}[driver]
+
+prefixes = tuple(f"{key}=" for key in updates)
+seen = set()
+out = []
+for line in lines:
+    if line.startswith(prefixes):
+        key = line.split("=", 1)[0]
+        if key in seen:
+            continue
+        out.append(f"{key}={updates[key]}")
+        seen.add(key)
+    else:
+        out.append(line)
+
+for key, value in updates.items():
+    if key not in seen:
+        out.append(f"{key}={value}")
+
+env_path.write_text("\n".join(out) + "\n")
+PY
+    echo "$(green "✅ Database driver set to $db in .env")"
+    if [ "$db" = "pgsql" ]; then
+      echo "$(yellow "ℹ Ensure Sail options include pgsql service (auto-added).")"
+    elif [ "$db" = "sqlite" ]; then
+      echo "$(yellow "ℹ Using SQLite file at ${sqlite_path:-database/database.sqlite}.")"
+    fi
+  else
+    echo "$(yellow "ℹ .env not found, DB_* not changed.")"
+  fi
+
+  local compose_file=""
+  for file in compose.yaml compose.yml docker-compose.yaml docker-compose.yml; do
+    if [ -f "$file" ]; then
+      compose_file="$file"
+      break
+    fi
+  done
+
+  if [ -n "$compose_file" ]; then
+    python3 - "$db" "$compose_file" <<'PY'
+import sys
+import re
+from pathlib import Path
+
+target = sys.argv[1]
+compose = Path(sys.argv[2])
+lines = compose.read_text().splitlines()
+
+def match_service(line, name):
+    m = re.match(r'^(\s*)(#\s*)?([A-Za-z0-9_.-]+):\s*$', line)
+    if not m:
+        return None
+    if m.group(3) != name:
+        return None
+    indent = len(m.group(1))
+    return indent
+
+def toggle_block(lines, name, enable):
+    out = []
+    i = 0
+    while i < len(lines):
+        indent = match_service(lines[i], name)
+        if indent is None:
+            out.append(lines[i])
+            i += 1
+            continue
+
+        def comment_line(line):
+            if not line.strip():
+                return line
+            if line.lstrip().startswith("#"):
+                return line
+            space = re.match(r'^(\s*)', line).group(1)
+            body = line[len(space):]
+            return f"{space}# {body}"
+
+        def uncomment_line(line):
+            space = re.match(r'^(\s*)', line).group(1)
+            body = line[len(space):]
+            if body.startswith("#"):
+                body = body[1:]
+                if body.startswith(" "):
+                    body = body[1:]
+                return f"{space}{body}"
+            return line
+
+        def is_new_block(line):
+            m = re.match(r'^(\s*)(#\s*)?([A-Za-z0-9_.-]+):\s*$', line)
+            if not m:
+                return False
+            return len(m.group(1)) <= indent
+
+        # process current service line
+        out.append(uncomment_line(lines[i]) if enable else comment_line(lines[i]))
+        i += 1
+        # process its block
+        while i < len(lines) and not is_new_block(lines[i]):
+            out.append(uncomment_line(lines[i]) if enable else comment_line(lines[i]))
+            i += 1
+    return out
+
+def adjust_depends(lines, enable_set, disable_set):
+    out = []
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        m = re.match(r'^(\s*)depends_on:\s*$', line)
+        if not m:
+            out.append(line)
+            i += 1
+            continue
+
+        block_indent = len(m.group(1))
+        block = [line]
+        i += 1
+        while i < len(lines):
+            indent = len(re.match(r'^(\s*)', lines[i]).group(1))
+            if indent <= block_indent and lines[i].strip():
+                break
+            block.append(lines[i])
+            i += 1
+
+        def parse_items(block_lines):
+            items = []
+            for bl in block_lines[1:]:
+                mm = re.match(r'^\s*-\s*([A-Za-z0-9_.-]+)\s*(#.*)?$', bl)
+                if mm:
+                    items.append((bl, mm.group(1), "list"))
+                    continue
+                mm = re.match(r'^\s*([A-Za-z0-9_.-]+):\s*(#.*)?$', bl)
+                if mm and len(re.match(r'^(\s*)', bl).group(1)) > block_indent:
+                    items.append((bl, mm.group(1), "map"))
+            return items
+
+        items = parse_items(block)
+        keep_lines = []
+        for original, name, kind in items:
+            if name in disable_set:
+                continue
+            keep_lines.append(name)
+
+        if not keep_lines:
+            # drop entire depends_on block
+            continue
+
+        new_block = [block[0]]
+        for original, name, kind in items:
+            if name in disable_set:
+                continue
+            if kind == "list":
+                new_block.append(re.sub(r'^(\s*)#?\s*-\s*([A-Za-z0-9_.-]+)', r'\1- ' + name, original))
+            else:
+                new_block.append(re.sub(r'^(\s*)#?\s*([A-Za-z0-9_.-]+):', r'\1' + name + ':', original))
+        # keep other non-item lines (comments/blank)
+        for bl in block[1:]:
+            if any(bl is itm[0] for itm in items):
+                continue
+            new_block.append(bl)
+
+        out.extend(new_block)
+
+    return out
+
+enable = []
+disable = []
+if target == "mysql":
+    enable = ["mysql"]
+    disable = ["pgsql"]
+elif target == "pgsql":
+    enable = ["pgsql"]
+    disable = ["mysql"]
+else:  # sqlite
+    enable = []
+    disable = ["mysql", "pgsql"]
+
+new_lines = lines
+for name in enable:
+    new_lines = toggle_block(new_lines, name, True)
+for name in disable:
+    new_lines = toggle_block(new_lines, name, False)
+new_lines = adjust_depends(new_lines, set(enable), set(disable))
+
+compose.write_text("\n".join(new_lines) + "\n")
+PY
+    if [ "$db" = "mysql" ]; then
+      echo "$(green "✅ $compose_file: mysql service enabled, pgsql disabled.")"
+    elif [ "$db" = "pgsql" ]; then
+      echo "$(green "✅ $compose_file: pgsql service enabled, mysql disabled.")"
+    else
+      echo "$(green "✅ $compose_file: mysql & pgsql services disabled for sqlite.")"
+    fi
+  fi
+  echo "Now you can run: sail up"
+}
+
+laravel_show_usage() {
+  echo "Usage:"
+  echo "  nfutils laravel create <directory|.>"
+  echo "  nfutils laravel init [-p PORT] [-db|--database mysql|pgsql|sqlite] [sail options]"
+}
+
+laravel_cmd() {
+  local subcommand="${1:-}"
+  shift || true
+
+  case "$subcommand" in
+    create)
+      local target="${1:-}"
+      if [ -z "$target" ]; then
+        echo "$(red "❌ Project directory is required for 'laravel create'.")"
+        laravel_show_usage
+        exit 1
+      fi
+      laravel_create "$@"
+      ;;
+    init)
+      laravel_sail "$@"
+      ;;
+    ""|-h|--help|help)
+      laravel_show_usage
+      ;;
+    *)
+      echo "$(red "❌ Unknown laravel subcommand: $subcommand")"
+      laravel_show_usage
+      exit 1
+      ;;
+  esac
+}
+# --- Dangerous Operations ---
+destroyer() {
+  read -p "⚠️  Delete ALL files in current directory? (y/N): " ans
+  [[ "$ans" == "y" ]] || { echo "Aborted."; exit 0; }
+  find . -mindepth 1 -delete
+  echo "$(green "✅ Directory cleared.")"
+}
+
+nuke_everything() {
+  echo "$(red "☢️  WARNING: This will stop Docker, remove containers/images, and delete EVERYTHING in $(pwd)")"
+  read -p "Type 'nuke' to continue: " first
+  [[ "$first" == "nuke" ]] || { echo "Aborted."; exit 1; }
+  read -p "This action is irreversible. Type 'DELETE' to proceed: " second
+  [[ "$second" == "DELETE" ]] || { echo "Aborted."; exit 1; }
+
+  ensure_docker
+
+  echo "$(yellow "🛑 Stopping running containers...")"
+  docker ps -q | xargs -r docker stop >/dev/null 2>&1 || true
+
+  echo "$(yellow "🧹 Removing containers...")"
+  docker ps -aq | xargs -r docker rm >/dev/null 2>&1 || true
+
+  echo "$(yellow "🧽 Removing images...")"
+  docker images -q | xargs -r docker rmi -f >/dev/null 2>&1 || true
+
+  echo "$(yellow "🗂  Removing volumes...")"
+  docker volume ls -q | xargs -r docker volume rm >/dev/null 2>&1 || true
+
+  echo "$(yellow "🌐 Removing custom networks...")"
+  docker network ls -q | grep -Ev '^(bridge|host|none)$' | xargs -r docker network rm >/dev/null 2>&1 || true
+
+  echo "$(yellow "🧨 Deleting current directory contents...")"
+  find . -mindepth 1 -delete
+
+  echo "$(green "✅ nfutils nuke completed. Directory wiped clean.")"
+}
+# --- Composer in Docker ---
+composer_cmd() {
+  ensure_docker
+  docker run --rm -u "$(id -u):$(id -g)" \
+    -v "$(pwd):/app" \
+    -v composer_cache:/tmp/cache \
+    -e COMPOSER_CACHE_DIR=/tmp/cache \
+    composer "$@"
+}
+
+# --- Self management ---
+nfutils_uninstall() {
+  echo "$(red "⚠️  This will remove nfutils from your system!")"
+  read -p "Are you sure? (y/N): " ans
+  [[ "$ans" == "y" ]] || { echo "Aborted."; exit 0; }
+  rm -f "$HOME/bin/nfutils"
+  if [ -f "$BASHRC" ]; then
+    strip_line_from_file "$BASHRC" "HOME/bin"
+    strip_line_from_file "$BASHRC" ".bash_completion.d/nfutils"
+  fi
+  if [ -f "$ZSHRC" ]; then
+    strip_line_from_file "$ZSHRC" "HOME/bin"
+    strip_block_between_markers "$ZSHRC" "# nfutils zsh completion start" "# nfutils zsh completion end"
+  fi
+  rm -f "$ZSH_COMPLETION_PATH"
+  echo "$(green "✅ nfutils uninstalled.")"
+}
+
+nfutils_update() {
+  echo "$(yellow "🔍 Downloading latest nfutils...")"
+  local tmp install_url remote_version
+  tmp=$(mktemp)
+  install_url=$(cache_busted_url "$NF_REPO_URL")
+  if ! curl -fsSL "$install_url" -o "$tmp" 2>/dev/null; then
+    rm -f "$tmp"
+    echo "$(red "❌ Unable to download nfutils (network or GitHub issue).")"
+    exit 1
+  fi
+  remote_version=$(grep -m1 'NF_VERSION="v' "$tmp" | cut -d'"' -f2)
+  echo "$(yellow "⬇️ Reinstalling nfutils ${remote_version:-}...")"
+  if ! bash "$tmp"; then
+    rm -f "$tmp"
+    echo "$(red "❌ Installation failed.")"
+    exit 1
+  fi
+  rm -f "$tmp"
+  reload_current_shell_rc
+  echo "$(green "✅ nfutils updated to ${remote_version:-latest}")"
+  exit 0
+}
+
+nfutils_version() {
+  echo "nfutils $NF_VERSION"
+  echo "Author : Nefla"
+  echo "Repo   : https://github.com/neflalabs/nfutils"
+}
+case "$1" in
+  laravel) shift; laravel_cmd "$@";;
+  composer) shift; composer_cmd "$@";;
+  destroyer) destroyer;;
+  nuke) nuke_everything;;
+  uninstall) nfutils_uninstall;;
+  update) nfutils_update;;
+  version|-v) nfutils_version;;
+  "") show_help;;
+  *) echo "$(red "Unknown command: $1")"; show_help;;
+esac
+EOF
+tmp_file=$(mktemp)
+sed "s|v2025-12-08T15:27:47Z-g6d228d3|$NF_VERSION|g; s|https://raw.githubusercontent.com/neflalabs/nfutils/main/nfutils.sh|$NF_REPO_URL|g" "$NF_PATH" > "$tmp_file"
+mv "$tmp_file" "$NF_PATH"
+
+chmod +x "$NF_PATH"
+
+ensure_bashrc
+append_unique_line "$BASHRC" 'export PATH="$HOME/bin:$PATH"'
+ensure_zshrc
+append_unique_line "$ZSHRC" 'export PATH="$HOME/bin:$PATH"'
+
+echo ""
+green "✅ nfutils $NF_VERSION installed successfully!"
+echo "👉 Try: nfutils --version"
+echo "👉 Or run: nfutils update"
+echo ""
+
+# ------------------------------------------------------------
+# Enable shell completions for nfutils
+# ------------------------------------------------------------
+NF_COMPLETION="$HOME/.bash_completion.d/nfutils"
+
+mkdir -p "$(dirname "$NF_COMPLETION")"
+mkdir -p "$ZSH_COMPLETION_DIR"
+
+cat > "$NF_COMPLETION" <<'EOC'
+# nfutils bash completion
+_nfutils_completions() {
+  local cur prev cmd subcmd
+  COMPREPLY=()
+  cur="${COMP_WORDS[COMP_CWORD]}"
+  prev="${COMP_WORDS[COMP_CWORD-1]}"
+  cmd="${COMP_WORDS[1]:-}"
+
+  local top_commands="laravel composer destroyer nuke update uninstall version help"
+  local laravel_subcommands="create init help"
+
+  if [ $COMP_CWORD -eq 1 ]; then
+    COMPREPLY=( $(compgen -W "${top_commands}" -- "${cur}") )
+    return 0
+  fi
+
+  case "${cmd}" in
+    laravel)
+      if [ $COMP_CWORD -eq 2 ]; then
+        COMPREPLY=( $(compgen -W "${laravel_subcommands}" -- "${cur}") )
+        return 0
+      fi
+      subcmd="${COMP_WORDS[2]:-}"
+      case "${subcmd}" in
+        create)
+          if [ $COMP_CWORD -eq 3 ]; then
+            local dirs=()
+            if [[ "." == "${cur}"* ]]; then
+              dirs+=(".")
+            fi
+            while IFS= read -r line; do
+              dirs+=("$line")
+            done < <(compgen -d -- "${cur}")
+            COMPREPLY=("${dirs[@]}")
+            if type compopt >/dev/null 2>&1; then
+              compopt -o dirnames 2>/dev/null
+            fi
+          fi
+          return 0
+          ;;
+        init)
+          if [[ "$prev" == "-p" || "$prev" == "--port" ]]; then
+            COMPREPLY=()
+            return 0
+          fi
+          if [[ "$prev" == "-db" || "$prev" == "--db" || "$prev" == "--database" ]]; then
+            COMPREPLY=( $(compgen -W "mysql pgsql sqlite" -- "${cur}") )
+            return 0
+          fi
+          if [ $COMP_CWORD -eq 3 ]; then
+            COMPREPLY=( $(compgen -W "-p --port -db --database" -- "${cur}") )
+            return 0
+          fi
+          return 0
+          ;;
+      esac
+      return 0
+      ;;
+  esac
+
+  COMPREPLY=()
+}
+complete -F _nfutils_completions nfutils
+
+EOC
+
+cat > "$ZSH_COMPLETION_PATH" <<'EOZ'
+#compdef nfutils
+
+_nfutils() {
+  local -a top_commands laravel_sub
+  top_commands=(laravel composer destroyer nuke update uninstall version help)
+  laravel_sub=(create init help)
+
+  if (( CURRENT == 2 )); then
+    _describe -t commands 'nfutils commands' top_commands
+    return
+  fi
+
+  case ${words[2]} in
+    laravel)
+      if (( CURRENT == 3 )); then
+        _describe -t laravel_subcommands 'laravel subcommands' laravel_sub
+        return
+      fi
+      case ${words[3]} in
+        create)
+          _files -/
+          ;;
+        init|'')
+          _values 'laravel init options' \
+            '-p[set custom Sail port]' \
+            '--port[set custom Sail port]' \
+            '-db[set database driver]:driver:(mysql pgsql sqlite)' \
+            '--database[set database driver]:driver:(mysql pgsql sqlite)'
+          ;;
+      esac
+      ;;
+  esac
+}
+
+_nfutils "$@"
+
+EOZ
+
+# activate immediately
+if [ -f "$NF_COMPLETION" ]; then
+  ensure_bashrc
+  append_unique_line "$BASHRC" "source $NF_COMPLETION"
+  source "$NF_COMPLETION"
+fi
+
+if [ -f "$ZSH_COMPLETION_PATH" ]; then
+  ensure_zshrc
+  strip_block_between_markers "$ZSHRC" "# nfutils zsh completion start" "# nfutils zsh completion end"
+  ensure_spacing_before_append "$ZSHRC"
+  cat >> "$ZSHRC" <<'EOZ'
+# nfutils zsh completion start
+alias sail='sh $([ -f sail ] && echo sail || echo vendor/bin/sail)'
+fpath=("$HOME/.zsh/completions" $fpath)
+autoload -Uz compinit && compinit
+# nfutils zsh completion end
+EOZ
+fi
+
+# Offer to reload the detected shell configuration
+prompt_source_rc

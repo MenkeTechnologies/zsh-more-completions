@@ -1,0 +1,2057 @@
+# Source: https://github.com/dtg01100/dcutil/blob/8153d1672bd0a29a1ae606ee20cc30f009f664ef/dcutil
+# Repository: dtg01100/dcutil (dcutil)
+#!/usr/bin/env bash
+
+# Main dcutil script
+# Routes commands to appropriate modules
+
+VERSION="v1.6.0"
+export VERSION
+
+set -euo pipefail
+
+# Source other dcutil modules for enhanced functionality
+# Resolve symlinks properly for different installation methods
+if [ -L "${BASH_SOURCE[0]}" ]; then
+    # Symlinked (Homebrew) - resolve to actual script location
+    SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
+else
+    # Direct execution
+    SCRIPT_PATH="${BASH_SOURCE[0]}"
+fi
+SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
+if [ -d "$SCRIPT_DIR/lib" ]; then
+    LIB_DIR="$SCRIPT_DIR/lib"
+elif [ -d "$SCRIPT_DIR/../lib" ]; then
+    LIB_DIR="$SCRIPT_DIR/../lib"
+elif [ -L "$SCRIPT_DIR/core.sh" ]; then
+    # Homebrew installation - libraries are symlinked in bin directory
+    LIB_DIR="$SCRIPT_DIR/../libexec"
+elif [ -f "$SCRIPT_DIR/core.sh" ]; then
+    # Libraries in same directory as script
+    LIB_DIR="$SCRIPT_DIR"
+elif [ -f "./lib/core.sh" ]; then
+    # Libraries in lib subdirectory of current directory
+    LIB_DIR="./lib"
+elif [ -f "./core.sh" ]; then
+    # Libraries in current directory
+    LIB_DIR="."
+else
+    echo "Error: Could not find dcutil library files" >&2
+    echo "Searched locations:" >&2
+    echo "  - $SCRIPT_DIR/lib" >&2
+    echo "  - $SCRIPT_DIR/../lib" >&2
+    echo "  - $SCRIPT_DIR/../libexec" >&2
+    echo "  - $SCRIPT_DIR" >&2
+    echo "  - ./lib" >&2
+    echo "  - ." >&2
+    exit 1
+fi
+
+# Verify core.sh exists before sourcing
+if [ ! -f "$LIB_DIR/core.sh" ]; then
+    echo "Error: core.sh not found at $LIB_DIR/core.sh" >&2
+    echo "LIB_DIR resolved to: $LIB_DIR" >&2
+    echo "SCRIPT_DIR is: $SCRIPT_DIR" >&2
+    echo "Contents of LIB_DIR:" >&2
+    ls -la "$LIB_DIR" 2>&1 || echo "  (directory does not exist)" >&2
+    exit 1
+fi
+
+# shellcheck disable=SC1091
+# shellcheck source=lib/core.sh
+
+# Parse --quiet/-q flags from the entire argument list early so quiet mode is respected
+DCUTIL_QUIET="${DCUTIL_QUIET:-0}"
+filtered_args=()
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --quiet|-q)
+            DCUTIL_QUIET=1
+            export DCUTIL_QUIET
+            shift
+            ;;
+        --)
+            shift
+            filtered_args+=("--")
+            while [ $# -gt 0 ]; do
+                filtered_args+=("$1")
+                shift
+            done
+            ;;
+        *)
+            filtered_args+=("$1")
+            shift
+            ;;
+    esac
+done
+set -- "${filtered_args[@]:-}"
+
+# Source core functionality first
+# shellcheck disable=SC1091
+# shellcheck source=lib/core.sh
+source "$LIB_DIR/core.sh"
+
+# Guardrail: Check for root user
+check_root_user
+
+# Require the official devcontainer CLI for operations
+require_devcontainer_cli
+
+# Always use official devcontainer CLI as primary engine with dcutil enhancements
+info "Using official devcontainer CLI with dcutil enhancements"
+# shellcheck disable=SC1091
+# shellcheck source=lib/api_official_cli.sh
+source "$LIB_DIR/api_official_cli.sh"
+
+# shellcheck disable=SC1091
+# shellcheck source=lib/docker.sh
+source "$LIB_DIR/docker.sh"
+if [ -f "$LIB_DIR/volumes.sh" ]; then
+    # shellcheck disable=SC1091
+    # shellcheck source=lib/volumes.sh
+    source "$LIB_DIR/volumes.sh"
+fi
+if [ -f "$LIB_DIR/security.sh" ]; then
+    # shellcheck disable=SC1091
+    # shellcheck source=lib/security.sh
+    source "$LIB_DIR/security.sh"
+fi
+if [ -f "$LIB_DIR/init.sh" ]; then
+    # shellcheck disable=SC1091
+    # shellcheck source=lib/init.sh
+    source "$LIB_DIR/init.sh"
+fi
+
+# Load optional modules for enhanced functionality
+if [ -f "$LIB_DIR/features.sh" ]; then
+    # shellcheck disable=SC1091
+    # shellcheck source=lib/features.sh
+    source "$LIB_DIR/features.sh"
+fi
+
+if [ -f "$LIB_DIR/lockfile.sh" ]; then
+    # shellcheck disable=SC1091
+    # shellcheck source=lib/lockfile.sh
+    source "$LIB_DIR/lockfile.sh"
+fi
+
+if [ -f "$LIB_DIR/lifecycle.sh" ]; then
+    # shellcheck disable=SC1091
+    # shellcheck source=lib/lifecycle.sh
+    source "$LIB_DIR/lifecycle.sh"
+fi
+# environment module is optional
+if [ -f "$LIB_DIR/environment.sh" ]; then
+    # shellcheck disable=SC1091
+    # shellcheck source=lib/environment.sh
+    source "$LIB_DIR/environment.sh"
+fi
+# userprobe module is optional
+if [ -f "$LIB_DIR/userprobe.sh" ]; then
+    # shellcheck disable=SC1091
+    # shellcheck source=lib/userprobe.sh
+    source "$LIB_DIR/userprobe.sh"
+fi
+# hostrequirements module is optional
+if [ -f "$LIB_DIR/hostrequirements.sh" ]; then
+    # shellcheck disable=SC1091
+    # shellcheck source=lib/hostrequirements.sh
+    source "$LIB_DIR/hostrequirements.sh"
+fi
+# shutdown module is optional
+if [ -f "$LIB_DIR/shutdown.sh" ]; then
+    # shellcheck disable=SC1091
+    # shellcheck source=lib/shutdown.sh
+    source "$LIB_DIR/shutdown.sh"
+fi
+# advanced module is optional
+if [ -f "$LIB_DIR/advanced.sh" ]; then
+    # shellcheck disable=SC1091
+    # shellcheck source=lib/advanced.sh
+    source "$LIB_DIR/advanced.sh"
+    # echo "DEBUG: advanced.sh sourced" >&2
+fi
+# integration module is optional
+if [ -f "$LIB_DIR/integration.sh" ]; then
+    # shellcheck disable=SC1091
+    # shellcheck source=lib/integration.sh
+    source "$LIB_DIR/integration.sh"
+fi
+# schema validation module is optional
+if [ -f "$LIB_DIR/schema-validation.sh" ]; then
+    # shellcheck disable=SC1091
+    # shellcheck source=lib/schema-validation.sh
+    source "$LIB_DIR/schema-validation.sh"
+fi
+# podman backend module is optional
+if [ -f "$LIB_DIR/podman.sh" ]; then
+    # shellcheck disable=SC1091
+    # shellcheck source=lib/podman.sh
+    source "$LIB_DIR/podman.sh"
+fi
+# monitoring module is optional
+if [ -f "$LIB_DIR/monitoring.sh" ]; then
+    # shellcheck disable=SC1091
+    # shellcheck source=lib/monitoring.sh
+    source "$LIB_DIR/monitoring.sh"
+fi
+# Template integration module is optional (needed by UX features)
+if [ -f "$LIB_DIR/template_integration.sh" ]; then
+    # shellcheck disable=SC1091
+    # shellcheck source=lib/template_integration.sh
+    source "$LIB_DIR/template_integration.sh"
+fi
+# UX enhancements module is optional
+if [ -f "$LIB_DIR/ux.sh" ]; then
+    # shellcheck disable=SC1091
+    # shellcheck source=lib/ux.sh
+    source "$LIB_DIR/ux.sh"
+fi
+# merging module is optional
+if [ -f "$LIB_DIR/merging.sh" ]; then
+    # shellcheck disable=SC1091
+    # shellcheck source=lib/merging.sh
+    source "$LIB_DIR/merging.sh"
+fi
+
+# Initialize backend system
+if command -v init_podman_backend >/dev/null 2>&1; then
+    init_podman_backend
+fi
+
+# Test function to verify improvements
+test_dcutil_improvements() {
+    echo "Testing dcutil improvements..."
+
+    # Test 1: Verify set -euo pipefail is active
+
+    if [[ $- == *e* ]] && [[ $- == *u* ]]; then
+        # Test pipefail functionality
+        set +e  # Temporarily disable exit "on error
+        false | true
+        local pipefail_result=$?
+        set -e  # Re-enable exit on error
+
+        if [ $pipefail_result -ne 0 ]; then
+            echo "✅ Error handling enabled (set -euo pipefail)"
+        else
+            echo "⚠️  Error handling partially configured (pipefail may not be working)"
+        fi
+    else
+        echo "❌ Error handling not properly configured"
+    fi
+
+    # Test 2: Test safe_path function
+    local test_path
+    test_path=$(safe_path "$HOME/test")
+    if [[ "$test_path" != "$HOME/test" ]]; then
+        echo "✅ safe_path function working"
+    else
+        echo "❌ safe_path function not expanding paths"
+    fi
+
+    # Test 3: Test volume JSON handling
+    if command -v jq &> /dev/null; then
+        echo "✅ jq available for JSON operations"
+    else
+        echo "⚠️  jq not available, falling back to sed"
+    fi
+
+    # Test 4: Check for atomic operations
+    if grep -q "mktemp" "$LIB_DIR/volumes.sh"; then
+        echo "✅ Atomic operations implemented"
+    else
+        echo "❌ Atomic operations not found"
+    fi
+
+    # Test 5: Check for rate limiting
+    if grep -q "sleep.*seconds" "$LIB_DIR/security.sh"; then
+        echo "✅ Rate limiting implemented"
+    else
+        echo "❌ Rate limiting not found"
+    fi
+
+    echo "Testing complete!"
+}
+
+# Show first-time welcome if this is the first run (skip in non-interactive/CI)
+if [ -t 0 ] && [ -z "${CI:-}" ] && [ -z "${GITHUB_ACTIONS:-}" ]; then
+    if command -v show_first_time_welcome >/dev/null 2>&1; then
+        if show_first_time_welcome; then
+            : # Continue normally
+        else
+            # User chose interactive menu from welcome
+            COMMAND="menu"
+        fi
+    fi
+fi
+
+# Parse and validate arguments
+COMMAND="${1:-menu}"  # Default to menu instead of help for better UX
+# echo "DEBUG: COMMAND set to '$COMMAND'" >&2
+# Allow a special verify-dialog command for debugging dialog UI without running full wizard
+if [ "${1:-}" = "verify-dialog" ]; then
+    export PROJECT_DIR
+    if command -v lib/init.sh >/dev/null 2>&1; then
+        echo "Running dialog verification..."
+    fi
+fi
+
+# Handle special completion command
+if [ "$COMMAND" = "completion" ]; then
+_generate_completion() {
+    local shell="${2:-bash}"
+
+    if [ "$shell" = "bash" ]; then
+        cat << 'BASH_EOF'
+#!/bin/bash
+
+# Bash completion for dcutil
+_dcutil() {
+    local cur prev words cword
+    _init_completion || return
+
+    cur="${words[2]}"
+    prev="${words[1]}"
+
+    # If no command yet, complete with available commands
+    if [ "$cur" -eq 1 ]; then
+        COMPREPLY=($(compgen -W "${commands}" -- "${cur}"))
+        return
+    fi
+
+    # Complete based on the current command
+    case "${words[1]}" in
+        dcutil)
+            COMPREPLY=($(compgen -W "${commands}" -- "${cur}"))
+            ;;
+        up)
+            COMPREPLY=($(compgen -W "${up_options}" -- "${cur}"))
+            ;;
+        down)
+            COMPREPLY=($(compgen -W "${down_options}" -- "${cur}"))
+            ;;
+        restart)
+            COMPREPLY=($(compgen -W "${restart_options}" -- "${cur}"))
+            ;;
+        enter)
+            COMPREPLY=($(compgen -W "${enter_options}" -- "${cur}"))
+            ;;
+        build)
+            COMPREPLY=($(compgen -W "${build_options}" -- "${cur}"))
+            ;;
+        clean)
+            COMPREPLY=($(compgen -W "${clean_options}" -- "${cur}"))
+            ;;
+        status)
+            COMPREPLY=($(compgen -W "${status_options}" -- "${cur}"))
+            ;;
+        stats)
+            COMPREPLY=($(compgen -W "${stats_commands}" -- "${cur}"))
+            ;;
+        logs)
+            COMPREPLY=($(compgen -W "${logs_options}" -- "${cur}"))
+            ;;
+        list)
+            COMPREPLY=($(compgen -W "${list_options}" -- "${cur}"))
+            ;;
+        run)
+            COMPREPLY=($(compgen -W "${run_options}" -- "${cur}"))
+            ;;
+        init)
+            COMPREPLY=($(compgen -W "${init_commands}" -- "${cur}"))
+            ;;
+        check)
+            COMPREPLY=($(compgen -W "${check_options}" -- "${cur}"))
+            ;;
+        ssh)
+            COMPREPLY=($(compgen -W "${ssh_commands}" -- "${cur}"))
+            ;;
+        volumes)
+            COMPREPLY=($(compgen -W "${volumes_commands}" -- "${cur}"))
+            ;;
+        compose)
+            COMPREPLY=($(compgen -W "${compose_commands}" -- "${cur}"))
+            ;;
+        features)
+            COMPREPLY=($(compgen -W "${features_commands}" -- "${cur}"))
+            ;;
+        advanced)
+            COMPREPLY=($(compgen -W "${advanced_commands}" -- "${cur}"))
+            ;;
+        integration)
+            COMPREPLY=($(compgen -W "${integration_commands}" -- "${cur}"))
+            ;;
+        merging)
+            COMPREPLY=($(compgen -W "${merging_commands}" -- "${cur}"))
+            ;;
+        userprobe)
+            COMPREPLY=($(compgen -W "${userprobe_commands}" -- "${cur}"))
+            ;;
+        hostrequirements)
+            COMPREPLY=($(compgen -W "${hostrequirements_commands}" -- "${cur}"))
+            ;;
+        shutdown)
+            COMPREPLY=($(compgen -W "${shutdown_commands}" -- "${cur}"))
+            ;;
+        schema)
+            COMPREPLY=($(compgen -W "${schema_commands}" -- "${cur}"))
+            ;;
+        podman)
+            COMPREPLY=($(compgen -W "${podman_commands}" -- "${cur}"))
+            ;;
+        rebuild)
+            COMPREPLY=($(compgen -W "${rebuild_options}" -- "${cur}"))
+            ;;
+        version)
+            COMPREPLY=($(compgen -W "${version_options}" -- "${cur}"))
+            ;;
+        help)
+            COMPREPLY=($(compgen -W "${help_options}" -- "${cur}"))
+            ;;
+        completion)
+            COMPREPLY=($(compgen -W "${completion_options}" -- "${cur}"))
+            ;;
+        test)
+            COMPREPLY=($(compgen -W "${test_options}" -- "${cur}"))
+            ;;
+        menu)
+            COMPREPLY=($(compgen -W "${menu_options}" -- "${cur}"))
+            ;;
+        *)
+            COMPREPLY=()
+            ;;
+    esac
+}
+
+complete -F _dcutil dcutil
+BASH_EOF
+    elif [ "$shell" = "zsh" ]; then
+        cat << 'ZSH_EOF'
+#compdef dcutil
+
+_dcutil() {
+    local -a commands
+    commands=(
+        'up:Start the devcontainer' \
+        'down:Stop the devcontainer' \
+        'enter:Enter the container shell' \
+        'build:Build the devcontainer image' \
+        'help:Show help'
+    )
+    _describe 'command' commands
+}
+ZSH_EOF
+    else
+        echo "Unsupported shell: $shell" >&2
+        return 1
+    fi
+}
+
+    _generate_completion "$@"
+    exit "$EXIT_SUCCESS"
+fi
+# Handle interactive menu mode
+if [ "$COMMAND" = "menu" ]; then
+    if command -v show_interactive_menu >/dev/null 2>&1; then
+        while true; do
+            show_interactive_menu
+            choice=$?
+
+            case $choice in
+                1) COMMAND="up"; break ;;
+                2) COMMAND="enter"; break ;;
+                3) COMMAND="down"; break ;;
+                4) COMMAND="status"; break ;;
+                5) COMMAND="stats"; break ;;
+                6) COMMAND="init"; break ;;
+                7) COMMAND="logs"; break ;;
+                8) COMMAND="volumes"; set -- "list"; break ;;
+                0) continue ;;  # Show menu again
+            esac
+        done
+    else
+        # Fallback to help if UX module not available
+        print_usage
+        exit "$EXIT_SUCCESS"
+    fi
+fi
+
+# Validate command and offer suggestions for invalid commands
+if ! validate_command "$COMMAND" 2>/dev/null; then
+    # Command is invalid - try to suggest an alternative
+    if command -v suggest_command >/dev/null 2>&1; then
+        if suggest_command "$COMMAND"; then
+            exit "$EXIT_INVALID_ARGS"
+        fi
+    fi
+    # If no suggestion found, show standard error
+    error "Unknown command: $COMMAND"
+    echo "Run 'dcutil help' to see available commands"
+    exit "$EXIT_INVALID_ARGS"
+fi
+
+# Allow verify-dialog command be invoked from top-level invocation
+if [ "$COMMAND" = "verify-dialog" ]; then
+    determine_project_dir
+    # Ensure modules are sourced
+    if command -v verify_dialog >/dev/null 2>&1; then
+        if verify_dialog; then
+            success "Dialog verification passed"
+            exit "$EXIT_SUCCESS"
+        else
+            error_exit "Dialog verification failed or dialog not available" "$EXIT_CONFIG_ERROR"
+        fi
+    else
+        error_exit "Dialog verification not available. Ensure init module is sourced." "$EXIT_CONFIG_ERROR"
+    fi
+fi
+
+# Print usage information
+print_usage() {
+    cat << 'EOF'
+Usage: dcutil <command> [options]
+
+Manage your development environment with ease - no Docker knowledge required!
+
+Quick Start:
+  dcutil up                    Start your development environment
+  dcutil enter                 Open a shell in your environment
+  dcutil down                  Stop your environment
+  dcutil restart               Restart your environment
+
+Core Commands:
+  up          Start your development environment (builds if needed)
+  down        Stop your environment
+  restart     Restart your environment
+  enter       Open a shell inside your environment
+  build       Build/rebuild your environment
+  clean       Remove all environment data
+  status      Check if your environment is running
+  stats       Monitor resource usage (CPU, memory, etc.)
+  logs        View environment logs
+  list        See all your development environments
+  run         Run a command in your environment
+
+Setup & Configuration:
+  init        Set up a new development environment
+  check       Verify your configuration is correct
+  volumes     Manage persistent storage
+  features    Add tools and languages to your environment
+
+Advanced:
+
+  ssh              SSH key management (enable, disable, status)
+  compose          Multi-container environments
+  advanced         Advanced configuration options
+  integration      Tool integrations
+  hostrequirements Check system requirements
+  rebuild          Rebuild with specific options
+
+Utility:
+  version     Show version information
+  completion  Setup command auto-completion
+  help        Show this help message
+  edit        Edit devcontainer.json with validation and optional re-edit
+
+Examples:
+  dcutil up                    # Start your environment
+  dcutil enter                 # Jump into a shell
+  dcutil stats                 # Check resource usage
+  dcutil volumes list          # See your storage
+  dcutil features install      # Add new tools
+
+For command-specific help:
+  dcutil <command> --help
+
+New to this? Just run:
+  dcutil init                  # Guided setup wizard
+EOF
+}
+
+# Handle help command before any other processing
+if [ "$COMMAND" = "help" ] || [ "$COMMAND" = "-h" ] || [ "$COMMAND" = "--help" ]; then
+    print_usage
+    exit "$EXIT_SUCCESS"
+fi
+
+# Handle special case for run command (project path can be second arg)
+if [ "$COMMAND" = "run" ]; then
+    if [ -n "${2:-}" ] && [ -d "$2" ]; then
+        determine_project_dir "$2"
+        shift 2  # Remove command and project path
+    else
+        determine_project_dir
+        shift 1
+    fi
+
+elif [ "$COMMAND" = "ssh" ]; then
+    # SSH command doesn't need project directory
+    determine_project_dir
+    shift 1
+elif [ "$COMMAND" = "volumes" ]; then
+    # Volumes command can take an optional project directory
+    determine_project_dir
+    shift 1
+elif [ "$COMMAND" = "compose" ]; then
+    # Compose command doesn't need project directory
+    determine_project_dir
+    shift 1
+elif [ "$COMMAND" = "build" ]; then
+    # Build command doesn't need project directory
+    determine_project_dir
+    shift 1
+
+    # Set up environment for build modules
+    export PROJECT_DIR
+    cd "$PROJECT_DIR" || error_exit "Failed to change to project directory: $PROJECT_DIR" "$EXIT_PERMISSION_ERROR"
+
+    # Check for build subcommands
+    case "${1:-}" in
+        "info")
+            # Show build info
+            if command -v show_build_info >/dev/null 2>&1; then
+                show_build_info
+            else
+                error_exit "Build info not available. No build configuration found." "$EXIT_CONFIG_ERROR"
+            fi
+            exit "$EXIT_SUCCESS"
+            ;;
+        "validate")
+            # Validate build configuration
+            if command -v validate_build_config >/dev/null 2>&1; then
+                if validate_build_config; then
+                    success "Build configuration is valid"
+                else
+                    error_exit "Build configuration validation failed" "$EXIT_CONFIG_ERROR"
+                fi
+            else
+                error_exit "Build validation not available. No build configuration found." "$EXIT_CONFIG_ERROR"
+            fi
+            exit "$EXIT_SUCCESS"
+            ;;
+        "clean")
+            # Clean build artifacts
+            if command -v clean_build_artifacts >/dev/null 2>&1; then
+                clean_build_artifacts
+            else
+                error_exit "Build clean not available. No build configuration found." "$EXIT_CONFIG_ERROR"
+            fi
+            exit "$EXIT_SUCCESS"
+            ;;
+        "")
+            # Standard build - fall through to normal processing
+            ;;
+        *)
+            # Assume it's a project path or invalid
+            ;;
+    esac
+
+    # Standard build command
+    docker_build "$@"
+    exit "$EXIT_SUCCESS"
+elif [ "$COMMAND" = "stats" ]; then
+    # Stats command for resource monitoring
+    determine_project_dir
+    shift 1
+
+    # Set up environment
+    export PROJECT_DIR
+    cd "$PROJECT_DIR" || error_exit "Failed to change to project directory: $PROJECT_DIR" "$EXIT_PERMISSION_ERROR"
+
+    # Handle stats command
+    if command -v handle_stats_command >/dev/null 2>&1; then
+        handle_stats_command "$PROJECT_DIR" "$@"
+    else
+        error_exit "Stats functionality not available. Monitoring module not loaded." "$EXIT_CONFIG_ERROR"
+    fi
+    exit "$EXIT_SUCCESS"
+elif [ "$COMMAND" = "hostrequirements" ]; then
+    # Host requirements command doesn't need project directory
+    determine_project_dir
+    shift 1
+elif [ "$COMMAND" = "shutdown" ]; then
+    # Shutdown action command doesn't need project directory
+    determine_project_dir
+    shift 1
+    elif [ "$COMMAND" = "lifecycle" ]; then
+        # Lifecycle command doesn't need project directory
+        determine_project_dir
+        shift 1
+
+        # Set up environment for lifecycle modules
+        export PROJECT_DIR
+        cd "$PROJECT_DIR" || error_exit "Failed to change to project directory: $PROJECT_DIR" "$EXIT_PERMISSION_ERROR"
+
+        # Check for lifecycle subcommands
+        case "${1:-}" in
+            "info"|"list")
+                # Show lifecycle info
+                if command -v show_lifecycle_info >/dev/null 2>&1; then
+                    show_lifecycle_info
+                else
+                    error_exit "Lifecycle info not available. No lifecycle configuration found." "$EXIT_CONFIG_ERROR"
+                fi
+                exit "$EXIT_SUCCESS"
+                ;;
+            "validate")
+                # Validate lifecycle configuration
+                if command -v validate_lifecycle_config >/dev/null 2>&1; then
+                    if validate_lifecycle_config; then
+                        success "Lifecycle configuration is valid"
+                    else
+                        error_exit "Lifecycle configuration validation failed" "$EXIT_CONFIG_ERROR"
+                    fi
+                else
+                    error_exit "Lifecycle validation not available. No lifecycle configuration found." "$EXIT_CONFIG_ERROR"
+                fi
+                exit "$EXIT_SUCCESS"
+                ;;
+            "")
+                # Standard lifecycle execution - fall through to normal processing
+                if command -v execute_lifecycle_commands >/dev/null 2>&1; then
+                    execute_lifecycle_commands
+                else
+                    error_exit "Lifecycle execution not available. No lifecycle configuration found." "$EXIT_CONFIG_ERROR"
+                fi
+                exit "$EXIT_SUCCESS"
+                ;;
+            "help"|"-h"|"--help")
+                cat << 'EOF'
+Usage: dcutil lifecycle <command> [options]
+
+Devcontainer lifecycle commands for container initialization and management:
+
+Commands:
+  info      Show lifecycle configuration
+  list      List configured lifecycle commands
+  validate  Validate lifecycle configuration
+  (none)    Execute lifecycle commands (default)
+
+Examples:
+  dcutil lifecycle info
+  dcutil lifecycle list
+  dcutil lifecycle validate
+  dcutil lifecycle
+
+Manages onCreateCommand, updateContentCommand, postAttachCommand, and waitFor properties.
+EOF
+                exit "$EXIT_SUCCESS"
+                ;;
+            *)
+                handle_unknown_subcommand "lifecycle" "${1:-}"
+                ;;
+        esac
+
+elif [ "$COMMAND" = "advanced" ]; then
+    # echo "DEBUG: Advanced command reached" >&2
+    # Advanced features command doesn't need project directory
+    determine_project_dir
+    shift 1
+
+    # Set up environment for advanced features modules
+    export PROJECT_DIR
+    cd "$PROJECT_DIR" || error_exit "Failed to change to project directory: $PROJECT_DIR" "$EXIT_PERMISSION_ERROR"
+
+    # Check for advanced features subcommands
+    case "${1:-}" in
+        "info")
+            # Show advanced features info
+            if command -v show_advanced_features_info >/dev/null 2>&1; then
+                show_advanced_features_info
+            else
+                error_exit "Advanced features info not available. No advanced features configuration found." "$EXIT_CONFIG_ERROR"
+            fi
+            exit "$EXIT_SUCCESS"
+            ;;
+        "validate")
+            # Validate advanced features configuration
+            if command -v validate_advanced_features_config >/dev/null 2>&1; then
+                validate_advanced_features_config
+            else
+                error_exit "Advanced features validation not available. No advanced features configuration found." "$EXIT_CONFIG_ERROR"
+            fi
+            exit "$EXIT_SUCCESS"
+            ;;
+        "apply")
+            # Apply advanced features
+            if command -v apply_advanced_features >/dev/null 2>&1; then
+                apply_advanced_features
+            else
+                error_exit "Advanced features application not available. No advanced features configuration found." "$EXIT_CONFIG_ERROR"
+            fi
+            exit "$EXIT_SUCCESS"
+            ;;
+        "help"|"-h"|"--help")
+            cat << 'EOF'
+Usage: dcutil advanced <command> [options]
+
+Advanced devcontainer features for enhanced configuration:
+
+Commands:
+  info      Show advanced features configuration
+  validate  Validate advanced features configuration
+  apply     Apply advanced features to running container
+
+Examples:
+  dcutil advanced info
+  dcutil advanced validate
+  dcutil advanced apply
+
+Supports updateRemoteUserUID, entrypoint override, overrideCommand,
+forwardPorts, portsAttributes, and workspaceMount features.
+EOF
+            exit "$EXIT_SUCCESS"
+            ;;
+        "")
+            # Default: show info
+            if command -v show_advanced_features_info >/dev/null 2>&1; then
+                # echo "DEBUG: show_advanced_features_info exists" >&2
+                # shellcheck disable=SC2181
+                if ! show_advanced_features_info; then
+                    error_exit "No advanced features configured." "$EXIT_CONFIG_ERROR"
+                fi
+            else
+                # echo "DEBUG: show_advanced_features_info not found" >&2
+                error_exit "Advanced features module not available." "$EXIT_CONFIG_ERROR"
+            fi
+            exit "$EXIT_SUCCESS"
+            ;;
+        *)
+            handle_unknown_subcommand "advanced" "${1:-}"
+            ;;
+    esac
+elif [ "$COMMAND" = "integration" ]; then
+    # Tool integration command doesn't need project directory
+    determine_project_dir
+    shift 1
+
+    # Set up environment for integration modules
+    export PROJECT_DIR
+    cd "$PROJECT_DIR" || error_exit "Failed to change to project directory: $PROJECT_DIR" "$EXIT_PERMISSION_ERROR"
+
+    # Check for integration subcommands
+    case "${1:-}" in
+        "info")
+            # Show integration info
+            if command -v show_tool_integration_info >/dev/null 2>&1; then
+                show_tool_integration_info
+            else
+                error_exit "Integration info not available. No integration configuration found." "$EXIT_CONFIG_ERROR"
+            fi
+            exit "$EXIT_SUCCESS"
+            ;;
+        "validate")
+            # Validate integration configuration
+            if command -v validate_tool_integration_config >/dev/null 2>&1; then
+                validate_tool_integration_config
+            else
+                error_exit "Integration validation not available. No integration configuration found." "$EXIT_CONFIG_ERROR"
+            fi
+            exit "$EXIT_SUCCESS"
+            ;;
+        "apply")
+            # Apply integration features
+            if command -v apply_tool_integration >/dev/null 2>&1; then
+                apply_tool_integration
+            else
+                error_exit "Integration application not available. No integration configuration found." "$EXIT_CONFIG_ERROR"
+            fi
+            exit "$EXIT_SUCCESS"
+            ;;
+        "help"|"-h"|"--help")
+            cat << 'EOF'
+Usage: dcutil integration <command> [options]
+
+Tool integration features for enhanced development environment:
+
+Commands:
+  info      Show tool integration configuration
+  validate  Validate tool integration configuration
+  apply     Apply tool integration features to running container
+
+Examples:
+  dcutil integration info
+  dcutil integration validate
+  dcutil integration apply
+
+Supports VS Code customizations, other tool customizations,
+and devcontainer.metadata label parsing.
+EOF
+            exit "$EXIT_SUCCESS"
+            ;;
+        "")
+            # Default: show info
+            if command -v show_tool_integration_info >/dev/null 2>&1; then
+                if ! show_tool_integration_info; then
+                    error_exit "No integration features configured." "$EXIT_CONFIG_ERROR"
+                fi
+            else
+                error_exit "Integration module not available." "$EXIT_CONFIG_ERROR"
+            fi
+            exit "$EXIT_SUCCESS"
+            ;;
+        *)
+            handle_unknown_subcommand "integration" "${1:-}"
+            ;;
+    esac
+elif [ "$COMMAND" = "merging" ]; then
+    # Metadata merging command doesn't need project directory
+    determine_project_dir
+    shift 1
+
+    # Set up environment for merging modules
+    export PROJECT_DIR
+    cd "$PROJECT_DIR" || error_exit "Failed to change to project directory: $PROJECT_DIR" "$EXIT_PERMISSION_ERROR"
+
+    # Check for merging subcommands
+    case "${1:-}" in
+        "show")
+            # Show merged configuration
+            if command -v show_merged_config >/dev/null 2>&1; then
+                show_merged_config
+            else
+                error_exit "Merging info not available. No image metadata found." "$EXIT_CONFIG_ERROR"
+            fi
+            exit "$EXIT_SUCCESS"
+            ;;
+        "validate")
+            # Validate merged configuration
+            if command -v validate_merged_config >/dev/null 2>&1; then
+                validate_merged_config
+            else
+                error_exit "Merging validation not available. No image metadata found." "$EXIT_CONFIG_ERROR"
+            fi
+            exit "$EXIT_SUCCESS"
+            ;;
+        "cleanup")
+            # Cleanup merged configuration
+            if command -v cleanup_merged_config >/dev/null 2>&1; then
+                cleanup_merged_config
+            else
+                error_exit "Merging cleanup not available." "$EXIT_CONFIG_ERROR"
+            fi
+            exit "$EXIT_SUCCESS"
+            ;;
+        "help"|"-h"|"--help")
+            cat << 'EOF'
+Usage: dcutil merging <command> [options]
+
+Image metadata merging for combining image labels with devcontainer.json:
+
+Commands:
+  show      Show merged configuration (image metadata + devcontainer.json)
+  validate  Validate merged configuration
+  cleanup   Cleanup temporary merged configuration files
+
+Examples:
+  dcutil merging show
+  dcutil merging validate
+  dcutil merging cleanup
+
+Implements the devcontainer specification merge logic for image metadata.
+EOF
+            exit "$EXIT_SUCCESS"
+            ;;
+        "")
+            # Default: show merged config
+            if command -v show_merged_config >/dev/null 2>&1; then
+                show_merged_config
+            else
+                error_exit "No image metadata found or merging module not available." "$EXIT_CONFIG_ERROR"
+            fi
+            exit "$EXIT_SUCCESS"
+            ;;
+        *)
+            handle_unknown_subcommand "merging" "${1:-}"
+            ;;
+    esac
+elif [ "$COMMAND" = "userprobe" ]; then
+    # User environment probing command doesn't need project directory
+    determine_project_dir
+    shift 1
+
+    # Set up environment for userprobe modules
+    export PROJECT_DIR
+    cd "$PROJECT_DIR" || error_exit "Failed to change to project directory: $PROJECT_DIR" "$EXIT_PERMISSION_ERROR"
+
+    # Check for userprobe subcommands
+    case "${1:-}" in
+        "probe")
+            # Probe user environment
+            if command -v probe_user_environment >/dev/null 2>&1; then
+                probe_user_environment
+            else
+                error_exit "User environment probing not available. No userEnvProbe configuration found." "$EXIT_CONFIG_ERROR"
+            fi
+            exit "$EXIT_SUCCESS"
+            ;;
+        "show")
+            # Show probed environment
+            if command -v show_probed_environment >/dev/null 2>&1; then
+                show_probed_environment
+            else
+                error_exit "Probed environment not available. Run 'dcutil userprobe probe' first." "$EXIT_CONFIG_ERROR"
+            fi
+            exit "$EXIT_SUCCESS"
+            ;;
+        "apply")
+            # Apply probed environment to container
+            if command -v apply_probed_environment >/dev/null 2>&1; then
+                apply_probed_environment
+            else
+                error_exit "Probed environment application not available. Run 'dcutil userprobe probe' first." "$EXIT_CONFIG_ERROR"
+            fi
+            exit "$EXIT_SUCCESS"
+            ;;
+        "validate")
+            # Validate userEnvProbe configuration
+            if command -v validate_user_env_probe_config >/dev/null 2>&1; then
+                validate_user_env_probe_config
+            else
+                error_exit "User environment validation not available. No userEnvProbe configuration found." "$EXIT_CONFIG_ERROR"
+            fi
+            exit "$EXIT_SUCCESS"
+            ;;
+        "cleanup")
+            # Cleanup probed environment
+            if command -v cleanup_probed_environment >/dev/null 2>&1; then
+                cleanup_probed_environment
+            else
+                error_exit "Probed environment cleanup not available." "$EXIT_CONFIG_ERROR"
+            fi
+            exit "$EXIT_SUCCESS"
+            ;;
+        "help"|"-h"|"--help")
+            cat << 'EOF'
+Usage: dcutil userprobe <command> [options]
+
+User environment probing for extracting user shell environment variables:
+
+Commands:
+  probe     Probe user environment variables using configured shell
+  show      Show probed environment variables
+  apply     Apply probed environment variables to running container
+  validate  Validate userEnvProbe configuration
+  cleanup   Cleanup probed environment variables
+
+Examples:
+  dcutil userprobe probe
+  dcutil userprobe show
+  dcutil userprobe apply
+  dcutil userprobe validate
+
+Supports bash, zsh, fish, and sh shells for environment probing.
+Implements devcontainer specification userEnvProbe property.
+EOF
+            exit "$EXIT_SUCCESS"
+            ;;
+        "")
+            # Default: probe environment
+            if command -v probe_user_environment >/dev/null 2>&1; then
+                probe_user_environment
+            else
+                error_exit "No userEnvProbe configuration found or userprobe module not available." "$EXIT_CONFIG_ERROR"
+            fi
+            exit "$EXIT_SUCCESS"
+            ;;
+        *)
+            handle_unknown_subcommand "userprobe" "${1:-}"
+            ;;
+    esac
+elif [ "$COMMAND" = "features" ]; then
+    # Features command doesn't need project directory until subcommand execution
+    determine_project_dir
+    shift 1
+
+    # Set up environment for features modules
+    export PROJECT_DIR
+    cd "$PROJECT_DIR" || error_exit "Failed to change to project directory: $PROJECT_DIR" "$EXIT_PERMISSION_ERROR"
+
+    # Use the features_cli function which handles all subcommands
+    features_cli "$@"
+    exit "$EXIT_SUCCESS"
+elif [ "$COMMAND" = "edit" ]; then
+    # Edit the devcontainer.json file in the default editor, validate, and allow re-editing like crontab
+    determine_project_dir
+    shift 1
+    # Choose config file path
+    if [ -f "$PROJECT_DIR/.devcontainer/devcontainer.json" ]; then
+        cfg="$PROJECT_DIR/.devcontainer/devcontainer.json"
+    elif [ -f "$PROJECT_DIR/.devcontainer.json" ]; then
+        cfg="$PROJECT_DIR/.devcontainer.json"
+    elif [ -f "$PROJECT_DIR/devcontainer.json" ]; then
+        cfg="$PROJECT_DIR/devcontainer.json"
+    else
+        error_exit "No devcontainer.json found in project" "$EXIT_CONFIG_ERROR"
+    fi
+
+    # Determine editor (prefer VISUAL over EDITOR if available)
+    EDITOR_CANDIDATE="${VISUAL:-${EDITOR:-vi}}"
+
+    tmpfile=$(mktemp "${TMPDIR:-/tmp}/devcontainer.json.XXXXXX")
+    trap 'rm -f "$tmpfile"' RETURN EXIT INT TERM
+
+    cp "$cfg" "$tmpfile" || error_exit "Failed to copy config to temp file" "$EXIT_CONFIG_ERROR"
+
+    while true; do
+        "$EDITOR_CANDIDATE" "$tmpfile"
+
+        # Validate configuration
+        # Prefer strict JSON syntax validation using jq if available
+        if command -v jq >/dev/null 2>&1; then
+            if ! jq -e . "$tmpfile" >/dev/null 2>&1; then
+                if [ -t 0 ]; then
+                    echo "Invalid JSON syntax detected. Reopen editor? (Y/n): "; read -r reedit || true
+                    if [[ "$reedit" =~ ^[Nn] ]]; then
+                        error_exit "User aborted editing due to invalid JSON" "$EXIT_CONFIG_ERROR"
+                    fi
+                    continue
+                else
+                    error_exit "Invalid JSON syntax detected (non-interactive)" "$EXIT_CONFIG_ERROR"
+                fi
+            fi
+        fi
+
+        # Use the official devcontainer CLI for authoritative validation
+        if ! validate_devcontainer_config_cli "$tmpfile"; then
+            if [ -t 0 ]; then
+                echo "Configuration is invalid for devcontainer CLI. Reopen editor? (Y/n): "; read -r reedit || true
+                if [[ "$reedit" =~ ^[Nn] ]]; then
+                    error_exit "User aborted editing due to devcontainer CLI validation failure" "$EXIT_CONFIG_ERROR"
+                fi
+                continue
+            else
+                error_exit "Configuration is invalid for devcontainer CLI (non-interactive)" "$EXIT_CONFIG_ERROR"
+            fi
+        fi
+
+        # Persist valid changes back to the original file (create backup)
+        cp "$cfg" "$cfg.backup" 2>/dev/null || true
+        if ! cp "$tmpfile" "$cfg"; then
+            error_exit "Failed to write changes back to $cfg" "$EXIT_CONFIG_ERROR"
+        fi
+        success "Configuration updated: $cfg"
+        break
+    done
+    exit "$EXIT_SUCCESS"
+elif [ "$COMMAND" = "environment" ]; then
+    # Environment command doesn't need project directory
+    determine_project_dir
+    shift 1
+    environment_cli "$@"
+    exit "$EXIT_SUCCESS"
+ elif [ "$COMMAND" = "rebuild" ]; then
+     # Rebuild command doesn't need project directory
+     determine_project_dir
+     shift 1
+ elif [ "$COMMAND" = "clean" ]; then
+     # Clean command operates in current directory
+     PROJECT_DIR="$(pwd)"
+     export PROJECT_DIR
+     devcontainer_clean
+     exit "$EXIT_SUCCESS"
+
+elif [ "$COMMAND" = "init" ]; then
+    # For init, use current directory (we want to initialize here)
+    if [ -f ".devcontainer/devcontainer.json" ] || [ -f ".devcontainer.json" ]; then
+        error_exit "Devcontainer configuration already exists in current directory. Use 'dcutil clean' or 'dcutil init clean' first to remove existing configuration" "$EXIT_CONFIG_ERROR"
+    fi
+    PROJECT_DIR="$(pwd)"
+    shift 1
+    init_mode "$@"
+    exit "$EXIT_SUCCESS"
+elif [ "$COMMAND" = "schema" ]; then
+    # Schema validation command doesn't need project directory
+    determine_project_dir
+    shift 1
+
+    # Set up environment for schema validation modules
+    export PROJECT_DIR
+    cd "$PROJECT_DIR" || error_exit "Failed to change to project directory: $PROJECT_DIR" "$EXIT_PERMISSION_ERROR"
+
+    # Check for schema subcommands
+    case "${1:-}" in
+        "validate")
+            # Validate devcontainer configuration schema
+            if command -v validate_devcontainer_schema >/dev/null 2>&1; then
+                validate_devcontainer_schema
+            else
+                error_exit "Schema validation not available. No devcontainer configuration found." "$EXIT_CONFIG_ERROR"
+            fi
+            exit "$EXIT_SUCCESS"
+            ;;
+        "show")
+            # Show schema validation status
+            if command -v show_schema_status >/dev/null 2>&1; then
+                show_schema_status
+            else
+                error_exit "Schema validation status not available." "$EXIT_CONFIG_ERROR"
+            fi
+            exit "$EXIT_SUCCESS"
+            ;;
+        "cleanup")
+            # Cleanup schema validation state
+            if command -v cleanup_schema_validation >/dev/null 2>&1; then
+                cleanup_schema_validation
+            else
+                error_exit "Schema validation cleanup not available." "$EXIT_CONFIG_ERROR"
+            fi
+            exit "$EXIT_SUCCESS"
+            ;;
+        "help"|"-h"|"--help")
+            cat << 'EOF'
+Usage: dcutil schema <command> [options]
+
+Devcontainer configuration schema validation for specification compliance:
+
+Commands:
+  validate  Validate devcontainer.json against specification schema
+  show      Show schema validation status and results
+  cleanup   Cleanup validation state
+
+Examples:
+  dcutil schema validate
+  dcutil schema show
+  dcutil schema validate .devcontainer/devcontainer.json
+
+Validates JSON structure, property types, required fields, and specification compliance.
+Provides detailed error and warning messages for configuration issues.
+EOF
+            exit "$EXIT_SUCCESS"
+            ;;
+        *)
+            handle_unknown_subcommand "schema" "${1:-}"
+            ;;
+    esac
+elif [ "$COMMAND" = "podman" ]; then
+    # Podman backend command doesn't need project directory
+    determine_project_dir
+    shift 1
+
+    # Set up environment for Podman backend modules
+    export PROJECT_DIR
+    cd "$PROJECT_DIR" || error_exit "Failed to change to project directory: $PROJECT_DIR" "$EXIT_PERMISSION_ERROR"
+
+    # Check for Podman subcommands
+    case "${1:-}" in
+        "status")
+            # Show Podman backend status
+            if command -v init_podman_backend >/dev/null 2>&1; then
+                init_podman_backend >/dev/null 2>&1
+            fi
+            if command -v show_backend_status >/dev/null 2>&1; then
+                show_backend_status
+            else
+                error_exit "Podman backend not available." "$EXIT_CONFIG_ERROR"
+            fi
+            exit "$EXIT_SUCCESS"
+            ;;
+        "validate")
+            # Validate Podman backend configuration
+            if command -v validate_backend_config >/dev/null 2>&1; then
+                validate_backend_config
+            else
+                error_exit "Podman backend not available." "$EXIT_CONFIG_ERROR"
+            fi
+            exit "$EXIT_SUCCESS"
+            ;;
+        "init")
+            # Initialize Podman backend
+            if command -v init_podman_backend >/dev/null 2>&1; then
+                init_podman_backend
+            else
+                error_exit "Podman backend not available." "$EXIT_CONFIG_ERROR"
+            fi
+            exit "$EXIT_SUCCESS"
+            ;;
+        "help"|"-h"|"--help")
+            cat << 'EOF'
+Usage: dcutil podman <command> [options]
+
+Podman backend support for dcutil with Docker compatibility:
+
+Commands:
+  status    Show Podman backend status and configuration
+  validate  Validate Podman backend configuration
+  init      Initialize Podman backend
+
+Examples:
+  dcutil podman status
+  dcutil podman validate
+  dcutil podman init
+
+Features:
+  - Automatic backend detection (Podman/Docker)
+  - Rootless container support with Podman
+  - Docker compatibility layer
+  - Fallback to Docker when needed
+  - OCI runtime compatibility
+
+Environment Variables:
+  DCUTIL_BACKEND=podman    Force Podman backend
+  DCUTIL_BACKEND=docker    Force Docker backend
+  DCUTIL_BACKEND=auto      Auto-detect (default)
+EOF
+            exit "$EXIT_SUCCESS"
+            ;;
+        "")
+            # Default: show status
+            if command -v show_backend_status >/dev/null 2>&1; then
+                show_backend_status
+            else
+                error_exit "Podman backend not available." "$EXIT_CONFIG_ERROR"
+            fi
+            exit "$EXIT_SUCCESS"
+            ;;
+        *)
+            handle_unknown_subcommand "podman" "${1:-}"
+            ;;
+    esac
+else
+    # Define schema usage function before command routing
+
+    # For up command, check for --project-home flag before determining project directory
+# Add edit command handling in top-level command routing
+
+    if [ "$COMMAND" = "up" ]; then
+        # Process up command arguments
+        up_project_home_flag=false
+        up_help_flag=false
+        temp_arg=""
+
+        while [ $# -gt 1 ]; do
+            case "$2" in
+                --project-home)
+                    up_project_home_flag=true
+                    shift
+                    ;;
+                --help|-h)
+                    up_help_flag=true
+                    shift
+                    ;;
+                *)
+                    # Store the first non-option argument as project directory
+                    if [ -z "$temp_arg" ]; then
+                        temp_arg="$2"
+                    fi
+                    shift
+                    ;;
+            esac
+        done
+
+        # Determine project directory from remaining args or defaults
+        if [ -n "$temp_arg" ]; then
+            determine_project_dir "$temp_arg"
+        else
+            determine_project_dir
+        fi
+
+        # Set environment variable to pass the flag to devcontainer
+        if [ "$up_project_home_flag" = true ]; then
+            export DCUTIL_PROJECT_HOME_ENABLED=true
+        fi
+
+        # If help flag was set, we'll handle it in the command execution
+        if [ "$up_help_flag" = true ]; then
+            export DCUTIL_UP_HELP=true
+        fi
+
+        shift 1  # Remove command only
+    else
+        determine_project_dir "${2:-}"
+        # For non-up commands, we need to preserve all remaining arguments
+        # Do not shift here to avoid losing arguments that the sub-commands may need
+    fi
+fi
+
+# Change to project directory
+info "Using project directory: $PROJECT_DIR"
+info "PROJECT_DIR before cd: '$PROJECT_DIR'"
+# Export PROJECT_DIR for all modules
+export PROJECT_DIR
+cd "$PROJECT_DIR" || error_exit "Failed to change to project directory: $PROJECT_DIR" "$EXIT_PERMISSION_ERROR"
+
+# Usage functions
+print_compose_usage() {
+    cat << 'EOF'
+Usage: dcutil compose <command> [options]
+
+Docker Compose commands for multi-container devenvironments:
+
+Commands:
+  up       Start the Docker Compose environment
+  down     Stop the Docker Compose environment
+  restart  Restart the Docker Compose environment
+  logs     Show logs from the Docker Compose services
+  exec     Execute a command in the main service container
+  status   Show status of Docker Compose services
+  build    Build Docker Compose images
+  clean    Clean up Docker Compose environment (stop and remove)
+  scale    Scale services to specified replica count
+  config   Show Docker Compose configuration
+
+Examples:
+  dcutil compose up
+  dcutil compose logs
+  dcutil compose exec bash
+  dcutil compose down
+  dcutil compose build
+
+Requires a devcontainer.json with dockerComposeFile and service properties.
+EOF
+}
+
+print_features_usage() {
+    cat << 'EOF'
+Usage: dcutil features <command> [options]
+
+Devcontainer Features commands for adding tools and runtimes:
+
+Commands:
+  add                  Add a feature to devcontainer configuration
+  remove               Remove a feature from devcontainer configuration
+  install              Install all configured features
+  info                 Show features configuration and status
+  validate             Validate features configuration
+  clean                Clean features cache and installation
+  update               Update all features (re-download and install)
+  check-updates        Check for available feature updates
+  test [target]        Test Features (similar to devcontainer CLI)
+  package <target>     Package Features (similar to devcontainer CLI)
+  publish <target>     Package and publish Features (similar to devcontainer CLI)
+  resolve-dependencies Resolve dependency graph from configuration (similar to devcontainer CLI)
+  generate-docs        Generate documentation for configured features (similar to devcontainer CLI)
+
+Examples:
+  dcutil features add node
+  dcutil features remove node
+  dcutil features add python --rebuild
+  dcutil features remove git --rebuild
+  dcutil features install
+  dcutil features info
+  dcutil features validate
+  dcutil features clean
+  dcutil features update
+  dcutil features test .
+  dcutil features package ./my-feature
+  dcutil features resolve-dependencies
+  dcutil features generate-docs
+
+Requires a devcontainer.json with features property containing feature specifications.
+EOF
+}
+
+print_advanced_usage() {
+    cat << 'EOF'
+Usage: dcutil advanced <command> [options]
+
+Advanced devcontainer features for enhanced configuration:
+
+Commands:
+  info      Show advanced features configuration
+  validate  Validate advanced features configuration
+  apply     Apply advanced features to running container
+
+Examples:
+  dcutil advanced info
+  dcutil advanced validate
+  dcutil advanced apply
+
+Supports updateRemoteUserUID, entrypoint override, overrideCommand,
+forwardPorts, portsAttributes, and workspaceMount features.
+EOF
+}
+
+print_integration_usage() {
+    cat << 'EOF'
+Usage: dcutil integration <command> [options]
+
+Tool integration features for enhanced development environment:
+
+Commands:
+  info      Show tool integration configuration
+  validate  Validate tool integration configuration
+  apply     Apply tool integration features to running container
+
+Examples:
+  dcutil integration info
+  dcutil integration validate
+  dcutil integration apply
+
+Supports VS Code customizations, other tool customizations,
+and devcontainer.metadata label parsing.
+EOF
+}
+
+print_merging_usage() {
+    cat << 'EOF'
+Usage: dcutil merging <command> [options]
+
+Image metadata merging for combining image labels with devcontainer.json:
+
+Commands:
+  show      Show merged configuration (image metadata + devcontainer.json)
+  validate  Validate merged configuration
+  cleanup   Cleanup temporary merged configuration files
+
+Examples:
+  dcutil merging show
+  dcutil merging validate
+  dcutil merging cleanup
+
+Implements the devcontainer specification merge logic for image metadata.
+EOF
+}
+
+print_userprobe_usage() {
+    cat << 'EOF'
+Usage: dcutil userprobe <command> [options]
+
+User environment probing for extracting user shell environment variables:
+
+Commands:
+  probe     Probe user environment variables using configured shell
+  show      Show probed environment variables
+  apply     Apply probed environment variables to running container
+  validate  Validate userEnvProbe configuration
+  cleanup   Cleanup probed environment variables
+
+Examples:
+  dcutil userprobe probe
+  dcutil userprobe show
+  dcutil userprobe apply
+  dcutil userprobe validate
+
+Supports bash, zsh, fish, and sh shells for environment probing.
+Implements devcontainer specification userEnvProbe property.
+EOF
+}
+
+print_hostrequirements_usage() {
+    cat << 'EOF'
+Usage: dcutil hostrequirements <command> [options]
+
+Host system requirements validation for devcontainer compatibility:
+
+Commands:
+  validate  Validate host system meets configured requirements
+  show      Show host requirements configuration and status
+  cleanup   Cleanup validation state
+
+Examples:
+  dcutil hostrequirements validate
+  dcutil hostrequirements show
+
+Validates CPU, memory, storage, and GPU requirements specified in devcontainer.json.
+EOF
+}
+
+print_shutdown_usage() {
+    cat << 'EOF'
+Usage: dcutil shutdown <command> [options]
+
+Container shutdown actions for handling container termination:
+
+Commands:
+  execute   Execute shutdown action for running container
+  show      Show shutdown action configuration
+  validate  Validate shutdown action configuration
+
+Examples:
+  dcutil shutdown execute
+  dcutil shutdown show
+  dcutil shutdown validate
+
+Supports stop, kill, none, shutdown actions and custom commands.
+EOF
+}
+
+case "$COMMAND" in
+    "up")
+        # First check if help was requested
+        if [ "${DCUTIL_UP_HELP:-false}" = true ]; then
+            print_up_usage
+            exit "$EXIT_SUCCESS"
+        fi
+
+        enhanced_dcutil_command "up" "$@"
+        ;;
+    "down")
+        enhanced_dcutil_command "down" "$@"
+        ;;
+
+    "features")
+        # Optional features command
+        if [ -z "${1:-}" ]; then
+            print_usage
+            exit "$EXIT_INVALID_ARGS"
+        fi
+        determine_project_dir
+        features_cli "$@"
+        exit "$EXIT_SUCCESS"
+        ;;
+    "restart")
+        determine_project_dir
+        devcontainer_restart
+        ;;
+    "enter")
+        determine_project_dir
+        devcontainer_enter
+        ;;
+    "build")
+        enhanced_dcutil_command "build" "$@"
+        ;;
+    "status")
+        determine_project_dir
+        devcontainer_status
+        ;;
+    "logs")
+        determine_project_dir
+        devcontainer_logs
+        ;;
+     "list")
+         determine_project_dir
+         devcontainer_list
+         ;;
+     "run")
+         enhanced_dcutil_command "run" "$@"
+         ;;
+     "check")
+         determine_project_dir
+         devcontainer_check
+         ;;
+
+    "volumes")
+        if [ $# -eq 0 ]; then
+            print_volumes_usage
+            exit "$EXIT_INVALID_ARGS"
+        fi
+
+        subcommand="$1"
+        shift
+
+        case "$subcommand" in
+            "list")
+                # Check if a project path was provided
+                if [ -n "${1:-}" ] && [ -d "$1" ]; then
+                    PROJECT_DIR="$1"
+                    initialize_devcontainer_config
+                    shift  # Remove the project path from arguments
+                fi
+                list_volumes
+                ;;
+            "add")
+                if [ $# -lt 3 ]; then
+                    error_exit "Usage: dcutil volumes add <name> <host_path> <container_path> [type] [project_path]" "$EXIT_INVALID_ARGS"
+                fi
+                # Check if last argument is a project path
+                if [ $# -gt 3 ] && [ -d "${!#}" ]; then
+                    PROJECT_DIR="${!#}"
+                    initialize_devcontainer_config
+                    # Remove the project path from arguments
+                    set -- "${@:1:$#-1}"
+                fi
+                add_volume "$1" "$2" "$3" "${4:-}"
+                ;;
+            "remove")
+                if [ $# -eq 0 ]; then
+                    error_exit "Usage: dcutil volumes remove <name>" "$EXIT_INVALID_ARGS"
+                fi
+                remove_volume "$1"
+                ;;
+            "mount")
+                if [ $# -eq 0 ]; then
+                    error_exit "Usage: dcutil volumes mount <name>" "$EXIT_INVALID_ARGS"
+                fi
+                mount_volume "$1"
+                ;;
+            "unmount")
+                if [ $# -eq 0 ]; then
+                    error_exit "Usage: dcutil volumes unmount <name>" "$EXIT_INVALID_ARGS"
+                fi
+                unmount_volume "$1"
+                ;;
+            "status")
+                volume_status
+                ;;
+            "backup")
+                if [ $# -eq 0 ]; then
+                    error_exit "Usage: dcutil volumes backup <name> [backup_path]" "$EXIT_INVALID_ARGS"
+                fi
+                backup_volume "$1" "${2:-}"
+                ;;
+            "restore")
+                if [ $# -lt 2 ]; then
+                    error_exit "Usage: dcutil volumes restore <name> <backup_path>" "$EXIT_INVALID_ARGS"
+                fi
+                restore_volume "$1" "$2"
+                ;;
+            "help"|"-h"|"--help")
+                print_volumes_usage
+                ;;
+            *)
+                handle_unknown_subcommand "volumes" "$subcommand"
+                ;;
+        esac
+        ;;
+    "compose")
+        if [ $# -eq 0 ]; then
+            print_compose_usage
+            exit "$EXIT_INVALID_ARGS"
+        fi
+
+        subcommand="$1"
+        shift
+
+        case "$subcommand" in
+            "up")
+                devcontainer_compose_up
+                ;;
+            "down")
+                devcontainer_compose_down
+                ;;
+            "restart")
+                devcontainer_compose_restart
+                ;;
+            "logs")
+                devcontainer_compose_logs
+                ;;
+            "scale")
+                # Scale services
+                if [ $# -lt 2 ]; then
+                    error_exit "Usage: dcutil compose scale <service> <replicas>" "$EXIT_INVALID_ARGS"
+                fi
+                if command -v docker_compose_scale >/dev/null 2>&1; then
+                    docker_compose_scale "$1" "$2"
+                else
+                    error_exit "Compose scale not available. No compose configuration found." "$EXIT_CONFIG_ERROR"
+                fi
+                exit "$EXIT_SUCCESS"
+                ;;
+            "config")
+                # Show compose configuration
+                if command -v docker_compose_config >/dev/null 2>&1; then
+                    docker_compose_config
+                else
+                    error_exit "Compose config not available. No compose configuration found." "$EXIT_CONFIG_ERROR"
+                fi
+                exit "$EXIT_SUCCESS"
+                ;;
+            "exec")
+                if [ $# -eq 0 ]; then
+                    error_exit "Usage: dcutil compose exec <command>" "$EXIT_INVALID_ARGS"
+                fi
+                devcontainer_compose_exec "$@"
+                ;;
+            "status")
+                devcontainer_compose_status
+                ;;
+            "build")
+                devcontainer_compose_build
+                ;;
+            "clean")
+                devcontainer_compose_clean
+                ;;
+            "help"|"-h"|"--help")
+                print_compose_usage
+                ;;
+            *)
+                handle_unknown_subcommand "compose" "$subcommand"
+                ;;
+        esac
+        ;;
+    "advanced")
+        if [ $# -eq 0 ]; then
+            print_advanced_usage
+            exit "$EXIT_INVALID_ARGS"
+        fi
+
+        subcommand="$1"
+        shift
+
+        case "$subcommand" in
+            "info")
+                devcontainer_advanced_info
+                ;;
+            "validate")
+                devcontainer_advanced_validate
+                ;;
+            "apply")
+                devcontainer_advanced_apply
+                ;;
+            "help"|"-h"|"--help")
+                print_advanced_usage
+                ;;
+            *)
+                handle_unknown_subcommand "advanced" "$subcommand"
+                ;;
+        esac
+        ;;
+    "integration")
+        if [ $# -eq 0 ]; then
+            print_integration_usage
+            exit "$EXIT_INVALID_ARGS"
+        fi
+
+        subcommand="$1"
+        shift
+
+        case "$subcommand" in
+            "info")
+                devcontainer_integration_info
+                ;;
+            "validate")
+                devcontainer_integration_validate
+                ;;
+            "apply")
+                devcontainer_integration_apply
+                ;;
+            "help"|"-h"|"--help")
+                print_integration_usage
+                ;;
+            *)
+                handle_unknown_subcommand "integration" "$subcommand"
+                ;;
+        esac
+        ;;
+    "merging")
+        if [ $# -eq 0 ]; then
+            print_merging_usage
+            exit "$EXIT_INVALID_ARGS"
+        fi
+
+        subcommand="$1"
+        shift
+
+        case "$subcommand" in
+            "show")
+                devcontainer_merging_show
+                ;;
+            "validate")
+                devcontainer_merging_validate
+                ;;
+            "cleanup")
+                devcontainer_merging_cleanup
+                ;;
+            "help"|"-h"|"--help")
+                print_merging_usage
+                ;;
+            *)
+                handle_unknown_subcommand "merging" "$subcommand"
+                ;;
+        esac
+        ;;
+    "userprobe")
+        if [ $# -eq 0 ]; then
+            print_userprobe_usage
+            exit "$EXIT_INVALID_ARGS"
+        fi
+
+        subcommand="$1"
+        shift
+
+        case "$subcommand" in
+            "probe")
+                devcontainer_userprobe_probe
+                ;;
+            "show")
+                devcontainer_userprobe_show
+                ;;
+            "apply")
+                devcontainer_userprobe_apply
+                ;;
+            "validate")
+                devcontainer_userprobe_validate
+                ;;
+            "cleanup")
+                devcontainer_userprobe_cleanup
+                ;;
+            "help"|"-h"|"--help")
+                print_userprobe_usage
+                ;;
+            *)
+                handle_unknown_subcommand "userprobe" "$subcommand"
+                ;;
+        esac
+        ;;
+    "hostrequirements")
+        if [ $# -eq 0 ]; then
+            print_hostrequirements_usage
+            exit "$EXIT_INVALID_ARGS"
+        fi
+
+        subcommand="$1"
+        shift
+
+        case "$subcommand" in
+            "validate")
+                if command -v validate_host_requirements >/dev/null 2>&1; then
+                    validate_host_requirements
+                else
+                    error_exit "Host requirements validation not available. No hostRequirements configuration found." "$EXIT_CONFIG_ERROR"
+                fi
+                ;;
+            "show")
+                if command -v show_host_requirements_status >/dev/null 2>&1; then
+                    show_host_requirements_status
+                else
+                    error_exit "Host requirements status not available. No hostRequirements configuration found." "$EXIT_CONFIG_ERROR"
+                fi
+                ;;
+            "cleanup")
+                if command -v cleanup_host_requirements >/dev/null 2>&1; then
+                    cleanup_host_requirements
+                else
+                    error_exit "Host requirements cleanup not available." "$EXIT_CONFIG_ERROR"
+                fi
+                ;;
+            "help"|"-h"|"--help")
+                print_hostrequirements_usage
+                ;;
+            *)
+                handle_unknown_subcommand "hostrequirements" "$subcommand"
+                ;;
+        esac
+        ;;
+    "shutdown")
+        if [ $# -eq 0 ]; then
+            print_shutdown_usage
+            exit "$EXIT_INVALID_ARGS"
+        fi
+
+        subcommand="$1"
+        shift
+
+        case "$subcommand" in
+            "execute")
+                container_name=$(determine_container_name 2>/dev/null || echo "")
+                if [ -z "$container_name" ]; then
+                    error_exit "No container name determined. Use 'dcutil shutdown help' for usage." "$EXIT_CONFIG_ERROR"
+                fi
+
+                if command -v execute_shutdown_action >/dev/null 2>&1; then
+                    execute_shutdown_action "$container_name"
+                else
+                    error_exit "Shutdown action execution not available. No shutdownAction configuration found." "$EXIT_CONFIG_ERROR"
+                fi
+                ;;
+            "show")
+                if command -v show_shutdown_action_config >/dev/null 2>&1; then
+                    show_shutdown_action_config
+                else
+                    error_exit "Shutdown action info not available. No shutdownAction configuration found." "$EXIT_CONFIG_ERROR"
+                fi
+                ;;
+            "validate")
+                if command -v validate_shutdown_action_config >/dev/null 2>&1; then
+                    validate_shutdown_action_config
+                else
+                    error_exit "Shutdown action validation not available. No shutdownAction configuration found." "$EXIT_CONFIG_ERROR"
+                fi
+                ;;
+            "help"|"-h"|"--help")
+                print_shutdown_usage
+                ;;
+            *)
+                handle_unknown_subcommand "shutdown" "$subcommand"
+                ;;
+        esac
+        ;;
+    "ssh")
+        if [ $# -eq 0 ]; then
+            echo "Usage: dcutil ssh <command> [options]"
+            echo "SSH commands for managing SSH key propagation to containers:"
+            echo "  enable                Enable SSH key propagation to container"
+            echo "  disable               Disable SSH key propagation to container"
+            echo "  toggle                Toggle SSH key propagation (on/off)"
+            echo "  status                Show current SSH propagation status"
+            echo "  help                  Show this help message"
+            exit "$EXIT_INVALID_ARGS"
+        fi
+
+        subcommand="$1"
+        shift
+
+        # Load SSH functions from template_integration module if available
+        if [ -f "$LIB_DIR/template_integration.sh" ]; then
+            # shellcheck disable=SC1091
+            # shellcheck source=lib/template_integration.sh
+            source "$LIB_DIR/template_integration.sh"
+        fi
+
+        case "$subcommand" in
+            "enable")
+                if command -v enable_ssh_propagation >/dev/null 2>&1; then
+                    enable_ssh_propagation
+                else
+                    error_exit "SSH enable function not available. SSH module not loaded." "$EXIT_CONFIG_ERROR"
+                fi
+                ;;
+            "disable")
+                if command -v disable_ssh_propagation >/dev/null 2>&1; then
+                    disable_ssh_propagation
+                else
+                    error_exit "SSH disable function not available. SSH module not loaded." "$EXIT_CONFIG_ERROR"
+                fi
+                ;;
+
+            "status")
+                if command -v check_ssh_propagation_status >/dev/null 2>&1; then
+                    check_ssh_propagation_status
+                else
+                    error_exit "SSH status function not available. SSH module not loaded." "$EXIT_CONFIG_ERROR"
+                fi
+                ;;
+            "help"|"-h"|"--help")
+                echo "Usage: dcutil ssh <command> [options]"
+                echo ""
+                echo "SSH key management for devcontainer environments:"
+                echo "  enable                Enable SSH key propagation to container"
+                echo "  disable               Disable SSH key propagation to container"
+
+                echo "  status                Show current SSH propagation status"
+                echo ""
+                echo "Examples:"
+                echo "  dcutil ssh enable      Enable SSH keys in container"
+                echo "  dcutil ssh disable     Disable SSH keys in container"
+
+                echo "  dcutil ssh status      Check SSH key propagation status"
+                ;;
+            *)
+                handle_unknown_subcommand "ssh" "$subcommand"
+                ;;
+        esac
+        ;;
+"rebuild")
+        # Rebuild command doesn't need project directory
+        determine_project_dir ""
+
+        # Set up environment for rebuild
+        export PROJECT_DIR
+        cd "$PROJECT_DIR" || error_exit "Failed to change to project directory: $PROJECT_DIR" "$EXIT_PERMISSION_ERROR"
+
+# Execute rebuild with options (pass all remaining args)
+        if command -v devcontainer_rebuild >/dev/null 2>&1; then
+            devcontainer_rebuild "$@"
+        else
+            error_exit "Rebuild functionality not available." "$EXIT_CONFIG_ERROR"
+        fi
+        ;;
+    "test")
+        test_dcutil_improvements
+        ;;
+    "version")
+        echo "dcutil $VERSION"
+        ;;
+    "help"|"-h"|"--help")
+        print_usage
+        ;;
+    *)
+        error_exit "Unknown command: $COMMAND" "$EXIT_INVALID_ARGS"
+        ;;
+    esac
+
+# Print main usage help
+exit "$EXIT_SUCCESS"

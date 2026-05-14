@@ -1,0 +1,3437 @@
+# Source: https://github.com/Pavdig/dtools/blob/5a859bf9cc7b1409b7128f85b542d170225aabdf/docker_tool_suite.sh
+# Repository: Pavdig/dtools (docker_tool_suite.sh)
+#!/bin/bash
+# =========================
+# --- Docker Tool Suite ---
+# =========================
+
+SCRIPT_VERSION=v1.5.4.8
+
+# --- Strict Mode & Globals ---
+set -euo pipefail
+DRY_RUN=false
+IS_CRON_RUN=false
+
+# --- Cleanup Function ---
+cleanup() {
+    local exit_code=$?
+    # Kill any background tail processes started by execute_and_log
+    if [[ -n "${tail_pid-}" ]]; then
+        kill "$tail_pid" 2>/dev/null || true
+    fi
+    
+    # Remove any stray temp files if they exist
+    if [[ -n "${tmp_log-}" && -f "$tmp_log" ]]; then
+        rm -f "$tmp_log"
+    fi
+
+    # Ensure ownership of the log file if we are in sudo/cron mode
+    if [[ -n "${LOG_FILE-}" && -f "$LOG_FILE" && -n "${SUDO_USER-}" ]]; then
+        chown "${SUDO_USER}:${SUDO_USER}" "$LOG_FILE" 2>/dev/null || true
+    fi
+
+    exit "$exit_code"
+}
+
+trap cleanup EXIT SIGINT SIGTERM
+
+# --- Initialize Terminal Cosmetics ---
+if tput setaf 1 > /dev/null 2>&1; then
+    C_RED=$(tput setaf 1)
+    C_GREEN=$(tput setaf 2)
+    C_YELLOW=$(tput setaf 3)
+    C_CYAN=$(tput setaf 6)
+    T_BOLD=$(tput bold)
+    C_GRAY=$(tput bold)$(tput setaf 0)
+    C_RESET=$'\e[0m'
+    TICKMARK=$'\xE2\x9C\x93'
+else
+    C_RED=""
+    C_GREEN=""
+    C_YELLOW=""
+    C_CYAN=""
+    T_BOLD=""
+    C_GRAY=""
+    C_RESET=""
+    TICKMARK="[OK]"
+fi
+
+# --- Standardized Footer Options ---
+optionsRandQ=(
+        "${C_GRAY}(R)eturn to previous menu${C_RESET}"
+        "${C_RED}(Q)uit the tool${C_RESET}"
+)
+
+optionsOnlyQ=(
+        "${C_RED}(Q)uit the tool${C_RESET}"
+)
+
+# --- User & Path Detection ---
+if [[ -n "${SUDO_USER-}" ]]; then
+    CURRENT_USER="${SUDO_USER}"
+else
+    CURRENT_USER="${USER:-$(whoami)}"
+fi
+SCRIPT_PATH=$(readlink -f "$0")
+
+# Capture original location before switching context
+ORIGINAL_PWD="$PWD"
+
+# Unconditionally switch to HOME or Root to prevent "getwd" errors
+# if the original launch directory is deleted while the script is running.
+cd "${HOME:-/}" 2>/dev/null || cd "/"
+
+# --- Command Prefix for Sudo ---
+SUDO_CMD=""
+if [[ $EUID -ne 0 ]]; then
+    SUDO_CMD="sudo"
+fi
+
+# --- Config Loader ---
+load_config() {
+    local cfg_file="$1"
+    tmp_log=$(mktemp) 
+    
+    if [[ ! -f "$cfg_file" ]]; then return 1; fi
+    
+    # Filter using the new variable name
+    grep -E '^\s*(#|$)|^[A-Z_]+=".*"$|^[A-Z_]+='"'.*'"'$|^[A-Z_]+=[a-zA-Z0-9/+=._-]+$|^[A-Z_]+=\($|^\s*"[^"]+"$|^\)$' "$cfg_file" > "$tmp_log" || true
+
+    # Security check using the new variable name
+    if grep -qE '`|\$\(|;|\||&' "$tmp_log"; then
+        echo -e "${C_RED}SECURITY ERROR: Config file contains executable code indicators! Aborting.${C_RESET}"
+        rm -f "$tmp_log"
+        tmp_log=""
+        exit 1
+    fi
+
+    # Source and clean up
+    . "$tmp_log"
+    rm -f "$tmp_log"
+    tmp_log=""
+}
+
+validate_loaded_config() {
+    # Validate Retention (Integer, 0 to 3650)
+    if [[ ! "${LOG_RETENTION_DAYS}" =~ ^[0-9]+$ ]] || [ "${LOG_RETENTION_DAYS}" -gt 3650 ]; then
+        echo -e "${C_RED}Warning: Invalid LOG_RETENTION_DAYS detected ('${LOG_RETENTION_DAYS}').${C_RESET}"
+        echo -e "${C_YELLOW}-> Correction applied to config file (Reset to 30).${C_RESET}"
+        LOG_RETENTION_DAYS="30"
+        sed -i "/^LOG_RETENTION_DAYS=/c\LOG_RETENTION_DAYS=\"30\"" "$CONFIG_FILE"
+    fi
+
+    # Validate Compression Level (Integer, 0-9)
+    if [[ ! "${ARCHIVE_COMPRESSION_LEVEL}" =~ ^[0-9]+$ ]] || [ "${ARCHIVE_COMPRESSION_LEVEL}" -gt 9 ]; then
+        echo -e "${C_RED}Warning: Invalid ARCHIVE_COMPRESSION_LEVEL detected ('${ARCHIVE_COMPRESSION_LEVEL}').${C_RESET}"
+        echo -e "${C_YELLOW}-> Correction applied to config file (Reset to 3).${C_RESET}"
+        ARCHIVE_COMPRESSION_LEVEL="3"
+        sed -i "/^ARCHIVE_COMPRESSION_LEVEL=/c\ARCHIVE_COMPRESSION_LEVEL=\"3\"" "$CONFIG_FILE"
+    fi
+
+    # Validate Paths (Basic check to ensure they aren't empty)
+    if [[ -z "${APPS_BASE_PATH}" ]]; then APPS_BASE_PATH="/home/${CURRENT_USER}/apps"; fi
+    if [[ -z "${BACKUP_LOCATION}" ]]; then BACKUP_LOCATION="/home/${CURRENT_USER}/backups"; fi
+}
+
+# --- Unified Configuration Paths ---
+CONFIG_DIR="/home/${CURRENT_USER}/.config/dtools"
+CONFIG_FILE="${CONFIG_DIR}/config.conf"
+
+# --- Helper: Pattern Matching ---
+_is_item_ignored() {
+    local item="$1"
+    local -n ignore_list_ref="$2"
+    for pattern in "${ignore_list_ref[@]}"; do
+        # The right side is intentionally unquoted to allow bash globbing (wildcards)
+        if [[ "$item" == $pattern ]]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+# --- SHARED UI FUNCTION ---
+print_standard_menu() {
+    local title="$1"
+    local -n _menu_options="$2"
+    local footer_mode="${3:-RQ}"
+
+    clear
+    echo "=============================================="
+    echo -e " ${C_GREEN}${T_BOLD}${title}${C_RESET}"
+    echo "=============================================="
+    
+    echo -e " ${C_YELLOW}Options: "
+    for i in "${!_menu_options[@]}"; do
+        echo -e " ${C_CYAN}$((i+1))${C_YELLOW}) ${C_RESET}${_menu_options[$i]}"
+    done
+    
+    echo -e "${C_RESET}----------------------------------------------"
+    
+    if [[ "$footer_mode" == "RQ" ]]; then
+        for i in "${!optionsRandQ[@]}"; do echo -e " ${optionsRandQ[$i]}"; done
+    elif [[ "$footer_mode" == "Q" ]]; then
+        for i in "${!optionsOnlyQ[@]}"; do echo -e " ${optionsOnlyQ[$i]}"; done
+    fi
+    
+    echo -e "${C_RESET}----------------------------------------------${C_RESET}"
+}
+
+# --- Encryption ---
+KEY_FILE="${CONFIG_DIR}/.master.key"
+
+get_secret_key() {
+    if [[ ! -d "$CONFIG_DIR" ]]; then 
+        mkdir -p "$CONFIG_DIR"
+        chmod 700 "$CONFIG_DIR"
+        if [[ -n "${SUDO_USER-}" ]]; then chown "${SUDO_USER}:${SUDO_USER}" "$CONFIG_DIR"; fi
+    fi
+
+    if [[ ! -f "$KEY_FILE" ]]; then
+        openssl rand -base64 64 > "$KEY_FILE"
+        chmod 600 "$KEY_FILE"
+        if [[ -n "${SUDO_USER-}" ]]; then chown "${SUDO_USER}:${SUDO_USER}" "$KEY_FILE"; fi
+    fi
+
+    cat "$KEY_FILE"
+}
+
+encrypt_pass() {
+    local plaintext="$1"
+    printf '%s' "$plaintext" | openssl enc -aes-256-cbc -a -salt -pbkdf2 -iter 133337 -pass fd:3 3< <(get_secret_key) | tr -d '\n'
+}
+
+decrypt_pass() {
+    local encrypted_text="$1"
+    printf '%s\n' "$encrypted_text" | openssl enc -aes-256-cbc -a -d -salt -pbkdf2 -iter 133337 -pass fd:3 3< <(get_secret_key) 2>/dev/null || true
+}
+
+_record_image_state() {
+    local app_dir="$1"
+    local image_name="$2"
+    local image_id="$3"
+    local history_file="${app_dir}/.update_history"
+
+    if [[ "$image_id" == "not_found" || -z "$image_id" ]]; then return; fi
+
+    local entry
+    entry="$(date +'%Y-%m-%d %H:%M:%S')|${image_name}|${image_id}"
+    
+    local last_entry
+    if [[ -f "$history_file" ]]; then
+        last_entry=$(tail -n 1 "$history_file")
+        if [[ "${last_entry#*|}" == "${image_name}|${image_id}" ]]; then
+            return
+        fi
+    fi
+
+    echo "$entry" >> "$history_file"
+
+    if [ "$(wc -l < "$history_file")" -gt 50 ]; then
+        local temp_hist; temp_hist=$(mktemp)
+        tail -n 50 "$history_file" > "$temp_hist"
+        mv "$temp_hist" "$history_file"
+    fi
+}
+
+_enable_cron_logging() {
+    local subdir="$1"
+    local prefix="$2"
+    local target_dir="${LOG_DIR}/${subdir}"
+    local current_date
+    current_date=$(date +'%Y-%m-%d')
+    local new_log_file="${target_dir}/${prefix}-${current_date}.log"
+
+    if [ ! -d "$target_dir" ]; then
+        mkdir -p "$target_dir"
+        if [[ -n "${SUDO_USER-}" ]]; then
+            chown "${SUDO_USER}:${SUDO_USER}" "$target_dir"
+        fi
+    fi
+
+    # Disable colors for cron logs
+    C_RED=""; C_GREEN=""; C_YELLOW=""; C_CYAN=""; T_BOLD=""; C_GRAY=""; C_RESET=""; TICKMARK="[OK]"
+
+    LOG_FILE="$new_log_file"
+
+    exec > >(while IFS= read -r line || [ -n "$line" ]; do echo "[$(date +'%Y-%m-%d %H:%M:%S')] $line"; done >> "$new_log_file") 2>&1
+    echo -e "Cron logging enabled. Output redirected to: $new_log_file"
+}
+
+check_root() {
+    if [[ $EUID -ne 0 ]]; then
+        echo -e "\n${C_YELLOW}This action requires root privileges. Please enter your password.${C_RESET}"
+        if ! sudo -v; then
+            echo -e "\n${C_RED}Authentication failed. Aborting.${C_RESET}" >&2
+            exit 1
+        fi
+        echo -e "\n${C_GREEN}Authentication successful.${C_RESET}\n"
+    fi
+}
+
+log() {
+    if [[ -n "${LOG_FILE-}" && "$IS_CRON_RUN" == "false" ]]; then echo "[$(date +'%Y-%m-%d %H:%M:%S')] $1" >> "$LOG_FILE"; fi
+    if [[ -n "${2-}" ]]; then echo -e "$2"; fi
+}
+
+execute_and_log() {
+    if $DRY_RUN; then
+        printf "${C_GRAY}[DRY RUN] Would execute: %q${C_RESET}\n" "$@"
+        return 0
+    fi
+
+    # Use the variable names recognized by the cleanup trap
+    tmp_log=$(mktemp)
+    tail_pid=""
+
+    # Only run tail if not in cron mode
+    if [[ "$IS_CRON_RUN" == "false" ]]; then
+        tail -f "$tmp_log" &> /dev/null &
+        tail_pid=$!
+    fi
+
+    "$@" &> "$tmp_log"
+    local exit_code=$?
+
+    # Stop tailing immediately after command finishes
+    if [[ -n "$tail_pid" ]]; then
+        kill "$tail_pid" 2>/dev/null || true
+        tail_pid="" 
+    fi
+
+    if [[ "$IS_CRON_RUN" == "false" ]]; then
+        cat "$tmp_log" >> "${LOG_FILE:-/dev/null}"
+    fi
+    
+    rm -f "$tmp_log"
+    tmp_log="" # Clear variable for trap safety
+    return "$exit_code"
+}
+
+check_deps() {
+    log "Checking dependencies..." "${C_GRAY}Checking dependencies...${C_RESET}"
+    local error_found=false
+
+    # Check binaries
+    if ! command -v docker &>/dev/null; then log "Error: Docker not found." "${C_RED}Error: Docker is not installed...${C_RESET}"; error_found=true; fi
+    if ! $SUDO_CMD docker compose version &>/dev/null; then log "Error: Docker Compose V2 not found." "${C_RED}Error: Docker Compose V2 not available...${C_RESET}"; error_found=true; fi
+    if ! command -v openssl &>/dev/null; then log "Error: openssl not found." "${C_RED}Error: 'openssl' is not installed (required for password encryption)...${C_RESET}"; error_found=true; fi
+    if ! command -v 7z &>/dev/null; then log "Warning: '7z' command not found." "${C_YELLOW}Warning: '7z' is not installed (required for secure archives)...${C_RESET}"; fi
+
+    # Check Daemon connectivity
+    if ! $SUDO_CMD docker info >/dev/null 2>&1; then
+        log "Error: Cannot connect to Docker Daemon." 
+        echo -e "${C_RED}Error: Unable to connect to the Docker Daemon.${C_RESET}"
+        echo -e "${C_YELLOW}Please ensure the Docker service is running (e.g., 'sudo systemctl start docker') and the user has permissions.${C_RESET}"
+        error_found=true
+    fi
+
+    if $error_found; then exit 1; fi
+    log "Dependencies check passed." ""
+}
+
+find_compose_file() {
+    local app_dir="$1"
+    local compose_files=("compose.yaml" "compose.yml" "docker-compose.yaml" "docker-compose.yml")
+    for file in "${compose_files[@]}"; do if [ -f "$app_dir/$file" ]; then echo "$app_dir/$file"; return 0; fi; done
+    return 1
+}
+
+discover_apps() {
+    local path="$1"; local -n app_array="$2"
+    app_array=()
+    if [ ! -d "$path" ]; then echo "Warning: Directory not found for discovery: $path" >> "${LOG_FILE:-/dev/null}"; return; fi
+    
+    shopt -s nullglob
+    local -a temp_list=()
+    for dir in "$path"/*/; do
+        if [ -d "$dir" ]; then
+            if find_compose_file "${dir%/}" &>/dev/null; then
+                temp_list+=("$(basename "$dir")")
+            fi
+        fi
+    done
+    shopt -u nullglob
+
+    # Use mapfile to sort the array safely, even with spaces
+    mapfile -t app_array < <(printf "%s\n" "${temp_list[@]}" | sort)
+}
+
+show_selection_menu() {
+    local title="$1" action_verb="$2"; local -n all_items_ref="$3"; local -n selected_status_ref="$4"
+    while true; do
+        clear
+        echo -e "====================================================="
+        echo -e " ${C_GREEN}${T_BOLD}${title}${C_RESET}"
+        echo -e "====================================================="
+        for i in "${!all_items_ref[@]}"; do
+            if ${selected_status_ref[$i]}; then echo -e " $((i+1)). ${C_GREEN}[x]${C_RESET} ${all_items_ref[$i]}"; else echo -e " $((i+1)). ${C_RED}[ ]${C_RESET} ${all_items_ref[$i]}"; fi
+        done
+        echo "-----------------------------------------------------"
+        echo -e "Enter a (${C_GREEN}No.${C_RESET}) to toggle, ${C_CYAN}(a)ll${C_RESET}, ${C_YELLOW}(${action_verb}) ${C_RESET}to ${C_YELLOW}${action_verb}${C_RESET}, ${C_GRAY}(r)eturn ${C_RESET}or ${C_RED}(q)uit${C_RESET}."
+        read -erp "Your choice: " choice
+        case "$choice" in
+            "${action_verb}")
+                local any_selected=false
+                for status in "${selected_status_ref[@]}"; do
+                    if $status; then any_selected=true; break; fi
+                done
+                if ! $any_selected; then
+                    echo -e "\n${C_YELLOW}No items selected. Try again.${C_RESET}"
+                    sleep 2
+                    continue
+                fi
+                return 0
+                ;;
+            [rR]) return 1 ;;
+            [qQ]) exit 0 ;;
+            [aA])
+                local all_selected=true; for status in "${selected_status_ref[@]}"; do if ! $status; then all_selected=false; break; fi; done
+                local new_status; new_status=$(if $all_selected; then echo "false"; else echo "true"; fi)
+                for i in "${!selected_status_ref[@]}"; do selected_status_ref[i]=$new_status; done ;;
+            *)
+                if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le "${#all_items_ref[@]}" ]; then
+                    local index=$((choice-1))
+                    if ${selected_status_ref[$index]}; then selected_status_ref[index]=false; else selected_status_ref[index]=true; fi
+                else
+                    echo -e "\n${C_RED}Invalid input. Try again.${C_RESET}"; sleep 2
+                fi ;;
+        esac
+    done
+}
+
+interactive_list_builder() {
+    local title="$1"; local -n source_array="$2"; local -n result_array="$3"
+    result_array=()
+    if [[ ${#source_array[@]} -eq 0 ]]; then echo -e "${C_YELLOW}No items found to configure. Skipping.${C_RESET}"; sleep 2; return; fi
+    local -a selected_status=(); for ((i=0; i<${#source_array[@]}; i++)); do selected_status+=("false"); done
+    if ! show_selection_menu "$title" "confirm" source_array selected_status; then return; fi
+    for i in "${!source_array[@]}"; do if ${selected_status[$i]}; then result_array+=("${source_array[$i]}"); fi; done
+}
+
+configure_shell_alias() {
+    check_root
+    local user_home="/home/${CURRENT_USER}"
+    local shell_rc=""
+    local comment_line="# Alias added by Docker Tool Suite"
+
+    if [[ -f "${user_home}/.zshrc" ]]; then
+        shell_rc="${user_home}/.zshrc"
+    elif [[ -f "${user_home}/.bashrc" ]]; then
+        shell_rc="${user_home}/.bashrc"
+    else
+        echo -e "${C_YELLOW}No shell configuration found. Creating .bashrc...${C_RESET}"
+        touch "${user_home}/.bashrc"
+        chown "${CURRENT_USER}:${CURRENT_USER}" "${user_home}/.bashrc"
+        shell_rc="${user_home}/.bashrc"
+    fi
+
+    clear
+    echo -e "${C_YELLOW}--- Configure Shell Alias ---${C_RESET}\n"
+    echo -e "Target User:   ${C_GREEN}${CURRENT_USER}${C_RESET}"
+    echo -e "Config File:   ${C_GREEN}${shell_rc}${C_RESET}"
+    echo -e "Script Path:   ${C_CYAN}${SCRIPT_PATH}${C_RESET}\n"
+
+    echo "Select an option:"
+    echo -e "   1) ${C_CYAN}Create or Update Alias${C_RESET}"
+    echo -e "   2) ${C_RED}Remove Alias${C_RESET}"
+    echo -e "   3) ${C_YELLOW}Cancel${C_RESET}"
+    echo
+    read -rp "${C_YELLOW}Enter choice [${C_RESET}1${C_YELLOW}-${C_RESET}3${C_YELLOW}]: ${C_RESET}" choice
+
+    case "$choice" in
+        1)
+            local default_alias="dtools"
+            read -rp "Enter alias name [${C_GREEN}${default_alias}${C_RESET}]: " alias_name
+            alias_name=${alias_name:-$default_alias}
+
+            if [[ ! "$alias_name" =~ ^[a-zA-Z0-9_]+$ ]]; then
+                echo -e "\n${C_RED}Error: Invalid alias name. Use only letters, numbers, and underscores.${C_RESET}"
+                echo -e "${C_GRAY}Characters like '/' or spaces are not allowed.${C_RESET}"; sleep 2
+                return
+            fi
+
+            if grep -q "^alias ${alias_name}=" "$shell_rc" && ! grep -q "^alias ${alias_name}='${SCRIPT_PATH}'" "$shell_rc"; then
+                echo -e "\n${C_RED}Error: The alias '${alias_name}' is already defined in ${shell_rc} pointing to something else.${C_RESET}"
+                echo -e "${C_YELLOW}Please choose a different name.${C_RESET}"; sleep 2
+                return
+            fi
+
+            local new_alias_line="alias ${alias_name}='${SCRIPT_PATH}'"
+            local temp_rc; temp_rc=$(mktemp)
+
+            grep -v -F "$comment_line" "$shell_rc" | grep -v "alias .*='${SCRIPT_PATH}'" > "$temp_rc"
+            echo "$comment_line" >> "$temp_rc"
+            echo "$new_alias_line" >> "$temp_rc"
+            mv "$temp_rc" "$shell_rc"
+            chown "${CURRENT_USER}:${CURRENT_USER}" "$shell_rc"
+            echo -e "\n${C_GREEN}${TICKMARK} Alias '${C_CYAN}${alias_name}${C_GREEN}' added to ${C_CYAN}${shell_rc}${C_GREEN}!${C_RESET}"
+            echo -e "${C_GRAY}NOTE: Run 'source ${shell_rc}' or restart your terminal to use it.${C_RESET}"
+            ;;
+        2)
+            if ! grep -q "alias .*='${SCRIPT_PATH}'" "$shell_rc"; then
+                echo -e "\n${C_YELLOW}No alias found to remove in ${C_GREEN}${shell_rc}${C_YELLOW}.${C_RESET}"
+                sleep 1; return
+            fi
+
+            echo -e "\n${C_YELLOW}Removing alias...${C_RESET}"
+            local temp_rc; temp_rc=$(mktemp)
+            grep -v -F "$comment_line" "$shell_rc" | grep -v "alias .*='${SCRIPT_PATH}'" > "$temp_rc"
+            mv "$temp_rc" "$shell_rc"
+            
+            chown "${CURRENT_USER}:${CURRENT_USER}" "$shell_rc"
+            echo -e "${C_GREEN}${TICKMARK} Alias removed successfully.${C_RESET}"
+            ;;
+        *) return ;;
+    esac
+}
+
+ensure_tool_installed() {
+    local tool_cmd="$1"
+    local package_name="$2"
+    local tool_desc="$3"
+
+    if ! command -v "$tool_cmd" &>/dev/null; then
+        echo -e "\n${C_RED}Error: '${tool_cmd}' command not found.${C_RESET}"
+        echo -e "${C_YELLOW}This tool is required for: ${tool_desc}.${C_RESET}\n"
+        read -rp "${C_YELLOW}Do you want to install '${C_CYAN}${package_name}${C_YELLOW}' now? ${C_RESET}(${C_GREEN}Y${C_RESET}/${C_RED}n${C_RESET}): " install_tool
+        if [[ "${install_tool:-y}" =~ ^(y|Y|yes|YES)$ ]]; then
+             echo -e "${C_CYAN}Installing ${package_name}...${C_RESET}"
+             if $SUDO_CMD apt-get update && $SUDO_CMD apt-get install -y "$package_name"; then
+                 echo -e "${C_GREEN}Installation successful.${C_RESET}"
+                 return 0
+             else
+                 echo -e "${C_RED}Installation failed. Please install '${C_CYAN}${package_name}${C_RED}' manually.${C_RESET}"
+                 return 1
+             fi
+        else
+             echo -e "${C_RED}Operation cancelled. Missing dependency.${C_RESET}"
+             return 1
+        fi
+    fi
+    return 0
+}
+
+_prompt_input() {
+    local prompt_text="$1"
+    local default_val="$2"
+    local -n output_var="$3"
+    local val_type="${4:-text}"
+    local min="${5:-}"
+    local max="${6:-}"
+
+    while true; do
+        local input_val
+        read -erp "${prompt_text} [${C_GREEN}${default_val}${C_RESET}]: " input_val
+        if [[ -z "$input_val" ]]; then
+            output_var="$default_val"
+        else
+            output_var="$input_val"
+        fi
+        local valid=true
+        case "$val_type" in
+            int)
+                if [[ ! "$output_var" =~ ^[0-9]+$ ]]; then
+                    echo -e "${C_RED}Error: Input must be a positive integer.${C_RESET}"
+                    valid=false
+                else
+                    local check_val=$((10#$output_var))
+                    if [[ -n "$min" && "$check_val" -lt "$min" ]]; then
+                        echo -e "${C_RED}Error: Minimum value is $min.${C_RESET}"
+                        valid=false
+                    fi
+                    if [[ -n "$max" && "$check_val" -gt "$max" ]]; then
+                        echo -e "${C_RED}Error: Maximum value is $max.${C_RESET}"
+                        valid=false
+                    fi
+                fi
+                ;;
+            path)
+                if [[ "$output_var" == ~* ]]; then
+                    output_var="${output_var/#\~/$HOME}"
+                fi
+
+                if [[ ! "$output_var" =~ ^/ ]]; then
+                    echo -e "${C_RED}Error: Path must be absolute (start with / or ~).${C_RESET}"
+                    valid=false
+                fi
+
+                if [[ "$output_var" =~ [\&\|\;\`\$] ]]; then
+                     echo -e "${C_RED}Error: Path contains invalid shell characters.${C_RESET}"
+                     valid=false
+                fi
+                ;;
+            subdir)
+                if [[ "$output_var" =~ ^(/|~) ]]; then
+                    echo -e "${C_RED}Error: Subdirectory must be a relative path (cannot start with / or ~).${C_RESET}"
+                    valid=false
+                fi
+                if [[ "$output_var" =~ [\&\|\;\`\$] ]]; then
+                     echo -e "${C_RED}Error: Name contains invalid shell characters.${C_RESET}"
+                     valid=false
+                fi
+                ;;
+        esac
+
+        if $valid; then break; fi
+    done
+}
+
+initial_setup() {
+    check_root
+    clear
+    echo "====================================================="
+    echo -e "${C_GREEN}${T_BOLD} Welcome to the ${C_CYAN}Docker Tool Suite ${SCRIPT_VERSION} ${C_GREEN}Setup!${C_RESET}"
+    echo "====================================================="
+
+    echo -e "\n${C_YELLOW}--- Checking System Dependencies ---${C_RESET}"
+    local -a packages_to_install=()
+
+    if ! command -v openssl &>/dev/null; then 
+        echo -e " ${C_RED}[-] openssl is missing.${C_RESET}"
+        packages_to_install+=("openssl")
+    else
+        echo -e " ${C_GREEN}[+] openssl is installed.${C_RESET}"
+    fi
+
+    if ! command -v 7z &>/dev/null; then 
+        echo -e " ${C_RED}[-] 7z (p7zip-full) is missing.${C_RESET}"
+        packages_to_install+=("p7zip-full")
+    else
+        echo -e " ${C_GREEN}[+] 7z is installed.${C_RESET}"
+    fi
+
+    if [ ${#packages_to_install[@]} -gt 0 ]; then
+        echo -e "\n${C_RED}Missing tools detected. These are required for encryption and archives.${C_RESET}"
+        read -rp "${C_YELLOW}Do you want to install them now via apt? ${C_RESET}(${C_GREEN}Y${C_RESET}/${C_RED}n${C_RESET}): " install_deps
+        if [[ "${install_deps:-y}" =~ ^(y|Y|yes|YES)$ ]]; then
+            echo -e "${C_CYAN}Updating package lists and installing...${C_RESET}"
+            $SUDO_CMD apt-get update
+            $SUDO_CMD apt-get install -y "${packages_to_install[@]}"
+            echo -e "${C_GREEN}${TICKMARK} Dependencies installed successfully.${C_RESET}"
+        else
+            echo -e "${C_RED}Warning: Script may fail without these dependencies.${C_RESET}"
+            sleep 2
+        fi
+    fi
+
+    echo -e "\n${C_YELLOW}This one-time setup will configure all modules.\n"
+    echo -e "${C_RESET}Settings will be saved to: ${C_GREEN}${CONFIG_FILE}${C_RESET}\n"
+
+    local apps_path_def="/home/${CURRENT_USER}/apps"
+    local managed_subdir_def="managed_stacks"
+    local backup_path_def="/home/${CURRENT_USER}/backups/docker-volume-backups"
+    local restore_path_def="/home/${CURRENT_USER}/backups/docker-volume-backups"
+    local log_dir_def="/home/${CURRENT_USER}/logs/dtools"
+    local log_retention_def="30"
+    
+    echo -e "-----------------------------------------------------\n"
+    echo -e "${C_YELLOW}--- Configure Path Settings ---${C_RESET}\n"
+    echo -e "${C_GRAY}Leave the default paths or enter your own. Autocompletion (Tab) is enabled.\n${C_RESET}"
+
+    _prompt_input "Base Compose Apps Path"      "$apps_path_def"      APPS_BASE_PATH    "path"
+    _prompt_input "Managed Apps Subdirectory"   "$managed_subdir_def" MANAGED_SUBDIR    "subdir"
+    _prompt_input "Volume Backup Location"      "$backup_path_def"    BACKUP_LOCATION   "path"
+    _prompt_input "Volume Restore Location"     "$restore_path_def"   RESTORE_LOCATION  "path"
+    _prompt_input "Log Directory Path"          "$log_dir_def"        LOG_DIR           "path"
+    _prompt_input "Log file retention period in days. Set to 0 to disable automatic pruning." "$log_retention_def" LOG_RETENTION_DAYS "int" 0 3650
+    
+    local log_sub_update_def="apps-update-logs"
+    local log_sub_unused_def="unused-images-update-logs"
+    
+    _prompt_input "Subdirectory for App Update Logs"    "$log_sub_update_def" LOG_SUBDIR_UPDATE "subdir"
+    _prompt_input "Subdirectory for Unused Image Logs"  "$log_sub_unused_def" LOG_SUBDIR_UNUSED "subdir"
+
+    echo -e "\n${C_YELLOW}--- Configure Helper Images ---${C_RESET}"
+    local backup_image_def="docker/alpine-tar-zstd:latest"
+    local explore_image_def="debian:trixie-slim"
+    
+    _prompt_input "Backup Helper Image"   "$backup_image_def"  BACKUP_IMAGE  "text"
+    _prompt_input "Volume Explorer Image" "$explore_image_def" EXPLORE_IMAGE "text"
+
+    local -a selected_ignored_volumes=()
+    read -rp $'\n'"${C_YELLOW}Do you want to configure ignored ${C_CYAN}volumes ${C_YELLOW}now? (${C_GREEN}y${C_YELLOW}/${C_RED}N${C_YELLOW})${C_RESET}: " config_vols
+    if [[ "${config_vols,,}" =~ ^(y|Y|yes|YES)$ ]]; then
+        mapfile -t all_volumes < <(docker volume ls --format "{{.Name}}" | sort)
+        interactive_list_builder "Select Volumes to IGNORE during backup" all_volumes selected_ignored_volumes
+    fi
+    
+    local -a selected_ignored_images=()
+    read -rp $'\n'"${C_YELLOW}Do you want to configure ignored ${C_CYAN}images ${C_YELLOW}now? (${C_GREEN}y${C_YELLOW}/${C_RED}N${C_YELLOW})${C_RESET}: " config_imgs
+    if [[ "${config_imgs,,}" =~ ^(y|Y|yes|YES)$ ]]; then
+        mapfile -t all_images < <(docker image ls --format "{{.Repository}}:{{.Tag}}" | grep -v "<none>" | sort)
+        interactive_list_builder "Select Images to IGNORE during updates" all_images selected_ignored_images
+    fi
+
+    echo -e "\n${C_YELLOW}--- Secure Archive Settings ---${C_RESET}"
+    local archive_pass_1 archive_pass_2 ENCRYPTED_ARCHIVE_PASSWORD=""
+
+    while true; do
+        echo -e "${C_GRAY}This password will be used to encrypt 7z backups by default.${C_RESET}"
+        read -srp "Enter a default password (leave blank for none): " archive_pass_1; echo
+
+        if [[ -z "$archive_pass_1" ]]; then
+            read -rp "${C_RED}You left the password blank! ${C_YELLOW}Disable default encryption? (${C_RED}Y${C_YELLOW}/${C_GREEN}n${C_YELLOW}): ${C_RESET}" confirm_no_pass
+            if [[ "${confirm_no_pass:-y}" =~ ^[Yy]$ ]]; then
+                echo -e "${C_GREEN}-> Default encryption disabled.${C_RESET}"
+                ENCRYPTED_ARCHIVE_PASSWORD=""
+                break
+            else
+                echo -e "${C_CYAN}-> Please enter a password then.${C_RESET}"
+                continue
+            fi
+        fi
+
+        read -srp "Confirm password: " archive_pass_2; echo
+
+        if [[ "$archive_pass_1" == "$archive_pass_2" ]]; then
+            ENCRYPTED_ARCHIVE_PASSWORD=$(encrypt_pass "${archive_pass_1}")
+            echo -e "${C_GREEN}-> Password saved and encrypted.${C_RESET}"
+            break
+        else
+            echo -e "${C_RED}Passwords do not match. Please try again.${C_RESET}"
+        fi
+    done
+
+    _prompt_input "${C_YELLOW}Default 7z Compression Level ${C_CYAN}(Copy:0 - Ultra:9)${C_RESET}" "3" ARCHIVE_COMPRESSION_LEVEL "int" 0 9
+
+    clear
+    echo -e "\n${C_GREEN}_--| Docker Tool Suite ${SCRIPT_VERSION} Setup |---_${C_RESET}\n"
+    echo -e "${C_YELLOW}--- Configuration Summary ---${C_RESET}\n"
+    echo "  App Manager:"
+    echo -e "    Base Path:       ${C_GREEN}${APPS_BASE_PATH}${C_RESET}"
+    echo -e "    Managed Subdir:  ${C_GREEN}${MANAGED_SUBDIR}${C_RESET}"
+    echo "  Volume Manager:"
+    echo -e "    Backup Path:     ${C_GREEN}${BACKUP_LOCATION}${C_RESET}"
+    echo -e "    Restore Path:    ${C_GREEN}${RESTORE_LOCATION}${C_RESET}"
+    echo -e "    Backup Image:    ${C_GREEN}${BACKUP_IMAGE}${C_RESET}"
+    echo -e "    Explorer Image:  ${C_GREEN}${EXPLORE_IMAGE}${C_RESET}"
+    echo "  Archive Settings:"
+    echo -e "    Compress Level:  ${C_GREEN}${ARCHIVE_COMPRESSION_LEVEL}${C_RESET}"
+    echo "  Logs:"
+    echo -e "    Log Path:        ${C_GREEN}${LOG_DIR}${C_RESET}"
+    echo -e "    Log Retention:   ${C_GREEN}${LOG_RETENTION_DAYS} days${C_RESET}"
+    echo "  Ignored Items:"
+    echo -e "    Volumes:         ${C_GREEN}${#selected_ignored_volumes[@]} selected${C_RESET}"
+    echo -e "    Images:          ${C_GREEN}${#selected_ignored_images[@]} selected${C_RESET}\n"
+    
+    read -rp "${C_YELLOW}Save this configuration? ${C_RESET}(${C_GREEN}Y${C_RESET}/${C_RED}n${C_RESET}): " confirm_setup
+    if [[ ! "${confirm_setup,,}" =~ ^(y|Y|yes|YES)$ ]]; then echo -e "\n ${C_RED}Setup canceled!\n${C_GRAY}(confirm to save the config)${C_RESET}"; exit 0; fi
+
+    echo -e "\n${C_GREEN}Saving configuration...${C_RESET}"; mkdir -p "${CONFIG_DIR}"
+    {
+        echo "# ============================================="
+        echo "#  Unified Configuration for Docker Tool Suite"
+        echo "# ============================================="
+        echo
+        echo "# App Directories"
+        printf "APPS_BASE_PATH=\"%s\"\n" "${APPS_BASE_PATH}"
+        printf "MANAGED_SUBDIR=\"%s\"\n" "${MANAGED_SUBDIR}"
+        echo
+        echo "# Backup Directories"
+        printf "BACKUP_LOCATION=\"%s\"\n" "${BACKUP_LOCATION}"
+        printf "RESTORE_LOCATION=\"%s\"\n" "${RESTORE_LOCATION}"
+        echo ""
+        echo "# Image used for backup/restore operations (must have tar and zstd)"
+        printf "BACKUP_IMAGE=\"%s\"\n" "${BACKUP_IMAGE}"
+        echo "# Image used for the interactive shell explorer"
+        printf "EXPLORE_IMAGE=\"%s\"\n" "${EXPLORE_IMAGE}"
+        echo
+        echo "# List of volumes to ignore during operations."
+        echo -n "IGNORED_VOLUMES=("
+        if [ ${#selected_ignored_volumes[@]} -gt 0 ]; then
+            printf "\n"; for vol in "${selected_ignored_volumes[@]}"; do echo "    \"$vol\""; done
+        else
+            printf "\n"; echo "    \"example-of-ignored_volume-1\""
+            printf ""; echo "    \"example-of-ignored_volume-2\""
+            printf ""; echo "    \"example-of-ignored_volume-3\""
+        fi
+        echo ")"
+        echo
+        echo "# List of images to ignore during operations."
+        echo -n "IGNORED_IMAGES=("
+        if [ ${#selected_ignored_images[@]} -gt 0 ]; then
+            printf "\n"; for img in "${selected_ignored_images[@]}"; do echo "    \"$img\""; done
+        else
+            printf "\n"; echo "    \"custom-registry/my-custom-app-1:latest\""
+            printf ""; echo "    \"custom-registry/my-custom-app-2:latest\""
+            printf ""; echo "    \"custom-registry/my-custom-app-3:latest\""
+        fi
+        echo ")"
+        echo
+        echo "# Archive Settings"
+        echo "# Password is encrypted using a unique key stored in .master.key."
+        printf "ENCRYPTED_ARCHIVE_PASSWORD=%q\n" "${ENCRYPTED_ARCHIVE_PASSWORD}"
+        echo "# Map compression: 7z levels are 0-9. (mx=0 is copy, mx=9 is ultra)."
+        echo "ARCHIVE_COMPRESSION_LEVEL=\"${ARCHIVE_COMPRESSION_LEVEL}\""
+        echo
+        echo "# Log Settings"
+        printf "LOG_DIR=\"%s\"\n" "${LOG_DIR}"
+        printf "LOG_SUBDIR_UPDATE=\"%s\"\n" "${LOG_SUBDIR_UPDATE}"
+        printf "LOG_SUBDIR_UNUSED=\"%s\"\n" "${LOG_SUBDIR_UNUSED}"
+        echo "# Log file retention period in days. Set to 0 to disable automatic pruning."
+        printf "LOG_RETENTION_DAYS=%s\n" "\"${LOG_RETENTION_DAYS}\""
+    } > "${CONFIG_FILE}"
+
+    echo -e "${C_YELLOW}Creating directories and setting permissions...${C_RESET}"
+    mkdir -p "${APPS_BASE_PATH}/${MANAGED_SUBDIR}" "${BACKUP_LOCATION}" "${RESTORE_LOCATION}" "${LOG_DIR}"
+    $SUDO_CMD chown -R "${CURRENT_USER}:${CURRENT_USER}" "${CONFIG_DIR}" "${APPS_BASE_PATH}" "${BACKUP_LOCATION}" "${RESTORE_LOCATION}" "${LOG_DIR}"
+
+    # Restrict Config Permissions
+    chmod 700 "${CONFIG_DIR}"
+    chmod 600 "${CONFIG_FILE}"
+
+    # Prompt for Task Scheduler
+    echo -e "\n${C_GREEN}--- Task Scheduler ---${C_RESET}\n"
+    read -rp "${C_YELLOW}Do you want to configure scheduled tasks ${C_GRAY}(Auto-Updates) ${C_YELLOW}now? ${C_RESET}(${C_CYAN}y${C_RESET}/${C_RED}N${C_RESET}): " config_sched
+    if [[ "${config_sched,,}" =~ ^(y|Y|yes|YES)$ ]]; then
+        scheduler_menu
+    fi
+
+    # Prompt for Shell Alias
+    echo -e "\n${C_GREEN}--- Optional: Shell Shortcut ---${C_RESET}\n"
+    read -rp "${C_YELLOW}Do you want to create a shell shortcut ${C_GRAY}(alias) ${C_YELLOW}now? ${C_RESET}(${C_CYAN}y${C_RESET}/${C_RED}N${C_RESET}): " config_alias
+    if [[ "${config_alias,,}" =~ ^(y|Y|yes|YES)$ ]]; then
+        configure_shell_alias
+    fi
+
+    echo -e "\n${C_GREEN}${TICKMARK} Setup complete! The script will now continue.${C_RESET}\n"; sleep 2
+}
+
+install_autocompletion() {
+    check_root
+    local user_home="/home/${CURRENT_USER}"
+    local shell_rc=""
+    local shell_type=""
+    
+    # Detect Shell via Parent Process
+    local parent_process
+    parent_process=$(ps -o comm= -p $PPID 2>/dev/null || echo "$SHELL")
+    
+    if [[ "$parent_process" =~ "zsh" ]]; then
+        shell_rc="${user_home}/.zshrc"
+        shell_type="zsh"
+    elif [[ "$parent_process" =~ "bash" ]]; then
+        shell_rc="${user_home}/.bashrc"
+        shell_type="bash"
+    else
+        echo -e "${C_RED}Could not detect supported shell (Bash/Zsh).${C_RESET}"
+        return 1
+    fi
+    echo -e "${C_YELLOW}Detected shell: ${C_CYAN}${shell_type}${C_YELLOW} | Config: ${C_CYAN}${shell_rc}${C_RESET}"
+    
+    # Prepare Paths for injection
+    local apps_dir="${APPS_BASE_PATH}"
+    local managed_dir="${APPS_BASE_PATH}/${MANAGED_SUBDIR}"
+
+    # Prepare Content
+    local new_content
+    new_content="# >>> Dtools Autocompletion >>>"
+    new_content+=$'\n'
+    if [[ "$shell_type" == "zsh" ]]; then
+        # --- ZSH VERSION ---
+        # We inject the literal paths so Zsh knows where to look for folders
+        new_content+=$(cat <<EOF
+#compdef dtools
+_dtools() {
+    local context state line
+    typeset -A opt_args
+
+    _arguments -C \\
+        '1: :->cmds' \\
+        '*:: :->args'
+
+    case \$state in
+        cmds)
+            local -a commands
+            commands=(
+                'update:Update specific or all apps'
+                'update-unused:Update unused images'
+                '--quick-backup:Backup specific volumes'
+                '-qb:Backup specific volumes'
+                '--help:Show help'
+                '-h:Show help'
+                '--version:Show version'
+                '-v:Show version'
+            )
+            _describe 'command' commands
+            ;;
+        args)
+            case \$line[1] in
+                update)
+                    # Complete folder names from both App dirs
+                    _path_files -W "(${apps_dir} ${managed_dir})" -/
+                    ;;
+                --quick-backup|-qb)
+                    local -a volumes
+                    volumes=("\${(@f)\$(docker volume ls -q 2>/dev/null)}")
+
+                    # _alternative allows us to present multiple types of completion at once.
+                    # 1. Docker Volumes (using compadd)
+                    # 2. Files/Directories (using _files)
+                    _alternative \\
+                        "volumes:Docker Volume:compadd -a volumes" \\
+                        "files:Filename:_files"
+                    ;;
+                *)
+                    # For all other commands, default to file completion
+                    _files
+                    ;;
+            esac
+            ;;
+    esac
+}
+
+compdef _dtools dtools docker_tool_suite.sh
+EOF
+)
+    else
+        # --- BASH VERSION ---
+        # We inject a 'find' command to list folders in your app directories
+        new_content+=$(cat <<EOF
+_dtools_completions() {
+    local cur prev opts
+    COMPREPLY=()
+    cur="\${COMP_WORDS[COMP_CWORD]}"
+    prev="\${COMP_WORDS[COMP_CWORD-1]}"
+    opts="update update-unused --quick-backup -qb --help -h --version -v"
+
+    # Check if 'update' is the command being used
+    if [[ " \${COMP_WORDS[@]} " =~ " update " ]]; then
+        local apps
+        # List directories from both locations, strip paths to just names
+        apps=\$(find "${apps_dir}" "${managed_dir}" -mindepth 1 -maxdepth 1 -type d -printf "%f\n" 2>/dev/null)
+        COMPREPLY=( \$(compgen -W "\${apps} --all --dry-run" -- \${cur}) )
+        return 0
+    fi
+
+    local is_qb=false
+    for ((i=1; i < COMP_CWORD; i++)); do
+        if [[ "\${COMP_WORDS[i]}" == "-qb" || "\${COMP_WORDS[i]}" == "--quick-backup" ]]; then
+            is_qb=true
+            break
+        fi
+    done
+
+    if [[ "\$is_qb" == "true" ]]; then
+        local volumes
+        volumes=\$(docker volume ls -q 2>/dev/null)
+        COMPREPLY=( \$(compgen -W "\${volumes}" -- \${cur}) )
+        while IFS= read -r f; do
+            COMPREPLY+=( "\$f" )
+        done < <(compgen -f -- "\${cur}")
+        return 0
+    fi
+
+    if [[ \${cur} == -* ]] || [[ \${COMP_CWORD} -eq 1 ]]; then
+        COMPREPLY=( \$(compgen -W "\${opts}" -- \${cur}) )
+        return 0
+    fi
+}
+complete -F _dtools_completions dtools
+EOF
+)
+    fi
+    new_content+=$'\n'
+    new_content+="# <<< Dtools Autocompletion <<<"
+    
+    # Installation Logic
+    if grep -Fq "# >>> Dtools Autocompletion >>>" "$shell_rc"; then
+        echo -e "${C_YELLOW}Updating existing autocompletion block (in-place)...${C_RESET}"
+        local temp_rc; temp_rc=$(mktemp)
+        awk -v new_block="$new_content" '
+            BEGIN { printing=1 }
+            /^# >>> Dtools Autocompletion >>>/ { printing=0; print new_block; next }
+            /^# <<< Dtools Autocompletion <<</ { printing=1; next }
+            printing { print }
+        ' "$shell_rc" > "$temp_rc"
+        cat "$temp_rc" > "$shell_rc"
+        rm "$temp_rc"
+    else
+        echo -e "${C_YELLOW}Appending new autocompletion block...${C_RESET}"
+        [ -n "$(tail -c1 "$shell_rc")" ] && echo "" >> "$shell_rc"
+        echo "$new_content" >> "$shell_rc"
+    fi
+    echo -e "${C_GREEN}${TICKMARK} Autocompletion installed/updated!${C_RESET}"
+    echo -e "${C_GRAY}Please run 'source ${shell_rc}' (or restart terminal) to apply changes.${C_RESET}"
+}
+
+validate_and_edit_compose() {
+    local app_name="$1"
+    local file="$2"
+    
+    # Simple validation: ensure the file actually exists
+    if [[ ! -f "$file" ]]; then
+        log "Error: Compose file for '$app_name' not found."
+        echo -e "${C_RED}Error: Compose file not found: $file${C_RESET}"
+        return 1
+    fi
+    return 0
+}
+
+_start_app_task() {
+    local app_name="$1" app_dir="$2"
+    local extra_args="${3:-}"
+
+    log "Starting $app_name..."
+    local compose_file; compose_file=$(find_compose_file "$app_dir")
+    if [ -z "$compose_file" ]; then log "Warning: No compose file for '$app_name'. Skipping." ""; return; fi
+
+    if ! validate_and_edit_compose "$app_name" "$compose_file"; then return; fi
+
+    log "Starting containers for '$app_name' (Args: ${extra_args:-none})..."
+
+    if execute_and_log $SUDO_CMD docker compose -f "$compose_file" up -d $extra_args; then
+        log "Successfully started '$app_name'."
+        echo -e "${C_GREEN}Successfully started '${C_CYAN}$app_name${C_GREEN}'.${C_RESET}"
+    else
+        log "ERROR: Failed to start '$app_name'."
+        echo -e "${C_RED}Failed to start '${C_CYAN}$app_name${C_RED}'! Check log for details.${C_RESET}"
+    fi
+}
+
+_stop_app_task() {
+    local app_name="$1" app_dir="$2"
+    log "Stopping $app_name..."
+    local compose_file; compose_file=$(find_compose_file "$app_dir")
+    if [ -z "$compose_file" ]; then log "Info: No compose file for '$app_name'. Cannot stop." ""; return; fi
+
+    if ! validate_and_edit_compose "$app_name" "$compose_file"; then return; fi
+
+    if execute_and_log $SUDO_CMD docker compose -f "$compose_file" down --remove-orphans; then
+        log "Successfully stopped '$app_name'."
+        echo -e "${C_GREEN}Successfully stopped '${C_CYAN}$app_name${C_GREEN}'.${C_RESET}"
+    else
+        log "ERROR: Failed to stop '$app_name'."
+        echo -e "${C_RED}Failed to stop '${C_CYAN}$app_name${C_RED}'! Check log for details.${C_RESET}"
+    fi
+}
+
+_update_app_task() {
+    local app_name="$1" app_dir="$2"
+    local force_mode="${3:-false}"
+
+    log "Updating $app_name (Force Mode: $force_mode)..."
+    local compose_file; compose_file=$(find_compose_file "$app_dir")
+    if [ -z "$compose_file" ]; then log "Warning: No compose file for '$app_name'. Skipping." ""; return; fi
+
+    if ! validate_and_edit_compose "$app_name" "$compose_file"; then return; fi
+
+    local was_running=false
+    # If this returns a non-empty string, at least one service is running.
+    if [ -n "$($SUDO_CMD docker compose -f "$compose_file" ps --services --status=running)" ]; then
+        was_running=true
+    fi
+
+    log "Checking for images to update for '$app_name'..."
+    mapfile -t all_app_images < <($SUDO_CMD docker compose -f "$compose_file" config --images 2>/dev/null)
+    
+    local -a images_to_pull=()
+    local all_pulls_succeeded=true
+    local update_was_found=false 
+
+    if [[ "$force_mode" == "true" ]]; then
+        update_was_found=true
+        log "Force mode enabled: Containers will be recreated."
+    fi
+
+    if [ ${#all_app_images[@]} -eq 0 ]; then
+        log "No images defined in compose file for $app_name."
+    else
+        for image in "${all_app_images[@]}"; do
+            if _is_item_ignored "$image" IGNORED_IMAGES; then
+                log "Skipping ignored image: $image" "   -> Skipping ignored image: ${C_GRAY}${image}${C_RESET}"
+            else
+                images_to_pull+=("$image")
+            fi
+        done
+
+        if [ ${#images_to_pull[@]} -gt 0 ]; then
+            echo -e "Pulling latest versions for non-ignored images in ${C_YELLOW}${app_name}${C_RESET}..."
+            for image in "${images_to_pull[@]}"; do
+                log "Checking image: $image" "   -> Checking ${C_CYAN}${image}${C_RESET}..."
+
+                local id_before
+                id_before=$($SUDO_CMD docker inspect --format='{{.Id}}' "$image" 2>/dev/null || echo "not_found")
+
+                local id_after
+                
+                if $DRY_RUN; then
+                    echo -e "      ${C_GRAY}[DRY RUN] Would pull: $image${C_RESET}"
+                    id_after="$id_before"
+                else
+                    _record_image_state "$app_dir" "$image" "$id_before"
+
+                    local pull_output; pull_output=$($SUDO_CMD docker pull "$image" 2>&1)
+                    local pull_exit_code=$?
+                    echo "$pull_output" >> "${LOG_FILE:-/dev/null}"
+                    
+                    if [ "$pull_exit_code" -ne 0 ]; then
+                        log "ERROR: Failed to pull image $image" "${C_RED}Failed to pull ${image}. See log for details.${C_RESET}"
+                        all_pulls_succeeded=false
+                        continue
+                    fi
+                    
+                    id_after=$($SUDO_CMD docker inspect --format='{{.Id}}' "$image" 2>/dev/null)
+                fi
+
+                if [[ "$id_before" != "$id_after" ]] && [[ "$id_before" != "not_found" ]]; then
+                    log "New image found for $image (Hash changed)." "   -> ${C_GREEN}Newer image downloaded!${C_RESET}"
+                    update_was_found=true
+                else
+                    log "Image $image is up to date."
+                fi
+            done
+        fi
+    fi
+
+    if $all_pulls_succeeded; then
+        if $was_running || [[ "$force_mode" == "true" ]]; then
+            if $update_was_found; then
+                local restart_msg="Restarting"
+                local start_args=""
+                
+                if [[ "$force_mode" == "true" ]]; then
+                    echo -e "${C_GREEN}Force Recreate enabled. Recreating containers for '$app_name'...${C_RESET}"
+                    restart_msg="Force recreating"
+                    start_args="--force-recreate"
+                else
+                    echo -e "${C_GREEN}New image(s) found. Restarting '$app_name' to apply updates...${C_RESET}"
+                fi
+
+                log "$restart_msg '$app_name'..."
+                _stop_app_task "$app_name" "$app_dir"
+                _start_app_task "$app_name" "$app_dir" "$start_args"
+                
+                log "Successfully updated/recreated '$app_name'."
+            else
+                log "App up to date. No action."
+                echo -e "All images for ${C_YELLOW}${app_name}${C_RESET} are up to date. No action taken."
+            fi
+        else
+            log "Application '$app_name' was not running. Images checked, but app remains stopped."
+        fi
+    else
+        log "ERROR: Failed to pull images for '$app_name'. Aborting."
+        echo -e "${C_RED}Update for '$app_name' aborted due to pull failures.${C_RESET}"
+    fi
+}
+
+_rollback_app_task() {
+    local app_name="$1" app_dir="$2"
+    local history_file="${app_dir}/.update_history"
+    
+    clear
+    echo -e "${C_GREEN}--- Rollback Wizard for ${C_CYAN}${app_name} ${C_GREEN}---${C_RESET}"
+    
+    if [[ ! -f "$history_file" ]]; then
+        echo -e "\n${C_RED}No update history found for this app.${C_RESET}\n"
+        read -rp "Press Enter to return..."
+        return
+    fi
+    
+    # Check if file has content
+    if [[ ! -s "$history_file" ]]; then
+        echo -e "${C_YELLOW}History file is empty.${C_RESET}"; read -rp "Press Enter..." ; return
+    fi
+    
+    echo -e "\n${C_YELLOW}Select a previous state to restore:${C_RESET}"
+    echo "---------------------------------------------------------------------------"
+    printf "%-4s | %-20s | %-30s | %s\n" "No." "Date" "Image Name" "ID (Hash)"
+    echo "---------------------------------------------------------------------------"
+    
+    local -a valid_choices=()
+    local display_count=0
+    
+    # Use tac to read in reverse, fallback to sed if tac is missing
+    local reader_cmd
+    if command -v tac >/dev/null; then reader_cmd="tac"; else reader_cmd="sed '1!G;h;$!d'"; fi
+    
+    # Read file line by line
+    while IFS='|' read -r timestamp img_name img_id || [[ -n "$timestamp" ]]; do
+        # Skip empty or malformed lines
+        [[ -z "$img_id" ]] && continue
+        
+        # Clean variables
+        timestamp=$(echo "$timestamp" | tr -d '\r' | xargs)
+        img_name=$(echo "$img_name" | tr -d '\r' | xargs)
+        img_id=$(echo "$img_id" | tr -d '\r' | xargs)
+        
+        # Verify the image still exists locally. 
+        if $SUDO_CMD docker image inspect "$img_id" &>/dev/null; then
+            local short_id="${img_id:7:12}"
+            printf "%-4s | %-20s | %-30s | %s\n" "$((display_count+1))" "$timestamp" "${img_name:0:28}" "$short_id"
+            
+            # Store original raw line for later use
+            valid_choices+=("$timestamp|$img_name|$img_id")
+            ((++display_count)) || true
+        fi
+        
+        if [ $display_count -ge 10 ]; then break; fi
+        
+    done < <(eval "$reader_cmd \"$history_file\"")
+
+    if [ ${#valid_choices[@]} -eq 0 ]; then
+        echo -e "\n${C_RED}No locally available images found in history.${C_RESET}\n"
+        read -rp "Press Enter..."
+        return
+    fi
+
+    echo -e "\n---------------------------------------------------------------------------"
+    read -rp "${C_YELLOW}Enter number to rollback to ${C_GRAY}(or '${C_RED}q${C_GRAY}' to cancel)${C_RESET}: " choice
+    if [[ "${choice,,}" == "q" ]]; then return; fi
+    
+    if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le "${#valid_choices[@]}" ]; then
+        local selected_line="${valid_choices[$((choice-1))]}"
+        IFS='|' read -r _ r_name r_id <<< "$selected_line"
+        
+        echo -e "\n${C_RED}WARNING: This will force '${C_RESET}${r_name}${C_RED}' to point to ID '${C_RESET}${r_id:7:12}${C_RED}' locally!${C_RESET}\n"
+        read -rp "${C_YELLOW}Are you sure? (${C_GREEN}y${C_RESET}/${C_RED}N${C_RESET}): ${C_RESET}" confirm
+        
+        if [[ "${confirm,,}" =~ ^(y|yes)$ ]]; then
+            log "Rolling back $app_name image $r_name to $r_id..."
+            
+            if execute_and_log $SUDO_CMD docker tag "$r_id" "$r_name"; then
+                echo -e "${C_GREEN}Image successfully retagged.${C_RESET}"
+                echo "Restarting application to apply change..."
+                
+                _stop_app_task "$app_name" "$app_dir" || true
+                _start_app_task "$app_name" "$app_dir" "--force-recreate" || true
+                
+                echo -e "\n${C_GREEN}${TICKMARK} Rollback complete.${C_RESET}"
+                log "Rollback successful for $r_name."
+            else
+                echo -e "${C_RED}Error: Failed to retag image.${C_RESET}"
+            fi
+        else
+            echo -e "\n${C_RED}Rollback canceled by user!${C_RESET}\n"
+        fi
+    else
+        echo -e "\n${C_RED}Invalid selection.${C_RESET}\n"
+    fi
+    read -rp "Press Enter to continue..."
+}
+
+app_manager_status() {
+    clear; log "Generating App Status Overview" "${C_CYAN}Displaying App Status Overview...${C_RESET}"; clear
+    local less_prompt="(Scroll with arrow keys, press 'q' to return)"
+    (
+        declare -A running_projects
+        while read -r proj; do
+            proj=$(echo "$proj" | tr -d '\r')
+            [[ -n "$proj" ]] && running_projects["$proj"]=1
+        done < <($SUDO_CMD docker compose ls --quiet)
+
+        echo "=============================================="
+        echo -e "${C_GREEN}${T_BOLD} App Status Overview ${C_RESET}"
+        echo "=============================================="
+        echo -e "\n${C_YELLOW} --- Essential Apps (${C_CYAN}${APPS_BASE_PATH}${C_YELLOW}) ---${C_RESET}\n"
+        
+        local -a essential_apps; discover_apps "$APPS_BASE_PATH" essential_apps
+        local -a filtered_essential=()
+        
+        for app in "${essential_apps[@]}"; do
+            if [ "$app" != "$MANAGED_SUBDIR" ]; then
+                filtered_essential+=("$app")
+            fi
+        done
+
+        if [ ${#filtered_essential[@]} -eq 0 ]; then
+            echo -e "\n ${C_RED}No essential apps found.${C_RESET}"
+        else
+            for app in "${filtered_essential[@]}"; do
+                if [[ -v running_projects[${app,,}] ]]; then 
+                    echo -e " ${C_GREEN}[RUNNING]${C_RESET}\t$app"
+                else 
+                    echo -e " ${C_RED}[STOPPED]${C_RESET}\t$app"
+                fi
+            done
+        fi
+
+        echo -e "\n${C_RESET}----------------------------------------------"
+        echo -e "\n${C_YELLOW} --- Managed Apps (${C_CYAN}${MANAGED_SUBDIR}${C_YELLOW}) ---${C_RESET}\n"
+        
+        local -a managed_apps; local managed_path="$APPS_BASE_PATH/$MANAGED_SUBDIR"; discover_apps "$managed_path" managed_apps
+        
+        if [ ${#managed_apps[@]} -eq 0 ]; then 
+            echo -e "\n ${C_RED}No managed apps found.${C_RESET}"
+        else
+            for app in "${managed_apps[@]}"; do
+                if [[ -v running_projects[$app] ]]; then
+                    echo -e " ${C_GREEN}[RUNNING]${C_RESET}\t$app"
+                else
+                    echo -e " ${C_RED}[STOPPED]${C_RESET}\t$app"
+                fi
+            done
+        fi
+
+        echo -e "${C_RESET}"
+        echo "=============================================="
+    ) | less -RX --prompt="$less_prompt"
+}
+
+app_manager_interactive_handler() {
+    local app_type_name="$1"
+    local discovery_path="$2"
+    local base_path="$3"
+
+    while true; do
+        local options=(
+            "Start ${app_type_name} Apps"
+            "Stop ${app_type_name} Apps"
+            "Update ${app_type_name} Apps"
+            "Rollback ${app_type_name} Apps"
+        )
+
+        print_standard_menu "Manage ${app_type_name} Apps" options "RQ"
+        
+        read -erp "${C_YELLOW}Please select an ${C_CYAN}option${C_RESET}: " choice
+
+        local action=""
+        local title=""
+        local task_func=""
+        local menu_action_key=""
+        local force_flag="false"
+
+        case "$choice" in
+            1)
+                action="start"; title="Select ${app_type_name} Apps to START"; task_func="_start_app_task"; menu_action_key="start" ;;
+            2)
+                action="stop"; title="Select ${app_type_name} Apps to STOP"; task_func="_stop_app_task"; menu_action_key="stop" ;;
+            3)
+                action="update"; title="Select ${app_type_name} Apps to UPDATE"; task_func="_update_app_task"; menu_action_key="update"
+                echo ""
+                read -rp "${C_CYAN}Force recreate containers even if no updates found? ${C_GRAY}(useful for config changes) ${C_RESET}[${C_GREEN}y${C_RESET}/${C_RED}N${C_RESET}]: " force_choice
+                if [[ "${force_choice,,}" =~ ^(y|Y|yes|YES)$ ]]; then
+                    force_flag="true"
+                    title="${title} (FORCE RECREATE)"
+                fi
+                ;;
+            4)
+                action="rollback"; title="Select ONE App to Rollback"; task_func="_rollback_app_task"; menu_action_key="rollback"
+                ;;
+            [rR]) return ;;
+            [qQ]) exit 0 ;;
+            *) echo -e "\n${C_RED}Invalid option.${C_RESET}"; sleep 1; continue ;;
+        esac
+
+        local -a all_apps; discover_apps "$discovery_path" all_apps
+        
+        if [[ "$app_type_name" == "Essential" ]]; then
+            local -a filtered_apps=()
+            for app in "${all_apps[@]}"; do
+                if [[ "$app" != "$MANAGED_SUBDIR" ]]; then
+                    filtered_apps+=("$app")
+                fi
+            done
+            all_apps=("${filtered_apps[@]}")
+        fi
+        
+        if [ ${#all_apps[@]} -eq 0 ]; then
+            log "No ${app_type_name} apps found for this action." "${C_YELLOW}No ${app_type_name} apps found.${C_RESET}"; sleep 2; continue
+        fi
+        
+        local -a selected_status=()
+        if [[ "$action" == "stop" || "$action" == "update" ]]; then
+            [[ "$force_flag" == "false" ]] && title+=" (defaults to running)"
+            declare -A running_apps_map
+            while read -r project; do 
+                project=$(echo "$project" | tr -d '\r')
+                [[ -n "$project" ]] && running_apps_map["$project"]=1
+            done < <($SUDO_CMD docker compose ls --quiet)
+            
+            for app in "${all_apps[@]}"; do
+                if [[ -v running_apps_map[${app,,}] ]]; then selected_status+=("true"); else selected_status+=("false"); fi
+            done
+        else
+            for ((i=0; i<${#all_apps[@]}; i++)); do selected_status+=("false"); done
+        fi
+
+        if ! show_selection_menu "$title" "$menu_action_key" all_apps selected_status; then
+            log "${C_YELLOW}User quit. No action taken." ""
+            continue
+        fi
+
+        if [[ "$action" == "rollback" ]]; then
+            local count=0
+            for i in "${!selected_status[@]}"; do
+                if ${selected_status[$i]}; then ((count+=1)); fi
+            done
+            
+            if [ $count -gt 1 ]; then
+                 echo -e "${C_RED}Rollback only supports one app at a time. Please select only one.${C_RESET}"; sleep 2; continue
+            fi
+            if [ $count -eq 0 ]; then
+                 echo -e "${C_YELLOW}No app selected.${C_RESET}"; sleep 1; continue
+            fi
+        fi
+
+        log "Performing '$action' on selected ${app_type_name} apps" "${C_GREEN}Processing selected apps...${C_RESET}\n"
+        for i in "${!all_apps[@]}"; do
+            if ${selected_status[$i]}; then 
+                if [[ "$task_func" == "_update_app_task" ]]; then
+                    $task_func "${all_apps[$i]}" "$base_path/${all_apps[$i]}" "$force_flag"
+                else
+                    $task_func "${all_apps[$i]}" "$base_path/${all_apps[$i]}"
+                fi
+            fi
+        done
+        
+        if [[ "$action" != "rollback" ]]; then
+            log "All selected ${app_type_name} app processes for '$action' finished."
+            echo -e "\n${C_CYAN}Task complete. Press Enter...${C_RESET}"; read -r
+        fi
+    done
+}
+
+app_manager_update_all_known_apps() {
+    check_root
+    log "=========================================================================================="
+    log "--- Starting update for RUNNING applications... ---"
+    log "Discovering currently running Docker Compose projects..."
+    declare -A running_projects
+
+    while read -r proj; do
+        proj=$(echo "$proj" | tr -d '\r')
+        [[ -n "$proj" ]] && running_projects["$proj"]=1
+    done < <($SUDO_CMD docker compose ls --quiet)
+
+    local -a essential_apps; discover_apps "$APPS_BASE_PATH" essential_apps
+    local -a managed_apps; discover_apps "$APPS_BASE_PATH/$MANAGED_SUBDIR" managed_apps
+
+    if [ ${#essential_apps[@]} -eq 0 ] && [ ${#managed_apps[@]} -eq 0 ]; then
+        log "No applications found in any directory." "${C_YELLOW}No applications found to update.${C_RESET}"
+        return
+    fi
+
+    log "Found essential and managed apps. Starting update process for running apps only..." "${C_GREEN}Updating all RUNNING applications...${C_RESET}"
+
+    for app in "${essential_apps[@]}"; do
+        if [[ "$app" != "$MANAGED_SUBDIR" ]]; then
+            if [[ -v running_projects[${app,,}] ]]; then
+                echo -e "\n${C_CYAN}--- Updating RUNNING Essential App: ${C_YELLOW}${app}${C_CYAN} ---${C_RESET}"
+                _update_app_task "$app" "$APPS_BASE_PATH/$app"
+            else
+                log "Skipping update for stopped essential app: $app"
+            fi
+        fi
+    done
+
+    for app in "${managed_apps[@]}"; do
+        if [[ -v running_projects[$app] ]]; then
+            echo -e "\n${C_CYAN}--- Updating RUNNING Managed App: ${C_YELLOW}${app}${C_CYAN} ---${C_RESET}"
+            _update_app_task "$app" "$APPS_BASE_PATH/$MANAGED_SUBDIR/$app"
+        else
+            log "Skipping update for stopped managed app: $app"
+        fi
+    done
+
+    log "--- Finished update task for all running applications. ---" "${C_GREEN}\nFull update task finished.${C_RESET}"
+    log "=========================================================================================="
+}
+
+app_manager_stop_all() {
+    log "Stopping ALL running Docker Compose projects" "${C_YELLOW}Stopping all projects...${C_RESET}"
+    local projects; projects=$($SUDO_CMD docker compose ls --quiet)
+    if [ -z "$projects" ]; then log "No running projects found." "${C_GREEN}No running projects found to stop.${C_RESET}"; return; fi
+    echo "$projects" | while read -r project; do
+        if [ -n "$project" ]; then
+            log "Stopping project: $project"
+            execute_and_log $SUDO_CMD docker compose -p "$project" down --remove-orphans
+        fi
+    done
+    log "All Docker Compose project stop processes finished."
+}
+
+app_manager_menu() {
+    check_root
+    local options=(
+        "Show App STATUS"
+        "Control ESSENTIAL Apps"
+        "Control MANAGED Apps"
+        "STOP ALL RUNNING APPS"
+    )
+    while true; do
+        print_standard_menu "Application Manager" options "RQ"
+        read -erp "${C_YELLOW}Please select an ${C_CYAN}option${C_RESET}: " choice
+        case "$choice" in
+            1) app_manager_status ;;
+            2) app_manager_interactive_handler "Essential" "$APPS_BASE_PATH" "$APPS_BASE_PATH" ;;
+            3) app_manager_interactive_handler "Managed" "$APPS_BASE_PATH/$MANAGED_SUBDIR" "$APPS_BASE_PATH/$MANAGED_SUBDIR" ;;
+            4) 
+                read -rp "$(printf "\n${C_RED}This will stop ALL running compose applications. Are you sure? ${C_RESET}[${C_GREEN}y${C_RESET}/${C_RED}N${C_RESET}]: ${C_RESET}")" confirm
+                if [[ "${confirm,,}" =~ ^(y|Y|yes|YES)$ ]]; then
+                    app_manager_stop_all
+                else
+                    echo -e "\n${C_YELLOW}Operation canceled.${C_RESET}"
+                fi
+                echo -e "\n${C_CYAN}Task complete. Press Enter...${C_RESET}"; read -r
+                ;;
+            [rR]) return ;;
+            [qQ]) log "Exiting script." "${C_GRAY}Exiting.${C_RESET}"; exit 0 ;;
+            *) echo -e "\n${C_RED}Invalid option.${C_RESET}"; sleep 1 ;;
+        esac
+    done
+}
+
+ensure_backup_image() {
+    log "Checking for backup image: $BACKUP_IMAGE"
+    if ! $SUDO_CMD docker image inspect "${BACKUP_IMAGE}" &>/dev/null; then
+        if [[ "$IS_CRON_RUN" == "true" ]]; then
+            log "Image not found (Cron mode), pulling..."
+            if ! execute_and_log $SUDO_CMD docker pull "${BACKUP_IMAGE}"; then 
+                log "ERROR: Failed to pull backup image."
+                return 1
+            fi
+        else
+            echo -e "${C_YELLOW}The required helper image (${C_CYAN}${BACKUP_IMAGE}${C_YELLOW}) is missing.${C_RESET}\n"
+            read -rp "${C_RESET}Download it now? (${C_GREEN}y${C_RESET}/${C_RED}N${C_RESET}): " confirm_dl
+            if [[ "${confirm_dl,,}" =~ ^(y|Y|yes|YES)$ ]]; then
+                echo -e "${C_CYAN}-> Pulling image...${C_RESET}"
+                if ! execute_and_log $SUDO_CMD docker pull "${BACKUP_IMAGE}"; then 
+                    echo -e "\n${C_RED}Error: Failed to pull image.${C_RESET}"
+                    echo -e "${C_GRAY}Check helper image name or internet connection.${C_RESET}"
+                    sleep 2
+                    return 1
+                    
+                fi
+            else
+                echo -e "\n${C_RED}Operation canceled. Function requires this image.${C_RESET}"
+                sleep 2
+                return 1
+            fi
+        fi
+    fi
+    return 0
+}
+
+ensure_explore_image() {
+    log "Checking for explorer image: ${EXPLORE_IMAGE}"
+    if ! $SUDO_CMD docker image inspect "${EXPLORE_IMAGE}" &>/dev/null; then
+        if [[ "$IS_CRON_RUN" == "true" ]]; then
+             if ! execute_and_log $SUDO_CMD docker pull "${EXPLORE_IMAGE}"; then return 1; fi
+        else
+            echo -e "${C_YELLOW}The required explorer image (${C_CYAN}${EXPLORE_IMAGE}${C_YELLOW}) is missing.${C_RESET}"
+            read -rp "Download it now? ${C_RESET}(${C_GREEN}y${C_RESET}/${C_RED}N${C_RESET}): " confirm_dl
+            if [[ "${confirm_dl,,}" =~ ^(y|Y|yes|YES)$ ]]; then
+                echo -e "${C_CYAN}-> Pulling image...${C_RESET}"
+                if ! execute_and_log $SUDO_CMD docker pull "${EXPLORE_IMAGE}"; then 
+                    echo -e "${C_RED}Error: Failed to pull image.${C_RESET}"
+                    return 1
+                fi
+            else
+                echo -e "${C_RED}Operation canceled. Function requires this image.${C_RESET}"
+                sleep 2
+                return 1
+            fi
+        fi
+    fi
+    return 0
+}
+
+run_in_volume() { local volume_name="$1"; shift; $SUDO_CMD docker run --rm -v "${volume_name}:/volume:ro" "${BACKUP_IMAGE}" "$@"; }
+
+volume_checker_inspect() {
+    local volume_name="$1"
+    echo -e "\n${C_CYAN}--- Inspecting '${volume_name}' ---${C_RESET}"; $SUDO_CMD docker volume inspect "${volume_name}"
+}
+
+volume_checker_list_files() {
+    local volume_name="$1"
+    echo -e "\n${C_CYAN}--- Listing files in '${volume_name}' ---${C_RESET}"; run_in_volume "${volume_name}" ls -lah /volume
+}
+
+volume_checker_calculate_size() {
+    local volume_name="$1"
+    echo -e "\n${C_CYAN}--- Calculating total size of '${volume_name}' ---${C_RESET}"; run_in_volume "${volume_name}" du -sh /volume
+}
+
+volume_checker_explore() {
+    local volume_name="$1"
+    if ! ensure_explore_image; then return; fi
+    local short_name="${volume_name:0:12}"
+
+    clear
+    echo "=============================================="
+    echo -e "          ${C_GREEN}${T_BOLD}Docker Tool Suite ${SCRIPT_VERSION}${C_RESET}"
+    echo "=============================================="
+    echo -e "${C_CYAN}           --- Interactive Shell ---${C_RESET}"
+    echo -e "${C_RESET}----------------------------------------------\n"
+    echo -e "${C_YELLOW}The volume ${C_CYAN}${volume_name} ${C_YELLOW}is mounted read-write at ${C_CYAN}/volume${C_YELLOW}."
+    echo -e "${C_YELLOW}Type ${C_GREEN}'exit' ${C_YELLOW}or press ${C_GREEN}Ctrl+D ${C_YELLOW}to return.${C_RESET}\n"
+
+    $SUDO_CMD docker run --rm -it \
+        -e TERM="$TERM" \
+        -v "${volume_name}:/volume" \
+        -v /etc/localtime:/etc/localtime:ro \
+        -w /volume \
+        "${EXPLORE_IMAGE}" \
+        bash -c "echo -e \"alias ll='ls -lah --color=auto'\" >> ~/.bashrc; \
+                 echo -e \"export PS1='\\\\[${C_RESET}\\\\][\\\\[${C_GREEN}\\\\]VOL-EXPLORER\\\\[${C_RESET}\\\\]@\\\\[${C_CYAN}\\\\]${short_name}\\\\[${C_RESET}\\\\]:\\\\[${C_GREEN}\\\\]\w\\\\[${C_RESET}\\\\]] \\\\[${C_GREEN}\\\\]# \\\\[${C_RESET}\\\\] '\" >> ~/.bashrc; \
+                 exec bash" || true
+}
+
+volume_checker_remove() {
+    local volume_name="$1"
+    read -rp "$(printf "\n${C_YELLOW}Permanently delete volume '${C_CYAN}%s${C_YELLOW}'? ${C_RESET}[${C_GREEN}y${C_RESET}/${C_RED}N${C_RESET}]: ${C_RESET}" "${volume_name}")" confirm
+    if [[ "${confirm,,}" =~ ^(y|Y|yes|YES)$ ]]; then
+        echo -e "-> Deleting volume '${volume_name}'..."
+        if execute_and_log $SUDO_CMD docker volume rm "${volume_name}"; then echo -e "${C_GREEN}Volume successfully deleted.${C_RESET}"; sleep 2; return 0; else echo -e "${C_RED}Error: Failed to delete. It might be in use.${C_RESET}"; sleep 3; return 1; fi
+    else echo -e "-> Deletion cancelled.${C_RESET}"; sleep 1; return 1; fi
+}
+
+volume_checker_menu() {
+    local volume_name="$1"
+    clear; volume_checker_inspect "${volume_name}"
+    while true; do
+        local options=(
+            "${C_CYAN}List volume files${C_RESET}"
+            "${C_CYAN}Calculate volume size${C_RESET}"
+            "${C_CYAN}Explore volume in shell${C_RESET}"
+            "${C_RED}Remove volume${C_RESET}"
+            "${C_GREEN}Return to volume list${C_RESET}"
+            "${C_GRAY}Quit${C_RESET}"
+        )
+        echo -e "\n${C_YELLOW}Options:${C_RESET}"
+        PS3=$'\n'"${C_YELLOW}Enter option ${C_RESET}number: "; select action in "${options[@]}"; do
+            case "$action" in
+                "${C_CYAN}List volume files${C_RESET}")
+                    ensure_backup_image || break
+                    volume_checker_list_files "${volume_name}"
+                    echo -e "${C_CYAN}---\nAction complete.\n\n${C_RESET}Press Enter to return to menu..."; read -r
+                    break
+                    ;;
+                "${C_CYAN}Calculate volume size${C_RESET}")
+                    ensure_backup_image || break
+                    volume_checker_calculate_size "${volume_name}"
+                    echo -e "${C_CYAN}---\nAction complete.\n\n${C_RESET}Press Enter to return to menu..."; read -r
+                    break
+                    ;;
+                "${C_CYAN}Explore volume in shell${C_RESET}") 
+                    ensure_explore_image || break
+                    volume_checker_explore "${volume_name}"; break ;;
+                "${C_RED}Remove volume${C_RESET}") if volume_checker_remove "${volume_name}"; then return; fi; break ;;
+                "${C_GREEN}Return to volume list${C_RESET}") return ;;
+                "${C_GRAY}Quit${C_RESET}") exit 0 ;;
+                *) echo -e "${C_RED}Invalid option '$REPLY'${C_RESET}"; sleep 1; break ;;
+            esac
+        done
+    done
+}
+
+volume_checker_main() {
+    while true; do
+        clear
+        echo "=============================================="
+        echo -e "          ${C_GREEN}${T_BOLD}Docker Tool Suite ${SCRIPT_VERSION}${C_RESET}"
+        echo "=============================================="
+        echo -e "           ${C_CYAN}--- Inspect & Manage Volumes ---"
+        echo -e "${C_RESET}----------------------------------------------\n"
+        mapfile -t volumes < <($SUDO_CMD docker volume ls --format "{{.Name}}")
+        if [ ${#volumes[@]} -eq 0 ]; then echo -e "${C_RED}No Docker volumes found.${C_RESET}"; sleep 2; return; fi
+        echo -e "${C_CYAN}Volume list:${C_RESET}"
+        PS3=$'\n'"${C_YELLOW}Enter ${C_CYAN}volume No.${C_YELLOW} ${C_GRAY}(r)eturn ${C_YELLOW}or ${C_RED}(q)uit${C_RESET}: "; select volume_name in "${volumes[@]}"; do
+            if [[ "$REPLY" == "r" || "$REPLY" == "R" ]]; then return; fi
+            if [[ "$REPLY" == "q" || "$REPLY" == "Q" ]]; then exit 0; fi
+            if [[ -n "$volume_name" ]]; then volume_checker_menu "${volume_name}"; break; else echo -e "${C_RED}Invalid selection.${C_RESET}"; fi
+        done
+    done
+}
+
+_find_project_dir_by_name() {
+    local project_name="$1"
+    
+    if [ -d "$APPS_BASE_PATH/$project_name" ]; then
+        if find_compose_file "$APPS_BASE_PATH/$project_name" &>/dev/null; then
+            echo "$APPS_BASE_PATH/$project_name"
+            return 0
+        fi
+    fi
+
+    local managed_path="$APPS_BASE_PATH/$MANAGED_SUBDIR"
+    if [ -d "$managed_path/$project_name" ]; then
+        if find_compose_file "$managed_path/$project_name" &>/dev/null; then
+            echo "$managed_path/$project_name"
+            return 0
+        fi
+    fi
+    
+    return 1
+}
+
+_is_volume_empty() {
+    local volume_name="$1"
+    $SUDO_CMD docker run --rm -v "${volume_name}:/volume:ro" "${BACKUP_IMAGE}" sh -c '[ -z "$(ls -A /volume)" ]' &> /dev/null
+}
+
+volume_smart_backup_main() {
+    clear; echo -e "${C_GREEN}Starting Smart Docker Volume Backup...${C_RESET}"
+    log "--- Starting Smart Volume Backup Session ---"
+
+    ensure_backup_image || volume_manager_menu
+
+    mapfile -t all_volumes < <($SUDO_CMD docker volume ls --format "{{.Name}}"); local -a filtered_volumes=()
+    for volume in "${all_volumes[@]}"; do if ! _is_item_ignored "$volume" IGNORED_VOLUMES; then filtered_volumes+=("$volume"); fi; done
+    if [[ ${#filtered_volumes[@]} -eq 0 ]]; then echo -e "${C_YELLOW}No available volumes to back up.${C_RESET}"; sleep 2; return; fi
+
+    local -a selected_status=(); for ((i=0; i<${#filtered_volumes[@]}; i++)); do selected_status+=("true"); done
+    if ! show_selection_menu "Select Volumes for SMART BACKUP" "backup" filtered_volumes selected_status; then echo -e "${C_RED}Backup canceled.${C_RESET}"; return; fi
+    local selected_volumes=(); for i in "${!filtered_volumes[@]}"; do if ${selected_status[$i]}; then selected_volumes+=("${filtered_volumes[$i]}"); fi; done
+    if [[ ${#selected_volumes[@]} -eq 0 ]]; then echo -e "\n${C_RED}No volumes selected! Exiting.${C_RESET}"; return; fi
+
+    echo -e "\n${C_YELLOW}Analyzing volumes and grouping them by application...${C_RESET}"
+    declare -A app_volumes_map
+    declare -A app_dir_map
+    local -a standalone_volumes=()
+
+    for volume in "${selected_volumes[@]}"; do
+        local container_id
+        container_id=$($SUDO_CMD docker ps -q --filter "volume=${volume}" | head -n 1)
+
+        if [[ -n "$container_id" ]]; then
+            local project_name
+            project_name=$($SUDO_CMD docker inspect --format '{{ index .Config.Labels "com.docker.compose.project" }}' "$container_id")
+
+            if [[ -n "$project_name" ]]; then
+                app_volumes_map["$project_name"]+="${volume} "
+                if [[ ! -v "app_dir_map[$project_name]" ]]; then
+                    echo " -> Found application for volume '${volume}': ${C_CYAN}${project_name}${C_RESET}"
+                    local found_dir
+                    found_dir=$(_find_project_dir_by_name "$project_name")
+                    if [[ -n "$found_dir" ]]; then
+                        app_dir_map["$project_name"]="$found_dir"
+                    else
+                        log "ERROR: Could not find directory for project '$project_name'. Treating as standalone."
+                        standalone_volumes+=("$volume")
+                        unset 'app_volumes_map["$project_name"]'
+                        continue
+                    fi
+                fi
+            else
+                echo -e " -> Volume '${C_CYAN}${volume}${C_RESET}' is non-compose. Backing up as standalone."
+                standalone_volumes+=("$volume")
+            fi
+        else
+            echo -e " -> Volume '${C_CYAN}${volume}${C_RESET}' is standalone."
+            standalone_volumes+=("$volume")
+        fi
+    done
+
+    local backup_dir
+    backup_dir="${BACKUP_LOCATION%/}/$(date +'%Y-%m-%d_%H-%M-%S')"
+    mkdir -p "$backup_dir"
+
+    if [ -n "${!app_volumes_map[*]}" ]; then
+        echo -e "\n${C_GREEN}--- Processing Application-Linked Backups ---${C_RESET}"
+        for app_name in "${!app_volumes_map[@]}"; do
+            echo -e "\n${C_YELLOW}Processing app: ${C_CYAN}${app_name}${C_RESET}"
+            log "Processing application group: ${app_name}"
+
+            local app_dir=${app_dir_map[$app_name]}
+            _stop_app_task "$app_name" "$app_dir"
+            local -a vols_to_backup; read -r -a vols_to_backup <<< "${app_volumes_map[$app_name]}"
+            echo "   -> Backing up ${#vols_to_backup[@]} volume(s)..."
+            for volume in "${vols_to_backup[@]}"; do
+                log "Backing up volume: ${volume}"
+                if _is_volume_empty "$volume"; then
+                    echo -e "      - ${C_GRAY}Skipping empty volume: ${volume}${C_RESET}"
+                    log "Skipped empty volume: $volume"
+                    continue
+                fi
+                
+                echo "      - Backing up ${C_CYAN}${volume}${C_RESET}..."
+                execute_and_log $SUDO_CMD docker run --rm -v "${volume}:/volume:ro" -v "${backup_dir}:/backup" "${BACKUP_IMAGE}" tar -C /volume --zstd -cf "/backup/${volume}.tar.zst" .
+            done
+            _start_app_task "$app_name" "$app_dir"
+            echo -e "${C_GREEN}Finished processing ${app_name}.${C_RESET}"
+        done
+    fi
+
+    if [[ ${#standalone_volumes[@]} -gt 0 ]]; then
+        echo -e "\n${C_GREEN}--- Processing Standalone Volume Backups ---${C_RESET}"
+        for volume in "${standalone_volumes[@]}"; do
+            log "Backing up standalone volume: ${volume}"
+            if _is_volume_empty "$volume"; then
+                echo -e " -> ${C_GRAY}Skipping empty volume: ${volume}${C_RESET}"
+                log "Skipped empty volume: $volume"
+                continue
+            fi
+
+            echo -e "${C_YELLOW}Backing up standalone volume: ${C_CYAN}${volume}${C_RESET}..."
+            execute_and_log $SUDO_CMD docker run --rm -v "${volume}:/volume:ro" -v "${backup_dir}:/backup" "${BACKUP_IMAGE}" tar -C /volume --zstd -cf "/backup/${volume}.tar.zst" .
+        done
+    fi
+
+    # Check for empty backup directory
+    if [[ -z "$($SUDO_CMD ls -A "$backup_dir")" ]]; then
+        echo -e "\n${C_YELLOW}No volumes were successfully backed up. ${C_GRAY}(all were empty, skipped, or failed)${C_RESET}"
+        echo -e "${C_GRAY}-> Cleaning up empty directory: ${backup_dir}${C_RESET}"
+        $SUDO_CMD rm -rf "$backup_dir"
+        return
+    fi
+
+    echo -e "\n${C_YELLOW}Changing ownership to '${CURRENT_USER}'...${C_RESET}"
+    $SUDO_CMD chown -R "${CURRENT_USER}:${CURRENT_USER}" "$backup_dir"
+    echo -e "\n${C_GREEN}${TICKMARK} Backup tasks completed successfully!${C_RESET}"
+
+    local create_archive=""
+    while true; do
+        read -rp $'\n'"${C_CYAN}Do you want to create a 7z archive of this backup? (${C_GREEN}y${C_CYAN}/${C_RED}N${C_CYAN}): ${C_RESET}" create_archive
+        case "${create_archive,,}" in
+            y|Y|yes|YES) break ;;
+            n|N|no|NO)  echo -e "${C_YELLOW}Skipping 7z archive creation.${C_RESET}"; return ;;
+            *)  echo -e "${C_RED}Invalid input!${C_RESET}";
+                echo -e "${C_YELLOW}Please enter ${C_GREEN}y${C_YELLOW} or ${C_RED}N${C_YELLOW}.${C_RESET}" ;;
+        esac
+    done
+
+    # Check/Install Dependencies
+    if ! ensure_tool_installed "7z" "p7zip-full" "creating compressed archives"; then 
+        echo -e "\n${C_YELLOW}Skipping archive creation as requested.${C_RESET}"
+        echo -e "${C_GREEN}Raw backups are available in: ${C_CYAN}${backup_dir}${C_RESET}"
+        return 0
+    fi
+    
+    # Check OpenSSL (only if needed)
+    if [[ -n "${ENCRYPTED_ARCHIVE_PASSWORD-}" ]] || [[ -n "${archive_password-}" ]]; then
+         if ! ensure_tool_installed "openssl" "openssl" "handling encrypted passwords"; then return 1; fi
+    fi
+
+    local archive_password=""
+    local password_is_set=false
+
+    if [[ -n "${ENCRYPTED_ARCHIVE_PASSWORD-}" ]]; then
+        echo -e "\n${C_YELLOW}A default archive password is configured.${C_RESET}"
+        while true; do
+            read -rp "${C_CYAN}Select: ${C_YELLOW}(U)se saved${C_RESET}, ${C_RESET}(E)nter new, ${C_GRAY}(N)o password${C_RESET}, ${C_RED}(C)ancel${C_RESET}: " pass_choice
+            case "${pass_choice,,}" in
+                u|U|use|USE)
+                    archive_password=$(decrypt_pass "${ENCRYPTED_ARCHIVE_PASSWORD}")
+                    if [[ -z "$archive_password" ]]; then
+                        echo -e "${C_RED}Error: Decryption failed. Please enter manually.${C_RESET}"
+                    else
+                        echo -e "${C_CYAN}Using ${C_YELLOW}saved ${C_CYAN}password.${C_RESET}"
+                        password_is_set=true
+                    fi
+                    break
+                    ;;
+                e|E|enter|ENTER)
+                    echo -e "\n${C_YELLOW}Session-specific password.${C_RESET}"
+                    break
+                    ;;
+                n|N|no|NO)
+                    echo -e "${C_YELLOW}Creating archive with NO password.${C_RESET}"
+                    archive_password=""
+                    password_is_set=true
+                    break
+                    ;;
+                c|C|cancel|CANCEL)
+                    echo -e "${C_RED}Archive creation canceled.${C_RESET}"; return ;;
+                *)
+                    echo -e "${C_RED}Invalid choice. Try again.${C_RESET}" ;;
+            esac
+        done
+    fi
+
+    if ! $password_is_set; then
+        while true; do
+            read -srp "Enter password for the archive (leave blank for none): " archive_pass_1; echo
+            if [[ -z "$archive_pass_1" ]]; then
+                archive_password=""
+                echo -e "${C_YELLOW}Proceeding without a password.${C_RESET}"
+                break
+            fi
+            read -srp "Confirm password: " archive_pass_2; echo
+            if [[ "$archive_pass_1" == "$archive_pass_2" ]]; then
+                archive_password="${archive_pass_1}"
+                break
+            else
+                echo -e "${C_RED}Passwords do not match. Please try again.${C_RESET}"
+            fi
+        done
+    fi
+
+    local current_date
+    current_date=$(date +'%Y-%m-%d')
+    local archive_name=""
+    
+    echo -e "\n${C_YELLOW}--- Archive Naming ---${C_RESET}"
+    echo -e "  1) Default      : ${C_CYAN}Apps-backup[${current_date}].7z ${C_RESET}"
+    echo -e "  2) Semi-Default : ${C_CYAN}Apps-backup(${C_RESET}(User defined)${C_CYAN})[${current_date}].7z ${C_RESET}"
+    echo -e "  3) Custom Name  : (User defined)${C_CYAN}.7z${C_RESET}"
+    echo -e "  4) Precision    : ${C_CYAN}Apps-backup[${current_date}_HH-MM-SS].7z\n ${C_RESET}"
+    read -rp "${C_YELLOW}Select naming convention [${C_RESET}1${C_YELLOW}-${C_RESET}4${C_YELLOW}]: ${C_RESET}" name_choice
+
+    case "$name_choice" in
+        2)
+            read -rp "Enter tag name (e.g., 'Plex' or 'Databases'): " tag_name
+            # Sanitize: Allow only alphanumeric, dash, underscore, dot
+            if [[ ! "$tag_name" =~ ^[a-zA-Z0-9._-]+$ ]]; then
+                echo -e "${C_RED}Invalid characters detected. Replaced with safe defaults.${C_RESET}"
+                tag_name=$(echo "$tag_name" | tr -cd '[:alnum:]._-')
+            fi
+            archive_name="Apps-backup(${tag_name})[${current_date}].7z"
+            ;;
+        3)
+            read -rp "Enter full filename: " custom_input
+            # Remove potentially dangerous characters
+            CLEAN_NAME=$(echo "$custom_input" | tr -cd '[:alnum:]_(). -')
+
+            if [[ -z "$CLEAN_NAME" ]]; then
+                echo -e "${C_RED}Error: Filename cannot be empty or have any special characters!${C_RESET}"
+                CLEAN_NAME="custom_backup[$(date +'%Y-%m-%d_%H-%M-%S')]"
+            fi
+            archive_name="${CLEAN_NAME}.7z"
+            ;;
+        4)
+            archive_name="Apps-backup[$(date +'%Y-%m-%d_%H-%M-%S')].7z"
+            ;;
+        *) 
+            archive_name="Apps-backup[${current_date}].7z"
+            ;;
+    esac
+
+    local archive_path
+    archive_path="$(dirname "$backup_dir")/${archive_name}"
+
+    if [[ -f "$archive_path" ]] || [[ -f "${archive_path%.7z}.part1.7z" ]]; then
+        echo -e "${C_YELLOW}File '${archive_name}' already exists. Appending timestamp...${C_RESET}"
+        archive_name="${archive_name%.7z}_$(date +'%H%M%S').7z"
+        archive_path="$(dirname "$backup_dir")/${archive_name}"
+    fi
+
+# Split Selection with Size Validation
+    local archive_split_opt=""
+    local backup_size_bytes
+    backup_size_bytes=$(du -sb "$backup_dir" | cut -f1)
+
+    while true; do
+        echo -e "\n${C_YELLOW}--- Archive Splitting ---${C_RESET}"
+        echo -e " 1) No split"
+        echo -e " 2) Split at 700MB ${C_GRAY}(CD safe)${C_RESET}"
+        echo -e " 3) Split at 4GB ${C_GRAY}(FAT32 safe)${C_RESET}"
+        echo -e " 4) Split at 8GB"
+        echo -e " 5) Split at 16GB"
+        echo -e " c) Custom split size (e.g., 500m, 2g, 1024k)"
+        echo -e " r) ${C_GRAY}Return to naming selection${C_RESET}"
+        echo -e "\n${C_CYAN}Current backup size: ${C_GREEN}$(numfmt --to=iec-i --suffix=B "$backup_size_bytes")${C_RESET}"
+        read -rp "${C_YELLOW}Enter choice${C_RESET}: " split_choice
+
+        local selected_size_bytes=0
+        local split_str=""
+
+        case "$split_choice" in
+            1) archive_split_opt=""; break ;;
+            2) split_str="700m";  selected_size_bytes=$((700 * 1024 * 1024)) ;;
+            3) split_str="4095m"; selected_size_bytes=$((4095 * 1024 * 1024)) ;;
+            4) split_str="8192m"; selected_size_bytes=$((8192 * 1024 * 1024)) ;;
+            5) split_str="16384m"; selected_size_bytes=$((16384 * 1024 * 1024)) ;;
+            c|C) 
+                read -rp "${C_YELLOW}Enter size (e.g., 500m, 2g, 1024k): ${C_RESET}" custom_size
+                if [[ "$custom_size" =~ ^([0-9]+)([kKmMgG])$ ]]; then
+                    num="${BASH_REMATCH[1]}"
+                    unit="${BASH_REMATCH[2]}"
+                    unit_lc=$(echo "$unit" | tr '[:upper:]' '[:lower:]')
+                    split_str="${num}${unit_lc}"
+
+                    case "$unit_lc" in
+                        k) selected_size_bytes=$((num * 1024)) ;;
+                        m) selected_size_bytes=$((num * 1024 * 1024)) ;;
+                        g) selected_size_bytes=$((num * 1024 * 1024 * 1024)) ;;
+                    esac
+                else
+                    echo -e "${C_RED}Invalid format!"
+                    echo -e "${C_YELLOW}Use numbers followed by (K)illobytes, (M)egabytes, or (G)igabytes.${C_RESET}"
+                    continue
+                fi
+                ;;
+            r|R) return 1 ;;
+            *) echo -e "${C_RED}Invalid option.${C_RESET}"; continue ;;
+        esac
+
+        # Validate if splitting is actually necessary
+        if [[ $selected_size_bytes -gt 0 ]]; then
+            if [[ $selected_size_bytes -ge $backup_size_bytes ]]; then
+                echo -e "\n${C_CYAN}NOTE: The selected split size (${C_GREEN}${split_str}${C_CYAN}) is LARGER than the total backup size.${C_RESET}"
+                echo -e "${C_GRAY}Applying a split in this case would result in a single file with a '.7z.001' extension.${C_RESET}"
+                echo
+                read -rp "${C_YELLOW}Continue WITHOUT splitting instead? ${C_RESET}(${C_GREEN}Y${C_RESET}/${C_GRAY}(${C_RESET}b)${C_GRAY})ack${C_RESET}/${C_RED}n${C_RESET}): " split_confirm
+                case "${split_confirm,,}" in
+                    y|yes|Y|YES|"") 
+                        archive_split_opt=""
+                        echo -e "${C_GREEN}-> Proceeding without split.${C_RESET}"
+                        break 
+                        ;;
+                    b|B|back|BACK) continue ;;
+                    n|N|no|NO) 
+                        archive_split_opt="-v${split_str}"
+                        echo -e "${C_YELLOW}-> Proceeding with split as requested.${C_RESET}"
+                        break 
+                        ;;
+                esac
+            else
+                archive_split_opt="-v${split_str}"
+                break
+            fi
+        fi
+    done
+
+    echo -e "\n${C_YELLOW}Creating secure 7z archive: ${C_GREEN}${archive_path}${C_RESET}"
+    echo -e "${C_GRAY}(Please wait, this may take time...)${C_RESET}"
+
+    local archive_log; archive_log=$(mktemp)
+    local archive_success=false
+
+    local sevenz_cmd=(7z a -t7z)
+    [[ -n "$archive_split_opt" ]] && sevenz_cmd+=("$archive_split_opt")
+
+    # Map compression: 7z levels are 0-9. (mx=0 is copy, mx=9 is ultra). 
+    # Default 3 is "Fast" in 7z.
+    sevenz_cmd+=("-mx=${ARCHIVE_COMPRESSION_LEVEL:-3}" "-y")
+
+    if [[ -n "$archive_password" ]]; then
+        # -mhe=on encrypts headers (filenames)
+        sevenz_cmd+=("-mhe=on" "-p${archive_password}")
+    fi
+    
+    sevenz_cmd+=("--" "${archive_path}" "${backup_dir}")
+
+    log "Creating 7z archive: $(basename "${archive_path}")"
+    
+    # Execute
+    "${sevenz_cmd[@]}" &> "$archive_log"
+    local run_exit_code=$?  # Capture the exit code here
+
+    while IFS= read -r line || [ -n "$line" ]; do
+        if [[ "$line" =~ (Done|OK|All OK) ]]; then
+            echo -e "${C_GREEN}${line}${C_RESET}"
+        elif [[ "$line" =~ (Adding|Updating|Creating) ]]; then
+            echo -e "${C_CYAN}${line}${C_RESET}"
+        elif [[ "$line" =~ (Error|WARNING|Cannot) ]]; then
+            echo -e "${C_RED}${line}${C_RESET}"
+        elif [[ "$line" =~ [0-9]+% ]]; then
+            echo -e "${line//%/%${C_RESET}}" 
+        else
+            echo "$line"
+        fi
+    done < "$archive_log"
+
+    cat "$archive_log" >> "${LOG_FILE:-/dev/null}"
+    rm "$archive_log"
+
+    # Trust the exit code for success
+    if [ $run_exit_code -eq 0 ]; then
+        archive_success=true
+    fi
+
+    if $archive_success; then
+        echo -e "\n${C_GREEN}7z archive created successfully.${C_RESET}\n"
+
+        local file_to_verify="$archive_path"
+
+        # Check if single file exists. If not, check for 7-Zip split format (.001)
+        if [[ ! -f "$file_to_verify" ]]; then
+            if [[ -f "${archive_path}.001" ]]; then
+                file_to_verify="${archive_path}.001"
+                echo -e "${C_CYAN}Detected split archive. Verifying part 1 sequence...${C_RESET}"
+            fi
+        fi
+
+    echo -e "${C_YELLOW}Verifying archive integrity...${C_RESET}"
+    local verify_cmd=(7z t)
+    # We do NOT add "-pPassword" here to avoid leaking it in process lists.
+    
+    verify_cmd+=("--" "$file_to_verify")
+
+    local verify_success=false
+
+    if [[ -n "$archive_password" ]]; then
+        # Pipe the password to stdin. Since we used -hp (encrypt headers) during creation,
+        # 7z will prompt for a password immediately. We feed it via printf.
+        # Note: We add \n here because interactive prompts usually expect an Enter key.
+        if printf '%s\n' "$archive_password" | "${verify_cmd[@]}" &>/dev/null; then
+            verify_success=true
+        fi
+    else
+        if "${verify_cmd[@]}" &>/dev/null; then
+            verify_success=true
+        fi
+    fi
+
+    if $verify_success; then
+         echo -e "${C_GREEN}Verification Passed: Archive is healthy.${C_RESET}\n"
+    else
+         echo -e "${C_RED}Verification FAILED! Do not delete the source files.${C_RESET}\n"
+         return 1
+    fi
+    
+    # Security: Clear the password variable from memory immediately after use
+    unset archive_password
+
+        while true; do
+            echo -e "${C_YELLOW}Do you want to delete the source backup folder?${C_RESET}"
+            echo -e "[${C_GREEN}${backup_dir}${C_RESET}]"
+            read -rp "(${C_RED}y${C_RESET}/${C_GREEN}N${C_RESET}): " delete_source
+            case "${delete_source,,}" in
+                y|Y|yes|YES)
+                    log "Deleting source folder: $backup_dir"
+                    execute_and_log $SUDO_CMD rm -rf "${backup_dir}"
+                    echo -e "\n${C_RED}Source folder deleted.${C_RESET}";
+                    break ;;
+                n|N|no|NO|"")
+                    echo -e "\n${C_YELLOW}Source backup folder kept.${C_RESET}";
+                    break ;;
+                *) echo -e "${C_RED}Please answer ${C_YELLOW}y${C_RED}/${C_YELLOW}YES ${C_RED}or ${C_GREEN}N${C_RED}/${C_GREEN}NO${C_RED}.${C_RESET}" ;;
+            esac
+        done
+    else
+        echo -e "\n${C_RED}Error: Failed to create 7z archive.${C_RESET}"
+    fi
+}
+
+quick_backup_handler() {
+    local args=("$@")
+    local custom_path=""
+    local -a target_volumes=()
+
+    # Parse Arguments: Check if last arg is a path
+    if [[ ${#args[@]} -gt 0 ]]; then
+        local last_arg="${args[-1]}"
+        # If it starts with / or . or ~ (expanded), treat as path
+        if [[ "$last_arg" =~ ^/ || "$last_arg" =~ ^\. ]]; then
+            custom_path="$last_arg"
+            unset 'args[${#args[@]}-1]'
+        fi
+    fi
+    target_volumes=("${args[@]}")
+
+    if [[ ${#target_volumes[@]} -eq 0 ]]; then
+        echo -e "${C_RED}Error: No Docker Volumes specified!${C_RESET}\n"
+        echo -e "${C_GRAY}Example: dtools volume1 volume2 /path/to/dir"
+        exit 1
+    fi
+
+    # Dependencies & Config Fallback
+    check_root
+    # Fallback defaults if config not loaded
+    BACKUP_IMAGE="${BACKUP_IMAGE:-docker/alpine-tar-zstd:latest}"
+    local backup_root="${custom_path:-${BACKUP_LOCATION:-}}"
+
+    if [[ -z "$backup_root" ]]; then
+        echo -e "${C_RED}Error: No backup location found.${C_RESET}"
+        echo "Please provide a path as the last argument or configure 'BACKUP_LOCATION'."
+        exit 1
+    fi
+
+    # Resolve relative paths against where the user actually ran the script
+    if [[ -n "$custom_path" ]]; then
+        # If path does NOT start with / (it is relative, e.g., "./" or "../"), prepend ORIGINAL_PWD
+        if [[ ! "$custom_path" =~ ^/ ]]; then
+            backup_root="${ORIGINAL_PWD}/${custom_path}"
+        fi
+    fi
+    
+    # Normalize path (handles ../, ./, and double slashes)
+    backup_root=$(realpath -m "$backup_root")
+    local current_ts
+    current_ts=$(date +'%Y-%m-%d_%H-%M-%S')
+    local backup_dir
+    backup_dir="${backup_root}/${current_ts}"
+
+    echo -e "${C_YELLOW}--- Quick Backup Started ---${C_RESET}"
+    echo -e "Destination: ${C_CYAN}${backup_dir}${C_RESET}"
+    
+    if ! command -v docker &>/dev/null; then echo "Error: Docker not found."; exit 1; fi
+    
+    # Check for helper image without full interactive 'ensure' function
+    if ! $SUDO_CMD docker image inspect "${BACKUP_IMAGE}" &>/dev/null; then
+        echo -e "${C_YELLOW}Pulling helper image: ${BACKUP_IMAGE}...${C_RESET}"
+        $SUDO_CMD docker pull "${BACKUP_IMAGE}" >/dev/null
+    fi
+
+    mkdir -p "$backup_dir"
+    chown "${CURRENT_USER}:${CURRENT_USER}" "$backup_dir"
+
+    # Analyze Volumes & Group by App
+    declare -A app_volumes_map
+    declare -A app_dir_map
+    local -a standalone_volumes=()
+
+    for volume in "${target_volumes[@]}"; do
+        # Verify volume exists
+        if ! $SUDO_CMD docker volume inspect "$volume" &>/dev/null; then
+            echo -e "${C_RED}Warning: Volume '$volume' not found. Skipping.${C_RESET}"
+            continue
+        fi
+
+        local container_id
+        container_id=$($SUDO_CMD docker ps -q --filter "volume=${volume}" | head -n 1)
+
+        if [[ -n "$container_id" ]]; then
+            local project_name
+            project_name=$($SUDO_CMD docker inspect --format '{{ index .Config.Labels "com.docker.compose.project" }}' "$container_id")
+
+            if [[ -n "$project_name" ]]; then
+                app_volumes_map["$project_name"]+="${volume} "
+                if [[ ! -v "app_dir_map[$project_name]" ]]; then
+                    local found_dir
+                    found_dir=$(_find_project_dir_by_name "$project_name")
+                    if [[ -n "$found_dir" ]]; then
+                        app_dir_map["$project_name"]="$found_dir"
+                    else
+                        # If we can't find the compose file, treat as standalone
+                        standalone_volumes+=("$volume")
+                        unset 'app_volumes_map["$project_name"]'
+                        continue
+                    fi
+                fi
+            else
+                standalone_volumes+=("$volume")
+            fi
+        else
+            standalone_volumes+=("$volume")
+        fi
+    done
+
+    # Perform Backups
+    # For App-Linked Volumes
+    for app_name in "${!app_volumes_map[@]}"; do
+        echo -e "Processing stack: ${C_CYAN}${app_name}${C_RESET}"
+        local app_dir=${app_dir_map[$app_name]}
+        
+        _stop_app_task "$app_name" "$app_dir"
+        
+        local -a vols_to_backup
+        read -r -a vols_to_backup <<< "${app_volumes_map[$app_name]}"
+        
+        for volume in "${vols_to_backup[@]}"; do
+            echo -e "  -> Backing up ${C_GREEN}${volume}${C_RESET}..."
+            $SUDO_CMD docker run --rm -v "${volume}:/volume:ro" -v "${backup_dir}:/backup" "${BACKUP_IMAGE}" tar -C /volume --zstd -cf "/backup/${volume}.tar.zst" .
+        done
+        
+        _start_app_task "$app_name" "$app_dir"
+    done
+
+    # For Standalone Volumes
+    for volume in "${standalone_volumes[@]}"; do
+        echo -e "Backing up standalone: ${C_GREEN}${volume}${C_RESET}..."
+        $SUDO_CMD docker run --rm -v "${volume}:/volume:ro" -v "${backup_dir}:/backup" "${BACKUP_IMAGE}" tar -C /volume --zstd -cf "/backup/${volume}.tar.zst" .
+    done
+
+    # Check for empty backup directory
+    if [[ -z "$($SUDO_CMD ls -A "$backup_dir")" ]]; then
+        echo -e "\n${C_YELLOW}No backups were created.${C_RESET}"
+        echo -e "${C_GRAY}-> Cleaning up empty directory: ${backup_dir}${C_RESET}"
+        $SUDO_CMD rm -rf "$backup_dir"
+        exit 0
+    fi
+
+    # Set ownership of backup files to current user
+    $SUDO_CMD chown -R "${CURRENT_USER}:${CURRENT_USER}" "$backup_dir"
+    echo -e "\n${C_GREEN}${TICKMARK} Quick backup complete!${C_RESET}"
+}
+
+volume_restore_main() {
+    clear; echo -e "${C_GREEN}Starting Docker Volume Restore...${C_RESET}"
+    log "--- Starting Volume Restore Session ---"
+    ensure_backup_image || return
+    
+    mapfile -t backup_files < <(find "$RESTORE_LOCATION" -type f \( -name "*.tar.zst" -o -name "*.tar.gz" \) 2>/dev/null | sort)
+    if [ ${#backup_files[@]} -eq 0 ]; then echo -e "${C_RED}No backup files (.tar.zst, .tar.gz) found in or under ${RESTORE_LOCATION}${C_RESET}"; sleep 3; return; fi
+    
+    local -a file_display_names=(); for file in "${backup_files[@]}"; do file_display_names+=("$(realpath --relative-to="$RESTORE_LOCATION" "$file")"); done
+    
+    local -a selected_status=(); for ((i=0; i<${#backup_files[@]}; i++)); do selected_status+=("false"); done
+    if ! show_selection_menu "Select archives to RESTORE" "restore" file_display_names selected_status; then
+        echo -e "${C_RED}Restore canceled.${C_RESET}"; return;
+    fi
+
+    local -a selected_files=(); for i in "${!backup_files[@]}"; do if ${selected_status[$i]}; then selected_files+=("${backup_files[$i]}"); fi; done
+
+    if [[ ${#selected_files[@]} -eq 0 ]]; then
+        echo -e "\n${C_YELLOW}No archives were selected. Restore operation cancelled.${C_RESET}"
+        return
+    fi
+    
+    echo -e "\n${C_RED}This will OVERWRITE existing data in corresponding volumes!${C_RESET}"; read -rp "Are you sure? ${C_RESET}(${C_GREEN}y${C_RESET}/${C_RED}N${C_RESET}): " confirm
+    if [[ ! "${confirm,,}" =~ ^(y|Y|yes|YES)$ ]]; then echo -e "${C_RED}Restore canceled.${C_RESET}"; return; fi
+    
+    for backup_file in "${selected_files[@]}"; do
+        local base_name; base_name=$(basename "$backup_file"); local volume_name="${base_name%%.tar.*}"
+        echo -e "\n${C_YELLOW}Restoring ${C_CYAN}${base_name}${C_RESET} to volume ${C_CYAN}${volume_name}${C_RESET}..."
+
+        log "Restoring volume '${volume_name}' from archive '${base_name}'"
+
+        if ! $SUDO_CMD docker volume inspect "$volume_name" &>/dev/null; then
+            echo "   -> Volume does not exist. Creating..."
+            local compose_project="${volume_name%%_*}"
+            local compose_volume="${volume_name#*_}"
+            $SUDO_CMD docker volume create --label "com.docker.compose.project=${compose_project}" --label "com.docker.compose.volume=${compose_volume}" "$volume_name" >/dev/null
+        fi
+
+        echo "   -> Importing data..."
+        local tar_opts="-xvf"; [[ "$base_name" == *.zst ]] && tar_opts="--zstd -xvf"
+        execute_and_log $SUDO_CMD docker run --rm -v "${volume_name}:/target" -v "$(dirname "$backup_file"):/backup" "${BACKUP_IMAGE}" tar -C /target ${tar_opts} "/backup/${base_name}"
+        echo -e "   ${C_GREEN}${TICKMARK} Restore for volume ${C_CYAN}${volume_name} ${C_GREEN}completed.${C_RESET}"
+    done
+    echo -e "\n${C_GREEN}All selected restore tasks finished.${C_RESET}"
+}
+
+volume_manager_menu() {
+    check_root
+    local options=(
+        "Smart Backup (Stop/Start Apps)"
+        "Restore Volumes"
+        "Inspect / Manage a Volume"
+    )
+    while true; do
+        print_standard_menu "Volume Manager" options "RQ"
+        read -erp "${C_YELLOW}Please select an ${C_CYAN}option${C_RESET}: " choice
+        case "$choice" in
+            1) 
+                volume_smart_backup_main
+                echo -e "\nPress Enter to return..."; read -r
+                ;;
+            2) 
+                volume_restore_main
+                echo -e "\nPress Enter to return..."; read -r
+                ;;
+            3) volume_checker_main ;;
+            [rR]) return ;;
+            [qQ]) log "Exiting script." "${C_GRAY}Exiting.${C_RESET}"; exit 0 ;;
+            *) echo -e "\n${C_RED}Invalid option.${C_RESET}"; sleep 1 ;;
+        esac
+    done
+}
+
+system_prune_main() {
+    check_root
+    clear
+    echo -e "${C_YELLOW}--- Docker System Prune ---${C_RESET}\n"
+    echo -e "This will remove:"
+    echo "  - all stopped containers"
+    echo "  - all networks not used by at least one container"
+    echo "  - all dangling images"
+    echo "  - all build cache"
+    echo ""
+    read -rp "$(printf "${C_RED}This action is IRREVERSIBLE. Are you sure? ${C_RESET}[${C_GREEN}y${C_RESET}/${C_RED}N${C_RESET}]: ${C_RESET}")" confirm
+    if [[ "${confirm,,}" =~ ^(y|Y|yes|YES)$ ]]; then
+        echo -e "\n${C_YELLOW}Pruning system...${C_RESET}"
+        log "Running Docker System Prune..."
+        execute_and_log $SUDO_CMD docker system prune -af
+        echo -e "\n${C_GREEN}${TICKMARK} System prune complete.${C_RESET}"
+    else
+        echo -e "\n${C_RED}Prune canceled.${C_RESET}"
+    fi
+}
+
+prune_old_logs() {
+    if [[ -n "${LOG_RETENTION_DAYS-}" && "$LOG_RETENTION_DAYS" -gt 0 ]]; then
+        log "Checking for old log files to prune (older than $LOG_RETENTION_DAYS days)..."
+        local deleted_count
+        deleted_count=$(find "$LOG_DIR" -name "*.log" -type f -mtime +"$LOG_RETENTION_DAYS" -print | wc -l)
+        if [[ "$deleted_count" -gt 0 ]]; then
+            find "$LOG_DIR" -name "*.log" -type f -mtime +"$LOG_RETENTION_DAYS" -delete
+            log "Pruned $deleted_count old log file(s)."
+        fi
+    fi
+}
+
+_log_viewer_select_and_view() {
+    while true; do
+        mapfile -t log_files < <(find "$LOG_DIR" -name "*.log" -type f | sort -r)
+        
+        if [ ${#log_files[@]} -eq 0 ]; then
+            echo -e "${C_YELLOW}No log files found to view.${C_RESET}"; sleep 2; return
+        fi
+
+        local -a options=()
+        for file in "${log_files[@]}"; do
+            options+=("$(realpath --relative-to="$LOG_DIR" "$file")")
+        done
+
+        print_standard_menu "Log Viewer" options "RQ"
+        read -erp "${C_YELLOW}Please select a log to view: ${C_RESET}" choice
+
+        # Handle Menu Selection
+        if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le "${#log_files[@]}" ]; then
+            local idx=$((choice-1))
+            clear
+            echo -e "${C_GREEN}--- Viewing Log: ${C_CYAN}$(basename "${log_files[$idx]}")${C_GREEN} ---${C_RESET}"
+            echo -e "${C_GRAY}(Press 'q' to return)${C_RESET}\n"
+            less -RX "${log_files[$idx]}"
+        elif [[ "${choice,,}" == "r" ]]; then
+            return
+        elif [[ "${choice,,}" == "q" ]]; then
+            exit 0
+        else
+            echo -e "\n${C_RED}Invalid option! Please try again.${C_RESET}"; sleep 1
+        fi
+    done
+}
+
+log_remover_main() {
+    clear
+    mapfile -t log_files < <(find "$LOG_DIR" -name "*.log" -type f | sort -r)
+    if [ ${#log_files[@]} -eq 0 ]; then echo -e "${C_YELLOW}No log files found to delete.${C_RESET}"; sleep 2; return; fi
+
+    local -a file_display_names=(); for file in "${log_files[@]}"; do file_display_names+=("$(realpath --relative-to="$LOG_DIR" "$file")"); done
+    local -a selected_status=(); for ((i=0; i<${#log_files[@]}; i++)); do selected_status+=("false"); done
+
+    if ! show_selection_menu "Select logs to DELETE" "delete" file_display_names selected_status; then
+        echo -e "${C_YELLOW}Deletion canceled.${C_RESET}"; sleep 1; return
+    fi
+    
+    local -a files_to_delete=()
+    for i in "${!log_files[@]}"; do if ${selected_status[$i]}; then files_to_delete+=("${log_files[$i]}"); fi; done
+    
+    if [ ${#files_to_delete[@]} -eq 0 ]; then echo -e "\n${C_YELLOW}No logs selected.${C_RESET}"; sleep 1; return; fi
+
+    echo -e "\n${C_RED}Permanently deleting ${#files_to_delete[@]} log file(s).${C_RESET}"
+    read -rp "${C_YELLOW}Are you sure? [${C_GREEN}y${C_YELLOW}/${C_RED}N${C_YELLOW}]: ${C_RESET}" confirm
+    if [[ ! "${confirm,,}" =~ ^(y|Y|yes|YES)$ ]]; then echo -e "${C_RED}Deletion canceled.${C_RESET}"; sleep 1; return; fi
+    
+    echo ""
+    for file in "${files_to_delete[@]}"; do
+        if rm "$file"; then
+            echo -e "-> ${C_GREEN}Deleted ${C_CYAN}$(basename "$file")${C_RESET}"
+            log "Deleted log file: $file"
+        else
+            echo -e "-> ${C_RED}Failed to delete $(basename "$file")${C_RESET}"
+            log "ERROR: Failed to delete log file: $file"
+        fi
+    done
+    echo -e "\n${C_GREEN}${TICKMARK} Operation complete.${C_RESET}"; sleep 1
+}
+
+log_manager_configure_retention() {
+    clear
+    echo -e "${C_GREEN}--- Configure Log Retention ---${C_RESET}\n"
+    _update_config_value "LOG_RETENTION_DAYS" "Log file retention period in days. Set to 0 to disable automatic pruning." "${LOG_RETENTION_DAYS:-30}" "30" "int" "0" "3650"
+    echo -e "\n${C_GREEN}${TICKMARK} Retention policy updated.${C_RESET}"; sleep 1
+}
+
+log_manager_menu() {
+    local options=(
+        "View Logs"
+        "Delete Logs"
+        "Configure Retention Period"
+    )
+    while true; do
+        print_standard_menu "Log Manager" options "RQ"
+        read -erp "${C_YELLOW}Please select an ${C_CYAN}option${C_RESET}: " choice
+        case "$choice" in
+            1) _log_viewer_select_and_view ;;
+            2) log_remover_main; echo -e "\nPress Enter to return..."; read -r ;;
+            3) log_manager_configure_retention; echo -e "\nPress Enter to return..."; read -r ;;
+            [rR]) return ;;
+            [qQ]) exit 0 ;;
+            *) echo -e "\n${C_RED}Invalid option.${C_RESET}"; sleep 1 ;;
+        esac
+    done
+}
+
+archive_settings_menu() {
+    local archive_level_def="3"
+    
+    while true; do
+        clear
+        echo "=============================================="
+        echo -e " ${C_GREEN}${T_BOLD}Archive Settings Manager${C_RESET}"
+        echo "=============================================="
+        echo -e " ${C_YELLOW}Current Settings:${C_RESET}"
+        echo -e " Compression Level: ${C_CYAN}${ARCHIVE_COMPRESSION_LEVEL} ${C_GRAY}(0-9)${C_RESET}"
+        if [[ -n "${ENCRYPTED_ARCHIVE_PASSWORD}" ]]; then
+            echo -e " Default Password:  ${C_GREEN}[SET]${C_RESET}"
+        else
+            echo -e " Default Password:  ${C_GRAY}[NOT SET]${C_RESET}"
+        fi
+        echo -e "${C_RESET}----------------------------------------------"
+        
+        echo -e " ${C_YELLOW}Options:${C_RESET}"
+        echo -e " 1) ${C_CYAN}Change Compression Level${C_RESET}"
+        echo -e " 2) ${C_CYAN}Change Default Password${C_RESET}"
+        echo -e " 3) ${C_YELLOW}Return to Previous Menu${C_RESET}"
+        echo -e "----------------------------------------------${C_RESET}"
+        
+        read -rp "Enter choice: " sub_choice
+        case "$sub_choice" in
+            1)
+                echo ""
+                # Added Limits: Min 0, Max 9
+                _update_config_value "ARCHIVE_COMPRESSION_LEVEL" "Compression Level (Copy:0 - Ultra:9)" "${ARCHIVE_COMPRESSION_LEVEL:-3}" "$archive_level_def" "int" "0" "9"
+                echo -e "\n${C_CYAN}Press Enter...${C_RESET}"; read -r
+                ;;
+            2)
+                update_secure_archive_settings
+                echo -e "\n${C_CYAN}Press Enter...${C_RESET}"; read -r
+                ;;
+            3) return ;;
+            *) echo -e "${C_RED}Invalid option.${C_RESET}"; sleep 1 ;;
+        esac
+    done
+}
+
+update_secure_archive_settings() {
+    check_root
+    clear
+    echo -e "${C_GREEN}--- Update Secure Archive Password ---${C_RESET}\n"
+
+    if ! ensure_tool_installed "openssl" "openssl" "encrypting passwords"; then
+        read -rp "Press Enter to return..."
+        return
+    fi
+
+    local archive_pass_1 archive_pass_2
+    local new_hash=""
+
+    while true; do
+        read -srp "${C_YELLOW}Enter a new password (leave blank to remove, or type '${C_CYAN}cancel${C_YELLOW}' to exit)${C_RESET}: " archive_pass_1; echo
+        
+        if [[ "${archive_pass_1,,}" == "cancel" || "${archive_pass_1,,}" == "CANCEL" ]]; then
+            echo -e "\n${C_GRAY}Operation cancelled. No changes were made.${C_RESET}"
+            return
+        fi
+
+        if [[ -z "$archive_pass_1" ]]; then
+            read -rp "${C_RED}You left the password blank. ${C_YELLOW}Remove default encryption? (${C_RED}y${C_YELLOW}/${C_GREEN}N${C_YELLOW}): ${C_RESET}" confirm_remove
+            if [[ "${confirm_remove,,}" =~ ^(y|Y|yes|YES)$ ]]; then
+                new_hash=""
+                break
+            else
+                echo -e "${C_GRAY}Operation canceled.${C_RESET}"
+                return
+            fi
+        fi
+
+        read -srp "Confirm new password: " archive_pass_2; echo
+
+        if [[ "$archive_pass_1" == "$archive_pass_2" ]]; then
+            new_hash=$(encrypt_pass "${archive_pass_1}")
+            break
+        else
+            echo -e "${C_RED}Passwords do not match. Please try again.${C_RESET}"
+        fi
+    done
+
+    echo -e "\n${C_YELLOW}Updating configuration file...${C_RESET}"
+    local new_config_line
+    new_config_line=$(printf "ENCRYPTED_ARCHIVE_PASSWORD=%q" "${new_hash}")
+
+    sed -i '/^ENCRYPTED_ARCHIVE_PASSWORD=/d' "$CONFIG_FILE"
+
+    local anchor="# Password is encrypted using a unique key stored in .master.key."
+    sed -i "\|$anchor|a ${new_config_line}" "$CONFIG_FILE"
+
+    chmod 600 "$CONFIG_FILE"
+    
+    # Updates the global variable immediately
+    load_config "$CONFIG_FILE"
+
+    if [[ -z "$ENCRYPTED_ARCHIVE_PASSWORD" ]]; then
+        echo -e "${C_GREEN}${TICKMARK} ${C_YELLOW}Default archive password has been removed.${C_RESET}"
+    else
+        echo -e "${C_GREEN}${TICKMARK} ${C_YELLOW}Archive password updated successfully.${C_RESET}"
+    fi
+}
+
+update_unused_images_main() {
+    check_root
+    if [[ "$IS_CRON_RUN" == "false" ]]; then clear; fi
+
+    log "=========================================================================================="
+    log "--- Starting unused image update script. ---" "${C_GREEN}--- Starting Unused Docker Image Updater ---${C_RESET}"
+    if $DRY_RUN; then log "--- Starting in Dry Run mode. No changes will be made. ---" "${C_GRAY}[DRY RUN] No changes will be made.${C_RESET}"; fi
+
+    local total_images_scanned=0 used_count=0 ignored_count=0 unpullable_count=0
+
+    log "Finding images used by existing containers (running or stopped)..." "${C_GRAY} -> Finding images used by existing containers...${C_RESET}"
+    local used_image_ids
+    used_image_ids=$($SUDO_CMD docker ps -aq | xargs -r $SUDO_CMD docker inspect --format='{{.Image}}' | sed 's/sha256://' | cut -c1-12 | sort -u)
+
+    local -a images_to_update=()
+    log "Scanning all local images to find unused ones..." "${C_GRAY} -> Scanning all local images...${C_RESET}"
+    
+    while read -r image_id image_name; do
+        total_images_scanned=$((total_images_scanned + 1))
+        
+        if echo "$used_image_ids" | grep -qx "$image_id"; then
+            log "Skipping used image: $image_name (ID: $image_id)"
+            used_count=$((used_count + 1))
+            continue
+        fi
+        
+        if _is_item_ignored "$image_name" IGNORED_IMAGES; then
+            log "Skipping ignored image: $image_name"
+            ignored_count=$((ignored_count + 1))
+            continue
+        fi
+
+        if [[ "$image_name" == "<none>:<none>" ]]; then
+            log "Skipping unpullable image: $image_name (ID: $image_id)"
+            unpullable_count=$((unpullable_count + 1))
+            continue
+        fi
+        
+        images_to_update+=("$image_name")
+    done < <($SUDO_CMD docker images --format '{{.ID}} {{.Repository}}:{{.Tag}}')
+
+    if [ ${#images_to_update[@]} -gt 0 ]; then
+        log "Found ${#images_to_update[@]} unused images to update." "${C_CYAN}Found ${#images_to_update[@]} images to update. Pulling in parallel...${C_RESET}"
+        local pull_tmp_dir; pull_tmp_dir=$(mktemp -d)
+        # -P 4 runs 4 pulls in parallel.
+        # Each process writes to its own file in the pull_tmp_dir.
+        printf "%s\n" "${images_to_update[@]}" | xargs -I {} -P 4 bash -c "
+            img='{}'
+            tmp_f=\"$pull_tmp_dir/\$(echo \"\$img\" | tr '/:' '_').log\"
+            $SUDO_CMD docker pull \"\$img\" > \"\$tmp_f\" 2>&1
+        "
+
+        for log_part in "$pull_tmp_dir"/*.log; do
+            if [ -f "$log_part" ]; then
+                cat "$log_part" >> "${LOG_FILE:-/dev/null}"
+                rm -f "$log_part"
+            fi
+        done
+        rmdir "$pull_tmp_dir"
+        log "All image updates are complete." "${C_GREEN}All image pulls are complete.${C_RESET}"
+    else
+        log "No unused images found to update." "${C_YELLOW}No unused images found to update.${C_RESET}"
+    fi
+
+    local updated_count=${#images_to_update[@]}
+    log "Cleaning up old, dangling images..." "${C_CYAN}Cleaning up old, dangling images...${C_RESET}"
+    execute_and_log $SUDO_CMD docker image prune -f
+
+    echo -e "\n${C_GREEN}--- Update Summary ---${C_RESET}"
+    echo "  Total images scanned: ${C_CYAN}$total_images_scanned${C_RESET}"
+    if $DRY_RUN; then echo "  Images that would be updated: ${C_CYAN}$updated_count${C_RESET}"; else echo "  Images updated: ${C_CYAN}$updated_count${C_RESET}"; fi
+    echo "  Images skipped (in use): ${C_YELLOW}$used_count${C_RESET}"
+    echo "  Images skipped (on ignore list): ${C_YELLOW}$ignored_count${C_RESET}"
+    echo "  Images skipped (un-pullable): ${C_YELLOW}$unpullable_count${C_RESET}"
+    log "--- Update Summary ---"
+    log "Total images scanned: $total_images_scanned"
+    log "Images updated/to be updated: $updated_count"
+    log "Images skipped (in use): $used_count"
+    log "Images skipped (on ignore list): $ignored_count"
+    log "Images skipped (un-pullable): $unpullable_count"
+    log "--- Script finished. ---"
+    log "=========================================================================================="
+}
+
+# --- Advanced Cron Scheduler ---
+_get_current_cron_schedule() {
+    local cmd_identifier="$1"
+    $SUDO_CMD crontab -l 2>/dev/null | grep "$cmd_identifier" | sed "s| $SUDO_CMD.*||" || true
+}
+
+_remove_cron_task() {
+    local cmd_identifier="$1"
+    local task_name="$2"
+
+    echo -e "${C_YELLOW}Removing existing $task_name task...${C_RESET}"
+    local current_crontab
+    current_crontab=$($SUDO_CMD crontab -l 2>/dev/null || true)
+    if [[ -z "$current_crontab" ]]; then return; fi
+
+    local comment_pattern="# $task_name (Managed by dtools)"
+    local new_crontab
+    new_crontab=$(echo "$current_crontab" | grep -v -F "$cmd_identifier" | grep -v -F "$comment_pattern" || true)
+
+    if [[ -z "$new_crontab" ]]; then
+        $SUDO_CMD crontab -r 2>/dev/null || true
+    else
+        echo "$new_crontab" | $SUDO_CMD crontab -
+    fi
+    log "Removed cron task: $task_name"
+}
+
+_add_cron_task() {
+    local cmd_identifier="$1"
+    local task_name="$2"
+    local cron_schedule="$3"
+    local full_command="$4"
+    local comment="# $task_name (Managed by dtools)"
+
+    _remove_cron_task "$cmd_identifier" "$task_name" >/dev/null
+
+    local current_crontab
+    current_crontab=$($SUDO_CMD crontab -l 2>/dev/null || true)
+    
+    echo -e "${C_YELLOW}Adding new schedule for $task_name...${C_RESET}"
+    printf "%s\n%s\n%s\n" "$current_crontab" "$comment" "$cron_schedule $full_command" | $SUDO_CMD crontab -
+    echo -e "${C_GREEN}${TICKMARK} Task scheduled successfully: ${C_CYAN}[$cron_schedule]${C_RESET}"
+    log "Scheduled $task_name at '$cron_schedule'"
+}
+
+_cron_schedule_picker() {
+    local task_name="$1"
+    local choice_ref="$2"
+
+    while true; do
+        clear
+        echo -e "${C_YELLOW}--- Configure Schedule for: ${C_GREEN}${task_name}${C_YELLOW} ---${C_RESET}\n"
+        echo -e "   ${C_GREEN}--- Frequent ---                     --- Daily & Weekly ---${C_RESET}"
+        echo "   1) @reboot (On Startup)              6) Daily (at 3 AM)"
+        echo "   2) Every hour                        7) Daily (at 4 AM)"
+        echo "   3) Every 6 hours                     8) Weekly (Sunday at 3 AM)"
+        echo "   4) Every 12 hours                    9) Weekly (Saturday at 3 AM)"
+        echo "   5) Daily (Midnight)                  "
+        echo
+        echo -e "   ${C_GREEN}--- Monthly & Custom ---${C_RESET}"
+        echo "   10) Monthly (1st at 4 AM)"
+        echo -e "   11) ${C_CYAN}Custom Cron Expression${C_RESET}"
+        echo -e "   12) ${C_RED}Cancel${C_RESET}"
+        echo
+        read -rp "${C_YELLOW}Select schedule: ${C_RESET}" choice
+        
+        local sched=""
+        case $choice in
+            1) sched="@reboot" ;;
+            2) sched="0 * * * *" ;;
+            3) sched="0 */6 * * *" ;;
+            4) sched="0 */12 * * *" ;;
+            5) sched="0 0 * * *" ;;
+            6) sched="0 3 * * *" ;;
+            7) sched="0 4 * * *" ;;
+            8) sched="0 3 * * 0" ;;
+            9) sched="0 3 * * 6" ;;
+            10) sched="0 4 1 * *" ;;
+            11) 
+                read -rp "Enter custom format (e.g. '30 5 * * *'): " custom_in
+                if [[ -n "$custom_in" ]]; then sched="$custom_in"; fi 
+                ;;
+            12) return 1 ;;
+            *) echo -e "${C_RED}Invalid option.${C_RESET}"; sleep 1; continue ;;
+        esac
+
+        if [[ -n "$sched" ]]; then
+            eval "$choice_ref='$sched'"
+            return 0
+        fi
+    done
+}
+
+scheduler_menu() {
+    check_root
+
+    local cmd_app_update="$SUDO_CMD SUDO_USER=${CURRENT_USER} $SCRIPT_PATH update --cron"
+    local cmd_unused_update="$SUDO_CMD SUDO_USER=${CURRENT_USER} $SCRIPT_PATH update-unused --cron"
+    local id_app_update="$SCRIPT_PATH update --cron"
+    local id_unused_update="$SCRIPT_PATH update-unused --cron"
+    local -a scheduler_options
+
+    while true; do
+        local sched_app
+        sched_app=$(_get_current_cron_schedule "$id_app_update")
+        local sched_unused
+        sched_unused=$(_get_current_cron_schedule "$id_unused_update")
+
+        local status_app="${C_RED}[DISABLED]${C_RESET}"
+        local status_unused="${C_RED}[DISABLED]${C_RESET}"
+
+        [[ -n "$sched_app" ]] && status_app="${C_GREEN}[ACTIVE: ${sched_app}]${C_RESET}"
+        [[ -n "$sched_unused" ]] && status_unused="${C_GREEN}[ACTIVE: ${sched_unused}]${C_RESET}"
+
+        scheduler_options=(
+            "${C_RESET}App Auto-Update      $status_app"
+            "${C_RESET}Unused Image Update  $status_unused"
+        )
+
+        print_standard_menu "Scheduler Manager ${C_RED}(Root)${C_RESET}" scheduler_options "RQ"
+        read -rp "${C_YELLOW}Select task to configure: ${C_RESET}" choice
+
+        local target_cmd=""
+        local target_id=""
+        local task_name=""
+        local current_sched=""
+
+        case "$choice" in
+            1) 
+                target_cmd="$cmd_app_update"
+                target_id="$id_app_update"
+                task_name="App Auto-Update"
+                current_sched="$sched_app"
+                ;;
+            2) 
+                target_cmd="$cmd_unused_update"
+                target_id="$id_unused_update"
+                task_name="Unused Image Pruner"
+                current_sched="$sched_unused"
+                ;;
+            [rR]) return ;;
+            [qQ]) exit 0 ;;
+            *) echo -e "${C_RED}Invalid option.${C_RESET}"; sleep 1; continue ;;
+        esac
+
+        echo -e "\n${C_RESET}----------------------------------------------"
+        echo -e "${C_CYAN}Configuring: $task_name${C_RESET}\n"
+        if [[ -n "$current_sched" ]]; then
+            echo -e "1) ${C_GREEN}Update Schedule${C_RESET}"
+            echo -e "2) ${C_RED}Remove Task${C_RESET}"
+            echo -e "3) ${C_GRAY}Cancel${C_RESET}\n${C_RESET}"
+            read -rp "Choice: " sub_choice
+            case "$sub_choice" in
+                1) 
+                    local new_sched
+                    if _cron_schedule_picker "$task_name" new_sched; then
+                        _add_cron_task "$target_id" "$task_name" "$new_sched" "$target_cmd"
+                        sleep 2
+                    fi
+                    ;;
+                2) 
+                    _remove_cron_task "$target_id" "$task_name" 
+                    echo -e "${C_GREEN}Task removed.${C_RESET}"; sleep 2
+                    ;;
+                *) continue ;;
+            esac
+        else
+            echo -e "${C_YELLOW}Task is currently ${C_RED}disabled${C_YELLOW}.${C_RESET}\n"
+            read -rp "${C_CYAN}Do you want to enable it? ${C_RESET}(${C_GREEN}y${C_RESET}/${C_RED}N${C_RESET}): " enable_opt
+            if [[ "${enable_opt,,}" =~ ^(y|yes)$ ]]; then
+                local new_sched
+                if _cron_schedule_picker "$task_name" new_sched; then
+                    _add_cron_task "$target_id" "$task_name" "$new_sched" "$target_cmd"
+                    sleep 2
+                fi
+            fi
+        fi
+    done
+}
+
+# --- Image Healthcheck ---
+_check_single_image_health() {
+    local img=$1
+    local output_res
+    output_res=$($SUDO_CMD docker inspect --format "{{if .Config.Healthcheck}}${C_GREEN}${TICKMARK} YES${C_RESET}{{else}}${C_RED}X NO${C_RESET}{{end}}" "$img" 2>/dev/null)
+    if [ -z "$output_res" ]; then
+        printf "%-55s %b\n" "$img" "${C_RED}Not found locally.${C_RESET}"
+    else
+        printf "%-55s %b\n" "$img" "${C_YELLOW}$output_res${C_RESET}"
+    fi
+}
+
+image_healthcheck_main() {
+    local options=(
+        "Check ALL images on the system ${C_GRAY}(Batch)${C_RESET}"
+        "Select ONE local image ${C_GRAY}(List)${C_RESET}"
+        "Check a custom/remote image"
+    )
+
+    while true; do
+        print_standard_menu "Image Healthcheck Inspector" options "RQ"
+        
+        read -erp "${C_YELLOW}Please select an ${C_CYAN}option: ${C_RESET}" choice
+
+        case "$choice" in
+            1)
+                echo -e "\n${C_YELLOW}Checking all local images for built-in healthcheck...${C_RESET}"
+                echo "------------------------------------------------------------"
+                printf "%-53s %s\n" "${C_CYAN}IMAGE NAME" "HEALTHCHECK${C_RESET}"
+                $SUDO_CMD docker image ls --format "{{.Repository}}:{{.Tag}}" | grep -v "<none>" | while read -r img; do
+                    _check_single_image_health "$img"
+                done
+                echo
+                read -rp "${C_GRAY}Press Enter to return...${C_RESET}"
+                ;;
+            2)
+                echo -e "\n${C_YELLOW}Loading local images...${C_RESET}"
+                mapfile -t local_images < <($SUDO_CMD docker image ls --format "{{.Repository}}:{{.Tag}}" | grep -v "<none>" | sort)
+                
+                if [ ${#local_images[@]} -eq 0 ]; then
+                    echo -e "${C_RED}No images found.${C_RESET}"; sleep 1; continue
+                fi
+
+                echo -e "${C_CYAN}Select an image to check:${C_RESET}"
+                PS3=$'\n'"${C_YELLOW}Enter number ${C_GRAY}(or 'q' to cancel)${C_RESET}: "
+                select img_choice in "${local_images[@]}"; do
+                    if [[ "$REPLY" == "q" || "$REPLY" == "Q" ]]; then break; fi
+                    if [[ -n "$img_choice" ]]; then
+                        echo
+                        echo "--------------------------------------------------------------"
+                        printf "%-55s %s\n" "${C_CYAN}IMAGE NAME" "HEALTHCHECK${C_RESET}"
+                        _check_single_image_health "$img_choice"
+                        echo "--------------------------------------------------------------"
+                        echo
+                        break
+                    else
+                        echo -e "${C_RED}Invalid selection.${C_RESET}"
+                    fi
+                done
+                
+                if [[ "$REPLY" != "q" && "$REPLY" != "Q" ]]; then
+                    read -rp "${C_GRAY}Press Enter to return...${C_RESET}"
+                fi
+                ;;
+            3)
+                echo
+                while true; do
+                    echo -e "${C_YELLOW}This will pull from registry if not found locally${C_RESET}"
+                    read -e -r -p "${C_CYAN}Enter image name ${C_GRAY}(e.g. nginx:latest)${C_RESET}: " custom_img
+
+                    if [[ -z "$custom_img" ]]; then break; fi
+
+                    if [[ ! "$custom_img" =~ ^[a-zA-Z0-9/._:-]+$ ]]; then
+                        echo -e "${C_RED}Invalid characters in image name.${C_RESET}"
+                        continue
+                    fi
+
+                    local explicit_tag=true
+                    if [[ "$custom_img" != *:* ]]; then
+                        explicit_tag=false
+                        echo -e "${C_YELLOW}Note: No tag provided. Docker will look for ':latest'.${C_RESET}"
+                    fi
+
+                    local image_existed_before=false
+                    if $SUDO_CMD docker image inspect "$custom_img" &> /dev/null; then
+                        image_existed_before=true
+                    fi
+
+                    echo "------------------------------------------------------------"
+                    echo -e "${C_YELLOW}Pulling ${C_CYAN}$custom_img${C_YELLOW}...${C_RESET}"
+                    
+                    local pull_output
+                    local exit_code=0
+
+                    pull_output=$($SUDO_CMD docker pull "$custom_img" 2>&1) || exit_code=$?
+
+                    log "Pulling custom image: $custom_img"
+
+                    if [ $exit_code -eq 0 ]; then
+                        echo "------------------------------------------------------------"
+                        echo -e "${C_YELLOW}Result:${C_RESET}\n"
+                        printf "%-55s %s\n" "${C_CYAN}IMAGE NAME" "HEALTHCHECK${C_RESET}"
+                        _check_single_image_health "$custom_img"
+                        echo -e "\n------------------------------------------------------------"
+
+                        if [ "$image_existed_before" = false ]; then
+                            echo -e "${C_YELLOW}Cleanup:${C_RESET} This image was downloaded specifically for this check.\n"
+                            read -rp "${C_YELLOW}Do you want to remove '${C_CYAN}${custom_img}${C_YELLOW}' now? ${C_RESET}[${C_GREEN}y${C_RESET}/${C_RED}N${C_RESET}]: ${C_RESET}" cleanup_choice
+                            if [[ "$cleanup_choice" =~ ^[yY]$ ]]; then
+                                echo -e "${C_YELLOW}Removing image...${C_RESET}"
+                                $SUDO_CMD docker rmi "$custom_img"
+                                echo -e "${C_GREEN}Image removed.${C_RESET}"
+                            else
+                                echo -e "${C_GRAY}Image kept.${C_RESET}"
+                            fi
+                        fi
+                    else
+                        log "Error pulling image $custom_img"
+                        
+                        echo "------------------------------------------------------------"
+                        echo -e "${C_RED}Failed to pull image.${C_RESET}\n"
+                        echo -e "${C_YELLOW}Docker Error Message:${C_RESET}"
+                        echo "$pull_output"
+                        
+                        if [[ "$pull_output" == *"manifest unknown"* || "$pull_output" == *"not found"* ]]; then
+                            if [ "$explicit_tag" = false ]; then
+                                echo -e "\n${C_CYAN}Tip:${C_YELLOW} The error 'manifest unknown' often means the ${C_GREEN}:latest${C_YELLOW} tag does not exist."
+                                echo -e "Try specifying a specific tag, e.g., ${C_GREEN}:main${C_YELLOW}, ${C_GREEN}:release, ${C_GREEN}:stable, or a version number.${C_RESET}"
+                            fi
+                        fi
+                    fi
+                    break
+                done
+                
+                echo
+                read -rp "Press Enter to return..."
+                ;;
+            [rR]) return ;;
+            [qQ]) log "Exiting script." "${C_GRAY}Exiting.${C_RESET}"; exit 0 ;;
+            *)
+                echo -e "\n${C_RED}Invalid option.${C_RESET}"
+                sleep 1
+                ;;
+        esac
+    done
+}
+
+utility_menu() {
+    local options=(
+        "Update all running Apps"
+        "Update Unused Images"
+        "Clean Up Docker System"
+        "Image Healthcheck Inspector"
+        "Log Manager"
+    )
+    while true; do
+        print_standard_menu "Utilities" options "RQ"
+        read -erp "${C_YELLOW}Please select an ${C_CYAN}option${C_RESET}: " choice
+        case "$choice" in
+            1) app_manager_update_all_known_apps; echo -e "\nPress Enter to return..."; read -r ;;
+            2) update_unused_images_main; echo -e "\nPress Enter to return..."; read -r ;;
+            3) system_prune_main; echo -e "\nPress Enter to return..."; read -r ;;
+            4) image_healthcheck_main ;;
+            5) log_manager_menu ;;
+            [rR]) return ;;
+            [qQ]) log "Exiting script." "${C_GRAY}Exiting.${C_RESET}"; exit 0 ;;
+            *) echo -e "\n${C_RED}Invalid option.${C_RESET}"; sleep 1 ;;
+        esac
+    done
+}
+
+_update_config_value() {
+    local key="$1"
+    local prompt_text="$2"
+    local current_value="${3-}"
+    local default_value="${4-}"
+    local validation_type="${5:-text}" # Types: text, int, path, subdir
+    local min_val="${6-}"
+    local max_val="${7-}"
+
+    if [[ -n "$default_value" ]]; then
+        if [[ "$current_value" != "$default_value" ]]; then
+            echo -e "${C_YELLOW}Current: ${C_CYAN}${current_value} ${C_YELLOW}days.${C_RESET}"
+            echo -e "${C_GRAY}Type '${C_CYAN}reset${C_GRAY}' to restore default value: ${C_CYAN}${default_value} ${C_GRAY}days. ${C_RESET}\n"
+        fi
+    fi
+
+    local new_value
+    while true; do
+        read -e -r -i "${current_value}" -p "$prompt_text: " input_val
+
+        if [[ -n "$default_value" && "${input_val,,}" == "reset" ]]; then
+            new_value="$default_value"
+            echo -e "${C_YELLOW}Restoring default value: ${new_value}${C_RESET}"
+            break
+        else
+            new_value=${input_val:-$current_value}
+        fi
+
+        local valid=true
+        case "$validation_type" in
+            int)
+                if [[ ! "$new_value" =~ ^[0-9]+$ ]]; then
+                    echo -e "${C_RED}Error: Input must be a positive integer.${C_RESET}"
+                    valid=false
+                else
+                    if [[ -n "$min_val" && "$new_value" -lt "$min_val" ]]; then
+                        echo -e "${C_RED}Error: Value must be at least $min_val.${C_RESET}"
+                        valid=false
+                    fi
+                    if [[ -n "$max_val" && "$new_value" -gt "$max_val" ]]; then
+                        echo -e "${C_RED}Error: Value cannot exceed $max_val.${C_RESET}"
+                        valid=false
+                    fi
+                fi
+                ;;
+            path)
+                if [[ ! "$new_value" =~ ^(/|~|\.) ]]; then
+                    echo -e "${C_RED}Error: Path must start with / (absolute), ~ (home), or . (relative).${C_RESET}"
+                    valid=false
+                fi
+                if [[ "$new_value" =~ [\&\|\;\`\$] ]]; then
+                     echo -e "${C_RED}Error: Path contains invalid shell characters.${C_RESET}"
+                     valid=false
+                fi
+                ;;
+            subdir)
+                if [[ "$new_value" =~ ^(/|~) ]]; then
+                    echo -e "${C_RED}Error: Subdirectory must be a relative path (cannot start with / or ~).${C_RESET}"
+                    valid=false
+                fi
+                if [[ "$new_value" =~ [\&\|\;\`\$] ]]; then
+                     echo -e "${C_RED}Error: Name contains invalid shell characters.${C_RESET}"
+                     valid=false
+                fi
+                ;;
+        esac
+
+        if $valid; then break; fi
+    done
+
+    local replacement="\"${new_value}\""
+
+    if grep -q "^${key}=" "$CONFIG_FILE"; then
+        sed -i "/^${key}=/c\\${key}=${replacement}" "$CONFIG_FILE"
+    else
+        echo "${key}=${replacement}" >> "$CONFIG_FILE"
+    fi
+    
+    chmod 600 "$CONFIG_FILE"
+    echo -e "${C_GREEN}${TICKMARK} Setting '${C_CYAN}${key}${C_GREEN}' updated.${C_RESET}"
+    load_config "$CONFIG_FILE"
+}
+
+update_ignored_items() {
+    local item_type="$1"
+    local -n source_items_ref="$2"
+    local -n ignored_items_ref="$3"
+    
+    check_root
+
+    local -a combined_list=("${source_items_ref[@]}" "${ignored_items_ref[@]}")
+    mapfile -t all_available_items < <(printf "%s\n" "${combined_list[@]}" | sort -u)
+    
+    if [[ ${#all_available_items[@]} -eq 0 ]]; then
+        echo -e "${C_YELLOW}No Docker ${item_type,,} found to configure.${C_RESET}"; sleep 2; return
+    fi
+
+    local -a selected_status=()
+    for item in "${all_available_items[@]}"; do
+        if _is_item_ignored "$item" ignored_items_ref; then
+            selected_status+=("true")
+        else
+            selected_status+=("false")
+        fi
+    done
+
+    local -a new_ignored_list=()
+    local title="Select ${item_type} to IGNORE"
+
+    if ! show_selection_menu "$title" "confirm" all_available_items selected_status; then
+        echo -e "${C_YELLOW}Update cancelled.${C_RESET}"; return
+    fi
+
+    for i in "${!all_available_items[@]}"; do
+        if ${selected_status[$i]}; then new_ignored_list+=("${all_available_items[$i]}"); fi
+    done
+    
+    local config_key="IGNORED_${item_type^^}"
+    local temp_file; temp_file=$(mktemp)
+    local comment_line="# List of ${item_type,,} to ignore during operations."
+    
+    local in_target_block=false
+    
+    while IFS= read -r line || [ -n "$line" ]; do
+        if [[ "$line" == "$comment_line" ]]; then continue; fi
+
+        if [[ "$line" =~ ^${config_key}=\($ ]]; then
+            in_target_block=true
+            echo "$comment_line" >> "$temp_file"
+            echo "${config_key}=(" >> "$temp_file"
+            if [ ${#new_ignored_list[@]} -gt 0 ]; then
+                for item in "${new_ignored_list[@]}"; do 
+                    echo "    \"$item\"" >> "$temp_file"
+                done
+            fi
+            echo ")" >> "$temp_file"
+            continue
+        fi
+
+        if $in_target_block; then
+            if [[ "$line" =~ ^[[:space:]]*\)$ ]]; then
+                in_target_block=false
+            fi
+            continue
+        fi
+
+        echo "$line" >> "$temp_file"
+    done < "$CONFIG_FILE"
+
+    mv "$temp_file" "$CONFIG_FILE"
+    chmod 600 "$CONFIG_FILE"
+
+    echo -e "${C_GREEN}${TICKMARK} Ignored ${C_CYAN}${item_type,,} ${C_GREEN}list updated successfully.${C_RESET}"
+    load_config "$CONFIG_FILE"
+}
+
+settings_manager_menu() {
+    local apps_path_def="/home/${CURRENT_USER}/apps"
+    local managed_subdir_def="managed_stacks"
+    local backup_path_def="/home/${CURRENT_USER}/backups/docker-volume-backups"
+    local restore_path_def="/home/${CURRENT_USER}/backups/docker-volume-backups"
+    local log_dir_def="/home/${CURRENT_USER}/logs/dtools"
+    local backup_image_def="docker/alpine-tar-zstd:latest"
+    local explore_image_def="debian:trixie-slim"
+    local archive_level_def="3"
+
+    local options=(
+        "Path Settings"
+        "Helper Images"
+        "Ignored Volumes"
+        "Ignored Images"
+        "Archive Settings"
+        "Shell Alias"
+        "Install Autocompletion"
+        "Task Scheduler"
+    )
+    while true; do
+        print_standard_menu "Settings Manager" options "RQ"
+        read -erp "${C_YELLOW}Please select an ${C_CYAN}option${C_RESET}: " choice
+        
+        case "$choice" in
+            1)
+                clear; echo -e "${C_YELLOW}--- Path Settings ---${C_RESET}\n"
+                _update_config_value "APPS_BASE_PATH" "Base Compose Apps Path" "$APPS_BASE_PATH" "$apps_path_def" "path"
+                _update_config_value "MANAGED_SUBDIR" "Managed Apps Subdirectory" "$MANAGED_SUBDIR" "$managed_subdir_def" "subdir"
+                _update_config_value "BACKUP_LOCATION" "Default Backup Location" "$BACKUP_LOCATION" "$backup_path_def" "path"
+                _update_config_value "RESTORE_LOCATION" "Default Restore Location" "$RESTORE_LOCATION" "$restore_path_def" "path"
+                _update_config_value "LOG_DIR" "Log Directory Path" "$LOG_DIR" "$log_dir_def" "path"
+                _update_config_value "LOG_SUBDIR_UPDATE" "Update Logs Subdir" "${LOG_SUBDIR_UPDATE:-apps-update-logs}" "apps-update-logs" "subdir"
+                _update_config_value "LOG_SUBDIR_UNUSED" "Unused Logs Subdir" "${LOG_SUBDIR_UNUSED:-unused-images-update-logs}" "unused-images-update-logs" "subdir"
+                
+                echo -e "\n${C_CYAN}Path settings updated. Press Enter...${C_RESET}"; read -r
+                ;;
+            2)
+                clear; echo -e "${C_YELLOW}--- Helper Image Settings ---${C_RESET}"
+                _update_config_value "BACKUP_IMAGE" "Backup Helper Image" "$BACKUP_IMAGE" "$backup_image_def" "text"
+                _update_config_value "EXPLORE_IMAGE" "Volume Explorer Image" "$EXPLORE_IMAGE" "$explore_image_def" "text"
+                echo -e "\n${C_CYAN}Image settings updated. Press Enter...${C_RESET}"; read -r
+                ;;
+            3)
+                local -a all_volumes; mapfile -t all_volumes < <($SUDO_CMD docker volume ls --format "{{.Name}}" | sort)
+                update_ignored_items "Volumes" "all_volumes" "IGNORED_VOLUMES"
+                echo -e "\nPress Enter to return..."; read -r
+                ;;
+            4)
+                local -a all_images
+                mapfile -t all_images < <($SUDO_CMD docker image ls --format "{{.Repository}}:{{.Tag}}" | grep -v "<none>" | sort)
+                update_ignored_items "Images" "all_images" "IGNORED_IMAGES"
+                echo -e "\nPress Enter to return..."; read -r
+                ;;
+            5)
+                archive_settings_menu
+                ;;
+            6)
+                configure_shell_alias
+                echo -e "\nPress Enter to return..."; read -r
+                ;;
+            7)
+                install_autocompletion; echo -e "\nPress Enter..."; read -r
+                ;;
+            8)
+                scheduler_menu
+                echo -e "\nPress Enter to return..."; read -r
+                ;;
+            [rR]) return ;;
+            [qQ]) log "Exiting script." "${C_GRAY}Exiting.${C_RESET}"; exit 0 ;;
+            *) echo -e "\n${C_RED}Invalid option.${C_RESET}"; sleep 1 ;;
+        esac
+    done
+}
+
+main_menu() {
+    local options=(
+        "Application Manager"
+        "Volume Manager"
+        "Utilities"
+        "Settings Manager"
+    )
+    while true; do
+        print_standard_menu "Docker Tool Suite ${SCRIPT_VERSION} - ${C_CYAN}${CURRENT_USER}" options "Q"
+        
+        read -erp "${C_YELLOW}Please select an ${C_CYAN}option${C_RESET}: " choice
+        case "$choice" in
+            1) app_manager_menu ;;
+            2) volume_manager_menu ;;
+            3) utility_menu ;;
+            4) settings_manager_menu ;;
+            [qQ]) log "Exiting script." "${C_GRAY}Exiting.${C_RESET}"; exit 0 ;;
+            *) echo -e "\n${C_RED}Invalid option: '$choice'.${C_RESET}"; sleep 1 ;;
+        esac
+    done
+}
+
+# --- Argument Parsing at script entry ---
+if [[ $# -gt 0 ]]; then
+    if [[ -f "$CONFIG_FILE" ]]; then
+        chmod 600 "$CONFIG_FILE" 2>/dev/null || true
+        load_config "$CONFIG_FILE"
+    fi
+
+    case "$1" in
+        --help|-h)
+            echo "=============================================="
+            echo -e " ${C_GREEN}${T_BOLD}Docker Tool Suite ${C_CYAN}${SCRIPT_VERSION}${C_GREEN}${T_BOLD} - Help Menu${C_RESET}"
+            echo "=============================================="
+            echo
+            echo -e "${C_YELLOW}Description:${C_RESET}"
+            echo -e "   A self-hosted CLI tool to manage Docker Compose stacks,"
+            echo -e "   volumes, backups, logs, and automated updates."
+            echo
+            echo -e " ${C_YELLOW}Usage:${C_RESET}"
+            echo -e "   ${C_CYAN}./$(basename "$0") ${C_GREEN}[command] ${C_GRAY}[options]${C_RESET}"
+            echo -e "    ${C_GRAY}(or configured alias) [command] [options]${C_RESET}"
+            echo
+            echo -e " ${C_YELLOW}Commands:${C_RESET}"
+            echo -e "   ${C_GRAY}(no args)${C_RESET}       Launch the interactive TUI menu."
+            echo -e "   ${C_GREEN}--help${C_RESET}          Show this help message."
+            echo -e "   ${C_GRAY}(alias: -h)${C_RESET}"
+            echo -e "   ${C_GREEN}--version${C_RESET}       Show script version."
+            echo -e "   ${C_GRAY}(alias: -v)${C_RESET}"
+            echo -e "   ${C_GREEN}update [apps]${C_RESET}   Update specific apps (space separated)."
+            echo -e "   ${C_GREEN}update --all${C_RESET}    Update ALL known applications."
+            echo -e "   ${C_GREEN}update-unused${C_RESET}   Update unused images and prune dangling ones."
+            echo -e "   ${C_GREEN}--quick-backup${C_RESET}  Backup specific volumes immediately."
+            echo -e "   ${C_GRAY}(alias: -qb)${C_RESET}"
+            echo
+            echo -e " ${C_YELLOW}Update Usage examples:${C_RESET}"
+            echo -e "   ${C_CYAN}dtools ${C_GREEN}update ${C_RESET}app1 app2          ${C_GRAY}(Update specific apps)${C_RESET}"
+            echo -e "   ${C_CYAN}dtools ${C_GREEN}update ${C_RESET}--all              ${C_GRAY}(Update all apps)${C_RESET}"
+            echo -e "   ${C_CYAN}dtools ${C_GREEN}update ${C_RESET}--all --dry-run    ${C_GRAY}(Simulate update for all)${C_RESET}"
+            echo
+            echo -e " ${C_YELLOW}Quick Backup Usage examples:${C_RESET}"
+            echo -e "   ${C_CYAN}dtools ${C_GREEN}--quick-backup ${C_RESET}volume1 [volume2...] /path/to/custom/destination ${C_GRAY}(Creates backups to provided dir)${C_RESET}"
+            echo -e "   ${C_CYAN}dtools ${C_GREEN}-qb ${C_RESET}volume1 volume2 [volume3...] ${C_GRAY}(Creates backups to dir saved in your config.conf)${C_RESET}"
+            echo
+            echo -e " ${C_YELLOW}Global Options:${C_RESET}"
+            echo -e "   ${C_GREEN}--cron${C_RESET}          Optimized for scheduled tasks (reduced logging)."
+            echo -e "   ${C_GREEN}--dry-run${C_RESET}       Simulate actions without making changes."
+            echo
+            echo "=============================================="
+            echo
+            exit 0 ;;
+
+        --quick-backup|-qb)
+            shift
+            # If no config was loaded and no path provided, quick_backup_handler will warn.
+            quick_backup_handler "$@"
+            exit 0 ;;
+
+        update)
+            # Config is mandatory for update tasks
+            if [[ ! -f "$CONFIG_FILE" ]]; then echo -e "${C_RED}Error: Config not found. Run interactive mode first.${C_RESET}"; exit 1; fi
+            shift
+            
+            # --- Argument Parsing ---
+            update_all=false
+            target_apps=()
+            log_prefix="dtools-au"
+
+            while (( "$#" )); do
+              case "$1" in
+                --dry-run) 
+                    DRY_RUN=true 
+                    ;;
+                --cron) 
+                    IS_CRON_RUN=true 
+                    ;;
+                --all|-a) 
+                    update_all=true 
+                    ;;
+                -*) 
+                    echo "Error: Unknown option: $1"
+                    exit 1 
+                    ;;
+                *) 
+                    # If it's not a flag, assume it's an app name
+                    target_apps+=("$1") 
+                    ;;
+              esac
+              shift
+            done
+            
+            # --- Logging Setup ---
+            if [ "$DRY_RUN" = true ]; then log_prefix="${log_prefix}-dry-run"; fi
+
+            if [ "$IS_CRON_RUN" = true ]; then
+                _enable_cron_logging "${LOG_SUBDIR_UPDATE:-apps-update-logs}" "$log_prefix"
+            else
+                log_dir="${LOG_DIR}/${LOG_SUBDIR_UPDATE:-apps-update-logs}"
+                mkdir -p "$log_dir"
+                LOG_FILE="${log_dir}/${log_prefix}-$(date +'%Y-%m-%d').log"
+                echo -e "${C_GRAY}Logging output to: $LOG_FILE${C_RESET}"
+            fi
+            
+            # --- Execution Logic ---
+            if [ "$update_all" = true ]; then
+                # Mode 1: Update ALL apps
+                if [ ${#target_apps[@]} -gt 0 ]; then
+                    echo -e "${C_YELLOW}Note: Specific apps were listed, but '--all' flag takes precedence.${C_RESET}"
+                fi
+                app_manager_update_all_known_apps
+
+            elif [ ${#target_apps[@]} -gt 0 ]; then
+                # Mode 2: Update SPECIFIC apps
+                check_root
+                log "Starting selective update for: ${target_apps[*]}"
+                echo -e "${C_GREEN}Starting selective update for ${#target_apps[@]} app(s)...${C_RESET}"
+
+                for app_name in "${target_apps[@]}"; do
+                    app_dir=$(_find_project_dir_by_name "$app_name")
+                    
+                    if [[ -n "$app_dir" ]]; then
+                        echo -e "\n${C_CYAN}--- Updating App: ${C_YELLOW}${app_name}${C_CYAN} ---${C_RESET}"
+                        _update_app_task "$app_name" "$app_dir"
+                    else
+                        log "Error: App '$app_name' not found."
+                        echo -e "${C_RED}Error: Could not find directory for app '${app_name}'.${C_RESET}"
+                        echo -e "${C_GRAY}(Ensure it exists in ${APPS_BASE_PATH} or the managed subdirectory)${C_RESET}"
+                    fi
+                done
+                log "Selective update task finished."
+
+            else
+                # Mode 3: No arguments provided
+                echo -e "${C_RED}Error: No target specified.${C_RESET}"
+                echo -e "Usage:"
+                echo -e "  dtools update --all              (Update all apps)"
+                echo -e "  dtools update app1 app2 ...      (Update specific apps)"
+                echo -e "  dtools update --all --dry-run    (Simulate update)"
+                exit 1
+            fi
+            
+            exit 0 ;;
+
+        update-unused)
+            # Config is mandatory for update tasks
+            if [[ ! -f "$CONFIG_FILE" ]]; then echo -e "${C_RED}Error: Config not found. Run interactive mode first.${C_RESET}"; exit 1; fi
+            shift 
+            log_prefix="dtools-uil"
+            while (( "$#" )); do
+              case "$1" in
+                --dry-run) DRY_RUN=true; shift ;;
+                --cron) IS_CRON_RUN=true; shift ;;
+                *) echo "Unknown option: $1"; exit 1 ;;
+              esac
+            done
+            
+            if [ "$DRY_RUN" = true ]; then log_prefix="${log_prefix}-dry-run"; fi
+
+            if [ "$IS_CRON_RUN" = true ]; then
+                _enable_cron_logging "${LOG_SUBDIR_UNUSED:-unused-images-update-logs}" "$log_prefix"
+            else
+                log_dir="${LOG_DIR}/${LOG_SUBDIR_UPDATE:-unused-images-update-logs}"
+                mkdir -p "$log_dir"
+                LOG_FILE="${log_dir}/${log_prefix}-$(date +'%Y-%m-%d').log"
+                echo -e "${C_GRAY}Logging output to: $LOG_FILE${C_RESET}"
+            fi
+            
+            update_unused_images_main
+            exit 0 ;;
+
+        --version|-v)
+            echo -e "${C_CYAN}Docker Tool Suite: ${C_GREEN}$SCRIPT_VERSION${C_RESET}"
+            exit 0 ;;
+
+        *) 
+            echo -e "${C_RED}Unknown command: $1${C_RESET}"
+            echo -e "Try ${C_YELLOW}$0 --help${C_RESET} for more information."
+            exit 1 ;;
+    esac
+fi
+
+# --- Config Validation & Startup (Interactive Mode) ---
+if [[ ! -f "$CONFIG_FILE" ]]; then
+    initial_setup
+fi
+
+if [[ -f "$CONFIG_FILE" ]]; then
+    chmod 600 "$CONFIG_FILE" 2>/dev/null || true
+    chmod 700 "$CONFIG_DIR" 2>/dev/null || true
+
+    load_config "$CONFIG_FILE"
+    validate_loaded_config
+
+    if [[ -z "${APPS_BASE_PATH-}" ]]; then
+        echo -e "${C_RED}Error: Configuration file is empty or corrupt!${C_RESET}"
+        backup_conf="${CONFIG_FILE}.$(date +%Y-%m-%d_%H-%M-%S).broken"
+        mv "$CONFIG_FILE" "$backup_conf"
+        echo -e "${C_YELLOW}Backed up broken config to: ${C_GRAY}${backup_conf}${C_RESET}"
+        echo
+        echo -e "${C_GREEN}Restarting initial setup...${C_RESET}\n"
+        sleep 2
+        initial_setup
+        load_config "$CONFIG_FILE"
+    fi
+else
+    echo -e "${C_RED}Error: Configuration file not found even after setup attempt.${C_RESET}"
+    exit 1
+fi
+
+LOG_FILE="$LOG_DIR/$(date +'%Y-%m-%d').log"; mkdir -p "$LOG_DIR"
+check_root
+prune_old_logs
+check_deps
+main_menu

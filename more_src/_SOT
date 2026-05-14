@@ -1,0 +1,437 @@
+# Source: https://github.com/NiklasJavier/SOT/blob/9cb9c3a6c5c509566c438b5b10097c0bd8b37a49/lib/cli/registry.sh
+# Repository: NiklasJavier/SOT (lib/cli/registry.sh)
+#!/usr/bin/env bash
+# =============================================================================
+# SOT CLI Registry - Dynamische Befehlsregistrierung
+# =============================================================================
+#
+# Dieses Modul ermöglicht die dynamische Registrierung und Entdeckung von
+# CLI-Befehlen mit Metadaten, Kategorien und Auto-Completion.
+#
+# Verwendung in Skripten:
+#   # @cmd: setup
+#   # @category: system
+#   # @description: Server-Konfiguration ausführen
+#   # @usage: SOT setup [--check] [--tags <tags>]
+#   # @example: SOT setup --tags ssh,firewall
+#
+# =============================================================================
+
+[[ -n "${_SOT_CLI_REGISTRY_LOADED:-}" ]] && return 0
+_SOT_CLI_REGISTRY_LOADED=1
+
+# Kategorien mit Emoji und Farbe
+declare -A CLI_CATEGORIES=(
+    ["system"]="🖥️ |System & Extensions"
+    ["vault"]="🔐|Vault & Secrets"
+    ["run"]="▶️ |Ausführung"
+    ["maintenance"]="🔧|Wartung & Updates"
+    ["plugins"]="🔌|Plugins & Module"
+    ["info"]="ℹ️ |Information"
+)
+
+# Registrierte Befehle (assoziatives Array)
+declare -A CLI_COMMANDS=()
+declare -A CLI_COMMAND_DESCRIPTIONS=()
+declare -A CLI_COMMAND_CATEGORIES=()
+declare -A CLI_COMMAND_USAGES=()
+declare -A CLI_COMMAND_EXAMPLES=()
+
+# =============================================================================
+# Metadaten aus Skript extrahieren
+# =============================================================================
+
+# Extrahiert Metadaten-Kommentare aus einem Skript
+# Arguments:
+#   $1 - Skript-Pfad
+# Sets:
+#   CMD_NAME, CMD_CATEGORY, CMD_DESC, CMD_USAGE, CMD_EXAMPLE
+extract_script_metadata() {
+    local script_path="$1"
+    local line
+    
+    CMD_NAME=""
+    CMD_CATEGORY="info"
+    CMD_DESC=""
+    CMD_USAGE=""
+    CMD_EXAMPLE=""
+    
+    while IFS= read -r line; do
+        case "$line" in
+            "# @cmd:"*)        CMD_NAME="${line#*: }" ;;
+            "# @category:"*)   CMD_CATEGORY="${line#*: }" ;;
+            "# @description:"*) CMD_DESC="${line#*: }" ;;
+            "# @usage:"*)      CMD_USAGE="${line#*: }" ;;
+            "# @example:"*)    CMD_EXAMPLE="${line#*: }" ;;
+        esac
+    done < <(head -30 "$script_path" 2>/dev/null)
+}
+
+# =============================================================================
+# Befehlsregistrierung
+# =============================================================================
+
+# Registriert einen Befehl manuell
+# Arguments:
+#   $1 - Befehlsname
+#   $2 - Skript-Pfad
+#   $3 - Kategorie
+#   $4 - Beschreibung
+#   $5 - Usage (optional)
+#   $6 - Beispiel (optional)
+register_command() {
+    local name="$1"
+    local path="$2"
+    local category="${3:-info}"
+    local description="${4:-}"
+    local usage="${5:-SOT $name}"
+    local example="${6:-}"
+    
+    CLI_COMMANDS["$name"]="$path"
+    CLI_COMMAND_CATEGORIES["$name"]="$category"
+    CLI_COMMAND_DESCRIPTIONS["$name"]="$description"
+    CLI_COMMAND_USAGES["$name"]="$usage"
+    CLI_COMMAND_EXAMPLES["$name"]="$example"
+}
+
+# Scannt ein Verzeichnis und registriert alle Befehle automatisch
+# Arguments:
+#   $1 - Verzeichnis
+#   $2 - Prefix (optional)
+discover_commands() {
+    local dir="$1"
+    local prefix="${2:-}"
+    local script rel_path cmd_name
+    
+    [[ ! -d "$dir" ]] && return 1
+    
+    while IFS= read -r -d '' script; do
+        rel_path="${script#"$dir/"}"
+        rel_path="${rel_path%.sh}"
+        
+        # Pfad zu Befehlsname: maintenance/update -> maintenance update
+        cmd_name="${rel_path//\// }"
+        [[ -n "$prefix" ]] && cmd_name="$prefix $cmd_name"
+        
+        # Metadaten extrahieren
+        extract_script_metadata "$script"
+        
+        # Falls keine Metadaten, generiere aus Pfad
+        [[ -z "$CMD_NAME" ]] && CMD_NAME="$cmd_name"
+        [[ -z "$CMD_DESC" ]] && CMD_DESC="Führt $rel_path aus"
+        
+        # Kategorie aus Verzeichnis ableiten wenn nicht gesetzt
+        if [[ "$CMD_CATEGORY" == "info" ]]; then
+            case "$rel_path" in
+                maintenance/*) CMD_CATEGORY="maintenance" ;;
+                integrations/*) CMD_CATEGORY="sync" ;;
+                setup*) CMD_CATEGORY="system" ;;
+                vault*) CMD_CATEGORY="vault" ;;
+                runner*) CMD_CATEGORY="run" ;;
+            esac
+        fi
+        
+        register_command "$CMD_NAME" "$script" "$CMD_CATEGORY" "$CMD_DESC" "$CMD_USAGE" "$CMD_EXAMPLE"
+        
+    done < <(find "$dir" -maxdepth 3 -type f -name "*.sh" -print0 2>/dev/null)
+}
+
+# =============================================================================
+# Hilfe-Formatierung
+# =============================================================================
+
+# Zeigt formatierte Kategorie-Header
+print_category_header() {
+    local category="$1"
+    local cat_info="${CLI_CATEGORIES[$category]:-ℹ️ |$category}"
+    local emoji="${cat_info%%|*}"
+    local name="${cat_info#*|}"
+    
+    printf "\n  %s ${BOLD:-}%s${NC:-}\n" "$emoji" "$name"
+    printf "  %s\n" "$(printf '─%.0s' {1..40})"
+}
+
+# Zeigt einen einzelnen Befehl formatiert an
+print_command_entry() {
+    local cmd="$1"
+    local desc="${CLI_COMMAND_DESCRIPTIONS[$cmd]:-}"
+    local max_cmd_len=25
+    
+    # Befehl auf feste Breite formatieren
+    printf "    ${GREEN:-}%-${max_cmd_len}s${NC:-} %s\n" "$cmd" "$desc"
+}
+
+# Zeigt die vollständige, kategorisierte Hilfe
+show_categorized_help() {
+    local category cmd
+    local -A category_commands
+    
+    # Befehle nach Kategorien gruppieren
+    for cmd in "${!CLI_COMMANDS[@]}"; do
+        category="${CLI_COMMAND_CATEGORIES[$cmd]:-info}"
+        # Separator für mehrteilige Befehle
+        category_commands["$category"]+="${cmd}|"
+    done
+    
+    # Header
+    printf "\n"
+    printf "  %s╔═══════════════════════════════════════════════════════════╗%s\n" "${BOLD:-}" "${NC:-}"
+    printf "  %s║%s        %sSOT%s — %sServer Operation Toolkit%s                  %s║%s\n" "${BOLD:-}" "${NC:-}" "${CYAN:-}" "${NC:-}" "${BOLD:-}" "${NC:-}" "${BOLD:-}" "${NC:-}"
+    printf "  %s╚═══════════════════════════════════════════════════════════╝%s\n" "${BOLD:-}" "${NC:-}"
+    printf "\n"
+    printf "  %sUsage:%s SOT %s<command>%s %s[options]%s\n" "${GREY:-}" "${NC:-}" "${GREEN:-}" "${NC:-}" "${YELLOW:-}" "${NC:-}"
+    
+    # Kategorien in definierter Reihenfolge ausgeben
+    for category in system vault run maintenance plugins info; do
+        local cmds="${category_commands[$category]:-}"
+        [[ -z "$cmds" ]] && continue
+        
+        print_category_header "$category"
+        
+        # Befehle sortiert ausgeben (| als Separator)
+        local IFS='|'
+        # shellcheck disable=SC2206
+        local -a cmd_array=($cmds)
+        local sorted_cmds
+        sorted_cmds=$(printf '%s\n' "${cmd_array[@]}" | sort)
+        
+        while IFS= read -r cmd; do
+            [[ -z "$cmd" ]] && continue
+            print_command_entry "$cmd"
+        done <<< "$sorted_cmds"
+    done
+    
+    # Footer
+    printf "\n"
+    printf "  %sSchnellzugriff (Aliasse):%s\n" "${GREY:-}" "${NC:-}"
+    printf "    %ssot u%s          = sot update\n" "${YELLOW:-}" "${NC:-}"
+    printf "    %ssot d%s          = sot doctor\n" "${YELLOW:-}" "${NC:-}"
+    printf "    %ssot ex%s         = sot extensions\n" "${YELLOW:-}" "${NC:-}"
+    printf "    %ssot ex install%s = sot extensions install\n" "${YELLOW:-}" "${NC:-}"
+    printf "    %ssot v%s          = sot vault edit\n" "${YELLOW:-}" "${NC:-}"
+    printf "\n"
+    printf "  %sTipps:%s\n" "${GREY:-}" "${NC:-}"
+    printf "    %ssot help <cmd>%s    Detaillierte Hilfe zu einem Befehl\n" "${YELLOW:-}" "${NC:-}"
+    printf "    %ssot aliases%s       Alle Aliasse anzeigen\n" "${YELLOW:-}" "${NC:-}"
+    printf "    %ssot --interactive%s Interaktives Menü starten\n" "${YELLOW:-}" "${NC:-}"
+    printf "\n"
+}
+
+# Zeigt detaillierte Hilfe für einen Befehl
+show_command_detail() {
+    local cmd="$1"
+    local path="${CLI_COMMANDS[$cmd]:-}"
+    local desc="${CLI_COMMAND_DESCRIPTIONS[$cmd]:-}"
+    local usage="${CLI_COMMAND_USAGES[$cmd]:-SOT $cmd}"
+    local example="${CLI_COMMAND_EXAMPLES[$cmd]:-}"
+    local category="${CLI_COMMAND_CATEGORIES[$cmd]:-info}"
+    local cat_info="${CLI_CATEGORIES[$category]:-ℹ️ |$category}"
+    local emoji="${cat_info%%|*}"
+    
+    if [[ -z "$path" ]]; then
+        err "Befehl '$cmd' nicht gefunden."
+        return 1
+    fi
+    
+    printf "\n"
+    printf "  %s%s %s%s\n" "${BOLD:-}" "$emoji" "$cmd" "${NC:-}"
+    printf "  %s\n\n" "$(printf '─%.0s' {1..50})"
+    
+    [[ -n "$desc" ]] && printf "  %sBeschreibung:%s\n    %s\n\n" "${GREY:-}" "${NC:-}" "$desc"
+    [[ -n "$usage" ]] && printf "  %sVerwendung:%s\n    %s%s%s\n\n" "${GREY:-}" "${NC:-}" "${GREEN:-}" "$usage" "${NC:-}"
+    [[ -n "$example" ]] && printf "  %sBeispiel:%s\n    %s%s%s\n\n" "${GREY:-}" "${NC:-}" "${YELLOW:-}" "$example" "${NC:-}"
+    
+    # Zusätzliche Hilfe aus Skript-Kommentaren
+    if [[ -f "$path" ]]; then
+        local has_help=false
+        while IFS= read -r line; do
+            if [[ "$line" =~ ^##[[:space:]](.+) ]]; then
+                [[ $has_help == false ]] && {
+                    printf "  %sDetails:%s\n" "${GREY:-}" "${NC:-}"
+                    has_help=true
+                }
+                printf "    %s\n" "${BASH_REMATCH[1]}"
+            fi
+        done < "$path"
+        [[ $has_help == true ]] && printf "\n"
+    fi
+}
+
+# =============================================================================
+# Interaktives Menü
+# =============================================================================
+
+show_interactive_menu() {
+    local category cmd
+    local -a menu_items=()
+    local -A menu_paths=()
+    local idx=1
+    
+    printf "\n"
+    printf "  %sSOT Interactive Menu%s\n" "${BOLD:-}" "${NC:-}"
+    printf "  %s\n\n" "$(printf '─%.0s' {1..30})"
+    
+    # Menü aufbauen
+    for category in system vault run maintenance plugins; do
+        local cat_info="${CLI_CATEGORIES[$category]:-ℹ️ |$category}"
+        local emoji="${cat_info%%|*}"
+        local name="${cat_info#*|}"
+        
+        local has_cmds=false
+        for cmd in "${!CLI_COMMANDS[@]}"; do
+            [[ "${CLI_COMMAND_CATEGORIES[$cmd]}" == "$category" ]] && has_cmds=true && break
+        done
+        [[ $has_cmds == false ]] && continue
+        
+        printf "  %s %s%s%s\n" "$emoji" "${BOLD:-}" "$name" "${NC:-}"
+        
+        for cmd in $(printf '%s\n' "${!CLI_COMMANDS[@]}" | sort); do
+            [[ "${CLI_COMMAND_CATEGORIES[$cmd]}" != "$category" ]] && continue
+            local desc="${CLI_COMMAND_DESCRIPTIONS[$cmd]:-}"
+            printf "    %s%2d)%s %-20s %s%s%s\n" "${CYAN:-}" "$idx" "${NC:-}" "$cmd" "${GREY:-}" "$desc" "${NC:-}"
+            menu_items+=("$cmd")
+            menu_paths["$idx"]="$cmd"
+            ((idx++))
+        done
+        printf "\n"
+    done
+    
+    printf "  %s 0)%s Beenden\n\n" "${CYAN:-}" "${NC:-}"
+    
+    # Auswahl
+    local choice
+    read -r -p "  Auswahl [0-$((idx-1))]: " choice
+    
+    if [[ "$choice" == "0" || -z "$choice" ]]; then
+        printf "  %sAuf Wiedersehen!%s\n\n" "${GREY:-}" "${NC:-}"
+        return 0
+    fi
+    
+    local selected="${menu_paths[$choice]:-}"
+    if [[ -n "$selected" ]]; then
+        printf "\n  %sFühre aus:%s SOT %s\n\n" "${GREEN:-}" "${NC:-}" "$selected"
+        return 0  # Caller should execute
+    else
+        printf "  %sUngültige Auswahl.%s\n" "${RED:-}" "${NC:-}"
+        return 1
+    fi
+}
+
+# =============================================================================
+# Auto-Completion Generator
+# =============================================================================
+
+generate_bash_completion() {
+    cat << 'COMPLETION_EOF'
+# SOT Bash Completion
+# Installieren: source <(SOT --completion bash)
+
+_sot_completions() {
+    local cur prev words cword
+    _init_completion || return
+
+    local commands="COMMAND_LIST"
+    
+    case $cword in
+        1)
+            COMPREPLY=($(compgen -W "$commands help --interactive --completion" -- "$cur"))
+            ;;
+        2)
+            case "${words[1]}" in
+                help)
+                    COMPREPLY=($(compgen -W "$commands" -- "$cur"))
+                    ;;
+                maintenance)
+                    COMPREPLY=($(compgen -W "update delete cleanup_old_users" -- "$cur"))
+                    ;;
+                integrations)
+                    COMPREPLY=($(compgen -W "aat_sync tid_sync validate" -- "$cur"))
+                    ;;
+                runner)
+                    COMPREPLY=($(compgen -W "ansible terraform" -- "$cur"))
+                    ;;
+            esac
+            ;;
+    esac
+}
+
+complete -F _sot_completions SOT
+COMPLETION_EOF
+}
+
+generate_zsh_completion() {
+    cat << 'COMPLETION_EOF'
+#compdef SOT
+# SOT Zsh Completion
+# Installieren: source <(SOT --completion zsh)
+
+_sot() {
+    local -a commands=(
+        'setup:Server-Konfiguration ausführen'
+        'vault:Vault interaktiv bearbeiten'
+        'runner:Ansible/Terraform ausführen'
+        'maintenance:Wartungsbefehle'
+        'integrations:AAT/TID Synchronisation'
+        'help:Hilfe anzeigen'
+    )
+    
+    local -a maintenance_cmds=(
+        'update:SOT aktualisieren'
+        'delete:SOT entfernen'
+        'cleanup_old_users:Alte Benutzer bereinigen'
+    )
+    
+    local -a integrations_cmds=(
+        'aat_sync:AAT synchronisieren'
+        'tid_sync:TID synchronisieren'
+        'validate:Sync validieren'
+    )
+    
+    _arguments -C \
+        '1: :->command' \
+        '2: :->subcommand' \
+        '*: :->args'
+    
+    case $state in
+        command)
+            _describe 'command' commands
+            ;;
+        subcommand)
+            case $words[2] in
+                maintenance)
+                    _describe 'subcommand' maintenance_cmds
+                    ;;
+                integrations)
+                    _describe 'subcommand' integrations_cmds
+                    ;;
+            esac
+            ;;
+    esac
+}
+
+_sot "$@"
+COMPLETION_EOF
+}
+
+# Generiert Completion für die aktuelle Shell
+generate_completion() {
+    local shell="${1:-bash}"
+    local cmd_list=""
+    
+    for cmd in "${!CLI_COMMANDS[@]}"; do
+        cmd_list+="$cmd "
+    done
+    
+    case "$shell" in
+        bash)
+            generate_bash_completion | sed "s/COMMAND_LIST/$cmd_list/"
+            ;;
+        zsh)
+            generate_zsh_completion
+            ;;
+        *)
+            echo "Unterstützte Shells: bash, zsh" >&2
+            return 1
+            ;;
+    esac
+}

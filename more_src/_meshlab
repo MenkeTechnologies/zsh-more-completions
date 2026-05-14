@@ -1,0 +1,1000 @@
+# Source: https://github.com/h0tbird/meshlab/blob/91d4342c35177ddaa7fabbc42bc12e0dd84f5089/bin/meshlab
+# Repository: h0tbird/meshlab (bin/meshlab)
+#!/usr/bin/env bash
+
+#------------------------------------------------------------------------------
+# [i] Initializations
+#------------------------------------------------------------------------------
+
+# Bash strict mode
+set -euo pipefail
+
+# Change to the execution directory
+cd "$(dirname "$0")"/..
+
+# shellcheck source=../lib/common.sh
+source ./lib/common.sh
+
+# Network traffic baseline (devcontainer non-loopback interfaces)
+NET_START=$(net_bytes)
+
+#------------------------------------------------------------------------------
+# [i] Versions
+#------------------------------------------------------------------------------
+
+readonly KINDCCM_VERSION='0.10.0'                      # https://github.com/kubernetes-sigs/cloud-provider-kind/releases
+readonly CILIUM_CHART_VERSION='1.19.4'                 # https://artifacthub.io/packages/helm/cilium/cilium
+readonly K8S_GATEWAY_CHART_VERSION='3.7.1'             # https://github.com/k8s-gateway/k8s_gateway/blob/master/charts/k8s-gateway/Chart.yaml
+readonly ARGOCD_CHART_VERSION='9.5.14'                 # https://artifacthub.io/packages/helm/argo-cd-oci/argo-cd
+readonly ARGOWF_CHART_VERSION='1.0.14'                 # https://artifacthub.io/packages/helm/argo/argo-workflows
+readonly PROMETHEUS_CHART_VERSION='29.6.0'             # https://artifacthub.io/packages/helm/prometheus-community/prometheus
+readonly GRAFANA_CHART_VERSION='10.5.15'               # https://artifacthub.io/packages/helm/grafana/grafana
+readonly OTEL_COLLECTOR_CHART_VERSION='0.154.0'        # https://artifacthub.io/packages/helm/opentelemetry-helm/opentelemetry-collector
+readonly VAULT_CHART_VERSION='0.32.0'                  # https://artifacthub.io/packages/helm/hashicorp/vault
+readonly CERT_MANAGER_CHART_VERSION='v1.20.2'          # https://artifacthub.io/packages/helm/cert-manager/cert-manager
+readonly KUBERNETES_REPLICATOR_CHART_VERSION='2.12.3'  # https://artifacthub.io/packages/helm/kubernetes-replicator/kubernetes-replicator
+readonly METRICS_SERVER_CHART_VERSION='3.13.0'         # https://artifacthub.io/packages/helm/metrics-server/metrics-server
+readonly ISTIO_CHART_VERSION='1.29.2'                  # https://artifacthub.io/packages/helm/istio-official/base
+readonly KIALI_CHART_VERSION='2.26.0'                  # https://artifacthub.io/packages/helm/kiali/kiali-operator
+
+#------------------------------------------------------------------------------
+# [i] Cleanup
+#------------------------------------------------------------------------------
+
+cleanup() {
+  blue "───[ Cleanup ]──────────────────────────────────────────────────────────"
+
+  argocd context --delete "${MNGR}" 2>/dev/null || true
+
+  # Only kill tilt instances we started (one per workload cluster)
+  for cluster in $(clusters); do
+    pkill -f "tilt up --context kind-${cluster}" 2>/dev/null || true
+  done
+
+  # Only kill socat tunnels we started from publish()
+  pkill -f 'socat TCP-LISTEN:[0-9]+,fork TCP:' 2>/dev/null || true
+
+  # Delete clusters first while cloud-provider-kind is still running, so it
+  # can reconcile LoadBalancer Service removals and tear down the per-LB
+  # envoy containers (kindccm-<hash>) it spawned.
+  # shellcheck disable=SC2048,SC2086 # intentional word splitting
+  kind --kubeconfig ~/.kube/config.host delete clusters "${MNGR}" ${CELLS[*]}
+
+  # Stop the controller and force-remove any straggler envoy LBs. Shell-side
+  # name matching since docker's `-f name=` is a substring match with no
+  # reliable regex anchors across versions.
+  docker ps -aq --filter name='^kindccm$' --filter name='^kindccm-' \
+  | xargs -r docker rm -f >/dev/null 2>&1
+
+  rm -rf ./tmp/*
+}
+
+#------------------------------------------------------------------------------
+# [i] cloud-provider-kind
+#------------------------------------------------------------------------------
+
+cloud-provider-kind() {
+  blue "───[ cloud-provider-kind ]──────────────────────────────────────────────"
+
+  docker network ls | grep -q ' kind ' || \
+  docker network create kind
+
+  docker ps --format '{{.Names}}' | grep -q '^kindccm$' || {
+    docker run --rm -d \
+      --name kindccm \
+      --network kind \
+      --volume /var/run/docker.sock:/var/run/docker.sock \
+      "registry.k8s.io/cloud-provider-kind/cloud-controller-manager:v${KINDCCM_VERSION}"
+  }
+}; SECTIONS+=( cloud-provider-kind )
+
+#------------------------------------------------------------------------------
+# [i] Pull-through image cache
+#------------------------------------------------------------------------------
+
+pull-through-cache() {
+  blue "───[ Pull-through registries ]──────────────────────────────────────────"
+
+  docker start registry-docker.io 2>/dev/null || docker run -d \
+    -e REGISTRY_PROXY_REMOTEURL=https://registry-1.docker.io \
+    --restart always \
+    --name registry-docker.io \
+    --network kind \
+    registry:2
+
+  docker start registry-quay.io 2>/dev/null || docker run -d \
+    -e REGISTRY_PROXY_REMOTEURL=https://quay.io \
+    --restart always \
+    --name registry-quay.io \
+    --network kind \
+    registry:2
+
+  docker start registry-ghcr.io 2>/dev/null || docker run -d \
+    -e REGISTRY_PROXY_REMOTEURL=https://ghcr.io \
+    --restart always \
+    --name registry-ghcr.io \
+    --network kind \
+    registry:2
+}; SECTIONS+=( pull-through-cache )
+
+#------------------------------------------------------------------------------
+# [i] Create the clusters
+#------------------------------------------------------------------------------
+
+create-clusters() {
+  blue "───[ KinD clusters ]────────────────────────────────────────────────────"
+
+  # Create the temporary directory
+  [[ -d ./tmp ]] || mkdir -p ./tmp
+
+  # Configure kind
+  for cell in $(all_cells); do
+    cat <<- EOF > "./tmp/kind-${cell}.yaml"
+		kind: Cluster
+		apiVersion: kind.x-k8s.io/v1alpha4
+		networking:
+		  disableDefaultCNI: true
+		  kubeProxyMode: "none"
+		kubeadmConfigPatches:
+		  - |-
+		    kind: ClusterConfiguration
+		    networking:
+		      dnsDomain: "${cell}.local"
+		EOF
+  done
+
+  # Create the clusters
+  for cluster in $(all_clusters); do (
+    kind get clusters 2>/dev/null | grep -qx "${cluster}" || {
+      kind --kubeconfig ~/.kube/config.host create cluster --name "${cluster}" --config "./tmp/kind-${CELL_OF[${cluster}]}.yaml" -q
+    }
+  ) & done; join
+
+  # Get and display all the IPs
+  ensure_ips
+  for cluster in $(all_clusters); do
+    echo "${cluster} = ${IP[${cluster}]}"
+  done
+}; SECTIONS+=( create-clusters )
+
+#------------------------------------------------------------------------------
+# [i] Add the registries to containerd
+#------------------------------------------------------------------------------
+
+add-registries-to-containerd() {
+  blue "───[ Configure containerd ]─────────────────────────────────────────────"
+
+  # Map registries to pull-through caches
+  echo "docker.io --> http://registry-docker.io:5000"
+  echo "quay.io   --> http://registry-quay.io:5000"
+  echo "ghcr.io   --> http://registry-ghcr.io:5000"
+
+  # Configure containerd in all clusters
+  for cluster in $(all_clusters); do (
+    docker exec -i "${cluster}-control-plane" bash -c '
+      mkdir -p /etc/containerd/certs.d/docker.io
+      cat <<- EOF > /etc/containerd/certs.d/docker.io/hosts.toml
+			server = "https://registry-1.docker.io"
+			[host."http://registry-docker.io:5000"]
+			  capabilities = ["pull", "resolve"]
+			EOF
+      mkdir -p /etc/containerd/certs.d/quay.io
+      cat <<- EOF > /etc/containerd/certs.d/quay.io/hosts.toml
+			server = "https://quay.io"
+			[host."http://registry-quay.io:5000"]
+			  capabilities = ["pull", "resolve"]
+			EOF
+      mkdir -p /etc/containerd/certs.d/ghcr.io
+      cat <<- EOF > /etc/containerd/certs.d/ghcr.io/hosts.toml
+			server = "https://ghcr.io"
+			[host."http://registry-ghcr.io:5000"]
+			  capabilities = ["pull", "resolve"]
+			EOF
+    '
+  ) & done; join
+}; SECTIONS+=( add-registries-to-containerd )
+
+#------------------------------------------------------------------------------
+# [i] Setup KUBECONFIG
+#------------------------------------------------------------------------------
+
+setup-kubeconfig() {
+  blue "───[ KUBECONFIG ]───────────────────────────────────────────────────────"
+
+  # Regenerate the in-container kubeconfig as a kind-* only snapshot of the
+  # host kubeconfig (bind-mounted RW at ~/.kube/config.host). All kind
+  # invocations in this script use --kubeconfig=~/.kube/config.host, so
+  # clusters created/deleted here remain visible on the host. Inside the
+  # devcontainer, kubectl/helm/istioctl/etc. only ever see kind-* contexts.
+  yq '
+    del(.contexts[] | select(.name | test("^kind-") | not)) |
+    del(.clusters[] | select(.name | test("^kind-") | not)) |
+    del(.users[]    | select(.name | test("^kind-") | not)) |
+    .current-context = (.contexts[0].name // "")
+  ' ~/.kube/config.host > ~/.kube/config.tmp
+  mv ~/.kube/config.tmp ~/.kube/config
+  chmod 600 ~/.kube/config
+
+  ensure_ips # Ensure cluster IPs are initialized
+
+  # Setup an in-cluster reachable API server config
+  cp -f ~/.kube/config ~/.kube/config.in-cluster
+  for cluster in $(all_clusters); do
+    echo "Server: https://${IP[${cluster}]}:6443"
+    kubectl --kubeconfig ~/.kube/config.in-cluster \
+    config set-cluster "kind-${cluster}" \
+    --server="https://${IP[${cluster}]}:6443"
+  done
+}; SECTIONS+=( setup-kubeconfig )
+
+#------------------------------------------------------------------------------
+# [i] Helm repositories
+#------------------------------------------------------------------------------
+
+helm-repositories() {
+  blue "───[ Helm repos ]───────────────────────────────────────────────────────"
+
+  retry helm repo add cilium https://helm.cilium.io/
+  retry helm repo add argo https://argoproj.github.io/argo-helm
+  retry helm repo add k8s_gateway https://k8s-gateway.github.io/k8s_gateway/
+  retry helm repo update
+}; SECTIONS+=( helm-repositories )
+
+#------------------------------------------------------------------------------
+# [i] Install the Cilium CNI
+#------------------------------------------------------------------------------
+
+install-cilium() {
+  blue "───[ Cilium CNI ]───────────────────────────────────────────────────────"
+  ensure_ips # Ensure cluster IPs are initialized
+
+  # Install the Cilium CNI
+  for cluster in $(all_clusters); do (
+
+    # Return early if already running
+    kubectl --context "kind-${cluster}" -n kube-system \
+      get deploy cilium-operator 2>/dev/null && exit 0
+
+    # Install (also installs Gateway API CRDs)
+    retry cilium install --context "kind-${cluster}" --wait \
+      --version "v${CILIUM_CHART_VERSION}" \
+      --values ./charts/cilium/values.yaml \
+      --values ./charts/cilium/values/"${cluster}".yaml \
+      --set k8sServiceHost="${IP[${cluster}]}"
+  ) & done; join
+}; SECTIONS+=( install-cilium )
+
+#------------------------------------------------------------------------------
+# [i] Install ClusterMesh
+#------------------------------------------------------------------------------
+
+install-clustermesh() {
+  blue "───[ ClusterMesh ]──────────────────────────────────────────────────────"
+
+  for cell in $(cells); do (
+
+    # Get the clusters of the cell
+    local clusters_arr
+    IFS=" " read -r -a clusters_arr <<< "${CELLS[${cell}]}"
+
+    # Return early if already running
+    kubectl --context "kind-${clusters_arr[0]}" -n kube-system get deploy clustermesh-apiserver 2>/dev/null &&
+    kubectl --context "kind-${clusters_arr[1]}" -n kube-system get deploy clustermesh-apiserver 2>/dev/null &&
+    exit 0
+
+    # Shared certificate authority
+    kubectl --context "kind-${clusters_arr[0]}" -n kube-system get secret cilium-ca -o yaml |
+    kubectl --context "kind-${clusters_arr[1]}" -n kube-system replace --force -f -; echo
+
+    # Enable ClusterMesh
+    cilium clustermesh enable --context "kind-${clusters_arr[0]}" --service-type LoadBalancer &
+    cilium clustermesh enable --context "kind-${clusters_arr[1]}" --service-type LoadBalancer &
+    join
+
+    # Wait for ClusterMesh API server and TLS certs to be ready
+    cilium clustermesh status --context "kind-${clusters_arr[0]}" --wait 2>&1 | grep -v 'Trying\|Waiting\|^$' &
+    cilium clustermesh status --context "kind-${clusters_arr[1]}" --wait 2>&1 | grep -v 'Trying\|Waiting\|^$' &
+    join
+
+    # Connect
+    cilium clustermesh connect --context "kind-${clusters_arr[0]}" --destination-context "kind-${clusters_arr[1]}"
+  ) & done; join
+}; SECTIONS+=( install-clustermesh )
+
+#------------------------------------------------------------------------------
+# [i] Install k8s_gateway
+#------------------------------------------------------------------------------
+
+install-k8s-gateway() {
+  blue "───[ k8s_gateway ]──────────────────────────────────────────────────────"
+
+  for cluster in $(all_clusters); do (
+    retry helm --kube-context "kind-${cluster}" \
+      upgrade -i exdns k8s_gateway/k8s-gateway \
+      --version "${K8S_GATEWAY_CHART_VERSION}" \
+      --namespace kube-system \
+      --set "domain=${DOMAIN}" |
+    grep 'LAST DEPLOYED'
+  ) & done; join
+}; SECTIONS+=( install-k8s-gateway )
+
+#------------------------------------------------------------------------------
+# [i] Setup internal CoreDNS for the ${DOMAIN}
+#------------------------------------------------------------------------------
+
+setup-coredns() {
+  blue "───[ CoreDNS ]──────────────────────────────────────────────────────────"
+
+  # Get the external LoadBalancer IP (blocks until ready)
+  local mngr_exdns_ip
+  mngr_exdns_ip=$(get_ext_ip "${MNGR}" kube-system exdns-k8s-gateway)
+
+  # Configure CoreDNS
+  for cluster in $(all_clusters); do (
+    local cell
+    cell=${CELL_OF[${cluster}]}
+
+    local output
+    output=$(kubectl --context "kind-${cluster}" -n kube-system create cm coredns \
+    --dry-run=client -o yaml --from-literal=Corefile="
+    .:53 {
+      errors
+      health {
+         lameduck 5s
+      }
+      ready
+      kubernetes ${cell}.local in-addr.arpa ip6.arpa {
+         pods insecure
+         fallthrough in-addr.arpa ip6.arpa
+         ttl 30
+      }
+      prometheus :9153
+      forward . /etc/resolv.conf {
+         max_concurrent 1000
+      }
+      cache 30 {
+         disable success ${cell}.local
+         disable denial ${cell}.local
+      }
+      loop
+      reload
+      loadbalance
+    }
+    ${DOMAIN}:53 {
+      forward . ${mngr_exdns_ip}
+    }" | kubectl --context "kind-${cluster}" -n kube-system apply -f - 2>/dev/null)
+    echo "${output}"
+
+    # Only restart if the ConfigMap actually changed; otherwise this is a no-op.
+    if [[ "${output}" != *"unchanged"* ]]; then
+      kubectl --context "kind-${cluster}" -n kube-system rollout restart deployment coredns
+    fi
+
+  ) & done; join
+}; SECTIONS+=( setup-coredns )
+
+#------------------------------------------------------------------------------
+# [i] Setup ArgoCD
+#------------------------------------------------------------------------------
+
+setup-argocd() {
+  blue "───[ ArgoCD ]───────────────────────────────────────────────────────────"
+
+  # Return early if already running
+  h0 -n argocd status argocd >/dev/null 2>&1 \
+  && echo "ArgoCD already installed, skipping" \
+  && return 0
+
+  # Install ArgoCD
+  h0 upgrade --install -n argocd --create-namespace --wait --timeout 5m \
+  argocd argo/argo-cd --version "${ARGOCD_CHART_VERSION}" \
+  --set 'server.service.type=LoadBalancer' \
+  --set 'server.extraArgs={--insecure=true}' \
+  --set configs.secret.argocdServerAdminPassword="$(htpasswd -nbBC 10 "" "${PASS}" | tr -d ':\n')" \
+  -f - <<- EOF | grep -E '^NAME|^LAST|^STATUS|^REVISION|^TEST'
+		configs:
+		  cm:
+		    resource.customizations.ignoreDifferences.admissionregistration.k8s.io_MutatingWebhookConfiguration: |
+		      jqPathExpressions:
+		      - '.webhooks[]?.clientConfig.caBundle'
+	EOF
+
+  # Set argocd.${DOMAIN} as ext DNS name
+  k0 -n argocd annotate svc argocd-server coredns.io/hostname=argocd."${DOMAIN}"
+
+  # Publish the ArgoCD port
+  publish "${MNGR}" argocd argocd-server 8080
+}; SECTIONS+=( setup-argocd )
+
+#------------------------------------------------------------------------------
+# [i] Register clusters to ArgoCD
+#------------------------------------------------------------------------------
+
+register-argocd-clusters() {
+  blue "───[ Register clusters to ArgoCD ]──────────────────────────────────────"
+
+  # Check if the ArgoCD context exists
+  argocd context "${MNGR}" 2> /dev/null || {
+
+    # Get the external LoadBalancer IP
+    local argocd_ip
+    argocd_ip=$(get_ext_ip "${MNGR}" argocd argocd-server)
+
+    # Login to ArgoCD
+    argocd login "${argocd_ip}" \
+      --plaintext \
+      --name "${MNGR}" \
+      --username admin \
+      --password "${PASS}"
+
+    # Add clusters with labels
+    for cluster in $(clusters); do
+      local cell
+      cell=${CELL_OF[${cluster}]}
+      argocd cluster list | grep -q "${cluster}" || \
+      argocd cluster add -y "kind-${cluster}" \
+        --kubeconfig ~/.kube/config.in-cluster \
+        --name "${cluster}" \
+        --label name="${cluster}" \
+        --label cell="${cell}" \
+        --logformat text
+    done
+  }
+}; SECTIONS+=( register-argocd-clusters )
+
+#------------------------------------------------------------------------------
+# [i] Install all the ApplicationSets
+#------------------------------------------------------------------------------
+
+install-applicationsets() {
+  blue "───[ ApplicationSets ]──────────────────────────────────────────────────"
+
+  # Use server-side apply: several charts ship the same shared AppProject
+  # (e.g. "monitoring"), and parallel client-side applies race on create,
+  # producing AlreadyExists errors. SSA converges safely under concurrency.
+  local ssa=( apply --server-side --force-conflicts -f - )
+  helm template ./charts/cilium --set "chartVersion=${CILIUM_CHART_VERSION}" | k0 "${ssa[@]}" &
+  helm template ./charts/prometheus --set "chartVersion=${PROMETHEUS_CHART_VERSION}" | k0 "${ssa[@]}" &
+  helm template ./charts/grafana --set "chartVersion=${GRAFANA_CHART_VERSION}" | k0 "${ssa[@]}" &
+  helm template ./charts/otel-collector --set "chartVersion=${OTEL_COLLECTOR_CHART_VERSION}" | k0 "${ssa[@]}" &
+  helm template ./charts/vault --set "chartVersion=${VAULT_CHART_VERSION}" | k0 "${ssa[@]}" &
+  helm template ./charts/cert-manager --set "chartVersion=${CERT_MANAGER_CHART_VERSION}" | k0 "${ssa[@]}" &
+  helm template ./charts/kubernetes-replicator --set "chartVersion=${KUBERNETES_REPLICATOR_CHART_VERSION}" | k0 "${ssa[@]}" &
+  helm template ./charts/metrics-server --set "chartVersion=${METRICS_SERVER_CHART_VERSION}" | k0 "${ssa[@]}" &
+  helm template ./charts/istio --set "chartVersion=${ISTIO_CHART_VERSION}" --set "networkMode=${NETWORK_MODE}" | k0 "${ssa[@]}" &
+  helm template ./charts/kiali --set "chartVersion=${KIALI_CHART_VERSION}" | k0 "${ssa[@]}" &
+  join
+}; SECTIONS+=( install-applicationsets )
+
+#------------------------------------------------------------------------------
+# [i] Setup ArgoWF
+#------------------------------------------------------------------------------
+
+setup-argowf() {
+  blue "───[ ArgoWF ]───────────────────────────────────────────────────────────"
+
+  # Return early if already running
+  h0 -n argowf status argo-workflows >/dev/null 2>&1 \
+  && echo "ArgoWF already installed, skipping" \
+  && return 0
+
+  # Install Argo Workflows
+  h0 upgrade --install -n argowf --create-namespace --wait --timeout 5m \
+    argo-workflows argo/argo-workflows --version "${ARGOWF_CHART_VERSION}" \
+    --set 'server.serviceType=LoadBalancer' \
+    --set 'server.authModes={server}' \
+    --set 'server.servicePort=80' \
+    --set 'workflow.serviceAccount.create=true' \
+    --set 'workflow.serviceAccount.name=argo-workflow' \
+    --set 'workflow.rbac.create=true' \
+    --set 'controller.workflowNamespaces={argocd}' \
+    --set-json 'workflow.rbac.rules=[{"apiGroups":["argoproj.io"],"resources":["applicationsets"],"verbs":["get","watch","patch"]}]' |
+    grep -E '^NAME|^LAST|^STATUS|^REVISION|^TEST'
+
+  # Set argowf.${DOMAIN} as ext DNS name
+  k0 -n argowf annotate svc argo-workflows-server coredns.io/hostname=argowf."${DOMAIN}"
+
+  # Publish the ArgoWF port
+  publish "${MNGR}" argowf argo-workflows-server 8081
+}; SECTIONS+=( setup-argowf )
+
+#------------------------------------------------------------------------------
+# [i] Bootstrap DAG
+#------------------------------------------------------------------------------
+
+bootstrap-dag() {
+  blue "───[ Bootstrap DAG ]────────────────────────────────────────────────────"
+
+  # Install Argo WorkflowTemplates
+  helm template ./charts/wftemplates | k0 -n argocd apply -f -
+
+  # Create a secret with ArgoCD credentials
+  k0 create secret generic argocd-credentials \
+   --from-literal=username='admin' \
+   --from-literal=password="${PASS}" \
+   --from-literal=token='' \
+   --dry-run=client -o yaml | k0 -n argocd apply -f -
+
+  # Create the monitoring namespace on all clusters
+  for cluster in $(all_clusters); do (
+    kubectl --context "kind-${cluster}" create ns monitoring \
+    --dry-run=client -o yaml | kubectl --context "kind-${cluster}" apply -f -
+  ) & done; join
+
+  # Create the bootstrap workflow
+  argo --context "kind-${MNGR}" list -n argocd | grep -q bootstrap || \
+  argo --context "kind-${MNGR}" submit -n argocd -w - <<- EOF
+	apiVersion: argoproj.io/v1alpha1
+	kind: Workflow
+	metadata:
+	  generateName: bootstrap-
+	spec:
+	  entrypoint: stages
+	  serviceAccountName: argo-workflow
+	  templates:
+	  - name: stages
+	    dag:
+	      tasks:
+	      - name: cilium
+	        templateRef:
+	          name: argocd-sync-and-wait
+	          template: argocd-sync-and-wait
+	        arguments:
+	          parameters:
+	          - name: selectors
+	            value: name=cilium
+	      - name: prometheus
+	        dependencies: [cilium]
+	        templateRef:
+	          name: argocd-sync-and-wait
+	          template: argocd-sync-and-wait
+	        arguments:
+	          parameters:
+	          - name: selectors
+	            value: name=prometheus
+	      - name: grafana
+	        dependencies: [prometheus]
+	        templateRef:
+	          name: argocd-sync-and-wait
+	          template: argocd-sync-and-wait
+	        arguments:
+	          parameters:
+	          - name: selectors
+	            value: name=grafana
+	      - name: otelco-node
+	        dependencies: [prometheus]
+	        templateRef:
+	          name: argocd-sync-and-wait
+	          template: argocd-sync-and-wait
+	        arguments:
+	          parameters:
+	          - name: selectors
+	            value: name=otelco-node
+	      - name: otelco-cluster
+	        dependencies: [prometheus]
+	        templateRef:
+	          name: argocd-sync-and-wait
+	          template: argocd-sync-and-wait
+	        arguments:
+	          parameters:
+	          - name: selectors
+	            value: name=otelco-cluster
+	      - name: vault
+	        dependencies: [cilium]
+	        templateRef:
+	          name: argocd-sync-and-wait
+	          template: argocd-sync-and-wait
+	        arguments:
+	          parameters:
+	          - name: selectors
+	            value: name=vault
+	      - name: cert-manager
+	        dependencies: [cilium]
+	        templateRef:
+	          name: argocd-sync-and-wait
+	          template: argocd-sync-and-wait
+	        arguments:
+	          parameters:
+	          - name: selectors
+	            value: name=cert-manager
+	      - name: kubernetes-replicator
+	        dependencies: [cilium]
+	        templateRef:
+	          name: argocd-sync-and-wait
+	          template: argocd-sync-and-wait
+	        arguments:
+	          parameters:
+	          - name: selectors
+	            value: name=kubernetes-replicator
+	      - name: metrics-server
+	        dependencies: [cilium]
+	        templateRef:
+	          name: argocd-sync-and-wait
+	          template: argocd-sync-and-wait
+	        arguments:
+	          parameters:
+	          - name: selectors
+	            value: name=metrics-server
+	      - name: populate-vault
+	        dependencies: [vault]
+	        templateRef:
+	          name: populate-vault
+	          template: populate-vault
+	      - name: istio-issuers
+	        dependencies: [populate-vault, cert-manager]
+	        templateRef:
+	          name: argocd-sync-and-wait
+	          template: argocd-sync-and-wait
+	        arguments:
+	          parameters:
+	          - name: selectors
+	            value: name=istio-issuers
+	      - name: istio-base
+	        dependencies: [cilium]
+	        templateRef:
+	          name: argocd-sync-and-wait
+	          template: argocd-sync-and-wait
+	        arguments:
+	          parameters:
+	          - name: selectors
+	            value: name=istio-base
+	      - name: istio-cni
+	        dependencies: [istio-base]
+	        templateRef:
+	          name: argocd-sync-and-wait
+	          template: argocd-sync-and-wait
+	        arguments:
+	          parameters:
+	          - name: selectors
+	            value: name=istio-cni
+	      - name: istio-istiod
+	        dependencies: [istio-base, istio-issuers]
+	        templateRef:
+	          name: argocd-sync-and-wait
+	          template: argocd-sync-and-wait
+	        arguments:
+	          parameters:
+	          - name: selectors
+	            value: name=istio-istiod
+	      - name: istio-ztunnel
+	        dependencies: [istio-istiod]
+	        templateRef:
+	          name: argocd-sync-and-wait
+	          template: argocd-sync-and-wait
+	        arguments:
+	          parameters:
+	          - name: selectors
+	            value: name=istio-ztunnel
+	      - name: istio-nsgw
+	        dependencies: [istio-istiod]
+	        templateRef:
+	          name: argocd-sync-and-wait
+	          template: argocd-sync-and-wait
+	        arguments:
+	          parameters:
+	          - name: selectors
+	            value: name=istio-nsgw
+	      - name: istio-ewgw
+	        dependencies: [istio-istiod]
+	        templateRef:
+	          name: argocd-sync-and-wait
+	          template: argocd-sync-and-wait
+	        arguments:
+	          parameters:
+	          - name: selectors
+	            value: name=istio-ewgw
+	      - name: kiali-operator
+	        dependencies:
+	        - prometheus
+	        - grafana
+	        - istio-cni
+	        - istio-ztunnel
+	        - istio-nsgw
+	        - istio-ewgw
+	        templateRef:
+	          name: argocd-sync-and-wait
+	          template: argocd-sync-and-wait
+	        arguments:
+	          parameters:
+	          - name: selectors
+	            value: name=kiali-operator
+	EOF
+}; SECTIONS+=( bootstrap-dag )
+
+#------------------------------------------------------------------------------
+# [i] Enable Istio endpoint discovery
+#------------------------------------------------------------------------------
+
+istio-endpoint-discovery() {
+  blue "───[ Istio remote secrets ]─────────────────────────────────────────────"
+
+  for cell in $(cells); do (
+    local clusters_arr
+    IFS=" " read -r -a clusters_arr <<< "${CELLS[${cell}]}"
+    istioctl --kubeconfig ~/.kube/config.in-cluster create-remote-secret \
+      --context "kind-${clusters_arr[0]}" --name="${clusters_arr[0]}" | \
+      kubectl --context "kind-${clusters_arr[1]}" apply -f -
+    istioctl --kubeconfig ~/.kube/config.in-cluster create-remote-secret \
+      --context "kind-${clusters_arr[1]}" --name="${clusters_arr[1]}" | \
+      kubectl --context "kind-${clusters_arr[0]}" apply -f -
+  ) & done; join
+}; SECTIONS+=( istio-endpoint-discovery )
+
+#------------------------------------------------------------------------------
+# [i] Grafana repository resource
+#------------------------------------------------------------------------------
+
+grafana-git-sync() {
+  blue "───[ Grafana git sync ]─────────────────────────────────────────────────"
+
+  # Skip if GITHUB_TOKEN is not set
+  [[ -z "${GITHUB_TOKEN:-}" ]] && {
+    echo "GITHUB_TOKEN not set, skipping Grafana repository configuration"
+    return 0
+  }
+
+  # Create ephemeral directory (cleaned up on exit, even on failure)
+  local repo_dir
+  repo_dir=$(mktemp -d)
+  trap 'rm -rf "${repo_dir}"; trap - RETURN' RETURN
+
+  # Create the Repository resource YAML
+  cat > "${repo_dir}/repository.yaml" <<- EOF
+	apiVersion: provisioning.grafana.app/v0alpha1
+	kind: Repository
+	metadata:
+	  name: meshlab-dashboards
+	spec:
+	  title: MeshLab Dashboards
+	  type: github
+	  github:
+	    url: https://github.com/h0tbird/meshlab
+	    branch: master
+	    path: grafana/
+	    generateDashboardPreviews: true
+	  sync:
+	    enabled: true
+	    intervalSeconds: 60
+	    target: folder
+	  workflows:
+	    - write
+	    - branch
+	secure:
+	  token:
+	    create: ${GITHUB_TOKEN}
+	EOF
+
+  # Configure grafanactl
+  mkdir -p ~/.config/grafanactl
+  cat > ~/.config/grafanactl/config.yaml <<- EOF
+	contexts:
+	  default:
+	    grafana:
+	      server: http://$(get_ext_ip "${MNGR}" monitoring grafana)
+	      org-id: 1
+	      user: admin
+	      password: ${PASS}
+	current-context: default
+	EOF
+
+  # Push the repository resource using grafanactl
+  grafanactl resources push --path "${repo_dir}"
+}; SECTIONS+=( grafana-git-sync )
+
+#------------------------------------------------------------------------------
+# [i] External kiali multi-cluster setup
+#------------------------------------------------------------------------------
+
+kiali-multicluster() {
+  blue "───[ External kiali multi-cluster setup ]───────────────────────────────"
+  ensure_ips # Ensure cluster IPs are initialized
+
+  for cluster in $(clusters); do
+    retry kiali-prepare-remote-cluster.sh \
+      --kiali-cluster-context "kind-${MNGR}" \
+      --remote-cluster-context "kind-${cluster}" \
+      --view-only false \
+      --process-kiali-secret true \
+      --process-remote-resources true \
+      --kiali-cluster-namespace monitoring \
+      --remote-cluster-name "${cluster}" \
+      --remote-cluster-url "https://${IP[${cluster}]}:6443" |
+      grep -v '^INFO:'
+  done
+
+  k0 -n monitoring annotate kiali kiali kiali.io/reconcile="$(date +%s)" --overwrite
+}; SECTIONS+=( kiali-multicluster )
+
+#------------------------------------------------------------------------------
+# [i] tilt up instances
+#------------------------------------------------------------------------------
+
+tilt-up() {
+  blue "───[ tilt up ]──────────────────────────────────────────────────────────"
+
+  # Git clone tilt extensions if not already done, otherwise update.
+  # This prevents parallel tilt instances from cloning simultaneously.
+  local tilt_ext_dir="/root/.local/share/tilt-dev/tilt_modules/github.com/tilt-dev/tilt-extensions"
+  if [[ -d "${tilt_ext_dir}" ]]; then
+    git -C "${tilt_ext_dir}" pull --ff-only
+  else
+    git clone https://github.com/tilt-dev/tilt-extensions "${tilt_ext_dir}"
+  fi
+
+  # Opt out of analytics
+  export TILT_DISABLE_ANALYTICS=1
+
+  # Start tilt for each workload cluster
+  local port=9091
+  for cluster in $(clusters); do
+    if pgrep -f "tilt up --context kind-${cluster}" &>/dev/null; then
+      echo "tilt ${cluster} on port ${port} (running)"
+    else
+      setsid tilt up --context "kind-${cluster}" --port "${port}" \
+      &> "./tmp/tilt-${cluster}.log" &
+      disown
+      echo "tilt ${cluster} on port ${port} (started)"
+    fi
+    ((port++))
+  done
+}; SECTIONS+=( tilt-up )
+
+#------------------------------------------------------------------------------
+# [i] Deploy some workloads
+#------------------------------------------------------------------------------
+
+deploy-workloads() {
+  blue "───[ Deploy workloads ]─────────────────────────────────────────────────"
+
+  # Deploy swarmctl ambient workloads
+  go run -C ../k-swarm ./cmd/swarmctl --context 'pasta-*|pizza-*' i --yes --istio-revision stable --image-tag main --dataplane-mode ambient --ingress-mode none --multi-cluster
+  go run -C ../k-swarm ./cmd/swarmctl --context 'pasta-*|pizza-*' w 1:2 --yes --istio-revision stable --image-tag main --dataplane-mode ambient --ingress-mode none --multi-cluster --log-responses
+
+  # Deploy swarmctl sidecar workloads
+  go run -C ../k-swarm ./cmd/swarmctl --context 'pasta-*|pizza-*' w 1:2 --yes --istio-revision stable --image-tag main --dataplane-mode sidecar --ingress-mode none --multi-cluster --log-responses
+}; SECTIONS+=( deploy-workloads )
+
+#------------------------------------------------------------------------------
+# [i] Publish ports
+#------------------------------------------------------------------------------
+
+publish-ports() {
+  blue "───[ Publish ports ]────────────────────────────────────────────────────"
+
+  publish "${MNGR}" vault vault 8082
+  printf "vault:\t\thttp://127.0.0.1:8082\n"
+  publish "${MNGR}" monitoring prometheus-server 8083
+  printf "prometheus:\thttp://127.0.0.1:8083\n"
+  publish "${MNGR}" monitoring grafana 8084
+  printf "grafana:\thttp://127.0.0.1:8084\n"
+  publish "${MNGR}" monitoring kiali 8085
+  printf "kiali:\t\thttp://127.0.0.1:8085\n"
+}; SECTIONS+=( publish-ports )
+
+#------------------------------------------------------------------------------
+# [i] Shell completion script (printed by `meshlab completion <shell>`)
+#------------------------------------------------------------------------------
+
+completion() {
+  case "${1:-}" in
+    zsh)
+      cat <<'EOF'
+#compdef meshlab
+#
+# Zsh completion for the `meshlab` CLI (bin/meshlab).
+#
+# Completes top-level subcommands and, for `meshlab run`, the list of
+# sections returned by `meshlab list` so completion never drifts from
+# the SECTIONS array defined in the script itself.
+
+_meshlab() {
+  local -a subcommands sections
+  local state
+
+  subcommands=(
+    'create:Create clusters and run all sections (optional --cell-count and --network-mode)'
+    'delete:Tear down clusters and clean up'
+    'watch:Watch cluster state via `ml short`'
+    'list:List all available sections'
+    'run:Run a single section (run <section> [--cell-count N])'
+    'completion:Print shell completion script (completion <shell>)'
+  )
+
+  if (( CURRENT == 2 )); then
+    _describe -t commands 'meshlab subcommand' subcommands
+    return
+  fi
+
+  # Shift past the subcommand so inner _arguments sees a clean command line.
+  local sub=${words[2]}
+  (( CURRENT-- ))
+  words=( "${words[1]}" "${words[@]:2}" )
+
+  case $sub in
+    create)
+      _arguments \
+        '*--cell-count[Number of workload cells]:count:(1 2)' \
+        '*--network-mode[Istio network topology]:mode:(multi single)'
+      ;;
+    run)
+      _arguments \
+        '1:section:->section' \
+        '*--cell-count[Number of workload cells]:count:(1 2)'
+      case $state in
+        section)
+          sections=(${(f)"$(command meshlab list 2>/dev/null)"})
+          _describe -t sections 'section' sections
+          ;;
+      esac
+      ;;
+    completion)
+      _arguments '1:shell:(zsh)'
+      ;;
+  esac
+}
+
+compdef _meshlab meshlab
+EOF
+      ;;
+    *)
+      echo "Usage: $(basename "$0") completion <zsh>" >&2
+      exit 1
+      ;;
+  esac
+}
+
+#------------------------------------------------------------------------------
+# [i] Validate the command line arguments
+#------------------------------------------------------------------------------
+
+# Defaults for `create` flags.
+export CELL_COUNT=1
+export NETWORK_MODE=multi
+
+# Tiny validators (assert, with a friendly error).
+_uint()  { [[ "$1" =~ ^[0-9]+$ ]] || { echo "expected non-negative integer, got '$1'" >&2; exit 1; }; }
+_oneof() { local v=$1; shift; [[ " $* " == *" $v "* ]] || { echo "expected one of: $*, got '$v'" >&2; exit 1; }; }
+
+# Parse `create` flags (called by the main case statement below). Flags must be passed before any positional arguments.
+parse_create_args() {
+  while (($#)); do case "$1" in
+    --cell-count)   _uint  "${2:-}"; CELL_COUNT=$2; shift 2 ;;
+    --network-mode) _oneof "${2:-}" multi single; NETWORK_MODE=$2; shift 2 ;;
+    *) echo "unknown create flag: $1" >&2; exit 1 ;;
+  esac; done
+}
+
+# Parse `run` arguments: a required section name followed by optional flags.
+parse_run_args() {
+  SECTION="${1:?Usage: meshlab run <section> [--cell-count N]}"; shift
+  while (($#)); do case "$1" in
+    --cell-count) _uint "${2:-}"; CELL_COUNT=$2; shift 2 ;;
+    *) echo "unknown run flag: $1" >&2; exit 1 ;;
+  esac; done
+}
+
+# Main case statement for top-level subcommands. Each subcommand is responsible for validating its own arguments (if any).
+case "${1:-}" in
+  create) shift; parse_create_args "$@" ;;
+  delete) cleanup; exit 0 ;;
+  watch) watch --color 'ml short'; exit 0 ;;
+  run) shift; parse_run_args "$@"; measure "${SECTION}"; exit 0 ;;
+  list) printf '%s\n' "${SECTIONS[@]}"; exit 0 ;;
+  completion) completion "${2:-}"; exit 0 ;;
+  *) echo "Usage: $(basename "$0") <create [--cell-count N] [--network-mode multi|single]|delete|watch|list|run SECTION [--cell-count N]|completion <shell>>"; exit 1 ;;
+esac
+
+#------------------------------------------------------------------------------
+# [i] Run all sections in order
+#------------------------------------------------------------------------------
+
+for section in "${SECTIONS[@]}"; do measure "${section}"; done
+
+#------------------------------------------------------------------------------
+# [i] Print total execution time and network traffic
+#------------------------------------------------------------------------------
+
+summary="$(human_time "${SECONDS}"), $(human_bytes "$(( $(net_bytes) - NET_START ))")"
+pad=$(printf '─%.0s' $(seq 1 $((57 - ${#summary}))))
+printf '\n%b───[ Done in %b%s%b%b ]%s%b\n\n' \
+  "${CYAN}" "${RST}${DIM}" "${summary}" "${RST}" "${CYAN}" "${pad}" "${RST}"

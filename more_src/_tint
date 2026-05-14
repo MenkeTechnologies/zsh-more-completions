@@ -1,0 +1,2096 @@
+# Source: https://github.com/corygabrielsen/tint/blob/ebcc5736516f1b21922e50ec530115dcaf73aae0/tint
+# Repository: corygabrielsen/tint (tint)
+#!/bin/sh
+# =============================================================================
+# tint - terminal theme switcher
+# https://github.com/corygabrielsen/tint
+# Copyright (c) 2026 Cory Gabrielsen
+# License: MIT
+# =============================================================================
+#
+# Compatibility:
+#   Interactive picker (no args) requires bash for read -n/-t support.
+#   All other commands work with any POSIX shell (dash, ash, sh):
+#     tint <theme>    tint completions    tint hook    tint reset
+#     tint --help     tint --list
+#
+#   Runtime deps: awk (required — sole palette parser), and a terminal
+#   supporting OSC 11 (background-color set/query).
+#
+#   Note: We use 'local' throughout. While not in POSIX spec, it's supported by
+#   dash, ash, busybox sh, and every /bin/sh in practical use. See:
+#   https://pubs.opengroup.org/onlinepubs/9699919799/utilities/V3_chap02.html
+#   (Austin Group defect #767 - 'local' is planned for next POSIX revision)
+#
+# Install:
+#   brew install corygabrielsen/tint/tint
+#   curl -fsSL https://github.com/corygabrielsen/tint/releases/latest/download/tint \
+#     -o ~/.local/bin/tint && chmod +x ~/.local/bin/tint
+#
+# Usage:
+#   tint                      Interactive picker with live preview
+#   tint <name|hex>           Set directly (e.g., "dracula", "#002b36")
+#   tint random               Pick a random theme
+#   tint reset                Reset to terminal default
+#   tint completions <shell>  Output shell completions (bash/zsh/fish)
+#   tint hook <shell>         Output shell integration code
+#   tint -h, --help           Show help
+#   tint -l, --list           List available themes
+#   tint -v, --version        Show version
+#
+# Library usage:
+#   . /path/to/tint               # `source` also works in bash/zsh
+#   tint_supports_color       # Check if terminal supports OSC color sequences
+#   tint_lookup "dracula"     # Palette name → theme string
+#   tint_resolve "dracula"    # Name → theme string, hex → expanded #rrggbb
+#   tint_set "$theme_string"  # Set theme (bg + fg + 16 ANSI colors)
+#   tint_reset                # Reset to terminal default
+#   tint_list                 # Print all theme names
+#   tint_pick "$current"      # Interactive picker → theme name
+#   tint_reload_palette       # Rebuild TINT_PALETTE after changing
+#                             #   TINT_PALETTE_DIR / XDG_CONFIG_HOME / HOME
+#
+# Configuration:
+#   TINT_PALETTE_DIR      Drop-in theme dir; files appended to built-ins.
+#                         Default: $XDG_CONFIG_HOME/tint/themes
+#
+#   Theme format: name:#bg:#fg:#00:#01:#02:#03:#04:#05:#06:#07:#08:#09:#10:#11:#12:#13:#14:#15
+#   (name + bg + fg + 16 ANSI colors, all #RRGGBB hex)
+#
+# =============================================================================
+
+TINT_VERSION="0.24.0"
+
+# Escape character for POSIX compatibility
+_TINT_ESC=$(printf '\033')
+
+# Width of the colored strip in picker rows (index + name)
+_TINT_PICKER_ROW_WIDTH=41
+
+# =============================================================================
+# Palette
+# =============================================================================
+
+_TINT_DEFAULT_PALETTE='
+apprentice:#262626:#bcbcbc:#1c1c1c:#af5f5f:#5f875f:#87875f:#5f87af:#5f5f87:#5f8787:#6c6c6c:#444444:#ff8700:#87af87:#ffffaf:#8fafd7:#8787af:#5fafaf:#ffffff
+ayu:#0a0e14:#b3b1ad:#0a0e14:#ff3333:#c2d94c:#ff8f40:#59c2ff:#ffee99:#95e6cb:#b3b1ad:#4d5566:#ff3333:#c2d94c:#ff8f40:#59c2ff:#ffee99:#95e6cb:#b3b1ad
+campbell:#0c0c0c:#cccccc:#0c0c0c:#c50f1f:#13a10e:#c19c00:#0037da:#881798:#3a96dd:#cccccc:#767676:#e74856:#16c60c:#f9f1a5:#3b78ff:#b4009e:#61d6d6:#f2f2f2
+catppuccin-frappe:#303446:#c6d0f5:#51576d:#e78284:#a6d189:#e5c890:#8caaee:#f4b8e4:#81c8be:#b5bfe2:#626880:#e78284:#a6d189:#e5c890:#8caaee:#f4b8e4:#81c8be:#a5adce
+catppuccin-macchiato:#24273a:#cad3f5:#494d64:#ed8796:#a6da95:#eed49f:#8aadf4:#f5bde6:#8bd5ca:#b8c0e0:#5b6078:#ed8796:#a6da95:#eed49f:#8aadf4:#f5bde6:#8bd5ca:#a5adcb
+catppuccin-mocha:#1e1e2e:#cdd6f4:#45475a:#f38ba8:#a6e3a1:#f9e2af:#89b4fa:#f5c2e7:#94e2d5:#bac2de:#585b70:#f38ba8:#a6e3a1:#f9e2af:#89b4fa:#f5c2e7:#94e2d5:#a6adc8
+cobalt2:#132738:#ffffff:#000000:#ff0000:#38de21:#ffe50a:#1460d2:#ff005d:#00bbbb:#bbbbbb:#555555:#f40e17:#3bd01d:#edc809:#5555ff:#ff55ff:#6ae3fa:#ffffff
+dracula:#282a36:#f8f8f2:#262626:#e64747:#42e66c:#e4f34a:#9b6bdf:#e356a7:#75d7ec:#f8f8f2:#7a7a7a:#ff5555:#50fa7b:#f1fa8c:#bd93f9:#ff79c6:#8be9fd:#f9f9fb
+everforest-dark:#2d353b:#d3c6aa:#2e383c:#e67e80:#a7c080:#dbbc7f:#7fbbb3:#d699b6:#83c092:#d3c6aa:#5c6a72:#f85552:#8da101:#dfa000:#3a94c5:#df69ba:#35a77c:#dfddc8
+github:#101216:#8b949e:#000000:#f78166:#56d364:#e3b341:#6ca4f8:#db61a2:#2b7489:#ffffff:#4d4d4d:#f78166:#56d364:#e3b341:#6ca4f8:#db61a2:#2b7489:#ffffff
+gruvbox-dark:#282828:#ebdbb2:#282828:#cc241d:#98971a:#d79921:#458588:#b16286:#689d6a:#a89984:#928374:#fb4934:#b8bb26:#fabd2f:#83a598:#d3869b:#8ec07c:#ebdbb2
+horizon:#1c1e26:#fdf0ed:#16161c:#e95678:#29d398:#fab795:#26bbd9:#ee64ae:#59e3e3:#fadad1:#232530:#ec6a88:#3fdaa4:#fbc3a7:#3fc6de:#f075b7:#6be6e6:#fdf0ed
+kanagawa:#1f1f28:#dcd7ba:#090618:#c34043:#76946a:#c0a36e:#7e9cd8:#957fb8:#6a9589:#c8c093:#727169:#e82424:#98bb6c:#e6c384:#7fb4ca:#938aa9:#7aa89f:#dcd7ba
+linux-console:#000000:#aaaaaa:#000000:#aa0000:#00aa00:#aa5500:#0000aa:#aa00aa:#00aaaa:#aaaaaa:#555555:#ff5555:#55ff55:#ffff55:#5555ff:#ff55ff:#55ffff:#ffffff
+material:#1e282c:#c3c7d1:#073641:#eb606b:#c3e88d:#f7eb95:#80cbc3:#ff2490:#aeddff:#ffffff:#002b36:#eb606b:#c3e88d:#f7eb95:#7dc6bf:#6c71c3:#34434d:#ffffff
+monokai:#272822:#f8f8f2:#75715e:#f92672:#a6e22e:#f4bf75:#66d9ef:#ae81ff:#2aa198:#f9f8f5:#272822:#f92672:#a6e22e:#f4bf75:#66d9ef:#ae81ff:#2aa198:#f8f8f2
+night-owl:#011627:#d6deeb:#011627:#ef5350:#22da6e:#addb67:#82aaff:#c792ea:#21c7a8:#ffffff:#575656:#ef5350:#22da6e:#ffeb95:#82aaff:#c792ea:#7fdbca:#ffffff
+nord:#2e3440:#d8dee9:#3b4252:#bf616a:#a3be8c:#ebcb8b:#81a1c1:#b48ead:#88c0d0:#e5e9f0:#4c566a:#bf616a:#a3be8c:#ebcb8b:#81a1c1:#b48ead:#8fbcbb:#eceff4
+onedark:#1e2127:#5c6370:#000000:#e06c75:#98c379:#d19a66:#61afef:#c678dd:#56b6c2:#abb2bf:#5c6370:#e06c75:#98c379:#d19a66:#61afef:#c678dd:#56b6c2:#fffefe
+palenight:#292d3e:#bfc7d5:#292d3e:#f07178:#c3e88d:#ffcb6b:#82aaff:#c792ea:#60adec:#abb2bf:#959dcb:#f07178:#c3e88d:#ff5572:#82aaff:#ffcb6b:#676e95:#fffefe
+putty:#000000:#bbbbbb:#000000:#bb0000:#00bb00:#bbbb00:#0000bb:#bb00bb:#00bbbb:#bbbbbb:#555555:#ff5555:#55ff55:#ffff55:#5555ff:#ff55ff:#55ffff:#ffffff
+rose-pine:#191724:#e0def4:#26233a:#eb6f92:#31748f:#f6c177:#9ccfd8:#c4a7e7:#ebbcba:#e0def4:#6e6a86:#eb6f92:#31748f:#f6c177:#9ccfd8:#c4a7e7:#ebbcba:#e0def4
+rose-pine-moon:#232136:#e0def4:#393552:#eb6f92:#3e8fb0:#f6c177:#9ccfd8:#c4a7e7:#ea9a97:#e0def4:#6e6a86:#eb6f92:#3e8fb0:#f6c177:#9ccfd8:#c4a7e7:#ea9a97:#e0def4
+solarized-dark:#002b36:#839496:#073642:#dc322f:#859900:#cf9a6b:#268bd2:#d33682:#2aa198:#eee8d5:#657b83:#cb4b16:#859900:#cf9a6b:#6c71c4:#d33682:#2aa198:#fdf6e3
+synthwave:#262335:#ffffff:#011627:#fe4450:#72f1b8:#fede5d:#03edf9:#ff7edb:#03edf9:#ffffff:#575656:#fe4450:#72f1b8:#fede5d:#03edf9:#ff7edb:#03edf9:#ffffff
+tango:#2e3436:#d3d7cf:#000000:#cc0000:#4e9a06:#c4a000:#3465a4:#75507b:#06989a:#d3d7cf:#555753:#ef2929:#8ae234:#fce94f:#739fcf:#ad7fa8:#34e2e2:#eeeeec
+tokyo:#1a1b26:#c0caf5:#414868:#f7768e:#9ece6a:#e0af68:#7aa2f7:#bb9af7:#7dcfff:#a9b1d6:#414868:#f7768e:#9ece6a:#e0af68:#7aa2f7:#bb9af7:#7dcfff:#c0caf5
+catppuccin-latte:#eff1f5:#4c4f69:#5c5f77:#d20f39:#40a02b:#df8e1d:#1e66f5:#ea76cb:#179299:#acb0be:#6c6f85:#d20f39:#40a02b:#df8e1d:#1e66f5:#ea76cb:#179299:#bcc0cc
+everforest-light:#fdf6e3:#5c6a72:#5c6a72:#f85552:#8da101:#dfa000:#3a94c5:#df69ba:#35a77c:#e0dcc7:#5c6a72:#f85552:#8da101:#dfa000:#3a94c5:#df69ba:#35a77c:#e0dcc7
+gruvbox-light:#fbf1c7:#3c3836:#fdf4c1:#cc241d:#98971a:#d79921:#458588:#b16286:#689d6a:#7c6f64:#928374:#9d0006:#79740e:#b57614:#076678:#8f3f71:#427b58:#3c3836
+onelight:#fafafa:#383a42:#000000:#e45649:#50a14f:#986801:#4078f2:#a626a4:#0184bc:#a0a1a7:#383a42:#e45649:#50a14f:#986801:#4078f2:#a626a4:#0184bc:#ffffff
+rose-pine-dawn:#faf4ed:#575279:#f2e9e1:#b4637a:#286983:#ea9d34:#56949f:#907aa9:#d7827e:#575279:#9893a5:#b4637a:#286983:#ea9d34:#56949f:#907aa9:#d7827e:#575279
+solarized-light:#fdf6e3:#657b83:#002b36:#dc322f:#859900:#b58900:#268bd2:#d33682:#2aa198:#eee8d5:#073642:#cb4b16:#586e75:#657b83:#839496:#6c71c4:#93a1a1:#fdf6e3
+deep-red:#452121:#e8dede:#0a0606:#ff8577:#6bc670:#ccac16:#86acff:#df8cd8:#43c3c3:#aeaeae:#868686:#ffc8c0:#89f58f:#fbd530:#c5d8ff:#ffbff8:#53f2f2:#d7d7d7
+deep-vermilion:#452a21:#e8e0de:#0a0806:#ff8577:#6bc670:#ccac16:#86acff:#df8cd8:#43c3c3:#aeaeae:#868686:#ffc8c0:#89f58f:#fbd530:#c5d8ff:#ffbff8:#53f2f2:#d7d7d7
+deep-orange:#453321:#e8e2de:#0a0a06:#ff8577:#6bc670:#ccac16:#86acff:#df8cd8:#43c3c3:#aeaeae:#868686:#ffc8c0:#89f58f:#fbd530:#c5d8ff:#ffbff8:#53f2f2:#d7d7d7
+deep-amber:#453c21:#e8e4de:#0a0b06:#ff8577:#6bc670:#ccac16:#86acff:#df8cd8:#43c3c3:#aeaeae:#868686:#ffc8c0:#89f58f:#fbd530:#c5d8ff:#ffbff8:#53f2f2:#d7d7d7
+deep-yellow:#454521:#e8e8de:#0a0a06:#ff8577:#6bc670:#ccac16:#86acff:#ffbff8:#43c3c3:#aeaeae:#868686:#ffc8c0:#89f58f:#fbd530:#c5d8ff:#ffbff8:#53f2f2:#d7d7d7
+deep-lime:#3c4521:#e4e8de:#080a06:#ff8577:#6bc670:#ccac16:#86acff:#df8cd8:#43c3c3:#aeaeae:#868686:#ffc8c0:#89f58f:#fbd530:#c5d8ff:#ffbff8:#53f2f2:#d7d7d7
+deep-chartreuse:#334521:#e2e8de:#060a06:#ff8577:#6bc670:#ccac16:#86acff:#df8cd8:#43c3c3:#aeaeae:#868686:#ffc8c0:#89f58f:#fbd530:#c5d8ff:#ffbff8:#53f2f2:#d7d7d7
+deep-harlequin:#2a4521:#e0e8de:#050a06:#ff8577:#6bc670:#ccac16:#86acff:#df8cd8:#43c3c3:#aeaeae:#868686:#ffc8c0:#89f58f:#fbd530:#c5d8ff:#ffbff8:#53f2f2:#d7d7d7
+deep-green:#214521:#dee8de:#060a06:#ff8577:#6bc670:#ccac16:#86acff:#df8cd8:#43c3c3:#aeaeae:#868686:#ffc8c0:#89f58f:#fbd530:#c5d8ff:#ffbff8:#53f2f2:#d7d7d7
+deep-emerald:#21452a:#dee8e0:#060a07:#ff8577:#6bc670:#ccac16:#86acff:#df8cd8:#43c3c3:#aeaeae:#868686:#ffc8c0:#89f58f:#fbd530:#c5d8ff:#ffbff8:#53f2f2:#d7d7d7
+deep-spring-green:#214533:#dee8e2:#060a08:#ff8577:#6bc670:#ccac16:#86acff:#df8cd8:#43c3c3:#aeaeae:#868686:#ffc8c0:#89f58f:#fbd530:#c5d8ff:#ffbff8:#53f2f2:#d7d7d7
+deep-aquamarine:#21453c:#dee8e4:#060a0a:#ff8577:#6bc670:#ccac16:#86acff:#df8cd8:#43c3c3:#aeaeae:#868686:#ffc8c0:#89f58f:#fbd530:#c5d8ff:#ffbff8:#53f2f2:#d7d7d7
+deep-cyan:#214545:#dee8e8:#060a0a:#ff8577:#6bc670:#ccac16:#86acff:#df8cd8:#43c3c3:#aeaeae:#868686:#ffc8c0:#89f58f:#fbd530:#c5d8ff:#ffbff8:#53f2f2:#d7d7d7
+deep-sky-blue:#213c45:#dee4e8:#06080a:#ff8577:#6bc670:#ccac16:#86acff:#df8cd8:#43c3c3:#aeaeae:#868686:#ffc8c0:#89f58f:#fbd530:#c5d8ff:#ffbff8:#53f2f2:#d7d7d7
+deep-azure:#213345:#dee2e8:#06060a:#ff8577:#6bc670:#ccac16:#86acff:#df8cd8:#43c3c3:#aeaeae:#868686:#ffc8c0:#89f58f:#fbd530:#c5d8ff:#ffbff8:#53f2f2:#d7d7d7
+deep-cobalt:#212a45:#dee0e8:#06050a:#ff8577:#6bc670:#ccac16:#86acff:#df8cd8:#43c3c3:#aeaeae:#868686:#ffc8c0:#89f58f:#fbd530:#c5d8ff:#ffbff8:#53f2f2:#d7d7d7
+deep-blue:#212145:#dedee8:#06060a:#ff8577:#6bc670:#ccac16:#86acff:#df8cd8:#43c3c3:#aeaeae:#868686:#ffc8c0:#89f58f:#fbd530:#c5d8ff:#ffbff8:#53f2f2:#d7d7d7
+deep-indigo:#2a2145:#e0dee8:#07060a:#ff8577:#6bc670:#ccac16:#86acff:#df8cd8:#43c3c3:#aeaeae:#868686:#ffc8c0:#89f58f:#fbd530:#c5d8ff:#ffbff8:#53f2f2:#d7d7d7
+deep-violet:#332145:#e2dee8:#08060a:#ff8577:#6bc670:#ccac16:#86acff:#df8cd8:#43c3c3:#aeaeae:#868686:#ffc8c0:#89f58f:#fbd530:#c5d8ff:#ffbff8:#53f2f2:#d7d7d7
+deep-purple:#3c2145:#e4dee8:#0a060a:#ff8577:#6bc670:#ccac16:#86acff:#df8cd8:#43c3c3:#aeaeae:#868686:#ffc8c0:#89f58f:#fbd530:#c5d8ff:#ffbff8:#53f2f2:#d7d7d7
+deep-magenta:#452145:#e8dee8:#0a060a:#ff8577:#6bc670:#ccac16:#86acff:#df8cd8:#43c3c3:#aeaeae:#868686:#ffc8c0:#89f58f:#fbd530:#c5d8ff:#ffbff8:#53f2f2:#d7d7d7
+deep-fuchsia:#45213c:#e8dee4:#0a060a:#ff8577:#6bc670:#ccac16:#86acff:#df8cd8:#43c3c3:#aeaeae:#868686:#ffc8c0:#89f58f:#fbd530:#c5d8ff:#ffbff8:#53f2f2:#d7d7d7
+deep-rose:#452133:#e8dee2:#0a0608:#ff8577:#6bc670:#ccac16:#86acff:#df8cd8:#43c3c3:#aeaeae:#868686:#ffc8c0:#89f58f:#fbd530:#c5d8ff:#ffbff8:#53f2f2:#d7d7d7
+deep-crimson:#45212a:#e8dee0:#0a0607:#ff8577:#6bc670:#ccac16:#86acff:#df8cd8:#43c3c3:#aeaeae:#868686:#ffc8c0:#89f58f:#fbd530:#c5d8ff:#ffbff8:#53f2f2:#d7d7d7
+dark-red:#783a3a:#180808:#1a1a1a:#ffc8c0:#6bc670:#f6d653:#c5d8ff:#ffbff8:#43c3c3:#d7d7d7:#aeaeae:#ffc8c0:#89f58f:#fbd530:#c5d8ff:#ffbff8:#53f2f2:#d7d7d7
+dark-vermilion:#78493a:#180c08:#1a1a1a:#ffc8c0:#95f198:#f6d653:#c5d8ff:#ffbff8:#74eeee:#d7d7d7:#aeaeae:#ffc8c0:#89f58f:#fbd530:#c5d8ff:#ffbff8:#53f2f2:#d7d7d7
+dark-orange:#78593a:#180e08:#1a1a1a:#ffc8c0:#95f198:#f6d653:#c5d8ff:#ffbff8:#74eeee:#d7d7d7:#aeaeae:#ffc8c0:#89f58f:#fbd530:#c5d8ff:#ffbff8:#53f2f2:#d7d7d7
+dark-amber:#78693a:#181208:#1a1a1a:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#121212
+dark-yellow:#78783a:#181808:#1a1a1a:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#121212
+dark-lime:#69783a:#161808:#1a1a1a:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#121212
+dark-chartreuse:#59783a:#121808:#1a1a1a:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#121212
+dark-harlequin:#49783a:#0e1808:#1a1a1a:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#121212
+dark-green:#3a783a:#081808:#1a1a1a:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#121212
+dark-emerald:#3a7849:#081810:#1a1a1a:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#121212
+dark-spring-green:#3a7859:#081812:#1a1a1a:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#121212
+dark-aquamarine:#3a7869:#081816:#1a1a1a:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#121212
+dark-cyan:#3a7878:#081818:#1a1a1a:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#121212
+dark-sky-blue:#3a6978:#081618:#1a1a1a:#ffc8c0:#95f198:#f6d653:#c5d8ff:#ffbff8:#74eeee:#d7d7d7:#aeaeae:#ffc8c0:#89f58f:#fbd530:#c5d8ff:#ffbff8:#53f2f2:#d7d7d7
+dark-azure:#3a5978:#081218:#1a1a1a:#ffc8c0:#95f198:#f6d653:#c5d8ff:#ffbff8:#74eeee:#d7d7d7:#aeaeae:#ffc8c0:#89f58f:#fbd530:#c5d8ff:#ffbff8:#53f2f2:#d7d7d7
+dark-cobalt:#3a4978:#080e18:#1a1a1a:#ffc8c0:#6bc670:#ccac16:#c5d8ff:#ffbff8:#43c3c3:#d7d7d7:#aeaeae:#ffc8c0:#89f58f:#fbd530:#c5d8ff:#ffbff8:#53f2f2:#d7d7d7
+dark-blue:#3a3a78:#080818:#1a1a1a:#ff8577:#6bc670:#ccac16:#86acff:#df8cd8:#43c3c3:#aeaeae:#868686:#ffc8c0:#89f58f:#fbd530:#c5d8ff:#ffbff8:#53f2f2:#d7d7d7
+dark-indigo:#493a78:#0c0818:#1a1a1a:#ffc8c0:#6bc670:#ccac16:#86acff:#ffbff8:#43c3c3:#aeaeae:#868686:#ffc8c0:#89f58f:#fbd530:#c5d8ff:#ffbff8:#53f2f2:#d7d7d7
+dark-violet:#593a78:#100818:#1a1a1a:#ffc8c0:#6bc670:#ccac16:#86acff:#ffbff8:#43c3c3:#aeaeae:#868686:#ffc8c0:#89f58f:#fbd530:#c5d8ff:#ffbff8:#53f2f2:#d7d7d7
+dark-purple:#693a78:#140818:#1a1a1a:#ffc8c0:#6bc670:#f6d653:#c5d8ff:#ffbff8:#43c3c3:#d7d7d7:#aeaeae:#ffc8c0:#89f58f:#fbd530:#c5d8ff:#ffbff8:#53f2f2:#d7d7d7
+dark-magenta:#783a78:#180818:#1a1a1a:#ffc8c0:#95f198:#f6d653:#c5d8ff:#ffbff8:#74eeee:#d7d7d7:#aeaeae:#ffc8c0:#89f58f:#fbd530:#c5d8ff:#ffbff8:#53f2f2:#d7d7d7
+dark-fuchsia:#783a69:#180814:#1a1a1a:#ffc8c0:#6bc670:#f6d653:#c5d8ff:#ffbff8:#43c3c3:#d7d7d7:#aeaeae:#ffc8c0:#89f58f:#fbd530:#c5d8ff:#ffbff8:#53f2f2:#d7d7d7
+dark-rose:#783a59:#180812:#1a1a1a:#ffc8c0:#6bc670:#f6d653:#c5d8ff:#ffbff8:#43c3c3:#d7d7d7:#aeaeae:#ffc8c0:#89f58f:#fbd530:#c5d8ff:#ffbff8:#53f2f2:#d7d7d7
+dark-crimson:#783a49:#18080c:#1a1a1a:#ffc8c0:#6bc670:#f6d653:#c5d8ff:#ffbff8:#43c3c3:#d7d7d7:#aeaeae:#ffc8c0:#89f58f:#fbd530:#c5d8ff:#ffbff8:#53f2f2:#d7d7d7
+red:#ac5353:#180808:#1a1a1a:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#121212
+vermilion:#ac6953:#180c08:#1a1a1a:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212
+orange:#ac8053:#180e08:#1a1a1a:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212
+amber:#ac9653:#181208:#1a1a1a:#2d0000:#001800:#181100:#01004a:#260024:#001617:#121212:#292929:#2d0000:#001800:#181100:#01004a:#260024:#001617:#121212
+yellow:#acac53:#181808:#1a1a1a:#550000:#003405:#322800:#061c6c:#681c65:#003030:#292929:#424242:#2d0000:#001800:#181100:#01004a:#260024:#001617:#121212
+lime:#96ac53:#161808:#1a1a1a:#550000:#003405:#322800:#061c6c:#490047:#003030:#292929:#424242:#2d0000:#001800:#181100:#01004a:#260024:#001617:#121212
+chartreuse:#80ac53:#121808:#1a1a1a:#550000:#003405:#322800:#061c6c:#490047:#003030:#292929:#424242:#2d0000:#001800:#181100:#01004a:#260024:#001617:#121212
+harlequin:#69ac53:#0e1808:#1a1a1a:#550000:#003405:#322800:#061c6c:#490047:#003030:#292929:#424242:#2d0000:#001800:#181100:#01004a:#260024:#001617:#121212
+green:#53ac53:#081808:#1a1a1a:#2d0000:#001800:#322800:#061c6c:#260024:#001617:#292929:#424242:#2d0000:#001800:#181100:#01004a:#260024:#001617:#121212
+emerald:#53ac69:#081810:#1a1a1a:#2d0000:#001800:#322800:#061c6c:#490047:#001617:#292929:#424242:#2d0000:#001800:#181100:#01004a:#260024:#001617:#121212
+spring-green:#53ac80:#081812:#1a1a1a:#550000:#003405:#322800:#061c6c:#490047:#003030:#292929:#424242:#2d0000:#001800:#181100:#01004a:#260024:#001617:#121212
+aquamarine:#53ac96:#081816:#1a1a1a:#550000:#003405:#322800:#061c6c:#490047:#003030:#292929:#424242:#2d0000:#001800:#181100:#01004a:#260024:#001617:#121212
+cyan:#53acac:#081818:#1a1a1a:#550000:#003405:#322800:#061c6c:#490047:#003030:#292929:#424242:#2d0000:#001800:#181100:#01004a:#260024:#001617:#121212
+sky-blue:#5396ac:#081618:#1a1a1a:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212
+azure:#5380ac:#081218:#1a1a1a:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212
+cobalt:#5369ac:#080e18:#1a1a1a:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#121212
+blue:#5353ac:#080818:#1a1a1a:#ffc8c0:#95f198:#f6d653:#c5d8ff:#ffbff8:#74eeee:#d7d7d7:#aeaeae:#ffc8c0:#89f58f:#fbd530:#c5d8ff:#ffbff8:#53f2f2:#d7d7d7
+indigo:#6953ac:#0c0818:#1a1a1a:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#121212
+violet:#8053ac:#100818:#1a1a1a:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#121212
+purple:#9653ac:#140818:#1a1a1a:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#121212
+magenta:#ac53ac:#180818:#1a1a1a:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#121212
+fuchsia:#ac5396:#180814:#1a1a1a:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#121212
+rose:#ac5380:#180812:#1a1a1a:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#121212
+crimson:#ac5369:#18080c:#1a1a1a:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#121212
+light-red:#c58686:#1a0808:#3a1a1a:#2d0000:#001800:#181100:#01004a:#260024:#001617:#121212:#292929:#2d0000:#001800:#181100:#01004a:#260024:#001617:#121212
+light-vermilion:#c59686:#1a0e08:#3a2a1a:#550000:#003405:#322800:#061c6c:#490047:#003030:#292929:#424242:#2d0000:#001800:#181100:#01004a:#260024:#001617:#121212
+light-orange:#c5a686:#1a1408:#3a2e1a:#820003:#003405:#504100:#1c3a8b:#681c65:#003030:#424242:#636363:#2d0000:#001800:#181100:#01004a:#260024:#001617:#121212
+light-amber:#c5b586:#1a1608:#3a301a:#820003:#00520f:#504100:#1c3a8b:#681c65:#004d4d:#424242:#636363:#2d0000:#001800:#181100:#01004a:#260024:#001617:#121212
+light-yellow:#c5c586:#1a1a08:#3a3a1a:#ac312a:#00520f:#504100:#1c3a8b:#8e4088:#004d4d:#424242:#636363:#2d0000:#001800:#181100:#01004a:#260024:#001617:#121212
+light-lime:#b5c586:#161a08:#2e3a1a:#820003:#00520f:#504100:#1c3a8b:#681c65:#004d4d:#424242:#636363:#2d0000:#001800:#181100:#01004a:#260024:#001617:#121212
+light-chartreuse:#a6c586:#121a08:#2a3a1a:#820003:#00520f:#504100:#1c3a8b:#681c65:#004d4d:#424242:#636363:#2d0000:#001800:#181100:#01004a:#260024:#001617:#121212
+light-harlequin:#96c586:#0e1a08:#263a1a:#820003:#00520f:#504100:#1c3a8b:#681c65:#004d4d:#424242:#636363:#2d0000:#001800:#181100:#01004a:#260024:#001617:#121212
+light-green:#86c586:#081a08:#1a3a1a:#820003:#00520f:#504100:#1c3a8b:#681c65:#004d4d:#424242:#636363:#2d0000:#001800:#181100:#01004a:#260024:#001617:#121212
+light-emerald:#86c596:#081a0e:#1a3a2a:#820003:#00520f:#504100:#1c3a8b:#681c65:#004d4d:#424242:#636363:#2d0000:#001800:#181100:#01004a:#260024:#001617:#121212
+light-spring-green:#86c5a6:#081a14:#1a3a2e:#820003:#00520f:#504100:#1c3a8b:#681c65:#004d4d:#424242:#636363:#2d0000:#001800:#181100:#01004a:#260024:#001617:#121212
+light-aquamarine:#86c5b5:#081a16:#1a3a30:#820003:#00520f:#504100:#1c3a8b:#681c65:#004d4d:#424242:#636363:#2d0000:#001800:#181100:#01004a:#260024:#001617:#121212
+light-cyan:#86c5c5:#081a1a:#1a3a3a:#820003:#00520f:#504100:#1c3a8b:#681c65:#004d4d:#424242:#636363:#2d0000:#001800:#181100:#01004a:#260024:#001617:#121212
+light-sky-blue:#86b5c5:#08161a:#1a2e3a:#820003:#00520f:#504100:#1c3a8b:#681c65:#004d4d:#424242:#636363:#2d0000:#001800:#181100:#01004a:#260024:#001617:#121212
+light-azure:#86a6c5:#08121a:#1a2a3a:#550000:#003405:#322800:#061c6c:#490047:#003030:#292929:#424242:#2d0000:#001800:#181100:#01004a:#260024:#001617:#121212
+light-cobalt:#8696c5:#080e1a:#1a263a:#2d0000:#001800:#181100:#01004a:#260024:#001617:#121212:#292929:#2d0000:#001800:#181100:#01004a:#260024:#001617:#121212
+light-blue:#8686c5:#08081a:#1a1a3a:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212
+light-indigo:#9686c5:#0e081a:#2a1a3a:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212
+light-violet:#a686c5:#12081a:#2e1a3a:#2d0000:#001800:#181100:#121212:#260024:#001617:#121212:#292929:#2d0000:#001800:#181100:#121212:#260024:#001617:#121212
+light-purple:#b586c5:#16081a:#301a3a:#2d0000:#001800:#181100:#01004a:#260024:#001617:#121212:#292929:#2d0000:#001800:#181100:#01004a:#260024:#001617:#121212
+light-magenta:#c586c5:#1a081a:#3a1a3a:#550000:#003405:#322800:#061c6c:#490047:#003030:#292929:#424242:#2d0000:#001800:#181100:#01004a:#260024:#001617:#121212
+light-fuchsia:#c586b5:#1a0816:#3a1a30:#2d0000:#001800:#322800:#061c6c:#260024:#001617:#292929:#424242:#2d0000:#001800:#181100:#01004a:#260024:#001617:#121212
+light-rose:#c586a6:#1a0812:#3a1a2a:#2d0000:#001800:#181100:#01004a:#260024:#001617:#121212:#292929:#2d0000:#001800:#181100:#01004a:#260024:#001617:#121212
+light-crimson:#c58696:#1a080e:#3a1a2a:#2d0000:#001800:#181100:#01004a:#260024:#001617:#121212:#292929:#2d0000:#001800:#181100:#01004a:#260024:#001617:#121212
+pale-red:#debaba:#180606:#3a1a1a:#ac312a:#00520f:#504100:#3b5eb2:#8e4088:#004d4d:#636363:#868686:#2d0000:#001800:#181100:#01004a:#260024:#001617:#121212
+pale-vermilion:#dec3ba:#180c06:#3a241a:#ac312a:#107823:#766200:#3b5eb2:#8e4088:#007272:#636363:#868686:#2d0000:#001800:#181100:#01004a:#260024:#001617:#121212
+pale-orange:#deccba:#181206:#3a2c1a:#ac312a:#107823:#766200:#3b5eb2:#8e4088:#007272:#636363:#868686:#2d0000:#001800:#181100:#01004a:#260024:#001617:#121212
+pale-amber:#ded5ba:#181606:#3a321a:#ac312a:#107823:#766200:#3b5eb2:#8e4088:#007272:#636363:#868686:#2d0000:#001800:#181100:#01004a:#260024:#001617:#121212
+pale-yellow:#dedeba:#181806:#3a3a1a:#d5584d:#107823:#766200:#3b5eb2:#b464ae:#007272:#636363:#868686:#2d0000:#001800:#181100:#01004a:#260024:#001617:#121212
+pale-lime:#d5deba:#141806:#2a3a1a:#ac312a:#107823:#766200:#3b5eb2:#8e4088:#007272:#636363:#868686:#2d0000:#001800:#181100:#01004a:#260024:#001617:#121212
+pale-chartreuse:#ccdeba:#101806:#2a3a1a:#ac312a:#107823:#766200:#3b5eb2:#8e4088:#007272:#636363:#868686:#2d0000:#001800:#181100:#01004a:#260024:#001617:#121212
+pale-harlequin:#c3deba:#0c1806:#243a1a:#ac312a:#107823:#766200:#3b5eb2:#8e4088:#007272:#636363:#868686:#2d0000:#001800:#181100:#01004a:#260024:#001617:#121212
+pale-green:#badeba:#061806:#1a3a1a:#ac312a:#107823:#766200:#3b5eb2:#8e4088:#007272:#636363:#868686:#2d0000:#001800:#181100:#01004a:#260024:#001617:#121212
+pale-emerald:#badec3:#06180c:#1a3a24:#ac312a:#107823:#766200:#3b5eb2:#8e4088:#007272:#636363:#868686:#2d0000:#001800:#181100:#01004a:#260024:#001617:#121212
+pale-spring-green:#badecc:#061812:#1a3a2a:#ac312a:#107823:#766200:#3b5eb2:#8e4088:#007272:#636363:#868686:#2d0000:#001800:#181100:#01004a:#260024:#001617:#121212
+pale-aquamarine:#baded5:#061816:#1a3a32:#ac312a:#107823:#766200:#3b5eb2:#8e4088:#007272:#636363:#868686:#2d0000:#001800:#181100:#01004a:#260024:#001617:#121212
+pale-cyan:#badede:#061818:#1a3a3a:#ac312a:#107823:#766200:#3b5eb2:#8e4088:#007272:#636363:#868686:#2d0000:#001800:#181100:#01004a:#260024:#001617:#121212
+pale-sky-blue:#bad5de:#061418:#1a2e3a:#ac312a:#107823:#766200:#3b5eb2:#8e4088:#007272:#636363:#868686:#2d0000:#001800:#181100:#01004a:#260024:#001617:#121212
+pale-azure:#baccde:#061218:#1a2a3a:#ac312a:#107823:#766200:#3b5eb2:#8e4088:#007272:#636363:#868686:#2d0000:#001800:#181100:#01004a:#260024:#001617:#121212
+pale-cobalt:#bac3de:#060c18:#1a243a:#ac312a:#00520f:#766200:#3b5eb2:#8e4088:#004d4d:#636363:#868686:#2d0000:#001800:#181100:#01004a:#260024:#001617:#121212
+pale-blue:#babade:#060618:#1a1a3a:#820003:#00520f:#504100:#1c3a8b:#681c65:#004d4d:#424242:#636363:#2d0000:#001800:#181100:#01004a:#260024:#001617:#121212
+pale-indigo:#c3bade:#0c0618:#241a3a:#820003:#00520f:#504100:#1c3a8b:#681c65:#004d4d:#424242:#636363:#2d0000:#001800:#181100:#01004a:#260024:#001617:#121212
+pale-violet:#ccbade:#100618:#2a1a3a:#ac312a:#00520f:#504100:#1c3a8b:#8e4088:#004d4d:#424242:#636363:#2d0000:#001800:#181100:#01004a:#260024:#001617:#121212
+pale-purple:#d5bade:#140618:#321a3a:#ac312a:#00520f:#766200:#3b5eb2:#8e4088:#004d4d:#636363:#868686:#2d0000:#001800:#181100:#01004a:#260024:#001617:#121212
+pale-magenta:#debade:#180618:#3a1a3a:#ac312a:#00520f:#766200:#3b5eb2:#8e4088:#004d4d:#636363:#868686:#2d0000:#001800:#181100:#01004a:#260024:#001617:#121212
+pale-fuchsia:#debad5:#180614:#3a1a30:#ac312a:#00520f:#766200:#3b5eb2:#8e4088:#004d4d:#636363:#868686:#2d0000:#001800:#181100:#01004a:#260024:#001617:#121212
+pale-rose:#debacc:#180610:#3a1a2a:#ac312a:#00520f:#766200:#3b5eb2:#8e4088:#004d4d:#636363:#868686:#2d0000:#001800:#181100:#01004a:#260024:#001617:#121212
+pale-crimson:#debac3:#18060c:#3a1a24:#ac312a:#00520f:#766200:#3b5eb2:#8e4088:#004d4d:#636363:#868686:#2d0000:#001800:#181100:#01004a:#260024:#001617:#121212
+neon-red:#e51a1a:#1a0404:#1a1a1a:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#121212
+neon-vermilion:#e54d1a:#1a0a04:#1a1a1a:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212
+neon-orange:#e5801a:#1a0e04:#1a1a1a:#2d0000:#001800:#322800:#061c6c:#490047:#003030:#292929:#424242:#2d0000:#001800:#181100:#01004a:#260024:#001617:#121212
+neon-amber:#e5b31a:#1a1404:#1a1a1a:#820003:#00520f:#504100:#1c3a8b:#681c65:#004d4d:#424242:#636363:#2d0000:#001800:#181100:#01004a:#260024:#001617:#121212
+neon-yellow:#e5e51a:#1a1a04:#1a1a1a:#d5584d:#107823:#766200:#5c82da:#b464ae:#007272:#636363:#868686:#2d0000:#001800:#181100:#01004a:#260024:#001617:#121212
+neon-lime:#b3e51a:#161a04:#1a1a1a:#ac312a:#107823:#766200:#3b5eb2:#8e4088:#007272:#636363:#868686:#2d0000:#001800:#181100:#01004a:#260024:#001617:#121212
+neon-chartreuse:#80e51a:#121a04:#1a1a1a:#ac312a:#107823:#766200:#3b5eb2:#8e4088:#007272:#636363:#868686:#2d0000:#001800:#181100:#01004a:#260024:#001617:#121212
+neon-harlequin:#4de51a:#0e1a04:#1a1a1a:#ac312a:#107823:#766200:#3b5eb2:#8e4088:#007272:#636363:#868686:#2d0000:#001800:#181100:#01004a:#260024:#001617:#121212
+neon-green:#1ae51a:#041a04:#1a1a1a:#ac312a:#107823:#766200:#3b5eb2:#8e4088:#007272:#636363:#868686:#2d0000:#001800:#181100:#01004a:#260024:#001617:#121212
+neon-emerald:#1ae54d:#041a0a:#1a1a1a:#ac312a:#107823:#766200:#3b5eb2:#8e4088:#007272:#636363:#868686:#2d0000:#001800:#181100:#01004a:#260024:#001617:#121212
+neon-spring-green:#1ae580:#041a12:#1a1a1a:#ac312a:#107823:#766200:#3b5eb2:#8e4088:#007272:#636363:#868686:#2d0000:#001800:#181100:#01004a:#260024:#001617:#121212
+neon-aquamarine:#1ae5b3:#041a16:#1a1a1a:#ac312a:#107823:#766200:#3b5eb2:#8e4088:#007272:#636363:#868686:#2d0000:#001800:#181100:#01004a:#260024:#001617:#121212
+neon-cyan:#1ae5e5:#041a1a:#1a1a1a:#ac312a:#107823:#766200:#3b5eb2:#8e4088:#007272:#636363:#868686:#2d0000:#001800:#181100:#01004a:#260024:#001617:#121212
+neon-sky-blue:#1ab3e5:#04161a:#1a1a1a:#550000:#003405:#322800:#061c6c:#490047:#003030:#292929:#424242:#2d0000:#001800:#181100:#01004a:#260024:#001617:#121212
+neon-azure:#1a80e5:#04121a:#1a1a1a:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212
+neon-cobalt:#1a4de5:#040e1a:#1a1a1a:#ffc8c0:#95f198:#f6d653:#c5d8ff:#ffbff8:#74eeee:#d7d7d7:#aeaeae:#ffc8c0:#89f58f:#fbd530:#c5d8ff:#ffbff8:#53f2f2:#d7d7d7
+neon-blue:#1a1ae5:#04041a:#1a1a1a:#ffc8c0:#6bc670:#f6d653:#c5d8ff:#ffbff8:#43c3c3:#d7d7d7:#aeaeae:#ffc8c0:#89f58f:#fbd530:#c5d8ff:#ffbff8:#53f2f2:#d7d7d7
+neon-indigo:#4d1ae5:#0a041a:#1a1a1a:#ffc8c0:#95f198:#f6d653:#c5d8ff:#ffbff8:#74eeee:#d7d7d7:#aeaeae:#ffc8c0:#89f58f:#fbd530:#c5d8ff:#ffbff8:#53f2f2:#d7d7d7
+neon-violet:#801ae5:#12041a:#1a1a1a:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#121212
+neon-purple:#b31ae5:#16041a:#1a1a1a:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#121212
+neon-magenta:#e51ae5:#1a041a:#1a1a1a:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212
+neon-fuchsia:#e51ab3:#1a0416:#1a1a1a:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212
+neon-rose:#e51a80:#1a0412:#1a1a1a:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212:#121212
+neon-crimson:#e51a4d:#1a040a:#1a1a1a:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#ebebeb:#121212
+'
+
+# _tint_load_palette - Build TINT_PALETTE from built-ins + $TINT_PALETTE_DIR.
+# Built-ins win on name collision (deduped by name, first wins).
+_tint_load_palette() {
+    # TINT_PALETTE_DIR wins (empty = hermetic). Absolute only;
+    # relative would resolve against $PWD.
+    local _tint_theme_dir=""
+    if [ "${TINT_PALETTE_DIR+set}" = "set" ]; then
+        case "$TINT_PALETTE_DIR" in /*|'') _tint_theme_dir="$TINT_PALETTE_DIR" ;; esac
+    else
+        case "${XDG_CONFIG_HOME:-}" in
+            /*) _tint_theme_dir="$XDG_CONFIG_HOME/tint/themes" ;;
+            *) case "${HOME:-}" in
+                /*) _tint_theme_dir="$HOME/.config/tint/themes" ;;
+               esac ;;
+        esac
+    fi
+
+    if [ -n "$_tint_theme_dir" ] && [ -d "$_tint_theme_dir" ] && [ -r "$_tint_theme_dir" ]; then
+        # ls -1A (not glob): handles empty dirs, dotfiles, symlinks. Env
+        # sanitization defeats user aliases / QUOTING_STYLE / CLICOLOR_FORCE.
+        # Heredoc expansion is one-pass per POSIX: $() output below is read
+        # verbatim, so filenames containing $(), backticks, or $VAR aren't
+        # re-interpreted by the shell.
+        set --
+        local _tint_theme_name _tint_theme_path
+        while IFS= read -r _tint_theme_name; do
+            [ -z "$_tint_theme_name" ] && continue
+            _tint_theme_path="$_tint_theme_dir/$_tint_theme_name"
+            if [ -f "$_tint_theme_path" ] && [ -r "$_tint_theme_path" ]; then
+                set -- "$@" "$_tint_theme_path"
+            fi
+        done <<EOF
+$(
+            unset CLICOLOR_FORCE CLICOLOR
+            # LC_ALL=C pins ls sort collation.
+            # shellcheck disable=SC2012  # filenames with newlines unsupported
+            LC_ALL=C QUOTING_STYLE=literal command ls -1A "$_tint_theme_dir"
+        )
+EOF
+    fi
+
+    # awk required (no fallback). Built-ins on stdin, drop-ins as operands —
+    # awk records don't cross files (POSIX), so a missing trailing newline
+    # can't merge the last entry of one file with the first of the next.
+    TINT_PALETTE=$(printf '%s\n' "$_TINT_DEFAULT_PALETTE" | command awk '
+        BEGIN { FS = ":" }
+        {
+            sub(/[[:space:]]#.*/, "")
+            sub(/^[[:space:]]+/, "")
+            sub(/[[:space:]]+$/, "")
+        }
+        /^[a-zA-Z0-9][a-zA-Z0-9_-]*(:#[0-9a-fA-F]{6}){18}$/ && !seen[$1]++
+    ' - "$@") || true
+}
+
+_tint_load_palette
+
+# tint_reload_palette - Rebuild TINT_PALETTE after changing
+# TINT_PALETTE_DIR / XDG_CONFIG_HOME / HOME post-source.
+tint_reload_palette() {
+    _tint_load_palette
+}
+
+# =============================================================================
+# Palette Functions
+# =============================================================================
+
+# tint_lookup <name> - Look up theme by name
+#
+# Stdout: full theme string (#bg:#fg:#00:#01:...:#15)
+# Returns: 0 if found, 1 if not found
+tint_lookup() {
+    local name="$1"
+    local line
+    # case pattern is quoted so $name matches literally, not as a glob.
+    while IFS= read -r line; do
+        case "$line" in
+            "$name:"*) printf '%s' "${line#*:}"; return 0 ;;
+        esac
+    done <<EOF
+$TINT_PALETTE
+EOF
+    return 1
+}
+
+# tint_resolve <input> - Resolve name/hex/"reset" to theme value
+#
+# For hex input: returns #rrggbb. For name: returns full theme string.
+# For "reset": returns empty.
+# Returns: 0 on success, 1 on failure (safe under set -e)
+tint_resolve() {
+    local input="$1"
+    [ "$input" = "reset" ] && return 0
+    case "$input" in
+        '#'[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F])
+            printf '%s' "$input"; return 0 ;;
+        '#'[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F])
+            # Expand 3-digit hex to 6-digit (#abc → #aabbcc)
+            local h="${input#\#}"
+            local c1="${h%??}" c3="${h#??}" c2
+            c2="${h#?}"; c2="${c2%?}"
+            printf '%s' "#${c1}${c1}${c2}${c2}${c3}${c3}"; return 0 ;;
+    esac
+    # Guard lookup failure to prevent set -e from aborting caller
+    tint_lookup "$input" || return 1
+}
+
+# tint_list - Print all palette entries
+#
+# Stdout: theme names, one per line
+tint_list() {
+    local name _rest
+    printf '%s\n' "$TINT_PALETTE" | while IFS=: read -r name _rest; do
+        printf '%s\n' "$name"
+    done
+}
+
+# _tint_palette_get <n> - Get nth palette entry (1-indexed)
+#
+# Stdout: name:#hex entry
+_tint_palette_get() {
+    printf '%s\n' "$TINT_PALETTE" | sed -n "${1}p"
+}
+
+# _tint_palette_count - Get number of palette entries
+#
+# Stdout: integer count
+_tint_palette_count() {
+    # Count non-empty lines. grep -c exits non-zero when no matches,
+    # so we capture output first to avoid || echo appending a second "0"
+    local count
+    count=$(printf '%s\n' "$TINT_PALETTE" | grep -c . 2>/dev/null) || count=0
+    printf '%s' "$count"
+}
+
+# =============================================================================
+# Terminal Functions
+# =============================================================================
+
+# tint_set <theme|bg> [<fg>] - Set terminal colors from theme string or bare hex
+#
+# Theme string mode (#bg:#fg:#00:#01:...:#15):
+#   tint_set "theme_str"        — set bg, fg, and 16 ANSI colors from theme
+#   tint_set "theme_str" "#fg"  — override theme fg with explicit fg
+#   tint_set "theme_str" ""     — set bg + ANSI colors, leave fg untouched
+#
+# Bare hex mode (#RRGGBB):
+#   tint_set "#bg"        — auto-compute fg from background luma
+#   tint_set "#bg" "#fg"  — use explicit fg
+#   tint_set "#bg" ""     — set bg only, leave fg untouched (unknown original)
+#
+# Why >/dev/tty 2>/dev/null?
+#
+# /dev/tty is a "magic" device that refers to the process's controlling terminal.
+# It's not a real file - it's a kernel abstraction. The device node exists in the
+# filesystem (so [ -e /dev/tty ] and [ -w /dev/tty ] return true), but writing to
+# it fails with ENXIO ("No such device or address") when no terminal is attached.
+#
+# This happens in: cron jobs, systemd services, `dash -c '...'`, detached processes.
+# We suppress stderr rather than pre-checking because:
+#   1. [ -w /dev/tty ] tests permission bits, not device connectivity
+#   2. [ -t 0 ] can be true while /dev/tty still fails (edge cases)
+#   3. Silently failing is correct behavior - no terminal means nothing to tint
+#
+# Implementation notes:
+#   - Subshell ( ... ) ensures the redirection error itself is captured
+#   - 2>/dev/null on the subshell catches "No such device or address"
+#   - || true prevents set -e from treating tty absence as fatal
+#   - This pattern works across bash, dash, and other POSIX shells
+#
+tint_set() {
+    local bg fg_seq="" ansi_seq=""
+    case "$1" in
+        *:*)
+            # Full theme string: #bg:#fg:#00:#01:...:#15
+            bg="${1%%:*}"
+            local rest="${1#*:}" _tint_theme_fg
+            _tint_theme_fg="${rest%%:*}"
+            rest="${rest#*:}"
+            if [ $# -ge 2 ] && [ -n "$2" ]; then
+                fg_seq="${_TINT_ESC}]10;${2}${_TINT_ESC}\\"
+            elif [ $# -lt 2 ]; then
+                fg_seq="${_TINT_ESC}]10;${_tint_theme_fg}${_TINT_ESC}\\"
+            fi
+            # Build OSC 4;N;color sequences for 16 ANSI colors
+            local i=0 color
+            while [ -n "$rest" ]; do
+                color="${rest%%:*}"
+                ansi_seq="${ansi_seq}${_TINT_ESC}]4;${i};${color}${_TINT_ESC}\\"
+                i=$((i + 1))
+                if [ "$rest" = "${rest#*:}" ]; then break; fi
+                rest="${rest#*:}"
+            done
+            ;;
+        *)
+            # Bare hex
+            bg="$1"
+            if [ $# -ge 2 ] && [ -n "$2" ]; then
+                fg_seq="${_TINT_ESC}]10;${2}${_TINT_ESC}\\"
+            elif [ $# -lt 2 ]; then
+                fg_seq="${_TINT_ESC}]10;$(_tint_fg_for_bg "$bg")${_TINT_ESC}\\"
+            fi
+            ;;
+    esac
+    # When $# >= 2 but $2 is empty: skip OSC 10 (caller doesn't know the
+    # original foreground, so leave it untouched rather than guessing)
+    ( printf '%s' "${_TINT_ESC}]11;${bg}${_TINT_ESC}\\${fg_seq}${ansi_seq}" >/dev/tty ) 2>/dev/null || true
+}
+
+# tint_reset - Reset to terminal profile default via OSC 111 (bg) + OSC 110 (fg) + OSC 104 (ANSI)
+# See tint_set for /dev/tty handling explanation.
+tint_reset() {
+    ( printf '\033]111\033\\\033]110\033\\\033]104\033\\' >/dev/tty ) 2>/dev/null || true
+}
+
+# _tint_query_osc_color <osc_code> - Query terminal for an OSC color
+#
+# Uses ( ) instead of { } so trap/stty changes can't leak to caller.
+# All terminal I/O goes through /dev/tty explicitly, so the subshell
+# capture ($(...)) doesn't interfere with stdin/stdout.
+#
+# Timeout: stty `time 2` = 200ms. This is a deliberate tradeoff: long enough
+# for all known local and remote terminals to respond (the response is a single
+# write from the terminal emulator), but short enough that non-responding
+# terminals (e.g. TERM=dumb, serial consoles) don't block for seconds.
+#
+# Stdout: #rrggbb hex value
+# Returns: 0 on success, 1 if terminal doesn't respond
+_tint_query_osc_color() (
+    old_settings=$(stty -g 2>/dev/null </dev/tty) || exit 1
+    stty raw -echo min 0 time 2 </dev/tty 2>/dev/null || {
+        stty "$old_settings" </dev/tty 2>/dev/null
+        exit 1
+    }
+    trap 'stty "$old_settings" </dev/tty 2>/dev/null' EXIT
+
+    printf '\033]%s;?\033\\' "$1" >/dev/tty
+    response=$(dd bs=64 count=1 2>/dev/null </dev/tty | tr -d '\000')
+
+    # Explicit restore (trap also fires on exit as safety net)
+    stty "$old_settings" </dev/tty 2>/dev/null
+
+    # Extract RGB: rgb:RRRR/GGGG/BBBB -> #RRGGBB (first 2 hex digits each)
+    #
+    # XParseColor allows 1-4 hex digits per component (h|hh|hhh|hhhh), but all known
+    # terminals respond with 4 digits: xterm, VTE, urxvt, kitty, alacritty, foot (since
+    # 2022). The regex requires 2+ digits, which safely handles all real-world responses.
+    # See: https://codeberg.org/dnkl/foot/issues/971 (foot aligned to 4-digit standard)
+    hex=$(printf '%s' "$response" | sed -n 's/.*rgb:\([0-9a-fA-F]\{2\}\)[0-9a-fA-F]*\/\([0-9a-fA-F]\{2\}\)[0-9a-fA-F]*\/\([0-9a-fA-F]\{2\}\)[0-9a-fA-F]*.*/#\1\2\3/p' | tr '[:upper:]' '[:lower:]')
+    # Empty means no rgb: in response (timeout or unparsable) — treat as failure
+    [ -n "$hex" ] || exit 1
+    printf '%s' "$hex"
+)
+
+# _tint_query_terminal_bg - Query terminal for current background color (OSC 11)
+_tint_query_terminal_bg() { _tint_query_osc_color 11; }
+
+# _tint_query_terminal_fg - Query terminal for current foreground color (OSC 10)
+_tint_query_terminal_fg() { _tint_query_osc_color 10; }
+
+# tint_supports_color - Check if terminal likely supports OSC color sequences
+#
+# This is a heuristic, not a guarantee. We check:
+#   1. TERM is not "dumb" (indicates minimal/no capabilities)
+#   2. /dev/tty is writable (we have a controlling terminal)
+#
+# Note: [ -t 1 ] (stdout is a tty) is insufficient - we write to /dev/tty,
+# not stdout. A process can have stdout redirected but still have a
+# controlling terminal, or vice versa.
+#
+# We don't detect terminal multiplexers (tmux/screen) here. OSC 11 may or
+# may not work through them depending on configuration. Users in tmux who
+# want to change the *outer* terminal color need passthrough sequences,
+# which we don't currently support.
+#
+# Returns: 0 if color support is likely, 1 otherwise
+tint_supports_color() {
+    [ "${TERM:-dumb}" != "dumb" ] || return 1
+    # Try opening /dev/tty for writing - this is the definitive check
+    ( printf '' >/dev/tty ) 2>/dev/null || return 1
+    return 0
+}
+
+# _tint_fg_for_bg <hex> - Compute readable foreground color for a background
+#
+# Returns #000000 (black) for light backgrounds, #ffffff (white) for dark.
+# Uses BT.601 luma: (R*299 + G*587 + B*114) / 1000, threshold > 128.
+#
+# POSIX-portable: uses printf '%d' "0x..." for hex-to-decimal conversion
+# and parameter expansion (${hex#??}) for substring advancement.
+#
+# Stdout: #000000 or #ffffff
+_tint_fg_for_bg() {
+    local hex="$1" r g b luma
+    # Strip leading # if present
+    hex="${hex#\#}"
+    r=$(printf '%d' "0x${hex%????}")
+    hex="${hex#??}"
+    g=$(printf '%d' "0x${hex%??}")
+    hex="${hex#??}"
+    b=$(printf '%d' "0x$hex")
+    luma=$(( (r * 299 + g * 587 + b * 114) / 1000 ))
+    if [ "$luma" -gt 128 ]; then
+        printf '#000000'
+    else
+        printf '#ffffff'
+    fi
+}
+
+# =============================================================================
+# Interactive Picker
+# =============================================================================
+#
+# State reference (all globals used by the picker subsystem):
+#
+#   Picker model                     Type  Description      Set by
+#   ───────────────────────────────  ────  ───────────────  ───────────────────────────────────────────────────
+#   _TINT_PICKER_IDX                 int   cursor pos       init_picker, find_default_index, model_move_cursor
+#   _TINT_PICKER_OLD_IDX             int   prev cursor pos  init_picker, model_move_cursor
+#   _TINT_PICKER_DEFAULT             int   star marker pos  find_default_index (caller arg) | init_picker (auto-detect fallback)
+#   _TINT_PICKER_ORIGINAL_THEME_IDX  int   original theme   init_picker (auto-detect from queried bg + fg; 0 if ambiguous)
+#   _TINT_PICKER_TOTAL               int   entry count      load_palette_arrays
+#   _TINT_PICKER_VISIBLE             int   window rows      init_picker
+#   _TINT_PICKER_KEY                 str   last keypress    read_key
+#   _TINT_PICKER_EXIT_REASON         str   exit cause       install_signal_traps, accept_selection, picker_loop
+#   _TINT_PICKER_SCROLLED            int   window shifted   init_picker, update_scroll_window
+#   _TINT_PICKER_RESIZED             int   resize pending   install_signal_traps, handle_resize
+#   _TINT_PICKER_WIN_START           int   top visible idx  init_picker, update_scroll_window
+#   _TINT_PICKER_WIN_END             int   bot visible idx  init_picker, update_scroll_window
+#
+#   Resource flags                Type             Description     Set by
+#   ────────────────────────────  ───────────────  ──────────────  ───────────────────────────────────────────────────
+#   _TINT_PICKER_CURSOR_HIDDEN    bool             cursor hidden   install_signal_traps, hide_cursor, restore_terminal
+#   _TINT_PICKER_ALT_SCREEN       bool             alt-screen on   install_signal_traps, setup_terminal, restore_terminal
+#   _TINT_PICKER_TRAPS_INSTALLED  bool             traps set       install_signal_traps, restore_terminal
+#   _TINT_PICKER_SAVED_STTY       str              original stty   install_signal_traps, setup_terminal
+#   _TINT_PICKER_RENDERED_ROWS    int              rows on screen  init_picker, render_all, restore_terminal
+#   _TINT_PICKER_PREVIEWED        bool             preview active  init_picker, apply_preview_color
+#   _TINT_PICKER_INTERRUPTED      int (0/130/143)  signal code     install_signal_traps, traps
+#   _TINT_PICKER_ORIGINAL_BG      str              starting bg     init_picker
+#   _TINT_PICKER_ORIGINAL_FG      str              starting fg     init_picker
+#
+#   Palette arrays (0 = "unchanged" entry)
+#
+#   _tint_themes[i] is the source of truth — the full colon-delimited theme
+#   string (#bg:#fg:#00:...:#15). The other arrays are denormalized caches
+#   to avoid repeated string parsing in the render loop (runs every keystroke).
+#
+#   Name                      Type  Description
+#   ────────────────────────  ────  ────────────────────────────────────────────
+#   _tint_themes_name[i]      str   theme name (unique identifier)
+#   _tint_themes_bg[i]        str   bg hex (#RRGGBB) — for render-row color gate
+#   _tint_themes[i]           str   full theme value (#bg:#fg:#00:...:#15)
+#   _tint_themes_fg[i]        str   fg hex (#RRGGBB) — pre-lowercased from theme
+#   _tint_themes_bg_r/g/b[i]  int   bg RGB components (for ANSI 48;2;r;g;b)
+#   _tint_themes_fg_r/g/b[i]  int   fg RGB components (for ANSI 38;2;r;g;b)
+#
+#   Session context (locals in tint_pick, visible via dynamic scoping)
+#   Name                 Type  Description
+#   ───────────────────  ────  ────────────────────────────────
+#   _tint_saved_traps    str   caller's INT/TERM traps
+#   _tint_saved_exit     str   caller's EXIT trap
+#   _tint_esc_timeout    str   escape sequence timeout
+#   _tint_read_timeout   str   keystroke polling timeout
+#   _tint_palette_count  int   number of palette entries
+#   _tint_last_idx       int   alias for _TINT_PICKER_TOTAL - 1
+
+# --- Picker: Terminal Helpers ---
+
+# _tint_hide_cursor - Hide the terminal cursor and set the hidden flag
+#
+# Sets: _TINT_PICKER_CURSOR_HIDDEN
+# Flag set before write so a signal between them errs on the safe side
+# (_tint_restore_terminal shows a cursor that was never hidden — harmless no-op).
+_tint_hide_cursor() { _TINT_PICKER_CURSOR_HIDDEN=1; printf '\e[?25l' >/dev/tty; }
+
+# _tint_get_terminal_height - Get the number of terminal lines
+#
+# Stdout: integer line count (defaults to 24)
+_tint_get_terminal_height() {
+    local n
+    n=$(tput lines 2>/dev/null) || n="${LINES:-24}"
+    case "$n" in *[!0-9]*|"") n=24 ;; esac
+    printf '%s' "$n"
+}
+
+# _tint_erase_picker - Clear all picker output from the terminal
+#
+# Cursor is on the scroll indicator line (N rows below first palette row,
+# which is 1 line below the hint line).
+# Move up to the hint line and erase everything below.
+# Note: if a signal fires mid-render, _TINT_PICKER_RENDERED_ROWS may not match
+# the actual cursor position, causing \e[J to clear a few extra lines.
+# Terminal clamps cursor-up at row 1, so this is cosmetic and transient.
+_tint_erase_picker() {
+    local n="${_TINT_PICKER_RENDERED_ROWS:-0}"
+    if [ "$n" -gt 0 ]; then
+        printf '\e[%dA' "$(( n + 1 ))" >/dev/tty
+    fi
+    # \e[J clears from cursor to end of screen without scrolling
+    printf '\r\e[J' >/dev/tty
+}
+
+# --- Picker: Teardown ---
+
+# _tint_restore_original_colors - Restore terminal to pre-picker colors
+#
+# Uses the best available strategy:
+#   1. Original bg matched a known theme → apply full theme (bg + ANSI),
+#      using queried fg if available (user may have set fg independently)
+#   2. Original bg queried but no theme match → set bg + fg, reset ANSI
+#      palette to terminal defaults (can't query individual ANSI colors)
+#   3. Nothing queried → full reset (OSC 110 + 111 + 104)
+#
+# No-op if no preview was ever applied (_TINT_PICKER_PREVIEWED=0), because
+# terminal state hasn't been modified.
+#
+# Reads: _TINT_PICKER_PREVIEWED, _TINT_PICKER_ORIGINAL_THEME_IDX, _TINT_PICKER_ORIGINAL_BG,
+#   _TINT_PICKER_ORIGINAL_FG, _tint_themes[] (via dynamic scoping)
+_tint_restore_original_colors() {
+    if [ "${_TINT_PICKER_PREVIEWED:-0}" -eq 0 ]; then return; fi
+    # shellcheck disable=SC3054
+    if [ "${_TINT_PICKER_ORIGINAL_THEME_IDX:-0}" -gt 0 ] && [ -n "${_tint_themes[$_TINT_PICKER_ORIGINAL_THEME_IDX]+x}" ]; then
+        # Original bg matched a known theme — restore bg + ANSI from theme.
+        # Use queried fg if available; otherwise let the theme's fg apply.
+        # shellcheck disable=SC3054
+        if [ -n "${_TINT_PICKER_ORIGINAL_FG:-}" ]; then
+            tint_set "${_tint_themes[$_TINT_PICKER_ORIGINAL_THEME_IDX]}" "$_TINT_PICKER_ORIGINAL_FG"
+        else
+            tint_set "${_tint_themes[$_TINT_PICKER_ORIGINAL_THEME_IDX]}"
+        fi
+    elif [ -n "${_TINT_PICKER_ORIGINAL_BG:-}" ]; then
+        if [ -z "${_TINT_PICKER_ORIGINAL_FG:-}" ]; then
+            # Can't restore fg (query failed) — reset to terminal default
+            ( printf '\033]110\033\\' >/dev/tty ) 2>/dev/null || true
+        fi
+        tint_set "$_TINT_PICKER_ORIGINAL_BG" "${_TINT_PICKER_ORIGINAL_FG:-}"
+        # No theme match and no way to query ANSI originals (no terminal
+        # supports querying all 16 ANSI colors). Resetting to defaults is
+        # the least-bad option: it restores the terminal's configured theme
+        # palette rather than leaving previewed ANSI colors stuck.
+        ( printf '\033]104\033\\' >/dev/tty ) 2>/dev/null || true
+    else
+        tint_reset
+    fi
+}
+
+# _tint_restore_terminal - Unified teardown for all exit paths
+#
+# Idempotent: safe to call multiple times (signal handler + normal return).
+# Uses resource flags to skip work that was never started or already undone.
+# Delegates color restoration to _tint_restore_original_colors.
+#
+# Reads: _TINT_PICKER_EXIT_REASON (decides whether to restore original theme)
+_tint_restore_terminal() {
+    if [ "${_TINT_PICKER_CURSOR_HIDDEN:-0}" -eq 1 ]; then
+        printf '\e[?25h' >/dev/tty
+        _TINT_PICKER_CURSOR_HIDDEN=0
+    fi
+    if [ "${_TINT_PICKER_RENDERED_ROWS:-0}" -gt 0 ]; then
+        _tint_erase_picker
+        _TINT_PICKER_RENDERED_ROWS=0
+    fi
+    if [ -n "${_TINT_PICKER_SAVED_STTY:-}" ]; then
+        stty "$_TINT_PICKER_SAVED_STTY" </dev/tty 2>/dev/null
+    fi
+    # Exit the alternate screen buffer — terminal restores the contents
+    # that were on screen before the picker entered. OSC bg/fg/palette
+    # state set during the session persists; only the buffer view is
+    # swapped back. Order matters: do this before _tint_restore_original_colors
+    # so the user's original buffer is what receives the restored colors.
+    if [ "${_TINT_PICKER_ALT_SCREEN:-0}" -eq 1 ]; then
+        printf '\e[?1049l' >/dev/tty
+        _TINT_PICKER_ALT_SCREEN=0
+    fi
+    if [ "$_TINT_PICKER_EXIT_REASON" != "confirm" ]; then
+        _tint_restore_original_colors
+    fi
+    if [ "${_TINT_PICKER_TRAPS_INSTALLED:-0}" -eq 1 ]; then
+        trap - EXIT INT TERM WINCH
+        eval "${_tint_saved_traps:-}"
+        eval "${_tint_saved_exit:-}"
+        _TINT_PICKER_TRAPS_INSTALLED=0
+    fi
+}
+
+# --- Picker: Model ---
+
+# _tint_model_move_cursor <direction> - Update cursor index with wrapping
+#
+# Pure model: no terminal I/O.
+#
+# Sets: _TINT_PICKER_IDX, _TINT_PICKER_OLD_IDX
+_tint_model_move_cursor() {
+    _TINT_PICKER_OLD_IDX=$_TINT_PICKER_IDX
+    if [ "$1" = "up" ]; then
+        _TINT_PICKER_IDX=$(( _TINT_PICKER_IDX > 0 ? _TINT_PICKER_IDX - 1 : _tint_last_idx ))
+    else
+        _TINT_PICKER_IDX=$(( _TINT_PICKER_IDX < _tint_last_idx ? _TINT_PICKER_IDX + 1 : 0 ))
+    fi
+}
+
+# _tint_update_scroll_window - Compute the scroll window that keeps _TINT_PICKER_IDX visible
+#
+# Pure model: no terminal I/O.
+# Edge-triggered: only shifts the window when the cursor would move off-screen.
+# This minimizes full redraws (most keypresses stay within the window and use
+# incremental rendering via _tint_render_changed_rows).
+#
+# Sets: _TINT_PICKER_WIN_START, _TINT_PICKER_WIN_END, _TINT_PICKER_SCROLLED
+_tint_update_scroll_window() {
+    local old_start=$_TINT_PICKER_WIN_START
+    if [ "$_TINT_PICKER_VISIBLE" -ge "$_TINT_PICKER_TOTAL" ]; then
+        _TINT_PICKER_WIN_START=0
+        _TINT_PICKER_WIN_END=$(( _TINT_PICKER_TOTAL - 1 ))
+    elif [ "${_TINT_PICKER_WIN_END:-0}" -eq 0 ] && [ "$_TINT_PICKER_RENDERED_ROWS" -eq 0 ]; then
+        # Initial window: center around cursor
+        local half=$(( _TINT_PICKER_VISIBLE / 2 ))
+        _TINT_PICKER_WIN_START=$(( _TINT_PICKER_IDX - half ))
+        if [ "$_TINT_PICKER_WIN_START" -lt 0 ]; then _TINT_PICKER_WIN_START=0; fi
+        _TINT_PICKER_WIN_END=$(( _TINT_PICKER_WIN_START + _TINT_PICKER_VISIBLE - 1 ))
+        if [ "$_TINT_PICKER_WIN_END" -ge "$_TINT_PICKER_TOTAL" ]; then
+            _TINT_PICKER_WIN_END=$(( _TINT_PICKER_TOTAL - 1 ))
+            _TINT_PICKER_WIN_START=$(( _TINT_PICKER_WIN_END - _TINT_PICKER_VISIBLE + 1 ))
+        fi
+    elif [ "$_TINT_PICKER_IDX" -lt "$_TINT_PICKER_WIN_START" ]; then
+        _TINT_PICKER_WIN_START=$_TINT_PICKER_IDX
+        _TINT_PICKER_WIN_END=$(( _TINT_PICKER_WIN_START + _TINT_PICKER_VISIBLE - 1 ))
+    elif [ "$_TINT_PICKER_IDX" -gt "$_TINT_PICKER_WIN_END" ]; then
+        _TINT_PICKER_WIN_END=$_TINT_PICKER_IDX
+        _TINT_PICKER_WIN_START=$(( _TINT_PICKER_WIN_END - _TINT_PICKER_VISIBLE + 1 ))
+    fi
+    if [ "$_TINT_PICKER_WIN_START" -ne "$old_start" ]; then
+        _TINT_PICKER_SCROLLED=1
+    else
+        _TINT_PICKER_SCROLLED=0
+    fi
+}
+
+# --- Picker: View ---
+
+# _tint_render_hint_line - Print the keyboard hint line above the picker
+_tint_render_hint_line() {
+    printf '\e[2m  \xe2\x86\x91/\xe2\x86\x93 Navigate   Enter: Select   Esc: Cancel\e[0m\n' >/dev/tty
+}
+
+# _tint_render_row <row_idx> <highlighted> - Append one formatted picker row to _tint_picker_buf
+#
+# Accessed via dynamic scoping from the caller. Each row has:
+#   - A 2-char prefix: "> " (cursor), "* " (default/current), or "  "
+#   - A colored background strip with index, hex value, and name
+#
+# Reads: _TINT_PICKER_DEFAULT, _TINT_PICKER_TOTAL, _TINT_PICKER_ORIGINAL_BG,
+#   _tint_themes_name[], _tint_themes_bg[], _tint_themes_bg_r/g/b[], _tint_themes_fg_r/g/b[]
+_tint_render_row() {
+    local row_idx="$1" highlighted="$2"
+    local name hex r g b num_width marker label row
+    num_width=${#_TINT_PICKER_TOTAL}
+
+    if [ "$row_idx" -eq 0 ]; then
+        if [ -n "$_TINT_PICKER_ORIGINAL_BG" ]; then name="(unchanged)"; else name="(reset to default)"; fi
+        hex="$_TINT_PICKER_ORIGINAL_BG"
+    else
+        # shellcheck disable=SC3054
+        name="${_tint_themes_name[$row_idx]}"
+        # shellcheck disable=SC3054
+        hex="${_tint_themes_bg[$row_idx]}"
+    fi
+
+    # Row 0 and the matching palette entry both get * (same color).
+    if [ "$highlighted" -eq 1 ]; then
+        marker="> "
+    elif [ "$row_idx" -eq "$_TINT_PICKER_DEFAULT" ] || { [ "$row_idx" -eq 0 ] && [ "$_TINT_PICKER_DEFAULT" -gt 0 ]; }; then
+        marker="* "
+    else
+        marker="  "
+    fi
+
+    local padded
+    # shellcheck disable=SC3045
+    printf -v label '%*d.  %s' "$num_width" "$((row_idx + 1))" "$name"
+    # shellcheck disable=SC3045
+    printf -v padded "%-${_TINT_PICKER_ROW_WIDTH}s" "$label"
+
+    # hex non-empty means we have color data (RGB arrays populated) —
+    # render with colored background. Empty for row 0 when original bg unknown.
+    if [ -n "$hex" ]; then
+        # shellcheck disable=SC3054
+        r="${_tint_themes_bg_r[$row_idx]}" g="${_tint_themes_bg_g[$row_idx]}" b="${_tint_themes_bg_b[$row_idx]}"
+        # shellcheck disable=SC3054
+        local fg_r="${_tint_themes_fg_r[$row_idx]}" fg_g="${_tint_themes_fg_g[$row_idx]}" fg_b="${_tint_themes_fg_b[$row_idx]}"
+        # No SGR 2 dim: would distort each theme's actual fg preview.
+        # shellcheck disable=SC3045
+        printf -v row '%s\e[38;2;%d;%d;%d;48;2;%d;%d;%dm %s\e[0m' "$marker" "$fg_r" "$fg_g" "$fg_b" "$r" "$g" "$b" "$padded"
+    else
+        row="${marker}${padded}"
+    fi
+    # shellcheck disable=SC3054,SC3024,SC3003
+    _tint_picker_buf+=$'\r\e[K'"${row}"$'\n'
+}
+
+# _tint_apply_preview_color - Apply the highlighted theme as a live preview
+#
+# Provides live preview as the user navigates the picker.
+# Always previews fg alongside bg (via auto-compute) even when the original
+# fg is unknown — skipping fg would leave text unreadable on light themes.
+#
+# Sets: _TINT_PICKER_PREVIEWED
+_tint_apply_preview_color() {
+    if [ "$_TINT_PICKER_IDX" -eq 0 ]; then
+        _tint_restore_original_colors
+        return
+    else
+        _TINT_PICKER_PREVIEWED=1
+        # shellcheck disable=SC3054
+        tint_set "${_tint_themes[$_TINT_PICKER_IDX]}"
+    fi
+}
+
+# _tint_render_scroll_indicator - Append scroll indicator to _tint_picker_buf
+#
+# Shows how many entries are hidden above/below (e.g., "↑ 3 more · ↓ 5 more").
+_tint_render_scroll_indicator() {
+    # shellcheck disable=SC3024,SC3003
+    _tint_picker_buf+=$'\r\e[K'
+    local indicator=""
+    if [ "$_TINT_PICKER_WIN_START" -gt 0 ] && [ "$_TINT_PICKER_WIN_END" -lt $(( _TINT_PICKER_TOTAL - 1 )) ]; then
+        # shellcheck disable=SC3045
+        printf -v indicator '\e[2m  \xe2\x86\x91 %d more \xc2\xb7 \xe2\x86\x93 %d more\e[0m' "$_TINT_PICKER_WIN_START" "$(( _TINT_PICKER_TOTAL - 1 - _TINT_PICKER_WIN_END ))"
+    elif [ "$_TINT_PICKER_WIN_START" -gt 0 ]; then
+        # shellcheck disable=SC3045
+        printf -v indicator '\e[2m  \xe2\x86\x91 %d more\e[0m' "$_TINT_PICKER_WIN_START"
+    elif [ "$_TINT_PICKER_WIN_END" -lt $(( _TINT_PICKER_TOTAL - 1 )) ]; then
+        # shellcheck disable=SC3045
+        printf -v indicator '\e[2m  \xe2\x86\x93 %d more\e[0m' "$(( _TINT_PICKER_TOTAL - 1 - _TINT_PICKER_WIN_END ))"
+    fi
+    # shellcheck disable=SC3024
+    _tint_picker_buf+="$indicator"
+}
+
+# _tint_render_all - Full redraw of the picker
+#
+# Repaints every visible row plus the scroll indicator. Output is
+# buffered into _tint_picker_buf and flushed in a single write() to avoid
+# flicker and reduce PTY backpressure (especially over SSH).
+#
+# Callers must update model state (_tint_update_scroll_window) first.
+#
+# Sets: _TINT_PICKER_RENDERED_ROWS
+_tint_render_all() {
+    local i highlighted
+
+    # Build entire frame into _tint_picker_buf, then write in one shot.
+    local _tint_picker_buf=""
+
+    # Move cursor up to first row position (for redraw).
+    if [ "${_TINT_PICKER_RENDERED_ROWS:-0}" -gt 0 ]; then
+        # shellcheck disable=SC3045
+        printf -v _tint_picker_buf '\e[%dA' "$(( _TINT_PICKER_RENDERED_ROWS ))"
+    fi
+
+    # Draw each visible row (appends to _tint_picker_buf via dynamic scoping)
+    local rows_printed=0
+    i=$_TINT_PICKER_WIN_START
+    while [ "$i" -le "$_TINT_PICKER_WIN_END" ]; do
+        if [ "$i" -eq "$_TINT_PICKER_IDX" ]; then highlighted=1; else highlighted=0; fi
+        _tint_render_row "$i" "$highlighted"
+        rows_printed=$(( rows_printed + 1 ))
+        i=$(( i + 1 ))
+    done
+
+    _tint_render_scroll_indicator
+    printf '%s' "$_tint_picker_buf" >/dev/tty
+    _TINT_PICKER_RENDERED_ROWS=$rows_printed
+}
+
+# _tint_render_changed_rows <old_idx> - Incremental repaint of two changed rows
+#
+# Only repaints the previously highlighted row (unhighlight) and the newly
+# highlighted row (highlight). Used when the scroll window hasn't changed,
+# reducing output from ~2KB (full frame) to ~200B (two rows). This prevents
+# PTY buffer deadlocks when the master side isn't draining continuously.
+#
+# Reads: _TINT_PICKER_IDX, _TINT_PICKER_WIN_START, _TINT_PICKER_RENDERED_ROWS
+_tint_render_changed_rows() {
+    local old_idx="$1"
+    # shellcheck disable=SC3024,SC3003
+    local _tint_picker_buf="" _tmp=""
+    local old_pos=$(( old_idx - _TINT_PICKER_WIN_START ))
+    local new_pos=$(( _TINT_PICKER_IDX - _TINT_PICKER_WIN_START ))
+
+    # Move from scroll indicator line up to old row
+    # shellcheck disable=SC3045
+    printf -v _tint_picker_buf '\e[%dA' "$(( _TINT_PICKER_RENDERED_ROWS - old_pos ))"
+
+    # Render old row (unhighlighted) — appends \r\e[K...row...\n to _tint_picker_buf
+    _tint_render_row "$old_idx" 0
+
+    # Cursor is now at old_pos + 1; navigate to new_pos
+    local diff=$(( new_pos - old_pos - 1 ))
+    if [ "$diff" -gt 0 ]; then
+        # shellcheck disable=SC3045
+        printf -v _tmp '\e[%dB' "$diff"
+        # shellcheck disable=SC3024
+        _tint_picker_buf+="$_tmp"
+    elif [ "$diff" -lt 0 ]; then
+        # shellcheck disable=SC3045
+        printf -v _tmp '\e[%dA' "$(( -diff ))"
+        # shellcheck disable=SC3024
+        _tint_picker_buf+="$_tmp"
+    fi
+
+    # Render new row (highlighted)
+    _tint_render_row "$_TINT_PICKER_IDX" 1
+
+    # Move back to scroll indicator line (cursor is at new_pos + 1)
+    local down=$(( _TINT_PICKER_RENDERED_ROWS - new_pos - 1 ))
+    if [ "$down" -gt 0 ]; then
+        # shellcheck disable=SC3045
+        printf -v _tmp '\e[%dB' "$down"
+        # shellcheck disable=SC3024
+        _tint_picker_buf+="$_tmp"
+    fi
+
+    printf '%s' "$_tint_picker_buf" >/dev/tty
+}
+
+# _tint_render_cursor_move - Render after a cursor move
+#
+# Applies preview color, then uses incremental rendering when the scroll
+# window didn't change, falling back to full redraw when scrolling occurred.
+#
+# Reads: _TINT_PICKER_SCROLLED, _TINT_PICKER_OLD_IDX
+_tint_render_cursor_move() {
+    _tint_apply_preview_color
+    # Render is non-fatal (signal races shouldn't abort the picker). Plain
+    # `cmd || true` inside a function called under `set -e` doesn't suppress
+    # errexit on bash 3.2 (macOS). Save and restore the errexit option around
+    # the render calls instead — works on bash 3.2 and 4+.
+    local _e=0
+    case $- in *e*) _e=1 ;; esac
+    set +e
+    if [ "$_TINT_PICKER_SCROLLED" -eq 1 ]; then
+        _tint_render_all
+    else
+        _tint_render_changed_rows "$_TINT_PICKER_OLD_IDX"
+    fi
+    [ "$_e" = "1" ] && set -e
+    return 0
+}
+
+# _tint_handle_resize - Recalculate layout and redraw after terminal resize
+#
+# Called from the picker loop when SIGWINCH sets _TINT_PICKER_RESIZED.
+# Erases the current picker, recalculates the visible window size,
+# reprints the hint line, and does a full redraw.
+#
+# Sets: _TINT_PICKER_VISIBLE, _TINT_PICKER_RESIZED
+_tint_handle_resize() {
+    _TINT_PICKER_RESIZED=0
+
+    _tint_erase_picker
+
+    # Recalculate visible rows from new terminal height
+    local term_lines
+    term_lines=$(_tint_get_terminal_height)
+    _TINT_PICKER_VISIBLE=$(( term_lines - 2 ))
+    if [ "$_TINT_PICKER_VISIBLE" -gt "$_TINT_PICKER_TOTAL" ]; then _TINT_PICKER_VISIBLE=$_TINT_PICKER_TOTAL; fi
+    if [ "$_TINT_PICKER_VISIBLE" -lt 1 ]; then _TINT_PICKER_VISIBLE=1; fi
+
+    # Reset scroll window state to trigger re-centering around current cursor
+    _TINT_PICKER_WIN_END=0
+    _TINT_PICKER_RENDERED_ROWS=0
+
+    # Reprint hint line and full frame
+    _tint_render_hint_line
+    _tint_update_scroll_window
+    _tint_render_all
+}
+
+# --- Picker: Input ---
+
+# _tint_read_key - Read one logical keypress
+#
+# Reads raw bytes from /dev/tty and normalizes escape sequences into
+# logical key names. Uses _tint_esc_timeout (set in _tint_setup_terminal)
+# to distinguish bare Escape from arrow key sequences.
+#
+# Sets: _TINT_PICKER_KEY - normalized key name:
+#   "up" | "down"     Arrow/vim keys
+#   "confirm"         Enter key
+#   "cancel"          Bare Esc (no following sequence)
+#   "q"               Q key
+#   ""                Timeout (no key pressed)
+# Returns: 0 on success or timeout, 1 on EOF/error
+_tint_read_key() {
+    _TINT_PICKER_KEY=""
+    local key key2 key3
+    if ! IFS= read -rn1 -t "$_tint_read_timeout" key </dev/tty; then
+        # Timeout with no data — loop back to check signals.
+        # If a byte arrived at the timeout boundary, key is non-empty;
+        # fall through to process it normally rather than aborting.
+        if [ -z "${key:-}" ]; then return 0; fi
+    fi
+    case "$key" in
+        "$_TINT_ESC")
+            # CSI: ESC [ A/B/C/D (most terminals)
+            # SS3: ESC O A/B/C/D (some terminals, notably older xterm modes)
+            if IFS= read -rn1 -t "$_tint_esc_timeout" key2 </dev/tty 2>/dev/null; then
+                case "$key2" in
+                    "["|"O")
+                        IFS= read -rn1 -t "$_tint_esc_timeout" key3 </dev/tty 2>/dev/null || return 0
+                        case "$key3" in
+                            A|D) _TINT_PICKER_KEY=up ;;   # Up/Left → up
+                            B|C) _TINT_PICKER_KEY=down ;;  # Down/Right → down
+                        esac
+                        ;;
+                esac
+            else
+                _TINT_PICKER_KEY=cancel
+            fi
+            ;;
+        h|k) _TINT_PICKER_KEY=up ;;
+        l|j) _TINT_PICKER_KEY=down ;;
+        q)   _TINT_PICKER_KEY=q ;;
+        "")  _TINT_PICKER_KEY=confirm ;;
+    esac
+}
+
+# --- Picker: Session ---
+
+# _tint_accept_selection - Confirm selection: teardown, apply theme, print result
+#
+# Model: sets _TINT_PICKER_EXIT_REASON=confirm so _tint_restore_terminal skips
+# background restore. View: tears down terminal, applies selected theme,
+# and prints theme name to stdout.
+#
+# Stdout: theme name (empty if unchanged/reset)
+_tint_accept_selection() {
+    # Model: mark as confirmed
+    _TINT_PICKER_EXIT_REASON=confirm
+    # View: teardown and apply final theme
+    _tint_restore_terminal
+    if [ "$_TINT_PICKER_IDX" -eq 0 ]; then
+        _tint_restore_original_colors
+    else
+        # shellcheck disable=SC3054
+        tint_set "${_tint_themes[$_TINT_PICKER_IDX]}"
+        # shellcheck disable=SC3054
+        printf '%s' "${_tint_themes_name[$_TINT_PICKER_IDX]}"
+    fi
+}
+
+
+# _tint_load_palette_arrays - Parse palette into parallel arrays with pre-computed RGB/fg
+#
+# Single read pass over $TINT_PALETTE.
+#
+# Sets: _tint_palette_count, _TINT_PICKER_TOTAL, _tint_last_idx (via dynamic scoping),
+#   _tint_themes_name[], _tint_themes_bg[], _tint_themes[], _tint_themes_fg[],
+#   _tint_themes_bg_r/g/b[], _tint_themes_fg_r/g/b[]
+_tint_load_palette_arrays() {
+    local line name theme bg
+    i=0
+    while IFS= read -r line; do
+        [ -z "$line" ] && continue
+        name="${line%%:*}"
+        theme="${line#*:}"
+        bg="${theme%%:*}"
+        # _tint_load_palette validates format, but guard here too for direct callers.
+        # Both bg and fg must be valid before we increment i, otherwise partial
+        # entries pollute the arrays (bg stored but fg missing).
+        case "$bg" in '#'[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]) ;; *) continue ;; esac
+        # shellcheck disable=SC3057
+        local _fg_raw="${theme#*:}"
+        _fg_raw="${_fg_raw%%:*}"
+        case "$_fg_raw" in '#'[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]) ;; *) continue ;; esac
+        i=$((i + 1))
+        # shellcheck disable=SC3054
+        _tint_themes_name[i]="$name"
+        # shellcheck disable=SC3054
+        _tint_themes[i]="$theme"
+        # shellcheck disable=SC3054,SC3057,SC3052
+        _tint_themes_bg_r[i]=$((16#${bg:1:2}))
+        # shellcheck disable=SC3054,SC3057,SC3052
+        _tint_themes_bg_g[i]=$((16#${bg:3:2}))
+        # shellcheck disable=SC3054,SC3057,SC3052
+        _tint_themes_bg_b[i]=$((16#${bg:5:2}))
+        # printf -v: bash builtin (no fork). %02x always produces lowercase.
+        # Bash 3.2 (macOS) rejects array-element targets for printf -v, so
+        # write to a scalar then assign — works on bash 3.2+.
+        local _bg_hex
+        # shellcheck disable=SC3045,SC3054
+        printf -v _bg_hex '#%02x%02x%02x' "${_tint_themes_bg_r[$i]}" "${_tint_themes_bg_g[$i]}" "${_tint_themes_bg_b[$i]}"
+        # shellcheck disable=SC3054
+        _tint_themes_bg[i]="$_bg_hex"
+        # Lowercase fg hex (no fork). _fg_raw already validated above.
+        # printf %02x produces lowercase hex, matching the bg path above.
+        # shellcheck disable=SC3054,SC3057,SC3052
+        _tint_themes_fg_r[i]=$((16#${_fg_raw:1:2}))
+        # shellcheck disable=SC3054,SC3057,SC3052
+        _tint_themes_fg_g[i]=$((16#${_fg_raw:3:2}))
+        # shellcheck disable=SC3054,SC3057,SC3052
+        _tint_themes_fg_b[i]=$((16#${_fg_raw:5:2}))
+        local _fg_hex
+        # shellcheck disable=SC3045,SC3054
+        printf -v _fg_hex '#%02x%02x%02x' "${_tint_themes_fg_r[$i]}" "${_tint_themes_fg_g[$i]}" "${_tint_themes_fg_b[$i]}"
+        # shellcheck disable=SC3054
+        _tint_themes_fg[i]="$_fg_hex"
+    done <<EOF
+$TINT_PALETTE
+EOF
+    _tint_palette_count=$i
+    _TINT_PICKER_TOTAL=$(( _tint_palette_count + 1 ))
+    _tint_last_idx=$(( _TINT_PICKER_TOTAL - 1 ))
+}
+
+# _tint_report_osc11_error - Print diagnostic when OSC 11 detection fails
+#
+# Includes environment-specific hints for tmux and SSH.
+_tint_report_osc11_error() {
+    cat >&2 <<'ERRMSG'
+Error: terminal does not support OSC 11 (background color escape sequences).
+
+tint uses OSC 11 to get and set the terminal background color.
+Your terminal did not respond to the background color request,
+which means tint cannot preview or apply colors.
+ERRMSG
+    if [ -n "${TMUX:-}" ]; then
+        echo "  Hint: try running: tmux set -g allow-passthrough on" >&2
+    elif [ -n "${SSH_TTY:-}${SSH_CONNECTION:-}" ]; then
+        echo "  Hint: try reconnecting with: ssh -t" >&2
+    fi
+    printf '%s\n' "  Try: printf '\033]11;?\033\\\\'" >&2
+    printf '  A supported terminal will echo back the current background color.\n' >&2
+}
+
+# _tint_compute_unchanged_entry - Pre-compute RGB for the original background and foreground
+#
+# Sets: _tint_themes_bg_r[0], _tint_themes_bg_g[0], _tint_themes_bg_b[0],
+#        _tint_themes_fg_r[0], _tint_themes_fg_g[0], _tint_themes_fg_b[0]
+_tint_compute_unchanged_entry() {
+    if [ -n "$_TINT_PICKER_ORIGINAL_BG" ]; then
+        # shellcheck disable=SC3054,SC3057,SC3052
+        _tint_themes_bg_r[0]=$((16#${_TINT_PICKER_ORIGINAL_BG:1:2}))
+        # shellcheck disable=SC3054,SC3057,SC3052
+        _tint_themes_bg_g[0]=$((16#${_TINT_PICKER_ORIGINAL_BG:3:2}))
+        # shellcheck disable=SC3054,SC3057,SC3052
+        _tint_themes_bg_b[0]=$((16#${_TINT_PICKER_ORIGINAL_BG:5:2}))
+    fi
+    if [ -n "$_TINT_PICKER_ORIGINAL_FG" ]; then
+        # shellcheck disable=SC3054,SC3057,SC3052
+        _tint_themes_fg_r[0]=$((16#${_TINT_PICKER_ORIGINAL_FG:1:2}))
+        # shellcheck disable=SC3054,SC3057,SC3052
+        _tint_themes_fg_g[0]=$((16#${_TINT_PICKER_ORIGINAL_FG:3:2}))
+        # shellcheck disable=SC3054,SC3057,SC3052
+        _tint_themes_fg_b[0]=$((16#${_TINT_PICKER_ORIGINAL_FG:5:2}))
+    else
+        # No fg queried — use luma-based black or white
+        # shellcheck disable=SC3054
+        if [ $(( (_tint_themes_bg_r[0] * 299 + _tint_themes_bg_g[0] * 587 + _tint_themes_bg_b[0] * 114) / 1000 )) -gt 128 ]; then
+            _tint_themes_fg_r[0]=0; _tint_themes_fg_g[0]=0; _tint_themes_fg_b[0]=0
+        else
+            _tint_themes_fg_r[0]=255; _tint_themes_fg_g[0]=255; _tint_themes_fg_b[0]=255
+        fi
+    fi
+}
+
+# _tint_find_default_index <current> - Match current value to a palette index
+#
+# Accepts a theme name, #RRGGBB hex, or full theme string (#bg:#fg:#00:...).
+# Names match _tint_themes_name[]; hex/full strings match _tint_themes_bg[],
+# with fg as a tiebreaker when a full theme string is provided.
+#
+# Sets: _TINT_PICKER_IDX, _TINT_PICKER_DEFAULT (if a match is found)
+# Reads: _tint_palette_count, _tint_themes_name[], _tint_themes_bg[] (via dynamic scoping)
+_tint_find_default_index() {
+    local current="$1"
+    [ -z "$current" ] && return 0
+    local i=1
+    # Try name match first (the common case for theme-based workflows)
+    while [ "$i" -le "$_tint_palette_count" ]; do
+        # shellcheck disable=SC3054
+        if [ "${_tint_themes_name[$i]}" = "$current" ]; then
+            _TINT_PICKER_IDX=$i
+            _TINT_PICKER_DEFAULT=$_TINT_PICKER_IDX
+            return 0
+        fi
+        i=$((i + 1))
+    done
+    # Fall back to hex match (for bare #RRGGBB input or full theme strings).
+    # Theme disambiguation for restore is handled separately in _tint_init_picker
+    # using bg+fg matching against the terminal's queried colors.
+    local current_hex current_fg="" resolve_input="$current"
+    # Full theme strings (#bg:#fg:#00:...) aren't valid tint_resolve input.
+    # Extract bg for resolving, and fg for disambiguation when themes share a bg.
+    case "$resolve_input" in
+        *:*)
+            current_fg="${resolve_input#*:}"
+            current_fg=$(printf '%s' "${current_fg%%:*}" | tr '[:upper:]' '[:lower:]')
+            resolve_input="${resolve_input%%:*}"
+            ;;
+    esac
+    current_hex=$(tint_resolve "$resolve_input" 2>/dev/null) || return 0
+    # tint_resolve returns full theme string for names; extract bg hex
+    current_hex=$(printf '%s' "${current_hex%%:*}" | tr '[:upper:]' '[:lower:]')
+    [ -z "$current_hex" ] && return 0
+    # When fg is available (full theme string input), prefer bg+fg match.
+    # Falls back to first bg-only match if fg doesn't narrow to one.
+    local _first_bg_match=0
+    i=1
+    while [ "$i" -le "$_tint_palette_count" ]; do
+        # shellcheck disable=SC3054
+        if [ "${_tint_themes_bg[$i]}" = "$current_hex" ]; then
+            if [ -n "$current_fg" ]; then
+                # shellcheck disable=SC3054
+                if [ "${_tint_themes_fg[$i]}" = "$current_fg" ]; then
+                    _TINT_PICKER_IDX=$i
+                    _TINT_PICKER_DEFAULT=$_TINT_PICKER_IDX
+                    return 0
+                fi
+                if [ "$_first_bg_match" -eq 0 ]; then _first_bg_match=$i; fi
+            else
+                _TINT_PICKER_IDX=$i
+                _TINT_PICKER_DEFAULT=$_TINT_PICKER_IDX
+                return 0
+            fi
+        fi
+        i=$((i + 1))
+    done
+    # No bg+fg match found — fall back to first bg-only match
+    if [ "$_first_bg_match" -gt 0 ]; then
+        _TINT_PICKER_IDX=$_first_bg_match
+        _TINT_PICKER_DEFAULT=$_TINT_PICKER_IDX
+    fi
+}
+
+# _tint_install_signal_traps - Save caller traps and install picker signal handlers
+#
+# EXIT is saved separately — in command substitution (hex=$(tint_pick)),
+# restoring EXIT would fire the caller's trap prematurely.
+# Uses BASH_SUBSHELL (Bash 3.0+) instead of BASHPID (Bash 4.0+)
+# for macOS Bash 3.2 compatibility.
+#
+# Sets: _tint_saved_traps, _tint_saved_exit, _TINT_PICKER_INTERRUPTED,
+#   _TINT_PICKER_RESIZED, _TINT_PICKER_CURSOR_HIDDEN, _TINT_PICKER_EXIT_REASON,
+#   _TINT_PICKER_KEY, _TINT_PICKER_SAVED_STTY, _TINT_PICKER_TRAPS_INSTALLED
+_tint_install_signal_traps() {
+    _tint_saved_traps=$(trap -p INT TERM WINCH 2>/dev/null || true)
+    # shellcheck disable=SC3028
+    if [ "${BASH_SUBSHELL:-0}" -eq 0 ]; then
+        _tint_saved_exit=$(trap -p EXIT 2>/dev/null || true)
+    else
+        _tint_saved_exit=""
+    fi
+
+    # Flag-based signal handling avoids killing the parent shell when
+    # sourced as a library. The read loop checks _TINT_PICKER_INTERRUPTED.
+    _TINT_PICKER_INTERRUPTED=0
+    _TINT_PICKER_RESIZED=0
+    _TINT_PICKER_CURSOR_HIDDEN=0
+    _TINT_PICKER_ALT_SCREEN=0
+    _TINT_PICKER_EXIT_REASON=""
+    _TINT_PICKER_KEY=""
+    # Clear stale stty snapshot so a signal between trap install and the
+    # new stty -g can't restore wrong state.
+    _TINT_PICKER_SAVED_STTY=""
+    # Install traps before stty -echo so a signal in the gap can't leave
+    # the terminal with echo disabled. Every interrupt path runs the
+    # same teardown prefix (mark interrupt + restore terminal); INT/TERM
+    # additionally record the signal-derived exit code (130 = 128+SIGINT,
+    # 143 = 128+SIGTERM). Factored into one local so the shared prefix
+    # has a single source of truth.
+    local on_interrupt='_TINT_PICKER_EXIT_REASON=interrupt; _tint_restore_terminal'
+    # The double-quoted form expands $on_interrupt now (at trap install)
+    # rather than when the signal fires — exactly what we want, since it
+    # bakes the shared prefix into each trap body as a literal string.
+    # shellcheck disable=SC2064
+    trap "$on_interrupt" EXIT
+    # shellcheck disable=SC2064
+    trap "$on_interrupt; _TINT_PICKER_INTERRUPTED=130" INT
+    # shellcheck disable=SC2064
+    trap "$on_interrupt; _TINT_PICKER_INTERRUPTED=143" TERM
+    trap '_TINT_PICKER_RESIZED=1' WINCH
+    _TINT_PICKER_TRAPS_INSTALLED=1
+}
+
+# _tint_setup_terminal - Configure terminal for picker: stty, cursor, timeouts
+#
+# Sets: _TINT_PICKER_SAVED_STTY, _tint_esc_timeout, _tint_read_timeout
+# Returns: non-zero if interrupted during setup
+_tint_setup_terminal() {
+    if [ "$_TINT_PICKER_INTERRUPTED" -ne 0 ]; then _tint_restore_terminal; return "$_TINT_PICKER_INTERRUPTED"; fi
+    # Enter the alternate screen buffer. Treats the picker as a modal app:
+    # the prior screen contents are saved by the terminal and restored on
+    # exit (via \e[?1049l in _tint_restore_terminal). The picker can use
+    # the full terminal height regardless of where the user invoked it
+    # from, and quitting leaves no trace in the user's scrollback.
+    #
+    # Set the flag *before* writing the escape: if a signal fires between
+    # the assignment and the printf, teardown will emit \e[?1049l on a
+    # buffer that never entered alt-screen — but \e[?1049l is a no-op when
+    # not in alt-screen, so the conservative pattern is harmless. The
+    # opposite order would lose the exit on interrupt, leaving the user
+    # stuck in the alt-screen buffer. Matches _tint_hide_cursor's pattern.
+    if [ "${_TINT_PICKER_ALT_SCREEN:-0}" -eq 0 ]; then
+        _TINT_PICKER_ALT_SCREEN=1
+        printf '\e[?1049h' >/dev/tty
+    fi
+    # Non-canonical mode: -echo suppresses keystroke echo, -icanon disables
+    # line buffering. Without -icanon, bash's read -n1 toggles canonical mode
+    # per call, creating a window for escape sequence byte delays.
+    _TINT_PICKER_SAVED_STTY=$(stty -g </dev/tty 2>/dev/null)
+    stty -echo -icanon </dev/tty 2>/dev/null
+    _tint_hide_cursor
+
+    # Timing constants for _tint_read_key:
+    #
+    #   _tint_esc_timeout  — distinguishes bare Escape (cancel) from the start
+    #     of an arrow key sequence (ESC + "[" + letter). With -icanon set above,
+    #     bytes arrive without line-buffering delays, so 10ms suffices. On very
+    #     slow links where arrow keys don't register, vim keys (h/j/k/l) bypass
+    #     this timeout entirely since they're single bytes.
+    #
+    #   _tint_read_timeout — main loop polling interval. Short enough to feel
+    #     responsive, long enough that the signal-check loop doesn't busy-wait.
+    #
+    # Bash 4+ supports fractional timeouts; Bash 3.x needs integer (1s min).
+    _tint_esc_timeout=0.01
+    # shellcheck disable=SC3028
+    _tint_read_timeout=0.5
+    # shellcheck disable=SC3028
+    if [ "${BASH_VERSINFO[0]:-3}" -lt 4 ]; then
+        _tint_esc_timeout=1
+        _tint_read_timeout=1
+    fi
+    if [ "$_TINT_PICKER_INTERRUPTED" -ne 0 ]; then _tint_restore_terminal; return "$_TINT_PICKER_INTERRUPTED"; fi
+    _tint_render_hint_line
+    # Model: compute scroll window for initial cursor position
+    _tint_update_scroll_window
+    # View: apply preview color and render initial frame
+    _tint_apply_preview_color
+    _tint_render_all
+}
+
+# _tint_init_picker [<current>] - Set up picker session state
+#
+# Loads palette, queries terminal, installs traps, renders initial frame.
+#
+# Sets (via dynamic scoping from tint_pick):
+#   _tint_themes_name[], _tint_themes_bg[], _tint_themes_fg[],
+#   _tint_themes_bg_r/g/b[], _tint_themes_fg_r/g/b[],
+#   _tint_saved_traps, _tint_saved_exit, _tint_esc_timeout, _tint_read_timeout,
+#   _tint_palette_count, _tint_last_idx
+# Returns: non-zero on failure (no bash, no tty, no OSC 11 support)
+_tint_init_picker() {
+    _TINT_PICKER_IDX=0
+    _TINT_PICKER_DEFAULT=0
+
+    _tint_load_palette_arrays
+
+    # Calculate visible window size based on terminal height
+    local term_lines
+    term_lines=$(_tint_get_terminal_height)
+    _TINT_PICKER_VISIBLE=$(( term_lines - 2 ))  # reserve hint + scroll indicator
+    if [ "$_TINT_PICKER_VISIBLE" -gt "$_TINT_PICKER_TOTAL" ]; then _TINT_PICKER_VISIBLE=$_TINT_PICKER_TOTAL; fi
+    if [ "$_TINT_PICKER_VISIBLE" -lt 1 ]; then _TINT_PICKER_VISIBLE=1; fi
+    _TINT_PICKER_RENDERED_ROWS=0
+    _TINT_PICKER_WIN_START=0
+    _TINT_PICKER_WIN_END=0
+    _TINT_PICKER_OLD_IDX=0
+    _TINT_PICKER_SCROLLED=0
+
+    if ! _TINT_PICKER_ORIGINAL_BG=$(_tint_query_terminal_bg); then
+        _tint_report_osc11_error
+        return 1
+    fi
+    _TINT_PICKER_ORIGINAL_FG=$(_tint_query_terminal_fg) || _TINT_PICKER_ORIGINAL_FG=""
+    _TINT_PICKER_PREVIEWED=0
+
+    _tint_compute_unchanged_entry
+    # _TINT_PICKER_DEFAULT controls the star marker. _TINT_PICKER_IDX (initial
+    # cursor) follows it ONLY when the caller's <current> arg matches; the
+    # auto-detect fallback below sets the star but leaves the cursor at 0.
+    _tint_find_default_index "${1:-}"
+    # _TINT_PICKER_ORIGINAL_THEME_IDX: theme matching the terminal's current colors.
+    # Auto-detected from actual terminal state, independent of the caller's hint.
+    # Strategy: collect all themes whose bg matches, then narrow by fg when
+    # available. If still ambiguous (0 or 2+ candidates), fall back to 0 so the
+    # restore path uses direct bg/fg restore instead of a potentially wrong theme.
+    # Known limitation: bg+fg match is a heuristic — a user could share bg+fg
+    # with a theme but have different ANSI colors. However, matching is still
+    # the best option: the alternative (ANSI reset to terminal defaults) is
+    # worse for the overwhelmingly common case where bg+fg match implies the
+    # theme. Individual ANSI colors can't be queried portably (no OSC 4 query).
+    _TINT_PICKER_ORIGINAL_THEME_IDX=0
+    if [ -n "$_TINT_PICKER_ORIGINAL_BG" ]; then
+        local _candidates="" _candidate_count=0
+        local _i=1
+        while [ "$_i" -le "$_tint_last_idx" ]; do
+            # shellcheck disable=SC3054
+            if [ "${_tint_themes_bg[$_i]}" = "$_TINT_PICKER_ORIGINAL_BG" ]; then
+                _candidates="${_candidates:+$_candidates }$_i"
+                _candidate_count=$((_candidate_count + 1))
+            fi
+            _i=$((_i + 1))
+        done
+        if [ "$_candidate_count" -gt 0 ] && [ -n "$_TINT_PICKER_ORIGINAL_FG" ]; then
+            # fg available — require both bg AND fg to match, so we don't
+            # restore the wrong ANSI palette for a user whose bg happens to
+            # coincide with a theme but whose fg/ANSI colors differ.
+            local _fg_candidates="" _fg_count=0
+            for _i in $_candidates; do
+                # shellcheck disable=SC3054
+                if [ "${_tint_themes_fg[$_i]}" = "$_TINT_PICKER_ORIGINAL_FG" ]; then
+                    _fg_candidates="${_fg_candidates:+$_fg_candidates }$_i"
+                    _fg_count=$((_fg_count + 1))
+                fi
+            done
+            if [ "$_fg_count" -eq 1 ]; then
+                _TINT_PICKER_ORIGINAL_THEME_IDX=$_fg_candidates
+            fi
+        elif [ "$_candidate_count" -eq 1 ]; then
+            # No fg available — trust the sole bg match
+            _TINT_PICKER_ORIGINAL_THEME_IDX=$_candidates
+        fi
+    fi
+    # If no explicit current matched, use auto-detect for the star marker too
+    if [ "$_TINT_PICKER_DEFAULT" -eq 0 ] && [ "$_TINT_PICKER_ORIGINAL_THEME_IDX" -gt 0 ]; then
+        _TINT_PICKER_DEFAULT=$_TINT_PICKER_ORIGINAL_THEME_IDX
+    fi
+    _tint_install_signal_traps
+    _tint_setup_terminal
+}
+
+# _tint_run_picker_loop - Input loop for the interactive picker
+#
+# Reads keystrokes via _tint_read_key and dispatches to action functions.
+#
+# Stdout: theme name (on confirm only, empty if unchanged)
+# Returns: 0 if theme selected, 1 if cancelled or error
+_tint_run_picker_loop() {
+    while true; do
+        if [ "$_TINT_PICKER_INTERRUPTED" -ne 0 ]; then _tint_restore_terminal; return "$_TINT_PICKER_INTERRUPTED"; fi
+        if [ "$_TINT_PICKER_RESIZED" -eq 1 ]; then _tint_handle_resize; fi
+        # Timeout ensures signal flag (_TINT_PICKER_INTERRUPTED) gets checked even
+        # when bash restarts read after a caught signal (SA_RESTART behavior).
+        _tint_read_key || { _TINT_PICKER_EXIT_REASON=cancel; _tint_restore_terminal; return 1; }
+        if [ "$_TINT_PICKER_INTERRUPTED" -ne 0 ]; then _tint_restore_terminal; return "$_TINT_PICKER_INTERRUPTED"; fi
+        if [ "$_TINT_PICKER_RESIZED" -eq 1 ]; then _tint_handle_resize; fi
+        case "$_TINT_PICKER_KEY" in
+            up|down)
+                # Model
+                _tint_model_move_cursor "$_TINT_PICKER_KEY"
+                _tint_update_scroll_window
+                # View
+                _tint_render_cursor_move
+                ;;
+            q|cancel) _TINT_PICKER_EXIT_REASON=cancel; _tint_restore_terminal; return 1 ;;
+            confirm)  _tint_accept_selection; return 0 ;;
+        esac
+    done
+}
+
+# tint_pick [<current>] - Interactive theme picker with live preview
+#
+# Stdout: theme name (on confirm only, empty if unchanged)
+# Returns: 0 if theme selected, 1 if cancelled or error
+tint_pick() {
+    # Bash required for read -n/-t used in interactive picker.
+    # Test actual bash array syntax in a subshell — simple presence checks
+    # like ${BASH_VERSINFO:-} can be fooled by env var spoofing (e.g.,
+    # BASH_VERSINFO=5 in dash). Only real bash can parse array subscripts.
+    # The subshell catches the fatal "Bad substitution" without killing us.
+    # shellcheck disable=SC3028,SC3054
+    if ! (eval '[ "${BASH_VERSINFO[0]+_}" = _ ]') 2>/dev/null; then
+        printf 'tint_pick: requires bash\n' >&2
+        return 1
+    fi
+    # TTY required for interactive display. CLI entry (_tint_main) checks this
+    # before calling tint_pick, but library callers may invoke it directly in
+    # headless contexts (e.g., scripts, CI). Guard here to fail early with a
+    # clear message rather than dying on the first >/dev/tty write.
+    if ! (: >/dev/tty) 2>/dev/null; then
+        printf 'tint_pick: requires a terminal (no TTY detected)\n' >&2
+        return 1
+    fi
+
+    # Session-scoped locals. Visible to _tint_init_picker, _tint_run_picker_loop,
+    # _tint_restore_terminal, and render functions via bash dynamic scoping.
+    local i _tint_palette_count _tint_last_idx
+    # shellcheck disable=SC3054
+    local -a _tint_themes_name _tint_themes_bg _tint_themes _tint_themes_fg \
+             _tint_themes_bg_r _tint_themes_bg_g _tint_themes_bg_b \
+             _tint_themes_fg_r _tint_themes_fg_g _tint_themes_fg_b
+    local _tint_saved_traps _tint_saved_exit
+    local _tint_esc_timeout _tint_read_timeout
+
+    _tint_init_picker "${1:-}" || return $?
+    _tint_run_picker_loop
+}
+
+# =============================================================================
+# Shell Completions
+# =============================================================================
+#
+# Generated scripts hardcode "tint" as the command name (standard convention
+# shared by direnv, zoxide, starship; matches the hook functions above).
+# Users who rename the binary via symlink should search-and-replace "tint"
+# with the new name in the generated output.
+#
+# All runtime lookups use `command tint` to bypass aliases/functions.
+
+# _tint_completions_bash - Output bash tab completion code
+#
+# Outputs a completion function for bash's `complete` builtin.
+# Designed for: eval "$(tint completions bash)"
+_tint_completions_bash() {
+    cat <<'BASH_COMP'
+_tint_completions() {
+    # COMP_WORDS and COMP_CWORD are always set by bash's completion system;
+    # defensive defaults (${..-}) for set -u resilience at no cost.
+    local cur opts
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]-}"
+
+    # Second argument: shell name for completions/hook
+    if (( COMP_CWORD == 2 )); then
+        case "${COMP_WORDS[1]-}" in
+            completions)
+                COMPREPLY=( $(compgen -W "bash zsh fish" -- "$cur") ) ;;
+            hook)
+                COMPREPLY=( $(compgen -W "bash zsh" -- "$cur") ) ;;
+        esac
+        return
+    fi
+
+    # No completions beyond second argument
+    if (( COMP_CWORD > 2 )); then
+        return
+    fi
+
+    # First argument: flags, subcommands, or theme names
+    opts="-h --help -l --list -v --version"
+    if [[ "$cur" == -* ]]; then
+        COMPREPLY=( $(compgen -W "$opts" -- "$cur") )
+    else
+        local names
+        names=$(command tint --list 2>/dev/null)
+        COMPREPLY=( $(compgen -W "$names completions hook random reset" -- "$cur") )
+    fi
+}
+complete -F _tint_completions tint
+BASH_COMP
+}
+
+# _tint_completions_zsh - Output zsh tab completion code
+#
+# Outputs a compdef function for zsh's completion system.
+# Designed for: eval "$(tint completions zsh)"
+_tint_completions_zsh() {
+    cat <<'ZSH_COMP'
+#compdef tint
+
+_tint() {
+    local -a subcommands flags themes
+
+    if (( CURRENT == 2 )); then
+        subcommands=(
+            'random:Pick a random theme'
+            'reset:Reset to terminal default'
+            'completions:Output shell completions'
+            'hook:Output shell integration code'
+        )
+        themes=( ${(f)"$(command tint --list 2>/dev/null)"} )
+
+        # Flags only when user types -; otherwise subcommands + themes
+        if [[ "${words[CURRENT]}" == -* ]]; then
+            flags=(
+                {-h,--help}':Show help'
+                {-l,--list}':List available themes'
+                {-v,--version}':Show version'
+            )
+            _describe -t flags 'flag' flags
+        else
+            zstyle ':completion:*:*:tint:*' group-name ''
+            _describe -t subcommands 'subcommand' subcommands
+            _describe -t themes 'theme' themes
+        fi
+    elif (( CURRENT == 3 )); then
+        case "${words[2]}" in
+            completions)
+                _values 'shell' bash zsh fish ;;
+            hook)
+                _values 'shell' bash zsh ;;
+        esac
+    fi
+}
+
+# compdef requires compinit; guard so eval before compinit doesn't error.
+# Place eval after compinit in .zshrc for completions to register.
+if (( $+functions[compdef] )); then
+    compdef _tint tint
+fi
+ZSH_COMP
+}
+
+# _tint_completions_fish - Output fish tab completion code
+#
+# Outputs complete commands for fish's completion system.
+# Designed for: tint completions fish > ~/.config/fish/completions/tint.fish
+_tint_completions_fish() {
+    cat <<'FISH_COMP'
+# Fish completions for tint
+complete -c tint -x
+
+# True when completing the first argument (no positional arg entered yet)
+function __tint_needs_command
+    set -l cmd (commandline -opc)
+    test (count $cmd) -eq 1
+end
+
+# Options (first argument only)
+complete -c tint -n __tint_needs_command -s h -l help -d 'Show help'
+complete -c tint -n __tint_needs_command -s l -l list -d 'List available themes'
+complete -c tint -n __tint_needs_command -s v -l version -d 'Show version'
+
+# Subcommands (first argument only)
+complete -c tint -n __tint_needs_command -a 'completions' -d 'Output shell completions'
+complete -c tint -n __tint_needs_command -a 'hook' -d 'Output shell integration code'
+complete -c tint -n __tint_needs_command -a 'random' -d 'Pick a random theme'
+complete -c tint -n __tint_needs_command -a 'reset' -d 'Reset to terminal default'
+
+# Subcommand arguments (second argument only)
+complete -c tint -n 'test (count (commandline -opc)) -eq 2; and __fish_seen_subcommand_from completions' -xa 'bash zsh fish'
+complete -c tint -n 'test (count (commandline -opc)) -eq 2; and __fish_seen_subcommand_from hook' -xa 'bash zsh'
+
+# Theme names (first argument only)
+complete -c tint -n __tint_needs_command -a "(command tint --list 2>/dev/null)" -d 'Theme name'
+FISH_COMP
+}
+
+# =============================================================================
+# CLI
+# =============================================================================
+
+# _tint_usage - Print usage information to stdout
+_tint_usage() {
+    cat <<'EOF'
+tint - terminal theme switcher
+
+Switch your terminal's color theme. Run tint to pick interactively,
+or tint <name> to set one directly. Each theme sets background,
+foreground, and all 16 ANSI colors. Add .tint files to directories
+for automatic theme switching.
+
+USAGE
+    tint                      Interactive picker with live preview
+    tint <name|hex>           Set theme directly
+    tint random               Pick a random theme
+    tint reset                Reset to terminal default
+    tint completions <shell>  Output shell completions (bash/zsh/fish)
+    tint hook <shell>         Output shell integration code
+    tint -h, --help           Show this help
+    tint -l, --list           List available themes
+    tint -v, --version        Show version
+
+INTERACTIVE CONTROLS
+    ←/→  h/l              Navigate themes
+    ↑/↓  k/j              Navigate themes
+    Enter                 Select theme
+    Esc  q                Cancel (restore original)
+
+EXAMPLES
+    tint dracula          Set by name
+    tint "#002b36"        Set by hex code
+    tint random           Surprise me
+    tint reset            Reset to terminal default
+    tint --list           Show all available themes
+
+SHELL INTEGRATION
+    Add to your shell's rc file:
+
+        # bash (~/.bashrc)
+        eval "$(tint hook bash)"
+
+        # zsh (~/.zshrc)
+        eval "$(tint hook zsh)"
+
+    Create .tint files in project directories:
+
+        echo "dracula" > ~/projects/myproject/.tint
+        echo "reset" > ~/projects/personal/.tint    # reset to default
+
+    The hook walks up from $PWD to / looking for the nearest .tint file.
+    Themes are sticky — if no .tint is found, the current theme is kept.
+    Place a .tint in ~ for a global default.
+
+    Hook output is silent on success; errors (unknown theme, malformed
+    .tint, etc.) print to stderr. Set TINT_HOOK_VERBOSE=1 to also print
+    "tint: <theme> from <path>" each time the hook applies a theme.
+
+CONFIGURATION
+    User themes:          $XDG_CONFIG_HOME/tint/themes/
+                          (or $TINT_PALETTE_DIR to override location)
+
+    Drop any file with theme entries into the directory. Files are read
+    in alphabetical order and appended to the built-in palette.
+
+    Theme format (one per line):
+        name:#bg:#fg:#00:#01:#02:#03:#04:#05:#06:#07:#08:#09:#10:#11:#12:#13:#14:#15
+    Each value is a #RRGGBB hex color (bg, fg, then 16 ANSI colors 0-15).
+
+MORE INFO
+    https://github.com/corygabrielsen/tint
+EOF
+}
+
+# _tint_hook_bash - Output bash shell integration code
+#
+# Outputs a self-contained hook that auto-applies .tint themes on directory change.
+# Designed for: eval "$(tint hook bash)"
+_tint_hook_bash() {
+    cat <<'HOOK'
+_tint_hook() {
+    local _tint_ret=$?
+    if [ "${_TINT_HOOK_PWD:-}" = "$PWD" ]; then
+        return "$_tint_ret"
+    fi
+    _TINT_HOOK_PWD="$PWD"
+    local _tint_dir="$PWD" _tint_file=""
+    # Guard against non-absolute PWD (would loop forever in walk-up)
+    case "$_tint_dir" in /*) ;; *) return "$_tint_ret" ;; esac
+    while true; do
+        if [ -f "$_tint_dir/.tint" ] && [ -r "$_tint_dir/.tint" ]; then
+            _tint_file="$_tint_dir/.tint"
+            break
+        fi
+        if [ "$_tint_dir" = "/" ]; then
+            break
+        fi
+        _tint_dir="${_tint_dir%/*}"
+        if [ -z "$_tint_dir" ]; then
+            _tint_dir="/"
+        fi
+    done
+    if [ -z "$_tint_file" ]; then
+        _TINT_HOOK_COLOR=""
+        return "$_tint_ret"
+    fi
+    local _tint_color
+    _tint_color=$(command sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]#.*//; s/[[:space:]]*$//' "$_tint_file" | command grep -m1 -E '^(#[0-9a-fA-F]{3}$|#[0-9a-fA-F]{6}$|[^#-])' || true)
+    if [ -z "$_tint_color" ]; then
+        _TINT_HOOK_COLOR=""
+        return "$_tint_ret"
+    fi
+    # Cache by .tint value. Theme-file edits under TINT_PALETTE_DIR
+    # don't invalidate; re-run `tint <name>` manually.
+    if [ "$_tint_color" = "${_TINT_HOOK_COLOR:-}" ]; then
+        return "$_tint_ret"
+    fi
+    _TINT_HOOK_COLOR="$_tint_color"
+    # Uses `tint` by name (standard convention; cf. direnv, zoxide, starship).
+    # stderr passes through so errors (unknown theme, malformed .tint, etc.)
+    # surface to the user — previously suppressed, which silently broke hooks.
+    # TINT_HOOK_VERBOSE=1 opts into direnv-style "applied X from Y" messages.
+    # `if` form neutralizes errexit: bash skips `set -e` propagation for
+    # commands in tested conditions (`if`, `while`, `until`, `&&`, `||`).
+    # Subshell isolates against bash 3.2 (macOS) errexit-in-function quirks
+    # where `set -e` could leak across function boundaries; the subshell's
+    # exit code is what `if` tests.
+    if ( command tint "$_tint_color" >/dev/null ); then
+        if [ "${TINT_HOOK_VERBOSE:-0}" = "1" ]; then
+            printf 'tint: %s from %s\n' "$_tint_color" "$_tint_file" >&2
+        fi
+    fi
+    return "$_tint_ret"
+}
+# Prepend to PROMPT_COMMAND, handling both string and array forms (Bash 5.1+)
+if [[ "$(declare -p PROMPT_COMMAND 2>/dev/null)" == "declare -a"* ]]; then
+    # Array form: prepend so _tint_hook captures $? from user's last command
+    _tint_found=0
+    for _tint_pc in "${PROMPT_COMMAND[@]}"; do
+        [[ "$_tint_pc" == "_tint_hook" ]] && _tint_found=1 && break
+    done
+    (( _tint_found )) || PROMPT_COMMAND=("_tint_hook" "${PROMPT_COMMAND[@]}")
+    unset _tint_found _tint_pc
+elif [[ ! "${PROMPT_COMMAND:-}" =~ (^|[;[:space:]])_tint_hook($|[;[:space:]]) ]]; then
+    PROMPT_COMMAND="_tint_hook${PROMPT_COMMAND:+;$PROMPT_COMMAND}"
+fi
+_tint_hook
+HOOK
+}
+
+# _tint_hook_zsh - Output zsh shell integration code
+#
+# Outputs a self-contained hook that auto-applies .tint themes on directory change.
+# Uses chpwd_functions (native zsh dir-change hook, no PWD cache needed).
+# Designed for: eval "$(tint hook zsh)"
+_tint_hook_zsh() {
+    cat <<'HOOK'
+_tint_hook() {
+    # Skip during zle widgets (tab completion, etc.) — zsh's _cd
+    # handler can temporarily change PWD, triggering chpwd spuriously
+    [[ -n "${WIDGET:-}" ]] && return
+    local _tint_dir="$PWD" _tint_file=""
+    # Guard against non-absolute PWD (would loop forever in walk-up)
+    case "$_tint_dir" in /*) ;; *) return ;; esac
+    while true; do
+        if [ -f "$_tint_dir/.tint" ] && [ -r "$_tint_dir/.tint" ]; then
+            _tint_file="$_tint_dir/.tint"
+            break
+        fi
+        if [ "$_tint_dir" = "/" ]; then
+            break
+        fi
+        _tint_dir="${_tint_dir%/*}"
+        if [ -z "$_tint_dir" ]; then
+            _tint_dir="/"
+        fi
+    done
+    if [ -z "$_tint_file" ]; then
+        _TINT_HOOK_COLOR=""
+        return
+    fi
+    local _tint_color
+    _tint_color=$(command sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]#.*//; s/[[:space:]]*$//' "$_tint_file" | command grep -m1 -E '^(#[0-9a-fA-F]{3}$|#[0-9a-fA-F]{6}$|[^#-])' || true)
+    if [ -z "$_tint_color" ]; then
+        _TINT_HOOK_COLOR=""
+        return
+    fi
+    # Cache by .tint value. Theme-file edits under TINT_PALETTE_DIR
+    # don't invalidate; re-run `tint <name>` manually.
+    if [ "$_tint_color" = "${_TINT_HOOK_COLOR:-}" ]; then
+        return
+    fi
+    _TINT_HOOK_COLOR="$_tint_color"
+    # Uses `tint` by name (standard convention; cf. direnv, zoxide, starship).
+    # stderr passes through so errors (unknown theme, malformed .tint, etc.)
+    # surface to the user — previously suppressed, which silently broke hooks.
+    # TINT_HOOK_VERBOSE=1 opts into direnv-style "applied X from Y" messages.
+    # `if ( ... )` guard prevents a non-zero exit from `tint` from aborting
+    # the hook when the user's shell is running under `set -e` / errexit;
+    # the subshell additionally isolates any state changes.
+    if ( command tint "$_tint_color" >/dev/null ); then
+        if [ "${TINT_HOOK_VERBOSE:-0}" = "1" ]; then
+            printf 'tint: %s from %s\n' "$_tint_color" "$_tint_file" >&2
+        fi
+    fi
+}
+if [[ -z "${chpwd_functions[(r)_tint_hook]-}" ]]; then
+    chpwd_functions+=(_tint_hook)
+fi
+_tint_hook
+HOOK
+}
+
+# _tint_main - CLI entry point, dispatch subcommand or launch interactive picker
+_tint_main() {
+    # Explicit empty argument is invalid, not interactive mode
+    if [ $# -gt 0 ] && [ -z "$1" ]; then
+        echo "error: theme name cannot be empty" >&2
+        exit 1
+    fi
+    # Reject extra arguments — most commands take zero, completions/hook take one
+    if [ $# -gt 1 ] && [ "$1" != "completions" ] && [ "$1" != "hook" ]; then
+        echo "error: unexpected argument: $2" >&2
+        echo "Run 'tint --help' for usage" >&2
+        exit 1
+    fi
+    if [ $# -gt 2 ]; then
+        echo "error: unexpected argument: $3" >&2
+        echo "Run 'tint --help' for usage" >&2
+        exit 1
+    fi
+    case "${1:-}" in
+        "")
+            # Interactive mode requires bash for read -n/-t (single-char input).
+            # We use /bin/sh shebang so non-interactive commands work on systems
+            # without bash (Alpine, busybox). Re-exec into bash for interactive.
+            # shellcheck disable=SC3028,SC3054
+            if ! (eval '[ "${BASH_VERSINFO[0]+_}" = _ ]') 2>/dev/null; then
+                # $0 contains the full path even when invoked via PATH - dash, zsh,
+                # and busybox sh all resolve it. If bash is available, re-exec into
+                # it. On systems without bash (e.g., Alpine), fall through to error.
+                if command -v bash >/dev/null 2>&1; then
+                    exec bash "$0" "$@"
+                fi
+                echo "error: interactive mode requires bash" >&2
+                echo "usage: tint <theme|hex>  or  tint --list" >&2
+                exit 1
+            fi
+            if ! tint_supports_color; then
+                echo "error: interactive mode requires a terminal" >&2
+                echo "usage: tint <theme|hex>  or  tint --list" >&2
+                exit 1
+            fi
+            # local is safe: the shebang re-exec ensures bash before _tint_main
+            # Cancel (return 1) and unchanged (return 0, empty output) both produce
+            # no stdout — this is intentional. The CLI always exits 0 for interactive
+            # mode; the library-level tint_pick distinguishes them via return code.
+            local _tint_result
+            if _tint_result=$(tint_pick); then
+                if [ -n "$_tint_result" ]; then printf '%s\n' "$_tint_result"; fi
+            fi
+            ;;
+        -h|--help)
+            _tint_usage
+            ;;
+        -l|--list)
+            tint_list
+            ;;
+        -v|--version)
+            echo "tint $TINT_VERSION"
+            ;;
+        -*)
+            echo "Unknown option: $1" >&2
+            echo "Run 'tint --help' for usage" >&2
+            exit 1
+            ;;
+        completions)
+            # ${2-bash} (no colon): defaults only when unset; empty "" hits *)
+            case "${2-bash}" in
+                bash) _tint_completions_bash ;;
+                zsh)  _tint_completions_zsh ;;
+                fish) _tint_completions_fish ;;
+                *)
+                    echo "error: unknown shell: $2" >&2
+                    echo "Supported: bash, zsh, fish" >&2
+                    exit 1
+                    ;;
+            esac
+            ;;
+        hook)
+            if [ $# -ne 2 ]; then
+                echo "error: usage: tint hook <bash|zsh>" >&2
+                exit 1
+            fi
+            case "$2" in
+                bash) _tint_hook_bash ;;
+                zsh)  _tint_hook_zsh ;;
+                *)
+                    echo "error: unsupported shell: $2" >&2
+                    echo "Supported shells: bash, zsh" >&2
+                    exit 1
+                    ;;
+            esac
+            ;;
+        random)
+            local count entry name theme idx
+            count=$(_tint_palette_count)
+            if [ "$count" -eq 0 ]; then
+                echo "No themes in palette" >&2
+                exit 1
+            fi
+            # Build seed in awk to avoid shell arithmetic octal pitfalls.
+            # date +%N output can have leading zeros (octal in shell) or be
+            # non-numeric on BSD/macOS. awk handles all of these safely.
+            idx=$(awk -v max="$count" -v pid="$$" -v sec="$(date +%s)" \
+                      -v nsec="$(date +%N 2>/dev/null || echo 0)" \
+                      -v rnd="${RANDOM:-0}" \
+                'BEGIN{ srand(pid * sec + rnd + (nsec+0)); print int(rand()*max)+1 }')
+            entry=$(_tint_palette_get "$idx")
+            name="${entry%%:*}"
+            theme="${entry#*:}"
+            tint_set "$theme"
+            echo "$name"
+            ;;
+        reset)
+            tint_reset
+            # Symmetric with the apply-by-name and apply-by-hex paths.
+            echo "reset"
+            ;;
+        *)
+            # shellcheck disable=SC3043
+            local resolved
+            if resolved=$(tint_resolve "$1") && [ -n "$resolved" ]; then
+                tint_set "$resolved"
+                # For hex input, echo the normalized value (e.g., #abc → #aabbcc).
+                # For named themes, echo the name the user typed.
+                case "$1" in
+                    '#'*) echo "${resolved%%:*}" ;;
+                    *)    echo "$1" ;;
+                esac
+            else
+                echo "Unknown theme: $1" >&2
+                echo "Run 'tint --list' for available themes" >&2
+                exit 1
+            fi
+            ;;
+    esac
+}
+
+# _tint_is_main - Detect whether this script is executed vs sourced
+#
+# Detection hierarchy: Bash (BASH_SOURCE) → Zsh (ZSH_EVAL_CONTEXT) → POSIX
+# (grep $0 for marker URL). When invoked as "bash tint" or "sh tint", $0 is
+# the script path, not the shell.
+#
+# Returns: 0 if executed directly, 1 if sourced
+# shellcheck disable=SC3028,SC3054
+_tint_is_main() {
+    # Bash: BASH_SOURCE[0] is array syntax that only works under bash.
+    # Test array access in a subshell first — if BASH_VERSION leaks via
+    # environment into dash/sh, the subshell catches the fatal "Bad
+    # substitution" error without killing the parent script.
+    if (eval '[ "${BASH_SOURCE[0]+_}" = _ ]') 2>/dev/null; then
+        [ "${BASH_SOURCE[0]}" = "$0" ]
+        return
+    fi
+    # Zsh: when executed, context is "toplevel" or "toplevel:shfunc"
+    # When sourced, context contains ":file:"
+    if [ -n "${ZSH_EVAL_CONTEXT:-}" ]; then
+        case "$ZSH_EVAL_CONTEXT" in
+            *:file:*|*:file) return 1 ;;  # Sourced
+            toplevel*) return 0 ;;        # Executed
+            *) return 1 ;;
+        esac
+    fi
+    # POSIX fallback: check if $0 actually IS this script.
+    # When executed (even via symlink/rename): $0 resolves to tint, which
+    # contains our unique header URL. When sourced from another script: $0
+    # is the calling script or shell, which won't have our marker.
+    # Fast path: known shell names are definitely sourced.
+    case "${0##*/}" in
+        sh|dash|ash|bash|zsh|ksh|csh|tcsh|fish|-*) return 1 ;;
+    esac
+    # For other $0 values (symlinks, renames, or sourcing from scripts),
+    # check if $0 contains our unique header URL (won't appear in caller scripts).
+    # Note: a caller that includes this exact URL line would be a false positive,
+    # but this is the best available POSIX heuristic (no reliable sourced-vs-exec
+    # detection exists in POSIX sh). The anchored full URL makes collisions
+    # negligible in practice.
+    if [ -f "$0" ] && grep -qm1 '^# https://github.com/corygabrielsen/tint$' "$0" 2>/dev/null; then
+        return 0  # Executed (tint, symlink, renamed copy)
+    fi
+    return 1  # Sourced from another script
+}
+
+if _tint_is_main; then
+    set -eu
+    _tint_main "$@"
+fi

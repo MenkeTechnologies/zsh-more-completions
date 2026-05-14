@@ -1,0 +1,4085 @@
+# Source: https://github.com/Dicklesworthstone/agent_settings_backup_script/blob/9a5a4b18a6998bdd554b747658eee20edff06f16/asb
+# Repository: Dicklesworthstone/agent_settings_backup_script (asb)
+#!/usr/bin/env bash
+#
+# asb - Agent Settings Backup
+# Backs up AI coding agent configuration folders to git-versioned repositories
+#
+# Each agent type gets its own git repository in the backup location, enabling:
+#   - Full history tracking of configuration changes
+#   - Easy restoration to any point in time
+#   - Diffing between backup snapshots
+#
+# Supported agents:
+#   claude, codex, cursor, gemini, cline, amp, aider, opencode, factory, windsurf,
+#   plandex, qwencode, amazonq
+#
+# Usage:
+#   asb backup              Backup all detected agents
+#   asb backup claude       Backup specific agent(s)
+#   asb restore claude      Restore agent from backup
+#   asb export claude       Export backup to archive
+#   asb import file.tar.gz  Import backup archive
+#   asb list                List all backups with status
+#   asb history claude      Show backup history for an agent
+#   asb diff claude         Show diff since last backup
+#   asb init                Initialize backup location
+#   asb config init         Create config file
+#   asb schedule --systemd  Install scheduled backups (systemd)
+#   asb schedule --cron     Install scheduled backups (cron)
+#   asb completion bash     Output shell completion script
+#
+# Environment:
+#   ASB_BACKUP_ROOT         Backup location (default: ~/.agent_settings_backups)
+#   ASB_AUTO_COMMIT         Auto-commit on backup (default: true)
+#   ASB_VERBOSE             Verbose output (default: false)
+#
+# Repository: https://github.com/Dicklesworthstone/agent_settings_backup_script
+# License: MIT
+#
+#==============================================================================
+
+set -uo pipefail
+export LC_ALL=C
+
+#==============================================================================
+# VERSION
+#==============================================================================
+
+ASB_VERSION="0.3.0"
+
+#==============================================================================
+# CONSTANTS
+#==============================================================================
+
+# Default backup location
+DEFAULT_BACKUP_ROOT="${HOME}/.agent_settings_backups"
+
+# Force mode - skip confirmations (set via --force or -f flag)
+FORCE=false
+
+# Dry-run mode - show what would happen without doing it (set via --dry-run or -n flag)
+DRY_RUN=false
+
+# JSON output mode - output machine-readable JSON (set via --json or -j flag)
+JSON_OUTPUT="${JSON_OUTPUT:-false}"
+# Structured output format (only applies when JSON_OUTPUT=true): json|toon
+OUTPUT_FORMAT="json"
+# Last backup commit hash (set during backup for hooks)
+LAST_BACKUP_COMMIT=""
+
+# Internal flag for restore preview changes
+RESTORE_HAS_CHANGES=false
+
+# Agent definitions: name -> source folder (relative to HOME)
+# Keep completion scripts in sync with this list.
+declare -A AGENT_FOLDERS=(
+    [claude]=".claude"
+    [codex]=".codex"
+    [cursor]=".cursor"
+    [gemini]=".gemini"
+    [cline]=".cline"
+    [amp]=".amp"
+    [aider]=".aider"
+    [opencode]=".opencode"
+    [factory]=".factory"
+    [windsurf]=".windsurf"
+    [plandex]=".plandex-home"
+    [qwencode]=".qwen"
+    [amazonq]=".q"
+)
+
+# Human-readable agent names
+declare -A AGENT_NAMES=(
+    [claude]="Claude Code"
+    [codex]="OpenAI Codex CLI"
+    [cursor]="Cursor"
+    [gemini]="Google Gemini"
+    [cline]="Cline"
+    [amp]="Amp (Sourcegraph)"
+    [aider]="Aider"
+    [opencode]="OpenCode"
+    [factory]="Factory Droid"
+    [windsurf]="Windsurf"
+    [plandex]="Plandex"
+    [qwencode]="Qwen Code"
+    [amazonq]="Amazon Q"
+)
+
+# Discovery patterns for new agents (folder -> name)
+# These are agents we know about but don't ship by default
+declare -A DISCOVERY_PATTERNS=(
+    [".kodu"]="Kodu"
+    [".continue"]="Continue"
+    [".sourcegraph"]="Sourcegraph CLI"
+    [".tabby"]="Tabby"
+    [".cody"]="Cody"
+    [".copilot"]="GitHub Copilot CLI"
+    [".tabnine"]="Tabnine"
+    [".supermaven"]="Supermaven"
+    [".aide"]="Aide"
+    [".roo"]="Roo Code"
+    [".void"]="Void Editor"
+    [".zed"]="Zed Editor"
+    [".trae"]="Trae"
+    [".melty"]="Melty"
+)
+
+#==============================================================================
+# COLORS
+#==============================================================================
+
+if [[ -t 2 ]] && [[ -z "${NO_COLOR:-}" ]]; then
+    RED='\033[0;31m'
+    GREEN='\033[0;32m'
+    YELLOW='\033[0;33m'
+    BLUE='\033[0;34m'
+    CYAN='\033[0;36m'
+    BOLD='\033[1m'
+    DIM='\033[2m'
+    RESET='\033[0m'
+else
+    RED='' GREEN='' YELLOW='' BLUE='' CYAN='' BOLD='' DIM='' RESET=''
+fi
+
+#==============================================================================
+# LOGGING
+#==============================================================================
+
+log_info() { printf '%b\n' "${BLUE}ℹ${RESET} $*" >&2; }
+log_success() { printf '%b\n' "${GREEN}✓${RESET} $*" >&2; }
+log_warn() { printf '%b\n' "${YELLOW}⚠${RESET} $*" >&2; }
+log_error() { printf '%b\n' "${RED}✗${RESET} $*" >&2; }
+log_step() { printf '%b\n' "${CYAN}→${RESET} $*" >&2; }
+log_debug() { if is_truthy "${ASB_VERBOSE:-false}"; then printf '%b\n' "${DIM}  $*${RESET}" >&2; fi; }
+log_dry() { printf '%b\n' "${YELLOW}!${RESET} DRY RUN: $*" >&2; }
+
+#==============================================================================
+# UTILITIES
+#==============================================================================
+
+command_exists() {
+    command -v "$1" &>/dev/null
+}
+
+is_truthy() {
+    case "${1:-}" in
+        true|TRUE|yes|YES|y|Y|1|on|ON) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+is_dry_run() {
+    [[ "${DRY_RUN:-false}" == "true" ]]
+}
+
+get_backup_root() {
+    local root="${ASB_BACKUP_ROOT:-$DEFAULT_BACKUP_ROOT}"
+    # Expand ~ if present
+    echo "${root/#\~/$HOME}"
+}
+
+get_agent_source() {
+    local agent="$1"
+    local folder="${AGENT_FOLDERS[$agent]:-}"
+    [[ -n "$folder" ]] && echo "${HOME}/${folder}"
+}
+
+get_agent_backup_dir() {
+    local agent="$1"
+    local folder="${AGENT_FOLDERS[$agent]:-}"
+    [[ -n "$folder" ]] && echo "$(get_backup_root)/${folder}"
+}
+
+get_config_dir() {
+    echo "${XDG_CONFIG_HOME:-$HOME/.config}/asb"
+}
+
+get_config_file() {
+    echo "$(get_config_dir)/config"
+}
+
+get_hooks_root() {
+    echo "$(get_config_dir)/hooks"
+}
+
+get_asb_command_path() {
+    # Prefer the currently executing script path
+    if [[ -n "${BASH_SOURCE[0]:-}" ]]; then
+        local script_path
+        if command -v readlink >/dev/null 2>&1; then
+            script_path=$(readlink -f "${BASH_SOURCE[0]}")
+        else
+            local script_dir
+            script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+            script_path="${script_dir}/$(basename "${BASH_SOURCE[0]}")"
+        fi
+        echo "$script_path"
+        return 0
+    fi
+    # Fallback to PATH lookup
+    if command -v asb >/dev/null 2>&1; then
+        command -v asb
+        return 0
+    fi
+    echo "asb"
+}
+
+get_schedule_log_file() {
+    echo "${XDG_STATE_HOME:-$HOME/.local/state}/asb/asb.log"
+}
+
+agent_exists() {
+    local agent="$1"
+    [[ -n "${AGENT_FOLDERS[$agent]:-}" ]]
+}
+
+agent_source_exists() {
+    local agent="$1"
+    local source
+    source=$(get_agent_source "$agent")
+    [[ -n "$source" && -d "$source" ]]
+}
+
+#==============================================================================
+# JSON OUTPUT
+#==============================================================================
+
+# Check if JSON output mode is enabled
+is_json_output() {
+    [[ "${JSON_OUTPUT:-false}" == "true" ]]
+}
+
+# Output JSON to stdout (for machine consumption)
+# Usage: json_output '{"key": "value"}'
+json_output() {
+    local json="$1"
+    if [[ "${OUTPUT_FORMAT:-json}" == "toon" ]]; then
+        local toon_out
+        if toon_out="$(asb_json_to_toon "$json" 2>/dev/null)"; then
+            printf '%s\n' "$toon_out"
+            return 0
+        fi
+        log_warn "TOON requested but tru/toon.sh not available; outputting JSON"
+    fi
+    printf '%s\n' "$json"
+}
+
+# Best-effort: load shared toon.sh helpers when needed (only for OUTPUT_FORMAT=toon).
+asb_try_load_toon_sh() {
+    if declare -F toon_encode >/dev/null 2>&1; then
+        return 0
+    fi
+    local toon_sh="${TOON_SH_PATH:-$HOME/.local/lib/toon.sh}"
+    if [[ -f "$toon_sh" ]]; then
+        # shellcheck source=/dev/null
+        source "$toon_sh" 2>/dev/null || true
+    fi
+    declare -F toon_encode >/dev/null 2>&1
+}
+
+asb_json_to_toon() {
+    local json="$1"
+    if ! asb_try_load_toon_sh; then
+        return 1
+    fi
+    if ! toon_available >/dev/null 2>&1; then
+        return 1
+    fi
+    printf '%s' "$json" | toon_encode
+}
+
+# Output JSON error and exit
+# Usage: json_error "message" [exit_code]
+json_error() {
+    local message="$1"
+    local code="${2:-1}"
+    # Escape special characters for JSON
+    message="${message//\\/\\\\}"
+    message="${message//\"/\\\"}"
+    message="${message//$'\n'/\\n}"
+    message="${message//$'\t'/\\t}"
+    json_output "{\"error\":\"${message}\",\"code\":${code}}"
+    exit "$code"
+}
+
+# Escape a string for safe inclusion in JSON
+# Usage: escaped=$(json_escape_string "value with \"quotes\"")
+json_escape_string() {
+    local str="$1"
+    str="${str//\\/\\\\}"      # Escape backslashes first
+    str="${str//\"/\\\"}"      # Escape quotes
+    str="${str//$'\n'/\\n}"    # Escape newlines
+    str="${str//$'\r'/\\r}"    # Escape carriage returns
+    str="${str//$'\t'/\\t}"    # Escape tabs
+    echo "$str"
+}
+
+# Build a JSON array from arguments
+# Usage: json_array "item1" "item2" "item3"
+json_array() {
+    local result="["
+    local first=true
+    for item in "$@"; do
+        if [[ "$first" == "true" ]]; then
+            first=false
+        else
+            result+=","
+        fi
+        result+="$item"
+    done
+    result+="]"
+    echo "$result"
+}
+
+#==============================================================================
+# HOOKS
+#==============================================================================
+
+run_hooks() {
+    local hook_type="$1"
+    local agent="$2"
+    local commit="${3:-}"
+    local hooks_root
+    hooks_root=$(get_hooks_root)
+    local hook_dir="${hooks_root}/${hook_type}.d"
+
+    if is_dry_run; then
+        log_debug "Skipping hooks in dry-run: ${hook_type}"
+        return 0
+    fi
+
+    if [[ ! -d "$hook_dir" ]]; then
+        log_debug "No hook directory: ${hook_dir}"
+        return 0
+    fi
+
+    local scripts=()
+    local script
+    for script in "$hook_dir"/*; do
+        [[ -f "$script" ]] || continue
+        scripts+=("$script")
+    done
+
+    if [[ ${#scripts[@]} -eq 0 ]]; then
+        log_debug "No hooks found in ${hook_dir}"
+        return 0
+    fi
+
+    mapfile -t scripts < <(printf '%s\n' "${scripts[@]}" | sort)
+
+    export ASB_AGENT="$agent"
+    export ASB_SOURCE
+    ASB_SOURCE=$(get_agent_source "$agent")
+    export ASB_BACKUP_DIR
+    ASB_BACKUP_DIR=$(get_agent_backup_dir "$agent")
+    export ASB_OPERATION="${hook_type#*-}"
+    export ASB_COMMIT="${commit:-}"
+
+    for script in "${scripts[@]}"; do
+        if [[ ! -x "$script" ]]; then
+            log_debug "Skipping non-executable hook: ${script}"
+            continue
+        fi
+        log_debug "Running hook: ${script}"
+        if ! "$script"; then
+            if [[ "$hook_type" == pre-* ]]; then
+                log_error "Pre-hook failed: ${script}"
+                return 1
+            fi
+            log_warn "Post-hook failed: ${script}"
+        fi
+    done
+
+    return 0
+}
+
+#==============================================================================
+# CONFIGURATION
+#==============================================================================
+
+load_config() {
+    local config_file
+    config_file=$(get_config_file)
+
+    if [[ -f "$config_file" ]]; then
+        # shellcheck source=/dev/null
+        if ! source "$config_file"; then
+            log_error "Failed to load config file: $config_file"
+            return 1
+        fi
+        log_debug "Loaded config from $config_file"
+    fi
+}
+
+#==============================================================================
+# GIT OPERATIONS
+#==============================================================================
+
+init_git_repo() {
+    local dir="$1"
+    local agent="$2"
+    local agent_name="${AGENT_NAMES[$agent]:-$agent}"
+
+    if [[ ! -d "$dir/.git" ]]; then
+        if is_dry_run; then
+            log_dry "Would initialize git repository for ${agent_name} at ${dir}"
+            return 0
+        fi
+        log_step "Initializing git repository for ${agent_name}..."
+        git -C "$dir" init --initial-branch=main >/dev/null 2>&1 || git -C "$dir" init >/dev/null 2>&1
+
+        # Create .gitignore for common exclusions
+        cat > "$dir/.gitignore" << 'EOF'
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+*.swp
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Large binary caches (agent-specific)
+**/cache/
+**/Cache/
+**/.cache/
+
+# Session files that may be large
+*.sqlite3-wal
+*.sqlite3-shm
+EOF
+
+        # Initial commit
+        git -C "$dir" add -A >/dev/null 2>&1
+        git -C "$dir" commit -m "Initial backup of ${agent_name} settings" --allow-empty >/dev/null 2>&1
+        log_success "Git repository initialized"
+    fi
+}
+
+create_backup_commit() {
+    local dir="$1"
+    local agent="$2"
+    local message="${3:-}"
+    local agent_name="${AGENT_NAMES[$agent]:-$agent}"
+
+    if is_dry_run; then
+        log_dry "Would create backup commit for ${agent_name}"
+        return 0
+    fi
+
+    # Check for changes
+    if git -C "$dir" diff --quiet HEAD 2>/dev/null && git -C "$dir" diff --staged --quiet 2>/dev/null; then
+        # Check for untracked files
+        if [[ -z "$(git -C "$dir" ls-files --others --exclude-standard 2>/dev/null)" ]]; then
+            log_info "No changes detected for ${agent_name}"
+            LAST_BACKUP_COMMIT=$(git -C "$dir" rev-parse --short HEAD 2>/dev/null || echo "")
+            return 0
+        fi
+    fi
+
+    # Stage all changes
+    git -C "$dir" add -A >/dev/null 2>&1
+
+    # Generate commit message if not provided
+    if [[ -z "$message" ]]; then
+        local timestamp
+        timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+        local changed_files
+        changed_files=$(git -C "$dir" diff --cached --name-only 2>/dev/null | wc -l | tr -d ' ')
+        message="Backup ${agent_name}: ${timestamp} (${changed_files} files changed)"
+    fi
+
+    # Commit
+    git -C "$dir" commit -m "$message" >/dev/null 2>&1
+    log_success "Created backup commit for ${agent_name}"
+
+    # Show brief summary
+    local commit_hash
+    commit_hash=$(git -C "$dir" rev-parse --short HEAD 2>/dev/null)
+    LAST_BACKUP_COMMIT="$commit_hash"
+    log_debug "Commit: ${commit_hash}"
+}
+
+#==============================================================================
+# BACKUP OPERATIONS
+#==============================================================================
+
+backup_agent() {
+    local agent="$1"
+    local source
+    local dest
+    local agent_name="${AGENT_NAMES[$agent]:-$agent}"
+
+    source=$(get_agent_source "$agent")
+    dest=$(get_agent_backup_dir "$agent")
+
+    if [[ ! -d "$source" ]]; then
+        if ! is_json_output; then
+            log_warn "${agent_name} not found at ${source}"
+        fi
+        # Set result for JSON collection by backup_all
+        BACKUP_AGENT_RESULT="{\"agent\":\"${agent}\",\"name\":\"$(json_escape_string "$agent_name")\",\"status\":\"not_found\",\"source\":\"$(json_escape_string "$source")\"}"
+        return 1
+    fi
+
+    if [[ "$DRY_RUN" == "true" ]]; then
+        if ! is_json_output; then
+            log_info "${DIM}[DRY RUN]${RESET} Would backup ${agent_name}"
+            log_info "${DIM}[DRY RUN]${RESET} Source: ${source}"
+            log_info "${DIM}[DRY RUN]${RESET} Destination: ${dest}"
+
+            if command_exists rsync; then
+                if [[ -d "$dest" ]]; then
+                    local changes
+                    changes=$(rsync -a --delete --checksum --dry-run --itemize-changes \
+                        --exclude='.git' \
+                        --exclude='.gitignore' \
+                        --exclude='*.log' \
+                        --exclude='cache/' \
+                        --exclude='Cache/' \
+                        --exclude='.cache/' \
+                        --exclude='*.sqlite3-wal' \
+                        --exclude='*.sqlite3-shm' \
+                        "$source/" "$dest/" 2>/dev/null | head -30)
+
+                    if [[ -n "$changes" ]]; then
+                        log_info "${DIM}[DRY RUN]${RESET} Files that would be synced:"
+                        echo "$changes" | while IFS= read -r line; do
+                            echo "  $line" >&2
+                        done
+                    else
+                        log_info "${DIM}[DRY RUN]${RESET} No file changes detected"
+                    fi
+                else
+                    log_info "${DIM}[DRY RUN]${RESET} Destination does not exist; all files would be copied"
+                fi
+            fi
+
+            if is_truthy "${ASB_AUTO_COMMIT:-true}"; then
+                if [[ -d "$dest/.git" ]]; then
+                    log_info "${DIM}[DRY RUN]${RESET} Would create backup commit"
+                else
+                    log_info "${DIM}[DRY RUN]${RESET} Would initialize git repo and create initial commit"
+                fi
+            fi
+        fi
+
+        # Set result for JSON collection by backup_all
+        BACKUP_AGENT_RESULT="{\"agent\":\"${agent}\",\"name\":\"$(json_escape_string "$agent_name")\",\"status\":\"dry_run\",\"source\":\"$(json_escape_string "$source")\",\"destination\":\"$(json_escape_string "$dest")\"}"
+        return 0
+    fi
+
+    if ! run_hooks "pre-backup" "$agent"; then
+        BACKUP_AGENT_RESULT="{\"agent\":\"${agent}\",\"name\":\"$(json_escape_string "$agent_name")\",\"status\":\"hook_failed\",\"hook\":\"pre-backup\"}"
+        return 1
+    fi
+
+    if ! is_json_output; then
+        log_step "Backing up ${agent_name}..."
+        log_debug "Source: ${source}"
+        log_debug "Destination: ${dest}"
+    fi
+
+    # Create backup directory if needed
+    mkdir -p "$dest"
+
+    # Initialize git repo if needed
+    init_git_repo "$dest" "$agent"
+
+    # Sync files using rsync for efficiency
+    local needs_fallback=false
+    if command_exists rsync; then
+        if ! rsync -a --delete --checksum \
+            --exclude='.git' \
+            --exclude='.gitignore' \
+            --exclude='*.log' \
+            --exclude='cache/' \
+            --exclude='Cache/' \
+            --exclude='.cache/' \
+            --exclude='*.sqlite3-wal' \
+            --exclude='*.sqlite3-shm' \
+            "$source/" "$dest/" 2>/dev/null; then
+            if ! is_json_output; then
+                log_warn "rsync failed; falling back to cp"
+            fi
+            needs_fallback=true
+        fi
+    else
+        log_debug "rsync not available; using cp fallback"
+        needs_fallback=true
+    fi
+
+    if [[ "$needs_fallback" == "true" ]]; then
+        # Fallback to cp
+        # First, remove files that no longer exist in source (except .git and .gitignore)
+        find "$dest" -mindepth 1 -maxdepth 1 ! -name '.git' ! -name '.gitignore' -exec rm -rf {} \; 2>/dev/null
+        # Preserve backup's .git before cp (source might overwrite it)
+        local git_preserved=false
+        if [[ -d "$dest/.git" ]]; then
+            mv "$dest/.git" "$dest/.git.asb_preserve" 2>/dev/null && git_preserved=true
+        fi
+        # Copy all files from source (use /. to include hidden files)
+        cp -r "$source"/. "$dest/" 2>/dev/null || true
+        # Remove any .git that came from source
+        rm -rf "$dest/.git" 2>/dev/null || true
+        # Restore backup's preserved .git
+        if [[ "$git_preserved" == "true" ]]; then
+            mv "$dest/.git.asb_preserve" "$dest/.git" 2>/dev/null || true
+        fi
+    fi
+
+    # Create commit if auto-commit is enabled
+    local hook_commit=""
+    local commit_created=false
+    if is_truthy "${ASB_AUTO_COMMIT:-true}"; then
+        create_backup_commit "$dest" "$agent"
+        hook_commit="$LAST_BACKUP_COMMIT"
+        [[ -n "$hook_commit" ]] && commit_created=true
+    else
+        hook_commit=$(git -C "$dest" rev-parse --short HEAD 2>/dev/null || echo "")
+    fi
+
+    run_hooks "post-backup" "$agent" "$hook_commit" || true
+
+    # Build JSON result
+    local json_result
+    json_result="{\"agent\":\"${agent}\",\"name\":\"$(json_escape_string "$agent_name")\",\"status\":\"success\""
+    json_result+=",\"source\":\"$(json_escape_string "$source")\",\"destination\":\"$(json_escape_string "$dest")\""
+    if [[ -n "$hook_commit" ]]; then
+        json_result+=",\"commit\":\"${hook_commit}\""
+    fi
+    if [[ "$commit_created" == "true" ]]; then
+        json_result+=",\"changes\":true"
+    else
+        json_result+=",\"changes\":false"
+    fi
+    json_result+="}"
+    BACKUP_AGENT_RESULT="$json_result"
+
+    return 0
+}
+
+backup_all() {
+    local agents=("$@")
+    local backed_up=0
+    local failed=0
+    local skipped=0
+    local json_results=()
+
+    # If no specific agents, backup all detected
+    if [[ ${#agents[@]} -eq 0 ]]; then
+        for agent in "${!AGENT_FOLDERS[@]}"; do
+            agents+=("$agent")
+        done
+    fi
+
+    if ! is_json_output; then
+        printf '\n' >&2
+        if [[ "$DRY_RUN" == "true" ]]; then
+            printf '%b\n' "${BOLD}Agent Settings Backup ${DIM}[DRY RUN]${RESET}" >&2
+        else
+            printf '%b\n' "${BOLD}Agent Settings Backup${RESET}" >&2
+        fi
+        printf '%s\n' "─────────────────────────" >&2
+        printf '\n' >&2
+    fi
+
+    for agent in "${agents[@]}"; do
+        BACKUP_AGENT_RESULT=""
+
+        if ! agent_exists "$agent"; then
+            if ! is_json_output; then
+                log_error "Unknown agent: ${agent}"
+            fi
+            json_results+=("{\"agent\":\"${agent}\",\"status\":\"unknown_agent\"}")
+            ((failed++))
+            continue
+        fi
+
+        if ! agent_source_exists "$agent"; then
+            log_debug "Skipping ${agent} (not installed)"
+            local agent_name="${AGENT_NAMES[$agent]:-$agent}"
+            json_results+=("{\"agent\":\"${agent}\",\"name\":\"$(json_escape_string "$agent_name")\",\"status\":\"skipped\",\"reason\":\"not_installed\"}")
+            ((skipped++))
+            continue
+        fi
+
+        if backup_agent "$agent"; then
+            ((backed_up++))
+            if ! is_json_output; then
+                local agent_name="${AGENT_NAMES[$agent]:-$agent}"
+                log_success "Backed up ${agent_name}"
+            fi
+        else
+            ((failed++))
+        fi
+
+        # Collect JSON result from backup_agent
+        if [[ -n "$BACKUP_AGENT_RESULT" ]]; then
+            json_results+=("$BACKUP_AGENT_RESULT")
+        fi
+    done
+
+    if is_json_output; then
+        local result
+        result="{\"results\":$(json_array "${json_results[@]}"),\"summary\":{\"backed_up\":${backed_up},\"skipped\":${skipped},\"failed\":${failed}}"
+        if [[ "$DRY_RUN" == "true" ]]; then
+            result+=",\"dry_run\":true"
+        fi
+        result+="}"
+        json_output "$result"
+    else
+        printf '\n' >&2
+        printf '%s\n' "─────────────────────────" >&2
+        if [[ "$DRY_RUN" == "true" ]]; then
+            log_info "[DRY RUN] Would backup ${backed_up}, skip ${skipped}, fail ${failed}"
+        else
+            log_info "Summary: ${backed_up} backed up, ${skipped} skipped, ${failed} failed"
+        fi
+    fi
+
+    [[ $failed -eq 0 ]]
+}
+
+#==============================================================================
+# RESTORE OPERATIONS
+#==============================================================================
+
+show_restore_preview() {
+    local backup_dir="$1"
+    local current_dir="$2"
+    local commit="${3:-HEAD}"
+    local agent_name="$4"
+
+    RESTORE_HAS_CHANGES=false
+
+    printf '\n' >&2
+    printf '%b\n' "${BOLD}Restore ${agent_name} from backup?${RESET}" >&2
+    printf '%s\n' "─────────────────────────────────────────" >&2
+    printf '\n' >&2
+
+    # Show backup info
+    printf "Backup location: %s\n" "$backup_dir" >&2
+
+    local commit_info
+    commit_info=$(git -C "$backup_dir" log -1 --format="%h (%ar)" "$commit" 2>/dev/null)
+    printf "Commit: %s\n" "${commit_info:-$commit}" >&2
+
+    local commit_msg
+    commit_msg=$(git -C "$backup_dir" log -1 --format="%s" "$commit" 2>/dev/null)
+    printf "Message: %s\n" "${commit_msg:-unknown}" >&2
+    printf '\n' >&2
+
+    # Extract backup to temp for comparison
+    local temp_backup
+    temp_backup=$(mktemp -d)
+    local prev_trap
+    prev_trap=$(trap -p RETURN)
+    if [[ -z "$prev_trap" ]]; then
+        prev_trap="trap - RETURN"
+    fi
+    # shellcheck disable=SC2064 # Variables intentionally expand at definition time
+    trap "rm -rf '$temp_backup'; $prev_trap" RETURN
+
+    if ! git -C "$backup_dir" archive "$commit" 2>/dev/null | tar -C "$temp_backup" -xf - 2>/dev/null; then
+        log_warn "Could not extract backup for preview"
+        return 1
+    fi
+
+    # Check if current dir exists
+    if [[ ! -d "$current_dir" ]]; then
+        printf "Target %s does not exist.\n" "$current_dir" >&2
+        printf "Will create directory with backup contents.\n" >&2
+        RESTORE_HAS_CHANGES=true
+        return 0
+    fi
+
+    # Compare and show differences
+    printf '%b\n' "${BOLD}Changes that will be made to ${current_dir}:${RESET}" >&2
+    printf '\n' >&2
+
+    local only_in_current=0
+    local only_in_backup=0
+    local differs=0
+
+    # Get diff output
+    local diff_output
+    diff_output=$(diff -rq "$current_dir" "$temp_backup" \
+        --exclude='.git' \
+        --exclude='.gitignore' \
+        2>/dev/null || true)
+
+    if [[ -z "$diff_output" ]]; then
+        printf '  %s(no differences detected)%s\n' "$DIM" "$RESET" >&2
+        return 0
+    fi
+
+    RESTORE_HAS_CHANGES=true
+
+    local entries=()
+
+    # Parse differences into sortable entries
+    while IFS= read -r line; do
+        if [[ "$line" == "Only in $current_dir"* ]]; then
+            local rest="${line#Only in }"
+            local dir="${rest%%:*}"
+            local file="${rest#*: }"
+            local rel_dir="${dir#"$current_dir"/}"
+            local rel_path
+            if [[ "$dir" == "$current_dir" ]]; then
+                rel_path="$file"
+            else
+                rel_path="${rel_dir}/${file}"
+            fi
+            entries+=("${rel_path}|delete")
+            ((only_in_current++))
+        elif [[ "$line" == "Only in $temp_backup"* ]]; then
+            local rest="${line#Only in }"
+            local dir="${rest%%:*}"
+            local file="${rest#*: }"
+            local rel_dir="${dir#"$temp_backup"/}"
+            local rel_path
+            if [[ "$dir" == "$temp_backup" ]]; then
+                rel_path="$file"
+            else
+                rel_path="${rel_dir}/${file}"
+            fi
+            entries+=("${rel_path}|add")
+            ((only_in_backup++))
+        elif [[ "$line" == "Files "* && "$line" == *" differ" ]]; then
+            local file="${line#Files "$current_dir"/}"
+            file="${file%% and *}"
+            entries+=("${file}|replace")
+            ((differs++))
+        fi
+    done <<< "$diff_output"
+
+    printf '%s\n' "${entries[@]}" | sort | while IFS='|' read -r path change_type; do
+        case "$change_type" in
+            delete)
+                printf "  ${RED}%-40s${RESET} %s\n" "$path" "(will be DELETED)" >&2
+                ;;
+            add)
+                printf "  ${GREEN}%-40s${RESET} %s\n" "$path" "(will be ADDED)" >&2
+                ;;
+            replace)
+                printf "  ${YELLOW}%-40s${RESET} %s\n" "$path" "(will be REPLACED)" >&2
+                ;;
+        esac
+    done
+
+    printf '\n' >&2
+
+    # Summary and warnings
+    printf '%b\n' "${DIM}Summary: ${only_in_backup} added, ${differs} replaced, ${only_in_current} deleted${RESET}" >&2
+
+    if [[ $only_in_current -gt 0 ]]; then
+        printf '%b\n' "${YELLOW}⚠ WARNING: ${only_in_current} file(s) exist only in current config and will be DELETED.${RESET}" >&2
+    fi
+
+    printf '\n' >&2
+    return 0
+}
+
+confirm_restore() {
+    # If force mode, skip confirmation
+    if [[ "$FORCE" == "true" ]]; then
+        log_debug "Skipping confirmation (--force)"
+        return 0
+    fi
+
+    # If dry-run mode, don't prompt (we're not actually doing anything)
+    if [[ "$DRY_RUN" == "true" ]]; then
+        return 0
+    fi
+
+    # Check if we're in a TTY
+    if [[ ! -t 0 ]]; then
+        log_error "Restore requires confirmation."
+        log_error "Use --force for non-interactive mode, or run interactively."
+        return 1
+    fi
+
+    # Prompt for confirmation
+    printf 'Proceed with restore? [y/N] ' >&2
+    local response
+    IFS= read -r response
+
+    case "$response" in
+        [yY]|[yY][eE][sS])
+            return 0
+            ;;
+        *)
+            log_info "Restore cancelled"
+            return 1
+            ;;
+    esac
+}
+
+restore_agent() {
+    local agent="$1"
+    local commit_ref="${2:-HEAD}"
+    local source
+    local dest
+    local agent_name="${AGENT_NAMES[$agent]:-$agent}"
+    local commit
+    local is_tag=false
+
+    source=$(get_agent_backup_dir "$agent")
+    dest=$(get_agent_source "$agent")
+
+    if [[ ! -d "$source/.git" ]]; then
+        if is_json_output; then
+            json_output "{\"agent\":\"${agent}\",\"name\":\"$(json_escape_string "$agent_name")\",\"status\":\"error\",\"error\":\"no_backup_found\"}"
+        else
+            log_error "No backup found for ${agent_name}"
+        fi
+        return 1
+    fi
+
+    # Resolve tag names to commits
+    if git -C "$source" rev-parse --verify "refs/tags/${commit_ref}" >/dev/null 2>&1; then
+        commit=$(git -C "$source" rev-parse "refs/tags/${commit_ref}")
+        is_tag=true
+        if ! is_json_output; then
+            log_info "Restoring from tag '${commit_ref}'"
+        fi
+    elif git -C "$source" rev-parse --verify "$commit_ref" >/dev/null 2>&1; then
+        commit=$(git -C "$source" rev-parse "$commit_ref")
+    else
+        if is_json_output; then
+            json_output "{\"agent\":\"${agent}\",\"name\":\"$(json_escape_string "$agent_name")\",\"status\":\"error\",\"error\":\"invalid_commit_or_tag\",\"ref\":\"$(json_escape_string "$commit_ref")\"}"
+        else
+            log_error "Invalid commit or tag: ${commit_ref}"
+            log_info "Run 'asb history ${agent}' to see valid commits"
+            log_info "Run 'asb tag ${agent} --list' to see available tags"
+        fi
+        return 1
+    fi
+
+    # Show preview (works in both normal and dry-run mode, but skip in JSON mode)
+    if ! is_json_output; then
+        if ! show_restore_preview "$source" "$dest" "$commit" "$agent_name"; then
+            log_error "Could not generate restore preview"
+            return 1
+        fi
+    else
+        # In JSON mode, we still need to check if there are changes
+        local temp_backup
+        temp_backup=$(mktemp -d)
+        # shellcheck disable=SC2064 # Variable intentionally expands at definition time
+        trap "rm -rf '$temp_backup'" RETURN
+
+        if git -C "$source" archive "$commit" 2>/dev/null | tar -C "$temp_backup" -xf - 2>/dev/null; then
+            if [[ -d "$dest" ]]; then
+                local diff_output
+                diff_output=$(diff -rq "$dest" "$temp_backup" \
+                    --exclude='.git' --exclude='.gitignore' \
+                    --exclude='*.log' --exclude='cache' --exclude='Cache' --exclude='.cache' 2>/dev/null || true)
+                if [[ -n "$diff_output" ]]; then
+                    RESTORE_HAS_CHANGES=true
+                else
+                    RESTORE_HAS_CHANGES=false
+                fi
+            else
+                RESTORE_HAS_CHANGES=true
+            fi
+        fi
+    fi
+
+    if [[ "$RESTORE_HAS_CHANGES" != "true" ]]; then
+        if is_json_output; then
+            json_output "{\"agent\":\"${agent}\",\"name\":\"$(json_escape_string "$agent_name")\",\"status\":\"no_changes\",\"commit\":\"$(git -C "$source" rev-parse --short "$commit" 2>/dev/null)\"}"
+        else
+            log_info "Already up to date; no changes to restore"
+        fi
+        return 0
+    fi
+
+    # Dry-run exits here
+    if [[ "$DRY_RUN" == "true" ]]; then
+        local short_commit
+        short_commit=$(git -C "$source" rev-parse --short "$commit" 2>/dev/null)
+        if is_json_output; then
+            local result
+            result="{\"agent\":\"${agent}\",\"name\":\"$(json_escape_string "$agent_name")\",\"status\":\"dry_run\""
+            result+=",\"commit\":\"${short_commit}\",\"source\":\"$(json_escape_string "$source")\",\"destination\":\"$(json_escape_string "$dest")\""
+            if [[ "$is_tag" == "true" ]]; then
+                result+=",\"tag\":\"$(json_escape_string "$commit_ref")\""
+            fi
+            result+="}"
+            json_output "$result"
+        else
+            log_info "[DRY RUN] Would restore ${agent_name} from ${commit}"
+        fi
+        return 0
+    fi
+
+    # Get confirmation (skip in JSON mode as it's non-interactive)
+    if ! is_json_output; then
+        if ! confirm_restore; then
+            return 1
+        fi
+    elif [[ "$FORCE" != "true" ]]; then
+        # JSON mode requires --force for non-interactive restore
+        json_output "{\"agent\":\"${agent}\",\"name\":\"$(json_escape_string "$agent_name")\",\"status\":\"error\",\"error\":\"confirmation_required\",\"message\":\"Use --force for non-interactive restore\"}"
+        return 1
+    fi
+
+    if ! run_hooks "pre-restore" "$agent" "$commit"; then
+        if is_json_output; then
+            json_output "{\"agent\":\"${agent}\",\"name\":\"$(json_escape_string "$agent_name")\",\"status\":\"error\",\"error\":\"pre_restore_hook_failed\"}"
+        fi
+        return 1
+    fi
+
+    # === PROCEED WITH RESTORE ===
+    if ! is_json_output; then
+        log_step "Restoring ${agent_name} from backup..."
+        log_debug "Backup: ${source}"
+        log_debug "Destination: ${dest}"
+        log_debug "Commit: ${commit}"
+    fi
+
+    # Create destination if needed
+    mkdir -p "$dest"
+
+    # If restoring a specific commit, checkout that commit first
+    if [[ "$commit" != "HEAD" ]]; then
+        git -C "$source" checkout "$commit" -- . >/dev/null 2>&1 || {
+            if is_json_output; then
+                json_output "{\"agent\":\"${agent}\",\"name\":\"$(json_escape_string "$agent_name")\",\"status\":\"error\",\"error\":\"checkout_failed\",\"commit\":\"$(json_escape_string "$commit")\"}"
+            else
+                log_error "Failed to checkout commit: ${commit}"
+            fi
+            return 1
+        }
+    fi
+
+    # Sync files
+    local needs_fallback=false
+    if command_exists rsync; then
+        if ! rsync -a --delete --checksum \
+            --exclude='.git' \
+            --exclude='.gitignore' \
+            "$source/" "$dest/" 2>/dev/null; then
+            if ! is_json_output; then
+                log_warn "rsync failed; falling back to cp"
+            fi
+            needs_fallback=true
+        fi
+    else
+        log_debug "rsync not available; using cp fallback"
+        needs_fallback=true
+    fi
+
+    if [[ "$needs_fallback" == "true" ]]; then
+        # Remove existing files (but preserve structure for hidden files)
+        find "$dest" -mindepth 1 -maxdepth 1 -exec rm -rf {} \; 2>/dev/null
+        # Copy all files including hidden ones (use /. to include dotfiles)
+        cp -r "$source"/. "$dest/" 2>/dev/null || true
+        # Remove .git and .gitignore that came from backup (shouldn't be in destination)
+        rm -rf "$dest/.git" "$dest/.gitignore" 2>/dev/null
+    fi
+
+    # Reset to HEAD if we checked out a specific commit
+    if [[ "$commit" != "HEAD" ]]; then
+        git -C "$source" checkout HEAD -- . >/dev/null 2>&1
+    fi
+
+    run_hooks "post-restore" "$agent" "$commit" || true
+
+    local short_commit
+    short_commit=$(git -C "$source" rev-parse --short "$commit" 2>/dev/null)
+    if is_json_output; then
+        local result
+        result="{\"agent\":\"${agent}\",\"name\":\"$(json_escape_string "$agent_name")\",\"status\":\"success\""
+        result+=",\"commit\":\"${short_commit}\",\"source\":\"$(json_escape_string "$source")\",\"destination\":\"$(json_escape_string "$dest")\""
+        if [[ "$is_tag" == "true" ]]; then
+            result+=",\"tag\":\"$(json_escape_string "$commit_ref")\""
+        fi
+        result+="}"
+        json_output "$result"
+    else
+        log_success "Restored ${agent_name} from backup"
+    fi
+    return 0
+}
+
+#==============================================================================
+# EXPORT / IMPORT
+#==============================================================================
+
+export_backup() {
+    local agent="$1"
+    local output="${2:-}"
+    local agent_name="${AGENT_NAMES[$agent]:-$agent}"
+    local source
+    local folder="${AGENT_FOLDERS[$agent]}"
+
+    source=$(get_agent_backup_dir "$agent")
+
+    # Validate backup exists
+    if [[ ! -d "$source/.git" ]]; then
+        if is_json_output; then
+            json_output "{\"agent\":\"${agent}\",\"name\":\"$(json_escape_string "$agent_name")\",\"status\":\"error\",\"error\":\"no_backup_found\"}"
+        else
+            log_error "No backup found for ${agent_name}"
+            log_info "Run 'asb backup ${agent}' first"
+        fi
+        return 1
+    fi
+
+    # Generate default filename if not specified
+    if [[ -z "$output" ]]; then
+        output="${agent}-backup-$(date +%Y%m%d-%H%M%S).tar.gz"
+    fi
+
+    local size_estimate
+    size_estimate=$(du -sh "$source" 2>/dev/null | cut -f1)
+    local commit_count
+    commit_count=$(git -C "$source" rev-list --count HEAD 2>/dev/null || echo "0")
+
+    # Dry-run mode
+    if [[ "$DRY_RUN" == "true" ]]; then
+        if is_json_output; then
+            json_output "{\"agent\":\"${agent}\",\"name\":\"$(json_escape_string "$agent_name")\",\"status\":\"dry_run\",\"output\":\"$(json_escape_string "$output")\",\"source\":\"$(json_escape_string "$source")\",\"size_estimate\":\"$(json_escape_string "$size_estimate")\",\"commits\":${commit_count}}"
+        else
+            log_info "[DRY RUN] Would export ${agent_name}"
+            log_info "[DRY RUN] Source: ${source}"
+            log_info "[DRY RUN] Output: ${output}"
+            log_info "[DRY RUN] Archive would contain ${size_estimate} of data"
+            log_info "[DRY RUN] Including ${commit_count} backup commits"
+        fi
+        return 0
+    fi
+
+    if ! is_json_output; then
+        log_step "Exporting ${agent_name}..."
+        log_debug "Source: ${source}"
+        log_debug "Output: ${output}"
+    fi
+
+    local backup_root
+    backup_root=$(get_backup_root)
+
+    # Pipe to stdout mode (no JSON output for this mode)
+    if [[ "$output" == "-" ]]; then
+        tar -czf - -C "$backup_root" "$folder" 2>/dev/null
+        return $?
+    fi
+
+    if [[ -f "$output" ]] && [[ "$FORCE" != "true" ]]; then
+        if is_json_output; then
+            json_output "{\"agent\":\"${agent}\",\"name\":\"$(json_escape_string "$agent_name")\",\"status\":\"error\",\"error\":\"file_exists\",\"output\":\"$(json_escape_string "$output")\"}"
+        else
+            log_error "Output file already exists: ${output}"
+            log_info "Use --force to overwrite, or specify different filename"
+        fi
+        return 1
+    fi
+
+    tar -czf "$output" -C "$backup_root" "$folder" 2>/dev/null
+
+    if [[ ! -f "$output" ]]; then
+        if is_json_output; then
+            json_output "{\"agent\":\"${agent}\",\"name\":\"$(json_escape_string "$agent_name")\",\"status\":\"error\",\"error\":\"archive_failed\"}"
+        else
+            log_error "Failed to create archive"
+        fi
+        return 1
+    fi
+
+    local size
+    size=$(du -h "$output" | cut -f1)
+    local size_bytes
+    size_bytes=$(stat -c%s "$output" 2>/dev/null || stat -f%z "$output" 2>/dev/null || echo "0")
+
+    if is_json_output; then
+        json_output "{\"agent\":\"${agent}\",\"name\":\"$(json_escape_string "$agent_name")\",\"status\":\"success\",\"output\":\"$(json_escape_string "$output")\",\"size\":\"$(json_escape_string "$size")\",\"size_bytes\":${size_bytes},\"commits\":${commit_count}}"
+    else
+        log_success "Exported ${agent_name}"
+        printf '\n' >&2
+        printf "  File:     %s\n" "$output" >&2
+        printf "  Size:     %s\n" "$size" >&2
+        printf "  History:  %s commits\n" "$commit_count" >&2
+    fi
+
+    return 0
+}
+
+import_backup() {
+    local archive="$1"
+    local backup_root
+    backup_root=$(get_backup_root)
+
+    if [[ "$archive" != "-" ]] && [[ ! -f "$archive" ]]; then
+        if is_json_output; then
+            json_output "{\"status\":\"error\",\"error\":\"archive_not_found\",\"archive\":\"$(json_escape_string "$archive")\"}"
+        else
+            log_error "Archive not found: ${archive}"
+        fi
+        return 1
+    fi
+
+    # Peek at archive to detect agent folder (needed for dry-run and JSON too)
+    local agent_folder=""
+    if [[ "$archive" != "-" ]]; then
+        local archive_list
+        if ! archive_list=$(tar -tzf "$archive" 2>/dev/null); then
+            if is_json_output; then
+                json_output "{\"status\":\"error\",\"error\":\"archive_read_failed\",\"archive\":\"$(json_escape_string "$archive")\"}"
+            else
+                log_error "Failed to read archive"
+            fi
+            return 1
+        fi
+        agent_folder=$(printf '%s\n' "$archive_list" | awk -F/ '{ gsub(/^\.\//, "", $0); if (NF > 1 && $1 != "" && $1 != ".") { print $1; exit } }')
+        if [[ -z "$agent_folder" ]]; then
+            if is_json_output; then
+                json_output "{\"status\":\"error\",\"error\":\"invalid_archive_structure\",\"message\":\"Archive does not contain a top-level directory\"}"
+            else
+                log_error "Archive does not contain a top-level directory"
+            fi
+            return 1
+        fi
+        if [[ "$agent_folder" == "." || "$agent_folder" == ".." || "$agent_folder" == *"/"* ]]; then
+            if is_json_output; then
+                json_output "{\"status\":\"error\",\"error\":\"invalid_archive_root\",\"folder\":\"$(json_escape_string "$agent_folder")\"}"
+            else
+                log_error "Invalid archive root: ${agent_folder}"
+            fi
+            return 1
+        fi
+    fi
+
+    # Dry-run mode
+    if [[ "$DRY_RUN" == "true" ]]; then
+        local would_overwrite=false
+        if [[ -n "$agent_folder" ]] && [[ -d "$backup_root/$agent_folder" ]]; then
+            would_overwrite=true
+        fi
+        if is_json_output; then
+            local result
+            result="{\"status\":\"dry_run\",\"archive\":\"$(json_escape_string "$archive")\",\"destination\":\"$(json_escape_string "$backup_root")\""
+            if [[ -n "$agent_folder" ]]; then
+                result+=",\"agent_folder\":\"$(json_escape_string "$agent_folder")\""
+            fi
+            result+=",\"would_overwrite\":${would_overwrite}}"
+            json_output "$result"
+        else
+            log_info "[DRY RUN] Would import from ${archive}"
+            log_info "[DRY RUN] Destination: ${backup_root}"
+            if [[ "$archive" != "-" ]]; then
+                log_info "[DRY RUN] Archive contents:"
+                tar -tzf "$archive" 2>/dev/null | head -10
+            fi
+            if [[ "$would_overwrite" == "true" ]]; then
+                log_info "[DRY RUN] Would overwrite existing backup: $backup_root/$agent_folder"
+            fi
+        fi
+        return 0
+    fi
+
+    if ! is_json_output; then
+        log_step "Importing backup..."
+    fi
+
+    # Create backup location if needed
+    mkdir -p "$backup_root"
+
+    # Check for existing backup (conflict detection)
+    if [[ -n "$agent_folder" ]] && [[ -d "$backup_root/$agent_folder" ]]; then
+        if [[ "$FORCE" != "true" ]]; then
+            if is_json_output; then
+                json_output "{\"status\":\"error\",\"error\":\"backup_exists\",\"folder\":\"$(json_escape_string "$backup_root/$agent_folder")\",\"message\":\"Use --force to overwrite existing backup\"}"
+                return 1
+            fi
+
+            log_warn "Backup already exists: $backup_root/$agent_folder"
+
+            if [[ -t 0 ]]; then
+                printf 'Overwrite existing backup? [y/N] ' >&2
+                local response
+                IFS= read -r response
+                case "$response" in
+                    [yY]|[yY][eE][sS])
+                        log_info "Will overwrite existing backup"
+                        ;;
+                    *)
+                        log_info "Import cancelled"
+                        return 1
+                        ;;
+                esac
+            else
+                log_error "Use --force to overwrite existing backup"
+                return 1
+            fi
+        fi
+
+        rm -rf -- "${backup_root:?}/${agent_folder:?}"
+    fi
+
+    local tar_exit=0
+    if [[ "$archive" == "-" ]]; then
+        tar -xzf - -C "$backup_root" 2>/dev/null || tar_exit=$?
+    else
+        tar -xzf "$archive" -C "$backup_root" 2>/dev/null || tar_exit=$?
+    fi
+
+    if [[ $tar_exit -ne 0 ]]; then
+        if is_json_output; then
+            json_output "{\"status\":\"error\",\"error\":\"extract_failed\"}"
+        else
+            log_error "Failed to extract archive"
+        fi
+        return 1
+    fi
+
+    if is_json_output; then
+        local result
+        result="{\"status\":\"success\",\"destination\":\"$(json_escape_string "$backup_root")\""
+        if [[ -n "$agent_folder" ]]; then
+            result+=",\"agent_folder\":\"$(json_escape_string "$agent_folder")\""
+        fi
+        result+="}"
+        json_output "$result"
+    else
+        log_success "Imported backup"
+        log_info "Destination: ${backup_root}"
+        log_info "Run 'asb list' to see imported backups"
+    fi
+
+    return 0
+}
+
+#==============================================================================
+# LIST / STATUS
+#==============================================================================
+
+list_backups() {
+    local backup_root
+    backup_root=$(get_backup_root)
+
+    # JSON output mode
+    if is_json_output; then
+        local json_items=()
+        for agent in "${!AGENT_FOLDERS[@]}"; do
+            local agent_name="${AGENT_NAMES[$agent]:-$agent}"
+            local folder="${AGENT_FOLDERS[$agent]}"
+            local source="${HOME}/${folder}"
+            local dest="${backup_root}/${folder}"
+            local status last_backup_ts last_backup_rel commit
+
+            if [[ ! -d "$source" ]]; then
+                status="not_installed"
+                last_backup_ts=""
+                last_backup_rel=""
+                commit=""
+            elif [[ ! -d "$dest/.git" ]]; then
+                status="no_backup"
+                last_backup_ts=""
+                last_backup_rel=""
+                commit=""
+            else
+                status="backed_up"
+                # Batch git info in single call: ISO date, relative date, short hash
+                local git_info
+                git_info=$(git -C "$dest" log -1 --format="%aI|%ar|%h" 2>/dev/null || echo "||")
+                last_backup_ts="${git_info%%|*}"
+                git_info="${git_info#*|}"
+                last_backup_rel="${git_info%%|*}"
+                commit="${git_info#*|}"
+            fi
+
+            # Escape strings for JSON safety
+            agent_name=$(json_escape_string "$agent_name")
+
+            local json_item="{\"agent\":\"${agent}\",\"name\":\"${agent_name}\",\"status\":\"${status}\""
+            if [[ -n "$last_backup_ts" ]]; then
+                json_item+=",\"last_backup\":\"${last_backup_ts}\",\"last_backup_relative\":\"${last_backup_rel}\",\"commit\":\"${commit}\""
+            fi
+            json_item+="}"
+            json_items+=("$json_item")
+        done
+
+        # Sort JSON items by agent name and output as array
+        local sorted_json
+        sorted_json=$(printf '%s\n' "${json_items[@]}" | sort)
+        local result="["
+        local first=true
+        while IFS= read -r item; do
+            if [[ "$first" == "true" ]]; then
+                first=false
+            else
+                result+=","
+            fi
+            result+="$item"
+        done <<< "$sorted_json"
+        result+="]"
+        json_output "$result"
+        return 0
+    fi
+
+    # Human-readable output
+    printf '\n' >&2
+    printf '%b\n' "${BOLD}Agent Settings Backup Status${RESET}" >&2
+    printf '%s\n' "────────────────────────────────────────────────────────────" >&2
+    printf '\n' >&2
+
+    printf '%-15s %-20s %-10s %-20s\n' "Agent" "Name" "Status" "Last Backup" >&2
+    printf '%s\n' "────────────────────────────────────────────────────────────" >&2
+
+    # Collect output lines for sorting
+    local output_lines=()
+    for agent in "${!AGENT_FOLDERS[@]}"; do
+        local agent_name="${AGENT_NAMES[$agent]:-$agent}"
+        local folder="${AGENT_FOLDERS[$agent]}"
+        local source="${HOME}/${folder}"
+        local dest="${backup_root}/${folder}"
+        local status
+        local last_backup="-"
+
+        if [[ ! -d "$source" ]]; then
+            status="${DIM}not installed${RESET}"
+        elif [[ ! -d "$dest/.git" ]]; then
+            status="${YELLOW}no backup${RESET}"
+        else
+            status="${GREEN}backed up${RESET}"
+            last_backup=$(git -C "$dest" log -1 --format="%ar" 2>/dev/null || echo "unknown")
+        fi
+
+        output_lines+=("$(printf "%-15s %-20s %-10b %-20s" "$agent" "$agent_name" "$status" "$last_backup")")
+    done
+
+    # Sort and print
+    printf '%s\n' "${output_lines[@]}" | sort >&2
+
+    printf '\n' >&2
+    printf "Backup location: %s\n" "$backup_root" >&2
+}
+
+#==============================================================================
+# STATISTICS
+#==============================================================================
+
+# Get size of a directory in human-readable format
+get_dir_size() {
+    local dir="$1"
+    if [[ -d "$dir" ]]; then
+        /usr/bin/du -sh "$dir" 2>/dev/null | cut -f1 || echo "?"
+    else
+        echo "0"
+    fi
+}
+
+# Get size of a directory in bytes
+get_dir_size_bytes() {
+    local dir="$1"
+    if [[ -d "$dir" ]]; then
+        /usr/bin/du -sb "$dir" 2>/dev/null | cut -f1 || echo "0"
+    else
+        echo "0"
+    fi
+}
+
+# Calculate changes per week for an agent
+calc_changes_per_week() {
+    local dest="$1"
+    local total_commits="$2"
+
+    if [[ "$total_commits" -eq 0 ]]; then
+        echo "0.0"
+        return
+    fi
+
+    # Get first and last commit dates
+    local first_date last_date
+    first_date=$(git -C "$dest" log --reverse --format="%ct" 2>/dev/null | head -1)
+    last_date=$(git -C "$dest" log -1 --format="%ct" 2>/dev/null)
+
+    if [[ -z "$first_date" || -z "$last_date" ]]; then
+        echo "0.0"
+        return
+    fi
+
+    local days=$(( (last_date - first_date) / 86400 ))
+    if [[ "$days" -lt 1 ]]; then
+        days=1
+    fi
+
+    local weeks
+    weeks=$(echo "scale=1; $days / 7" | bc 2>/dev/null || echo "1")
+    if [[ "$weeks" == "0" || "$weeks" == ".0" ]]; then
+        weeks="1"
+    fi
+
+    echo "scale=1; $total_commits / $weeks" | bc 2>/dev/null || echo "$total_commits"
+}
+
+# Show stats for a single agent
+stats_agent() {
+    local agent="$1"
+    local agent_name="${AGENT_NAMES[$agent]:-$agent}"
+    local dest
+    dest=$(get_agent_backup_dir "$agent")
+
+    if [[ ! -d "$dest/.git" ]]; then
+        if is_json_output; then
+            json_error "No backup found for ${agent}"
+        fi
+        log_error "No backup found for ${agent_name}"
+        return 1
+    fi
+
+    local total_commits first_date first_ago last_date last_ago storage
+    local avg_interval changes_per_week files_tracked
+
+    total_commits=$(git -C "$dest" rev-list --count HEAD 2>/dev/null || echo "0")
+    storage=$(get_dir_size "$dest")
+    storage_bytes=$(get_dir_size_bytes "$dest")
+
+    if [[ "$total_commits" -gt 0 ]]; then
+        first_date=$(git -C "$dest" log --reverse --format="%ci" 2>/dev/null | head -1 | cut -d' ' -f1)
+        first_ago=$(git -C "$dest" log --reverse --format="%cr" 2>/dev/null | head -1)
+        last_date=$(git -C "$dest" log -1 --format="%ci" 2>/dev/null | cut -d' ' -f1,2)
+        last_ago=$(git -C "$dest" log -1 --format="%cr" 2>/dev/null)
+        changes_per_week=$(calc_changes_per_week "$dest" "$total_commits")
+
+        # Calculate average interval between commits
+        if [[ "$total_commits" -gt 1 ]]; then
+            local first_ts last_ts
+            first_ts=$(git -C "$dest" log --reverse --format="%ct" 2>/dev/null | head -1)
+            last_ts=$(git -C "$dest" log -1 --format="%ct" 2>/dev/null)
+            local total_hours=$(( (last_ts - first_ts) / 3600 ))
+            if [[ "$total_hours" -gt 0 ]]; then
+                avg_interval=$(echo "scale=1; $total_hours / ($total_commits - 1)" | bc 2>/dev/null || echo "?")
+                avg_interval="${avg_interval} hours"
+            else
+                avg_interval="< 1 hour"
+            fi
+        else
+            avg_interval="N/A"
+        fi
+    else
+        first_date="N/A"
+        first_ago="never"
+        last_date="N/A"
+        last_ago="never"
+        avg_interval="N/A"
+        changes_per_week="0"
+    fi
+
+    # Count tracked files (excluding .git)
+    files_tracked=$(find "$dest" -type f ! -path "*/.git/*" 2>/dev/null | wc -l)
+
+    if is_json_output; then
+        json_output "{\"agent\":\"${agent}\",\"name\":\"$(json_escape_string "$agent_name")\",\"total_backups\":${total_commits},\"first_backup\":\"$(json_escape_string "$first_date")\",\"first_backup_ago\":\"$(json_escape_string "$first_ago")\",\"last_backup\":\"$(json_escape_string "$last_date")\",\"last_backup_ago\":\"$(json_escape_string "$last_ago")\",\"storage\":\"$(json_escape_string "$storage")\",\"storage_bytes\":${storage_bytes:-0},\"avg_interval\":\"$(json_escape_string "$avg_interval")\",\"changes_per_week\":${changes_per_week},\"files_tracked\":${files_tracked}}"
+        return 0
+    fi
+
+    printf '\n' >&2
+    printf '%b\n' "${BOLD}${agent_name} Statistics${RESET}" >&2
+    printf '%s\n' "────────────────────────────────────────" >&2
+    printf '\n' >&2
+
+    printf "%-18s %s\n" "Total backups:" "$total_commits" >&2
+    printf "%-18s %s (%s)\n" "First backup:" "$first_date" "$first_ago" >&2
+    printf "%-18s %s (%s)\n" "Last backup:" "$last_date" "$last_ago" >&2
+    printf "%-18s %s\n" "Storage used:" "$storage" >&2
+    printf "%-18s %s\n" "Average interval:" "$avg_interval" >&2
+    printf "%-18s %s commits\n" "Changes/week:" "$changes_per_week" >&2
+    printf "%-18s %s\n" "Files tracked:" "$files_tracked" >&2
+    printf '\n' >&2
+}
+
+# Show stats for all agents
+stats_all() {
+    local backup_root
+    backup_root=$(get_backup_root)
+
+    local total_backups=0
+    local total_size_bytes=0
+    local agents_with_backup=0
+
+    # Collect data for all agents
+    local agent_data=()
+
+    for agent in "${!AGENT_FOLDERS[@]}"; do
+        local folder="${AGENT_FOLDERS[$agent]}"
+        local dest="${backup_root}/${folder}"
+
+        if [[ -d "$dest/.git" ]]; then
+            local agent_name="${AGENT_NAMES[$agent]:-$agent}"
+            local commits storage last_ago changes_per_week size_bytes
+
+            commits=$(git -C "$dest" rev-list --count HEAD 2>/dev/null || echo "0")
+            storage=$(get_dir_size "$dest")
+            size_bytes=$(get_dir_size_bytes "$dest")
+            last_ago=$(git -C "$dest" log -1 --format="%cr" 2>/dev/null || echo "never")
+            changes_per_week=$(calc_changes_per_week "$dest" "$commits")
+
+            total_backups=$((total_backups + commits))
+            total_size_bytes=$((total_size_bytes + size_bytes))
+            ((agents_with_backup++))
+
+            agent_data+=("${agent}|${agent_name}|${commits}|${storage}|${last_ago}|${changes_per_week}")
+        fi
+    done
+
+    if [[ ${#agent_data[@]} -eq 0 ]]; then
+        if is_json_output; then
+            json_output "{\"agents\":[],\"total_backups\":0,\"total_storage\":\"0\",\"total_storage_bytes\":0}"
+        else
+            log_warn "No backups found"
+        fi
+        return 0
+    fi
+
+    # Sort by agent name
+    mapfile -t agent_data < <(printf '%s\n' "${agent_data[@]}" | sort)
+
+    # Calculate total storage in human-readable format
+    local total_storage
+    if [[ "$total_size_bytes" -gt 1073741824 ]]; then
+        total_storage="$(echo "scale=1; $total_size_bytes / 1073741824" | bc)G"
+    elif [[ "$total_size_bytes" -gt 1048576 ]]; then
+        total_storage="$(echo "scale=1; $total_size_bytes / 1048576" | bc)M"
+    elif [[ "$total_size_bytes" -gt 1024 ]]; then
+        total_storage="$(echo "scale=1; $total_size_bytes / 1024" | bc)K"
+    else
+        total_storage="${total_size_bytes}B"
+    fi
+
+    if is_json_output; then
+        local json_agents=()
+        for entry in "${agent_data[@]}"; do
+            IFS='|' read -r agent agent_name commits storage last_ago changes_per_week <<< "$entry"
+            json_agents+=("{\"agent\":\"${agent}\",\"name\":\"$(json_escape_string "$agent_name")\",\"backups\":${commits},\"storage\":\"$(json_escape_string "$storage")\",\"last_backup\":\"$(json_escape_string "$last_ago")\",\"changes_per_week\":${changes_per_week}}")
+        done
+        json_output "{\"agents\":$(json_array "${json_agents[@]}"),\"total_backups\":${total_backups},\"total_storage\":\"$(json_escape_string "$total_storage")\",\"total_storage_bytes\":${total_size_bytes}}"
+        return 0
+    fi
+
+    printf '\n' >&2
+    printf '%b\n' "${BOLD}Backup Statistics${RESET}" >&2
+    printf '%s\n' "────────────────────────────────────────────────────────────────────────" >&2
+    printf '\n' >&2
+
+    # Header
+    printf '%-15s %-8s %-10s %-20s %s\n' "Agent" "Backups" "Size" "Last Backup" "Changes/Week" >&2
+    printf '%s\n' "────────────────────────────────────────────────────────────────────────" >&2
+
+    for entry in "${agent_data[@]}"; do
+        IFS='|' read -r agent agent_name commits storage last_ago changes_per_week <<< "$entry"
+        printf '%-15s %-8s %-10s %-20s %s\n' "$agent" "$commits" "$storage" "$last_ago" "$changes_per_week" >&2
+    done
+
+    printf '\n' >&2
+    printf "Total: %d backups, %s storage across %d agents\n" "$total_backups" "$total_storage" "$agents_with_backup" >&2
+    printf '\n' >&2
+}
+
+# Main stats command handler
+stats_command() {
+    if [[ $# -eq 0 ]]; then
+        stats_all
+    else
+        local agent="$1"
+        if ! agent_exists "$agent"; then
+            if is_json_output; then
+                json_error "Unknown agent: ${agent}"
+            fi
+            log_error "Unknown agent: ${agent}"
+            log_info "Run 'asb list' to see available agents"
+            return 1
+        fi
+        stats_agent "$agent"
+    fi
+}
+
+#==============================================================================
+# DISCOVERY
+#==============================================================================
+
+# Get custom agents file path
+get_custom_agents_file() {
+    echo "$(get_config_dir)/custom_agents"
+}
+
+# Load custom agents from config
+load_custom_agents() {
+    local custom_file
+    custom_file=$(get_custom_agents_file)
+
+    if [[ -f "$custom_file" ]]; then
+        local line key value
+        while IFS= read -r line || [[ -n "$line" ]]; do
+            # Skip empty lines and comments
+            [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
+            # Split on first = only (value may contain = signs)
+            key="${line%%=*}"
+            value="${line#*=}"
+            # Trim whitespace
+            key="${key// /}"
+            value="${value// /}"
+            if [[ -n "$key" && -n "$value" ]]; then
+                AGENT_FOLDERS["$key"]="$value"
+                # Set name from DISCOVERY_PATTERNS if available, else use key
+                AGENT_NAMES["$key"]="${DISCOVERY_PATTERNS[$value]:-$key}"
+            fi
+        done < "$custom_file"
+    fi
+}
+
+# Save a custom agent to config
+save_custom_agent() {
+    local agent_key="$1"
+    local agent_folder="$2"
+    local custom_file
+    custom_file=$(get_custom_agents_file)
+
+    # Ensure config directory exists
+    mkdir -p "$(dirname "$custom_file")"
+
+    # Append to custom agents file
+    echo "${agent_key}=${agent_folder}" >> "$custom_file"
+}
+
+# Scan for new agents not already known
+scan_for_agents() {
+    local discovered=()
+
+    for folder in "${!DISCOVERY_PATTERNS[@]}"; do
+        local full_path="${HOME}/${folder}"
+
+        # Skip if already in AGENT_FOLDERS
+        local already_known=false
+        for known_folder in "${AGENT_FOLDERS[@]}"; do
+            if [[ "$known_folder" == "$folder" ]]; then
+                already_known=true
+                break
+            fi
+        done
+
+        if [[ "$already_known" == "true" ]]; then
+            continue
+        fi
+
+        # Check if folder exists and is a directory
+        if [[ -d "$full_path" ]]; then
+            local name="${DISCOVERY_PATTERNS[$folder]}"
+            discovered+=("${folder}|${name}")
+        fi
+    done
+
+    printf '%s\n' "${discovered[@]}"
+}
+
+# Generate a safe agent key from folder name
+folder_to_key() {
+    local folder="$1"
+    # Remove leading dot and convert to lowercase
+    echo "${folder#.}" | tr '[:upper:]' '[:lower:]' | tr -cd '[:alnum:]'
+}
+
+# Discover and optionally add new agents
+discover_command() {
+    local auto_add=false
+    local list_only=false
+
+    # Parse options
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --auto|-a)
+                auto_add=true
+                ;;
+            --list|-l)
+                list_only=true
+                ;;
+            --help|-h)
+                printf '%b\n' "${BOLD}asb discover${RESET} - scan for new AI coding agents" >&2
+                printf '\n' >&2
+                printf "Usage:\n" >&2
+                printf "  asb discover           Interactive mode - prompt for each found agent\n" >&2
+                printf "  asb discover --auto    Automatically add all found agents\n" >&2
+                printf "  asb discover --list    Just list found agents without adding\n" >&2
+                printf "  asb discover --json    Output found agents as JSON\n" >&2
+                return 0
+                ;;
+            *)
+                log_error "Unknown option: $1"
+                return 1
+                ;;
+        esac
+        shift
+    done
+
+    local discovered
+    discovered=$(scan_for_agents)
+
+    if [[ -z "$discovered" ]]; then
+        if is_json_output; then
+            json_output "{\"discovered\":[],\"added\":[]}"
+        else
+            log_info "No new agents found"
+        fi
+        return 0
+    fi
+
+    local discovered_arr=()
+    while IFS= read -r line; do
+        [[ -n "$line" ]] && discovered_arr+=("$line")
+    done <<< "$discovered"
+
+    if is_json_output; then
+        local json_discovered=()
+        for entry in "${discovered_arr[@]}"; do
+            IFS='|' read -r folder name <<< "$entry"
+            local key
+            key=$(folder_to_key "$folder")
+            json_discovered+=("{\"key\":\"${key}\",\"folder\":\"$(json_escape_string "$folder")\",\"name\":\"$(json_escape_string "$name")\",\"path\":\"$(json_escape_string "${HOME}/${folder}")\"}")
+        done
+
+        if [[ "$list_only" == "true" ]]; then
+            json_output "{\"discovered\":$(json_array "${json_discovered[@]}")}"
+        else
+            # In auto mode with JSON, add all and report
+            local added=()
+            for entry in "${discovered_arr[@]}"; do
+                IFS='|' read -r folder name <<< "$entry"
+                local key
+                key=$(folder_to_key "$folder")
+                save_custom_agent "$key" "$folder"
+                AGENT_FOLDERS["$key"]="$folder"
+                AGENT_NAMES["$key"]="$name"
+                added+=("\"${key}\"")
+            done
+            json_output "{\"discovered\":$(json_array "${json_discovered[@]}"),\"added\":$(json_array "${added[@]}")}"
+        fi
+        return 0
+    fi
+
+    # Human-readable output
+    printf '\n' >&2
+    printf '%b\n' "${BOLD}Scanning for AI coding agents...${RESET}" >&2
+    printf '\n' >&2
+
+    printf "Found %d new agent(s):\n\n" "${#discovered_arr[@]}" >&2
+
+    for entry in "${discovered_arr[@]}"; do
+        IFS='|' read -r folder name <<< "$entry"
+        printf "  ${CYAN}~/%s${RESET}  %s\n" "$folder" "$name" >&2
+    done
+    printf '\n' >&2
+
+    if [[ "$list_only" == "true" ]]; then
+        return 0
+    fi
+
+    local added_count=0
+
+    if [[ "$auto_add" == "true" ]]; then
+        for entry in "${discovered_arr[@]}"; do
+            IFS='|' read -r folder name <<< "$entry"
+            local key
+            key=$(folder_to_key "$folder")
+            save_custom_agent "$key" "$folder"
+            AGENT_FOLDERS["$key"]="$folder"
+            AGENT_NAMES["$key"]="$name"
+            ((added_count++))
+            log_success "Added ${name} (${key})"
+        done
+    else
+        # Interactive mode
+        for entry in "${discovered_arr[@]}"; do
+            IFS='|' read -r folder name <<< "$entry"
+            local key
+            key=$(folder_to_key "$folder")
+
+            printf '%b' "${YELLOW}Add ${name} (~/${folder})? [y/N] ${RESET}" >&2
+            read -r confirm
+            if [[ "$confirm" =~ ^[Yy]$ ]]; then
+                save_custom_agent "$key" "$folder"
+                AGENT_FOLDERS["$key"]="$folder"
+                AGENT_NAMES["$key"]="$name"
+                ((added_count++))
+                log_success "Added ${name} (${key})"
+            fi
+        done
+    fi
+
+    printf '\n' >&2
+    if [[ "$added_count" -gt 0 ]]; then
+        log_success "Added ${added_count} new agent(s). Run 'asb backup' to back them up."
+    else
+        log_info "No agents added"
+    fi
+}
+
+#==============================================================================
+# HISTORY
+#==============================================================================
+
+show_history() {
+    local agent="$1"
+    local limit="${2:-20}"
+    local agent_name="${AGENT_NAMES[$agent]:-$agent}"
+    local dest
+
+    dest=$(get_agent_backup_dir "$agent")
+
+    if [[ ! -d "$dest/.git" ]]; then
+        if is_json_output; then
+            json_error "No backup history for ${agent_name}" 1
+        fi
+        log_error "No backup history for ${agent_name}"
+        return 1
+    fi
+
+    # JSON output mode
+    if is_json_output; then
+        local json_items=()
+        local total
+        total=$(git -C "$dest" rev-list --count HEAD 2>/dev/null || echo "0")
+
+        # Get commit data in a machine-parseable format
+        while IFS=$'\t' read -r full_commit commit date message; do
+            # Escape message for JSON
+            message=$(json_escape_string "$message")
+            local tags_raw
+            tags_raw=$(git -C "$dest" tag --points-at "$full_commit" 2>/dev/null || true)
+            local tag_items=()
+            if [[ -n "$tags_raw" ]]; then
+                while IFS= read -r tag; do
+                    [[ -n "$tag" ]] || continue
+                    tag_items+=("\"$(json_escape_string "$tag")\"")
+                done <<< "$tags_raw"
+            fi
+            local tags_json
+            tags_json=$(json_array "${tag_items[@]}")
+            local json_item="{\"commit\":\"${commit}\",\"date\":\"${date}\",\"message\":\"${message}\",\"tags\":${tags_json}}"
+            json_items+=("$json_item")
+        done < <(git -C "$dest" log --format="%H%x09%h%x09%aI%x09%s" -n "$limit" 2>/dev/null)
+
+        # Build the final JSON
+        local commits_json="["
+        local first=true
+        for item in "${json_items[@]}"; do
+            if [[ "$first" == "true" ]]; then
+                first=false
+            else
+                commits_json+=","
+            fi
+            commits_json+="$item"
+        done
+        commits_json+="]"
+
+        json_output "{\"agent\":\"${agent}\",\"name\":\"$(json_escape_string "$agent_name")\",\"total\":${total},\"commits\":${commits_json}}"
+        return 0
+    fi
+
+    # Human-readable output
+    printf '\n' >&2
+    printf '%b\n' "${BOLD}Backup History: ${agent_name}${RESET}" >&2
+    printf '%s\n' "─────────────────────────────────────" >&2
+    printf '\n' >&2
+
+    git -C "$dest" log --oneline --decorate -n "$limit" 2>/dev/null
+
+    printf '\n' >&2
+    local total
+    total=$(git -C "$dest" rev-list --count HEAD 2>/dev/null || echo "0")
+    log_info "Total backups: ${total}"
+}
+
+#==============================================================================
+# DIFF
+#==============================================================================
+
+show_diff() {
+    local agent="$1"
+    local agent_name="${AGENT_NAMES[$agent]:-$agent}"
+    local source
+    local dest
+
+    source=$(get_agent_source "$agent")
+    dest=$(get_agent_backup_dir "$agent")
+
+    if [[ ! -d "$source" ]]; then
+        if is_json_output; then
+            json_output "{\"agent\":\"${agent}\",\"name\":\"$(json_escape_string "$agent_name")\",\"status\":\"error\",\"error\":\"not_installed\"}"
+        else
+            log_error "${agent_name} not installed"
+        fi
+        return 1
+    fi
+
+    if [[ ! -d "$dest/.git" ]]; then
+        if is_json_output; then
+            json_output "{\"agent\":\"${agent}\",\"name\":\"$(json_escape_string "$agent_name")\",\"status\":\"error\",\"error\":\"no_backup_found\"}"
+        else
+            log_error "No backup found for ${agent_name}"
+        fi
+        return 1
+    fi
+
+    # Create a temp copy of current state
+    local temp_dir
+    temp_dir=$(mktemp -d)
+    local prev_trap
+    prev_trap=$(trap -p RETURN)
+    if [[ -z "$prev_trap" ]]; then
+        prev_trap="trap - RETURN"
+    fi
+    # shellcheck disable=SC2064 # Variables intentionally expand at definition time
+    trap "rm -rf '$temp_dir'; $prev_trap" RETURN
+
+    # Copy current source to temp (use /. to include hidden files)
+    cp -r "$source"/. "$temp_dir/" 2>/dev/null || true
+
+    # Compare with backup
+    local diff_output
+    diff_output=$(diff -rq "$dest" "$temp_dir" \
+        --exclude='.git' \
+        --exclude='.gitignore' \
+        --exclude='*.log' \
+        --exclude='cache' \
+        --exclude='Cache' \
+        --exclude='.cache' \
+        2>/dev/null || true)
+
+    if is_json_output; then
+        local added=()
+        local removed=()
+        local modified=()
+
+        while IFS= read -r line; do
+            [[ -z "$line" ]] && continue
+            if [[ "$line" == "Only in $dest"* ]]; then
+                # File only in backup (will be added on restore / was deleted)
+                local file="${line#Only in "$dest"}"
+                file="${file#/: }"
+                file="${file#: }"
+                removed+=("\"$(json_escape_string "$file")\"")
+            elif [[ "$line" == "Only in $temp_dir"* ]]; then
+                # File only in current (new file)
+                local file="${line#Only in "$temp_dir"}"
+                file="${file#/: }"
+                file="${file#: }"
+                added+=("\"$(json_escape_string "$file")\"")
+            elif [[ "$line" == "Files "* && "$line" == *" differ" ]]; then
+                # File differs
+                local file="${line#Files }"
+                file="${file%% and *}"
+                file="${file#"$dest"/}"
+                modified+=("\"$(json_escape_string "$file")\"")
+            fi
+        done <<< "$diff_output"
+
+        local has_changes=false
+        if [[ ${#added[@]} -gt 0 || ${#removed[@]} -gt 0 || ${#modified[@]} -gt 0 ]]; then
+            has_changes=true
+        fi
+
+        local result
+        result="{\"agent\":\"${agent}\",\"name\":\"$(json_escape_string "$agent_name")\",\"status\":\"success\""
+        result+=",\"has_changes\":${has_changes}"
+        result+=",\"added\":$(json_array "${added[@]}")"
+        result+=",\"removed\":$(json_array "${removed[@]}")"
+        result+=",\"modified\":$(json_array "${modified[@]}")"
+        result+="}"
+        json_output "$result"
+    else
+        printf '\n' >&2
+        printf '%b\n' "${BOLD}Changes since last backup: ${agent_name}${RESET}" >&2
+        printf '%s\n' "─────────────────────────────────────────────" >&2
+        printf '\n' >&2
+
+        if [[ -n "$diff_output" ]]; then
+            echo "$diff_output" >&2
+        else
+            log_info "No changes since last backup"
+        fi
+
+        printf '\n' >&2
+    fi
+}
+
+#==============================================================================
+# SCHEDULING
+#==============================================================================
+
+schedule_validate_interval() {
+    local interval="$1"
+    case "$interval" in
+        hourly|daily|weekly)
+            return 0
+            ;;
+        *)
+            log_error "Invalid interval: ${interval}"
+            log_info "Supported intervals: hourly, daily, weekly"
+            return 1
+            ;;
+    esac
+}
+
+schedule_cron_expr() {
+    local interval="$1"
+    case "$interval" in
+        hourly) echo "0 * * * *" ;;
+        daily) echo "0 0 * * *" ;;
+        weekly) echo "0 0 * * 0" ;;
+    esac
+}
+
+schedule_install_cron() {
+    local interval="$1"
+    local cron_expr
+    cron_expr=$(schedule_cron_expr "$interval")
+    local asb_cmd
+    asb_cmd=$(get_asb_command_path)
+    local log_file
+    log_file=$(get_schedule_log_file)
+    local log_dir
+    log_dir=$(dirname "$log_file")
+
+    local asb_cmd_escaped
+    asb_cmd_escaped=$(printf '%q' "$asb_cmd")
+    local log_file_escaped
+    log_file_escaped=$(printf '%q' "$log_file")
+    local cron_line="${cron_expr} ${asb_cmd_escaped} backup >> ${log_file_escaped} 2>&1 # ASB_BACKUP_SCHEDULE"
+
+    if is_dry_run; then
+        log_dry "Would install cron schedule (${interval})"
+        log_dry "Cron line: ${cron_line}"
+        return 0
+    fi
+
+    if ! command_exists crontab; then
+        log_error "crontab is required for --cron scheduling"
+        return 1
+    fi
+
+    mkdir -p "$log_dir"
+
+    local existing
+    existing=$(crontab -l 2>/dev/null || true)
+    local cleaned
+    cleaned=$(printf '%s\n' "$existing" | grep -v 'ASB_BACKUP_SCHEDULE' || true)
+
+    {
+        printf '%s\n' "$cleaned"
+        printf '%s\n' "# ASB_BACKUP_SCHEDULE"
+        printf '%s\n' "$cron_line"
+    } | crontab -
+
+    log_success "Installed cron schedule (${interval})"
+    log_info "Logs: ${log_file}"
+}
+
+schedule_remove_cron() {
+    if is_dry_run; then
+        log_dry "Would remove cron schedule"
+        return 0
+    fi
+
+    if ! command_exists crontab; then
+        log_error "crontab is required for --cron scheduling"
+        return 1
+    fi
+
+    local existing
+    existing=$(crontab -l 2>/dev/null || true)
+    local cleaned
+    cleaned=$(printf '%s\n' "$existing" | grep -v 'ASB_BACKUP_SCHEDULE' || true)
+    printf '%s\n' "$cleaned" | crontab -
+
+    log_success "Removed cron schedule"
+}
+
+schedule_status_cron() {
+    if is_dry_run; then
+        log_dry "Would check cron schedule status"
+        return 0
+    fi
+
+    if ! command_exists crontab; then
+        log_error "crontab is required for --cron scheduling"
+        return 1
+    fi
+
+    local existing
+    existing=$(crontab -l 2>/dev/null || true)
+    if printf '%s\n' "$existing" | grep -q 'ASB_BACKUP_SCHEDULE'; then
+        log_success "Cron schedule is installed"
+        printf '%s\n' "$existing" | grep 'ASB_BACKUP_SCHEDULE' -A1 >&2 || true
+    else
+        log_info "No cron schedule found"
+    fi
+}
+
+schedule_install_systemd() {
+    local interval="$1"
+    local systemd_dir="$HOME/.config/systemd/user"
+    local service_file="$systemd_dir/asb-backup.service"
+    local timer_file="$systemd_dir/asb-backup.timer"
+    local asb_cmd
+    asb_cmd=$(get_asb_command_path)
+
+    if is_dry_run; then
+        log_dry "Would install systemd user timer (${interval})"
+        log_dry "Service: ${service_file}"
+        log_dry "Timer: ${timer_file}"
+        return 0
+    fi
+
+    if ! command_exists systemctl; then
+        log_error "systemctl is required for --systemd scheduling"
+        return 1
+    fi
+
+    mkdir -p "$systemd_dir"
+
+    cat > "$service_file" <<EOF
+[Unit]
+Description=Agent Settings Backup
+
+[Service]
+Type=oneshot
+ExecStart=${asb_cmd} backup
+EOF
+
+    cat > "$timer_file" <<EOF
+[Unit]
+Description=Run asb backup ${interval}
+
+[Timer]
+OnCalendar=${interval}
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+
+    systemctl --user daemon-reload
+    systemctl --user enable --now asb-backup.timer >/dev/null 2>&1
+
+    log_success "Installed systemd timer (${interval})"
+}
+
+schedule_remove_systemd() {
+    local systemd_dir="$HOME/.config/systemd/user"
+    local service_file="$systemd_dir/asb-backup.service"
+    local timer_file="$systemd_dir/asb-backup.timer"
+
+    if is_dry_run; then
+        log_dry "Would remove systemd user timer"
+        return 0
+    fi
+
+    if ! command_exists systemctl; then
+        log_error "systemctl is required for --systemd scheduling"
+        return 1
+    fi
+
+    systemctl --user disable --now asb-backup.timer >/dev/null 2>&1 || true
+    rm -f "$service_file" "$timer_file"
+    systemctl --user daemon-reload
+
+    log_success "Removed systemd timer"
+}
+
+schedule_status_systemd() {
+    if is_dry_run; then
+        log_dry "Would check systemd schedule status"
+        return 0
+    fi
+
+    if ! command_exists systemctl; then
+        log_error "systemctl is required for --systemd scheduling"
+        return 1
+    fi
+
+    if systemctl --user is-enabled asb-backup.timer >/dev/null 2>&1; then
+        log_success "Systemd timer is enabled"
+        systemctl --user status asb-backup.timer --no-pager >&2 || true
+    else
+        log_info "Systemd timer is not enabled"
+    fi
+}
+
+schedule_status_json() {
+    local mode="${1:-}"
+    local cron_json="null"
+    local systemd_json="null"
+
+    if [[ -z "$mode" || "$mode" == "cron" ]]; then
+        local cron_available=false
+        local cron_installed=false
+        local cron_line=""
+
+        if command_exists crontab; then
+            cron_available=true
+            local existing
+            existing=$(crontab -l 2>/dev/null || true)
+            if printf '%s\n' "$existing" | grep -q 'ASB_BACKUP_SCHEDULE'; then
+                cron_installed=true
+                cron_line=$(printf '%s\n' "$existing" | grep 'ASB_BACKUP_SCHEDULE' | tail -n 1)
+            fi
+        fi
+
+        local cron_line_json="null"
+        if [[ -n "$cron_line" ]]; then
+            cron_line_json="\"$(json_escape_string "$cron_line")\""
+        fi
+
+        cron_json="{\"available\":${cron_available},\"installed\":${cron_installed},\"line\":${cron_line_json}}"
+    fi
+
+    if [[ -z "$mode" || "$mode" == "systemd" ]]; then
+        local systemd_available=false
+        local systemd_enabled=false
+
+        if command_exists systemctl; then
+            systemd_available=true
+            if systemctl --user is-enabled asb-backup.timer >/dev/null 2>&1; then
+                systemd_enabled=true
+            fi
+        fi
+
+        systemd_json="{\"available\":${systemd_available},\"enabled\":${systemd_enabled}}"
+    fi
+
+    json_output "{\"cron\":${cron_json},\"systemd\":${systemd_json}}"
+}
+
+show_schedule_help() {
+    cat << EOF
+
+${BOLD}asb schedule${RESET} - set up automated backups
+
+Usage:
+    asb schedule --cron|--systemd [--interval hourly|daily|weekly]
+    asb schedule --status [--cron|--systemd]
+    asb schedule --remove --cron|--systemd
+
+Options:
+    --cron            Use cron (crontab)
+    --systemd         Use systemd user timer
+    --interval        Schedule interval (hourly, daily, weekly). Default: daily
+    --status          Show current schedule status
+    --remove          Remove scheduled backup
+    -h, --help        Show this help
+EOF
+}
+
+schedule_backup() {
+    local mode=""
+    local interval="daily"
+    local remove=false
+    local status=false
+    local cron_selected=false
+    local systemd_selected=false
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --cron)
+                cron_selected=true
+                mode="cron"
+                ;;
+            --systemd)
+                systemd_selected=true
+                mode="systemd"
+                ;;
+            --interval)
+                shift
+                interval="${1:-}"
+                ;;
+            --remove)
+                remove=true
+                ;;
+            --status)
+                status=true
+                ;;
+            -h|--help)
+                show_schedule_help
+                return 0
+                ;;
+            *)
+                log_error "Unknown option: $1"
+                log_info "Run 'asb schedule --help' for usage"
+                return 1
+                ;;
+        esac
+        shift
+    done
+
+    if [[ "$cron_selected" == "true" && "$systemd_selected" == "true" ]]; then
+        log_error "Choose only one: --cron or --systemd"
+        return 1
+    fi
+
+    if [[ -n "$interval" ]] && ! schedule_validate_interval "$interval"; then
+        return 1
+    fi
+
+    if [[ "$status" == "true" ]]; then
+        if is_json_output; then
+            schedule_status_json "$mode"
+            return $?
+        fi
+        if [[ -n "$mode" ]]; then
+            if [[ "$mode" == "cron" ]]; then
+                schedule_status_cron
+            else
+                schedule_status_systemd
+            fi
+            return $?
+        fi
+        log_info "Checking cron schedule..."
+        schedule_status_cron || true
+        log_info "Checking systemd schedule..."
+        schedule_status_systemd || true
+        return 0
+    fi
+
+    if [[ "$remove" == "true" ]]; then
+        if [[ -z "$mode" ]]; then
+            log_error "--remove requires --cron or --systemd"
+            return 1
+        fi
+        if [[ "$mode" == "cron" ]]; then
+            schedule_remove_cron
+        else
+            schedule_remove_systemd
+        fi
+        return $?
+    fi
+
+    if [[ -z "$mode" ]]; then
+        if command_exists systemctl; then
+            mode="systemd"
+        elif command_exists crontab; then
+            mode="cron"
+        else
+            log_error "No scheduler detected. Install systemd or crontab, or specify --cron/--systemd."
+            return 1
+        fi
+        log_info "No scheduler specified; defaulting to ${mode}"
+    fi
+
+    if [[ "$mode" == "cron" ]]; then
+        schedule_install_cron "$interval"
+    else
+        schedule_install_systemd "$interval"
+    fi
+}
+
+#==============================================================================
+# HOOKS COMMANDS
+#==============================================================================
+
+list_hooks() {
+    local hooks_root
+    hooks_root=$(get_hooks_root)
+    local hook_types=(pre-backup post-backup pre-restore post-restore)
+
+    if is_json_output; then
+        local entries=()
+        local hook_type
+        for hook_type in "${hook_types[@]}"; do
+            local dir="${hooks_root}/${hook_type}.d"
+            local names=()
+            if [[ -d "$dir" ]]; then
+                local script
+                for script in "$dir"/*; do
+                    [[ -x "$script" ]] || continue
+                    names+=("\"$(json_escape_string "$(basename "$script")")\"")
+                done
+            fi
+            entries+=("\"${hook_type}\":$(json_array "${names[@]}")")
+        done
+
+        local hooks_json="{"
+        local first=true
+        local entry
+        for entry in "${entries[@]}"; do
+            if [[ "$first" == "true" ]]; then
+                first=false
+            else
+                hooks_json+=","
+            fi
+            hooks_json+="$entry"
+        done
+        hooks_json+="}"
+
+        json_output "{\"root\":\"$(json_escape_string "$hooks_root")\",\"hooks\":${hooks_json}}"
+        return 0
+    fi
+
+    printf '\n' >&2
+    printf '%b\n' "${BOLD}asb Hooks${RESET}" >&2
+    printf '%s\n' "─────────────────────────────" >&2
+    printf '\n' >&2
+    printf "Hooks root: %s\n\n" "$hooks_root" >&2
+
+    local hook_type
+    for hook_type in "${hook_types[@]}"; do
+        local dir="${hooks_root}/${hook_type}.d"
+        printf "%-15s " "${hook_type}:" >&2
+        if [[ ! -d "$dir" ]]; then
+            printf "%b\n" "${DIM}(missing directory)${RESET}" >&2
+            continue
+        fi
+
+        local scripts=()
+        local script
+        for script in "$dir"/*; do
+            [[ -x "$script" ]] || continue
+            scripts+=("$(basename "$script")")
+        done
+
+        if [[ ${#scripts[@]} -eq 0 ]]; then
+            printf "%b\n" "${DIM}(none)${RESET}" >&2
+            continue
+        fi
+
+        printf "%s\n" "${scripts[*]}" >&2
+    done
+}
+
+hooks_command() {
+    local action="${1:-list}"
+    case "$action" in
+        list|--list|-l)
+            list_hooks
+            ;;
+        -h|--help|help)
+            printf '\n' >&2
+            printf '%b\n' "${BOLD}asb hooks${RESET} - list configured hooks" >&2
+            printf '%s\n' "────────────────────────────────────" >&2
+            printf '\n' >&2
+            printf "Usage:\n" >&2
+            printf "  asb hooks --list\n" >&2
+            printf "  asb hooks list\n" >&2
+            printf '\n' >&2
+            ;;
+        *)
+            log_error "Unknown hooks command: ${action}"
+            log_info "Usage: asb hooks --list"
+            return 1
+            ;;
+    esac
+}
+
+#==============================================================================
+# VERIFY
+#==============================================================================
+
+verify_agent_json() {
+    local agent="$1"
+    local agent_name="${AGENT_NAMES[$agent]:-$agent}"
+    local dest
+    local issues=0
+    local warnings=0
+    local details=()
+
+    dest=$(get_agent_backup_dir "$agent")
+
+    # Check if backup directory exists
+    if [[ ! -d "$dest" ]]; then
+        details+=("\"$(json_escape_string "No backup directory found")\"")
+        issues=1
+        json_output "{\"agent\":\"${agent}\",\"name\":\"$(json_escape_string "$agent_name")\",\"status\":\"missing\",\"issues\":${issues},\"warnings\":${warnings},\"details\":$(json_array "${details[@]}")}"
+        return 1
+    fi
+
+    # Check if it's a git repository
+    if [[ ! -d "$dest/.git" ]]; then
+        details+=("\"$(json_escape_string "Not a git repository")\"")
+        ((issues++))
+    else
+        # Run git fsck to check repository integrity
+        local fsck_output
+        if ! fsck_output=$(git -C "$dest" fsck --no-dangling 2>&1); then
+            details+=("\"$(json_escape_string "Git repository integrity check failed")\"")
+            if [[ -n "$fsck_output" ]]; then
+                details+=("\"$(json_escape_string "$fsck_output")\"")
+            fi
+            ((issues++))
+        fi
+
+        # Check if HEAD is valid
+        if ! git -C "$dest" rev-parse HEAD &>/dev/null; then
+            details+=("\"$(json_escape_string "Invalid HEAD reference")\"")
+            ((issues++))
+        fi
+
+        # Check if there's at least one commit
+        local commit_count
+        commit_count=$(git -C "$dest" rev-list --count HEAD 2>/dev/null || echo "0")
+        if [[ "$commit_count" -eq 0 ]]; then
+            details+=("\"$(json_escape_string "No commits in repository")\"")
+            ((warnings++))
+        fi
+    fi
+
+    # Check if .gitignore exists
+    if [[ ! -f "$dest/.gitignore" ]]; then
+        details+=("\"$(json_escape_string "Missing .gitignore file")\"")
+        ((warnings++))
+    fi
+
+    local status="ok"
+    if [[ "$issues" -gt 0 ]]; then
+        status="error"
+    elif [[ "$warnings" -gt 0 ]]; then
+        status="warning"
+    fi
+
+    json_output "{\"agent\":\"${agent}\",\"name\":\"$(json_escape_string "$agent_name")\",\"status\":\"${status}\",\"issues\":${issues},\"warnings\":${warnings},\"details\":$(json_array "${details[@]}")}"
+
+    if [[ "$issues" -gt 0 ]]; then
+        return 1
+    fi
+    return 0
+}
+
+verify_all_json() {
+    local agents=("$@")
+    local results=()
+    local failed=0
+
+    # If no agents specified, verify all backed-up agents
+    if [[ ${#agents[@]} -eq 0 ]]; then
+        for agent in "${!AGENT_FOLDERS[@]}"; do
+            local dest
+            dest=$(get_agent_backup_dir "$agent")
+            if [[ -d "$dest" ]]; then
+                agents+=("$agent")
+            fi
+        done
+    fi
+
+    if [[ ${#agents[@]} -eq 0 ]]; then
+        json_output "[]"
+        return 0
+    fi
+
+    # Sort agents for consistent output
+    mapfile -t agents < <(sort <<<"${agents[*]}")
+
+    for agent in "${agents[@]}"; do
+        if ! agent_exists "$agent"; then
+            local agent_msg="Unknown agent: ${agent}"
+            results+=("{\"agent\":\"$(json_escape_string "$agent")\",\"name\":\"$(json_escape_string "$agent")\",\"status\":\"unknown\",\"issues\":1,\"warnings\":0,\"details\":$(json_array "\"$(json_escape_string "$agent_msg")\"")}")
+            failed=1
+            continue
+        fi
+
+        local item
+        if item=$(verify_agent_json "$agent"); then
+            :
+        else
+            failed=1
+        fi
+        results+=("$item")
+    done
+
+    json_output "$(json_array "${results[@]}")"
+    return $failed
+}
+
+verify_agent() {
+    local agent="$1"
+    local agent_name="${AGENT_NAMES[$agent]:-$agent}"
+    local dest
+    local issues=0
+    local warnings=0
+
+    dest=$(get_agent_backup_dir "$agent")
+
+    log_step "Verifying ${agent_name} backup..."
+
+    # Check if backup directory exists
+    if [[ ! -d "$dest" ]]; then
+        log_warn "${agent_name}: No backup directory found"
+        return 1
+    fi
+
+    # Check if it's a git repository
+    if [[ ! -d "$dest/.git" ]]; then
+        log_error "${agent_name}: Not a git repository"
+        ((issues++))
+    else
+        # Run git fsck to check repository integrity
+        log_debug "Running git fsck..."
+        local fsck_output
+        if ! fsck_output=$(git -C "$dest" fsck --no-dangling 2>&1); then
+            log_error "${agent_name}: Git repository integrity check failed"
+            log_debug "$fsck_output"
+            ((issues++))
+        else
+            log_debug "Git fsck passed"
+        fi
+
+        # Check if HEAD is valid
+        if ! git -C "$dest" rev-parse HEAD &>/dev/null; then
+            log_error "${agent_name}: Invalid HEAD reference"
+            ((issues++))
+        else
+            log_debug "HEAD is valid"
+        fi
+
+        # Check if there's at least one commit
+        local commit_count
+        commit_count=$(git -C "$dest" rev-list --count HEAD 2>/dev/null || echo "0")
+        if [[ "$commit_count" -eq 0 ]]; then
+            log_warn "${agent_name}: No commits in repository"
+            ((warnings++))
+        else
+            log_debug "Found $commit_count commits"
+        fi
+    fi
+
+    # Check if .gitignore exists
+    if [[ ! -f "$dest/.gitignore" ]]; then
+        log_warn "${agent_name}: Missing .gitignore file"
+        ((warnings++))
+    else
+        log_debug ".gitignore present"
+    fi
+
+    # Check for dangling objects (informational)
+    if [[ -d "$dest/.git" ]]; then
+        local dangling
+        dangling=$(git -C "$dest" fsck --unreachable 2>/dev/null | grep -c "^unreachable" 2>/dev/null || true)
+        dangling="${dangling:-0}"
+        dangling="${dangling//[^0-9]/}"  # Remove any non-numeric characters
+        if [[ -n "$dangling" && "$dangling" -gt 0 ]] 2>/dev/null; then
+            log_debug "${agent_name}: $dangling unreachable objects (can be cleaned with git gc)"
+        fi
+    fi
+
+    # Report results
+    if [[ "$issues" -gt 0 ]]; then
+        log_error "${agent_name}: ${issues} issue(s) found"
+        return 1
+    elif [[ "$warnings" -gt 0 ]]; then
+        log_warn "${agent_name}: ${warnings} warning(s)"
+        return 0
+    else
+        log_success "${agent_name}: OK"
+        return 0
+    fi
+}
+
+verify_all() {
+    local agents=("$@")
+    local verified=0
+    local failed=0
+    local skipped=0
+
+    if is_json_output; then
+        verify_all_json "$@"
+        return $?
+    fi
+
+    printf '\n' >&2
+    printf '%b\n' "${BOLD}Verifying Backup Integrity${RESET}" >&2
+    printf '%s\n' "────────────────────────────────────────────────────────────" >&2
+    printf '\n' >&2
+
+    # If no agents specified, verify all backed-up agents
+    if [[ ${#agents[@]} -eq 0 ]]; then
+        for agent in "${!AGENT_FOLDERS[@]}"; do
+            local dest
+            dest=$(get_agent_backup_dir "$agent")
+            if [[ -d "$dest" ]]; then
+                agents+=("$agent")
+            fi
+        done
+    fi
+
+    if [[ ${#agents[@]} -eq 0 ]]; then
+        log_warn "No backups found to verify"
+        return 0
+    fi
+
+    # Sort agents for consistent output
+    mapfile -t agents < <(sort <<<"${agents[*]}")
+
+    for agent in "${agents[@]}"; do
+        if ! agent_exists "$agent"; then
+            log_warn "Unknown agent: $agent"
+            ((skipped++))
+            continue
+        fi
+
+        local dest
+        dest=$(get_agent_backup_dir "$agent")
+        if [[ ! -d "$dest" ]]; then
+            local agent_name="${AGENT_NAMES[$agent]:-$agent}"
+            log_warn "${agent_name}: No backup found"
+            ((skipped++))
+            continue
+        fi
+
+        if verify_agent "$agent"; then
+            ((verified++))
+        else
+            ((failed++))
+        fi
+    done
+
+    # Summary
+    printf '\n' >&2
+    printf '%s\n' "────────────────────────────────────────────────────────────" >&2
+    if [[ "$failed" -eq 0 && "$skipped" -eq 0 ]]; then
+        log_success "All backups verified: ${verified} OK"
+    elif [[ "$failed" -eq 0 ]]; then
+        log_warn "Verification complete: ${verified} OK, ${skipped} not found"
+    else
+        log_warn "Verification complete: ${verified} OK, ${failed} failed, ${skipped} not found"
+    fi
+
+    [[ "$failed" -eq 0 ]]
+}
+
+#==============================================================================
+# TAGS
+#==============================================================================
+
+# Validate tag name - alphanumeric, underscore, hyphen, dot allowed (for semver)
+# Must not start with dash or dot
+validate_tag_name() {
+    local tagname="$1"
+    if [[ ! "$tagname" =~ ^[a-zA-Z0-9][a-zA-Z0-9_.-]*$ ]]; then
+        return 1
+    fi
+    return 0
+}
+
+# Create a tag for a backup commit
+tag_backup() {
+    local agent="$1"
+    local tagname="$2"
+    local commit="${3:-HEAD}"
+    local agent_name="${AGENT_NAMES[$agent]:-$agent}"
+    local dest
+
+    dest=$(get_agent_backup_dir "$agent")
+
+    if [[ ! -d "$dest/.git" ]]; then
+        if is_json_output; then
+            json_error "No backup found for ${agent}"
+        fi
+        log_error "No backup found for ${agent_name}"
+        return 1
+    fi
+
+    if ! validate_tag_name "$tagname"; then
+        if is_json_output; then
+            json_error "Invalid tag name. Use only letters, numbers, underscore, hyphen, dot"
+        fi
+        log_error "Invalid tag name: ${tagname}"
+        log_info "Tag names must start with a letter or number, and contain only letters, numbers, underscore, hyphen, or dot"
+        return 1
+    fi
+
+    # Check if tag already exists
+    if git -C "$dest" tag -l "$tagname" | grep -q "^${tagname}$"; then
+        if is_json_output; then
+            json_error "Tag '${tagname}' already exists for ${agent}"
+        fi
+        log_error "Tag '${tagname}' already exists for ${agent_name}"
+        log_info "Use 'asb tag ${agent} --delete ${tagname}' to remove it first"
+        return 1
+    fi
+
+    # Resolve commit reference
+    if ! git -C "$dest" rev-parse --verify "$commit" &>/dev/null; then
+        if is_json_output; then
+            json_error "Invalid commit reference: ${commit}"
+        fi
+        log_error "Invalid commit reference: ${commit}"
+        return 1
+    fi
+
+    if [[ "$DRY_RUN" == "true" ]]; then
+        if is_json_output; then
+            local resolved_commit
+            resolved_commit=$(git -C "$dest" rev-parse --short "$commit")
+            json_output "{\"agent\":\"${agent}\",\"name\":\"$(json_escape_string "$agent_name")\",\"tag\":\"$(json_escape_string "$tagname")\",\"commit\":\"${resolved_commit}\",\"dry_run\":true}"
+        else
+            log_info "[DRY RUN] Would tag ${agent_name} backup as '${tagname}' at commit ${commit}"
+        fi
+        return 0
+    fi
+
+    if git -C "$dest" tag "$tagname" "$commit" 2>/dev/null; then
+        local resolved_commit
+        resolved_commit=$(git -C "$dest" rev-parse --short "$commit")
+        if is_json_output; then
+            json_output "{\"agent\":\"${agent}\",\"name\":\"$(json_escape_string "$agent_name")\",\"tag\":\"$(json_escape_string "$tagname")\",\"commit\":\"${resolved_commit}\",\"success\":true}"
+        else
+            log_success "Tagged ${agent_name} backup as '${tagname}' (${resolved_commit})"
+        fi
+        return 0
+    else
+        if is_json_output; then
+            json_error "Failed to create tag '${tagname}'"
+        fi
+        log_error "Failed to create tag '${tagname}'"
+        return 1
+    fi
+}
+
+# List all tags for an agent
+list_tags() {
+    local agent="$1"
+    local agent_name="${AGENT_NAMES[$agent]:-$agent}"
+    local dest
+
+    dest=$(get_agent_backup_dir "$agent")
+
+    if [[ ! -d "$dest/.git" ]]; then
+        if is_json_output; then
+            json_error "No backup found for ${agent}"
+        fi
+        log_error "No backup found for ${agent_name}"
+        return 1
+    fi
+
+    local tags
+    tags=$(git -C "$dest" tag -l 2>/dev/null | sort)
+
+    if is_json_output; then
+        local tag_array=()
+        while IFS= read -r tag; do
+            [[ -z "$tag" ]] && continue
+            local commit
+            commit=$(git -C "$dest" rev-parse --short "$tag" 2>/dev/null || echo "unknown")
+            local date
+            date=$(git -C "$dest" log -1 --format="%ci" "$tag" 2>/dev/null || echo "unknown")
+            tag_array+=("{\"tag\":\"$(json_escape_string "$tag")\",\"commit\":\"${commit}\",\"date\":\"$(json_escape_string "$date")\"}")
+        done <<< "$tags"
+        json_output "{\"agent\":\"${agent}\",\"name\":\"$(json_escape_string "$agent_name")\",\"tags\":$(json_array "${tag_array[@]}")}"
+        return 0
+    fi
+
+    if [[ -z "$tags" ]]; then
+        log_info "No tags found for ${agent_name}"
+        return 0
+    fi
+
+    printf '\n' >&2
+    printf '%b\n' "${BOLD}Tags for ${agent_name}${RESET}" >&2
+    printf '%s\n' "────────────────────────────────────────" >&2
+    printf '\n' >&2
+
+    while IFS= read -r tag; do
+        [[ -z "$tag" ]] && continue
+        local commit
+        commit=$(git -C "$dest" rev-parse --short "$tag" 2>/dev/null || echo "???")
+        local date
+        date=$(git -C "$dest" log -1 --format="%cr" "$tag" 2>/dev/null || echo "unknown")
+        printf '  %b%-20s%b  %s  (%s)\n' "${CYAN}" "$tag" "${RESET}" "$commit" "$date" >&2
+    done <<< "$tags"
+    printf '\n' >&2
+}
+
+# Delete a tag
+delete_tag() {
+    local agent="$1"
+    local tagname="$2"
+    local agent_name="${AGENT_NAMES[$agent]:-$agent}"
+    local dest
+
+    dest=$(get_agent_backup_dir "$agent")
+
+    if [[ ! -d "$dest/.git" ]]; then
+        if is_json_output; then
+            json_error "No backup found for ${agent}"
+        fi
+        log_error "No backup found for ${agent_name}"
+        return 1
+    fi
+
+    # Check if tag exists
+    if ! git -C "$dest" tag -l "$tagname" | grep -q "^${tagname}$"; then
+        if is_json_output; then
+            json_error "Tag '${tagname}' not found for ${agent}"
+        fi
+        log_error "Tag '${tagname}' not found for ${agent_name}"
+        return 1
+    fi
+
+    if [[ "$DRY_RUN" == "true" ]]; then
+        if is_json_output; then
+            json_output "{\"agent\":\"${agent}\",\"name\":\"$(json_escape_string "$agent_name")\",\"tag\":\"$(json_escape_string "$tagname")\",\"deleted\":false,\"dry_run\":true}"
+        else
+            log_info "[DRY RUN] Would delete tag '${tagname}' from ${agent_name}"
+        fi
+        return 0
+    fi
+
+    if [[ "$FORCE" != "true" ]]; then
+        printf '%b' "${YELLOW}Delete tag '${tagname}' from ${agent_name}? [y/N] ${RESET}" >&2
+        read -r confirm
+        if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+            log_info "Cancelled"
+            return 0
+        fi
+    fi
+
+    if git -C "$dest" tag -d "$tagname" &>/dev/null; then
+        if is_json_output; then
+            json_output "{\"agent\":\"${agent}\",\"name\":\"$(json_escape_string "$agent_name")\",\"tag\":\"$(json_escape_string "$tagname")\",\"deleted\":true}"
+        else
+            log_success "Deleted tag '${tagname}' from ${agent_name}"
+        fi
+        return 0
+    else
+        if is_json_output; then
+            json_error "Failed to delete tag '${tagname}'"
+        fi
+        log_error "Failed to delete tag '${tagname}'"
+        return 1
+    fi
+}
+
+# Resolve a tag name to a commit hash (for restore)
+resolve_tag_or_commit() {
+    local agent="$1"
+    local ref="$2"
+    local dest
+
+    dest=$(get_agent_backup_dir "$agent")
+
+    if [[ ! -d "$dest/.git" ]]; then
+        echo ""
+        return 1
+    fi
+
+    # Try to resolve as a tag first, then as a commit
+    if git -C "$dest" rev-parse --verify "refs/tags/${ref}" &>/dev/null; then
+        git -C "$dest" rev-parse "refs/tags/${ref}"
+    elif git -C "$dest" rev-parse --verify "$ref" &>/dev/null; then
+        git -C "$dest" rev-parse "$ref"
+    else
+        echo ""
+        return 1
+    fi
+}
+
+# Main tag command handler
+tag_command() {
+    if [[ $# -lt 1 ]]; then
+        if is_json_output; then
+            json_error "Usage: asb tag <agent> <tagname> [commit] | asb tag <agent> --list | asb tag <agent> --delete <tagname>"
+        fi
+        log_error "Usage: asb tag <agent> <tagname> [commit]"
+        log_info "       asb tag <agent> --list"
+        log_info "       asb tag <agent> --delete <tagname>"
+        return 1
+    fi
+
+    local agent="$1"
+    shift
+
+    if ! agent_exists "$agent"; then
+        if is_json_output; then
+            json_error "Unknown agent: ${agent}"
+        fi
+        log_error "Unknown agent: ${agent}"
+        log_info "Run 'asb list' to see available agents"
+        return 1
+    fi
+
+    # Parse subcommand
+    case "${1:-}" in
+        --list|-l)
+            list_tags "$agent"
+            ;;
+        --delete|-d)
+            if [[ -z "${2:-}" ]]; then
+                if is_json_output; then
+                    json_error "Usage: asb tag <agent> --delete <tagname>"
+                fi
+                log_error "Usage: asb tag <agent> --delete <tagname>"
+                return 1
+            fi
+            delete_tag "$agent" "$2"
+            ;;
+        "")
+            if is_json_output; then
+                json_error "Usage: asb tag <agent> <tagname> [commit]"
+            fi
+            log_error "Missing tag name"
+            log_info "Usage: asb tag <agent> <tagname> [commit]"
+            return 1
+            ;;
+        -*)
+            if is_json_output; then
+                json_error "Unknown option: ${1}"
+            fi
+            log_error "Unknown option: ${1}"
+            return 1
+            ;;
+        *)
+            # Create tag
+            tag_backup "$agent" "$@"
+            ;;
+    esac
+}
+
+#==============================================================================
+# INIT
+#==============================================================================
+
+init_backup_location() {
+    local backup_root
+    backup_root=$(get_backup_root)
+
+    printf '\n' >&2
+    printf '%b\n' "${BOLD}Initializing Backup Location${RESET}" >&2
+    printf '%s\n' "─────────────────────────────" >&2
+    printf '\n' >&2
+
+    if [[ "$DRY_RUN" == "true" ]]; then
+        log_info "[DRY RUN] Would initialize backup location at ${backup_root}"
+        log_info "[DRY RUN] Would create README.md in backup root"
+        return 0
+    fi
+
+    if [[ -d "$backup_root" ]]; then
+        log_info "Backup location already exists: ${backup_root}"
+    else
+        log_step "Creating backup location: ${backup_root}"
+        mkdir -p "$backup_root"
+        log_success "Created backup location"
+    fi
+
+    # Create a README in the backup root
+    cat > "$backup_root/README.md" << 'EOF'
+# Agent Settings Backups
+
+This directory contains git-versioned backups of AI coding agent configuration folders.
+
+## Structure
+
+Each agent has its own directory with a full git repository:
+
+```
+.agent_settings_backups/
+├── .claude/          # Claude Code
+├── .codex/           # OpenAI Codex CLI
+├── .cursor/          # Cursor
+├── .gemini/          # Google Gemini
+├── .cline/           # Cline
+├── .amp/             # Amp (Sourcegraph)
+├── .aider/           # Aider
+├── .opencode/        # OpenCode
+├── .factory/         # Factory Droid
+├── .windsurf/        # Windsurf
+├── .plandex-home/    # Plandex
+├── .qwen/            # Qwen Code
+└── .q/               # Amazon Q
+```
+
+## Usage
+
+```bash
+# Backup all agents
+asb backup
+
+# Backup specific agent
+asb backup claude
+
+# Show history
+asb history claude
+
+# Restore from backup
+asb restore claude
+
+# Restore from specific commit
+asb restore claude abc1234
+```
+
+## Generated by
+
+Agent Settings Backup (asb)
+https://github.com/Dicklesworthstone/agent_settings_backup_script
+EOF
+
+    log_success "Initialization complete"
+    printf '\n' >&2
+    log_info "Run 'asb backup' to create your first backup"
+}
+
+#==============================================================================
+# CONFIGURATION
+#==============================================================================
+
+init_config() {
+    local config_dir
+    local config_file
+    config_dir=$(get_config_dir)
+    config_file=$(get_config_file)
+    local hooks_root
+    hooks_root=$(get_hooks_root)
+
+    # Create directory if needed
+    if [[ ! -d "$config_dir" ]]; then
+        log_step "Creating config directory: $config_dir"
+        mkdir -p "$config_dir"
+    fi
+
+    # Ensure hooks directory structure exists
+    local hook_dirs=(
+        "${hooks_root}/pre-backup.d"
+        "${hooks_root}/post-backup.d"
+        "${hooks_root}/pre-restore.d"
+        "${hooks_root}/post-restore.d"
+    )
+    local hook_dir
+    for hook_dir in "${hook_dirs[@]}"; do
+        if [[ ! -d "$hook_dir" ]]; then
+            mkdir -p "$hook_dir"
+        fi
+    done
+
+    # Don't overwrite existing config
+    if [[ -f "$config_file" ]]; then
+        log_info "Config file already exists: $config_file"
+        log_info "Edit manually or delete to regenerate"
+        return 0
+    fi
+
+    log_step "Creating config file: $config_file"
+
+    cat > "$config_file" << 'CONFIGEOF'
+# asb (Agent Settings Backup) configuration
+# Generated by: asb config init
+# Documentation: asb help
+#
+# This file is sourced as bash. You can use variables and expressions.
+# This config file overrides environment variables when set.
+
+#-----------------------------------------------------------------------------
+# BACKUP LOCATION
+#-----------------------------------------------------------------------------
+# Where agent settings backups are stored.
+# Each agent gets its own git repository under this directory.
+# Default: ~/.agent_settings_backups
+#
+# ASB_BACKUP_ROOT="$HOME/.agent_settings_backups"
+
+#-----------------------------------------------------------------------------
+# AUTO-COMMIT
+#-----------------------------------------------------------------------------
+# Automatically create a git commit after each backup.
+# Set to "false" to stage changes without committing (manual workflow).
+# Default: true
+#
+# ASB_AUTO_COMMIT=true
+
+#-----------------------------------------------------------------------------
+# VERBOSE OUTPUT
+#-----------------------------------------------------------------------------
+# Show detailed debug output during operations.
+# Useful for troubleshooting or understanding what asb is doing.
+# Default: false
+#
+# ASB_VERBOSE=false
+
+#-----------------------------------------------------------------------------
+# FUTURE OPTIONS (not yet implemented)
+#-----------------------------------------------------------------------------
+# Custom exclusion patterns, agent definitions, etc. will go here
+# as asb evolves. See: https://github.com/Dicklesworthstone/agent_settings_backup_script
+CONFIGEOF
+
+    log_success "Created config file: $config_file"
+    log_info "Edit the file to customize your settings"
+}
+
+show_config() {
+    local config_file
+    config_file=$(get_config_file)
+
+    printf '\n' >&2
+    printf '%b\n' "${BOLD}asb Configuration${RESET}" >&2
+    printf '%s\n' "─────────────────────────────" >&2
+    printf '\n' >&2
+
+    # Show config file status
+    if [[ -f "$config_file" ]]; then
+        printf "Config file: %s\n" "$config_file" >&2
+    else
+        printf "Config file: %s (not created)\n" "$config_file" >&2
+        log_info "Run 'asb config init' to create"
+    fi
+    printf '\n' >&2
+
+    # Show effective values
+    printf '%b\n' "${BOLD}Effective Settings${RESET}" >&2
+    printf '%s\n' "─────────────────────────────" >&2
+    printf "%-20s %s\n" "ASB_BACKUP_ROOT:" "$(get_backup_root)" >&2
+    printf "%-20s %s\n" "ASB_AUTO_COMMIT:" "${ASB_AUTO_COMMIT:-true}" >&2
+    printf "%-20s %s\n" "ASB_VERBOSE:" "${ASB_VERBOSE:-false}" >&2
+    printf '\n' >&2
+
+    # Show source of each value (helpful for debugging)
+    printf '%b\n' "${DIM}Source: config file > environment > default${RESET}" >&2
+}
+
+#==============================================================================
+# COMPLETION
+#==============================================================================
+
+show_completion_bash() {
+    cat << 'BASHCOMP'
+# asb bash completion
+# Install: eval "$(asb completion bash)"
+# Or: asb completion bash >> ~/.bashrc
+
+_asb_completions() {
+    shopt -s extglob
+    local cur="${COMP_WORDS[COMP_CWORD]}"
+    local prev="${COMP_WORDS[COMP_CWORD-1]}"
+    local cmd=""
+    local cmd_index=0
+    local i
+
+    for ((i=1; i<${#COMP_WORDS[@]}; i++)); do
+        case "${COMP_WORDS[$i]}" in
+            -n|--dry-run|-f|--force|-v|--verbose|-j|--json)
+                continue
+                ;;
+            *)
+                cmd="${COMP_WORDS[$i]}"
+                cmd_index=$i
+                break
+                ;;
+        esac
+    done
+
+    # All commands
+    local commands="backup restore export import list stats discover history diff verify tag schedule hooks init config help version completion"
+
+    # All agent names (keep in sync with AGENT_FOLDERS)
+    local agents="aider amazonq amp claude cline codex cursor factory gemini opencode plandex qwencode windsurf"
+
+    # Config subcommands
+    local config_cmds="init show"
+
+    # Tag subcommands
+    local tag_opts="--list -l --delete -d"
+
+    # Schedule options
+    local schedule_opts="--cron --systemd --interval --status --remove --help"
+    local schedule_intervals="hourly daily weekly"
+
+    # Global flags
+    local global_flags="-n --dry-run -f --force -v --verbose -j --json"
+
+    case "$prev" in
+        asb)
+            COMPREPLY=($(compgen -W "$commands $global_flags" -- "$cur"))
+            ;;
+        -n|--dry-run|-f|--force|-v|--verbose|-j|--json)
+            COMPREPLY=($(compgen -W "$commands" -- "$cur"))
+            ;;
+        backup|b|verify|v)
+            COMPREPLY=($(compgen -W "$agents" -- "$cur"))
+            ;;
+        restore|r|history|h|log|diff|d|export|ex|tag|t|stats|st)
+            COMPREPLY=($(compgen -W "$agents" -- "$cur"))
+            ;;
+        config|cfg)
+            COMPREPLY=($(compgen -W "$config_cmds" -- "$cur"))
+            ;;
+        schedule|sched)
+            COMPREPLY=($(compgen -W "$schedule_opts" -- "$cur"))
+            ;;
+        hooks)
+            COMPREPLY=($(compgen -W "--list -l" -- "$cur"))
+            ;;
+        --interval)
+            COMPREPLY=($(compgen -W "$schedule_intervals" -- "$cur"))
+            ;;
+        import|im)
+            COMPREPLY=($(compgen -f -X '!*.@(tar.gz|tgz)' -- "$cur"))
+            ;;
+        *)
+            if [[ "$cmd" == "restore" || "$cmd" == "r" ]] && [[ $COMP_CWORD -eq $((cmd_index + 2)) ]]; then
+                local agent="${COMP_WORDS[$((cmd_index + 1))]}"
+                local backup_root="${ASB_BACKUP_ROOT:-${HOME}/.agent_settings_backups}"
+                local backup_dir="${backup_root}/.${agent}"
+                if [[ -d "$backup_dir/.git" ]]; then
+                    local commits tags
+                    commits=$(git -C "$backup_dir" log --oneline -15 2>/dev/null | cut -d' ' -f1)
+                    tags=$(git -C "$backup_dir" tag -l 2>/dev/null)
+                    COMPREPLY=($(compgen -W "$commits $tags HEAD" -- "$cur"))
+                fi
+            elif [[ "$cmd" == "tag" || "$cmd" == "t" ]] && [[ $COMP_CWORD -eq $((cmd_index + 2)) ]]; then
+                COMPREPLY=($(compgen -W "$tag_opts" -- "$cur"))
+            elif [[ "$cmd" == "tag" || "$cmd" == "t" ]] && [[ $COMP_CWORD -eq $((cmd_index + 3)) ]]; then
+                local prev_arg="${COMP_WORDS[$((COMP_CWORD - 1))]}"
+                if [[ "$prev_arg" == "--delete" || "$prev_arg" == "-d" ]]; then
+                    local agent="${COMP_WORDS[$((cmd_index + 1))]}"
+                    local backup_root="${ASB_BACKUP_ROOT:-${HOME}/.agent_settings_backups}"
+                    local backup_dir="${backup_root}/.${agent}"
+                    if [[ -d "$backup_dir/.git" ]]; then
+                        local tags
+                        tags=$(git -C "$backup_dir" tag -l 2>/dev/null)
+                        COMPREPLY=($(compgen -W "$tags" -- "$cur"))
+                    fi
+                fi
+            elif [[ "$cmd" == "export" || "$cmd" == "ex" ]] && [[ $COMP_CWORD -eq $((cmd_index + 2)) ]]; then
+                COMPREPLY=($(compgen -f -- "$cur"))
+            fi
+            ;;
+    esac
+}
+
+complete -F _asb_completions asb
+BASHCOMP
+}
+
+show_completion_zsh() {
+    cat << 'ZSHCOMP'
+#compdef asb
+# asb zsh completion
+# Install: eval "$(asb completion zsh)"
+# Or: asb completion zsh > ~/.zsh/completions/_asb
+
+_asb() {
+    local -a commands agents config_cmds global_opts shells
+
+    commands=(
+        'backup:Backup agent settings'
+        'restore:Restore agent from backup'
+        'export:Export backup as archive'
+        'import:Import backup from archive'
+        'list:List all agents and status'
+        'stats:Show backup statistics'
+        'discover:Scan for new AI agents'
+        'history:Show backup history'
+        'diff:Show changes since last backup'
+        'verify:Verify backup integrity'
+        'tag:Tag a backup with a name'
+        'schedule:Set up automated backups'
+        'hooks:List configured hooks'
+        'init:Initialize backup location'
+        'config:Manage configuration'
+        'completion:Show shell completion script'
+        'help:Show help message'
+        'version:Show version'
+    )
+
+    agents=(
+        'aider:Aider'
+        'amazonq:Amazon Q'
+        'amp:Amp (Sourcegraph)'
+        'claude:Claude Code'
+        'cline:Cline'
+        'codex:OpenAI Codex CLI'
+        'cursor:Cursor'
+        'factory:Factory Droid'
+        'gemini:Google Gemini'
+        'opencode:OpenCode'
+        'plandex:Plandex'
+        'qwencode:Qwen Code'
+        'windsurf:Windsurf'
+    )
+
+    config_cmds=(
+        'init:Create default config file'
+        'show:Display current settings'
+    )
+
+    shells=(
+        'bash:Bash completion'
+        'zsh:Zsh completion'
+        'fish:Fish completion'
+    )
+
+    schedule_opts=(
+        '--cron:Use cron scheduler'
+        '--systemd:Use systemd timer'
+        '--interval:Set interval (hourly/daily/weekly)'
+        '--status:Show current schedule'
+        '--remove:Remove scheduled backup'
+        '--help:Show schedule help'
+    )
+
+    tag_opts=(
+        '--list:List all tags'
+        '-l:List all tags'
+        '--delete:Delete a tag'
+        '-d:Delete a tag'
+    )
+
+    hooks_opts=(
+        '--list:List configured hooks'
+    )
+
+    global_opts=(
+        '-n[Dry-run mode]'
+        '--dry-run[Dry-run mode]'
+        '-f[Force mode]'
+        '--force[Force mode]'
+        '-v[Verbose output]'
+        '--verbose[Verbose output]'
+        '-j[JSON output]'
+        '--json[JSON output]'
+    )
+
+    _arguments -C \
+        $global_opts \
+        '1:command:->command' \
+        '*::arg:->args'
+
+    case "$state" in
+        command)
+            _describe 'command' commands
+            ;;
+        args)
+            local cmd=""
+            local cmd_index=0
+            local i
+            for i in {2..$#words}; do
+                if [[ "${words[$i]}" != -* ]]; then
+                    cmd="${words[$i]}"
+                    cmd_index=$i
+                    break
+                fi
+            done
+
+            case "$cmd" in
+                backup|b|verify|v)
+                    _describe 'agent' agents
+                    ;;
+                restore|r|history|h|log|diff|d|export|ex|stats|st)
+                    if [[ $CURRENT -eq $((cmd_index + 1)) ]]; then
+                        _describe 'agent' agents
+                    elif [[ $CURRENT -eq $((cmd_index + 2)) && "$cmd" =~ ^(restore|r)$ ]]; then
+                        local agent="${words[$((cmd_index + 1))]}"
+                        local backup_root="${ASB_BACKUP_ROOT:-${HOME}/.agent_settings_backups}"
+                        local backup_dir="${backup_root}/.${agent}"
+                        if [[ -d "$backup_dir/.git" ]]; then
+                            local -a commits tags
+                            commits=($(git -C "$backup_dir" log --oneline -15 2>/dev/null | cut -d' ' -f1))
+                            tags=($(git -C "$backup_dir" tag -l 2>/dev/null))
+                            commits+=(HEAD $tags)
+                            _describe 'commit or tag' commits
+                        fi
+                    fi
+                    ;;
+                tag|t)
+                    if [[ $CURRENT -eq $((cmd_index + 1)) ]]; then
+                        _describe 'agent' agents
+                    elif [[ $CURRENT -eq $((cmd_index + 2)) ]]; then
+                        _describe 'tag option' tag_opts
+                    elif [[ $CURRENT -eq $((cmd_index + 3)) ]]; then
+                        local prev_arg="${words[$((CURRENT-1))]}"
+                        if [[ "$prev_arg" == "--delete" || "$prev_arg" == "-d" ]]; then
+                            local agent="${words[$((cmd_index + 1))]}"
+                            local backup_root="${ASB_BACKUP_ROOT:-${HOME}/.agent_settings_backups}"
+                            local backup_dir="${backup_root}/.${agent}"
+                            if [[ -d "$backup_dir/.git" ]]; then
+                                local -a tags
+                                tags=($(git -C "$backup_dir" tag -l 2>/dev/null))
+                                _describe 'tag' tags
+                            fi
+                        fi
+                    fi
+                    ;;
+                config|cfg)
+                    if [[ $CURRENT -eq $((cmd_index + 1)) ]]; then
+                        _describe 'config command' config_cmds
+                    fi
+                    ;;
+                schedule|sched)
+                    if [[ "${words[$((CURRENT-1))]}" == "--interval" ]]; then
+                        local -a intervals
+                        intervals=(hourly daily weekly)
+                        _describe 'interval' intervals
+                    else
+                        _describe 'schedule option' schedule_opts
+                    fi
+                    ;;
+                hooks)
+                    _describe 'hooks option' hooks_opts
+                    ;;
+                import|im)
+                    if [[ $CURRENT -eq $((cmd_index + 1)) ]]; then
+                        _files -g '*.tar.gz'
+                    fi
+                    ;;
+                completion)
+                    if [[ $CURRENT -eq $((cmd_index + 1)) ]]; then
+                        _describe 'shell' shells
+                    fi
+                    ;;
+            esac
+            ;;
+    esac
+}
+
+_asb "$@"
+ZSHCOMP
+}
+
+show_completion_fish() {
+    cat << 'FISHCOMP'
+# asb fish completion
+# Install: asb completion fish | source
+# Or: asb completion fish > ~/.config/fish/completions/asb.fish
+
+complete -c asb -f
+
+complete -c asb -n '__fish_use_subcommand' -a backup -d 'Backup agent settings'
+complete -c asb -n '__fish_use_subcommand' -a restore -d 'Restore agent from backup'
+complete -c asb -n '__fish_use_subcommand' -a export -d 'Export backup as archive'
+complete -c asb -n '__fish_use_subcommand' -a import -d 'Import backup from archive'
+complete -c asb -n '__fish_use_subcommand' -a list -d 'List all agents and status'
+complete -c asb -n '__fish_use_subcommand' -a stats -d 'Show backup statistics'
+complete -c asb -n '__fish_use_subcommand' -a discover -d 'Scan for new AI agents'
+complete -c asb -n '__fish_use_subcommand' -a history -d 'Show backup history'
+complete -c asb -n '__fish_use_subcommand' -a diff -d 'Show changes since last backup'
+complete -c asb -n '__fish_use_subcommand' -a verify -d 'Verify backup integrity'
+complete -c asb -n '__fish_use_subcommand' -a tag -d 'Tag a backup with a name'
+complete -c asb -n '__fish_use_subcommand' -a schedule -d 'Set up automated backups'
+complete -c asb -n '__fish_use_subcommand' -a hooks -d 'List configured hooks'
+complete -c asb -n '__fish_use_subcommand' -a init -d 'Initialize backup location'
+complete -c asb -n '__fish_use_subcommand' -a config -d 'Manage configuration'
+complete -c asb -n '__fish_use_subcommand' -a completion -d 'Show shell completion script'
+complete -c asb -n '__fish_use_subcommand' -a help -d 'Show help message'
+complete -c asb -n '__fish_use_subcommand' -a version -d 'Show version'
+
+complete -c asb -s n -l dry-run -d 'Show what would happen without changes'
+complete -c asb -s f -l force -d 'Skip confirmation prompts'
+complete -c asb -s v -l verbose -d 'Show detailed output'
+complete -c asb -s j -l json -d 'Output in JSON format'
+
+set -l agent_commands backup restore history diff verify export tag
+
+for cmd in $agent_commands
+    complete -c asb -n "__fish_seen_subcommand_from $cmd" -a 'aider' -d 'Aider'
+    complete -c asb -n "__fish_seen_subcommand_from $cmd" -a 'amazonq' -d 'Amazon Q'
+    complete -c asb -n "__fish_seen_subcommand_from $cmd" -a 'amp' -d 'Amp (Sourcegraph)'
+    complete -c asb -n "__fish_seen_subcommand_from $cmd" -a 'claude' -d 'Claude Code'
+    complete -c asb -n "__fish_seen_subcommand_from $cmd" -a 'cline' -d 'Cline'
+    complete -c asb -n "__fish_seen_subcommand_from $cmd" -a 'codex' -d 'OpenAI Codex CLI'
+    complete -c asb -n "__fish_seen_subcommand_from $cmd" -a 'cursor' -d 'Cursor'
+    complete -c asb -n "__fish_seen_subcommand_from $cmd" -a 'factory' -d 'Factory Droid'
+    complete -c asb -n "__fish_seen_subcommand_from $cmd" -a 'gemini' -d 'Google Gemini'
+    complete -c asb -n "__fish_seen_subcommand_from $cmd" -a 'opencode' -d 'OpenCode'
+    complete -c asb -n "__fish_seen_subcommand_from $cmd" -a 'plandex' -d 'Plandex'
+    complete -c asb -n "__fish_seen_subcommand_from $cmd" -a 'qwencode' -d 'Qwen Code'
+    complete -c asb -n "__fish_seen_subcommand_from $cmd" -a 'windsurf' -d 'Windsurf'
+end
+
+complete -c asb -n '__fish_seen_subcommand_from config' -a 'init' -d 'Create config file'
+complete -c asb -n '__fish_seen_subcommand_from config' -a 'show' -d 'Show settings'
+
+complete -c asb -n '__fish_seen_subcommand_from completion' -a 'bash' -d 'Bash completion'
+complete -c asb -n '__fish_seen_subcommand_from completion' -a 'zsh' -d 'Zsh completion'
+complete -c asb -n '__fish_seen_subcommand_from completion' -a 'fish' -d 'Fish completion'
+
+complete -c asb -n '__fish_seen_subcommand_from schedule' -l cron -d 'Use cron scheduler'
+complete -c asb -n '__fish_seen_subcommand_from schedule' -l systemd -d 'Use systemd timer'
+complete -c asb -n '__fish_seen_subcommand_from schedule' -l interval -a 'hourly daily weekly' -d 'Schedule interval'
+complete -c asb -n '__fish_seen_subcommand_from schedule' -l status -d 'Show current schedule'
+complete -c asb -n '__fish_seen_subcommand_from schedule' -l remove -d 'Remove scheduled backup'
+complete -c asb -n '__fish_seen_subcommand_from schedule' -l help -d 'Show schedule help'
+
+complete -c asb -n '__fish_seen_subcommand_from tag' -s l -l list -d 'List all tags'
+complete -c asb -n '__fish_seen_subcommand_from tag' -s d -l delete -d 'Delete a tag'
+
+complete -c asb -n '__fish_seen_subcommand_from discover' -s a -l auto -d 'Automatically add all found'
+complete -c asb -n '__fish_seen_subcommand_from discover' -s l -l list -d 'List found agents only'
+
+complete -c asb -n '__fish_seen_subcommand_from import' -F -a '*.tar.gz'
+
+complete -c asb -n '__fish_seen_subcommand_from hooks' -l list -d 'List configured hooks'
+FISHCOMP
+}
+
+#==============================================================================
+# HELP
+#==============================================================================
+
+show_help() {
+    cat << EOF
+
+${BOLD}asb${RESET} - Agent Settings Backup v${ASB_VERSION}
+Backs up AI coding agent configuration folders to git-versioned repositories.
+Use --dry-run to preview changes before making them.
+
+${BOLD}USAGE${RESET}
+    asb [OPTIONS] <command> [args]
+
+${BOLD}OPTIONS${RESET}
+    -n, --dry-run         Show what would happen without making changes
+    -f, --force           Skip confirmation prompts (use with caution)
+    -v, --verbose         Show detailed output
+    -j, --json            Output machine-readable JSON (where supported)
+    --format FORMAT       Structured output format: json or toon (TOON uses toon_rust tru)
+
+${BOLD}COMMANDS${RESET}
+    backup [agents...]        Backup agent settings (all if none specified)
+    restore <agent> [commit]  Restore agent from backup (prompts for confirmation)
+    export <agent> [file]     Export backup as portable archive
+    import <file>             Import backup from archive
+    list                      List all agents and backup status
+    stats [agent]             Show backup statistics
+    discover [--auto|--list]  Scan for new AI agents to add
+    history <agent>           Show backup history for an agent
+    diff <agent>              Show changes since last backup
+    verify [agents...]        Verify backup integrity (all if none specified)
+    tag <agent> <name>        Tag a backup commit with a meaningful name
+    schedule [options]        Set up automated scheduled backups
+    hooks --list              List configured hooks
+    init                      Initialize backup location
+    config [init|show]        Manage configuration
+    completion [shell]        Output shell completion script (bash/zsh/fish)
+    help                      Show this help message
+    version                   Show version
+
+${BOLD}CONFIGURATION${RESET}
+    Config file: ${XDG_CONFIG_HOME:-$HOME/.config}/asb/config (XDG-compliant)
+
+    Create config:    asb config init
+    View settings:    asb config show
+
+    Settings can also be set via environment variables.
+    Precedence: config file > environment variable > default
+
+${BOLD}PORTABILITY${RESET}
+    Export backups as portable archives for transfer between machines:
+
+    asb export claude                    # Creates claude-backup-DATE.tar.gz
+    asb export claude my-backup.tar.gz   # Custom filename
+
+    Import archives:
+
+    asb import backup.tar.gz
+
+    Piping support (for transfer/encryption/cloud storage):
+
+    asb export claude - | ssh host "asb import -"
+    asb export claude - | gpg -c > backup.gpg
+    asb export claude - | aws s3 cp - s3://bucket/backup.tar.gz
+
+${BOLD}SCHEDULING${RESET}
+    Set up automated backups with cron or systemd:
+
+    asb schedule --cron                # Install daily cron job
+    asb schedule --systemd             # Install daily systemd timer
+    asb schedule --interval hourly     # Run every hour instead of daily
+    asb schedule --status              # Show current schedule
+    asb schedule --remove --cron       # Remove cron schedule
+    asb schedule --remove --systemd    # Remove systemd timer
+
+    Run 'asb schedule --help' for full options.
+
+${BOLD}SUPPORTED AGENTS${RESET}
+    claude      Claude Code (~/.claude)
+    codex       OpenAI Codex CLI (~/.codex)
+    cursor      Cursor (~/.cursor)
+    gemini      Google Gemini (~/.gemini)
+    cline       Cline (~/.cline)
+    amp         Amp/Sourcegraph (~/.amp)
+    aider       Aider (~/.aider)
+    opencode    OpenCode (~/.opencode)
+    factory     Factory Droid (~/.factory)
+    windsurf    Windsurf (~/.windsurf)
+    plandex     Plandex (~/.plandex-home)
+    qwencode    Qwen Code (~/.qwen)
+    amazonq     Amazon Q (~/.q)
+
+${BOLD}EXAMPLES${RESET}
+    asb backup                  # Backup all detected agents
+    asb --dry-run backup        # Preview backup without changes
+    asb -n backup claude        # Preview backup of specific agent
+    asb backup claude codex     # Backup specific agents
+    asb list                    # Show backup status
+    asb history claude          # Show Claude backup history
+    asb restore claude          # Restore Claude from latest backup
+    asb restore claude abc123   # Restore from specific commit
+    asb --force restore claude  # Restore without confirmation (scripting)
+    asb --dry-run restore claude  # Preview restore without changes
+
+    # Schedule automatic backups
+    asb schedule --systemd --interval daily
+    asb schedule --cron --interval weekly
+
+    # Export and import
+    asb export claude
+    asb import claude-backup.tar.gz
+
+    # Transfer to remote machine
+    asb export claude - | ssh server "asb import -"
+
+    # Tag backups with meaningful names
+    asb tag claude pre-upgrade          # Tag current backup
+    asb tag claude stable abc123        # Tag specific commit
+    asb tag claude --list               # List all tags
+    asb tag claude --delete pre-upgrade # Delete a tag
+    asb restore claude pre-upgrade      # Restore using tag name
+
+${BOLD}SHELL COMPLETION${RESET}
+    Enable tab completion for commands and agent names:
+
+    Bash (~/.bashrc):
+        eval "\$(asb completion bash)"
+
+    Zsh (~/.zshrc):
+        eval "\$(asb completion zsh)"
+
+    Fish (~/.config/fish/config.fish):
+        asb completion fish | source
+
+    After adding, restart your shell or source the RC file.
+
+${BOLD}ENVIRONMENT${RESET}
+    ASB_BACKUP_ROOT       Backup location (default: ~/.agent_settings_backups)
+    ASB_AUTO_COMMIT       Auto-commit on backup (default: true)
+    ASB_VERBOSE           Verbose output (default: false)
+
+    Tip: Use 'asb config init' to create a persistent config file.
+
+${BOLD}SAFETY${RESET}
+    The restore command shows a preview of changes and requires confirmation
+    before overwriting your current configuration. Use --force to skip this
+    for automated scripts, but use with caution.
+
+EOF
+}
+
+show_version() {
+    echo "asb version ${ASB_VERSION}"
+}
+
+#==============================================================================
+# MAIN
+#==============================================================================
+
+main() {
+    # Check for git
+    if ! command_exists git; then
+        log_error "git is required but not installed"
+        exit 1
+    fi
+
+    # Load configuration (config file overrides env vars)
+    if ! load_config; then
+        exit 1
+    fi
+
+    # Load custom agents from config
+    load_custom_agents
+
+    # Parse global flags (can appear anywhere)
+    local non_flags=()
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -n|--dry-run)
+                DRY_RUN=true
+                ;;
+            -f|--force)
+                FORCE=true
+                ;;
+            -v|--verbose)
+                ASB_VERBOSE=true
+                ;;
+            -j|--json)
+                JSON_OUTPUT=true
+                OUTPUT_FORMAT="json"
+                # Disable colors when outputting JSON
+                RED='' GREEN='' YELLOW='' BLUE='' CYAN='' BOLD='' DIM='' RESET=''
+                ;;
+            --format)
+                if [[ -z "${2:-}" || "$2" == -* ]]; then
+                    log_error "Option --format requires a value (json|toon)"
+                    exit 1
+                fi
+                JSON_OUTPUT=true
+                OUTPUT_FORMAT="${2,,}"
+                case "$OUTPUT_FORMAT" in
+                    json|toon) ;;
+                    *)
+                        log_error "Invalid --format: $2 (expected json|toon)"
+                        exit 1
+                        ;;
+                esac
+                # Disable colors when outputting structured data
+                RED='' GREEN='' YELLOW='' BLUE='' CYAN='' BOLD='' DIM='' RESET=''
+                shift
+                ;;
+            --format=*)
+                JSON_OUTPUT=true
+                OUTPUT_FORMAT="${1#*=}"
+                OUTPUT_FORMAT="${OUTPUT_FORMAT,,}"
+                case "$OUTPUT_FORMAT" in
+                    json|toon) ;;
+                    *)
+                        log_error "Invalid --format: ${1#*=} (expected json|toon)"
+                        exit 1
+                        ;;
+                esac
+                # Disable colors when outputting structured data
+                RED='' GREEN='' YELLOW='' BLUE='' CYAN='' BOLD='' DIM='' RESET=''
+                ;;
+            --)
+                shift
+                non_flags+=("$@")
+                break
+                ;;
+            *)
+                non_flags+=("$1")
+                ;;
+        esac
+        shift
+    done
+
+    local command="${non_flags[0]:-help}"
+    if [[ ${#non_flags[@]} -gt 1 ]]; then
+        set -- "${non_flags[@]:1}"
+    else
+        set --
+    fi
+
+    case "$command" in
+        backup|b)
+            backup_all "$@"
+            ;;
+        restore|r)
+            if [[ $# -lt 1 ]]; then
+                log_error "Usage: asb restore <agent> [commit]"
+                exit 1
+            fi
+            restore_agent "$@"
+            ;;
+        export|ex)
+            if [[ $# -lt 1 ]]; then
+                log_error "Usage: asb export <agent> [file]"
+                exit 1
+            fi
+            local agent="$1"
+            shift || true
+            if ! agent_exists "$agent"; then
+                log_error "Unknown agent: ${agent}"
+                log_info "Run 'asb list' to see available agents"
+                exit 1
+            fi
+            export_backup "$agent" "$@"
+            ;;
+        import|im)
+            if [[ $# -lt 1 ]]; then
+                log_error "Usage: asb import <file>"
+                exit 1
+            fi
+            import_backup "$@"
+            ;;
+        list|ls|l)
+            list_backups
+            ;;
+        stats|st)
+            stats_command "$@"
+            ;;
+        discover|disc)
+            discover_command "$@"
+            ;;
+        history|h|log)
+            if [[ $# -lt 1 ]]; then
+                log_error "Usage: asb history <agent>"
+                exit 1
+            fi
+            show_history "$@"
+            ;;
+        diff|d)
+            if [[ $# -lt 1 ]]; then
+                log_error "Usage: asb diff <agent>"
+                exit 1
+            fi
+            show_diff "$@"
+            ;;
+        verify|v)
+            verify_all "$@"
+            ;;
+        tag|t)
+            tag_command "$@"
+            ;;
+        schedule|sched)
+            schedule_backup "$@"
+            ;;
+        hooks)
+            hooks_command "$@"
+            ;;
+        init|i)
+            init_backup_location
+            ;;
+        config|cfg)
+            local config_cmd="${1:-show}"
+            shift || true
+            case "$config_cmd" in
+                init)
+                    init_config
+                    ;;
+                show)
+                    show_config
+                    ;;
+                *)
+                    log_error "Unknown config command: $config_cmd"
+                    log_info "Usage: asb config [init|show]"
+                    exit 1
+                    ;;
+            esac
+            ;;
+        completion)
+            local shell="${1:-bash}"
+            case "$shell" in
+                bash)
+                    show_completion_bash
+                    ;;
+                zsh)
+                    show_completion_zsh
+                    ;;
+                fish)
+                    show_completion_fish
+                    ;;
+                *)
+                    log_error "Unknown shell: ${shell}"
+                    log_info "Supported: bash, zsh, fish"
+                    exit 1
+                    ;;
+            esac
+            ;;
+        help|--help|-h)
+            show_help
+            ;;
+        version|--version)
+            show_version
+            ;;
+        *)
+            log_error "Unknown command: ${command}"
+            log_info "Run 'asb help' for usage"
+            exit 1
+            ;;
+    esac
+}
+
+# Allow sourcing for unit tests without executing main
+if [[ "${ASB_SOURCED:-false}" != "true" ]]; then
+    main "$@"
+fi

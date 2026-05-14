@@ -1,0 +1,2080 @@
+# Source: https://github.com/curiositech/port-daddy/blob/e254b0470329fe910de30779dd78f015adeb96e6/completions/port-daddy.zsh
+# Repository: curiositech/port-daddy (completions/port-daddy.zsh)
+#compdef port-daddy pd
+
+# Zsh completion for Port Daddy v3.6 CLI
+#
+# INSTALLATION:
+#   Option 1 — Fpath (recommended):
+#     Place this file in a directory listed in $fpath, e.g.:
+#       mkdir -p ~/.zsh/completions
+#       cp port-daddy.zsh ~/.zsh/completions/_port-daddy
+#     Then add to ~/.zshrc (before compinit):
+#       fpath=(~/.zsh/completions $fpath)
+#       autoload -Uz compinit && compinit
+#
+#   Option 2 — Oh My Zsh:
+#     cp port-daddy.zsh ~/.oh-my-zsh/completions/_port-daddy
+#     Then restart your shell or run: omz reload
+#
+#   Option 3 — System-wide (macOS with Homebrew zsh):
+#     cp port-daddy.zsh "$(brew --prefix)/share/zsh/site-functions/_port-daddy"
+#
+#   Option 4 — Direct source (quick test, no caching):
+#     echo 'source /path/to/port-daddy/completions/port-daddy.zsh' >> ~/.zshrc
+#     (Note: sourcing bypasses compdef; use fpath for proper registration)
+#
+# REQUIREMENTS:
+#   - Zsh 5.1+
+#   - curl (for dynamic completions from the running daemon)
+#
+# DYNAMIC COMPLETIONS:
+#   When the daemon is running on localhost:9876, completions for service
+#   identities, channels, locks, and agent IDs are fetched live.
+#   If the daemon is not running, dynamic completions are silently skipped.
+
+# ---------------------------------------------------------------------------
+# Helpers — daemon queries
+# ---------------------------------------------------------------------------
+
+# Query the daemon with a 1-second timeout; emit nothing on failure.
+_pd_query() {
+  local path="$1"
+  curl -s --max-time 1 "http://localhost:9876${path}" 2>/dev/null
+}
+
+# Populate $reply with active service IDs from the daemon.
+_pd_service_ids() {
+  local raw
+  raw="$(_pd_query '/services')"
+  reply=( ${(f)"$(printf '%s\n' "$raw" | grep -o '"id":"[^"]*"' | sed 's/"id":"//;s/"//')"} )
+}
+
+# Populate $reply with channel names from the daemon.
+_pd_channels() {
+  local raw
+  raw="$(_pd_query '/channels')"
+  reply=( ${(f)"$(printf '%s\n' "$raw" | grep -o '"name":"[^"]*"' | sed 's/"name":"//;s/"//')"} )
+}
+
+# Populate $reply with active lock names from the daemon.
+_pd_lock_names() {
+  local raw
+  raw="$(_pd_query '/locks')"
+  reply=( ${(f)"$(printf '%s\n' "$raw" | grep -o '"name":"[^"]*"' | sed 's/"name":"//;s/"//')"} )
+}
+
+# Populate $reply with registered agent IDs from the daemon.
+_pd_agent_ids() {
+  local raw
+  raw="$(_pd_query '/agents')"
+  reply=( ${(f)"$(printf '%s\n' "$raw" | grep -o '"id":"[^"]*"' | sed 's/"id":"//;s/"//')"} )
+}
+
+# ---------------------------------------------------------------------------
+# Dynamic completion helpers (used with _arguments / _alternative)
+# ---------------------------------------------------------------------------
+
+_pd_complete_services() {
+  local -a ids
+  _pd_service_ids
+  ids=("${reply[@]}")
+  if (( ${#ids[@]} > 0 )); then
+    _describe 'service identity' ids
+  fi
+}
+
+_pd_complete_channels() {
+  local -a names
+  _pd_channels
+  names=("${reply[@]}")
+  if (( ${#names[@]} > 0 )); then
+    _describe 'channel' names
+  fi
+}
+
+_pd_complete_locks() {
+  local -a names
+  _pd_lock_names
+  names=("${reply[@]}")
+  if (( ${#names[@]} > 0 )); then
+    _describe 'lock name' names
+  fi
+}
+
+_pd_complete_agents() {
+  local -a ids
+  _pd_agent_ids
+  ids=("${reply[@]}")
+  if (( ${#ids[@]} > 0 )); then
+    _describe 'agent ID' ids
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# Sub-completions
+# ---------------------------------------------------------------------------
+
+_pd_cmd_claim() {
+  _arguments \
+    '(-p --port)'{-p,--port}'[port number to request]:port number:' \
+    '--range[port range (lo-hi)]:range (lo-hi):' \
+    '--expires[TTL in seconds]:seconds:' \
+    '--pair[paired service identity]:service:_pd_complete_services' \
+    '--cmd[command to associate]:command:_command_names' \
+    '--export[print export PORT=N for eval]' \
+    '(-j --json)'{-j,--json}'[JSON output]' \
+    '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+    '(-h --help)'{-h,--help}'[show help]' \
+    '1:service identity:_pd_complete_services'
+}
+
+_pd_cmd_release() {
+  _arguments \
+    '--expired[release all expired services]' \
+    '(-j --json)'{-j,--json}'[JSON output]' \
+    '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+    '(-h --help)'{-h,--help}'[show help]' \
+    '1:service identity:_pd_complete_services'
+}
+
+_pd_cmd_find() {
+  _arguments \
+    '--status[filter by status]:status:(active expired all)' \
+    '--port[filter by port number]:port number:' \
+    '--expired[include expired]' \
+    '(-j --json)'{-j,--json}'[JSON output]' \
+    '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+    '(-h --help)'{-h,--help}'[show help]' \
+    '1:service identity:_pd_complete_services'
+}
+
+_pd_cmd_list() {
+  _arguments \
+    '(-j --json)'{-j,--json}'[JSON output]' \
+    '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+    '(-h --help)'{-h,--help}'[show help]'
+}
+
+_pd_cmd_url() {
+  local -a subcmds
+  subcmds=(
+    'set:set URL for an environment'
+    'rm:remove URL for an environment'
+    'list:list all URLs for a service'
+    'ls:list all URLs for a service (alias)'
+  )
+
+  # Check if first arg is a subcommand
+  if (( CURRENT == 2 )); then
+    _alternative \
+      'subcommands:subcommand:_describe "subcommand" subcmds' \
+      'identities:service identity:_pd_complete_services'
+    return
+  fi
+
+  local subcmd="${words[2]}"
+  case "$subcmd" in
+    set)
+      case $CURRENT in
+        3) _pd_complete_services ;;
+        4) _values 'environment' dev staging prod local tunnel ;;
+        5) _message 'URL (e.g. https://example.com)' ;;
+      esac
+      ;;
+    rm|remove)
+      case $CURRENT in
+        3) _pd_complete_services ;;
+        4) _values 'environment' dev staging prod local tunnel ;;
+      esac
+      ;;
+    list|ls)
+      _pd_complete_services
+      ;;
+    *)
+      # Original behavior: pd url <identity>
+      _arguments \
+        '(-e --env)'{-e,--env}'[environment name]:env name:(dev staging prod)' \
+        '--open[open URL in browser]' \
+        '(-j --json)'{-j,--json}'[JSON output]' \
+        '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+        '(-h --help)'{-h,--help}'[show help]' \
+        '1:service identity:_pd_complete_services'
+      ;;
+  esac
+}
+
+_pd_cmd_tunnel() {
+  local -a subcmds
+  subcmds=(
+    'start:start a tunnel for a service'
+    'stop:stop a tunnel'
+    'status:get tunnel status'
+    'list:list all active tunnels'
+    'ls:list all active tunnels (alias)'
+    'providers:check installed tunnel providers'
+  )
+
+  if (( CURRENT == 2 )); then
+    _describe 'subcommand' subcmds
+    return
+  fi
+
+  local subcmd="${words[2]}"
+  case "$subcmd" in
+    start)
+      _arguments \
+        '--provider[tunnel provider]:provider:(ngrok cloudflared localtunnel)' \
+        '(-j --json)'{-j,--json}'[JSON output]' \
+        '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+        '(-h --help)'{-h,--help}'[show help]' \
+        '1:service identity:_pd_complete_services'
+      ;;
+    stop|status)
+      _arguments \
+        '(-j --json)'{-j,--json}'[JSON output]' \
+        '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+        '(-h --help)'{-h,--help}'[show help]' \
+        '1:service identity:_pd_complete_services'
+      ;;
+    list|ls|providers)
+      _arguments \
+        '(-j --json)'{-j,--json}'[JSON output]' \
+        '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+        '(-h --help)'{-h,--help}'[show help]'
+      ;;
+  esac
+}
+
+_pd_cmd_dns() {
+  local -a subcmds
+  subcmds=(
+    'list:list DNS records'
+    'ls:list DNS records (alias)'
+    'register:register a DNS record for a service'
+    'add:register a DNS record (alias)'
+    'unregister:remove a DNS record'
+    'rm:remove a DNS record (alias)'
+    'lookup:lookup by hostname'
+    'cleanup:remove stale DNS records'
+    'status:DNS system status'
+    'setup:initialize /etc/hosts managed section'
+    'teardown:remove /etc/hosts managed section'
+    'sync:rebuild /etc/hosts from DNS registry'
+    'help:show help'
+  )
+
+  if (( CURRENT == 2 )); then
+    _describe 'subcommand' subcmds
+    return
+  fi
+
+  local subcmd="${words[2]}"
+  case "$subcmd" in
+    register|add)
+      _arguments \
+        '--port[port number]:port:' \
+        '--hostname[custom hostname]:hostname:' \
+        '--resolve[also add to /etc/hosts]' \
+        '(-j --json)'{-j,--json}'[JSON output]' \
+        '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+        '1:service identity:_pd_complete_services'
+      ;;
+    unregister|rm|remove)
+      _arguments \
+        '(-j --json)'{-j,--json}'[JSON output]' \
+        '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+        '1:service identity:_pd_complete_services'
+      ;;
+    lookup)
+      _arguments \
+        '(-j --json)'{-j,--json}'[JSON output]' \
+        '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+        '1:hostname:'
+      ;;
+    list|ls)
+      _arguments \
+        '--pattern[filter by identity pattern]:pattern:' \
+        '--limit[max records to return]:limit:' \
+        '(-j --json)'{-j,--json}'[JSON output]' \
+        '(-q --quiet)'{-q,--quiet}'[suppress output]'
+      ;;
+    cleanup|status|setup|teardown|sync|help)
+      _arguments \
+        '(-j --json)'{-j,--json}'[JSON output]' \
+        '(-q --quiet)'{-q,--quiet}'[suppress output]'
+      ;;
+  esac
+}
+
+_pd_cmd_env() {
+  _arguments \
+    '--file[write env vars to file]:file:_files' \
+    '(-j --json)'{-j,--json}'[JSON output]' \
+    '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+    '(-h --help)'{-h,--help}'[show help]' \
+    '1:service identity:_pd_complete_services'
+}
+
+_pd_cmd_pub() {
+  _arguments \
+    '(-m --message)'{-m,--message}'[message payload]:message:' \
+    '--sender[sender agent ID]:agent ID:_pd_complete_agents' \
+    '(-j --json)'{-j,--json}'[JSON output]' \
+    '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+    '(-h --help)'{-h,--help}'[show help]' \
+    '1:channel:_pd_complete_channels' \
+    '2:message:'
+}
+
+_pd_cmd_sub() {
+  _arguments \
+    '(-j --json)'{-j,--json}'[JSON output]' \
+    '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+    '(-h --help)'{-h,--help}'[show help]' \
+    '1:channel:_pd_complete_channels'
+}
+
+_pd_cmd_tube() {
+  _arguments \
+    '--send[read stdin and post a top-level message]' \
+    '--reply[read stdin and post a reply]:parent message id:' \
+    '--since[resume listening from a message id]:message id:' \
+    '--limit[backfill cap when no cursor exists]:count:' \
+    '--once[do one poll-pass and exit]' \
+    '--no-history[ignore the on-disk listen cursor]' \
+    '--sender[sender agent ID]:agent ID:_pd_complete_agents' \
+    '(-j --json)'{-j,--json}'[JSON output]' \
+    '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+    '(-h --help)'{-h,--help}'[show help]' \
+    '1:channel:_pd_complete_channels'
+}
+
+_pd_cmd_wait() {
+  _arguments \
+    '--timeout[timeout in seconds]:seconds:' \
+    '(-j --json)'{-j,--json}'[JSON output]' \
+    '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+    '(-h --help)'{-h,--help}'[show help]' \
+    '1:service identity:_pd_complete_services'
+}
+
+_pd_cmd_lock() {
+  local -a lock_subcmds
+  lock_subcmds=(
+    'extend:extend a lock TTL'
+  )
+
+  local state
+  _arguments -C \
+    '--ttl[lock TTL in seconds]:seconds:' \
+    '--owner[owner agent ID]:agent ID:_pd_complete_agents' \
+    '(-j --json)'{-j,--json}'[JSON output]' \
+    '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+    '(-h --help)'{-h,--help}'[show help]' \
+    '1:lock name or subcommand:->first_arg' \
+    && return
+
+  case "$state" in
+    first_arg)
+      _alternative \
+        'subcommands:subcommand:_describe "lock subcommand" lock_subcmds' \
+        'locks:lock name:_pd_complete_locks'
+      ;;
+  esac
+}
+
+_pd_cmd_unlock() {
+  _arguments \
+    '--force[force-release even if not owner]' \
+    '--owner[owner agent ID]:agent ID:_pd_complete_agents' \
+    '(-j --json)'{-j,--json}'[JSON output]' \
+    '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+    '(-h --help)'{-h,--help}'[show help]' \
+    '1:lock name:_pd_complete_locks'
+}
+
+_pd_cmd_locks() {
+  _arguments \
+    '(-j --json)'{-j,--json}'[JSON output]' \
+    '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+    '(-h --help)'{-h,--help}'[show help]'
+}
+
+_pd_cmd_agent() {
+  local -a agent_subcmds
+  agent_subcmds=(
+    'register:register a new agent'
+    'heartbeat:send a heartbeat for an agent'
+    'unregister:unregister an agent'
+  )
+
+  local state subcmd
+  _arguments -C \
+    '(-j --json)'{-j,--json}'[JSON output]' \
+    '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+    '(-h --help)'{-h,--help}'[show help]' \
+    '1:subcommand:->subcommand' \
+    '*::subcommand args:->args' \
+    && return
+
+  case "$state" in
+    subcommand)
+      _describe 'agent subcommand' agent_subcmds
+      ;;
+    args)
+      subcmd="${words[1]}"
+      case "$subcmd" in
+        register)
+          _arguments \
+            '--agent[agent ID]:agent ID:' \
+            '--type[agent type]:type:(worker orchestrator monitor generic)' \
+            '--name[human-readable name]:name:' \
+            '--identity[semantic identity (project:stack:context)]:identity:_pd_complete_services' \
+            '--purpose[what the agent is working on]:purpose:' \
+            '--worktree[git worktree identifier]:worktree:' \
+            '--maxServices[max services]:count:' \
+            '--maxLocks[max locks]:count:' \
+            '(-j --json)'{-j,--json}'[JSON output]' \
+            '(-q --quiet)'{-q,--quiet}'[suppress output]'
+          ;;
+        heartbeat|unregister)
+          _arguments \
+            '--agent[agent ID]:agent ID:_pd_complete_agents' \
+            '(-j --json)'{-j,--json}'[JSON output]' \
+            '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+            '1:agent ID:_pd_complete_agents'
+          ;;
+      esac
+      ;;
+  esac
+}
+
+_pd_cmd_agents() {
+  _arguments \
+    '--active[show only active agents]' \
+    '(-j --json)'{-j,--json}'[JSON output]' \
+    '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+    '(-h --help)'{-h,--help}'[show help]'
+}
+
+_pd_cmd_actors() {
+  _arguments \
+    '--project[filter live evidence by project]:project:' \
+    '--limit[max session/salvage evidence]:count:' \
+    '--message[queue a message to the actor mailbox]:message:' \
+    '--from[message sender]:sender:' \
+    '--type[message type]:type:' \
+    '--wake[try to hail compatibility fleet body]' \
+    '(-j --json)'{-j,--json}'[JSON output]' \
+    '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+    '1:actor id or alias:(navigator cartographer coxswain signalman harbormaster sounder lookout breaker caulker quartermaster)'
+}
+
+_pd_cmd_log() {
+  _arguments \
+    '--limit[max entries to return]:count:' \
+    '--type[activity type]:type:(claim release lock unlock pub sub agent heartbeat)' \
+    '--agent[filter by agent ID]:agent ID:_pd_complete_agents' \
+    '--target[filter by target service ID]:service ID:_pd_complete_services' \
+    '--since[only entries after timestamp]:ISO timestamp:' \
+    '--from[start of time range]:ISO timestamp or epoch:' \
+    '--to[end of time range]:ISO timestamp or epoch:' \
+    '(-j --json)'{-j,--json}'[JSON output]' \
+    '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+    '(-h --help)'{-h,--help}'[show help]'
+}
+
+_pd_cmd_activity() {
+  local -a activity_subcmds
+  activity_subcmds=(
+    'summary:show activity summary'
+    'stats:show activity statistics'
+  )
+
+  local state
+  _arguments -C \
+    '(-j --json)'{-j,--json}'[JSON output]' \
+    '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+    '(-h --help)'{-h,--help}'[show help]' \
+    '1:subcommand:->subcommand' \
+    && return
+
+  case "$state" in
+    subcommand)
+      _describe 'activity subcommand' activity_subcmds
+      ;;
+  esac
+}
+
+_pd_cmd_scan() {
+  _arguments \
+    '--dry-run[preview scan results without saving config]' \
+    '(-j --json)'{-j,--json}'[JSON output]' \
+    '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+    '(-h --help)'{-h,--help}'[show help]'
+}
+
+_pd_cmd_projects() {
+  local -a projects_subcmds
+  projects_subcmds=(
+    'rm:remove a registered project'
+  )
+
+  local state
+  _arguments -C \
+    '(-j --json)'{-j,--json}'[JSON output]' \
+    '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+    '(-h --help)'{-h,--help}'[show help]' \
+    '1:subcommand:->subcommand' \
+    '*::subcommand args:->args' \
+    && return
+
+  case "$state" in
+    subcommand)
+      _describe 'projects subcommand' projects_subcmds
+      ;;
+    args)
+      ;;
+  esac
+}
+
+_pd_cmd_dashboard() {
+  _arguments \
+    '(-h --help)'{-h,--help}'[show help]'
+}
+
+_pd_cmd_channels() {
+  local -a channels_subcmds
+  channels_subcmds=(
+    'clear:clear messages from a channel'
+  )
+
+  local state
+  _arguments -C \
+    '(-j --json)'{-j,--json}'[JSON output]' \
+    '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+    '(-h --help)'{-h,--help}'[show help]' \
+    '1:subcommand:->subcommand' \
+    && return
+
+  case "$state" in
+    subcommand)
+      _alternative \
+        'subcommands:subcommand:_describe "channels subcommand" channels_subcmds'
+      ;;
+  esac
+}
+
+_pd_cmd_webhook() {
+  local -a webhook_subcmds
+  webhook_subcmds=(
+    'list:list all webhooks'
+    'events:list available webhook events'
+    'test:send test delivery to a webhook'
+    'update:update a webhook'
+    'rm:delete a webhook'
+    'deliveries:list webhook deliveries'
+  )
+
+  local state
+  _arguments -C \
+    '(-j --json)'{-j,--json}'[JSON output]' \
+    '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+    '(-h --help)'{-h,--help}'[show help]' \
+    '1:subcommand:->subcommand' \
+    && return
+
+  case "$state" in
+    subcommand)
+      _describe 'webhook subcommand' webhook_subcmds
+      ;;
+  esac
+}
+
+_pd_cmd_metrics() {
+  _arguments \
+    '(-j --json)'{-j,--json}'[JSON output]' \
+    '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+    '(-h --help)'{-h,--help}'[show help]'
+}
+
+_pd_cmd_config() {
+  _arguments \
+    '--dir[target directory]:directory:_directories' \
+    '(-j --json)'{-j,--json}'[JSON output]' \
+    '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+    '(-h --help)'{-h,--help}'[show help]'
+}
+
+_pd_cmd_health() {
+  _arguments \
+    '(-j --json)'{-j,--json}'[JSON output]' \
+    '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+    '(-h --help)'{-h,--help}'[show help]' \
+    '1:service ID:_pd_complete_services'
+}
+
+_pd_cmd_ports() {
+  local -a ports_subcmds
+  ports_subcmds=(
+    'cleanup:release stale port assignments'
+  )
+
+  local state
+  _arguments -C \
+    '--system[show system/well-known ports]' \
+    '(-j --json)'{-j,--json}'[JSON output]' \
+    '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+    '(-h --help)'{-h,--help}'[show help]' \
+    '1:subcommand:->subcommand' \
+    && return
+
+  case "$state" in
+    subcommand)
+      _describe 'ports subcommand' ports_subcmds
+      ;;
+  esac
+}
+
+_pd_cmd_up() {
+  _arguments \
+    '--service[start only this service and its dependencies]:service name:' \
+    '--no-health[skip health checks]' \
+    '--branch[use git branch as context in identity]' \
+    '--timeout[health check timeout in ms]:milliseconds:' \
+    '--dir[target directory]:directory:_directories' \
+    '(-j --json)'{-j,--json}'[JSON output]' \
+    '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+    '(-h --help)'{-h,--help}'[show help]'
+}
+
+_pd_cmd_down() {
+  _arguments \
+    '(-j --json)'{-j,--json}'[JSON output]' \
+    '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+    '(-h --help)'{-h,--help}'[show help]'
+}
+
+_pd_cmd_bench() {
+  _arguments \
+    '(-j --json)'{-j,--json}'[JSON output]' \
+    '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+    '(-h --help)'{-h,--help}'[show help]'
+}
+
+_pd_cmd_demo() {
+  local -a demo_subcmds
+  demo_subcmds=(
+    'port-conflict:demonstrate port conflict resolution'
+    'coordination:demonstrate agent coordination'
+  )
+
+  local state
+  _arguments -C \
+    '(-j --json)'{-j,--json}'[JSON output]' \
+    '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+    '(-h --help)'{-h,--help}'[show help]' \
+    '1:subcommand:->subcommand' \
+    && return
+
+  case "$state" in
+    subcommand)
+      _describe 'demo subcommand' demo_subcmds
+      ;;
+  esac
+}
+
+_pd_cmd_fleet() {
+  local -a fleet_subcmds
+  fleet_subcmds=(
+    'init:create pd-fleet.yml and git hook in current project'
+    'up:start all fleet agents (CLI mode, terminal-attached)'
+    'down:stop all fleet agents'
+    'status:show fleet health and recent events'
+    'run:run a specific agent from pd-fleet.yml once'
+    'panic:SIGTERM every running fleet agent (confirmation required)'
+    'unpanic:disarm a previous panic state'
+    'validate:parse pd-fleet.yml and check topology'
+    'prompt:one-line fleet status (for shell prompts)'
+    'log:show fleet log'
+    'gardener:auto-commit uncommitted changes'
+    'qa:adversarial review of latest commit'
+    'hunt:find and fill test coverage gaps'
+    'docs:sync documentation to match code'
+    'simplify:propose simplifications for latest commit'
+    'research:deep research on a topic'
+    'spark:run one ideation cycle'
+    'ideas:search ideas, notes, tuples, and repo markdown'
+  )
+
+  local state
+  _arguments -C \
+    '(-h --help)'{-h,--help}'[show help]' \
+    '1:subcommand:->subcommand' \
+    '*::args:->args' \
+    && return
+
+  case "$state" in
+    subcommand)
+      _describe 'fleet subcommand' fleet_subcmds
+      ;;
+    args)
+      case "${words[2]}" in
+        panic)
+          _arguments \
+            '--reason[reason for arming panic (required)]:reason:' \
+            '--yes[skip interactive YES confirmation]' \
+            '(-j --json)'{-j,--json}'[JSON output]' \
+            '(-q --quiet)'{-q,--quiet}'[minimal output]'
+          ;;
+        unpanic)
+          _arguments \
+            '--reason[reason for disarming panic (required)]:reason:' \
+            '(-j --json)'{-j,--json}'[JSON output]' \
+            '(-q --quiet)'{-q,--quiet}'[minimal output]'
+          ;;
+      esac
+      ;;
+  esac
+}
+
+_pd_cmd_wallet() {
+  local -a wallet_subcmds
+  wallet_subcmds=(
+    'show:show project wallet balance + commons pool'
+    'top-up:deposit virtual USD into a project wallet'
+    'history:show wallet.topup and bond.slash activity'
+  )
+  local state
+  _arguments -C '1:subcommand:->subcommand' '*::args:->args'
+  case "$state" in
+    subcommand) _describe 'wallet subcommand' wallet_subcmds ;;
+    args)
+      case "${words[2]}" in
+        top-up|topup)
+          _arguments \
+            '--usd[USD amount to deposit (> 0)]:usd:' \
+            '--yes[skip confirmation prompt]' \
+            '(-j --json)'{-j,--json}'[JSON output]' \
+            '(-q --quiet)'{-q,--quiet}'[minimal output]'
+          ;;
+        history)
+          _arguments \
+            '--since[lookback window (e.g. 7d, 24h, 30m)]:since:' \
+            '--limit[max entries]:n:' \
+            '(-j --json)'{-j,--json}'[JSON output]' \
+            '(-q --quiet)'{-q,--quiet}'[minimal output]'
+          ;;
+        *)
+          _arguments \
+            '(-j --json)'{-j,--json}'[JSON output]' \
+            '(-q --quiet)'{-q,--quiet}'[minimal output]'
+          ;;
+      esac
+      ;;
+  esac
+}
+
+_pd_cmd_bond() {
+  local -a bond_subcmds
+  bond_subcmds=(
+    'list:list bond escrow rows (filterable)'
+    'slash:manually slash a bond (audited; requires --reason)'
+  )
+  local state
+  _arguments -C '1:subcommand:->subcommand' '*::args:->args'
+  case "$state" in
+    subcommand) _describe 'bond subcommand' bond_subcmds ;;
+    args)
+      case "${words[2]}" in
+        list|ls)
+          _arguments \
+            '--project[filter by project]:project:' \
+            '--state[filter by state]:state:(escrowed running exiting refunded slashed)' \
+            '--limit[max rows]:n:' \
+            '(-j --json)'{-j,--json}'[JSON output]' \
+            '(-q --quiet)'{-q,--quiet}'[minimal output]'
+          ;;
+        slash)
+          _arguments \
+            '--portion[portion to slash (0..1)]:portion:' \
+            '--reason[audited reason text (required)]:reason:' \
+            '--yes[skip confirmation prompt]' \
+            '(-j --json)'{-j,--json}'[JSON output]' \
+            '(-q --quiet)'{-q,--quiet}'[minimal output]'
+          ;;
+      esac
+      ;;
+  esac
+}
+
+_pd_cmd_doctor() {
+  _arguments \
+    '(-j --json)'{-j,--json}'[JSON output]' \
+    '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+    '(-h --help)'{-h,--help}'[show help]'
+}
+
+_pd_cmd_session() {
+  local -a session_subcmds
+  session_subcmds=(
+    'start:start a new session'
+    'end:end a session (completed)'
+    'done:end a session (alias for end)'
+    'abandon:abandon a session'
+    'rm:delete a session and cascade notes/files'
+    'files:manage file claims for a session'
+    'phase:set session phase (planning/in_progress/testing/etc)'
+  )
+
+  local state subcmd
+  _arguments -C \
+    '(-j --json)'{-j,--json}'[JSON output]' \
+    '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+    '(-h --help)'{-h,--help}'[show help]' \
+    '1:subcommand:->subcommand' \
+    '*::subcommand args:->args' \
+    && return
+
+  case "$state" in
+    subcommand)
+      _describe 'session subcommand' session_subcmds
+      ;;
+    args)
+      subcmd="${words[1]}"
+      case "$subcmd" in
+        start)
+          _arguments \
+            '(-P --purpose)'{-P,--purpose}'[session purpose]:purpose:' \
+            '(-a --agent)'{-a,--agent}'[agent ID]:agent ID:_pd_complete_agents' \
+            '(-j --json)'{-j,--json}'[JSON output]' \
+            '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+            '1:purpose:'
+          ;;
+        end|done)
+          _arguments \
+            '(-n --note)'{-n,--note}'[handoff note]:note:' \
+            '(-j --json)'{-j,--json}'[JSON output]' \
+            '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+            '1:session ID:'
+          ;;
+        abandon|rm)
+          _arguments \
+            '(-j --json)'{-j,--json}'[JSON output]' \
+            '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+            '1:session ID:'
+          ;;
+        files)
+          local -a files_subcmds
+          files_subcmds=(
+            'add:claim files for a session'
+            'rm:release files from a session'
+          )
+          _arguments -C \
+            '(-j --json)'{-j,--json}'[JSON output]' \
+            '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+            '1:subcommand:->files_sub' \
+            && return
+          case "$state" in
+            files_sub)
+              _describe 'files subcommand' files_subcmds
+              ;;
+          esac
+          ;;
+        phase)
+          _arguments \
+            '(-j --json)'{-j,--json}'[JSON output]' \
+            '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+            '1:session ID:' \
+            '2:phase:(planning in_progress testing reviewing completed abandoned)'
+          ;;
+      esac
+      ;;
+  esac
+}
+
+_pd_cmd_sessions() {
+  _arguments \
+    '--all[show all sessions, not just active]' \
+    '--status[filter by status]:status:(active completed abandoned)' \
+    '--files[include file claims]' \
+    '(-j --json)'{-j,--json}'[JSON output]' \
+    '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+    '(-h --help)'{-h,--help}'[show help]'
+}
+
+_pd_cmd_note() {
+  _arguments \
+    '(-c --content)'{-c,--content}'[note content]:content:' \
+    '(-t --type)'{-t,--type}'[note type]:type:(note handoff commit warning)' \
+    '(-j --json)'{-j,--json}'[JSON output]' \
+    '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+    '(-h --help)'{-h,--help}'[show help]' \
+    '1:content:'
+}
+
+_pd_cmd_notes() {
+  _arguments \
+    '--limit[max entries to return]:count:' \
+    '--type[filter by note type]:type:(note handoff commit warning)' \
+    '(-j --json)'{-j,--json}'[JSON output]' \
+    '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+    '(-h --help)'{-h,--help}'[show help]'
+}
+
+_pd_cmd_daemon() {
+  # Shared completion for daemon lifecycle commands: start stop restart status
+  # install uninstall dev ci-gate
+  _arguments \
+    '(-j --json)'{-j,--json}'[JSON output]' \
+    '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+    '(-h --help)'{-h,--help}'[show help]'
+}
+
+_pd_cmd_salvage() {
+  local -a salvage_subcmds
+  salvage_subcmds=(
+    'claim:claim a dead agent'\''s work for resurrection'
+    'complete:mark resurrection as complete'
+    'abandon:return agent to resurrection queue'
+    'dismiss:remove agent from queue (reviewed, not resurrecting)'
+  )
+
+  local state subcmd
+  _arguments -C \
+    '--project[filter to agents in this project]:project name:' \
+    '--stack[filter by stack (requires --project)]:stack name:' \
+    '--all[show ALL queue entries globally (use sparingly)]' \
+    '--limit[max entries to return]:count:' \
+    '(-j --json)'{-j,--json}'[JSON output]' \
+    '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+    '(-h --help)'{-h,--help}'[show help]' \
+    '1:subcommand:->subcommand' \
+    '*::subcommand args:->args' \
+    && return
+
+  case "$state" in
+    subcommand)
+      _describe 'salvage subcommand' salvage_subcmds
+      ;;
+    args)
+      subcmd="${words[1]}"
+      case "$subcmd" in
+        claim|abandon|dismiss)
+          _arguments \
+            '(-j --json)'{-j,--json}'[JSON output]' \
+            '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+            '1:agent ID:_pd_complete_agents'
+          ;;
+        complete)
+          _arguments \
+            '(-j --json)'{-j,--json}'[JSON output]' \
+            '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+            '1:old agent ID:_pd_complete_agents' \
+            '2:new agent ID:'
+          ;;
+      esac
+      ;;
+  esac
+}
+
+_pd_cmd_changelog() {
+  local -a changelog_subcmds
+  changelog_subcmds=(
+    'add:add a changelog entry'
+    'show:show changes for an identity'
+    'tree:show changes for identity and children'
+    'export:export changelog as markdown'
+    'identities:list all identities with changelog entries'
+  )
+
+  local state subcmd
+  _arguments -C \
+    '--limit[max entries to return]:count:' \
+    '(-j --json)'{-j,--json}'[JSON output]' \
+    '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+    '(-h --help)'{-h,--help}'[show help]' \
+    '1:subcommand:->subcommand' \
+    '*::subcommand args:->args' \
+    && return
+
+  case "$state" in
+    subcommand)
+      _describe 'changelog subcommand' changelog_subcmds
+      ;;
+    args)
+      subcmd="${words[1]}"
+      case "$subcmd" in
+        add)
+          _arguments \
+            '--type[change type]:type:(feature fix refactor docs chore breaking)' \
+            '--description[detailed description]:description:' \
+            '--session[link to session ID]:session ID:' \
+            '--agent[link to agent ID]:agent ID:_pd_complete_agents' \
+            '(-j --json)'{-j,--json}'[JSON output]' \
+            '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+            '1:identity (project:service:feature):_pd_complete_services' \
+            '2:summary:'
+          ;;
+        show|tree)
+          _arguments \
+            '--limit[max entries to return]:count:' \
+            '(-j --json)'{-j,--json}'[JSON output]' \
+            '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+            '1:identity:_pd_complete_services'
+          ;;
+        export)
+          _arguments \
+            '--format[output format]:format:(flat tree keep-a-changelog)' \
+            '--limit[max entries to return]:count:' \
+            '--since[filter by timestamp]:timestamp:' \
+            '(-j --json)'{-j,--json}'[JSON output]' \
+            '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+            '1:identity:_pd_complete_services'
+          ;;
+        identities)
+          _arguments \
+            '(-j --json)'{-j,--json}'[JSON output]' \
+            '(-q --quiet)'{-q,--quiet}'[suppress output]'
+          ;;
+      esac
+      ;;
+  esac
+}
+
+_pd_cmd_files() {
+  _arguments \
+    '--session[filter by session ID]:session ID:' \
+    '(-j --json)'{-j,--json}'[JSON output]' \
+    '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+    '(-h --help)'{-h,--help}'[show help]'
+}
+
+_pd_cmd_who_owns() {
+  _arguments \
+    '(-j --json)'{-j,--json}'[JSON output]' \
+    '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+    '(-h --help)'{-h,--help}'[show help]' \
+    '1:file path:_files'
+}
+
+_pd_cmd_integration() {
+  local -a integration_subcmds
+  integration_subcmds=(
+    'ready:signal that work is ready for integration'
+    'needs:signal that work needs something from another agent'
+    'list:list recent integration signals'
+  )
+
+  local state subcmd
+  _arguments -C \
+    '--project[filter by project name]:project name:' \
+    '(-j --json)'{-j,--json}'[JSON output]' \
+    '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+    '(-h --help)'{-h,--help}'[show help]' \
+    '1:subcommand:->subcommand' \
+    '*::subcommand args:->args' \
+    && return
+
+  case "$state" in
+    subcommand)
+      _describe 'integration subcommand' integration_subcmds
+      ;;
+    args)
+      subcmd="${words[1]}"
+      case "$subcmd" in
+        ready|needs)
+          _arguments \
+            '(-d --description)'{-d,--description}'[signal description]:description:' \
+            '(-j --json)'{-j,--json}'[JSON output]' \
+            '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+            '1:identity:_pd_complete_services' \
+            '2:description:'
+          ;;
+        list)
+          _arguments \
+            '--project[filter by project name]:project name:' \
+            '(-j --json)'{-j,--json}'[JSON output]' \
+            '(-q --quiet)'{-q,--quiet}'[suppress output]'
+          ;;
+      esac
+      ;;
+  esac
+}
+
+_pd_cmd_briefing() {
+  _arguments \
+    '--full[full sync with session/agent archives and activity.log]' \
+    '--project[override project detection]:project name:' \
+    '--dir[target directory]:directory:_directories' \
+    '(-j --json)'{-j,--json}'[JSON output (no disk write)]' \
+    '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+    '(-h --help)'{-h,--help}'[show help]'
+}
+
+_pd_cmd_begin() {
+  _arguments \
+    '(-P --purpose)'{-P,--purpose}'[what you are working on]:purpose:' \
+    '(-i --identity)'{-i,--identity}'[semantic identity (project:stack:context)]:identity:_pd_complete_services' \
+    '(-a --agent)'{-a,--agent}'[agent ID (auto-generated if omitted)]:agent ID:' \
+    '(-t --type)'{-t,--type}'[agent type]:type:(worker orchestrator monitor)' \
+    '--files[files to claim]:file:_files' \
+    '(-f --force)'{-f,--force}'[force file claims even if already claimed]' \
+    '(-j --json)'{-j,--json}'[JSON output]' \
+    '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+    '(-h --help)'{-h,--help}'[show help]' \
+    '1:purpose:'
+}
+
+_pd_cmd_done() {
+  _arguments \
+    '(-n --note)'{-n,--note}'[final note]:note:' \
+    '(-a --agent)'{-a,--agent}'[agent ID]:agent ID:_pd_complete_agents' \
+    '--session[session ID]:session ID:' \
+    '(-s --status)'{-s,--status}'[session end status]:status:(completed abandoned)' \
+    '(-j --json)'{-j,--json}'[JSON output]' \
+    '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+    '(-h --help)'{-h,--help}'[show help]' \
+    '1:note:'
+}
+
+_pd_cmd_whoami() {
+  _arguments \
+    '--agent[agent ID]:agent ID:_pd_complete_agents' \
+    '(-j --json)'{-j,--json}'[JSON output]' \
+    '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+    '(-h --help)'{-h,--help}'[show help]'
+}
+
+_pd_cmd_with_lock() {
+  _arguments \
+    '--ttl[lock TTL in milliseconds]:milliseconds:' \
+    '--owner[lock owner]:owner:' \
+    '(-j --json)'{-j,--json}'[JSON output]' \
+    '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+    '(-h --help)'{-h,--help}'[show help]' \
+    '1:lock name:_pd_complete_locks' \
+    '*:command:'
+}
+
+_pd_cmd_learn() {
+  _arguments \
+    '(-h --help)'{-h,--help}'[show help]'
+}
+
+_pd_cmd_history() {
+  _arguments \
+    '--limit[max entries to return]:count:' \
+    '--type[activity type]:type:(claim release lock unlock pub sub agent heartbeat)' \
+    '--agent[filter by agent ID]:agent ID:_pd_complete_agents' \
+    '(-j --json)'{-j,--json}'[JSON output]' \
+    '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+    '(-h --help)'{-h,--help}'[show help]'
+}
+
+_pd_cmd_spawn() {
+  local -a spawn_subcmds
+  spawn_subcmds=(
+    'kill:kill a running spawned agent'
+  )
+
+  local state subcmd
+  _arguments -C \
+    '--backend[AI backend to use]:backend:(ollama claude claude-cli gemini codex aider custom)' \
+    '--model[model name override]:model:' \
+    '--identity[PD semantic identity (project:stack:context)]:identity:_pd_complete_services' \
+    '--budget[required spend ceiling in USD]:usd:' \
+    '--purpose[human-readable task description]:purpose:' \
+    '--allowedTools[tool permissions for claude-cli]:tools:' \
+    '--maxTokens[max tokens for claude/claude-cli]:tokens:' \
+    '--files[files to pass to aider]:file:_files' \
+    '--workdir[working directory]:directory:_directories' \
+    '--timeout[timeout in milliseconds]:milliseconds:' \
+    '(-j --json)'{-j,--json}'[JSON output]' \
+    '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+    '(-h --help)'{-h,--help}'[show help]' \
+    '1:subcommand or task:->subcommand' \
+    '*::subcommand args:->args' \
+    && return
+
+  case "$state" in
+    subcommand)
+      _alternative \
+        'subcommands:subcommand:_describe "subcommand" spawn_subcmds' \
+        'task:task description:'
+      ;;
+    args)
+      subcmd="${words[1]}"
+      case "$subcmd" in
+        kill)
+          _arguments \
+            '1:agent ID:'
+          ;;
+      esac
+      ;;
+  esac
+}
+
+_pd_cmd_cockpit() {
+  local -a cockpit_subcmds
+  cockpit_subcmds=(
+    'missions:list mission cards parsed from the project roadmap'
+    'help:show cockpit help'
+  )
+
+  if (( CURRENT == 2 )); then
+    _describe 'subcommand' cockpit_subcmds
+    return
+  fi
+
+  local subcmd="${words[2]}"
+  case "$subcmd" in
+    missions)
+      _arguments \
+        '--project[scope to a different project directory]:dir:_files -/' \
+        '--status[filter by comma-separated statuses]' \
+        '--limit[cap returned missions]' \
+        '--json[emit raw intake envelope]'
+      ;;
+  esac
+}
+
+_pd_cmd_sortie() {
+  local -a sortie_subcmds
+  sortie_subcmds=(
+    'run:launch a tracked sortie mission'
+    'list:list recent sorties'
+    'status:get one sortie status'
+    'logs:get one sortie event log'
+    'help:show sortie help'
+  )
+
+  if (( CURRENT == 2 )); then
+    _describe 'subcommand' sortie_subcmds
+    return
+  fi
+
+  local subcmd="${words[2]}"
+  case "$subcmd" in
+    run)
+      _arguments \
+        '--backend[AI backend to use]:backend:(ollama claude claude-cli gemini codex aider custom)' \
+        '--model[model name override]:model:' \
+        '--tier[model tier]:tier:(low mid high)' \
+        '--budget[required spend ceiling in USD]:usd:' \
+        '--dir[project directory]:directory:_directories' \
+        '--recipe[mission recipe]:recipe:(investigate fix review creative custom)' \
+        '--expected[expected output summary]:text:' \
+        '--context[extra context]:text:' \
+        '--identity[explicit coordinator identity]:identity:' \
+        '--purpose[human-readable task description]:purpose:' \
+        '--allowedTools[tool permissions]:tools:' \
+        '--timeout[timeout in milliseconds]:milliseconds:' \
+        '--maxTokens[max tokens]:tokens:' \
+        '(-j --json)'{-j,--json}'[JSON output]' \
+        '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+        '(-h --help)'{-h,--help}'[show help]' \
+        '*:goal text:_message "goal text"'
+      ;;
+    list)
+      _arguments \
+        '--all[list sorties across all projects]' \
+        '--limit[max results]:count:' \
+        '--dir[project directory]:directory:_directories' \
+        '(-j --json)'{-j,--json}'[JSON output]' \
+        '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+        '(-h --help)'{-h,--help}'[show help]'
+      ;;
+    status)
+      _arguments \
+        '1:sortie id:' \
+        '(-j --json)'{-j,--json}'[JSON output]' \
+        '(-h --help)'{-h,--help}'[show help]'
+      ;;
+    logs)
+      _arguments \
+        '1:sortie id:' \
+        '--limit[max events]:count:' \
+        '(-j --json)'{-j,--json}'[JSON output]' \
+        '(-h --help)'{-h,--help}'[show help]'
+      ;;
+    *)
+      _describe 'subcommand' sortie_subcmds
+      ;;
+  esac
+}
+
+_pd_cmd_spawned() {
+  _arguments \
+    '(-j --json)'{-j,--json}'[JSON output]' \
+    '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+    '(-h --help)'{-h,--help}'[show help]'
+}
+
+_pd_cmd_watch() {
+  _arguments \
+    '--exec[shell command to run on each message]:command:_command_names' \
+    '--once[exit after first message]' \
+    '--max-concurrent[max concurrent exec processes (default: 3)]:count' \
+    '--timeout[per-exec timeout in ms (default: 30000)]:milliseconds' \
+    '--min-interval[min ms between executions, rate limit (default: 0)]:milliseconds' \
+    '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+    '(-h --help)'{-h,--help}'[show help]' \
+    '1:channel:_pd_complete_channels'
+}
+
+_pd_complete_harbors() {
+  local harbors
+  harbors=( ${(f)"$(_pd_query '/harbors' | grep -o '"name":"[^"]*"' | sed 's/"name":"//;s/"//')"} )
+  _describe 'harbor name' harbors
+}
+
+_pd_cmd_harbor() {
+  local -a harbor_subcmds
+  harbor_subcmds=(
+    'create:create a named harbor'
+    'enter:enter a harbor (declare capabilities)'
+    'leave:leave a harbor'
+    'show:show harbor members and capabilities'
+    'destroy:destroy a harbor'
+    'delete:destroy a harbor (alias)'
+  )
+
+  local state subcmd
+  _arguments -C \
+    '1:subcommand:->subcommand' \
+    '*::subcommand args:->args' \
+    && return
+
+  case "$state" in
+    subcommand)
+      _describe 'harbor subcommand' harbor_subcmds
+      ;;
+    args)
+      subcmd="${words[1]}"
+      case "$subcmd" in
+        create)
+          _arguments \
+            '--cap[capabilities (comma-separated)]:capabilities:' \
+            '--channels[channel names (comma-separated)]:channels:' \
+            '--expires[expiry duration (e.g. 2h, 30m)]:duration:' \
+            '(-j --json)'{-j,--json}'[JSON output]' \
+            '1:harbor name:'
+          ;;
+        enter)
+          _arguments \
+            '--agent[agent ID]:agent ID:_pd_complete_agents' \
+            '--cap[capabilities (comma-separated)]:capabilities:' \
+            '(-j --json)'{-j,--json}'[JSON output]' \
+            '1:harbor name:_pd_complete_harbors'
+          ;;
+        leave|show|destroy|delete)
+          _arguments \
+            '--agent[agent ID (for leave)]:agent ID:_pd_complete_agents' \
+            '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+            '1:harbor name:_pd_complete_harbors'
+          ;;
+      esac
+      ;;
+  esac
+}
+
+_pd_cmd_harbors() {
+  _arguments \
+    '(-j --json)'{-j,--json}'[JSON output]'
+}
+
+_pd_cmd_tuple() {
+  local -a tuple_subcmds
+  tuple_subcmds=(
+    'out:write a tuple into the space'
+    'rd:read (copy) matching tuples'
+    'in:take (remove) matching tuples'
+    'scan:list all tuples in the space'
+    'count:count tuples in the space'
+  )
+
+  local state subcmd
+  _arguments -C '1:subcommand:->subcommand' '*::args:->args'
+
+  case "$state" in
+    subcommand)
+      _describe 'tuple subcommand' tuple_subcmds
+      ;;
+    args)
+      subcmd="${words[1]}"
+      case "$subcmd" in
+        out)
+          _arguments \
+            '--harbor[scope to a harbor namespace]:harbor name:' \
+            '--ttl[time-to-live in milliseconds]:ttl:' \
+            '--as[agent ID]:agent ID:_pd_complete_agents' \
+            '(-j --json)'{-j,--json}'[JSON output]' \
+            '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+            '1:fields JSON:'
+          ;;
+        rd|read)
+          _arguments \
+            '--harbor[scope to a harbor namespace]:harbor name:' \
+            '--limit[max results]:limit:' \
+            '(-j --json)'{-j,--json}'[JSON output]' \
+            '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+            '1:pattern JSON:'
+          ;;
+        in|take)
+          _arguments \
+            '--harbor[scope to a harbor namespace]:harbor name:' \
+            '--limit[max tuples to take]:limit:' \
+            '(-j --json)'{-j,--json}'[JSON output]' \
+            '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+            '1:pattern JSON:'
+          ;;
+        scan)
+          _arguments \
+            '--harbor[scope to a harbor namespace]:harbor name:' \
+            '(-j --json)'{-j,--json}'[JSON output]' \
+            '(-q --quiet)'{-q,--quiet}'[suppress output]'
+          ;;
+        count)
+          _arguments \
+            '--harbor[scope to a harbor namespace]:harbor name:' \
+            '(-j --json)'{-j,--json}'[JSON output]' \
+            '(-q --quiet)'{-q,--quiet}'[suppress output]'
+          ;;
+      esac
+      ;;
+  esac
+}
+
+_pd_cmd_say() {
+  _arguments \
+    '--pin[also write a tuple to the fleet harbor]' \
+    '--heat[also spray pheromone on a file (<path>[=0..1])]:heat:' \
+    '--broadcast[also publish to a pub/sub channel]:channel:_pd_complete_channels' \
+    '--kind[tuple kind prefix (default: finding)]:kind:' \
+    '--harbor[tuple harbor (default: fleet)]:harbor:' \
+    '--as[agent ID to associate with the write]:agent ID:_pd_complete_agents' \
+    '(-j --json)'{-j,--json}'[JSON output]' \
+    '(-q --quiet)'{-q,--quiet}'[minimal output]' \
+    '1:text:'
+}
+
+_pd_cmd_look() {
+  local -a look_subcmds
+  look_subcmds=(
+    'heat:show the file heat map (alias for --heat)'
+    'hot:alias of heat'
+  )
+
+  local state
+  _arguments -C '1:subcommand:->subcommand' '*::args:->args'
+
+  case "$state" in
+    subcommand)
+      _describe 'look subcommand' look_subcmds
+      _arguments \
+        '--since[lookback window in minutes (default: 60)]:minutes:' \
+        '--heat[show file heat map instead of sitrep]' \
+        '--project[scope salvage queue to a project]:project:' \
+        '--stack[scope salvage queue to a stack]:stack:' \
+        '--limit-activity[max activity entries]:n:' \
+        '--limit-notes[max notes]:n:' \
+        '(-j --json)'{-j,--json}'[JSON output]' \
+        '(-q --quiet)'{-q,--quiet}'[one-line summary]'
+      ;;
+    args)
+      _arguments \
+        '--since[lookback window in minutes (default: 60)]:minutes:' \
+        '--project[scope salvage queue to a project]:project:' \
+        '--stack[scope salvage queue to a stack]:stack:' \
+        '(-j --json)'{-j,--json}'[JSON output]' \
+        '(-q --quiet)'{-q,--quiet}'[one-line summary]'
+      ;;
+  esac
+}
+
+_pd_cmd_sitrep() {
+  _arguments \
+    '--since[lookback window in minutes (default: 60)]:minutes:' \
+    '--project[scope salvage queue to a project]:project:' \
+    '--stack[scope salvage queue to a stack]:stack:' \
+    '--limit-activity[max activity entries]:n:' \
+    '--limit-notes[max notes]:n:' \
+    '(-j --json)'{-j,--json}'[JSON output]' \
+    '(-q --quiet)'{-q,--quiet}'[one-line summary]'
+}
+
+_pd_cmd_advise() {
+  _arguments \
+    '--task[intended work description]:task:' \
+    '--session[explicit session id]:session:' \
+    '--sessionId[explicit session id]:session:' \
+    '--agent[explicit agent id]:agent:' \
+    '--agentId[explicit agent id]:agent:' \
+    '--dir[project root]:directory:_files -/' \
+    '--projectRoot[project root]:directory:_files -/' \
+    '--channels[include channel suggestions]' \
+    '--tuples[include tuple suggestions]' \
+    '(-j --json)'{-j,--json}'[JSON output]' \
+    '(-q --quiet)'{-q,--quiet}'[suppress non-essential output]' \
+    '*:files:_files'
+}
+
+_pd_cmd_guard() {
+  local -a guard_subcmds
+  guard_subcmds=(
+    'status:show Coordination Guard status'
+    'check:verify session and file-claim discipline'
+    'enable:write project config and enable guard checks'
+    'disable:turn guard checks off for this project'
+    'install:install or update the managed pre-commit hook'
+  )
+
+  _arguments -C \
+    '1:subcommand:->subcommand' \
+    '*::args:->args'
+
+  case "$state" in
+    subcommand)
+      _describe 'subcommand' guard_subcmds
+      ;;
+    args)
+      case "${words[2]}" in
+        check)
+          _arguments \
+            '--mode[override guard mode]:mode:(off warn enforce)' \
+            '--warn[warn instead of blocking]' \
+            '--enforce[block on violations]' \
+            '--off[disable this check]' \
+            '--staged[check staged files]' \
+            '--hook[format output for a git hook]' \
+            '(-j --json)'{-j,--json}'[JSON output]' \
+            '(-q --quiet)'{-q,--quiet}'[suppress non-essential output]' \
+            '*:files:_files'
+          ;;
+        enable|install)
+          _arguments \
+            '--mode[guard mode]:mode:(warn enforce)' \
+            '--warn[warn instead of blocking]' \
+            '--enforce[block on violations]' \
+            '(-j --json)'{-j,--json}'[JSON output]' \
+            '(-q --quiet)'{-q,--quiet}'[suppress non-essential output]'
+          ;;
+        status|disable)
+          _arguments \
+            '(-j --json)'{-j,--json}'[JSON output]' \
+            '(-q --quiet)'{-q,--quiet}'[suppress non-essential output]'
+          ;;
+      esac
+      ;;
+  esac
+}
+
+_pd_cmd_pheromone() {
+  local -a ph_subcmds
+  ph_subcmds=(
+    'spray:set a pheromone value (0..1)'
+    'file:sugar for spray files <path> heat <strength>'
+    'files:file heat map'
+    'show:read pheromones for an entity'
+    'ls:list all non-zero pheromones'
+  )
+
+  local state
+  _arguments -C '1:subcommand:->subcommand' '*::args:->args'
+
+  case "$state" in
+    subcommand)
+      _describe 'pheromone subcommand' ph_subcmds
+      ;;
+    args)
+      case "${words[2]}" in
+        files)
+          _arguments \
+            '--path[path prefix filter]:path:' \
+            '--depth[max path depth]:n:' \
+            '--limit[max rows]:n:' \
+            '(-j --json)'{-j,--json}'[JSON output]' \
+            '(-q --quiet)'{-q,--quiet}'[minimal output]'
+          ;;
+        *)
+          _arguments \
+            '(-j --json)'{-j,--json}'[JSON output]' \
+            '(-q --quiet)'{-q,--quiet}'[minimal output]'
+          ;;
+      esac
+      ;;
+  esac
+}
+
+_pd_cmd_graph() {
+  local -a graph_subcmds
+  graph_subcmds=(
+    'edges:list semantic graph edges'
+    'stats:summarize graph edge counts'
+    'help:show graph help'
+  )
+
+  local state
+  _arguments -C '1:subcommand:->subcommand' '*::args:->args'
+
+  case "$state" in
+    subcommand)
+      _describe 'graph subcommand' graph_subcmds
+      ;;
+    args)
+      case "${words[2]}" in
+        edges)
+          _arguments \
+            '--dir[project directory filter]:path:_files -/' \
+            '--scope[scope filter]:' \
+            '--source-type[source entity type]:' \
+            '--source-id[source entity id]:' \
+            '--edge-type[edge type]:' \
+            '--target-type[target entity type]:' \
+            '--target-id[target entity id]:' \
+            '--query[text search]:' \
+            '--limit[max edges]:limit:' \
+            '(-j --json)'{-j,--json}'[output JSON]' \
+            '(-q --quiet)'{-q,--quiet}'[quiet output]'
+          ;;
+        stats)
+          _arguments \
+            '--dir[project directory filter]:path:_files -/' \
+            '(-j --json)'{-j,--json}'[output JSON]' \
+            '(-q --quiet)'{-q,--quiet}'[quiet output]'
+          ;;
+        *)
+          _describe 'graph subcommand' graph_subcmds
+          ;;
+      esac
+      ;;
+  esac
+}
+
+_pd_cmd_memory() {
+  local -a memory_subcmds
+  memory_subcmds=(
+    'episodes:list episodic memory entries'
+    'stats:summarize episodic memory counts'
+    'help:show memory help'
+  )
+
+  local state
+  _arguments -C '1:subcommand:->subcommand' '*::args:->args'
+
+  case "$state" in
+    subcommand)
+      _describe 'memory subcommand' memory_subcmds
+      ;;
+    args)
+      case "${words[2]}" in
+        episodes)
+          _arguments \
+            '--dir[project directory filter]:path:_files -/' \
+            '--project[logical project filter]:' \
+            '--harbor[harbor filter]:' \
+            '--agent[agent filter]:agent id:' \
+            '--type[episode type filter]:' \
+            '--query[text search]:' \
+            '--limit[max episodes]:limit:' \
+            '(-j --json)'{-j,--json}'[output JSON]' \
+            '(-q --quiet)'{-q,--quiet}'[quiet output]'
+          ;;
+        stats)
+          _arguments \
+            '--dir[project directory filter]:path:_files -/' \
+            '--project[logical project filter]:' \
+            '(-j --json)'{-j,--json}'[output JSON]' \
+            '(-q --quiet)'{-q,--quiet}'[quiet output]'
+          ;;
+        *)
+          _describe 'memory subcommand' memory_subcmds
+          ;;
+      esac
+      ;;
+  esac
+}
+
+_pd_cmd_ideas() {
+  local -a ideas_subcmds
+  ideas_subcmds=(
+    'list:list curated idea/family entries from the trove'
+    'search:search trove, repo markdown, daemon notes/tuples, and optional raw residue'
+    'show:show one idea/family in detail'
+    'help:show ideas help'
+  )
+
+  local state
+  _arguments -C '1:subcommand:->subcommand' '*::args:->args'
+
+  case "$state" in
+    subcommand)
+      _describe 'ideas subcommand' ideas_subcmds
+      ;;
+    args)
+      case "${words[2]}" in
+        list)
+          _arguments \
+            '--dir[project directory filter]:path:_files -/' \
+            '--status[status filter]:(now backlog parked merge local)' \
+            '--limit[max entries]:limit:' \
+            '--include-raw[include local .spark/.spider residue]' \
+            '(-j --json)'{-j,--json}'[output JSON]' \
+            '(-q --quiet)'{-q,--quiet}'[quiet output]'
+          ;;
+        search)
+          _arguments \
+            '--dir[project directory filter]:path:_files -/' \
+            '--status[status filter]:(now backlog parked merge local)' \
+            '--limit[max entries]:limit:' \
+            '--sources[search sources]:(trove raw notes tuples markdown all)' \
+            '--include-raw[include local .spark/.spider residue]' \
+            '(-j --json)'{-j,--json}'[output JSON]' \
+            '(-q --quiet)'{-q,--quiet}'[quiet output]' \
+            '1:query:'
+          ;;
+        show)
+          _arguments \
+            '--dir[project directory filter]:path:_files -/' \
+            '--include-raw[include local .spark/.spider residue]' \
+            '(-j --json)'{-j,--json}'[output JSON]' \
+            '(-q --quiet)'{-q,--quiet}'[quiet output]' \
+            '1:slug:'
+          ;;
+        *)
+          _describe 'ideas subcommand' ideas_subcmds
+          ;;
+      esac
+      ;;
+  esac
+}
+
+_pd_cmd_roadmap() {
+  _arguments \
+    '1:subcommand:(ack harvest)' \
+    '2:feedback id:' \
+    '--dir[project directory]:path:_files -/' \
+    '--root[project root]:path:_files -/' \
+    '--projectDir[project directory]:path:_files -/' \
+    '--limit[rows per section]:limit:' \
+    '--feedback-status[live tuple feedback status]:(open harvested wontfix all)' \
+    '--feedback-harbor[harbor scope for live feedback]:harbor:' \
+    '--feedback-limit[max live feedback rows]:limit:' \
+    '--as[harvester agent id]:agent id:' \
+    '--into[roadmap slug the feedback was folded into]:slug:' \
+    '--no-excerpts[hide current-work and Cartographer excerpts]' \
+    '(-j --json)'{-j,--json}'[output JSON]' \
+    '(-q --quiet)'{-q,--quiet}'[agent-readable section:slug output]'
+}
+
+_pd_cmd_inbox() {
+  local -a inbox_subcmds
+  inbox_subcmds=(
+    'send:send a message to an agent inbox'
+    'stats:get inbox stats for an agent'
+    'clear:clear all messages from an agent inbox'
+    'read-all:mark all messages as read'
+    'list:list messages in an agent inbox'
+  )
+
+  local state subcmd
+  _arguments -C \
+    '(-j --json)'{-j,--json}'[JSON output]' \
+    '(-q --quiet)'{-q,--quiet}'[suppress output]' \
+    '(-h --help)'{-h,--help}'[show help]' \
+    '1:agent ID:_pd_complete_agents' \
+    '2:subcommand:->subcommand' \
+    '*::subcommand args:->args' \
+    && return
+
+  case "$state" in
+    subcommand)
+      _describe 'inbox subcommand' inbox_subcmds
+      ;;
+    args)
+      subcmd="${words[1]}"
+      case "$subcmd" in
+        send)
+          _arguments \
+            '--message[message content]:message:' \
+            '--from[sender agent ID]:agent ID:_pd_complete_agents' \
+            '(-j --json)'{-j,--json}'[JSON output]' \
+            '(-q --quiet)'{-q,--quiet}'[suppress output]'
+          ;;
+        stats|list|read-all|clear)
+          _arguments \
+            '(-j --json)'{-j,--json}'[JSON output]' \
+            '(-q --quiet)'{-q,--quiet}'[suppress output]'
+          ;;
+      esac
+      ;;
+  esac
+}
+
+# ---------------------------------------------------------------------------
+# Main completion entry point
+# ---------------------------------------------------------------------------
+
+_port_daddy() {
+  local -a commands
+  commands=(
+    # Service management (+ single-letter aliases)
+    'claim:claim a port for a service'
+    'c:claim a port (alias for claim)'
+    'release:release a service port'
+    'r:release a service port (alias for release)'
+    'find:find a service by identity or port'
+    'f:find a service (alias for find)'
+    'list:list all active services'
+    'l:list all active services (alias for list)'
+    'ps:list all active services (alias for list)'
+    'services:list all active services (alias for list)'
+    'url:manage service URLs (get/set/rm/list)'
+    'env:get environment variable block for a service'
+    'tunnel:manage tunnels (start/stop/status/list)'
+    'dns:local DNS records for services'
+    # Agent coordination
+    'pub:publish a message to a channel'
+    'publish:publish a message to a channel (alias for pub)'
+    'broadcast:publish a message to a channel (alias for pub)'
+    'sub:subscribe to a channel (streaming)'
+    'subscribe:subscribe to a channel (alias for sub)'
+    'listen:subscribe to a channel (alias for sub)'
+    'tube:conversational pipe over a channel (listen/send/reply via stdin)'
+    'wait:wait until a service is claimed'
+    'lock:acquire a distributed lock'
+    'unlock:release a distributed lock'
+    'locks:list all active locks'
+    # Agent registry
+    'agent:manage an agent (register/heartbeat/unregister)'
+    'agents:list registered agents'
+    'actor:show one durable maritime actor'
+    'actors:list durable maritime actors'
+    'swarm:list registered agents (alias for agents)'
+    # Activity
+    'log:tail the activity log'
+    'activity:show activity summary or stats'
+    # Sessions & Notes
+    'session:manage a session (start/end/abandon/rm/files)'
+    'sessions:list sessions'
+    'note:add a quick note'
+    'notes:list recent notes'
+    # Agent Resurrection
+    'salvage:check for dead agents with recoverable work'
+    'resurrection:check for dead agents (alias for salvage)'
+    # Changelog
+    'changelog:hierarchical changelog with identity-based rollup'
+    # File Claims & Integration
+    'add:claim-aware git add wrapper'
+    'files:list all active file claims across sessions'
+    'who-owns:check who has claimed a specific file path'
+    'integration:manage integration signals (ready/needs/list)'
+    'add:stage files through the coordination claim filter'
+    # Sugar (compound commands)
+    'begin:begin a work session (register agent + start session)'
+    'b:begin a work session (alias for begin)'
+    'done:end a work session (end session + unregister agent)'
+    'whoami:show current agent/session context'
+    'w:show current context (alias for whoami)'
+    'with-lock:run a command while holding a lock'
+    'n:add a quick note (alias for note)'
+    'u:start all services (alias for up)'
+    'd:stop all services (alias for down)'
+    # Tutorial
+    'learn:interactive tutorial — learn Port Daddy step by step'
+    'tutorial:interactive tutorial (alias for learn)'
+    # Briefing & History
+    'briefing:generate .portdaddy/ project briefing'
+    'history:view recent project activity'
+    # Consolidated read/write (3.8.4)
+    'say:write a finding (note) with optional fan-out to tuple/pheromone/broadcast'
+    'look:situation report (sitrep default, --heat for file heat map)'
+    'sitrep:explicit alias for look (the maritime name)'
+    'advise:suggest coordination moves before editing'
+    'preflight:alias for advise before risky work'
+    'compass:maritime alias for advise'
+    'guard:enforce Port Daddy session and file-claim discipline'
+    'snapshots:list/show/restore/prune claim-watcher snapshots'
+    'snapshot:alias for snapshots'
+    'shipwright:survey + propose + apply for fleet authoring'
+    'pheromone:stigmergic coordination (spray, files, show, ls)'
+    'ph:alias for pheromone'
+    # Agent Inbox
+    'inbox:agent-to-agent direct messaging inbox'
+    # AI Agent Spawner + Watch
+    'spawn:launch an AI agent (Ollama/Claude/Gemini/Aider/custom)'
+    'spawned:list active spawned agents'
+    'sortie:launch and inspect tracked mission records'
+    'cockpit:App-Native Development Cockpit — read roadmap into mission cards'
+    'watch:subscribe to a channel and run a script on each message'
+    # Harbors (named permission namespaces)
+    'harbor:create, enter, leave, show, or destroy a harbor'
+    'harbors:list all active harbors'
+    # Tuple space
+    'tuple:Linda-style tuple space (out, rd, in, scan, count)'
+    # Semantic graph + episodic memory
+    'graph:inspect semantic graph edges and stats'
+    'memory:inspect episodic memory entries and stats'
+    'ideas:search the canonical ideas trove and local residue'
+    # Cartographer roadmap projection
+    'roadmap:show Cartographer-curated Next Cuts, ideas, and dogfood feedback'
+    # Quorum (swarm consensus primitive)
+    'quorum:propose, vote, list, or inspect swarm proposals'
+    # Feedback (central agentic-feedback primitive)
+    'feedback:drop, list, show, or harvest structured agentic feedback'
+    # System & Monitoring
+    'dashboard:open web dashboard in browser'
+    'channels:list pub/sub channels'
+    'webhook:manage webhooks'
+    'webhooks:manage webhooks (alias for webhook)'
+    'metrics:show daemon metrics'
+    'config:show resolved configuration'
+    'health:check service health'
+    'ports:list active port assignments'
+    # Orchestration
+    'up:start all services (auto-detect or from .portdaddyrc)'
+    'down:stop all services started by up'
+    # Benchmarking, Demos & Fleet
+    'bench:run performance benchmarks'
+    'demo:interactive demos of Port Daddy features'
+    'fleet:manage background agent fleet (gardener, QA, docs, research)'
+    # Project (+ aliases)
+    'scan:deep-scan project for frameworks and register with daemon'
+    's:deep-scan project (alias for scan)'
+    'projects:list or manage registered projects'
+    'p:list or manage projects (alias for projects)'
+    'doctor:run environment diagnostics'
+    'diagnose:run environment diagnostics (alias for doctor)'
+    'hints:show salvage queue and onboarding nudges for the current project'
+    # Daemon lifecycle
+    'start:start the Port Daddy daemon'
+    'stop:stop the Port Daddy daemon'
+    'restart:restart the Port Daddy daemon'
+    'status:show daemon status'
+    'install:install daemon as a system service'
+    'uninstall:uninstall the system service'
+    'dev:start daemon in development mode (foreground)'
+    'ci-gate:exit non-zero if daemon is running stale code'
+    'mcp:start MCP server for Claude Code / Claude Desktop (pd mcp install to configure)'
+    'daemon:daemon lifecycle subcommands (status, log, doctor)'
+    'setup:install daemon, MCP, FleetBar, and initialize a project'
+    'init:set up Port Daddy for this project (scan, fleet, MCP, git hook)'
+    # Bonds / Wallets — FleetControl hardening
+    'wallet:manage project USD wallets (show/top-up/history)'
+    'bond:inspect and manually slash agent bond escrows'
+    # Info
+    'version:print version information'
+    'help:show help'
+  )
+
+  local -a global_opts
+  global_opts=(
+    '(-j --json)'{-j,--json}'[output JSON]'
+    '(-q --quiet)'{-q,--quiet}'[suppress non-essential output]'
+    '(-h --help)'{-h,--help}'[show help]'
+    '(-V --version)'{-V,--version}'[print version]'
+  )
+
+  local state
+  _arguments -C \
+    "${global_opts[@]}" \
+    '1:command:->command' \
+    '*::command args:->args' \
+    && return
+
+  case "$state" in
+    command)
+      _describe 'command' commands
+      ;;
+    args)
+      local cmd="${words[1]}"
+      case "$cmd" in
+        c|claim)            _pd_cmd_claim ;;
+        r|release)          _pd_cmd_release ;;
+        f|find)             _pd_cmd_find ;;
+        l|list|ps|services)  _pd_cmd_list ;;
+        url)                _pd_cmd_url ;;
+        env)                _pd_cmd_env ;;
+        tunnel)             _pd_cmd_tunnel ;;
+        dns)                _pd_cmd_dns ;;
+        pub|publish|broadcast) _pd_cmd_pub ;;
+        sub|subscribe|listen) _pd_cmd_sub ;;
+        tube)               _pd_cmd_tube ;;
+        wait)               _pd_cmd_wait ;;
+        lock)               _pd_cmd_lock ;;
+        unlock)             _pd_cmd_unlock ;;
+        locks)              _pd_cmd_locks ;;
+        agent)              _pd_cmd_agent ;;
+        agents|swarm)        _pd_cmd_agents ;;
+        actor|actors)        _pd_cmd_actors ;;
+        log)                _pd_cmd_log ;;
+        activity)           _pd_cmd_activity ;;
+        session)            _pd_cmd_session ;;
+        sessions)           _pd_cmd_sessions ;;
+        note)               _pd_cmd_note ;;
+        notes)              _pd_cmd_notes ;;
+        salvage|resurrection) _pd_cmd_salvage ;;
+        changelog)          _pd_cmd_changelog ;;
+        up)                 _pd_cmd_up ;;
+        down)               _pd_cmd_down ;;
+        bench)              _pd_cmd_bench ;;
+        demo)               _pd_cmd_demo ;;
+        fleet)              _pd_cmd_fleet ;;
+        s|scan)             _pd_cmd_scan ;;
+        p|projects)         _pd_cmd_projects ;;
+        doctor|diagnose)    _pd_cmd_doctor ;;
+        init)               ;; # no subcommands
+        start|stop|restart|status|install|uninstall|dev|ci-gate)
+                            _pd_cmd_daemon ;;
+        dashboard)              _pd_cmd_dashboard ;;
+        channels)               _pd_cmd_channels ;;
+        webhook|webhooks)       _pd_cmd_webhook ;;
+        metrics)                _pd_cmd_metrics ;;
+        config)                 _pd_cmd_config ;;
+        health)                 _pd_cmd_health ;;
+        ports)                  _pd_cmd_ports ;;
+        files)                  _pd_cmd_files ;;
+        who-owns)               _pd_cmd_who_owns ;;
+        integration)            _pd_cmd_integration ;;
+        briefing)               _pd_cmd_briefing ;;
+        history)                _pd_cmd_history ;;
+        begin|b)                _pd_cmd_begin ;;
+        done)                   _pd_cmd_done ;;
+        whoami|w)               _pd_cmd_whoami ;;
+        with-lock)              _pd_cmd_with_lock ;;
+        n)                      _pd_cmd_note ;;
+        u)                      _pd_cmd_up ;;
+        d)                      _pd_cmd_down ;;
+        learn|tutorial)         _pd_cmd_learn ;;
+        inbox)                  _pd_cmd_inbox ;;
+        spawn)                  _pd_cmd_spawn ;;
+        sortie)                 _pd_cmd_sortie ;;
+        cockpit)                _pd_cmd_cockpit ;;
+        spawned)                _pd_cmd_spawned ;;
+        watch)                  _pd_cmd_watch ;;
+        harbor)                 _pd_cmd_harbor ;;
+        harbors)                _pd_cmd_harbors ;;
+        tuple)                  _pd_cmd_tuple ;;
+        say)                    _pd_cmd_say ;;
+        look)                   _pd_cmd_look ;;
+        sitrep)                 _pd_cmd_sitrep ;;
+        advise|preflight|compass) _pd_cmd_advise ;;
+        guard)                  _pd_cmd_guard ;;
+        pheromone|ph)           _pd_cmd_pheromone ;;
+        wallet)                 _pd_cmd_wallet ;;
+        bond)                   _pd_cmd_bond ;;
+        graph)                  _pd_cmd_graph ;;
+        memory)                 _pd_cmd_memory ;;
+        ideas)                  _pd_cmd_ideas ;;
+        roadmap)                _pd_cmd_roadmap ;;
+        mcp)                _arguments '1:subcommand:(start install)' ;;
+        version|help)       ;;
+        *)                  ;;
+      esac
+      ;;
+  esac
+}
+
+_port_daddy "$@"

@@ -1,0 +1,1283 @@
+# Source: https://github.com/ronakrm/geewit/blob/91e8bbf3dfacea75d68d866931b23ceb1d5aeecd/bin/gwt
+# Repository: ronakrm/geewit (bin/gwt)
+#!/usr/bin/env bash
+set -euo pipefail
+
+readonly GWT_VERSION="0.1.1"
+
+CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/gwt"
+CONFIG_FILE="${GWT_CONFIG_FILE:-$CONFIG_DIR/config}"
+
+DEFAULT_BASE_BRANCH="main"
+DEFAULT_COLORS=(red green yellow blue magenta cyan colour208 colour196 colour202 colour226 colour46 colour51 colour201 colour93 colour99 colour33 colour166 colour184 colour214 colour220)
+
+load_config() {
+    if [[ -f "$CONFIG_FILE" ]]; then
+        # shellcheck disable=SC1090
+        source "$CONFIG_FILE"
+    fi
+}
+
+ensure_config_dir() {
+    mkdir -p "$CONFIG_DIR"
+}
+
+set_config_value() {
+    local key="$1"
+    local value="$2"
+    ensure_config_dir
+    touch "$CONFIG_FILE"
+    local escaped
+    escaped=$(printf '%q' "$value")
+    local escaped_sed
+    escaped_sed="${escaped//\\/\\\\}"
+    escaped_sed="${escaped_sed//&/\\&}"
+    if grep -q "^${key}=" "$CONFIG_FILE"; then
+        sed -i "s|^${key}=.*$|${key}=${escaped_sed}|" "$CONFIG_FILE"
+    else
+        printf '%s=%s\n' "$key" "$escaped" >> "$CONFIG_FILE"
+    fi
+}
+
+print_usage() {
+    cat <<'EOS'
+Usage: gwt <command> [args]
+
+Core commands
+  new <branch> [base]     Create a worktree + tmux session (base defaults to main)
+                          Use --agent CMD or --no-agent to override the agent pane
+                          Use --detach or -d to create without attaching
+  switch <branch>         Attach to an existing session
+  list                    List worktrees and matching tmux sessions
+  remove <branch>         Remove worktree, tmux session, and local branch
+                          Use --keep-branch to preserve the local branch
+  cleanup [base]          Remove worktrees already merged into base (default: main)
+  merge <branch> [base]   Merge branch into base and clean up the worktree
+  status                  Show git status for every worktree
+  push [remote]           Push current branch (default remote: origin)
+  from-pr <number>        Create a worktree from a GitHub PR (requires gh)
+
+Tmux integration
+  tmux-status [path]      Internal helper for the tmux status line
+
+Agent configuration
+  agent show              Show current agent command
+  agent set <command>     Update the command used to start the agent pane
+  agent clear             Remove the agent command
+
+Other
+  config-path             Print the config file location
+  completion <shell>      Print shell completion script (bash|zsh)
+  version                 Show CLI version
+  help                    Show this message
+EOS
+}
+
+require_git_repo() {
+    if ! git rev-parse --show-toplevel >/dev/null 2>&1; then
+        echo "gwt: must be run inside a git repository" >&2
+        exit 1
+    fi
+}
+
+require_command() {
+    local cmd="$1"
+    if ! command -v "$cmd" >/dev/null 2>&1; then
+        echo "gwt: missing required command '$cmd'" >&2
+        exit 1
+    fi
+}
+
+repo_root() {
+    git rev-parse --show-toplevel
+}
+
+primary_worktree_root() {
+    local common
+    common=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)
+    if [[ -z "$common" ]]; then
+        return
+    fi
+    if [[ -d "$common" ]]; then
+        dirname "$common"
+    fi
+}
+
+canonical_repo_root() {
+    local primary
+    primary="$(primary_worktree_root)"
+    if [[ -n "$primary" ]]; then
+        echo "$primary"
+    else
+        repo_root
+    fi
+}
+
+repo_name() {
+    basename "$(canonical_repo_root)"
+}
+
+resolve_worktree_base() {
+    local root="$1"
+    local base="${GWT_WORKTREE_BASE:-}"
+    if [[ -z "$base" ]]; then
+        base="$(cd "$root/.." && pwd)"
+    elif [[ "${base:0:1}" != "/" ]]; then
+        mkdir -p "$root/$base"
+        base="$(cd "$root/$base" && pwd)"
+    else
+        mkdir -p "$base"
+    fi
+    echo "$base"
+}
+
+worktree_path_for_branch() {
+    local branch="$1"
+    local root
+    root="$(canonical_repo_root)"
+    local base
+    base="$(resolve_worktree_base "$root")"
+    local prefix="${GWT_PREFIX:-}"
+    local path
+    path="$base/${prefix}$(repo_name)-$branch"
+    echo "$path"
+}
+
+worktree_dir_for_branch() {
+    local branch="$1"
+    local current=""
+    local path=""
+    while IFS= read -r line; do
+        case "$line" in
+            "worktree "*)
+                current="${line#worktree }"
+                ;;
+            "branch refs/heads/$branch")
+                if [[ -n "$current" ]]; then
+                    path="$current"
+                    break
+                fi
+                ;;
+        esac
+    done < <(git worktree list --porcelain)
+    if [[ -n "$path" ]]; then
+        echo "$path"
+        return
+    fi
+    local fallback
+    fallback="$(worktree_path_for_branch "$branch")"
+    if [[ -n "$fallback" && -d "$fallback" ]]; then
+        echo "$fallback"
+    fi
+}
+
+ensure_worktree_clean() {
+    local dir="$1"
+    local label="${2:-$dir}"
+    if [[ -z "$dir" || ! -d "$dir" ]]; then
+        return
+    fi
+    local status
+    status="$(git -C "$dir" status --porcelain 2>/dev/null || true)"
+    if [[ -n "$status" ]]; then
+        echo "gwt: worktree '$label' has uncommitted changes" >&2
+        exit 1
+    fi
+}
+
+remove_branch_resources() {
+    local branch="$1"
+    local repo_dir
+    repo_dir="$(canonical_repo_root)"
+    local worktree_dir
+    worktree_dir="$(worktree_dir_for_branch "$branch")"
+    local session
+    session="$(session_name_for_branch "$branch")"
+
+    if [[ -n "$worktree_dir" && -d "$worktree_dir" && "$worktree_dir" != "$repo_dir" ]]; then
+        git -C "$repo_dir" worktree remove "$worktree_dir" --force >/dev/null 2>&1 || true
+    fi
+    if command -v tmux >/dev/null 2>&1; then
+        tmux kill-session -t "$session" 2>/dev/null || true
+    fi
+    update_workspace_for_branch remove "$branch"
+}
+
+session_name_for_branch() {
+    printf '%s-%s' "$(repo_name)" "$1"
+}
+
+copy_env_if_present() {
+    local root
+    root="$(canonical_repo_root)"
+    local worktree_dir="$1"
+    if [[ -f "$root/.env" ]]; then
+        cp "$root/.env" "$worktree_dir/.env"
+    fi
+}
+
+get_hook_script_path() {
+    local hook_name="$1"
+    local root
+    root="$(canonical_repo_root)"
+    local script_path="$root/.geewit_${hook_name}.sh"
+    if [[ -f "$script_path" && -x "$script_path" ]]; then
+        echo "$script_path"
+    fi
+}
+
+find_workspace_file() {
+    local root
+    root="$(canonical_repo_root)"
+    find "$root" -maxdepth 1 -type f -name '*.code-workspace' -print -quit 2>/dev/null || true
+}
+
+update_workspace_for_branch() {
+    local action="$1"
+    local branch="$2"
+    local workspace_file
+    workspace_file="$(find_workspace_file)"
+    if [[ -z "$workspace_file" ]]; then
+        return
+    fi
+    if ! command -v python3 >/dev/null 2>&1; then
+        echo "gwt: python3 required to update workspace file" >&2
+        return
+    fi
+    local worktree_dir
+    worktree_dir="$(worktree_path_for_branch "$branch")"
+    python3 - "$workspace_file" "$worktree_dir" "$action" <<'PY'
+import json
+import os
+import sys
+
+workspace_file, worktree_dir, action = sys.argv[1:4]
+
+try:
+    with open(workspace_file, 'r', encoding='utf-8') as handle:
+        data = json.load(handle)
+except (OSError, json.JSONDecodeError):
+    sys.exit(0)
+
+if not isinstance(data, dict):
+    sys.exit(0)
+
+folders = data.get('folders')
+if not isinstance(folders, list):
+    folders = []
+    data['folders'] = folders
+
+workspace_root = os.path.dirname(workspace_file) or os.curdir
+rel_path = os.path.relpath(worktree_dir, workspace_root)
+rel_path = rel_path.replace(os.path.sep, '/')
+abs_path = os.path.abspath(worktree_dir).replace(os.path.sep, '/')
+
+def normalise(value):
+    return (value or '').replace('\\', '/')
+
+targets = {normalise(rel_path), normalise(abs_path)}
+
+changed = False
+
+if action == 'add':
+    for folder in folders:
+        if isinstance(folder, dict) and normalise(folder.get('path')) in targets:
+            break
+    else:
+        folders.append({'path': rel_path})
+        changed = True
+elif action == 'remove':
+    new_folders = []
+    for folder in folders:
+        if isinstance(folder, dict) and normalise(folder.get('path')) in targets:
+            changed = True
+            continue
+        new_folders.append(folder)
+    if changed:
+        data['folders'] = new_folders
+
+if changed:
+    with open(workspace_file, 'w', encoding='utf-8') as handle:
+        json.dump(data, handle, indent=4)
+        handle.write('\n')
+PY
+}
+
+choose_random_color() {
+    local idx=$((RANDOM % ${#DEFAULT_COLORS[@]}))
+    echo "${DEFAULT_COLORS[$idx]}"
+}
+
+branch_exists_locally() {
+    git show-ref --quiet --verify "refs/heads/$1"
+}
+
+branch_exists_remote() {
+    git ls-remote --exit-code --heads origin "$1" >/dev/null 2>&1
+}
+
+resolve_base_revision() {
+    local base="$1"
+    local commit=""
+
+    if commit=$(git rev-parse --verify --quiet "${base}^{commit}"); then
+        echo "$commit"
+        return
+    fi
+
+    if [[ "$base" != */* ]]; then
+        if commit=$(git rev-parse --verify --quiet "origin/${base}^{commit}"); then
+            echo "$commit"
+            return
+        fi
+
+        if git fetch origin "$base" >/dev/null 2>&1; then
+            if commit=$(git rev-parse --verify --quiet "origin/${base}^{commit}"); then
+                echo "$commit"
+                return
+            fi
+        fi
+    fi
+
+    echo "gwt: unable to resolve base branch '$base'" >&2
+    exit 1
+}
+
+create_worktree() {
+    local branch="$1"
+    local base_branch="$2"
+    local worktree_dir
+    worktree_dir="$(worktree_path_for_branch "$branch")"
+
+    echo "→ creating worktree at $worktree_dir"
+    if branch_exists_locally "$branch" || branch_exists_remote "$branch"; then
+        git worktree add "$worktree_dir" "$branch"
+    else
+        local base_revision
+        base_revision="$(resolve_base_revision "$base_branch")"
+        git worktree add -b "$branch" "$worktree_dir" "$base_revision"
+    fi
+    copy_env_if_present "$worktree_dir"
+}
+
+setup_tmux_session_base() {
+    local branch="$1"
+    local worktree_dir="$2"
+    local session
+    session="$(session_name_for_branch "$branch")"
+
+    tmux kill-session -t "$session" 2>/dev/null || true
+    tmux new-session -d -s "$session" -c "$worktree_dir"
+
+    local color
+    color="$(choose_random_color)"
+    tmux set-option -t "$session" status-style "bg=$color,fg=black"
+    tmux set-option -t "$session" status-interval 2
+    tmux set-option -t "$session" status-left-length 80
+    tmux set-option -t "$session" status-right-length 120
+    tmux set-option -t "$session" status-left "#[fg=black,bold] #S "
+    tmux set-option -t "$session" status-right "#[fg=black,bold]#(GWT_PANE_PATH='#{pane_current_path}' gwt tmux-status) "
+
+    tmux rename-window -t "$session:0" "workspace"
+    tmux split-window -t "$session:0" -h -c "$worktree_dir"
+}
+
+attach_tmux_session() {
+    local session="$1"
+    if [[ -n "${TMUX:-}" ]]; then
+        tmux switch-client -t "$session"
+    else
+        tmux attach-session -t "$session"
+    fi
+}
+
+configure_tmux_session() {
+    local branch="$1"
+    local agent_override="${2:-}"
+    local agent_override_set="${3:-0}"
+    local detach="${4:-0}"
+    local worktree_dir
+    worktree_dir="$(worktree_path_for_branch "$branch")"
+    local session
+    session="$(session_name_for_branch "$branch")"
+
+    setup_tmux_session_base "$branch" "$worktree_dir"
+
+    local agent_command=""
+    if [[ "$agent_override_set" -eq 1 ]]; then
+        agent_command="$agent_override"
+    else
+        agent_command="${GWT_AGENT_COMMAND:-}"
+    fi
+
+    if [[ -n "$agent_command" ]]; then
+        tmux send-keys -t "$session:0.0" "$agent_command" C-m
+        tmux select-pane -t "$session:0.0"
+    fi
+    tmux send-keys -t "$session:0.1" "git status" C-m
+
+    local hook_script
+    hook_script="$(get_hook_script_path "new")"
+    if [[ -n "$hook_script" ]]; then
+        tmux send-keys -t "$session:0.1" "source $hook_script" C-m
+    fi
+
+    if (( detach )); then
+        echo "✓ created session $session (use 'gwt switch $branch' to attach)"
+    else
+        attach_tmux_session "$session"
+    fi
+}
+
+configure_tmux_session_recovery() {
+    local branch="$1"
+    local worktree_dir="$2"
+    local session
+    session="$(session_name_for_branch "$branch")"
+
+    setup_tmux_session_base "$branch" "$worktree_dir"
+
+    # Show recovery message instead of starting agent
+    tmux send-keys -t "$session:0.0" "echo '⚠ Recovered session - resume agent manually if desired'" C-m
+    tmux send-keys -t "$session:0.1" "git status" C-m
+
+    attach_tmux_session "$session"
+}
+
+cmd_new() {
+    require_git_repo
+    require_command tmux
+    local branch=""
+    local base_branch=""
+    local agent_override=""
+    local agent_override_set=0
+    local detach=0
+    local positionals=()
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --agent)
+                if [[ $# -lt 2 ]]; then
+                    echo "gwt new: --agent requires a command" >&2
+                    exit 1
+                fi
+                agent_override="$2"
+                agent_override_set=1
+                shift 2
+                ;;
+            --agent=*)
+                agent_override="${1#*=}"
+                agent_override_set=1
+                shift
+                ;;
+            --no-agent)
+                agent_override=""
+                agent_override_set=1
+                shift
+                ;;
+            --detach|-d)
+                detach=1
+                shift
+                ;;
+            --)
+                shift
+                positionals+=("$@")
+                break
+                ;;
+            --*)
+                echo "gwt new: unknown option '$1'" >&2
+                exit 1
+                ;;
+            *)
+                positionals+=("$1")
+                shift
+                ;;
+        esac
+    done
+
+    if [[ ${#positionals[@]} -lt 1 ]]; then
+        echo "Usage: gwt new <branch> [base] [--agent CMD | --no-agent] [--detach]" >&2
+        exit 1
+    fi
+
+    branch="${positionals[0]}"
+    if [[ ${#positionals[@]} -ge 2 ]]; then
+        base_branch="${positionals[1]}"
+    else
+        base_branch="${GWT_BASE_BRANCH:-$DEFAULT_BASE_BRANCH}"
+    fi
+
+    local session
+    session="$(session_name_for_branch "$branch")"
+    local worktree_dir
+    worktree_dir="$(worktree_dir_for_branch "$branch")"
+
+    # Check if worktree exists but session is missing (orphaned worktree)
+    if [[ -n "$worktree_dir" && -d "$worktree_dir" ]]; then
+        if ! tmux has-session -t "$session" 2>/dev/null; then
+            echo "gwt: worktree already exists at $worktree_dir but tmux session is missing"
+            read -r -p "Create new tmux session for this worktree? [y/N] " reply
+            if [[ "$reply" =~ ^[Yy]$ ]]; then
+                configure_tmux_session_recovery "$branch" "$worktree_dir"
+                return
+            else
+                echo "aborted"
+                exit 1
+            fi
+        else
+            echo "gwt: worktree and session already exist for $branch" >&2
+            echo "Use 'gwt switch $branch' to attach to the existing session" >&2
+            exit 1
+        fi
+    fi
+
+    create_worktree "$branch" "$base_branch"
+    update_workspace_for_branch add "$branch"
+    configure_tmux_session "$branch" "$agent_override" "$agent_override_set" "$detach"
+}
+
+cmd_switch() {
+    require_command tmux
+    require_git_repo
+    local branch="${1:-}"
+    if [[ -z "$branch" ]]; then
+        echo "Usage: gwt switch <branch>" >&2
+        exit 1
+    fi
+    local session
+    session="$(session_name_for_branch "$branch")"
+    if tmux has-session -t "$session" 2>/dev/null; then
+        if [[ -n "${TMUX:-}" ]]; then
+            tmux switch-client -t "$session"
+        else
+            tmux attach-session -t "$session"
+        fi
+    else
+        # Check if worktree exists but session is missing (orphaned worktree)
+        local worktree_dir
+        worktree_dir="$(worktree_dir_for_branch "$branch")"
+        if [[ -n "$worktree_dir" && -d "$worktree_dir" ]]; then
+            echo "gwt: worktree exists at $worktree_dir but tmux session is missing"
+            read -r -p "Create new tmux session for this worktree? [y/N] " reply
+            if [[ "$reply" =~ ^[Yy]$ ]]; then
+                configure_tmux_session_recovery "$branch" "$worktree_dir"
+            else
+                echo "aborted"
+                exit 1
+            fi
+        else
+            echo "gwt: no tmux session found for $branch" >&2
+            exit 1
+        fi
+    fi
+}
+
+cmd_list() {
+    require_git_repo
+    local repo
+    repo="$(repo_name)"
+    printf 'Worktrees\n---------\n'
+    git worktree list | while read -r line; do
+        local path branch session status
+        path=$(echo "$line" | awk '{print $1}')
+        branch=$(echo "$line" | sed -n 's/.*\[\(.*\)\].*/\1/p')
+        session="${repo}-${branch}"
+        if tmux has-session -t "$session" 2>/dev/null; then
+            status="✓ tmux"
+        else
+            status="✗ tmux"
+        fi
+        printf '%-25s %-8s %s\n' "$branch" "$status" "$path"
+    done
+    printf '\nSessions\n--------\n'
+    tmux list-sessions 2>/dev/null | grep "^${repo}-" || echo 'none'
+}
+
+cmd_remove() {
+    require_git_repo
+    require_command tmux
+    local branch=""
+    local keep_branch=0
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --keep-branch)
+                keep_branch=1
+                shift
+                ;;
+            --)
+                shift
+                if [[ $# -gt 0 ]]; then
+                    branch="$1"
+                fi
+                break
+                ;;
+            --*)
+                echo "gwt remove: unknown option '$1'" >&2
+                exit 1
+                ;;
+            *)
+                branch="$1"
+                shift
+                ;;
+        esac
+    done
+
+    if [[ -z "$branch" ]]; then
+        echo "Usage: gwt remove <branch> [--keep-branch]" >&2
+        exit 1
+    fi
+    local worktree_dir session
+    worktree_dir="$(worktree_path_for_branch "$branch")"
+    session="$(session_name_for_branch "$branch")"
+    local repo_dir
+    repo_dir="$(canonical_repo_root)"
+    echo "This will remove $worktree_dir, tmux session $session, and local branch $branch"
+    if (( keep_branch )); then
+        echo "(--keep-branch: local branch will be preserved)"
+    fi
+    read -r -p "Continue? [y/N] " reply
+    if [[ ! "$reply" =~ ^[Yy]$ ]]; then
+        echo "aborted"
+        exit 1
+    fi
+    local hook_script
+    hook_script="$(get_hook_script_path "remove")"
+    if [[ -n "$hook_script" && -d "$worktree_dir" ]]; then
+        if tmux has-session -t "$session" 2>/dev/null; then
+            echo "→ running remove hook in tmux pane"
+            tmux send-keys -t "$session:0.1" C-c C-c
+            local wait_channel="gwt-remove-$$"
+            local hook_command
+            printf -v hook_command 'cd "%s" && ( source "%s" ) || true; tmux wait-for -S "%s"' \
+                "$worktree_dir" "$hook_script" "$wait_channel"
+            tmux send-keys -t "$session:0.1" "$hook_command" C-m
+            tmux wait-for "$wait_channel"
+        else
+            echo "→ running remove hook"
+            (cd "$worktree_dir" && "$hook_script")
+        fi
+    fi
+    tmux kill-session -t "$session" 2>/dev/null || true
+    git worktree remove "$worktree_dir" --force
+    update_workspace_for_branch remove "$branch"
+    if (( keep_branch )); then
+        echo "✓ removed worktree and session for $branch (branch preserved)"
+    else
+        if git -C "$repo_dir" branch -d "$branch" 2>/dev/null; then
+            echo "✓ removed $branch"
+        elif git -C "$repo_dir" branch -D "$branch" 2>/dev/null; then
+            echo "✓ removed $branch (force deleted unmerged branch)"
+        else
+            echo "✓ removed worktree and session (branch $branch not found or could not be deleted)"
+        fi
+    fi
+}
+
+cmd_cleanup() {
+    require_git_repo
+    local base="${1:-${GWT_BASE_BRANCH:-$DEFAULT_BASE_BRANCH}}"
+    git fetch origin "$base" >/dev/null 2>&1 || true
+    git worktree list | while read -r line; do
+        local branch
+        branch=$(echo "$line" | sed -n 's/.*\[\(.*\)\].*/\1/p')
+        if [[ "$branch" == "$base" || "$branch" == "main" || "$branch" == "master" ]]; then
+            continue
+        fi
+        if git branch --merged "$base" | grep -F -x -q "${branch}"; then
+            echo "✓ $branch merged into $base"
+            read -r -p "  remove? [y/N] " reply
+            if [[ "$reply" =~ ^[Yy]$ ]]; then
+                cmd_remove "$branch"
+            fi
+        else
+            echo "○ $branch not merged"
+        fi
+    done
+}
+
+cmd_merge() {
+    require_git_repo
+    local keep_resources=0
+    local positionals=()
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --keep)
+                keep_resources=1
+                shift
+                ;;
+            --)
+                shift
+                while [[ $# -gt 0 ]]; do
+                    positionals+=("$1")
+                    shift
+                done
+                break
+                ;;
+            --*)
+                echo "gwt merge: unknown option '$1'" >&2
+                exit 1
+                ;;
+            *)
+                positionals+=("$1")
+                shift
+                ;;
+        esac
+    done
+
+    local branch=""
+    local base=""
+    if (( ${#positionals[@]} >= 1 )); then
+        branch="${positionals[0]}"
+    fi
+    if (( ${#positionals[@]} >= 2 )); then
+        base="${positionals[1]}"
+    fi
+
+    if [[ -z "$branch" ]]; then
+        branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+    fi
+    if [[ -z "$branch" ]]; then
+        echo "gwt merge: unable to determine branch to merge" >&2
+        exit 1
+    fi
+    if [[ -z "$base" ]]; then
+        base="${GWT_BASE_BRANCH:-$DEFAULT_BASE_BRANCH}"
+    fi
+    if [[ "$branch" == "$base" ]]; then
+        echo "gwt merge: branch and base are identical ($branch)" >&2
+        exit 1
+    fi
+
+    if ! git rev-parse --verify --quiet "refs/heads/$branch" >/dev/null; then
+        echo "gwt merge: unknown branch '$branch'" >&2
+        exit 1
+    fi
+
+    local repo_dir
+    repo_dir="$(canonical_repo_root)"
+
+    if ! git rev-parse --verify --quiet "refs/heads/$base" >/dev/null; then
+        local base_commit=""
+        base_commit="$(resolve_base_revision "$base")"
+        git -C "$repo_dir" branch --track "$base" "$base_commit" >/dev/null 2>&1 || \
+            git -C "$repo_dir" branch "$base" "$base_commit" >/dev/null 2>&1 || true
+    fi
+
+    ensure_worktree_clean "$repo_dir" "$base"
+
+    local branch_dir
+    branch_dir="$(worktree_dir_for_branch "$branch")"
+    ensure_worktree_clean "$branch_dir" "$branch"
+
+    git -C "$repo_dir" fetch origin "$base" >/dev/null 2>&1 || true
+
+    if ! git -C "$repo_dir" switch "$base" >/dev/null 2>&1; then
+        git -C "$repo_dir" checkout "$base" >/dev/null 2>&1 || true
+    fi
+
+    echo "→ merging $branch into $base"
+    if ! git -C "$repo_dir" merge --no-ff "$branch"; then
+        echo "⚠ merge conflict detected while merging $branch into $base" >&2
+        echo "   Resolve conflicts in $repo_dir, commit, then rerun 'gwt merge $branch $base'." >&2
+        echo "   Tip: use 'gwt switch $branch' to jump back into the branch worktree." >&2
+        return 1
+    fi
+
+    echo "✓ merged $branch into $base"
+
+    if (( keep_resources )); then
+        return 0
+    fi
+
+    remove_branch_resources "$branch"
+    if git -C "$repo_dir" branch -d "$branch"; then
+        echo "✓ deleted branch $branch"
+    else
+        echo "⚠ could not delete branch $branch (is it still checked out?)" >&2
+    fi
+}
+
+cmd_status() {
+    require_git_repo
+    local current
+    current=$(pwd)
+    git worktree list | while read -r line; do
+        local path branch
+        path=$(echo "$line" | awk '{print $1}')
+        branch=$(echo "$line" | sed -n 's/.*\[\(.*\)\].*/\1/p')
+        echo "→ $branch ($path)"
+        if cd "$path" 2>/dev/null; then
+            if [[ -n $(git status --porcelain) ]]; then
+                echo "  ⚠ uncommitted changes"
+                git status --short | sed 's/^/    /' | head -5
+            else
+                echo "  ✓ clean"
+            fi
+            local upstream
+            upstream=$(git rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null || true)
+            if [[ -n "$upstream" ]]; then
+                local ahead behind
+                ahead=$(git rev-list --count '@{u}..HEAD' 2>/dev/null || echo 0)
+                behind=$(git rev-list --count 'HEAD..@{u}' 2>/dev/null || echo 0)
+                if (( ahead > 0 || behind > 0 )); then
+                    echo "  ↕ ahead:$ahead behind:$behind ($upstream)"
+                fi
+            else
+                echo "  ○ no upstream"
+            fi
+        else
+            echo "  ✗ cannot access"
+        fi
+        echo
+    done
+    cd "$current"
+}
+
+cmd_push() {
+    require_git_repo
+    local remote="${1:-origin}"
+    local branch
+    branch=$(git rev-parse --abbrev-ref HEAD)
+    echo "→ pushing $branch to $remote"
+    git push -u "$remote" "$branch"
+    if command -v gh >/dev/null 2>&1; then
+        read -r -p "Create PR? [y/N] " reply
+        if [[ "$reply" =~ ^[Yy]$ ]]; then
+            gh pr create --web
+        fi
+    fi
+}
+
+cmd_from_pr() {
+    require_git_repo
+    if ! command -v gh >/dev/null 2>&1; then
+        echo "gwt: GitHub CLI (gh) required" >&2
+        exit 1
+    fi
+    local pr="${1:-}"
+    if [[ -z "$pr" ]]; then
+        echo "Usage: gwt from-pr <number>" >&2
+        exit 1
+    fi
+    local branch
+    branch=$(gh pr view "$pr" --json headRefName --jq '.headRefName')
+    if [[ -z "$branch" ]]; then
+        echo "gwt: unable to resolve PR #$pr" >&2
+        exit 1
+    fi
+    git fetch origin "$branch"
+    cmd_new "$branch"
+}
+
+format_sync_status() {
+    local output=""
+    local branch
+    branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
+    local main_branch=""
+    if git show-ref --verify --quiet refs/heads/main; then
+        main_branch="main"
+    elif git show-ref --verify --quiet refs/heads/master; then
+        main_branch="master"
+    fi
+    if [[ -n "$main_branch" && "$branch" != "$main_branch" ]]; then
+        local ahead behind
+        ahead=$(git rev-list --count ${main_branch}..HEAD 2>/dev/null || echo 0)
+        behind=$(git rev-list --count HEAD..${main_branch} 2>/dev/null || echo 0)
+        if (( ahead > 0 || behind > 0 )); then
+            output+=" [↑${ahead}↓${behind}]"
+        fi
+    fi
+    local upstream
+    upstream=$(git rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null || true)
+    if [[ -n "$upstream" ]]; then
+        local local_sha remote_sha
+        local_sha=$(git rev-parse HEAD 2>/dev/null || echo 0)
+        remote_sha=$(git rev-parse '@{u}' 2>/dev/null || echo 0)
+        if [[ "$local_sha" == "$remote_sha" ]]; then
+            output+=" ✓"
+        else
+            local ahead_remote behind_remote
+            ahead_remote=$(git rev-list --count '@{u}..HEAD' 2>/dev/null || echo 0)
+            behind_remote=$(git rev-list --count 'HEAD..@{u}' 2>/dev/null || echo 0)
+            if (( ahead_remote > 0 && behind_remote > 0 )); then
+                output+=" ⟷${ahead_remote}/${behind_remote}"
+            elif (( ahead_remote > 0 )); then
+                output+=" →${ahead_remote}"
+            elif (( behind_remote > 0 )); then
+                output+=" ←${behind_remote}"
+            fi
+        fi
+    else
+        output+=" ⚠"
+    fi
+    echo "$output"
+}
+
+cmd_tmux_status() {
+    local path="${GWT_PANE_PATH:-${1:-$PWD}}"
+    if [[ ! -d "$path" ]]; then
+        echo ""
+        exit 0
+    fi
+    cd "$path" || exit 0
+    if ! git rev-parse --git-dir >/dev/null 2>&1; then
+        echo ""
+        exit 0
+    fi
+    local branch
+    branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
+    local staged modified untracked
+    staged=$(git diff --cached --numstat 2>/dev/null | wc -l | tr -d ' ')
+    modified=$(git diff --numstat 2>/dev/null | wc -l | tr -d ' ')
+    untracked=$(git ls-files --others --exclude-standard 2>/dev/null | wc -l | tr -d ' ')
+    local status=""
+    if (( staged > 0 )); then
+        status+=" +${staged}"
+    fi
+    if (( modified > 0 )); then
+        status+=" ~${modified}"
+    fi
+    if (( untracked > 0 )); then
+        status+=" ?${untracked}"
+    fi
+    status="${status# }"
+    local output="⎇ ${branch}"
+    if [[ -n "$status" ]]; then
+        output+=" [${status}]"
+    fi
+    output+="$(format_sync_status)"
+    echo "$output"
+}
+
+print_completion_bash() {
+    cat <<'EOS'
+_gwt_branch_worktrees() {
+    git worktree list 2>/dev/null | sed -n 's/.*\[\(.*\)\].*/\1/p'
+}
+
+_gwt_branch_locals() {
+    git branch --format='%(refname:short)' 2>/dev/null
+}
+
+_gwt_completion() {
+    local cur="${COMP_WORDS[COMP_CWORD]}"
+    local cmd="${COMP_WORDS[1]}"
+
+    if (( COMP_CWORD == 1 )); then
+        COMPREPLY=( $(compgen -W "new switch list remove cleanup merge status push from-pr tmux-status agent config-path completion version help" -- "$cur") )
+        return
+    fi
+
+    case "$cmd" in
+        switch)
+            local branches
+            branches=$(_gwt_branch_worktrees)
+            if [[ -n "$branches" ]]; then
+                COMPREPLY=( $(compgen -W "$branches" -- "$cur") )
+            fi
+            ;;
+        remove)
+            if [[ "$cur" == -* ]]; then
+                COMPREPLY=( $(compgen -W "--keep-branch" -- "$cur") )
+                return
+            fi
+            local branches
+            branches=$(_gwt_branch_worktrees)
+            if [[ -n "$branches" ]]; then
+                COMPREPLY=( $(compgen -W "$branches" -- "$cur") )
+            fi
+            ;;
+        cleanup)
+            local options
+            options=$(printf '%s\n' main master develop $(_gwt_branch_locals) | sort -u)
+            COMPREPLY=( $(compgen -W "$options" -- "$cur") )
+            ;;
+        merge)
+            local prev="${COMP_WORDS[COMP_CWORD-1]}"
+            if [[ "$cur" == -* ]]; then
+                COMPREPLY=( $(compgen -W "--keep" -- "$cur") )
+                return
+            fi
+            if [[ "$prev" == "--keep" ]]; then
+                local branches
+                branches=$(_gwt_branch_locals)
+                if [[ -n "$branches" ]]; then
+                    COMPREPLY=( $(compgen -W "$branches" -- "$cur") )
+                fi
+                return
+            fi
+            if (( COMP_CWORD == 2 )); then
+                local branches
+                branches=$(_gwt_branch_locals)
+                if [[ -n "$branches" ]]; then
+                    COMPREPLY=( $(compgen -W "$branches" -- "$cur") )
+                fi
+            elif (( COMP_CWORD == 3 )); then
+                local bases
+                bases=$(printf '%s\n' main master develop $(_gwt_branch_locals) | sort -u)
+                COMPREPLY=( $(compgen -W "$bases" -- "$cur") )
+            fi
+            ;;
+        new)
+            local prev="${COMP_WORDS[COMP_CWORD-1]}"
+            if [[ "$cur" == -* ]]; then
+                COMPREPLY=( $(compgen -W "--agent --no-agent --detach -d" -- "$cur") )
+                return
+            fi
+            if [[ "$prev" == "--agent" ]]; then
+                return
+            fi
+            if (( COMP_CWORD == 2 || COMP_CWORD == 3 )); then
+                local options
+                options=$(_gwt_branch_locals)
+                if [[ -n "$options" ]]; then
+                    COMPREPLY=( $(compgen -W "$options" -- "$cur") )
+                fi
+            fi
+            ;;
+        agent)
+            if (( COMP_CWORD == 2 )); then
+                COMPREPLY=( $(compgen -W "show set clear" -- "$cur") )
+            fi
+            ;;
+        completion)
+            if (( COMP_CWORD == 2 )); then
+                COMPREPLY=( $(compgen -W "bash zsh" -- "$cur") )
+            fi
+            ;;
+    esac
+}
+
+complete -o default -F _gwt_completion gwt
+EOS
+}
+
+print_completion_zsh() {
+    cat <<'EOS'
+#compdef gwt
+
+_gwt_branch_worktrees() {
+    git worktree list 2>/dev/null | sed -n 's/.*\[\(.*\)\].*/\1/p'
+}
+
+_gwt_branch_locals() {
+    git branch --format='%(refname:short)' 2>/dev/null
+}
+
+_gwt() {
+    local -a commands
+    commands=(
+        'new:Create a worktree and tmux session'
+        'switch:Attach to an existing session'
+        'list:List worktrees and sessions'
+        'remove:Remove a worktree and session'
+        'cleanup:Prune merged worktrees'
+        'merge:Merge branch into base and clean up'
+        'status:Show summary of worktrees'
+        'push:Push the current branch'
+        'from-pr:Create worktree from PR'
+        'tmux-status:Internal status helper'
+        'agent:Manage agent command'
+        'config-path:Show config file path'
+        'completion:Print completion script'
+        'version:Show CLI version'
+        'help:Show usage'
+    )
+
+    if (( CURRENT == 2 )); then
+        _describe 'command' commands
+        return
+    fi
+
+    local cmd=${words[2]}
+    case $cmd in
+        switch)
+            local -a branches
+            branches=(${(f)"$(_gwt_branch_worktrees)"})
+            _describe 'branch' branches
+            ;;
+        remove)
+            local current_arg=${words[CURRENT]}
+            if [[ $current_arg == -* ]]; then
+                local -a remove_opts
+                remove_opts=(
+                    '--keep-branch:Preserve the local git branch'
+                )
+                _describe 'option' remove_opts
+                return
+            fi
+            local -a branches
+            branches=(${(f)"$(_gwt_branch_worktrees)"})
+            _describe 'branch' branches
+            ;;
+        cleanup)
+            local -a bases
+            bases=(${(f)"$(printf '%s\n' main master develop $(_gwt_branch_locals) | sort -u)"})
+            _describe 'branch' bases
+            ;;
+        merge)
+            local current_arg=${words[CURRENT]}
+            local prev_arg=${words[CURRENT-1]}
+            if [[ $current_arg == -* ]]; then
+                local -a merge_opts
+                merge_opts=(
+                    '--keep:Skip branch and worktree cleanup'
+                )
+                _describe 'option' merge_opts
+                return
+            fi
+            if [[ $prev_arg == --keep ]]; then
+                local -a branches
+                branches=(${(f)"$(_gwt_branch_locals)"})
+                _describe 'branch' branches
+                return
+            fi
+            if (( CURRENT == 3 )); then
+                local -a branches
+                branches=(${(f)"$(_gwt_branch_locals)"})
+                _describe 'branch' branches
+            elif (( CURRENT == 4 )); then
+                local -a bases
+                bases=(${(f)"$(printf '%s\n' main master develop $(_gwt_branch_locals) | sort -u)"})
+                _describe 'branch' bases
+            fi
+            ;;
+        new)
+            local current_arg=${words[CURRENT]}
+            local prev_arg=${words[CURRENT-1]}
+            if [[ $current_arg == -* ]]; then
+                local -a new_opts
+                new_opts=(
+                    '--agent:Set command to run in agent pane'
+                    '--no-agent:Do not start an agent pane'
+                    '--detach:Create session without attaching'
+                    '-d:Create session without attaching'
+                )
+                _describe 'option' new_opts
+                return
+            fi
+            if [[ $prev_arg == --agent ]]; then
+                return
+            fi
+            if (( CURRENT == 3 || CURRENT == 4 )); then
+                local -a locals
+                locals=(${(f)"$(_gwt_branch_locals)"})
+                _describe 'branch' locals
+            fi
+            ;;
+        agent)
+            if (( CURRENT == 3 )); then
+                local -a actions
+                actions=(
+                    'show:Print the configured agent command'
+                    'set:Set the agent command'
+                    'clear:Remove the agent command'
+                )
+                _describe 'agent action' actions
+            fi
+            ;;
+        completion)
+            if (( CURRENT == 3 )); then
+                local -a shells
+                shells=(
+                    'bash:Bash completion script'
+                    'zsh:Zsh completion script'
+                )
+                _describe 'shell' shells
+            fi
+            ;;
+        *)
+            _default
+            ;;
+    esac
+}
+
+compdef _gwt gwt
+EOS
+}
+
+cmd_completion() {
+    local shell="${1:-}"
+    case "$shell" in
+        bash)
+            print_completion_bash
+            ;;
+        zsh)
+            print_completion_zsh
+            ;;
+        "")
+            echo "Usage: gwt completion <bash|zsh>" >&2
+            exit 1
+            ;;
+        *)
+            echo "gwt: unsupported shell '$shell'" >&2
+            exit 1
+            ;;
+    esac
+}
+
+cmd_agent_show() {
+    echo "${GWT_AGENT_COMMAND:-}"
+}
+
+cmd_agent_set() {
+    local command="$*"
+    if [[ -z "$command" ]]; then
+        echo "Usage: gwt agent set <command>" >&2
+        exit 1
+    fi
+    set_config_value GWT_AGENT_COMMAND "$command"
+    GWT_AGENT_COMMAND="$command"
+    echo "Agent command set to: $command"
+}
+
+cmd_agent_clear() {
+    set_config_value GWT_AGENT_COMMAND ""
+    unset GWT_AGENT_COMMAND || true
+    echo "Agent command cleared"
+}
+
+cmd_config_path() {
+    echo "$CONFIG_FILE"
+}
+
+cmd_version() {
+    echo "gwt $GWT_VERSION"
+}
+
+main() {
+    load_config
+    ensure_config_dir
+    local cmd="${1:-help}"
+    shift || true
+    case "$cmd" in
+        new) cmd_new "$@" ;;
+        switch) cmd_switch "$@" ;;
+        list) cmd_list "$@" ;;
+        remove) cmd_remove "$@" ;;
+        cleanup) cmd_cleanup "$@" ;;
+        merge) cmd_merge "$@" ;;
+        status) cmd_status "$@" ;;
+        push) cmd_push "$@" ;;
+        from-pr) cmd_from_pr "$@" ;;
+        tmux-status) cmd_tmux_status "$@" ;;
+        agent)
+            local sub="${1:-}"; shift || true
+            case "$sub" in
+                show) cmd_agent_show ;;
+                set) cmd_agent_set "$@" ;;
+                clear) cmd_agent_clear ;;
+                *) echo "Usage: gwt agent {show|set|clear}" >&2; exit 1 ;;
+            esac
+            ;;
+        completion) cmd_completion "$@" ;;
+        config-path) cmd_config_path ;;
+        version|--version|-v|-V) cmd_version ;;
+        help|-h|--help) print_usage ;;
+        *) echo "Unknown command: $cmd" >&2; print_usage; exit 1 ;;
+    esac
+}
+
+main "$@"

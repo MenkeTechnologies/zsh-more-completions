@@ -1,0 +1,626 @@
+# Source: https://github.com/brooksjoey11/agentic-2.0/blob/f855725eb664d442fd9976435e8d5546284c0f27/setup.sh
+# Repository: brooksjoey11/agentic-2.0 (setup.sh)
+#!/usr/bin/env bash
+# setup.sh - Production-grade installation script
+set -euo pipefail
+
+# === Colors ===
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+MAG='\033[0;35m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+
+# === Configuration ===
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LOG_FILE="/tmp/agentic-shell-setup-$(date +%Y%m%d-%H%M%S).log"
+
+# === Functions ===
+log() { echo -e "${BLUE}[$(date +%H:%M:%S)]${NC} $*" | tee -a "$LOG_FILE"; }
+info() { echo -e "${GREEN}✅${NC} $*" | tee -a "$LOG_FILE"; }
+warn() { echo -e "${YELLOW}⚠️${NC} $*" | tee -a "$LOG_FILE"; }
+error() { echo -e "${RED}❌${NC} $*" | tee -a "$LOG_FILE"; }
+die() { error "$*"; exit 1; }
+
+banner() {
+    cat << "EOF"
+╔═══════════════════════════════════════════════════════════════╗
+║                                                               ║
+║   █████╗  ██████╗ ███████╗███╗   ██╗████████╗██╗ ██████╗     ║
+║  ██╔══██╗██╔════╝ ██╔════╝████╗  ██║╚══██╔══╝██║██╔════╝     ║
+║  ███████║██║  ███╗█████╗  ██╔██╗ ██║   ██║   ██║██║          ║
+║  ██╔══██║██║   ██║██╔══╝  ██║╚██╗██║   ██║   ██║██║          ║
+║  ██║  ██║╚██████╔╝███████╗██║ ╚████║   ██║   ██║╚██████╗     ║
+║  ╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝  ╚═══╝   ╚═╝   ╚═╝ ╚═════╝     ║
+║                                                               ║
+║              SHELL 2.0 - DISTRIBUTED COGNITIVE               ║
+║                     Production Setup v2.0                     ║
+╚═══════════════════════════════════════════════════════════════╝
+EOF
+}
+
+check_prerequisites() {
+    log "🔍 Checking prerequisites..."
+    
+    # OS Detection
+    OS="$(uname -s)"
+    case "$OS" in
+        Linux)
+            if [[ -f /etc/os-release ]]; then
+                source /etc/os-release
+                DISTRO="$ID"
+                log "Detected Linux: $PRETTY_NAME"
+            else
+                DISTRO="unknown"
+            fi
+            ;;
+        Darwin)
+            DISTRO="darwin"
+            log "Detected macOS"
+            ;;
+        MINGW*|MSYS*|CYGWIN*)
+            DISTRO="windows"
+            log "Detected Windows (WSL recommended)"
+            ;;
+        *)
+            die "Unsupported OS: $OS"
+            ;;
+    esac
+    
+    # Python
+    if ! command -v python3 &>/dev/null; then
+        die "Python 3 not found"
+    fi
+    PY_VERSION=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
+    if [[ "$(echo "$PY_VERSION" | cut -d. -f1)" -lt 3 ]] || [[ "$(echo "$PY_VERSION" | cut -d. -f1)" -eq 3 && "$(echo "$PY_VERSION" | cut -d. -f2)" -lt 11 ]]; then
+        die "Python 3.11+ required (found $PY_VERSION)"
+    fi
+    info "Python $PY_VERSION found"
+    
+    # Docker
+    if ! command -v docker &>/dev/null; then
+        warn "Docker not found. Installing..."
+        install_docker
+    else
+        DOCKER_VERSION=$(docker --version | cut -d' ' -f3 | cut -d',' -f1)
+        info "Docker $DOCKER_VERSION found"
+    fi
+    
+    # Docker Compose
+    if ! command -v docker-compose &>/dev/null && ! docker compose version &>/dev/null; then
+        warn "Docker Compose not found. Installing..."
+        install_docker_compose
+    else
+        info "Docker Compose found"
+    fi
+    
+    # Git
+    if ! command -v git &>/dev/null; then
+        warn "Git not found. Installing..."
+        install_git
+    else
+        info "Git found"
+    fi
+    
+    # Kubectl (optional)
+    if command -v kubectl &>/dev/null; then
+        info "kubectl found"
+    else
+        warn "kubectl not found (optional - for Kubernetes deployment)"
+    fi
+    
+    # Helm (optional)
+    if command -v helm &>/dev/null; then
+        info "Helm found"
+    else
+        warn "Helm not found (optional - for Helm deployment)"
+    fi
+}
+
+install_docker() {
+    case "$DISTRO" in
+        ubuntu|debian)
+            sudo apt-get update
+            sudo apt-get install -y docker.io
+            sudo systemctl enable docker
+            sudo systemctl start docker
+            ;;
+        centos|rhel|fedora)
+            sudo yum install -y docker
+            sudo systemctl enable docker
+            sudo systemctl start docker
+            ;;
+        darwin)
+            warn "Please install Docker Desktop from https://docker.com"
+            read -p "Press enter after installing Docker"
+            ;;
+        *)
+            die "Unsupported distro for automatic Docker installation"
+            ;;
+    esac
+    
+    # Add user to docker group
+    sudo usermod -aG docker "$USER" || true
+    info "Docker installed. You may need to log out and back in for group changes."
+}
+
+install_docker_compose() {
+    LATEST=$(curl -s https://api.github.com/repos/docker/compose/releases/latest | grep tag_name | cut -d'"' -f4)
+    sudo curl -L "https://github.com/docker/compose/releases/download/$LATEST/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+    sudo chmod +x /usr/local/bin/docker-compose
+    info "Docker Compose installed"
+}
+
+install_git() {
+    case "$DISTRO" in
+        ubuntu|debian)
+            sudo apt-get update
+            sudo apt-get install -y git
+            ;;
+        centos|rhel|fedora)
+            sudo yum install -y git
+            ;;
+        darwin)
+            brew install git
+            ;;
+        *)
+            die "Unsupported distro for automatic Git installation"
+            ;;
+    esac
+    info "Git installed"
+}
+
+create_directories() {
+    log "📁 Creating directories..."
+    
+    # Create necessary directories
+    mkdir -p "$REPO_ROOT"/{logs,data,configs,certs}
+    mkdir -p "$REPO_ROOT"/data/{postgres,redis,etcd,rabbitmq,prometheus,grafana}
+    mkdir -p "$HOME/.config/agentic-shell"
+    mkdir -p "$HOME/.local/state/agentic-shell"
+    mkdir -p "$HOME/.local/share/agentic-shell"
+    
+    # Set permissions
+    chmod 700 "$HOME/.config/agentic-shell"
+    chmod 700 "$HOME/.local/state/agentic-shell"
+    
+    info "Directory structure created"
+}
+
+setup_python_env() {
+    log "🐍 Setting up Python environment..."
+    
+    # Create virtual environment
+    python3 -m venv "$REPO_ROOT/venv"
+    source "$REPO_ROOT/venv/bin/activate"
+    
+    # Upgrade pip
+    pip install --upgrade pip wheel setuptools
+    
+    # Install dependencies
+    if [[ -f "$REPO_ROOT/requirements.txt" ]]; then
+        pip install -r "$REPO_ROOT/requirements.txt"
+    fi
+    
+    if [[ -f "$REPO_ROOT/pyproject.toml" ]]; then
+        pip install poetry
+        poetry install
+    fi
+    
+    info "Python environment created"
+}
+
+setup_configs() {
+    log "⚙️ Setting up configurations..."
+    
+    # Copy example env if not exists
+    if [[ ! -f "$REPO_ROOT/.env" ]]; then
+        cp "$REPO_ROOT/.env.example" "$REPO_ROOT/.env"
+        info "Created .env file - please edit with your API keys"
+    fi
+    
+    # Create agent pool config
+    if [[ ! -f "$REPO_ROOT/configs/agent-pool.yml" ]]; then
+        cat > "$REPO_ROOT/configs/agent-pool.yml" <<EOF
+agents:
+  planner:
+    model: mistral-large-latest
+    agent_id: \${AGENT_ID:-ag_019ca619014874dfbef495f2174d390d}
+    max_concurrent: 5
+    
+  executor:
+    model: mistral-large-latest
+    agent_id: \${AGENT_ID}
+    max_concurrent: 10
+    
+  coder:
+    model: mistral-large-latest
+    agent_id: \${AGENT_ID}
+    max_concurrent: 8
+    
+  debugger:
+    model: mistral-large-latest
+    agent_id: \${AGENT_ID}
+    max_concurrent: 4
+    
+  optimizer:
+    model: mistral-large-latest
+    agent_id: \${AGENT_ID}
+    max_concurrent: 2
+    
+  reflector:
+    model: mistral-large-latest
+    agent_id: \${AGENT_ID}
+    max_concurrent: 1
+EOF
+    fi
+    
+    # Create tool registry config
+    if [[ ! -f "$REPO_ROOT/configs/tool-registry.yml" ]]; then
+        cat > "$REPO_ROOT/configs/tool-registry.yml" <<EOF
+tools:
+  shell:
+    type: system
+    dangerous_commands: []
+    working_dir: /tmp
+    
+  kubernetes:
+    type: system
+    command: kubectl
+    auth_method: kubeconfig
+    
+  docker:
+    type: system
+    command: docker
+    socket: /var/run/docker.sock
+    
+  aws:
+    type: cloud
+    auth_method: iam
+    
+  github:
+    type: api
+    auth_method: token
+EOF
+    fi
+    
+    # Create logging config
+    cat > "$REPO_ROOT/configs/logging.conf" <<EOF
+[loggers]
+keys=root,orchestrator,agents,tools
+
+[handlers]
+keys=console,file,json
+
+[formatters]
+keys=detailed,json
+
+[logger_root]
+level=INFO
+handlers=console,file
+
+[logger_orchestrator]
+level=DEBUG
+handlers=console,file,json
+qualname=orchestrator
+propagate=0
+
+[handler_console]
+class=StreamHandler
+level=INFO
+formatter=detailed
+args=(sys.stdout,)
+
+[handler_file]
+class=handlers.RotatingFileHandler
+level=DEBUG
+formatter=detailed
+args=('logs/agentic-shell.log', 'a', 10485760, 5)
+
+[handler_json]
+class=handlers.RotatingFileHandler
+level=INFO
+formatter=json
+args=('logs/agentic-shell.json', 'a', 10485760, 5)
+
+[formatter_detailed]
+format=%(asctime)s - %(name)s - %(levelname)s - %(message)s
+
+[formatter_json]
+class=pythonjsonlogger.jsonlogger.JsonFormatter
+format=%(asctime)s %(name)s %(levelname)s %(message)s
+EOF
+    
+    info "Configurations created"
+}
+
+setup_database() {
+    log "🗄️ Setting up database..."
+    
+    # Start PostgreSQL container
+    docker run -d \
+        --name agentic-postgres \
+        -e POSTGRES_DB=agentic \
+        -e POSTGRES_USER=agentic \
+        -e POSTGRES_PASSWORD="$(openssl rand -base64 32)" \
+        -v "$REPO_ROOT/data/postgres:/var/lib/postgresql/data" \
+        -p 5432:5432 \
+        postgres:15
+    
+    # Wait for PostgreSQL to be ready
+    sleep 5
+    
+    # Run schema initialization
+    if [[ -f "$REPO_ROOT/scripts/init-db.sql" ]]; then
+        docker exec -i agentic-postgres psql -U agentic -d agentic < "$REPO_ROOT/scripts/init-db.sql"
+    fi
+    
+    info "Database initialized"
+}
+
+install_systemd_services() {
+    log "🔧 Installing systemd services..."
+    
+    # Create systemd service files
+    sudo tee /etc/systemd/system/agentic-orchestrator.service > /dev/null <<EOF
+[Unit]
+Description=Agentic Shell Orchestrator
+After=docker.service network.target
+Requires=docker.service
+
+[Service]
+Type=simple
+User=$USER
+WorkingDirectory=$REPO_ROOT
+Environment=PATH=$REPO_ROOT/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ExecStart=$REPO_ROOT/venv/bin/python -m src.orchestrator.main
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    
+    for agent in planner executor coder debugger optimizer reflector; do
+        sudo tee "/etc/systemd/system/agentic-$agent.service" > /dev/null <<EOF
+[Unit]
+Description=Agentic Shell $agent Worker
+After=agentic-orchestrator.service
+Requires=agentic-orchestrator.service
+
+[Service]
+Type=simple
+User=$USER
+WorkingDirectory=$REPO_ROOT
+Environment=AGENT_TYPE=$agent
+Environment=PATH=$REPO_ROOT/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ExecStart=$REPO_ROOT/venv/bin/python -m src.agents.$agent
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    done
+    
+    # Reload systemd
+    sudo systemctl daemon-reload
+    
+    info "Systemd services created"
+}
+
+create_launcher() {
+    log "🚀 Creating launcher script..."
+    
+    # Create global launcher
+    sudo tee /usr/local/bin/agentic-shell > /dev/null <<'EOF'
+#!/usr/bin/env bash
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$REPO_ROOT/venv/bin/activate"
+exec python -m src.client.cli "$@"
+EOF
+    
+    sudo chmod +x /usr/local/bin/agentic-shell
+    
+    # Create local wrapper
+    cat > "$REPO_ROOT/agentic-shell" <<'EOF'
+#!/usr/bin/env bash
+cd "$(dirname "$0")"
+source venv/bin/activate
+exec python -m src.client.cli "$@"
+EOF
+    
+    chmod +x "$REPO_ROOT/agentic-shell"
+    
+    info "Launcher created: agentic-shell"
+}
+
+setup_completion() {
+    log "📝 Setting up shell completion..."
+    
+    # Bash completion
+    mkdir -p "$HOME/.bash_completion.d"
+    cat > "$HOME/.bash_completion.d/agentic-shell" <<'EOF'
+_agentic_shell_completion() {
+    local cur prev opts
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+    
+    opts="--server --session --help --debug --version"
+    
+    if [[ ${cur} == -* ]] ; then
+        COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
+        return 0
+    fi
+}
+complete -F _agentic_shell_completion agentic-shell
+EOF
+    
+    # Zsh completion
+    mkdir -p "$HOME/.zsh/completion"
+    cat > "$HOME/.zsh/completion/_agentic-shell" <<'EOF'
+#compdef agentic-shell
+
+_agentic_shell() {
+    local -a opts
+    opts=(
+        '--server[WebSocket server URL]'
+        '--session[Session ID]'
+        '--help[Show help]'
+        '--debug[Enable debug mode]'
+        '--version[Show version]'
+    )
+    
+    _arguments $opts
+}
+
+_agentic_shell "$@"
+EOF
+    
+    info "Shell completion installed"
+}
+
+test_installation() {
+    log "🧪 Testing installation..."
+    
+    # Test Python imports
+    source "$REPO_ROOT/venv/bin/activate"
+    python -c "
+import sys
+try:
+    import fastapi
+    import websockets
+    import mistralai
+    import redis
+    import asyncpg
+    print('✅ All Python imports successful')
+except ImportError as e:
+    print(f'❌ Import error: {e}')
+    sys.exit(1)
+" || warn "Some Python imports failed"
+    
+    # Test Docker
+    docker ps &>/dev/null && info "Docker working" || warn "Docker not accessible (may need logout)"
+    
+    # Test configs
+    if [[ -f "$REPO_ROOT/.env" ]]; then
+        info "Configuration file present"
+    else
+        warn "No .env file found"
+    fi
+    
+    info "Installation test complete"
+}
+
+show_summary() {
+    banner
+    
+    cat << EOF
+
+${GREEN}╔═══════════════════════════════════════════════════════════════╗
+║                    INSTALLATION COMPLETE                          ║
+╚═══════════════════════════════════════════════════════════════════╝${NC}
+
+${CYAN}📋 Next Steps:${NC}
+
+1. ${YELLOW}Edit your configuration:${NC}
+   ${DIM}$ vim $REPO_ROOT/.env${NC}
+   - Add your Mistral API key
+   - Configure database passwords
+   - Set tool credentials
+
+2. ${YELLOW}Start the system:${NC}
+   ${DIM}$ cd $REPO_ROOT${NC}
+   ${DIM}$ make up${NC}                    # Development mode
+   ${DIM}$ make prod-up${NC}                # Production mode
+
+3. ${YELLOW}Connect to the shell:${NC}
+   ${DIM}$ agentic-shell${NC}
+   ${DIM}$ ./agentic-shell --help${NC}
+
+4. ${YELLOW}Check status:${NC}
+   ${DIM}$ make status${NC}
+   ${DIM}$ docker-compose ps${NC}
+
+${CYAN}🔧 Available Commands:${NC}
+
+   ${GREEN}make up${NC}         - Start all services
+   ${GREEN}make down${NC}       - Stop all services  
+   ${GREEN}make logs${NC}       - View logs
+   ${GREEN}make test${NC}       - Run tests
+   ${GREEN}make clean${NC}      - Clean up
+   ${GREEN}make backup${NC}     - Backup data
+   ${GREEN}make restore${NC}    - Restore from backup
+
+${CYAN}📊 Monitoring:${NC}
+
+   Orchestrator API : ${BLUE}http://localhost:8000/docs${NC}
+   RabbitMQ UI      : ${BLUE}http://localhost:15672${NC} (guest/guest)
+   Consul UI        : ${BLUE}http://localhost:8500${NC}
+   Prometheus       : ${BLUE}http://localhost:9090${NC}
+   Grafana          : ${BLUE}http://localhost:3000${NC} (admin/admin)
+
+${CYAN}📁 Important Paths:${NC}
+
+   Configs     : ${DIM}$REPO_ROOT/configs/${NC}
+   Logs        : ${DIM}$REPO_ROOT/logs/${NC}
+   Data        : ${DIM}$REPO_ROOT/data/${NC}
+   Environment : ${DIM}$REPO_ROOT/.env${NC}
+
+${GREEN}✅ Setup completed successfully!${NC}
+${YELLOW}⚠️  You may need to log out and back in for Docker permissions.${NC}
+
+EOF
+}
+
+# === Main ===
+main() {
+    banner
+    log "Starting Agentic Shell 2.0 installation..."
+    
+    check_prerequisites
+    create_directories
+    setup_python_env
+    setup_configs
+    setup_database
+    create_launcher
+    setup_completion
+    
+    # Optional: install systemd services (if running as root or with sudo)
+    if [[ $EUID -eq 0 ]] || sudo -n true 2>/dev/null; then
+        install_systemd_services
+    else
+        warn "Skipping systemd services (requires root). Run with sudo to enable."
+    fi
+    
+    test_installation
+    show_summary
+    
+    log "Installation log saved to: $LOG_FILE"
+}
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --production)
+            PRODUCTION=1
+            shift
+            ;;
+        --no-docker)
+            NO_DOCKER=1
+            shift
+            ;;
+        --help)
+            echo "Usage: $0 [--production] [--no-docker]"
+            exit 0
+            ;;
+        *)
+            shift
+            ;;
+    esac
+done
+
+main "$@"

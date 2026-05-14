@@ -1,0 +1,194 @@
+# Source: https://github.com/jasonwoodland/nvs/blob/342b457163242caf118f50e3cf8883e31ba11e33/nvs
+# Repository: jasonwoodland/nvs (nvs)
+#!/bin/bash
+
+usage() {
+  cat <<EOF
+Usage: nvs
+       nvs [server-index]
+       nvs --help
+EOF
+}
+
+run_with_timeout() {
+  local secs="$1"
+  shift
+  if command -v timeout >/dev/null 2>&1; then
+    timeout "$secs" "$@"
+  elif command -v gtimeout >/dev/null 2>&1; then
+    gtimeout "$secs" "$@"
+  else
+    perl -e 'alarm shift @ARGV; exec { $ARGV[0] } @ARGV' "$secs" "$@"
+  fi
+}
+
+server_list() {
+  local servers i sock info_expr result title cwd uis attached
+
+  servers="$(socket_list)"
+  [ -n "$servers" ] || return 0
+
+  info_expr="printf(\"%s\t%s\t%d\", &buftype ==# 'terminal' && !empty(get(b:, 'term_title', '')) ? b:term_title : expand('%:t'), fnamemodify(getcwd(), ':t'), len(nvim_list_uis()))"
+
+  i=1
+  while IFS= read -r sock; do
+    [ -n "$sock" ] || continue
+    if result="$(run_with_timeout 1 nvim --server "$sock" --remote-expr "$info_expr" 2>/dev/null)" && [ -n "$result" ]; then
+      IFS=$'\t' read -r title cwd uis <<<"$result"
+      [ -n "$title" ] || title="[No Name]"
+      [ -n "$cwd" ] || cwd="-"
+      attached=""
+      [ "$uis" -gt 0 ] || attached="[detached]"
+    else
+      title="[sock: $sock]"
+      cwd="?"
+      attached=""
+    fi
+    printf "%d\t%s\t%s\t%s\t%s\n" "$i" "$cwd" "$title" "$attached" "$sock"
+    i=$((i + 1))
+  done <<<"$servers"
+}
+
+socket_list() {
+  if ! command -v lsof >/dev/null 2>&1; then
+    echo "Command lsof not found."
+    exit 1
+  fi
+
+  ps -axo pid=,comm= 2>/dev/null | awk '$2 ~ /(^|\/)nvim$/ { print $1 }' | while IFS= read -r pid; do
+    [ -n "$pid" ] || continue
+    {
+      lsof -nP -a -p "$pid" -U -F tn 2>/dev/null
+      lsof -nP -a -p "$pid" -i4 -i6 -F tn 2>/dev/null
+    } | awk '
+      /^t/ {
+        typ = substr($0, 2)
+        next
+      }
+      /^n/ {
+        name = substr($0, 2)
+        if (typ == "unix") {
+          if (name ~ /^\//) print name
+        } else if (typ == "IPv4" || typ == "IPv6") {
+          if (name ~ /->/) next
+          sub(/ \(LISTEN\)$/, "", name)
+          print name
+        }
+      }
+    '
+  done | awk 'NF' | sort -u
+}
+
+server_name_from_index() {
+  server_list | awk -F '\t' -v i="$1" '$1 == i { print $5; exit }'
+}
+
+completion_indexes() {
+  paste \
+    <(server_list | awk -F '\t' '{ print $1 }') \
+    <(server_list | awk -F '\t' '{ printf "%s\t%s\t%s\t%s\n", $1, $2, $3, $4 }' | format_rows) \
+    | awk -F '\t' '{ printf "%s\t%s\n", $1, $2 }'
+}
+
+format_rows() {
+  awk -F '\t' '
+    {
+      if (length($2) > w2) w2 = length($2)
+      if (length($3) > w3) w3 = length($3)
+      rows[NR] = $0
+    }
+    END {
+      for (i = 1; i <= NR; i++) {
+        split(rows[i], f, "\t")
+        printf "%3d  %-" w2 "s  %-" w3 "s", f[1], f[2], f[3]
+        if (f[4] != "") printf "  %s", f[4]
+        printf "\n"
+      }
+    }
+  '
+}
+
+print_zsh_completion() {
+  cat <<'EOF'
+#compdef nvs
+
+_nvs() {
+  local -a values labels help_flags
+  local idx label
+
+  if (( CURRENT == 2 )); then
+    while IFS=$'\t' read -r idx label; do
+      [[ -n "$idx" ]] || continue
+      values+=("$idx")
+      labels+=("$label")
+    done < <(nvs __complete-indexes 2>/dev/null)
+
+    (( ${#values} > 0 )) && compadd -Q -d labels -- "${values[@]}"
+    return 0
+  fi
+}
+
+compdef _nvs nvs
+EOF
+}
+
+list_servers() {
+  rows="$(server_list)"
+  if [ -z "$rows" ]; then
+    echo "No Neovim sockets found."
+    exit 1
+  fi
+
+  printf '%s\n' "$rows" | format_rows
+}
+
+connect_server() {
+  target="${1:-}"
+
+  case "$target" in
+    --help)
+      usage
+      exit 0
+      ;;
+  esac
+
+  [ -n "$target" ] || { usage; exit 1; }
+  [[ "$target" =~ ^[0-9]+$ ]] || { usage; exit 1; }
+  sock="$(server_name_from_index "$target")"
+
+  if [ -z "${sock:-}" ]; then
+    usage
+    exit 1
+  fi
+
+  exec nvim --server "$sock" --remote-ui
+}
+
+case "${1:-}" in
+  __complete-indexes)
+    completion_indexes
+    ;;
+  --zsh-completion)
+    print_zsh_completion
+    ;;
+  "")
+    if command -v fzf >/dev/null 2>&1; then
+      rows="$(server_list)"
+      if [ -z "$rows" ]; then
+        echo "No Neovim sockets found."
+        exit 1
+      fi
+      selection="$(printf '%s\n' "$rows" | format_rows | fzf --height=~50%)" || exit 0
+      idx="$(echo "$selection" | awk '{ print $1 }')"
+      connect_server "$idx"
+    else
+      list_servers
+    fi
+    ;;
+  --help)
+    usage
+    ;;
+  *)
+    connect_server "$1"
+    ;;
+esac
