@@ -1,0 +1,97 @@
+# Source: https://github.com/hirocarma/zsh_compdef_for_tazpkg/blob/df687808224f8d954e7076f979ab3270d7328724/_tazpkg
+# Repository: hirocarma/zsh_compdef_for_tazpkg (_tazpkg)
+#compdef tazpkg
+
+# Copyright (c) 2019 hirocarma
+# License: MIT
+
+function _tazpkg() {
+    local context  curcontext=$curcontext state line
+    typeset -A opt_args
+    local ret=1
+
+    _arguments -C \
+      '(-h)-h[Show help on the TazPkg commands]' \
+      '(-a)-a[Show TazPkg activity log]' \
+      '(-cc)-cc[Clean all packages downloaded in cache directory]' \
+      '(-l)-l[List installed packages on the system]' \
+      '(-lm)-lm[List all available packages on the mirror]' \
+      '(-s)-s[Search for a package by pattern or name]: :_list_of_pkg' \
+      '(-sp)-sp[Search on mirror for package having a particular file]' \
+      '(-sf)-sf[Search for file in all installed packages files]' \
+      '(-g)-g[Download a package into the current directory]: :_list_of_pkg' \
+      '(-i)-i[Install a local package]:file:_files' \
+      '(-gi)-gi[Download and install a package from the mirror]: :_list_of_pkg' \
+      '(-r)-r[Remove the specified package and all installed files]: :_installed_pkg' \
+      '(-d)-d[Print description of a package]: :_list_of_pkg' \
+      '(-lf)-dlf[List the files installed with a package]: :_installed_pkg' \
+      '(-b)-b[Block an installed package version]: :_installed_pkg' \
+      '(-u)-u[Unblock an installed package for upgrade]: :_installed_pkg' \
+	  '(-e)-e[Extract a (*.tazpkg) package into a directory]:file:_files' \
+      '(-sm)-sm[Change the mirror URL configuration]' \
+      '*::tazpkg command:_tazpkg_command' \
+      && ret=0
+  return ret
+}
+
+_tazpkg_command() {
+  local -a _tazpkg_cmds
+  _tazpkg_cmds=(
+    "${(@f)$(tazpkg -h \
+	| sed '/SliTaz package manager/d' \
+	| sed '/Usage:/d' \
+	| sed '/tazpkg \[command\]/d' \
+	| sed '/SHell:/d' \
+	| sed '/Commands:/d' \
+	| sed '/usage/d' \
+	| cut -c 8- \
+	| sed '/^[[:blank:]]*$/d' \
+	| sed "s/[[:cntrl:]]//" \
+	| sed 's/\[26G/:/')}"
+	)
+
+  if (( CURRENT == 1 )); then
+    _describe -t commands 'tazpkg command' _tazpkg_cmds || compadd "$@"
+  else
+    local command="${${_tazpkg_cmds[(r)$words[1]:*]%%:*}}"
+
+    local cur=$words[CURRENT]
+    local prev=""
+    [[ $CURRENT > 2 ]] && prev=$words[$((CURRENT - 1))]
+
+    case $command in
+      remove|list-files|block|unblock|check)
+        _installed_pkg
+      ;;
+      search|get|get-install|info|desc|bugs|depends|rdepends)
+        _list_of_pkg
+      ;;
+    esac
+  fi
+}
+
+_list_of_pkg() {
+  local -a _c
+  _c=(
+  "${(@f)$(tazpkg -lm \
+  | sed -n '/^$/{n;p}' \
+  | grep -vF 'List' \
+  | sed '$d')}"
+  )
+  _describe -t commands _list_of_pkg _c
+}
+
+_installed_pkg() {
+  local -a _c
+  _c=(
+  "${(@f)$(tazpkg -l \
+  | awk '{print$1}' \
+  | sed '/====/d' \
+  | sed '/List of all installed packages/d' \
+  | sed '/^$/d' \
+  | sed '$d')}"
+  )
+  _describe -t commands _installed_pkg _c
+}
+
+_tazpkg "$@"
