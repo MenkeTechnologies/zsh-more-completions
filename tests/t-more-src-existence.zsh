@@ -5698,6 +5698,9 @@
 @test 'more_src has _makepasswd' {
     assert "$xsrc/_makepasswd" is_file
 }
+@test 'more_src has _mako-toggle' {
+    assert "$xsrc/_mako-toggle" is_file
+}
 @test 'more_src has _mamba' {
     assert "$xsrc/_mamba" is_file
 }
@@ -7930,6 +7933,9 @@
 @test 'more_src has _risor' {
     assert "$xsrc/_risor" is_file
 }
+@test 'more_src has _riverctl' {
+    assert "$xsrc/_riverctl" is_file
+}
 @test 'more_src has _river' {
     assert "$xsrc/_river" is_file
 }
@@ -9679,6 +9685,9 @@
 @test 'more_src has _usbguard' {
     assert "$xsrc/_usbguard" is_file
 }
+@test 'more_src has _usbguard-applet' {
+    assert "$xsrc/_usbguard-applet" is_file
+}
 @test 'more_src has _usbrip' {
     assert "$xsrc/_usbrip" is_file
 }
@@ -9687,6 +9696,9 @@
 }
 @test 'more_src has _utwifi' {
     assert "$xsrc/_utwifi" is_file
+}
+@test 'more_src has _uwsm' {
+    assert "$xsrc/_uwsm" is_file
 }
 @test 'more_src has _uu-arch' {
     assert "$xsrc/_uu-arch" is_file
@@ -10410,6 +10422,9 @@
 }
 @test 'more_src has _wormhole' {
     assert "$xsrc/_wormhole" is_file
+}
+@test 'more_src has _wpactl' {
+    assert "$xsrc/_wpactl" is_file
 }
 @test 'more_src has _wpctl' {
     assert "$xsrc/_wpctl" is_file
