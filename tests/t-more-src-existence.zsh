@@ -1282,6 +1282,9 @@
 @test 'more_src has _calibre' {
     assert "$xsrc/_calibre" is_file
 }
+@test 'more_src has _caligula' {
+    assert "$xsrc/_caligula" is_file
+}
 @test 'more_src has _calico' {
     assert "$xsrc/_calico" is_file
 }
@@ -1618,6 +1621,9 @@
 }
 @test 'more_src has _chezscheme' {
     assert "$xsrc/_chezscheme" is_file
+}
+@test 'more_src has _chuck' {
+    assert "$xsrc/_chuck" is_file
 }
 @test 'more_src has _chicken-install' {
     assert "$xsrc/_chicken-install" is_file
@@ -4212,6 +4218,9 @@
 @test 'more_src has _guacenc' {
     assert "$xsrc/_guacenc" is_file
 }
+@test 'more_src has _gummi' {
+    assert "$xsrc/_gummi" is_file
+}
 @test 'more_src has _guild' {
     assert "$xsrc/_guild" is_file
 }
@@ -5144,6 +5153,9 @@
 @test 'more_src has _khaos' {
     assert "$xsrc/_khaos" is_file
 }
+@test 'more_src has _kile' {
+    assert "$xsrc/_kile" is_file
+}
 @test 'more_src has _kicad' {
     assert "$xsrc/_kicad" is_file
 }
@@ -5646,6 +5658,9 @@
 }
 @test 'more_src has _ly-fu' {
     assert "$xsrc/_ly-fu" is_file
+}
+@test 'more_src has _lyx' {
+    assert "$xsrc/_lyx" is_file
 }
 @test 'more_src has _lychee' {
     assert "$xsrc/_lychee" is_file
@@ -7010,6 +7025,9 @@
 }
 @test 'more_src has _pdd' {
     assert "$xsrc/_pdd" is_file
+}
+@test 'more_src has _pdfpc' {
+    assert "$xsrc/_pdfpc" is_file
 }
 @test 'more_src has _pdfgrep' {
     assert "$xsrc/_pdfgrep" is_file
@@ -8842,8 +8860,14 @@
 @test 'more_src has _supabase' {
     assert "$xsrc/_supabase" is_file
 }
+@test 'more_src has _sclang' {
+    assert "$xsrc/_sclang" is_file
+}
 @test 'more_src has _superctl' {
     assert "$xsrc/_superctl" is_file
+}
+@test 'more_src has _supercollider' {
+    assert "$xsrc/_supercollider" is_file
 }
 @test 'more_src has _superfile' {
     assert "$xsrc/_superfile" is_file
@@ -9163,6 +9187,12 @@
 }
 @test 'more_src has _texlab' {
     assert "$xsrc/_texlab" is_file
+}
+@test 'more_src has _texmaker' {
+    assert "$xsrc/_texmaker" is_file
+}
+@test 'more_src has _texstudio' {
+    assert "$xsrc/_texstudio" is_file
 }
 @test 'more_src has _texloganalyser' {
     assert "$xsrc/_texloganalyser" is_file
