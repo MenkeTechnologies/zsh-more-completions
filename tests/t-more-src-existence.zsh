@@ -14799,3 +14799,78 @@
 @test 'more_src has _integrit' {
     assert "$xsrc/_integrit" is_file
 }
+@test 'more_src has _zabbix-agent' {
+    assert "$xsrc/_zabbix-agent" is_file
+}
+@test 'more_src has _zabbix-agent2' {
+    assert "$xsrc/_zabbix-agent2" is_file
+}
+@test 'more_src has _zabbix-get' {
+    assert "$xsrc/_zabbix-get" is_file
+}
+@test 'more_src has _zabbix-sender' {
+    assert "$xsrc/_zabbix-sender" is_file
+}
+@test 'more_src has _zabbix-proxy' {
+    assert "$xsrc/_zabbix-proxy" is_file
+}
+@test 'more_src has _zabbix-server' {
+    assert "$xsrc/_zabbix-server" is_file
+}
+@test 'more_src has _zabbix-java-gateway' {
+    assert "$xsrc/_zabbix-java-gateway" is_file
+}
+@test 'more_src has _munin-run' {
+    assert "$xsrc/_munin-run" is_file
+}
+@test 'more_src has _munin-async' {
+    assert "$xsrc/_munin-async" is_file
+}
+@test 'more_src has _munin-asyncd' {
+    assert "$xsrc/_munin-asyncd" is_file
+}
+@test 'more_src has _munin-mkconfig' {
+    assert "$xsrc/_munin-mkconfig" is_file
+}
+@test 'more_src has _munin-collect' {
+    assert "$xsrc/_munin-collect" is_file
+}
+@test 'more_src has _ksmtuned' {
+    assert "$xsrc/_ksmtuned" is_file
+}
+@test 'more_src has _tuned-gui' {
+    assert "$xsrc/_tuned-gui" is_file
+}
+@test 'more_src has _spice-html5' {
+    assert "$xsrc/_spice-html5" is_file
+}
+@test 'more_src has _prom2json' {
+    assert "$xsrc/_prom2json" is_file
+}
+@test 'more_src has _victoria-logs' {
+    assert "$xsrc/_victoria-logs" is_file
+}
+@test 'more_src has _pinot' {
+    assert "$xsrc/_pinot" is_file
+}
+@test 'more_src has _ntpstat' {
+    assert "$xsrc/_ntpstat" is_file
+}
+@test 'more_src has _redfish-finder' {
+    assert "$xsrc/_redfish-finder" is_file
+}
+@test 'more_src has _libreswan' {
+    assert "$xsrc/_libreswan" is_file
+}
+@test 'more_src has _accel-pppd' {
+    assert "$xsrc/_accel-pppd" is_file
+}
+@test 'more_src has _openl2tp' {
+    assert "$xsrc/_openl2tp" is_file
+}
+@test 'more_src has _openl2tpd' {
+    assert "$xsrc/_openl2tpd" is_file
+}
+@test 'more_src has _vpnc-script' {
+    assert "$xsrc/_vpnc-script" is_file
+}
