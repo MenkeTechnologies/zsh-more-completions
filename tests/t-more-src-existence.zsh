@@ -1248,6 +1248,9 @@
 @test 'more_src has _calico' {
     assert "$xsrc/_calico" is_file
 }
+@test 'more_src has _capacitor' {
+    assert "$xsrc/_capacitor" is_file
+}
 @test 'more_src has _capistrano' {
     assert "$xsrc/_capistrano" is_file
 }
