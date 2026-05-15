@@ -1116,6 +1116,12 @@
 @test 'more_src has _buildah' {
     assert "$xsrc/_buildah" is_file
 }
+@test 'more_src has _buildbot' {
+    assert "$xsrc/_buildbot" is_file
+}
+@test 'more_src has _buildbot-worker' {
+    assert "$xsrc/_buildbot-worker" is_file
+}
 @test 'more_src has _buildctl' {
     assert "$xsrc/_buildctl" is_file
 }
@@ -4073,6 +4079,9 @@
 }
 @test 'more_src has _haku' {
     assert "$xsrc/_haku" is_file
+}
+@test 'more_src has _hal' {
+    assert "$xsrc/_hal" is_file
 }
 @test 'more_src has _halloy' {
     assert "$xsrc/_halloy" is_file
