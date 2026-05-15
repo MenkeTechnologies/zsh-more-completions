@@ -1,0 +1,991 @@
+# Source: https://github.com/5nik7/paint/blob/1a2749b4359fbdd127cc7557acd0fbe5bcc58673/paint
+# Repository: 5nik7/paint (paint)
+#!/usr/bin/env bash
+# paint — render styled, colored text in your terminal
+#
+# Single segment (stable) version.
+#
+# Examples:
+#   paint blue "text"
+#   paint underline green bold "text"
+#   paint red -bg green "text"
+#   date | paint blue
+#   echo "hello" | paint blue --join newline - "world"
+#
+# Box mode:
+#   paint --box red -fg blue -bg black "text"
+#   paint --box --border red -fg blue -bg black "text"
+#
+# Completion:
+#   paint --completion zsh    # prints zsh completion script (_paint)
+
+set -euo pipefail
+
+prog="${0##*/}"
+die() { printf '%s: %s\n' "$prog" "$*" >&2; exit 1; }
+
+# ---------- embedded completions ----------
+print_completion_zsh() {
+  cat <<'ZSH'
+#compdef paint
+# Zsh completion for: paint
+#
+# Features:
+# - Stops suggesting tokens AFTER `--`
+# - Smarter `bright`: after `bright`, only suggests colors
+# - Completes --border colors
+# - Includes all paint options (color mode, escapes stdin, join, completion, table, box)
+
+local -a opts styles color_names color_nums bright_nums join_modes color_modes
+local expl
+
+opts=(
+  '--ansi[Use ANSI escape codes (default)]'
+  '--tput[Use tput/terminfo sequences]'
+  '-e[Append newline (echo-like)]'
+  '--echo[Append newline (echo-like)]'
+  '-t[Print token/color tables and exit]'
+  '--table[Print token/color tables and exit]'
+  '--join=[Delimiter when joining stdin + suffix text]:join mode:(newline space none)'
+  '--escapes-stdin[Interpret backslash escapes from stdin]'
+  '--color=[Color output mode]:mode:(always auto never)'
+  '--force-color[Force color output (same as --color always)]'
+  '--no-color[Disable color output (same as --color never)]'
+  '--box[Draw a border box around the rendered text]'
+  '--border=[Border color token for --box]:border color:->border'
+  '--completion=[Print completion script]:shell:(zsh)'
+  '-fg[Next color applies to foreground (default)]'
+  '--foreground[Next color applies to foreground (default)]'
+  '-bg[Next color applies to background]'
+  '--background[Next color applies to background]'
+  '-h[Show help]'
+  '--help[Show help]'
+)
+
+styles=(
+  'bold:enable bold'
+  'dim:enable dim'
+  'italic:enable italic'
+  'underline:enable underline'
+  'blink:enable blink'
+  'reverse:enable reverse video'
+  'invis:enable invisible'
+  '--bold:enable bold'
+  '--dim:enable dim'
+  '--italic:enable italic'
+  '--underline:enable underline'
+  '--blink:enable blink'
+  '--reverse:enable reverse video'
+  '--invis:enable invisible'
+)
+
+color_names=(black red green yellow blue magenta cyan white)
+color_nums=(0 1 2 3 4 5 6 7)
+bright_nums=(8 9 10 11 12 13 14 15)
+join_modes=(newline space none)
+color_modes=(always auto never)
+
+_paint_has_double_dash() {
+  local i
+  for i in {2..$#words}; do
+    [[ ${words[i]} == -- ]] && return 0
+  done
+  return 1
+}
+
+_paint_colors_describe() {
+  local -a items
+  items=(
+    ${color_names[@]/%/:color name}
+    ${color_nums[@]/%/:color code}
+    ${bright_nums[@]/%/:bright color code}
+  )
+  _describe -t colors 'color' items -V
+}
+
+if _paint_has_double_dash; then
+  _arguments -s -S $opts '*:text: _default'
+  return 0
+fi
+
+_arguments -s -S \
+  $opts \
+  '*:token or text:->tok' && return 0
+
+case $state in
+  tok)
+    if [[ ${words[CURRENT-1]} == --join ]]; then
+      _describe -t join_modes 'join mode' join_modes
+      return 0
+    fi
+    if [[ ${words[CURRENT-1]} == --color ]]; then
+      _describe -t color_modes 'color mode' color_modes
+      return 0
+    fi
+    if [[ ${words[CURRENT-1]} == --border ]]; then
+      _paint_colors_describe
+      return 0
+    fi
+    if [[ ${words[CURRENT-1]} == bright ]]; then
+      _paint_colors_describe
+      return 0
+    fi
+
+    local -a token_suggestions
+    token_suggestions=(
+      'bright:make next color bright'
+      '-:read stdin explicitly (as text)'
+      '--:end tokens/options (treat rest as text)'
+      $styles
+      '-fg:foreground target'
+      '--foreground:foreground target'
+      '-bg:background target'
+      '--background:background target'
+      ${color_names[@]/%/:color name}
+      ${color_nums[@]/%/:color code}
+      ${bright_nums[@]/%/:bright color code}
+    )
+
+    _describe -t tokens 'token' token_suggestions -V
+    ;;
+  border)
+    _paint_colors_describe
+    ;;
+esac
+ZSH
+}
+
+# ---------- term capability (independent of TTY) ----------
+term_supports_color() {
+  [[ "${TERM:-}" != "dumb" && -n "${TERM:-}" ]] || return 1
+
+  if command -v tput >/dev/null 2>&1; then
+    local n
+    n="$(tput colors 2>/dev/null || echo 0)"
+    [[ "$n" =~ ^[0-9]+$ ]] || n=0
+    (( n >= 8 )) && return 0
+  fi
+
+  [[ -n "${COLORTERM:-}" ]] && return 0
+  [[ "${TERM:-}" =~ (xterm|screen|tmux|rxvt|linux|vt100|ansi|color|cygwin) ]] && return 0
+  return 1
+}
+
+stdout_is_tty() { [[ -t 1 ]]; }
+
+# ---------- constants ----------
+declare -A STYLE_SGR=(
+  [bold]=1
+  [dim]=2
+  [italic]=3
+  [underline]=4
+  [blink]=5
+  [reverse]=7
+  [invis]=8
+)
+
+color_to_index() {
+  local tok="$1"
+  case "$tok" in
+    black|0)   echo 0 ;;
+    red|1)     echo 1 ;;
+    green|2)   echo 2 ;;
+    yellow|3)  echo 3 ;;
+    blue|4)    echo 4 ;;
+    magenta|5) echo 5 ;;
+    cyan|6)    echo 6 ;;
+    white|7)   echo 7 ;;
+    [0-9]|1[0-5]) echo "$tok" ;; # allow 0..15 directly
+    *) return 1 ;;
+  esac
+}
+
+index_to_name() {
+  local idx="$1"
+  case "$idx" in
+    0)  echo "black" ;;
+    1)  echo "red" ;;
+    2)  echo "green" ;;
+    3)  echo "yellow" ;;
+    4)  echo "blue" ;;
+    5)  echo "magenta" ;;
+    6)  echo "cyan" ;;
+    7)  echo "white" ;;
+    8)  echo "bright black" ;;
+    9)  echo "bright red" ;;
+    10) echo "bright green" ;;
+    11) echo "bright yellow" ;;
+    12) echo "bright blue" ;;
+    13) echo "bright magenta" ;;
+    14) echo "bright cyan" ;;
+    15) echo "bright white" ;;
+    *)  echo "unknown" ;;
+  esac
+}
+
+contrast_fg_for_bg() {
+  local bg="$1"
+  case "$bg" in
+    0|1|2|4|5|6|8|9|10|12|13|14) echo 15 ;;
+    *)                           echo 0  ;;
+  esac
+}
+
+# ---------- join ----------
+join_mode="newline" # default (smart when joining stdin + suffix)
+print_join_delim() {
+  case "$1" in
+    newline) printf '\n' ;;
+    space)   printf ' ' ;;
+    none)    : ;;
+    *) return 1 ;;
+  esac
+}
+
+# ---------- escapes ----------
+print_arg_text() { printf '%b' "$1"; }
+
+# stdin: raw by default; opt-in escape interpretation (stream transform)
+print_stdin_raw_or_escaped() {
+  if (( escapes_stdin )); then
+    if command -v python3 >/dev/null 2>&1; then
+      python3 - <<'PY'
+import sys
+data = sys.stdin.read()
+sys.stdout.write(bytes(data, "utf-8").decode("unicode_escape"))
+PY
+    elif command -v perl >/dev/null 2>&1; then
+      perl -pe 's/\\r/\r/g; s/\\n/\n/g; s/\\t/\t/g; s/\\a/\a/g; s/\\b/\b/g; s/\\f/\f/g; s/\\v/\v/g; s/\\\\/\\/g;'
+    else
+      cat
+    fi
+  else
+    cat
+  fi
+}
+
+# ---------- color mode (auto/always/never) ----------
+color_mode="always"   # auto|always|never (DEFAULT: always)
+TERM_CAN_COLOR=0
+term_supports_color && TERM_CAN_COLOR=1
+
+should_color() {
+  case "$color_mode" in
+    never)  return 1 ;;
+    always) (( TERM_CAN_COLOR )) ;;
+    auto)   (( TERM_CAN_COLOR )) && stdout_is_tty ;;
+    *)      (( TERM_CAN_COLOR )) ;;
+  esac
+}
+
+# ---------- rendering ----------
+build_ansi_prefix() {
+  local styles_name="$1" fg="$2" bg="$3"
+  declare -n _styles="$styles_name"
+
+  local sgr=() k
+  for k in "${!_styles[@]}"; do
+    sgr+=("${STYLE_SGR[$k]}")
+  done
+
+  if [[ -n "$fg" ]]; then
+    if (( fg <= 7 )); then sgr+=("$((30 + fg))"); else sgr+=("$((90 + (fg - 8)))"); fi
+  fi
+  if [[ -n "$bg" ]]; then
+    if (( bg <= 7 )); then sgr+=("$((40 + bg))"); else sgr+=("$((100 + (bg - 8)))"); fi
+  fi
+
+  # IMPORTANT: always return 0 (set -e safe), even if sgr is empty.
+  if ((${#sgr[@]})); then
+    printf '\033[%sm' "$(IFS=';'; echo "${sgr[*]}")"
+  fi
+  return 0
+}
+
+build_tput_prefix() {
+  local styles_name="$1" fg="$2" bg="$3"
+  declare -n _styles="$styles_name"
+  command -v tput >/dev/null 2>&1 || return 0
+
+  local pre=""
+  [[ -n "${_styles[bold]+x}"      ]] && pre+=$(tput bold 2>/dev/null || true)
+  [[ -n "${_styles[dim]+x}"       ]] && pre+=$(tput dim 2>/dev/null || true)
+  [[ -n "${_styles[italic]+x}"    ]] && pre+=$(tput sitm 2>/dev/null || true)
+  [[ -n "${_styles[underline]+x}" ]] && pre+=$(tput smul 2>/dev/null || true)
+  [[ -n "${_styles[blink]+x}"     ]] && pre+=$(tput blink 2>/dev/null || true)
+  [[ -n "${_styles[reverse]+x}"   ]] && pre+=$(tput rev 2>/dev/null || true)
+  [[ -n "${_styles[invis]+x}"     ]] && pre+=$(tput invis 2>/dev/null || true)
+
+  [[ -n "$fg" ]] && pre+=$(tput setaf "$fg" 2>/dev/null || true)
+  [[ -n "$bg" ]] && pre+=$(tput setab "$bg" 2>/dev/null || true)
+
+  printf '%b' "$pre"
+  return 0
+}
+
+reset_seq() {
+  case "$mode" in
+    tput)
+      command -v tput >/dev/null 2>&1 && tput sgr0 2>/dev/null || printf '\033[0m'
+      ;;
+    *)
+      printf '\033[0m'
+      ;;
+  esac
+}
+
+print_prefix() {
+  should_color || return 0
+  case "$mode" in
+    tput) build_tput_prefix style_on "$fg_index" "$bg_index" || return 0 ;;
+    *)    build_ansi_prefix style_on "$fg_index" "$bg_index" || return 0 ;;
+  esac
+}
+
+print_reset() {
+  should_color || return 0
+  reset_seq
+}
+
+# Border prefix (for --box). Uses ONLY foreground color, no styles/bg.
+border_prefix() {
+  should_color || return 0
+  [[ -n "${border_fg_index:-}" ]] || return 0
+
+  local -A _bstyles=()
+  case "$mode" in
+    tput) build_tput_prefix _bstyles "$border_fg_index" "" ;;
+    *)    build_ansi_prefix _bstyles "$border_fg_index" "" ;;
+  esac
+}
+
+# ---------- help formatting uses should_color() too ----------
+fmt_ansi() {
+  local sgr="${1:-}" txt="${2:-}"
+  if should_color && [[ -n "$sgr" ]]; then
+    printf '\033[%sm%s\033[0m' "$sgr" "$txt"
+  else
+    printf '%s' "$txt"
+  fi
+}
+
+usage() {
+  printf '%s — render styled, colored text in your terminal\n\n' "$(fmt_ansi '1;4' 'paint')"
+  printf '%s\n' "$(fmt_ansi '1' 'USAGE')"
+  printf '  paint [options|tokens...] [--] [TEXT...]\n'
+  printf '  paint [options|tokens...] -        # explicit: read stdin as text\n'
+  printf '  <cmd> | paint [options|tokens...]  # filter stdin\n\n'
+
+  printf '%s\n' "$(fmt_ansi '1' 'COMMON')"
+  printf '  paint red "hello"\n'
+  printf '  paint underline green bold "hello"\n'
+  printf '  paint red -bg green "hello"\n'
+  printf '  date | paint bright yellow\n\n'
+
+  printf '%s\n' "$(fmt_ansi '1' 'BOX MODE')"
+  printf '  paint --box red -fg blue -bg black "text"\n'
+  printf '  paint --box --border red -fg blue -bg black "text"\n\n'
+
+  printf '%s\n' "$(fmt_ansi '1' 'OPTIONS')"
+  printf '  --ansi                      ANSI escapes (default)\n'
+  printf '  --tput                      Use tput sequences\n'
+  printf '  --color <always|auto|never> Color mode (default: always)\n'
+  printf '  --force-color               Same as --color always\n'
+  printf '  --no-color                  Same as --color never\n'
+  printf '  --box                       Draw a border box around the rendered text\n'
+  printf '  --border <color>            Border color for --box (or put a color token right after --box)\n'
+  printf '  --join <newline|space|none> Join stdin + suffix when "-" used (default: newline, smart)\n'
+  printf '  --escapes-stdin             Interpret escapes from stdin (\\n, \\t, ...)\n'
+  printf '  -e, --echo                  Append newline at end\n'
+  printf '  -t, --table                 Print token/style + color tables and exit\n'
+  printf '  --completion zsh            Print zsh completion script\n'
+  printf '  -h, --help                  Show help\n\n'
+
+  printf '%s\n' "$(fmt_ansi '1' 'TOKENS')"
+  printf '  Styles:  bold dim italic underline blink reverse invis\n'
+  printf '  Target:  -fg/--foreground (default), -bg/--background\n'
+  printf '  Colors:  black|0 red|1 green|2 yellow|3 blue|4 magenta|5 cyan|6 white|7\n'
+  printf '          bright <color>  (or 8..15)\n'
+}
+
+# ---------- segment state ----------
+reset_segment_state() {
+  target="fg"
+  bright_next=0
+  fg_index=""
+  bg_index=""
+  unset style_on
+  declare -gA style_on=()
+}
+
+is_style_token() {
+  case "$1" in
+    bold|dim|italic|underline|blink|reverse|invis|--bold|--dim|--italic|--underline|--blink|--reverse|--invis) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+is_target_token() {
+  case "$1" in
+    -fg|--foreground|-bg|--background) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+is_color_token() {
+  [[ "$1" == bright ]] && return 0
+  color_to_index "$1" >/dev/null 2>&1 && return 0
+  return 1
+}
+
+is_format_token() {
+  is_style_token "$1" && return 0
+  is_target_token "$1" && return 0
+  is_color_token "$1" && return 0
+  return 1
+}
+
+apply_format_token() {
+  local tok="$1"
+  case "$tok" in
+    bright) bright_next=1 ;;
+    -fg|--foreground) target="fg" ;;
+    -bg|--background) target="bg" ;;
+    bold|dim|italic|underline|blink|reverse|invis) style_on["$tok"]=1 ;;
+    --bold|--dim|--italic|--underline|--blink|--reverse|--invis) style_on["${tok#--}"]=1 ;;
+    *)
+      local idx
+      idx="$(color_to_index "$tok")"
+      if (( idx >= 0 && idx <= 7 )) && (( bright_next )); then idx=$((idx + 8)); fi
+      [[ "$target" == "fg" ]] && fg_index="$idx" || bg_index="$idx"
+      bright_next=0
+      ;;
+  esac
+}
+
+# ---------- table helpers (unicode box + bright black separators only) ----------
+supports_utf8() {
+  local loc="${LC_ALL:-}${LC_CTYPE:-}${LANG:-}"
+  [[ "$loc" =~ ([Uu][Tt][Ff]-?8) ]]
+}
+
+bb_part() {
+  local s="$1"
+  if should_color; then
+    printf '\033[90m%s\033[0m' "$s"
+  else
+    printf '%s' "$s"
+  fi
+}
+
+repeat_char() { local ch="$1" n="$2" i; for ((i=0; i<n; i++)); do printf '%s' "$ch"; done; }
+
+BOX_TL="+" BOX_TR="+" BOX_BL="+" BOX_BR="+"
+BOX_TM="+" BOX_MM="+" BOX_BM="+"
+BOX_LM="+" BOX_RM="+"
+BOX_H="-"  BOX_V="|"
+
+box_set_charset() {
+  if supports_utf8; then
+    BOX_TL="┌" BOX_TR="┐" BOX_BL="└" BOX_BR="┘"
+    BOX_TM="┬" BOX_MM="┼" BOX_BM="┴"
+    BOX_LM="├" BOX_RM="┤"
+    BOX_H="─"  BOX_V="│"
+  else
+    BOX_TL="+" BOX_TR="+" BOX_BL="+" BOX_BR="+"
+    BOX_TM="+" BOX_MM="+" BOX_BM="+"
+    BOX_LM="├" BOX_RM="┤"
+    BOX_H="-"  BOX_V="|"
+  fi
+}
+
+mkcell() { local w="$1"; shift; printf '%-*s' "$w" " $* "; }
+
+box_line() {
+  local left="$1" mid="$2" right="$3"; shift 3
+  local w i
+  bb_part "$left"
+  for ((i=0; i<$#; i++)); do
+    w="${@:i+1:1}"
+    bb_part "$(repeat_char "$BOX_H" "$w")"
+    (( i < $#-1 )) && bb_part "$mid"
+  done
+  bb_part "$right"
+  printf '\n'
+}
+
+box_row() {
+  local -a widths=()
+  while (($#)); do
+    [[ "$1" == "--" ]] && { shift; break; }
+    widths+=("$1"); shift
+  done
+  local -a cells=("$@")
+
+  bb_part "$BOX_V"
+  local i
+  for i in "${!widths[@]}"; do
+    printf '%-*s' "${widths[i]}" "${cells[i]}"
+    bb_part "$BOX_V"
+  done
+  printf '\n'
+}
+
+# ---------- tables (two tables, boxed) ----------
+print_table() {
+  box_set_charset
+
+  # ----- Table 1: format tokens -----
+  printf '%s\n' "$(fmt_ansi '1;4' 'PAINT FORMAT TOKENS')"
+
+  local -a fmt_tokens=(bold dim italic underline blink reverse invis)
+
+  local max_tok=0 t
+  for t in "${fmt_tokens[@]}"; do ((${#t} > max_tok)) && max_tok=${#t}; done
+  local W1_TOKEN=$((max_tok + 2))
+  local W1_ESC=$((3 + 2))
+  local W1_EX=$((max_tok + 2))
+  local -a W1=("$W1_TOKEN" "$W1_ESC" "$W1_EX")
+
+  box_line "$BOX_TL" "$BOX_TM" "$BOX_TR" "${W1[@]}"
+  box_row  "${W1[@]}" -- \
+    "$(mkcell "$W1_TOKEN" "TOKEN")" \
+    "$(mkcell "$W1_ESC"   "ESC")" \
+    "$(mkcell "$W1_EX"    "")"
+  box_line "$BOX_LM" "$BOX_MM" "$BOX_RM" "${W1[@]}"
+
+  local tok sgr esc_short inner_w
+  inner_w=$((W1_EX - 2))
+
+  for tok in "${fmt_tokens[@]}"; do
+    sgr="${STYLE_SGR[$tok]}"
+    esc_short="$sgr"
+
+    bb_part "$BOX_V"
+    printf '%-*s' "$W1_TOKEN" " $tok "
+    bb_part "$BOX_V"
+    printf '%-*s' "$W1_ESC" " $esc_short "
+    bb_part "$BOX_V"
+
+    reset_segment_state
+    style_on["$tok"]=1
+    print_prefix
+    printf ' '
+    printf '%-*s' "$inner_w" "$tok"
+    printf ' '
+    print_reset
+
+    bb_part "$BOX_V"
+    printf '\n'
+  done
+
+  box_line "$BOX_BL" "$BOX_BM" "$BOX_BR" "${W1[@]}"
+  printf '\n'
+
+  # ----- Table 2: colors -----
+  printf '%s\n' "$(fmt_ansi '1;4' 'PAINT COLORS')"
+
+  local max_name=0 name i
+  for i in {0..15}; do
+    name="$(index_to_name "$i")"
+    ((${#name} > max_name)) && max_name=${#name}
+  done
+
+  local W2_TOKEN=$((max_name + 2))
+  local W2_CODE=$((4 + 2))
+  local W2_EFG=$((6 + 2))
+  local W2_FGEX=$((4 + 2))
+  local W2_EBG=$((6 + 2))
+  local W2_BGEX=$((4 + 2))
+  local -a W2=("$W2_TOKEN" "$W2_CODE" "$W2_EFG" "$W2_FGEX" "$W2_EBG" "$W2_BGEX")
+
+  box_line "$BOX_TL" "$BOX_TM" "$BOX_TR" "${W2[@]}"
+  box_row  "${W2[@]}" -- \
+    "$(mkcell "$W2_TOKEN" "TOKEN")" \
+    "$(mkcell "$W2_CODE"  "CODE")" \
+    "$(mkcell "$W2_EFG"   "ESC FG")" \
+    "$(mkcell "$W2_FGEX"  "")" \
+    "$(mkcell "$W2_EBG"   "ESC BG")" \
+    "$(mkcell "$W2_BGEX"  "")"
+  box_line "$BOX_LM" "$BOX_MM" "$BOX_RM" "${W2[@]}"
+
+  local fg_sgr bg_sgr esc_fg_short esc_bg_short bg_fg
+  for i in {0..15}; do
+    name="$(index_to_name "$i")"
+
+    if (( i <= 7 )); then
+      fg_sgr=$((30 + i))
+      bg_sgr=$((40 + i))
+    else
+      fg_sgr=$((90 + (i - 8)))
+      bg_sgr=$((100 + (i - 8)))
+    fi
+
+    esc_fg_short="0;${fg_sgr}"
+    esc_bg_short="0;${bg_sgr}"
+
+    bb_part "$BOX_V"
+    printf '%-*s' "$W2_TOKEN" " $name "
+    bb_part "$BOX_V"
+    printf '%-*s' "$W2_CODE" " $i "
+    bb_part "$BOX_V"
+    printf '%-*s' "$W2_EFG" " $esc_fg_short "
+    bb_part "$BOX_V"
+
+    reset_segment_state
+    fg_index="$i"; bg_index=""
+    print_prefix
+    printf '%-*s' "$W2_FGEX" " FG "
+    print_reset
+    bb_part "$BOX_V"
+
+    printf '%-*s' "$W2_EBG" " $esc_bg_short "
+    bb_part "$BOX_V"
+
+    bg_fg="$(contrast_fg_for_bg "$i")"
+    reset_segment_state
+    fg_index="$bg_fg"; bg_index="$i"
+    print_prefix
+    printf '%-*s' "$W2_BGEX" " BG "
+    print_reset
+    bb_part "$BOX_V"
+
+    printf '\n'
+  done
+
+  box_line "$BOX_BL" "$BOX_BM" "$BOX_BR" "${W2[@]}"
+}
+
+# ---------- box rendering ----------
+make_tmp() { printf '%s/%s.%s.%s' "${TMPDIR:-/tmp}" "$prog" "$$" "$RANDOM"; }
+
+write_content_file() {
+  local out="$1"
+
+  if (( force_stdin )); then
+    [[ -t 0 ]] && die "stdin token '-' provided but stdin is not piped"
+    ensure_stdin_buffered
+
+    if (( suffix_present )) && [[ "$join_mode" == "newline" ]]; then
+      cat "$stdin_tmp" >"$out"
+      stdin_ends_with_newline || printf '\n' >>"$out"
+      print_arg_text "${seg_text[*]}" >>"$out"
+    else
+      cat "$stdin_tmp" >"$out"
+      if (( suffix_present )); then
+        print_join_delim "$join_mode" >>"$out"
+        print_arg_text "${seg_text[*]}" >>"$out"
+      fi
+    fi
+  elif (( suffix_present )); then
+    print_arg_text "${seg_text[*]}" >"$out"
+  elif [[ ! -t 0 ]]; then
+    print_stdin_raw_or_escaped >"$out"
+  else
+    die "no text provided"
+  fi
+}
+
+max_line_width() {
+  awk '{ if (length($0) > m) m = length($0) } END { print (m+0) }' "$1"
+}
+
+print_boxed_output() {
+  box_set_charset
+
+  local content_file
+  content_file="$(make_tmp)"
+  local _cleanup_box=0
+  trap '[[ $_cleanup_box -eq 1 && -f "$content_file" ]] && rm -f "$content_file" 2>/dev/null || true' RETURN
+  _cleanup_box=1
+
+  write_content_file "$content_file"
+
+  local w
+  w="$(max_line_width "$content_file")"
+  [[ "$w" =~ ^[0-9]+$ ]] || w=0
+
+  local inner=$((w + 2))
+  local top="${BOX_TL}$(repeat_char "$BOX_H" "$inner")${BOX_TR}"
+  local bot="${BOX_BL}$(repeat_char "$BOX_H" "$inner")${BOX_BR}"
+
+  local b_on="" b_off=""
+  if should_color && [[ -n "${border_fg_index:-}" ]]; then
+    b_on="$(border_prefix)"
+    b_off="$(reset_seq)"
+  fi
+
+  # top
+  [[ -n "$b_on" ]] && printf '%b' "$b_on"
+  printf '%s' "$top"
+  [[ -n "$b_off" ]] && printf '%b' "$b_off"
+  printf '\n'
+
+  # content (handle last line w/o trailing newline)
+  local line printed_any=0
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    printed_any=1
+
+    [[ -n "$b_on" ]] && printf '%b' "$b_on"
+    printf '%s' "$BOX_V"
+    [[ -n "$b_off" ]] && printf '%b' "$b_off"
+
+    printf ' '
+    print_prefix
+    printf '%s' "$line"
+    print_reset
+
+    local pad=$(( w - ${#line} ))
+    (( pad > 0 )) && printf '%*s' "$pad" ''
+    printf ' '
+
+    [[ -n "$b_on" ]] && printf '%b' "$b_on"
+    printf '%s' "$BOX_V"
+    [[ -n "$b_off" ]] && printf '%b' "$b_off"
+    printf '\n'
+  done <"$content_file"
+
+  if (( ! printed_any )); then
+    [[ -n "$b_on" ]] && printf '%b' "$b_on"
+    printf '%s' "$BOX_V"
+    [[ -n "$b_off" ]] && printf '%b' "$b_off"
+    printf ' '
+    print_prefix; printf '%s' ""; print_reset
+    printf '%*s' "$w" ''
+    printf ' '
+    [[ -n "$b_on" ]] && printf '%b' "$b_on"
+    printf '%s' "$BOX_V"
+    [[ -n "$b_off" ]] && printf '%b' "$b_off"
+    printf '\n'
+  fi
+
+  # bottom
+  [[ -n "$b_on" ]] && printf '%b' "$b_on"
+  printf '%s' "$bot"
+  [[ -n "$b_off" ]] && printf '%b' "$b_off"
+}
+
+# ---------- parsing ----------
+mode="ansi"
+append_newline=0
+escapes_stdin=0
+show_table=0
+completion_shell=""
+
+box_mode=0
+border_fg_index=""
+
+reset_segment_state
+
+stdin_is_piped=0
+[[ ! -t 0 ]] && stdin_is_piped=1
+
+stdin_tmp=""
+stdin_ready=0
+
+cleanup_stdin_tmp() {
+  [[ -n "${stdin_tmp:-}" ]] && rm -f "$stdin_tmp" 2>/dev/null || true
+}
+trap cleanup_stdin_tmp EXIT
+
+ensure_stdin_buffered() {
+  (( stdin_is_piped )) || die "stdin token '-' used but stdin is not piped"
+  (( stdin_ready )) && return 0
+  stdin_tmp="${TMPDIR:-/tmp}/${prog}.stdin.$$.$RANDOM"
+  print_stdin_raw_or_escaped >"$stdin_tmp"
+  stdin_ready=1
+}
+
+stdin_ends_with_newline() {
+  ensure_stdin_buffered
+  [[ -s "$stdin_tmp" ]] || return 1
+  local last
+  last="$(tail -c 1 "$stdin_tmp" 2>/dev/null || true)"
+  [[ "$last" == $'\n' ]]
+}
+
+parse_border_from_args() {
+  ((${#args[@]})) || return 1
+  if [[ "${args[0]}" == "bright" ]]; then
+    ((${#args[@]} >= 2)) || die "--box/--border bright requires a color"
+    local base idx
+    base="${args[1]}"
+    idx="$(color_to_index "$base" 2>/dev/null || true)"
+    [[ -n "$idx" ]] || die "invalid border color: $base"
+    (( idx <= 7 )) && idx=$((idx + 8))
+    border_fg_index="$idx"
+    args=("${args[@]:2}")
+    return 0
+  fi
+
+  local tok idx
+  tok="${args[0]}"
+  idx="$(color_to_index "$tok" 2>/dev/null || true)"
+  [[ -n "$idx" ]] || return 1
+  border_fg_index="$idx"
+  args=("${args[@]:1}")
+  return 0
+}
+
+args=()
+while (($#)); do
+  a="$1"; shift
+  case "$a" in
+    -h|--help) usage; exit 0 ;;
+    --ansi) mode="ansi" ;;
+    --tput) mode="tput" ;;
+    -e|--echo) append_newline=1 ;;
+    --escapes-stdin) escapes_stdin=1 ;;
+    --table|-t) show_table=1 ;;
+    --completion)
+      (($#)) || die "--completion requires: zsh"
+      completion_shell="$1"; shift
+      ;;
+    --color)
+      (($#)) || die "--color requires: always|auto|never"
+      color_mode="$1"; shift
+      [[ "$color_mode" =~ ^(always|auto|never)$ ]] || die "invalid --color: $color_mode"
+      ;;
+    --force-color) color_mode="always" ;;
+    --no-color)    color_mode="never" ;;
+    --join)
+      (($#)) || die "--join requires: newline|space|none"
+      join_mode="$1"; shift
+      print_join_delim "$join_mode" >/dev/null 2>&1 || die "invalid --join: $join_mode"
+      ;;
+    --box) box_mode=1 ;;
+    --border)
+      (($#)) || die "--border requires a color token"
+      args+=("$1"); shift
+      border_fg_index="__pending__"
+      ;;
+    --) args+=("--"); args+=("$@"); break ;;
+    *) args+=("$a") ;;
+  esac
+done
+
+if [[ -n "$completion_shell" ]]; then
+  case "$completion_shell" in
+    zsh) print_completion_zsh; exit 0 ;;
+    *) die "unsupported completion shell: $completion_shell (supported: zsh)" ;;
+  esac
+fi
+
+if (( show_table )); then
+  reset_segment_state
+  print_table
+  exit 0
+fi
+
+if [[ "$border_fg_index" == "__pending__" ]]; then
+  border_fg_index=""
+  parse_border_from_args || die "invalid --border color"
+fi
+
+if (( box_mode )) && [[ -z "${border_fg_index:-}" ]]; then
+  if ((${#args[@]})); then
+    if [[ "${args[0]}" == "bright" ]]; then
+      if ((${#args[@]} >= 2)) && color_to_index "${args[1]}" >/dev/null 2>&1; then
+        parse_border_from_args || true
+      fi
+    elif color_to_index "${args[0]}" >/dev/null 2>&1; then
+      parse_border_from_args || true
+    fi
+  fi
+fi
+
+# stdin-only
+if ((${#args[@]} == 0)) && (( stdin_is_piped )); then
+  reset_segment_state
+  ensure_stdin_buffered
+  if (( box_mode )); then
+    force_stdin=1
+    suffix_present=0
+    seg_text=()
+    [[ -n "${border_fg_index:-}" ]] || border_fg_index="${fg_index:-}"
+    print_boxed_output
+    (( append_newline )) && printf '\n'
+    exit 0
+  fi
+
+  print_prefix
+  cat "$stdin_tmp"
+  print_reset
+  (( append_newline )) && printf '\n'
+  exit 0
+fi
+
+((${#args[@]} > 0)) || die "no text provided (try: $prog blue \"text\" or: echo test | $prog blue)"
+
+# Single segment parser
+seg_text=()
+text_started=0
+force_stdin=0
+
+while ((${#args[@]})); do
+  tok="${args[0]}"
+  args=("${args[@]:1}")
+
+  if (( text_started )); then
+    [[ "$tok" == "-" ]] && { force_stdin=1; continue; }
+    seg_text+=("$tok")
+    continue
+  fi
+
+  case "$tok" in
+    --) text_started=1; continue ;;
+    -)  force_stdin=1; text_started=1; continue ;;
+    *)
+      if is_format_token "$tok"; then
+        apply_format_token "$tok"
+        continue
+      fi
+      text_started=1
+      seg_text+=("$tok")
+      ;;
+  esac
+done
+
+suffix_present=0
+((${#seg_text[@]} > 0)) && suffix_present=1
+
+if (( box_mode )) && [[ -z "${border_fg_index:-}" ]]; then
+  border_fg_index="${fg_index:-}"
+fi
+
+if (( box_mode )); then
+  print_boxed_output
+  (( append_newline )) && printf '\n'
+  exit 0
+fi
+
+# Normal output
+print_prefix
+
+if (( force_stdin )); then
+  [[ -t 0 ]] && { print_reset; die "stdin token '-' provided but stdin is not piped"; }
+  ensure_stdin_buffered
+
+  if (( suffix_present )) && [[ "$join_mode" == "newline" ]]; then
+    cat "$stdin_tmp"
+    stdin_ends_with_newline || printf '\n'
+    print_arg_text "${seg_text[*]}"
+  else
+    cat "$stdin_tmp"
+    if (( suffix_present )); then
+      print_join_delim "$join_mode"
+      print_arg_text "${seg_text[*]}"
+    fi
+  fi
+elif (( suffix_present )); then
+  print_arg_text "${seg_text[*]}"
+elif [[ ! -t 0 ]]; then
+  print_stdin_raw_or_escaped
+else
+  print_reset
+  die "no text provided"
+fi
+
+print_reset
+(( append_newline )) && printf '\n'
+exit 0

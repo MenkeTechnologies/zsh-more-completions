@@ -1,0 +1,239 @@
+# Source: https://github.com/vjrasane/bitwarden-secrets-manager-env/blob/8cd791e40bfe2961693a26ed0d036281cfef0d1d/functions/bwsenv
+# Repository: vjrasane/bitwarden-secrets-manager-env (functions/bwsenv)
+#!/bin/bash
+#compdef bwsenv
+
+function bwsenv() {
+  local _VERSION="0.0.1"
+  local _HELP="TODO: usage"
+  local _CONFIG_FILE_NAME=".bws.env"
+  local _CONFIG_FILE="$BWS_CONFIG_FILE"
+
+  # [[ -n "${BWS_ACCESS_TOKEN:+defined}" ]] && local _ENV_ACCESS_TOKEN="${BWS_ACCESS_TOKEN}"
+  # [[ -n "${BWS_PROJECT_ID:+defined}" ]] && local _ENV_PROJECT_ID="${BWS_PROJECT_ID}"
+
+  local _ACCESS_TOKEN="$BWS_ACCESS_TOKEN"
+  local _PROJECT_ID="$BWS_PROJECT_ID"
+
+  local _IS_SOPS_INSTALLED=false
+  local _UNSET_VARIABLES=false
+
+  # function _cleanup() {
+  #   if [[ -n "${_ENV_ACCESS_TOKEN:+defined}" ]]; then
+  #     BWS_ACCESS_TOKEN="${_ENV_ACCESS_TOKEN}"
+  #   else
+  #     unset BWS_ACCESS_TOKEN
+  #   fi
+
+  #   if [[ -n "${_ENV_PROJECT_ID:+defined}" ]]; then
+  #     BWS_PROJECT_ID="${_ENV_PROJECT_ID}"
+  #   else
+  #     unset BWS_PROJECT_ID
+  #   fi
+  # }
+
+  function _check_deps() {
+    local deps=(bws jq)
+    local missing=()
+    for cmd in "${deps[@]}"; do
+      if ! command -v "$cmd" >/dev/null 2>&1; then
+        missing+=("$cmd")
+      fi
+    done
+
+    if ((${#missing[@]})); then
+      echo "Error: missing dependencies: ${missing[*]}. Please install them and retry." >&2
+      return 1
+    fi
+
+    _IS_SOPS_INSTALLED=$(command -v sops >/dev/null 2>&1 && echo true || echo false)
+  }
+
+  function _load_env_from_plaintext() {
+    local envfile="$1"
+    source "$envfile"
+    echo "$BWS_ACCESS_TOKEN"
+    echo "$BWS_PROJECT_ID"
+  }
+
+  function _load_env_from_ciphertext() {
+    local envfile="$1"
+    if sops filestatus --input-type dotenv "$envfile" 2>/dev/null | jq -e '.encrypted == true' >/dev/null; then
+      source <(sops -d --input-type dotenv --output-type dotenv "$envfile")
+    else
+      _load_env_from_plaintext "$envfile"
+    fi
+    echo "$BWS_ACCESS_TOKEN"
+    echo "$BWS_PROJECT_ID"
+  }
+
+  function _load_env_from_file() {
+    local envfile="$1"
+    if [[ ! -f "$envfile" ]]; then
+      echo "Error: config file not found at $envfile"
+      return 1
+    fi
+    echo "Using config file: $envfile"
+
+    if $_IS_SOPS_INSTALLED; then
+      lines=( "${(@f)$(_load_env_from_ciphertext "$envfile")}" ) || return 1
+    else
+      lines=( "${(@f)$(_load_env_from_plaintext "$envfile")}" ) || return 1
+    fi
+  }
+
+  function _load_env_recursive() {
+    local dir="$1"
+    if ! [[ "$dir" == "$HOME" || "$dir" == "/" ]]; then
+      local parent_dir="$(dirname "$dir")"
+      _load_env_recursive "$parent_dir" || return 1
+    fi
+
+    local envfile="$dir/$_CONFIG_FILE_NAME"
+    if [[ -f "$envfile" ]]; then
+      _load_env_from_file "$envfile" || return 1
+    fi
+  }
+
+  function _load_env() {
+    _CONFIG_FILE="${_CONFIG_FILE-$BWS_CONFIG_FILE}"
+    _load_env_recursive "$(pwd)" || return 1
+    if [[ -n "$_CONFIG_FILE" ]]; then
+      _load_env_from_file "$_CONFIG_FILE" || return 1
+    fi
+
+    if [[ -n "${_ENV_ACCESS_TOKEN:+defined}" ]]; then
+      _ACCESS_TOKEN="${_ENV_ACCESS_TOKEN}"
+    else
+      _PROJECT_ID="${_PROJECT_ID:-$BWS_PROJECT_ID}"
+    fi
+
+    if [[ -n "${_ENV_PROJECT_ID:+defined}" ]]; then
+      _PROJECT_ID="${_ENV_PROJECT_ID}"
+    else
+      _ACCESS_TOKEN="${_ACCESS_TOKEN:-$BWS_ACCESS_TOKEN}"
+    fi
+  }
+
+  function _verify_env() {
+    if [[ -z "$_ACCESS_TOKEN" ]]; then
+      echo "Error: BWS_ACCESS_TOKEN not set after loading env" >&2
+      return 1
+    fi
+  }
+
+  function _prompt_for_project() {
+    local projects=$(bws project list --access-token "$_ACCESS_TOKEN" 2>/dev/null) || {
+      echo "Error: unable to list projects" >&2
+      return 1
+    }
+
+    echo "Available projects:"
+    echo "$projects" | jq -r '.[] | "* \(.name) (\(.id))"'
+
+    while true; do
+      echo -n "Select project name (empty for no project): "
+      local project_name
+      read project_name
+
+      if [[ -z "$project_name" ]]; then
+        _PROJECT_ID=""
+        return 0
+      else
+        project_id=$(jq -r --arg NAME "$project_name" '.[] | select(.name==$NAME) | .id' <<<"$projects")
+        if [[ -n "$project_id" ]]; then
+          _PROJECT_ID="$project_id"
+          return 0
+        else
+          echo "Error: no project named '$project_name'" >&2
+        fi
+      fi
+    done
+  }
+
+  function _display_project_info() {
+    if [[ -n "$_PROJECT_ID" ]]; then
+      local info=$(bws project get --access-token "$_ACCESS_TOKEN" "$_PROJECT_ID" 2>/dev/null) || {
+        echo "Error: unable to fetch project $_PROJECT_ID" >&2
+        return 1
+      }
+      local name=$(jq -r '.name' <<<"$info")
+      if [[ -z "$name" ]]; then
+        echo "Error: project '$name' not found" >&2
+        return 1
+      fi
+
+      echo "Using project: $name ($_PROJECT_ID)"
+    else
+      echo "No project selected."
+    fi
+  }
+
+  function _resolve_project() {
+    if [[ -z "$_PROJECT_ID" ]]; then
+      _prompt_for_project || return 1
+    fi
+  }
+
+  function _start_shell() {
+    local secrets=$(bws secret list --access-token "$_ACCESS_TOKEN" $_PROJECT_ID 2>/dev/null | jq -c '[ .[] | { key, value: (.value | @base64) } ]') || {
+      echo "Error: unable to list secrets" >&2
+      return 1
+    }
+
+    echo "Secrets to be injected:"
+    echo "$secrets" | jq -r '.[] | "* \(.key)"'
+    echo -n "Proceed? [y/N] "
+    local confirm
+    read confirm
+    [[ $confirm =~ ^[Yy]$ ]] || {
+      echo "Aborted."
+      return 1
+    }
+
+    echo "Starting subshell with secrets injected..."
+    if [[ -n "$_PROJECT_ID" ]]; then
+      bws run --access-token "$_ACCESS_TOKEN" --project-id "$_PROJECT_ID" -- $SHELL
+    else
+      bws run --access-token "$_ACCESS_TOKEN" -- $SHELL
+    fi
+    echo "Exiting subshell..."
+  }
+
+  # trap _cleanup EXIT
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+    -v | --version)
+      echo "$_VERSION"
+      return 0
+      ;;
+    -h | --help)
+      echo "$_HELP"
+      return 0
+      ;;
+    -c | --config)
+      _CONFIG_FILE="$2"
+      shift 2
+      ;;
+    --project)
+      local _ENV_PROJECT_ID="$2"
+      shift 2
+      ;;
+    --access-token)
+      local _ENV_ACCESS_TOKEN="$2"
+      shift 2
+      ;;
+    *) break ;;
+    esac
+  done
+
+  _check_deps || return 1
+  _load_env || return 1
+  _verify_env || return 1
+  _resolve_project || return 1
+  _display_project_info || return 1
+  _start_shell || return 1
+}
+
+bwsenv "$@"

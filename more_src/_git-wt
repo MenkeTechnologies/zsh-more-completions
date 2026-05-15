@@ -1,0 +1,274 @@
+# Source: https://github.com/fingergohappy/git-wt/blob/a6e59125a74960d5881d294102d4604b66518dce/completions/_git-wt
+# Repository: fingergohappy/git-wt (completions/_git-wt)
+#compdef git-wt
+
+# Completion for git-wt.
+# Completion must never exceed command semantics (projects.md).
+
+_git-wt() {
+  emulate -L zsh
+  setopt localoptions noshwordsplit
+
+  # Dynamically discover AI providers from ai directory
+  local -a GIT_WT_AI_PROVIDERS
+  GIT_WT_AI_PROVIDERS=()
+  
+  # Try to find git-wt installation directory
+  local git_wt_dir
+  # Check common installation paths
+  for git_wt_dir in \
+    "${0:A:h:h}" \
+    "${fpath[@]/%\/_git-wt/}" \
+    "$HOME/.oh-my-zsh/custom/plugins/git-wt" \
+    "$HOME/.config/zsh/plugins/git-wt" \
+    "/usr/local/share/git-wt" \
+    ; do
+    if [[ -d "$git_wt_dir/lib/git-wt/ai" ]]; then
+      local ai_dir="$git_wt_dir/lib/git-wt/ai"
+      setopt localoptions extendedglob nullglob
+      local provider_file
+      for provider_file in $ai_dir/*.zsh(N); do
+        local provider_name=${provider_file:t:r}
+        case $provider_name in
+          (bootstrap|providers)
+            continue
+            ;;
+          (*)
+            GIT_WT_AI_PROVIDERS+=($provider_name)
+            ;;
+        esac
+      done
+      break
+    fi
+  done
+  
+  # Fallback if directory not found
+  if (( $#GIT_WT_AI_PROVIDERS == 0 )); then
+    GIT_WT_AI_PROVIDERS=(claude cursorcli opencode codex)
+  fi
+
+  local -a commands
+  commands=(
+    'create:create new worktree + branch'
+    'switch:switch to feature worktree'
+    'enter:alias of switch'
+    'cd:alias of switch'
+    'root:cd back to project root'
+    'remove:remove feature worktree'
+    'rm:alias of remove'
+    'list:list all feature worktrees'
+    'ls:alias of list'
+    'status:show current context status'
+    'merge:merge feature branch into root'
+    'rebase:rebase root onto feature'
+    'a:open feature with AI agent'
+    'e:open feature with editor'
+    'ca:create and open with AI'
+    'cs:create and switch'
+    'ce:create and open with editor'
+    'config:configure ai/editor/work-tree-name'
+    'init:initialize project and worktree root (optional: auto-detect repos)'
+  )
+
+  # Extract command names automatically from commands array
+  local -a cmd_names
+  cmd_names=(${commands%%:*})
+
+  _git_wt__project_root() {
+    emulate -L zsh
+
+    command git rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 1
+
+    local toplevel common
+    toplevel=$(command git rev-parse --path-format=absolute --show-toplevel 2>/dev/null \
+      || command git rev-parse --show-toplevel 2>/dev/null) || return 1
+
+    common=$(command git rev-parse --path-format=absolute --git-common-dir 2>/dev/null \
+      || command git rev-parse --git-common-dir 2>/dev/null) || return 1
+
+    if [[ $common != /* ]]; then
+      common="$toplevel/$common"
+    fi
+
+    if [[ ${common:t} == ".git" ]]; then
+      print -r -- "${common:h}"
+      return 0
+    fi
+
+    print -r -- "$toplevel"
+  }
+
+  _git_wt__ai_providers() {
+    emulate -L zsh
+    # Use shared AI providers array from bootstrap
+    local provider
+    for provider in "${GIT_WT_AI_PROVIDERS[@]}"; do
+      print -r -- "${provider}:AI"
+    done
+  }
+
+  _git_wt__ai_providers_comp() {
+    emulate -L zsh
+    setopt localoptions noshwordsplit
+
+    local -a providers
+    local line
+    for line in ${(@f)$(_git_wt__ai_providers)}; do
+      providers+=("${line%%:*}:${line#*:}")
+    done
+
+    if (( $#providers )); then
+      _describe 'AI provider' providers
+    fi
+  }
+
+  _git_wt__a_flags_comp() {
+    emulate -L zsh
+    setopt localoptions noshwordsplit
+
+    local -a flags
+    flags=(
+      '--ai:AI provider name'
+    )
+
+    _describe 'flag' flags
+  }
+
+  _git_wt__features_comp() {
+    emulate -L zsh
+    setopt localoptions noshwordsplit
+
+    local -a features
+    local line
+    for line in ${(@f)$(_git_wt__features)}; do
+      features+=("${line%%:*}:${line#*:}")
+    done
+
+    if (( $#features )); then
+      _describe 'feature worktree' features
+    fi
+  }
+
+  _git_wt__is_ai_provider() {
+    emulate -L zsh
+    local provider=$1
+    # Check if provider is in the shared AI providers array
+    (( ${GIT_WT_AI_PROVIDERS[(I)$provider]} ))
+  }
+
+  _git_wt__features() {
+    emulate -L zsh
+    setopt localoptions noshwordsplit
+
+    local project_root
+    project_root=$(_git_wt__project_root) || return 0
+
+    # Use auto-unique array to avoid duplicates
+    local -aU out
+    local porcelain
+    porcelain=$(command git -C "$project_root" worktree list --porcelain 2>/dev/null) || return 0
+
+    local -a lines
+    lines=("${(@f)porcelain}")
+
+    local line path name
+    for line in "${lines[@]}"; do
+      if [[ $line == worktree\ * ]]; then
+        path=${line#worktree }
+        if [[ $path == $project_root ]]; then
+          continue
+        fi
+        name=${path:t}
+        if [[ $name == "." || $name == "current" || $name == ".." ]]; then
+          continue
+        fi
+        out+=("${name}:feature")
+      fi
+    done
+
+    print -rl -- $out
+  }
+
+  local context state state_descr line
+  typeset -A opt_args
+  
+  _arguments -C \
+    '1:command:->cmds' \
+    '2: :->args1' \
+    '*::arg:->args_rest' && return 0
+
+  case $state in
+    (cmds)
+      # Always use _describe to show descriptions with prefix matching
+      _describe -t commands 'git-wt command' commands
+      ;;
+    (args1)
+      case ${words[2]-} in
+        (a)
+          _alternative \
+            'flags:flag:_git_wt__a_flags_comp' \
+            'features:feature worktree:_git_wt__features_comp'
+          ;;
+        (switch|enter|cd|remove|rm|e|merge|rebase)
+          _git_wt__features_comp
+          ;;
+        (config)
+          _values 'key' ai editor work-tree-name
+          ;;
+        (init)
+          if (( CURRENT == 3 )); then
+            _message 'project-name or URL (optional: auto-detects repos in current dir)'
+          fi
+          ;;
+        (*)
+          return 0
+          ;;
+      esac
+      ;;
+    (args_rest)
+      case ${words[1]-} in
+        (a)
+          # Find --ai flag position
+          local ai_index=0
+          local i
+          for (( i=1; i<=$#words; i++ )); do
+            if [[ ${words[i]} == --ai ]]; then
+              ai_index=$i
+              break
+            fi
+          done
+
+          # If --ai flag exists
+          if (( ai_index > 0 )); then
+            # If cursor is right after --ai flag, complete AI providers
+            if (( CURRENT == ai_index + 1 )); then
+              _git_wt__ai_providers_comp
+              return 0
+            fi
+
+            # If a provider was already specified, complete features
+            local provider=${words[ai_index+1]-}
+            if [[ -n $provider ]] && _git_wt__is_ai_provider "$provider"; then
+              if (( CURRENT == ai_index + 2 )); then
+                _git_wt__features_comp
+                return 0
+              fi
+            fi
+          else
+            # No --ai flag yet, offer flags or features
+            _alternative \
+              'flags:flag:_git_wt__a_flags_comp' \
+              'features:feature worktree:_git_wt__features_comp'
+          fi
+
+          return 0
+          ;;
+        (*)
+          return 0
+          ;;
+      esac
+      ;;
+  esac
+}
+
+_git-wt "$@"

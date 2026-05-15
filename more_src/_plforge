@@ -1,0 +1,147 @@
+# Source: https://github.com/Snowflake-Labs/polaris-local-forge/blob/0f21ebf998a188ec4ee7202ba4dc35f175f1446a/plforge
+# Repository: Snowflake-Labs/polaris-local-forge (plforge)
+#!/bin/bash
+# Copyright 2025 Snowflake Inc.
+# SPDX-License-Identifier: Apache-2.0
+#
+# plforge - Polaris Local Forge task wrapper with shell completions
+#
+# Install:
+#   ln -sf "$(pwd)/plforge" ~/.local/bin/plforge
+#
+# Completions:
+#   plforge --completion zsh > ~/.config/zsh/completions/_plforge
+#   plforge --completion bash >> ~/.bashrc
+
+# Resolve the real path of this script (follows symlinks)
+SCRIPT_PATH="$(realpath "${BASH_SOURCE[0]}")"
+SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
+TASKFILE="$SCRIPT_DIR/Taskfile.yml"
+
+# Suppress uv VIRTUAL_ENV mismatch warnings globally
+unset VIRTUAL_ENV
+
+# Support PLF_WORK_DIR so users don't have to pass WORK_DIR= every time
+if [ -n "$PLF_WORK_DIR" ]; then
+  export WORK_DIR="$PLF_WORK_DIR"
+fi
+
+# Generate shell completion
+if [[ "$1" == "--completion" ]]; then
+    shell="${2:-bash}"
+    case "$shell" in
+        bash)
+            cat <<'EOF'
+_plforge_completions() {
+    local tasks
+    tasks=$(plforge --list-tasks 2>/dev/null)
+    COMPREPLY=($(compgen -W "$tasks" -- "${COMP_WORDS[COMP_CWORD]}"))
+}
+complete -F _plforge_completions plforge
+EOF
+            ;;
+        zsh)
+            cat <<'EOF'
+#compdef plforge
+
+_plforge() {
+    local -a tasks
+    tasks=(${(f)"$(plforge --list-tasks 2>/dev/null | sed 's/:/\\:/g')"})
+    _describe 'task' tasks
+}
+
+_plforge "$@"
+EOF
+            ;;
+        *)
+            echo "Unsupported shell: $shell (use bash or zsh)"
+            exit 1
+            ;;
+    esac
+    exit 0
+fi
+
+# List just task names (for completion scripts)
+if [[ "$1" == "--list-tasks" ]]; then
+    task --taskfile "$TASKFILE" --list-all 2>/dev/null | \
+        awk '/^\* / { gsub(/:$/, "", $2); print $2 }'
+    exit 0
+fi
+
+# Handle --help to list all tasks
+if [[ "$1" == "--help" || "$1" == "-h" || -z "$1" ]]; then
+    echo "plforge - Polaris Local Forge"
+    echo ""
+    echo "Usage: plforge <task> [options]"
+    echo ""
+    echo "Options:"
+    echo "  --help, -h          Show this help and list all tasks"
+    echo "  --completion [shell] Generate shell completion (bash or zsh)"
+    echo "  --list-tasks        List task names (for completion scripts)"
+    echo ""
+    echo "Environment:"
+    echo "  PLF_WORK_DIR        Default WORK_DIR for all tasks (avoids passing WORK_DIR= each time)"
+    echo ""
+    echo "Task Help:"
+    echo "  plforge <task> --help    Show detailed help for a task"
+    echo ""
+    echo "Examples:"
+    echo "  plforge setup:all                          # Full setup in current directory"
+    echo "  plforge setup:all WORK_DIR=~/polaris-dev   # Explicit work dir"
+    echo "  PLF_WORK_DIR=~/polaris-dev plforge doctor --fix"
+    echo "  plforge l2c:sync --dry-run                 # No need for '-- --dry-run'"
+    echo ""
+    exec task --taskfile "$TASKFILE" --list-all
+fi
+
+# Handle <task> --help or <task> -h -> show task summary (strip internal vars/env/commands noise)
+if [[ -n "$1" && "$1" != -* ]]; then
+    for arg in "${@:2}"; do
+        if [[ "$arg" == "--help" || "$arg" == "-h" ]]; then
+            task --taskfile "$TASKFILE" "$1" --summary 2>&1 | awk '/^vars:$/{exit} /^env:$/{exit} /^commands:$/{exit} {print}'
+            exit 0
+        fi
+    done
+fi
+
+# Auto-insert '--' before flags for tasks that use CLI_ARGS.
+# Transforms: plforge doctor --fix  ->  task doctor -- --fix
+# Leaves VAR=value args before the separator untouched.
+if [[ -n "$1" && "$1" != -* ]]; then
+    task_name="$1"
+    shift
+    need_separator=false
+    has_separator=false
+
+    for arg in "$@"; do
+        if [[ "$arg" == "--" ]]; then
+            has_separator=true
+            break
+        fi
+        if [[ "$arg" == --* && "$arg" != *=* ]]; then
+            need_separator=true
+            break
+        fi
+    done
+
+    if $need_separator && ! $has_separator; then
+        # Split into VAR=value args (before flags) and flag args (after)
+        vars=()
+        flags=()
+        seen_flag=false
+        for arg in "$@"; do
+            if ! $seen_flag && [[ "$arg" == *=* && "$arg" != --* ]]; then
+                vars+=("$arg")
+            else
+                seen_flag=true
+                flags+=("$arg")
+            fi
+        done
+        exec task --taskfile "$TASKFILE" "$task_name" "${vars[@]}" -- "${flags[@]}"
+    else
+        exec task --taskfile "$TASKFILE" "$task_name" "$@"
+    fi
+fi
+
+# Fallback: pass everything through
+exec task --taskfile "$TASKFILE" "$@"

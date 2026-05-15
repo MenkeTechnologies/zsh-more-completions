@@ -1,0 +1,1681 @@
+# Source: https://github.com/arian24b/scripts/blob/b3629f513ac4c76b1b3e1af5e22bd8ce313284ba/server-setup.sh
+# Repository: arian24b/scripts (server-setup.sh)
+#!/usr/bin/env bash
+# server-setup.sh
+# Install path aliases: sstup, server-setup
+# Author: ArianOmrani
+
+set -euo pipefail
+
+# =========================================================
+# Version
+# =========================================================
+VERSION="1.1.0"
+
+# =========================================================
+# Install targets
+# =========================================================
+SELF_NAMES=("server-setup" "sstup")
+SELF_DIR="/usr/local/sbin"
+LOCK_FILE="/var/lock/server-setup.lock"
+
+# Default update URL
+DEFAULT_SELF_UPDATE_URL="https://github.com/arian24b/scripts/raw/refs/heads/main/server-setup.sh"
+
+# =========================================================
+# APT DEFAULTS (baseline - always installed)
+# Print with: server-setup --print-apt
+# =========================================================
+APT_PACKAGES_DEFAULT=(
+  ca-certificates curl wget git gnupg lsb-release jq
+  build-essential unzip zip zstd
+  tmux nano nmap
+  htop iotop nload net-tools bind9-dnsutils
+  tuned iperf3 axel
+)
+
+# =========================================================
+# Defaults (behavior)
+# =========================================================
+LOCATION="auto"                  # auto|iran|global
+DO_UPDATE=0                      # -U / --update
+PROXY=""                         # -p / --proxy  socks5://... | http(s)://...
+INSTALL_SET=""                   # -i / --install  (non-apt installers only)
+APT_ADD=""                       # --apt-add pkg1,pkg2
+APT_REMOVE=""                    # --apt-remove pkg1,pkg2
+PRINT_APT=0                      # --print-apt
+DRY_RUN=0                        # -n / --dry-run
+CONFIG_FILE=""                   # -F / --config
+PRESET=""                        # -R / --preset
+WIZARD=0                          # -Z / --wizard
+
+# Logging / debug
+LOG_PATH=""                      # -l / --log
+DEBUG=0                          # -d / --debug
+
+# Cleanup
+DO_CLEANUP=1                     # -c / --cleanup
+CLEANUP_LEVEL="basic"            # -C / --cleanup-level basic|full
+
+# System defaults (idempotent)
+ENABLE_IR_OPTIMIZATIONS=1
+ENABLE_FAIL2BAN=1
+ENABLE_TUNED=1
+TUNED_PROFILE="network-latency"
+ENABLE_RCLOCAL=1
+
+# swap/placeholder/journal
+SWAP_MB="0"                      # -s / --swap-size (MB)
+TMP_PATH="/home/.placeholder"    # -t / --tmp-path
+TMP_SIZE="0"                     # -T / --tmp-size
+JOURNAL_SIZE="10M"               # --journal-size
+JOURNAL_TIME="7d"                # --journal-time
+
+# Pi overclock
+OVERCLOCK_PROFILE=""             # -o / --overclock safe|performance
+
+# SSH harden + keys (optional)
+SSH_HARDEN=0                     # --ssh-harden
+SSH_PORT="3232"                  # --ssh-port
+SSH_PORT_SET=0
+SSH_ALLOW_USERS=""               # --ssh-allow-users "user1,user2"
+SSH_PUBKEY_URL="https://github.com/arian24b.keys"   # --ssh-pubkey-url https://github.com/arian24b.keys
+SSH_KEYS_FILE=""                 # --ssh-keys-file /path/to/keys
+SSH_KEYS_USER="root"             # --ssh-keys-user user
+
+# Self install/update/completion
+SELF_INSTALL=0                   # --self-install
+SELF_UNINSTALL=0                 # --self-uninstall
+SELF_UPDATE_URL=""               # --self-update [url]
+PRINT_INSTALL_PATH=0             # --print-install-path
+INSTALL_COMPLETION=0             # --install-completion
+
+# Security / system
+UFW_ENABLE=0                      # --ufw-enable
+UFW_ALLOW_SSH=0                   # --ufw-allow-ssh-port
+DOCKER_USER=""                   # --docker-user
+TIMEZONE=""                      # --timezone
+LOCALE=""                        # --locale
+HOSTNAME=""                      # --hostname
+
+# Subcommand
+SUBCMD="server"      # server|self
+
+# Verbosity: quiet|normal|verbose
+VERBOSITY="normal"
+QUIET=0
+VERBOSE=0
+
+# Summary
+SUMMARY_CHANGES=()
+
+
+# =========================================================
+# Output helpers
+# =========================================================
+log()  {
+  if [[ "$QUIET" -eq 0 ]]; then
+    echo -e "\033[1;32m[+]\033[0m $*"
+  fi
+  return 0
+}
+warn() {
+  if [[ "$QUIET" -eq 0 ]]; then
+    echo -e "\033[1;33m[!]\033[0m $*"
+  fi
+  return 0
+}
+err()  { echo -e "\033[1;31m[x]\033[0m $*" >&2; }
+die()  { err "$*"; exit 1; }
+
+vlog() {
+  if [[ "$VERBOSE" -eq 1 && "$QUIET" -eq 0 ]]; then
+    echo -e "\033[1;36m[v]\033[0m $*"
+  fi
+  return 0
+}
+
+add_summary() {
+  local msg="$1"
+  SUMMARY_CHANGES+=("$msg")
+}
+
+show_summary() {
+  [[ "${#SUMMARY_CHANGES[@]}" -gt 0 ]] || return 0
+  echo
+  log "Summary:"
+  for item in "${SUMMARY_CHANGES[@]}"; do
+    echo " - $item"
+  done
+}
+show_summary
+
+need_root() { [[ "${EUID}" -eq 0 ]] || die "Run as root (sudo)."; }
+cmd_exists() { command -v "$1" >/dev/null 2>&1; }
+
+# =========================================================
+# Dry-run wrapper
+# =========================================================
+run() {
+  if [[ "$DRY_RUN" -eq 1 ]]; then
+    echo "[dry-run] $*"
+    return 0
+  fi
+  vlog "RUN: $*"
+  eval "$@"
+}
+
+# =========================================================
+# Logging / debug
+# =========================================================
+enable_logging() {
+  if [[ -n "$LOG_PATH" ]]; then
+    mkdir -p "$(dirname "$LOG_PATH")"
+    touch "$LOG_PATH"
+    # Redirect stdout/stderr through tee, preserving exit codes with pipefail
+    exec > >(tee -a "$LOG_PATH") 2>&1
+    log "Logging enabled: $LOG_PATH"
+  fi
+}
+
+enable_debug() {
+  if [[ "$DEBUG" -eq 1 ]]; then
+    set -x
+  fi
+}
+
+# =========================================================
+# Lock file (avoid concurrent runs)
+# =========================================================
+acquire_lock() {
+  need_root
+  exec 9>"$LOCK_FILE"
+  if ! flock -n 9; then
+    die "Another server-setup is already running (lock: $LOCK_FILE)"
+  fi
+  # Ensure lock released on exit
+  trap 'release_lock' EXIT
+}
+
+release_lock() {
+  # fd 9 will be closed automatically; this is just explicit
+  flock -u 9 2>/dev/null || true
+}
+
+# =========================================================
+# Capabilities checks
+# =========================================================
+has_systemd() { [[ -d /run/systemd/system ]] && cmd_exists systemctl; }
+has_resolved() { has_systemd && systemctl list-unit-files 2>/dev/null | grep -q '^systemd-resolved\.service'; }
+has_journalctl() { cmd_exists journalctl; }
+has_dpkg() { cmd_exists dpkg; }
+has_apt() { cmd_exists apt-get; }
+
+is_raspberry_pi() {
+  [[ -f /proc/device-tree/model ]] && tr -d '\0' </proc/device-tree/model | grep -qi "raspberry pi"
+}
+
+rpi_boot_config_path() {
+  [[ -f /boot/firmware/config.txt ]] && { echo "/boot/firmware/config.txt"; return; }
+  [[ -f /boot/config.txt ]] && { echo "/boot/config.txt"; return; }
+  # best guess
+  echo "/boot/firmware/config.txt"
+}
+
+# =========================================================
+# Proxy wrappers
+# =========================================================
+CURL="curl -fsSL"
+WGET="wget -q"
+
+apply_proxy_env() {
+  [[ -n "$PROXY" ]] || return 0
+  export http_proxy="$PROXY" https_proxy="$PROXY" HTTP_PROXY="$PROXY" HTTPS_PROXY="$PROXY"
+}
+
+wrap_net_tools() {
+  apply_proxy_env
+  if [[ -n "$PROXY" ]]; then
+    if [[ "$PROXY" =~ ^socks5:// ]]; then
+      CURL="curl -fsSL --proxy ${PROXY/socks5:\/\//socks5h:\/\/}"
+      WGET="wget -q" # rely on env; socks support varies
+    else
+      CURL="curl -fsSL --proxy $PROXY"
+      WGET="wget -q -e use_proxy=yes -e http_proxy=$PROXY -e https_proxy=$PROXY"
+    fi
+  fi
+}
+
+write_apt_proxy_conf() {
+  [[ -n "$PROXY" ]] || return 0
+  if [[ "$PROXY" =~ ^https?:// ]]; then
+    run "cat > /etc/apt/apt.conf.d/99proxy <<'EOF'
+Acquire::http::Proxy \"${PROXY}\";
+Acquire::https::Proxy \"${PROXY}\";
+EOF"
+    log "APT proxy configured (/etc/apt/apt.conf.d/99proxy)"
+  else
+    warn "APT proxy not configured (PROXY is not http(s)://). APT may not support socks directly."
+  fi
+}
+
+# =========================================================
+# Country detection: ifconfig.io first, then chabokan
+# =========================================================
+get_country_code() {
+  local cc=""
+  cc="$($CURL --max-time 4 ifconfig.io/country_code 2>/dev/null || true)"
+  cc="$(echo -n "$cc" | tr -d ' \r\n\t')"
+  [[ -n "$cc" ]] && { echo "$cc"; return 0; }
+
+  local ip json
+  ip="$($CURL --max-time 4 ifconfig.io/ip 2>/dev/null || true)"
+  ip="$(echo -n "$ip" | tr -d ' \r\n\t')"
+  [[ -z "$ip" ]] && { echo ""; return 0; }
+
+  json="$($CURL --max-time 4 "https://chabokan.net/ip/?address=${ip}" 2>/dev/null || true)"
+  [[ -z "$json" ]] && { echo ""; return 0; }
+
+  if cmd_exists jq; then
+    cc="$(echo "$json" | jq -r '.country_code // .countryCode // .country // empty' 2>/dev/null || true)"
+    cc="$(echo -n "$cc" | tr -d ' \r\n\t')"
+    echo "$cc"
+  else
+    cc="$(echo "$json" | grep -Eo '"country_code"\s*:\s*"[^"]+"' | head -n1 | cut -d'"' -f4 || true)"
+    cc="$(echo -n "$cc" | tr -d ' \r\n\t')"
+    echo "$cc"
+  fi
+}
+
+is_iran() { [[ "$(get_country_code || true)" == "IR" ]]; }
+
+# =========================================================
+# Presets / config / wizard helpers
+# =========================================================
+add_install_item() {
+  local item="$1"
+  [[ -n "$item" ]] || return 0
+  if [[ -z "$INSTALL_SET" ]]; then
+    INSTALL_SET="$item"
+    return 0
+  fi
+  if [[ ",${INSTALL_SET}," != *",${item},"* ]]; then
+    INSTALL_SET+="${INSTALL_SET:+,}${item}"
+  fi
+}
+
+apply_preset() {
+  local preset="$1"
+  case "$preset" in
+    minimal)
+      ENABLE_FAIL2BAN=0
+      ENABLE_TUNED=0
+      ENABLE_RCLOCAL=0
+      DO_CLEANUP=0
+      ;;
+    base)
+      # defaults (no changes)
+      ;;
+    hardened)
+      SSH_HARDEN=1
+      UFW_ENABLE=1
+      UFW_ALLOW_SSH=1
+      ;;
+    docker)
+      add_install_item docker
+      ;;
+    pi)
+      OVERCLOCK_PROFILE="safe"
+      ;;
+    "")
+      return 0
+      ;;
+    *)
+      die "Unknown preset: $preset (use minimal|base|hardened|docker|pi)"
+      ;;
+  esac
+}
+
+load_config() {
+  local f="$1"
+  [[ -f "$f" ]] || die "Config file not found: $f"
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line="${line%%#*}"
+    line="$(echo -n "$line" | sed -E 's/^[ \t]+|[ \t]+$//g')"
+    [[ -z "$line" ]] && continue
+    if [[ "$line" =~ ^([A-Za-z_][A-Za-z0-9_]*)=(.*)$ ]]; then
+      local key="${BASH_REMATCH[1]}"
+      local val="${BASH_REMATCH[2]}"
+      val="${val%\"}"; val="${val#\"}"
+      val="${val%\'}"; val="${val#\'}"
+      case "$key" in
+        LOCATION) LOCATION="$val" ;;
+        DO_UPDATE) DO_UPDATE="$val" ;;
+        PROXY) PROXY="$val" ;;
+        INSTALL_SET) INSTALL_SET="$val" ;;
+        APT_ADD) APT_ADD="$val" ;;
+        APT_REMOVE) APT_REMOVE="$val" ;;
+        PRINT_APT) PRINT_APT="$val" ;;
+        DRY_RUN) DRY_RUN="$val" ;;
+        LOG_PATH) LOG_PATH="$val" ;;
+        DEBUG) DEBUG="$val" ;;
+        DO_CLEANUP) DO_CLEANUP="$val" ;;
+        CLEANUP_LEVEL) CLEANUP_LEVEL="$val" ;;
+        SWAP_MB) SWAP_MB="$val" ;;
+        TMP_PATH) TMP_PATH="$val" ;;
+        TMP_SIZE) TMP_SIZE="$val" ;;
+        JOURNAL_SIZE) JOURNAL_SIZE="$val" ;;
+        JOURNAL_TIME) JOURNAL_TIME="$val" ;;
+        OVERCLOCK_PROFILE) OVERCLOCK_PROFILE="$val" ;;
+        SSH_HARDEN) SSH_HARDEN="$val" ;;
+        SSH_PORT) SSH_PORT="$val"; SSH_PORT_SET=1 ;;
+        SSH_ALLOW_USERS) SSH_ALLOW_USERS="$val" ;;
+        SSH_PUBKEY_URL) SSH_PUBKEY_URL="$val" ;;
+        SSH_KEYS_FILE) SSH_KEYS_FILE="$val" ;;
+        SSH_KEYS_USER) SSH_KEYS_USER="$val" ;;
+        SELF_UPDATE_URL) SELF_UPDATE_URL="$val" ;;
+        UFW_ENABLE) UFW_ENABLE="$val" ;;
+        UFW_ALLOW_SSH) UFW_ALLOW_SSH="$val" ;;
+        DOCKER_USER) DOCKER_USER="$val" ;;
+        TIMEZONE) TIMEZONE="$val" ;;
+        LOCALE) LOCALE="$val" ;;
+        HOSTNAME) HOSTNAME="$val" ;;
+        PRESET) PRESET="$val" ;;
+        *) warn "Unknown config key ignored: $key" ;;
+      esac
+    else
+      warn "Ignoring invalid config line: $line"
+    fi
+  done < "$f"
+}
+
+# =========================================================
+# OS detection
+# =========================================================
+source /etc/os-release || true
+OS_ID="${ID:-unknown}"
+OS_LIKE="${ID_LIKE:-}"
+is_ubuntu() { [[ "$OS_ID" == "ubuntu" ]] || echo "$OS_LIKE" | grep -qi "ubuntu"; }
+is_debian() { [[ "$OS_ID" == "debian" ]] || echo "$OS_LIKE" | grep -qi "debian"; }
+
+# =========================================================
+# DNS + mirrors (idempotent)
+# =========================================================
+set_shecan_dns_systemd_resolved() {
+  has_resolved || { warn "systemd-resolved not available; skipping Shecan DNS."; return 0; }
+
+  run "mkdir -p /etc/systemd/resolved.conf.d"
+  run "cat > /etc/systemd/resolved.conf.d/99-shecan.conf <<'EOF'
+[Resolve]
+DNS=178.22.122.100 185.51.200.2
+FallbackDNS=1.1.1.1 8.8.8.8
+EOF"
+
+  run "systemctl enable systemd-resolved >/dev/null 2>&1 || true"
+  run "systemctl restart systemd-resolved >/dev/null 2>&1 || true"
+
+  # Link resolv.conf to resolved stub if possible
+  if [[ -e /run/systemd/resolve/stub-resolv.conf ]]; then
+    run "ln -sf /run/systemd/resolve/stub-resolv.conf /etc/resolv.conf || true"
+  elif [[ -e /run/systemd/resolve/resolv.conf ]]; then
+    run "ln -sf /run/systemd/resolve/resolv.conf /etc/resolv.conf || true"
+  fi
+
+  log "DNS set to Shecan (systemd-resolved)."
+}
+
+set_arvan_mirrors_ubuntu() {
+  local arvan="http://mirror.arvancloud.ir/ubuntu"
+  if [[ -f /etc/apt/sources.list.d/ubuntu.sources ]]; then
+    run "sed -i -E \"s#URIs:\\s*https?://[^ ]+#URIs: ${arvan}#g\" /etc/apt/sources.list.d/ubuntu.sources || true"
+  fi
+  if [[ -f /etc/apt/sources.list ]]; then
+    run "sed -i -E \
+      -e \"s#https?://(archive|security)\\.ubuntu\\.com/ubuntu#${arvan}#g\" \
+      -e \"s#https?://[a-z]{2}\\.archive\\.ubuntu\\.com/ubuntu#${arvan}#g\" \
+      /etc/apt/sources.list || true"
+  fi
+  run "find /etc/apt/sources.list.d -maxdepth 1 -type f -name \"*.list\" -print0 2>/dev/null \
+    | xargs -0 -I{} sed -i -E \
+      -e \"s#https?://(archive|security)\\.ubuntu\\.com/ubuntu#${arvan}#g\" \
+      -e \"s#https?://[a-z]{2}\\.archive\\.ubuntu\\.com/ubuntu#${arvan}#g\" {} || true"
+  log "Ubuntu mirrors updated to ArvanCloud."
+}
+
+set_arvan_mirrors_debian_deb822() {
+  local arvan_deb="http://mirror.arvancloud.ir/debian"
+  local arvan_sec="http://mirror.arvancloud.ir/debian-security"
+  local f="/etc/apt/sources.list.d/debian.sources"
+  [[ -f "$f" ]] || return 0
+
+  run "sed -i -E \
+    -e \"s#URIs:\\s*https?://deb\\.debian\\.org/debian#URIs: ${arvan_deb}#g\" \
+    -e \"s#URIs:\\s*https?://security\\.debian\\.org/debian-security#URIs: ${arvan_sec}#g\" \
+    -e \"s#URIs:\\s*https?://deb\\.debian\\.org/#URIs: ${arvan_deb}/#g\" \
+    -e \"s#URIs:\\s*https?://security\\.debian\\.org/#URIs: ${arvan_sec}/#g\" \
+    \"$f\" || true"
+  log "Debian mirrors updated in deb822 ($f)."
+}
+
+set_arvan_mirrors_debian() {
+  set_arvan_mirrors_debian_deb822 || true
+  local arvan_deb="http://mirror.arvancloud.ir/debian"
+  local arvan_sec="http://mirror.arvancloud.ir/debian-security"
+
+  if [[ -f /etc/apt/sources.list ]]; then
+    run "sed -i -E \
+      -e \"s#https?://deb\\.debian\\.org/debian#${arvan_deb}#g\" \
+      -e \"s#https?://security\\.debian\\.org/debian-security#${arvan_sec}#g\" \
+      -e \"s#https?://ftp\\.[^/]+/debian#${arvan_deb}#g\" \
+      /etc/apt/sources.list || true"
+  fi
+
+  run "find /etc/apt/sources.list.d -maxdepth 1 -type f -name \"*.list\" -print0 2>/dev/null \
+    | xargs -0 -I{} sed -i -E \
+      -e \"s#https?://deb\\.debian\\.org/debian#${arvan_deb}#g\" \
+      -e \"s#https?://security\\.debian\\.org/debian-security#${arvan_sec}#g\" \
+      -e \"s#https?://ftp\\.[^/]+/debian#${arvan_deb}#g\" {} || true"
+
+  log "Debian mirrors updated to ArvanCloud."
+}
+
+set_rpios_raspberrypi_repo_iut() {
+  local iut_repo="http://repo.iut.ac.ir/repo/archive.raspberrypi.org/debian"
+
+  if [[ -f /etc/apt/sources.list.d/raspi.sources ]]; then
+    run "sed -i -E \"s#URIs:\\s*https?://archive\\.raspberrypi\\.org/debian#URIs: ${iut_repo}#g\" \
+      /etc/apt/sources.list.d/raspi.sources || true"
+    log "RPi repo updated in raspi.sources (IUT)."
+    return 0
+  fi
+
+  if [[ -f /etc/apt/sources.list.d/raspi.list ]]; then
+    run "sed -i -E \"s#https?://archive\\.raspberrypi\\.org/debian#${iut_repo}#g\" \
+      /etc/apt/sources.list.d/raspi.list || true"
+    log "RPi repo updated in raspi.list (IUT)."
+  fi
+}
+
+apply_location_optimizations() {
+  [[ "$ENABLE_IR_OPTIMIZATIONS" -eq 1 ]] || { log "IR optimizations disabled."; return 0; }
+
+  local do_ir=0
+  case "$LOCATION" in
+    iran) do_ir=1 ;;
+    global) do_ir=0 ;;
+    auto)
+      if is_iran; then do_ir=1; else do_ir=0; fi
+      ;;
+    *) die "--location must be auto|iran|global" ;;
+  esac
+
+  if [[ "$do_ir" -eq 1 ]]; then
+    log "Location => IR mode (Arvan mirrors + Shecan DNS + RPi repo IUT)."
+    set_shecan_dns_systemd_resolved
+    if is_raspberry_pi; then set_rpios_raspberrypi_repo_iut || true; fi
+    if is_ubuntu; then set_arvan_mirrors_ubuntu
+    elif is_debian; then set_arvan_mirrors_debian
+    else warn "Unknown distro ($OS_ID). Skipping mirror changes."
+    fi
+    add_summary "IR optimizations applied"
+  else
+    log "Location => Global mode (no mirror/DNS changes)."
+    add_summary "Global mirrors/DNS (no changes)"
+  fi
+}
+
+# =========================================================
+# APT list modifiers
+# =========================================================
+csv_to_array() {
+  local csv="${1:-}"
+  csv="$(echo -n "$csv" | tr -d ' \t\r\n')"
+  [[ -z "$csv" ]] && return 0
+  IFS=',' read -r -a _out <<<"$csv"
+  printf '%s\n' "${_out[@]}"
+}
+
+build_apt_list() {
+  local pkgs=("${APT_PACKAGES_DEFAULT[@]}")
+  local add remove p
+
+  if [[ -n "$APT_ADD" ]]; then
+    while IFS= read -r p; do
+      [[ -z "$p" ]] && continue
+      # add if not present
+      if ! printf '%s\n' "${pkgs[@]}" | grep -qxF "$p"; then
+        pkgs+=("$p")
+      fi
+    done < <(csv_to_array "$APT_ADD")
+  fi
+
+  if [[ -n "$APT_REMOVE" ]]; then
+    while IFS= read -r remove; do
+      [[ -z "$remove" ]] && continue
+      pkgs=($(printf '%s\n' "${pkgs[@]}" | grep -vxF "$remove" || true))
+    done < <(csv_to_array "$APT_REMOVE")
+  fi
+
+  printf '%s\n' "${pkgs[@]}"
+}
+
+print_apt() {
+  build_apt_list
+}
+
+# =========================================================
+# APT baseline install
+# =========================================================
+apt_install_baseline() {
+  has_apt || die "apt-get not found; this tool supports Debian/Ubuntu family."
+
+  log "APT update..."
+  run "apt-get update -y || apt-get update -y --fix-missing || true"
+
+  log "Installing baseline APT packages..."
+  mapfile -t pkgs < <(build_apt_list)
+  # shellcheck disable=SC2145
+  run "apt-get install -y --no-install-recommends ${pkgs[*]}"
+
+  if [[ "$DO_UPDATE" -eq 1 ]]; then
+    log "Upgrading system packages (--update)..."
+    run "apt-get upgrade -y || true"
+    run "apt-get dist-upgrade -y || true"
+  fi
+
+  run "apt-get autoremove -y || true"
+  run "apt-get clean || true"
+}
+
+# =========================================================
+# Default system setup (idempotent)
+# =========================================================
+setup_journal_defaults() {
+  has_journalctl || { warn "journalctl not available; skipping journal vacuum."; return 0; }
+  [[ -n "$JOURNAL_SIZE" ]] && run "journalctl --vacuum-size=\"$JOURNAL_SIZE\" || true"
+  [[ -n "$JOURNAL_TIME" ]] && run "journalctl --vacuum-time=\"$JOURNAL_TIME\" || true"
+  log "journalctl vacuum applied (size=$JOURNAL_SIZE, time=$JOURNAL_TIME)"
+  add_summary "Journal vacuum applied ($JOURNAL_SIZE, $JOURNAL_TIME)"
+}
+
+setup_swap_dphys() {
+  [[ "$SWAP_MB" != "0" ]] || return 0
+  [[ -f /etc/dphys-swapfile ]] || { warn "dphys-swapfile config missing; skipping swap."; return 0; }
+
+  # Idempotent set of CONF_SWAPSIZE
+  if grep -q '^CONF_SWAPSIZE=' /etc/dphys-swapfile; then
+    run "sed -i -E \"s/^CONF_SWAPSIZE=.*/CONF_SWAPSIZE=${SWAP_MB}/\" /etc/dphys-swapfile"
+  else
+    run "echo \"CONF_SWAPSIZE=${SWAP_MB}\" >> /etc/dphys-swapfile"
+  fi
+
+  if has_systemd; then
+    run "systemctl enable dphys-swapfile >/dev/null 2>&1 || true"
+    run "systemctl restart dphys-swapfile >/dev/null 2>&1 || true"
+  else
+    run "dphys-swapfile setup || true"
+    run "dphys-swapfile swapon || true"
+  fi
+  log "Swap configured via dphys-swapfile: ${SWAP_MB} MB"
+  add_summary "Swap configured (${SWAP_MB} MB)"
+}
+
+setup_tmp_placeholder() {
+  [[ "$TMP_SIZE" != "0" ]] || return 0
+  run "rm -f \"$TMP_PATH\" || true"
+  run "fallocate -l \"$TMP_SIZE\" \"$TMP_PATH\""
+  log "Placeholder file created: $TMP_PATH ($TMP_SIZE)"
+  add_summary "Placeholder file created ($TMP_PATH, $TMP_SIZE)"
+}
+
+setup_fail2ban_default() {
+  [[ "$ENABLE_FAIL2BAN" -eq 1 ]] || return 0
+  has_systemd || { warn "systemd not present; skipping fail2ban enable."; return 0; }
+  run "systemctl enable fail2ban >/dev/null 2>&1 || true"
+  run "systemctl restart fail2ban >/dev/null 2>&1 || true"
+  log "fail2ban enabled"
+  add_summary "fail2ban enabled"
+}
+
+setup_tuned_default() {
+  [[ "$ENABLE_TUNED" -eq 1 ]] || return 0
+  has_systemd || { warn "systemd not present; skipping tuned enable."; return 0; }
+  cmd_exists tuned-adm || { warn "tuned-adm not found; skipping tuned profile."; return 0; }
+  run "systemctl enable tuned >/dev/null 2>&1 || true"
+  run "systemctl restart tuned >/dev/null 2>&1 || true"
+  run "tuned-adm profile \"$TUNED_PROFILE\" || true"
+  log "tuned enabled (profile=$TUNED_PROFILE)"
+  add_summary "tuned enabled ($TUNED_PROFILE)"
+}
+
+setup_rc_local_default() {
+  [[ "$ENABLE_RCLOCAL" -eq 1 ]] || return 0
+  has_systemd || { warn "systemd not present; skipping rc-local service."; return 0; }
+
+  # Create /etc/rc.local if missing (idempotent)
+  if [[ ! -f /etc/rc.local ]]; then
+    run "cat > /etc/rc.local <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF"
+    run "chmod +x /etc/rc.local"
+  fi
+
+  # Create rc-local.service if missing (idempotent)
+  if [[ ! -f /etc/systemd/system/rc-local.service ]]; then
+    run "cat > /etc/systemd/system/rc-local.service <<'EOF'
+[Unit]
+Description=/etc/rc.local Compatibility
+ConditionPathExists=/etc/rc.local
+After=network.target
+
+[Service]
+Type=forking
+ExecStart=/etc/rc.local start
+TimeoutSec=0
+RemainAfterExit=yes
+GuessMainPID=no
+
+[Install]
+WantedBy=multi-user.target
+EOF"
+  fi
+
+  run "systemctl daemon-reload || true"
+  run "systemctl enable rc-local.service >/dev/null 2>&1 || true"
+  run "systemctl restart rc-local.service >/dev/null 2>&1 || true"
+  log "rc.local enabled"
+  add_summary "rc.local enabled"
+}
+
+resolve_swap_size() {
+  if [[ "$SWAP_MB" == "auto" ]]; then
+    local mem_kb
+    mem_kb="$(grep -m1 '^MemTotal:' /proc/meminfo | tr -s ' ' | cut -d' ' -f2)"
+    if [[ -z "$mem_kb" ]]; then
+      warn "Unable to determine RAM; skipping auto swap."
+      SWAP_MB="0"
+      return 0
+    fi
+    local mem_mb=$((mem_kb / 1024))
+    if [[ "$mem_mb" -le 1024 ]]; then
+      SWAP_MB="1024"
+    elif [[ "$mem_mb" -le 2048 ]]; then
+      SWAP_MB="2048"
+    else
+      SWAP_MB="2048"
+    fi
+    add_summary "Auto swap selected (${SWAP_MB} MB)"
+  fi
+}
+
+user_home_dir() {
+  local user="$1"
+  getent passwd "$user" | cut -d: -f6
+}
+
+install_ssh_keys_to_user() {
+  local user="$1"
+  local keys_content="$2"
+  [[ -n "$user" && -n "$keys_content" ]] || return 0
+  local home
+  home="$(user_home_dir "$user")"
+  [[ -n "$home" ]] || { warn "User '$user' not found; skipping SSH keys."; return 0; }
+
+  run "mkdir -p \"$home/.ssh\""
+  run "chmod 700 \"$home/.ssh\""
+  run "touch \"$home/.ssh/authorized_keys\""
+  run "chmod 600 \"$home/.ssh/authorized_keys\""
+
+  while IFS= read -r line; do
+    [[ -z "$line" ]] && continue
+    if ! grep -qxF "$line" "$home/.ssh/authorized_keys"; then
+      run "echo \"$line\" >> \"$home/.ssh/authorized_keys\""
+    fi
+  done <<<"$keys_content"
+
+  run "chown -R $user:$user \"$home/.ssh\""
+  log "SSH authorized_keys updated for $user"
+  add_summary "SSH keys updated ($user)"
+}
+
+install_ssh_keys_from_url() {
+  [[ -n "$SSH_PUBKEY_URL" ]] || return 0
+  local keys
+  keys="$($CURL "$SSH_PUBKEY_URL" || true)"
+  [[ -n "$keys" ]] || { warn "Could not fetch SSH keys from $SSH_PUBKEY_URL"; return 0; }
+  install_ssh_keys_to_user "$SSH_KEYS_USER" "$keys"
+}
+
+install_ssh_keys_from_file() {
+  [[ -n "$SSH_KEYS_FILE" ]] || return 0
+  [[ -f "$SSH_KEYS_FILE" ]] || { warn "SSH keys file not found: $SSH_KEYS_FILE"; return 0; }
+  local keys
+  keys="$(cat "$SSH_KEYS_FILE")"
+  [[ -n "$keys" ]] || { warn "SSH keys file is empty: $SSH_KEYS_FILE"; return 0; }
+  install_ssh_keys_to_user "$SSH_KEYS_USER" "$keys"
+}
+
+setup_ssh_hardening() {
+  [[ "$SSH_HARDEN" -eq 1 ]] || return 0
+  local f="/etc/ssh/sshd_config"
+  [[ -f "$f" ]] || { warn "sshd_config not found; skipping SSH harden."; return 0; }
+
+  [[ -f "${f}.bak" ]] || run "cp -a \"$f\" \"${f}.bak\""
+
+  # idempotent set
+  run "sed -i -E \
+    -e 's/^\\s*#?\\s*PasswordAuthentication\\s+.*/PasswordAuthentication no/' \
+    -e 's/^\\s*#?\\s*PermitRootLogin\\s+.*/PermitRootLogin no/' \
+    -e 's/^\\s*#?\\s*PubkeyAuthentication\\s+.*/PubkeyAuthentication yes/' \
+    \"$f\" || true"
+
+  if [[ -n "$SSH_PORT" ]]; then
+    if grep -qE '^\s*Port\s+' "$f"; then
+      run "sed -i -E \"s/^\\s*Port\\s+.*/Port ${SSH_PORT}/\" \"$f\""
+    else
+      run "echo \"Port ${SSH_PORT}\" >> \"$f\""
+    fi
+  fi
+
+  if [[ -n "$SSH_ALLOW_USERS" ]]; then
+    local allow_line="AllowUsers ${SSH_ALLOW_USERS//,/ }"
+    if grep -qE '^\s*AllowUsers\s+' "$f"; then
+      run "sed -i -E \"s/^\\s*AllowUsers\\s+.*/${allow_line}/\" \"$f\""
+    else
+      run "echo \"$allow_line\" >> \"$f\""
+    fi
+  fi
+
+  if has_systemd; then
+    run "systemctl restart ssh >/dev/null 2>&1 || systemctl restart sshd >/dev/null 2>&1 || true"
+  fi
+  log "SSH hardening applied."
+  add_summary "SSH hardening enabled"
+}
+
+setup_ufw() {
+  [[ "$UFW_ENABLE" -eq 1 ]] || return 0
+  cmd_exists ufw || { warn "ufw not installed; skipping firewall."; return 0; }
+  if [[ "$UFW_ALLOW_SSH" -eq 1 ]]; then
+    local port
+    if [[ "$SSH_PORT_SET" -eq 1 ]]; then
+      port="$SSH_PORT"
+    else
+      port="22"
+    fi
+    run "ufw allow ${port}/tcp || true"
+    add_summary "ufw allow SSH (${port}/tcp)"
+  fi
+  run "ufw --force enable || true"
+  log "ufw enabled"
+  add_summary "ufw enabled"
+}
+
+setup_docker_user() {
+  [[ -n "$DOCKER_USER" ]] || return 0
+  cmd_exists docker || { warn "docker not installed; skipping docker group."; return 0; }
+  id -u "$DOCKER_USER" >/dev/null 2>&1 || { warn "User '$DOCKER_USER' not found; skipping docker group."; return 0; }
+  run "usermod -aG docker \"$DOCKER_USER\""
+  log "Docker group updated for $DOCKER_USER"
+  add_summary "Docker group added ($DOCKER_USER)"
+}
+
+setup_timezone() {
+  [[ -n "$TIMEZONE" ]] || return 0
+  if [[ ! -f "/usr/share/zoneinfo/$TIMEZONE" ]]; then
+    warn "Timezone not found: $TIMEZONE"
+    return 0
+  fi
+  if has_systemd && cmd_exists timedatectl; then
+    run "timedatectl set-timezone \"$TIMEZONE\""
+  else
+    run "echo \"$TIMEZONE\" > /etc/timezone"
+    run "ln -sf \"/usr/share/zoneinfo/$TIMEZONE\" /etc/localtime"
+  fi
+  log "Timezone set to $TIMEZONE"
+  add_summary "Timezone set ($TIMEZONE)"
+}
+
+setup_locale() {
+  [[ -n "$LOCALE" ]] || return 0
+  if ! cmd_exists locale-gen && has_apt; then
+    run "apt-get install -y locales || true"
+  fi
+  if cmd_exists locale-gen; then
+    run "locale-gen \"$LOCALE\" || true"
+  else
+    warn "locale-gen not found; skipping locale generation."
+  fi
+  if cmd_exists update-locale; then
+    run "update-locale LANG=\"$LOCALE\" || true"
+  fi
+  log "Locale set to $LOCALE"
+  add_summary "Locale set ($LOCALE)"
+}
+
+setup_hostname() {
+  [[ -n "$HOSTNAME" ]] || return 0
+  local old
+  old="$(hostname)"
+  if has_systemd && cmd_exists hostnamectl; then
+    run "hostnamectl set-hostname \"$HOSTNAME\""
+  else
+    run "echo \"$HOSTNAME\" > /etc/hostname"
+    run "hostname \"$HOSTNAME\" || true"
+  fi
+  if [[ -f /etc/hosts ]]; then
+    if grep -q '^127\.0\.1\.1' /etc/hosts; then
+      run "sed -i -E \"s/^127\\.0\\.1\\.1\\s+.*/127.0.1.1\t${HOSTNAME}/\" /etc/hosts || true"
+    else
+      run "echo \"127.0.1.1\t${HOSTNAME}\" >> /etc/hosts"
+    fi
+  fi
+  log "Hostname set to $HOSTNAME (was $old)"
+  add_summary "Hostname set ($HOSTNAME)"
+}
+
+apply_pi_overclock() {
+  [[ -n "$OVERCLOCK_PROFILE" ]] || return 0
+  is_raspberry_pi || { warn "Not a Raspberry Pi; skipping overclock."; return 0; }
+
+  local cfg; cfg="$(rpi_boot_config_path)"
+  run "mkdir -p \"$(dirname "$cfg")\""
+  run "touch \"$cfg\""
+
+  local model; model="$(tr -d '\0' </proc/device-tree/model | tr -d '\r\n' || true)"
+  log "Overclock: model='$model' profile='$OVERCLOCK_PROFILE' file='$cfg'"
+
+  # Remove prior block (idempotent)
+  run "sed -i '/^# --- ARIAN OVERCLOCK BEGIN ---$/,/^# --- ARIAN OVERCLOCK END ---$/d' \"$cfg\" || true"
+
+  # Append new block
+  local block=""
+  block+=$'\n# --- ARIAN OVERCLOCK BEGIN ---\n'
+  block+="# Profile: ${OVERCLOCK_PROFILE}"$'\n'
+  block+="# Note: force_turbo intentionally not set."$'\n'
+  if echo "$model" | grep -qi "Raspberry Pi 4"; then
+    if [[ "$OVERCLOCK_PROFILE" == "performance" ]]; then
+      block+="arm_freq=2000"$'\n'
+      block+="over_voltage=6"$'\n'
+      block+="gpu_freq=600"$'\n'
+    else
+      block+="arm_freq=1800"$'\n'
+      block+="over_voltage=2"$'\n'
+      block+="gpu_freq=550"$'\n'
+    fi
+  elif echo "$model" | grep -qi "Zero 2"; then
+    if [[ "$OVERCLOCK_PROFILE" == "performance" ]]; then
+      block+="arm_freq=1300"$'\n'
+      block+="over_voltage=6"$'\n'
+      block+="core_freq=525"$'\n'
+    else
+      block+="arm_freq=1200"$'\n'
+      block+="over_voltage=2"$'\n'
+      block+="core_freq=525"$'\n'
+    fi
+  else
+    block+="arm_freq=1600"$'\n'
+    block+="over_voltage=2"$'\n'
+  fi
+  block+="# --- ARIAN OVERCLOCK END ---"$'\n'
+
+  run "printf '%s' \"$block\" >> \"$cfg\""
+  warn "Overclock written. Reboot required."
+}
+
+# =========================================================
+# Non-APT installers (only via --install)
+# =========================================================
+has_install() {
+  local item="$1"
+  [[ ",${INSTALL_SET}," == *",${item},"* ]]
+}
+
+install_uv() {
+  if cmd_exists uv; then
+    [[ "$DO_UPDATE" -eq 1 ]] && run "uv self update || true"
+    log "uv already installed"
+    return 0
+  fi
+  log "Installing uv..."
+  run "$CURL https://astral.sh/uv/install.sh | sh"
+  # uv installs in ~/.local/bin for root
+  export PATH="$PATH:/root/.local/bin"
+  add_summary "Installed uv"
+}
+
+install_docker() {
+  if cmd_exists docker; then
+    [[ "$DO_UPDATE" -eq 1 ]] && { log "Updating Docker via installer..."; run "$CURL https://get.docker.com | sh || true"; }
+    log "docker already installed"
+    return 0
+  fi
+  log "Installing docker..."
+  run "$CURL https://get.docker.com | sh"
+  if has_systemd; then
+    run "systemctl enable docker >/dev/null 2>&1 || true"
+    run "systemctl restart docker >/dev/null 2>&1 || true"
+  fi
+  add_summary "Installed docker"
+}
+
+install_ollama() {
+  if cmd_exists ollama; then
+    [[ "$DO_UPDATE" -eq 1 ]] && { log "Updating Ollama via installer..."; run "$CURL https://ollama.com/install.sh | sh || true"; }
+    log "ollama already installed"
+    return 0
+  fi
+  log "Installing ollama..."
+  run "$CURL https://ollama.com/install.sh | sh"
+  add_summary "Installed ollama"
+}
+
+# =========================================================
+# Cleanup
+# =========================================================
+cleanup_basic() {
+  log "Cleanup (basic)..."
+  run "apt-get autoremove -y || true"
+  run "apt-get clean || true"
+  # safer tmp cleanup: only old files
+  run "find /tmp -type f -mtime +2 -delete 2>/dev/null || true"
+  run "find /var/tmp -type f -mtime +2 -delete 2>/dev/null || true"
+  log "Cleanup basic done."
+}
+
+cleanup_full() {
+  log "Cleanup (full)..."
+  run "apt-get autoremove -y || true"
+  run "apt-get clean || true"
+  run "apt-get autoclean || true"
+  setup_journal_defaults || true
+  run "find /tmp -type f -mtime +1 -delete 2>/dev/null || true"
+  run "find /var/tmp -type f -mtime +1 -delete 2>/dev/null || true"
+  run "rm -f /var/cache/apt/archives/*.deb 2>/dev/null || true"
+  log "Cleanup full done."
+}
+
+run_cleanup_if_requested() {
+  [[ "$DO_CLEANUP" -eq 1 ]] || return 0
+  case "$CLEANUP_LEVEL" in
+    basic) cleanup_basic ;;
+    full)  cleanup_full ;;
+    *) warn "Unknown cleanup level '$CLEANUP_LEVEL' => basic"; cleanup_basic ;;
+  esac
+}
+
+# =========================================================
+# Self install / update / uninstall
+# =========================================================
+script_realpath() {
+  if cmd_exists readlink; then
+    readlink -f "$0" 2>/dev/null || echo "$0"
+  else
+    echo "$0"
+  fi
+}
+
+self_install() {
+  need_root
+  local src; src="$(script_realpath)"
+  [[ -f "$src" ]] || die "Cannot self-install: source not found ($src)"
+
+  run "mkdir -p \"$SELF_DIR\""
+  run "install -m 0755 \"$src\" \"$SELF_DIR/server-setup\""
+  run "ln -sf \"$SELF_DIR/server-setup\" \"$SELF_DIR/sstup\""
+  log "Installed: $SELF_DIR/server-setup and symlink $SELF_DIR/sstup"
+}
+
+self_uninstall() {
+  need_root
+  run "rm -f \"$SELF_DIR/server-setup\" \"$SELF_DIR/sstup\""
+  log "Uninstalled server-setup and sstup from $SELF_DIR"
+}
+
+self_update() {
+  need_root
+  local url="${SELF_UPDATE_URL:-$DEFAULT_SELF_UPDATE_URL}"
+  [[ -n "$url" ]] || die "--self-update requires a URL (or set DEFAULT_SELF_UPDATE_URL in script)."
+
+  local tmp="/tmp/server-setup.new.$$"
+  run "$CURL \"$url\" -o \"$tmp\""
+  [[ "$DRY_RUN" -eq 1 ]] && { log "dry-run: downloaded update to $tmp"; return 0; }
+
+  [[ -s "$tmp" ]] || die "Downloaded update is empty."
+  head -n1 "$tmp" | grep -qE '^#!/usr/bin/env bash|^#!/bin/bash' || die "Update doesn't look like a bash script."
+
+  chmod 0755 "$tmp"
+  run "mkdir -p \"$SELF_DIR\""
+  run "mv -f \"$tmp\" \"$SELF_DIR/server-setup\""
+  run "ln -sf \"$SELF_DIR/server-setup\" \"$SELF_DIR/sstup\""
+  log "Updated installed script at $SELF_DIR/server-setup"
+}
+
+# =========================================================
+# Completion
+# =========================================================
+completion_script_bash() {
+  cat <<'EOF'
+# Bash completion for server-setup / sstup
+_server_setup_complete() {
+  local cur prev
+  cur="${COMP_WORDS[COMP_CWORD]}"
+  prev="${COMP_WORDS[COMP_CWORD-1]}"
+
+  local opts="
+    -h --help
+    -V --version
+    -n --dry-run
+    -d --debug
+    -F --config
+    -R --preset
+    -Z --wizard
+    -l --log
+    -L --location
+    -i --install
+    -p --proxy
+    -U --update
+    -c --cleanup
+    -C --cleanup-level
+    -s --swap-size
+    -t --tmp-path
+    -T --tmp-size
+    -j --journal-size
+    -J --journal-time
+    -o --overclock
+    -H --ssh-harden
+    -S --ssh-port
+    -W --ssh-allow-users
+    -K --ssh-pubkey-url
+    -f --ssh-keys-file
+    -u --ssh-keys-user
+    -a --apt-add
+    -r --apt-remove
+    -P --print-apt
+    -I --self-install
+    -Y --self-update
+    -X --self-uninstall
+    -Q --print-install-path
+    -B --install-completion
+    -E --ufw-enable
+    -A --ufw-allow-ssh-port
+    -D --docker-user
+    -z --timezone
+    -O --locale
+    -N --hostname
+  "
+
+  case "$prev" in
+    -L|--location)
+      COMPREPLY=( $(compgen -W "auto iran global" -- "$cur") )
+      return 0
+      ;;
+    -R|--preset)
+      COMPREPLY=( $(compgen -W "minimal base hardened docker pi" -- "$cur") )
+      return 0
+      ;;
+    -i|--install)
+      COMPREPLY=( $(compgen -W "docker ollama uv" -- "$cur") )
+      return 0
+      ;;
+    -C|--cleanup-level)
+      COMPREPLY=( $(compgen -W "basic full" -- "$cur") )
+      return 0
+      ;;
+    -o|--overclock)
+      COMPREPLY=( $(compgen -W "safe performance" -- "$cur") )
+      return 0
+      ;;
+    -F|--config|-l|--log|-p|--proxy|-s|--swap-size|-t|--tmp-path|-T|--tmp-size|-j|--journal-size|-J|--journal-time|-S|--ssh-port|-W|--ssh-allow-users|-K|--ssh-pubkey-url|-f|--ssh-keys-file|-u|--ssh-keys-user|-a|--apt-add|-r|--apt-remove|-Y|--self-update|-D|--docker-user|-z|--timezone|-O|--locale|-N|--hostname)
+      COMPREPLY=()
+      return 0
+      ;;
+  esac
+
+  COMPREPLY=( $(compgen -W "$opts" -- "$cur") )
+}
+complete -F _server_setup_complete server-setup sstup
+EOF
+}
+
+install_completion() {
+  # Install completion for current shell (bash/zsh supported)
+  local shell="${SHELL:-}"
+  if [[ -n "${BASH_VERSION:-}" ]] || echo "$shell" | grep -qi bash; then
+    local dir="/etc/bash_completion.d"
+    run "mkdir -p \"$dir\""
+    run "cat > \"$dir/server-setup\" <<'EOF'
+$(completion_script_bash)
+EOF"
+    log "Bash completion installed to /etc/bash_completion.d/server-setup"
+    log "Reload shell or run: source /etc/bash_completion"
+    return 0
+  fi
+
+  # zsh: install as bashcompinit wrapper
+  if echo "$shell" | grep -qi zsh; then
+    local dir="/usr/local/share/zsh/site-functions"
+    run "mkdir -p \"$dir\""
+    run "cat > \"$dir/_server-setup\" <<'EOF'
+#compdef server-setup sstup
+autoload -U +X bashcompinit && bashcompinit
+source /etc/bash_completion.d/server-setup 2>/dev/null || true
+EOF"
+    # ensure bash completion exists too
+    install_completion_bash_only || true
+    log "Zsh completion installed to $dir/_server-setup"
+    return 0
+  fi
+
+  warn "Shell not recognized for completion install. Supported: bash, zsh."
+}
+
+install_completion_bash_only() {
+  local dir="/etc/bash_completion.d"
+  run "mkdir -p \"$dir\""
+  run "cat > \"$dir/server-setup\" <<'EOF'
+$(completion_script_bash)
+EOF"
+}
+
+# =========================================================
+# Wizard (TUI)
+# =========================================================
+ensure_dialog() {
+  cmd_exists dialog && return 0
+  has_apt || die "dialog not installed and apt-get not available."
+  log "Installing dialog for wizard..."
+  run "apt-get update -y || apt-get update -y --fix-missing || true"
+  run "apt-get install -y dialog"
+}
+
+wizard_input() {
+  local title="$1"
+  local prompt="$2"
+  local def="$3"
+  local val
+  val="$(dialog --stdout --title "$title" --inputbox "$prompt" 10 70 "$def" 2>/dev/null)"
+  local rc=$?
+  [[ "$rc" -eq 0 ]] || die "Wizard cancelled."
+  echo "$val"
+}
+
+wizard_menu() {
+  local title="$1"
+  local prompt="$2"
+  shift 2
+  local val
+  val="$(dialog --stdout --title "$title" --menu "$prompt" 12 70 8 "$@" 2>/dev/null)"
+  local rc=$?
+  [[ "$rc" -eq 0 ]] || die "Wizard cancelled."
+  echo "$val"
+}
+
+wizard_checklist() {
+  local title="$1"
+  local prompt="$2"
+  shift 2
+  local val
+  val="$(dialog --stdout --separate-output --title "$title" --checklist "$prompt" 14 70 8 "$@" 2>/dev/null)"
+  local rc=$?
+  [[ "$rc" -eq 0 ]] || die "Wizard cancelled."
+  echo "$val"
+}
+
+wizard_yesno() {
+  local title="$1"
+  local prompt="$2"
+  if dialog --stdout --title "$title" --yesno "$prompt" 8 70 2>/dev/null; then
+    return 0
+  fi
+  local rc=$?
+  [[ "$rc" -eq 255 ]] && die "Wizard cancelled."
+  return 1
+}
+
+wizard() {
+  ensure_dialog
+
+  local preset
+  preset="$(wizard_menu "Preset" "Select a preset" \
+    none "No preset" \
+    minimal "Minimal" \
+    base "Base" \
+    hardened "Hardened" \
+    docker "Docker" \
+    pi "Raspberry Pi" \
+  )"
+  if [[ "$preset" != "none" ]]; then
+    PRESET="$preset"
+    apply_preset "$PRESET"
+  fi
+
+  LOCATION="$(wizard_menu "Location" "Select location mode" \
+    auto "Auto-detect" \
+    iran "Iran" \
+    global "Global" \
+  )"
+
+  local installers
+  installers="$(wizard_checklist "Installers" "Select installers" \
+    docker "Docker" off \
+    ollama "Ollama" off \
+    uv "uv" off \
+  )"
+  INSTALL_SET=""
+  while IFS= read -r item; do
+    add_install_item "$item"
+  done <<<"$installers"
+
+  APT_ADD="$(wizard_input "APT" "APT packages to add (comma-separated)" "$APT_ADD")"
+  APT_REMOVE="$(wizard_input "APT" "APT packages to remove (comma-separated)" "$APT_REMOVE")"
+
+  if wizard_yesno "Update" "Upgrade packages (apt upgrade/dist-upgrade)?"; then
+    DO_UPDATE=1
+  else
+    DO_UPDATE=0
+  fi
+
+  PROXY="$(wizard_input "Proxy" "Proxy URL (optional)" "$PROXY")"
+
+  SWAP_MB="$(wizard_input "Swap" "Swap size (MB) or 'auto' or 0" "$SWAP_MB")"
+  TMP_PATH="$(wizard_input "Placeholder" "Placeholder path" "$TMP_PATH")"
+  TMP_SIZE="$(wizard_input "Placeholder" "Placeholder size (e.g. 2G or 0 to disable)" "$TMP_SIZE")"
+  JOURNAL_SIZE="$(wizard_input "Journal" "Journal size (e.g. 10M)" "$JOURNAL_SIZE")"
+  JOURNAL_TIME="$(wizard_input "Journal" "Journal time (e.g. 7d)" "$JOURNAL_TIME")"
+
+  local cleanup_choice
+  cleanup_choice="$(wizard_menu "Cleanup" "Cleanup level" \
+    none "No cleanup" \
+    basic "Basic" \
+    full "Full" \
+  )"
+  if [[ "$cleanup_choice" == "none" ]]; then
+    DO_CLEANUP=0
+  else
+    DO_CLEANUP=1
+    CLEANUP_LEVEL="$cleanup_choice"
+  fi
+
+  if wizard_yesno "SSH" "Enable SSH hardening?"; then
+    SSH_HARDEN=1
+  else
+    SSH_HARDEN=0
+  fi
+
+  local ssh_port
+  ssh_port="$(wizard_input "SSH" "SSH port (leave blank to keep current)" "$SSH_PORT")"
+  if [[ -n "$ssh_port" ]]; then
+    SSH_PORT="$ssh_port"
+    SSH_PORT_SET=1
+  fi
+  SSH_ALLOW_USERS="$(wizard_input "SSH" "SSH AllowUsers (comma-separated)" "$SSH_ALLOW_USERS")"
+  SSH_PUBKEY_URL="$(wizard_input "SSH" "SSH public key URL" "$SSH_PUBKEY_URL")"
+  SSH_KEYS_FILE="$(wizard_input "SSH" "SSH keys file path (optional)" "$SSH_KEYS_FILE")"
+  SSH_KEYS_USER="$(wizard_input "SSH" "SSH keys user" "$SSH_KEYS_USER")"
+
+  if wizard_yesno "Firewall" "Enable UFW firewall?"; then
+    UFW_ENABLE=1
+  else
+    UFW_ENABLE=0
+  fi
+  if wizard_yesno "Firewall" "Allow SSH port in UFW?"; then
+    UFW_ALLOW_SSH=1
+  else
+    UFW_ALLOW_SSH=0
+  fi
+
+  if [[ ",${INSTALL_SET}," == *",docker,"* ]]; then
+    DOCKER_USER="$(wizard_input "Docker" "Docker user to add to docker group (optional)" "$DOCKER_USER")"
+  fi
+
+  TIMEZONE="$(wizard_input "Timezone" "Timezone (e.g. UTC or Asia/Tehran)" "$TIMEZONE")"
+  LOCALE="$(wizard_input "Locale" "Locale (e.g. en_US.UTF-8)" "$LOCALE")"
+  HOSTNAME="$(wizard_input "Hostname" "Hostname (optional)" "$HOSTNAME")"
+
+  local summary
+  summary="Preset: ${PRESET:-none}\nLocation: $LOCATION\nInstallers: ${INSTALL_SET:-none}\nAPT add: ${APT_ADD:-none}\nAPT remove: ${APT_REMOVE:-none}\nUpdate: $DO_UPDATE\nCleanup: ${DO_CLEANUP:-0} (${CLEANUP_LEVEL})\nSSH harden: $SSH_HARDEN\nSSH port: ${SSH_PORT:-default}\nUFW: $UFW_ENABLE (allow SSH: $UFW_ALLOW_SSH)\nTimezone: ${TIMEZONE:-none}\nLocale: ${LOCALE:-none}\nHostname: ${HOSTNAME:-none}"
+  if ! wizard_yesno "Confirm" "Proceed with these settings?\n\n$summary"; then
+    die "Wizard cancelled."
+  fi
+}
+
+# =========================================================
+# Help / version
+# =========================================================
+usage() {
+  cat <<EOF
+server-setup ($VERSION)
+
+Usage:
+  server-setup <command> [options]
+
+Commands:
+  server     Apply server baseline + requested installers (default)
+  self       Self-management (install/update/uninstall/completion/path)
+
+Core:
+  -h, --help                         Display this help and exit
+  -V, --version                      Display the server-setup version and exit
+  -n, --dry-run                      Show actions without making changes
+  -d, --debug                        Enable bash debug (set -x)
+  -F, --config PATH                  Load config file (KEY=VALUE, overrides preset)
+  -R, --preset NAME                  Apply preset: minimal|base|hardened|docker|pi
+  -Z, --wizard                       Launch TUI wizard (overrides other options)
+  -l, --log PATH                     Tee output to log file (e.g. /var/log/setup.log)
+  -q, --quiet                        Reduce output (errors only)
+  -v, --verbose                      More detailed output
+  -L, --location MODE                auto|iran|global
+  -p, --proxy URL                    socks5://IP:PORT or http(s)://IP:PORT
+  -U, --update                       Upgrade apt packages + update selected installers where possible
+
+APT baseline:
+  -P, --print-apt                    Print baseline apt packages and exit
+  -a, --apt-add LIST                 Add apt packages (comma-separated)
+  -r, --apt-remove LIST              Remove apt packages (comma-separated)
+
+System tuning:
+  -s, --swap-size MB                 Configure swap with dphys-swapfile (MB)
+  -t, --tmp-path PATH                Placeholder path (default: $TMP_PATH)
+  -T, --tmp-size SIZE                Placeholder size (e.g. 2G)
+  -j, --journal-size SIZE            journalctl vacuum size (default: $JOURNAL_SIZE)
+  -J, --journal-time TIME            journalctl vacuum time (default: $JOURNAL_TIME)
+  -o, --overclock PROFILE            safe|performance (Raspberry Pi only)
+  -c, --cleanup                      Cleanup after run (basic)
+  -C, --cleanup-level LEVEL          basic|full
+
+SSH options:
+  -H, --ssh-harden                   Disable password auth + root login (idempotent)
+  -S, --ssh-port PORT                Change SSH port
+  -W, --ssh-allow-users user1,user2  Set AllowUsers
+  -K, --ssh-pubkey-url URL           Append pubkeys to target user's authorized_keys
+  -f, --ssh-keys-file PATH           Append keys from local file
+  -u, --ssh-keys-user USER           Target user for SSH keys (default: root)
+
+Non-APT installers (only via --install):
+  -i, --install LIST                 docker,ollama,uv (comma-separated)
+
+Firewall & docker:
+  -E, --ufw-enable                    Enable ufw firewall
+  -A, --ufw-allow-ssh-port            Allow SSH port in ufw
+  -D, --docker-user USER              Add user to docker group
+
+System identity:
+  -z, --timezone TZ                   Set timezone (e.g. UTC, Asia/Tehran)
+  -O, --locale LOCALE                 Set locale (e.g. en_US.UTF-8)
+  -N, --hostname NAME                 Set hostname
+
+Self management:
+  -I, --self-install                 Install to $SELF_DIR/server-setup and alias $SELF_DIR/sstup
+  -Y, --self-update [URL]            Update installed script from URL (default: DEFAULT_SELF_UPDATE_URL)
+  -X, --self-uninstall               Remove installed commands
+  -Q, --print-install-path           Print install path and exit
+  -B, --install-completion           Install completion for the current shell
+
+Examples:
+  sudo server-setup server -L auto -l /var/log/setup.log
+  sudo server-setup server -L iran -i docker,ollama,uv -U -l /var/log/setup.log
+  sudo server-setup self --self-install
+  sudo server-setup self --install-completion
+  sudo server-setup server --wizard
+
+Config file:
+  KEY=VALUE per line (no quotes required). CLI options override config values.
+
+Stdin usage:
+  curl -sSkL "$DEFAULT_SELF_UPDATE_URL" | bash - -h
+  curl -sSkL "$DEFAULT_SELF_UPDATE_URL" | bash - server -L auto -q
+EOF
+}
+
+show_version() {
+  echo "$VERSION"
+}
+
+# =========================================================
+# Args
+# =========================================================
+SELF_UPDATE_REQUESTED=0
+require_arg() {
+  local opt="$1"
+  local val="${2:-}"
+  [[ -n "$val" && ! "$val" =~ ^- ]] || die "Option $opt requires an argument."
+}
+parse_args() {
+  # Allow stdin marker: curl ... | bash - -h
+  if [[ "${1:-}" == "-" ]]; then
+    shift
+  fi
+
+  # Subcommand (optional)
+  if [[ "${1:-}" == "server" || "${1:-}" == "self" ]]; then
+    SUBCMD="$1"
+    shift
+  else
+    SUBCMD="server"
+  fi
+
+  # First pass: capture preset/config before parsing the rest
+  local args=("$@")
+  local i=0
+  local preset_arg=""
+  local config_arg=""
+  while [[ $i -lt ${#args[@]} ]]; do
+    case "${args[$i]}" in
+      -R|--preset)
+        preset_arg="${args[$((i+1))]:-}"
+        i=$((i+2))
+        ;;
+      --preset=*)
+        preset_arg="${args[$i]#*=}"
+        i=$((i+1))
+        ;;
+      -F|--config)
+        config_arg="${args[$((i+1))]:-}"
+        i=$((i+2))
+        ;;
+      --config=*)
+        config_arg="${args[$i]#*=}"
+        i=$((i+1))
+        ;;
+      *)
+        i=$((i+1))
+        ;;
+    esac
+  done
+
+  [[ -n "$preset_arg" ]] && PRESET="$preset_arg"
+  [[ -n "$config_arg" ]] && CONFIG_FILE="$config_arg"
+  [[ -n "$PRESET" ]] && apply_preset "$PRESET"
+  [[ -n "$CONFIG_FILE" ]] && load_config "$CONFIG_FILE"
+  if [[ -z "$preset_arg" && -n "$PRESET" ]]; then
+    apply_preset "$PRESET"
+  fi
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -h|--help) usage; exit 0 ;;
+      -V|--version) show_version; exit 0 ;;
+
+      -n|--dry-run) DRY_RUN=1; shift ;;
+      -d|--debug) DEBUG=1; shift ;;
+      -F|--config) require_arg "$1" "${2:-}"; CONFIG_FILE="$2"; shift 2 ;;
+      --config=*) CONFIG_FILE="${1#*=}"; shift ;;
+      -R|--preset) require_arg "$1" "${2:-}"; PRESET="$2"; shift 2 ;;
+      --preset=*) PRESET="${1#*=}"; shift ;;
+      -Z|--wizard) WIZARD=1; shift ;;
+      -l|--log) require_arg "$1" "${2:-}"; LOG_PATH="$2"; shift 2 ;;
+      --log=*) LOG_PATH="${1#*=}"; shift ;;
+      -L|--location) require_arg "$1" "${2:-}"; LOCATION="$2"; shift 2 ;;
+      --location=*) LOCATION="${1#*=}"; shift ;;
+      -p|--proxy) require_arg "$1" "${2:-}"; PROXY="$2"; shift 2 ;;
+      --proxy=*) PROXY="${1#*=}"; shift ;;
+      -U|--update) DO_UPDATE=1; shift ;;
+      -q|--quiet) QUIET=1; VERBOSE=0; shift ;;
+      -v|--verbose) VERBOSE=1; QUIET=0; shift ;;
+
+      -i|--install) require_arg "$1" "${2:-}"; INSTALL_SET="$(echo -n "$2" | tr -d ' \t\r\n')"; shift 2 ;;
+      --install=*) INSTALL_SET="$(echo -n "${1#*=}" | tr -d ' \t\r\n')"; shift ;;
+
+      -P|--print-apt) PRINT_APT=1; shift ;;
+      -a|--apt-add) require_arg "$1" "${2:-}"; APT_ADD="$2"; shift 2 ;;
+      --apt-add=*) APT_ADD="${1#*=}"; shift ;;
+      -r|--apt-remove) require_arg "$1" "${2:-}"; APT_REMOVE="$2"; shift 2 ;;
+      --apt-remove=*) APT_REMOVE="${1#*=}"; shift ;;
+
+      -s|--swap-size) require_arg "$1" "${2:-}"; SWAP_MB="$2"; shift 2 ;;
+      --swap-size=*) SWAP_MB="${1#*=}"; shift ;;
+      -t|--tmp-path) require_arg "$1" "${2:-}"; TMP_PATH="$2"; shift 2 ;;
+      --tmp-path=*) TMP_PATH="${1#*=}"; shift ;;
+      -T|--tmp-size) require_arg "$1" "${2:-}"; TMP_SIZE="$2"; shift 2 ;;
+      --tmp-size=*) TMP_SIZE="${1#*=}"; shift ;;
+      -j|--journal-size) require_arg "$1" "${2:-}"; JOURNAL_SIZE="$2"; shift 2 ;;
+      --journal-size=*) JOURNAL_SIZE="${1#*=}"; shift ;;
+      -J|--journal-time) require_arg "$1" "${2:-}"; JOURNAL_TIME="$2"; shift 2 ;;
+      --journal-time=*) JOURNAL_TIME="${1#*=}"; shift ;;
+      -o|--overclock) require_arg "$1" "${2:-}"; OVERCLOCK_PROFILE="$2"; shift 2 ;;
+      --overclock=*) OVERCLOCK_PROFILE="${1#*=}"; shift ;;
+      -c|--cleanup) DO_CLEANUP=1; shift ;;
+      -C|--cleanup-level) require_arg "$1" "${2:-}"; DO_CLEANUP=1; CLEANUP_LEVEL="$2"; shift 2 ;;
+      --cleanup-level=*) DO_CLEANUP=1; CLEANUP_LEVEL="${1#*=}"; shift ;;
+
+      -H|--ssh-harden) SSH_HARDEN=1; shift ;;
+      -S|--ssh-port) require_arg "$1" "${2:-}"; SSH_PORT="$2"; SSH_PORT_SET=1; shift 2 ;;
+      --ssh-port=*) SSH_PORT="${1#*=}"; SSH_PORT_SET=1; shift ;;
+      -W|--ssh-allow-users) require_arg "$1" "${2:-}"; SSH_ALLOW_USERS="$2"; shift 2 ;;
+      --ssh-allow-users=*) SSH_ALLOW_USERS="${1#*=}"; shift ;;
+      -K|--ssh-pubkey-url) require_arg "$1" "${2:-}"; SSH_PUBKEY_URL="$2"; shift 2 ;;
+      --ssh-pubkey-url=*) SSH_PUBKEY_URL="${1#*=}"; shift ;;
+      -f|--ssh-keys-file) require_arg "$1" "${2:-}"; SSH_KEYS_FILE="$2"; shift 2 ;;
+      --ssh-keys-file=*) SSH_KEYS_FILE="${1#*=}"; shift ;;
+      -u|--ssh-keys-user) require_arg "$1" "${2:-}"; SSH_KEYS_USER="$2"; shift 2 ;;
+      --ssh-keys-user=*) SSH_KEYS_USER="${1#*=}"; shift ;;
+
+      -I|--self-install) SELF_INSTALL=1; shift ;;
+      -X|--self-uninstall) SELF_UNINSTALL=1; shift ;;
+      -Y|--self-update)
+        SELF_UPDATE_REQUESTED=1
+        # URL optional
+        if [[ -n "${2:-}" && ! "${2:-}" =~ ^- ]]; then
+          SELF_UPDATE_URL="${2:-}"
+          shift 2
+        else
+          SELF_UPDATE_URL=""
+          shift
+        fi
+        ;;
+      --self-update=*) SELF_UPDATE_REQUESTED=1; SELF_UPDATE_URL="${1#*=}"; shift ;;
+      -Q|--print-install-path) PRINT_INSTALL_PATH=1; shift ;;
+      -B|--install-completion) INSTALL_COMPLETION=1; shift ;;
+
+      -E|--ufw-enable) UFW_ENABLE=1; shift ;;
+      -A|--ufw-allow-ssh-port) UFW_ALLOW_SSH=1; shift ;;
+      -D|--docker-user) require_arg "$1" "${2:-}"; DOCKER_USER="$2"; shift 2 ;;
+      --docker-user=*) DOCKER_USER="${1#*=}"; shift ;;
+      -z|--timezone) require_arg "$1" "${2:-}"; TIMEZONE="$2"; shift 2 ;;
+      --timezone=*) TIMEZONE="${1#*=}"; shift ;;
+      -O|--locale) require_arg "$1" "${2:-}"; LOCALE="$2"; shift 2 ;;
+      --locale=*) LOCALE="${1#*=}"; shift ;;
+      -N|--hostname) require_arg "$1" "${2:-}"; HOSTNAME="$2"; shift 2 ;;
+      --hostname=*) HOSTNAME="${1#*=}"; shift ;;
+
+      *) die "Unknown option: $1 (use --help)" ;;
+    esac
+  done
+}
+
+# =========================================================
+# Main
+# =========================================================
+main() {
+  parse_args "$@"
+
+  if [[ "$PRINT_APT" -eq 1 ]]; then
+    print_apt
+    exit 0
+  fi
+
+  if [[ "$PRINT_INSTALL_PATH" -eq 1 ]]; then
+    echo "$SELF_DIR/server-setup"
+    exit 0
+  fi
+
+  need_root
+
+  if [[ "$WIZARD" -eq 1 ]]; then
+    if [[ "$SUBCMD" == "server" ]]; then
+      wizard
+    else
+      warn "Wizard is only available for the server command."
+    fi
+  fi
+
+  enable_logging
+  enable_debug
+  acquire_lock
+  wrap_net_tools
+  write_apt_proxy_conf
+
+  # self-only actions
+  if [[ "$SUBCMD" == "self" ]]; then
+    if [[ "$INSTALL_COMPLETION" -eq 1 ]]; then
+      install_completion
+      exit 0
+    fi
+    if [[ "$SELF_INSTALL" -eq 1 ]]; then
+      self_install
+      exit 0
+    fi
+    if [[ "$SELF_UNINSTALL" -eq 1 ]]; then
+      self_uninstall
+      exit 0
+    fi
+    if [[ "$SELF_UPDATE_REQUESTED" -eq 1 ]]; then
+      self_update
+      exit 0
+    fi
+    usage
+    exit 1
+  fi
+
+  # server command (default)
+  if [[ "$INSTALL_COMPLETION" -eq 1 || "$SELF_INSTALL" -eq 1 || "$SELF_UNINSTALL" -eq 1 || "$SELF_UPDATE_REQUESTED" -eq 1 ]]; then
+    warn "Self options are under: server-setup self ..."
+  fi
+
+  apply_location_optimizations
+  apt_install_baseline
+
+  setup_timezone
+  setup_locale
+  setup_hostname
+
+  setup_journal_defaults
+  resolve_swap_size
+  setup_swap_dphys
+  setup_tmp_placeholder
+  setup_fail2ban_default
+  setup_tuned_default
+  setup_rc_local_default
+
+  install_ssh_keys_from_url
+  install_ssh_keys_from_file
+  setup_ssh_hardening
+  apply_pi_overclock
+
+  has_install uv && install_uv
+  has_install docker && install_docker
+  setup_docker_user
+  has_install ollama && install_ollama
+
+  setup_ufw
+
+  run_cleanup_if_requested
+
+  log "Done."
+  warn "If DNS/mirrors/overclock/swap changed, reboot is recommended."
+  show_summary
+}
+
+main "$@"

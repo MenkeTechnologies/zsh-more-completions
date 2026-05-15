@@ -1,0 +1,2531 @@
+# Source: https://github.com/datamadsen/farv/blob/5de3577ba0775750610cba47923cd817489c3c47/bin/farv
+# Repository: datamadsen/farv (bin/farv)
+#!/usr/bin/env bash
+
+# ============================================================================
+# FARV - A friend in rice is a friend that's nice :-)
+# Theme Management System
+# ============================================================================
+
+# ----------------------------------------------------------------------------
+# Configuration and Setup
+# ----------------------------------------------------------------------------
+
+# Detect platform and set system paths
+case "$(uname -s)" in
+Darwin*)
+  # macOS - check for Homebrew installation
+  if command -v brew >/dev/null 2>&1; then
+    FARV_SYSTEM_DIR="$(brew --prefix)/share/farv"
+  else
+    FARV_SYSTEM_DIR="/usr/local/share/farv"
+  fi
+  ;;
+*)
+  # Linux and other Unix-like systems
+  FARV_SYSTEM_DIR="/usr/share/farv"
+  ;;
+esac
+
+FARV_SYSTEM_THEMES="$FARV_SYSTEM_DIR/themes"
+
+# User paths (XDG compliant)
+FARV_CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}/farv"
+FARV_USER_THEMES="$FARV_CONFIG_HOME/themes"
+FARV_CURRENT_LINK="$FARV_CONFIG_HOME/current"
+
+# Source utility functions
+source "$FARV_SYSTEM_DIR/lib/utils.sh"
+
+# ----------------------------------------------------------------------------
+# Core Theme Functions
+# ----------------------------------------------------------------------------
+
+# Function to discover themes with search priority
+# Function to discover themes in a category (simple output - just names)
+discover_themes() {
+  local category="$1" # light or dark
+  local themes=()
+  local seen_themes=()
+
+  # User themes first (higher priority)
+  if [ -d "$FARV_USER_THEMES/$category" ]; then
+    for theme_dir in "$FARV_USER_THEMES/$category"/*/; do
+      if [ -d "$theme_dir" ] && [ "$theme_dir" != "$FARV_USER_THEMES/$category/*/" ]; then
+        local theme_name
+        theme_name=$(basename "$theme_dir")
+        themes+=("$theme_name")
+        seen_themes+=("$theme_name")
+      fi
+    done
+  fi
+
+  # System themes second (only if not overridden by user)
+  if [ -d "$FARV_SYSTEM_THEMES/$category" ]; then
+    for theme_dir in "$FARV_SYSTEM_THEMES/$category"/*/; do
+      if [ -d "$theme_dir" ] && [ "$theme_dir" != "$FARV_SYSTEM_THEMES/$category/*/" ]; then
+        local theme_name
+        theme_name=$(basename "$theme_dir")
+        # Only add if not already found in user themes
+        if [[ ! " ${seen_themes[*]} " =~ $theme_name ]]; then
+          themes+=("$theme_name")
+        fi
+      fi
+    done
+  fi
+
+  printf '%s\n' "${themes[@]}"
+}
+
+# Function to discover themes in a category (verbose output with descriptions)
+discover_themes_verbose() {
+  local category="$1" # light or dark
+  local themes=()
+  local seen_themes=()
+
+  # User themes first (higher priority)
+  if [ -d "$FARV_USER_THEMES/$category" ]; then
+    for theme_dir in "$FARV_USER_THEMES/$category"/*/; do
+      if [ -d "$theme_dir" ] && [ "$theme_dir" != "$FARV_USER_THEMES/$category/*/" ]; then
+        local theme_name
+        theme_name=$(basename "$theme_dir")
+        # Check if this is a customized system theme or pure user theme
+        if [[ -d "$FARV_SYSTEM_THEMES/$category/$theme_name" ]]; then
+          themes+=("$theme_name (customized $category system theme)")
+        else
+          themes+=("$theme_name ($category user theme)")
+        fi
+        seen_themes+=("$theme_name")
+      fi
+    done
+  fi
+
+  # System themes second (only if not overridden by user)
+  if [ -d "$FARV_SYSTEM_THEMES/$category" ]; then
+    for theme_dir in "$FARV_SYSTEM_THEMES/$category"/*/; do
+      if [ -d "$theme_dir" ] && [ "$theme_dir" != "$FARV_SYSTEM_THEMES/$category/*/" ]; then
+        local theme_name
+        theme_name=$(basename "$theme_dir")
+        # Only add if not already found in user themes
+        if [[ ! " ${seen_themes[*]} " =~ $theme_name ]]; then
+          themes+=("$theme_name ($category system theme)")
+        fi
+      fi
+    done
+  fi
+
+  printf '%s\n' "${themes[@]}"
+}
+
+# Function to get search paths in priority order (highest to lowest)
+get_search_paths() {
+  local category="$1"
+  local theme_name="$2"
+
+  # Priority order (first match wins):
+  # 1. User theme-specific (highest priority)
+  # 2. System theme-specific
+  # 3. User category-level
+  # 4. System category-level
+  # 5. User global
+  # 6. System global (lowest priority)
+
+  local paths=(
+    "$FARV_USER_THEMES/$category/$theme_name"
+    "$FARV_SYSTEM_THEMES/$category/$theme_name"
+    "$FARV_USER_THEMES/$category"
+    "$FARV_SYSTEM_THEMES/$category"
+    "$FARV_USER_THEMES"
+    "$FARV_SYSTEM_THEMES"
+  )
+
+  printf '%s\n' "${paths[@]}"
+}
+
+# Function to resolve file path using layering system
+resolve_file_path() {
+  local category="$1"
+  local theme_name="$2"
+  local filename="$3"
+
+  # Special handling for backgrounds folder
+  if [ "$filename" = "backgrounds" ]; then
+    resolve_backgrounds_path "$category" "$theme_name"
+    return $?
+  fi
+
+  while IFS= read -r search_path; do
+    local file_path="$search_path/$filename"
+    if [ -f "$file_path" ] && [ ! -x "$file_path" ]; then
+      echo "$file_path"
+      return 0
+    fi
+  done < <(get_search_paths "$category" "$theme_name")
+
+  return 1
+}
+
+# Function to resolve backgrounds folder path with search priority
+resolve_backgrounds_path() {
+  local category="$1"
+  local theme_name="$2"
+
+  while IFS= read -r search_path; do
+    local backgrounds_path="$search_path/backgrounds"
+    if [ -d "$backgrounds_path" ]; then
+      echo "$backgrounds_path"
+      return 0
+    fi
+  done < <(get_search_paths "$category" "$theme_name")
+
+  return 1
+}
+
+# Function to discover all unique filenames in theme hierarchy
+discover_theme_files() {
+  local category="$1"
+  local theme_name="$2"
+  local files=()
+
+  while IFS= read -r search_path; do
+    if [ -d "$search_path" ]; then
+      # Check for backgrounds folder
+      if [ -d "$search_path/backgrounds" ]; then
+        # Add backgrounds folder as a discoverable "file"
+        if [[ ! " ${files[*]} " =~ "backgrounds" ]]; then
+          files+=("backgrounds")
+        fi
+      fi
+
+      # Discover regular files
+      for file in "$search_path"/*; do
+        if [ -f "$file" ] && [ ! -x "$file" ]; then
+          local filename
+          filename=$(basename "$file")
+          # Add to array if not already present
+          if [[ ! " ${files[*]} " =~ $filename ]]; then
+            files+=("$filename")
+          fi
+        fi
+      done
+    fi
+  done < <(get_search_paths "$category" "$theme_name")
+
+  printf '%s\n' "${files[@]}"
+}
+
+# Function to discover executable scripts in priority order
+discover_theme_scripts() {
+  local category="$1"
+  local theme_name="$2"
+  local scripts=()
+  local seen_scripts=()
+
+  while IFS= read -r search_path; do
+    if [ -d "$search_path" ]; then
+      for script in "$search_path"/*; do
+        if [ -f "$script" ] && [ -x "$script" ]; then
+          local script_name
+          script_name=$(basename "$script")
+          # Only add if not already seen (higher priority wins)
+          if [[ ! " ${seen_scripts[*]} " =~ $script_name ]]; then
+            scripts+=("$script")
+            seen_scripts+=("$script_name")
+          fi
+        fi
+      done
+    fi
+  done < <(get_search_paths "$category" "$theme_name")
+
+  printf '%s\n' "${scripts[@]}"
+}
+
+# Function to resolve theme path (for theme existence checking)
+resolve_theme_path() {
+  local theme_name="$1"
+  local category="$2"
+
+  # Check if theme exists in any location
+  while IFS= read -r search_path; do
+    if [ -d "$search_path" ]; then
+      # For theme-specific paths, check if it's the right theme
+      if [[ "$search_path" == *"/$category/$theme_name" ]]; then
+        echo "$search_path"
+        return 0
+      fi
+    fi
+  done < <(get_search_paths "$category" "$theme_name")
+
+  return 1
+}
+
+# Function to find theme path
+find_theme_path() {
+  local theme_input="$1"
+  local theme_name theme_path
+
+  # Check if input includes category and user/system indicator
+  if [[ "$theme_input" == *" (light) [user]" ]]; then
+    theme_name="${theme_input%% \(light\) \[user\]}"
+    theme_path="$FARV_USER_THEMES/light/$theme_name"
+  elif [[ "$theme_input" == *" (dark) [user]" ]]; then
+    theme_name="${theme_input%% \(dark\) \[user\]}"
+    theme_path="$FARV_USER_THEMES/dark/$theme_name"
+  elif [[ "$theme_input" == *" (light)" ]]; then
+    theme_name="${theme_input%% \(light\)}"
+    theme_path=$(resolve_theme_path "$theme_name" "light")
+  elif [[ "$theme_input" == *" (dark)" ]]; then
+    theme_name="${theme_input%% \(dark\)}"
+    theme_path=$(resolve_theme_path "$theme_name" "dark")
+  else
+    # Try to find theme in both light and dark directories, prioritizing user themes
+    theme_name="$theme_input"
+    theme_path=$(resolve_theme_path "$theme_name" "light")
+    if [ -z "$theme_path" ]; then
+      theme_path=$(resolve_theme_path "$theme_name" "dark")
+    fi
+  fi
+
+  echo "$theme_path"
+}
+
+# Function to get current theme info from symlinks
+get_current_theme_info() {
+  # Read a symlink to determine current theme name and category
+  # Look for pattern: $FARV_SYSTEM_THEMES/{category}/{theme}/{file}
+  # or: ~/.config/farv/themes/{category}/{theme}/{file}
+  local sample_link
+  sample_link=$(find "$FARV_CURRENT_LINK" -type l 2>/dev/null | grep -v "FARV_THEME_INFO" | head -n1)
+  if [ -n "$sample_link" ]; then
+    local target
+    target=$(readlink "$sample_link")
+    if [[ "$target" =~ /themes/([^/]+)/([^/]+)/ ]]; then
+      local category="${BASH_REMATCH[1]}"
+      local theme="${BASH_REMATCH[2]}"
+      echo "$theme:$category"
+      return 0
+    fi
+  fi
+  return 1
+}
+
+# Function to show available commands
+show_commands() {
+  echo "Usage: farv <command> [arguments]"
+  echo ""
+  echo "Available commands:"
+  echo "  use [theme]         Use a theme (interactive if fzf available)"
+  echo "  list                List available themes"
+  echo "  current             Show current active theme"
+  echo "  background|bg       Manage theme backgrounds"
+  echo "  reload              Reload current active theme"
+  echo "  next                Cycle to next theme"
+  echo "  prev                Cycle to previous theme"
+  echo "  random              Switch to random theme"
+  echo "  new <cat> <name>    Create new theme"
+  echo "  clone <src> [name]  Clone existing theme"
+  echo "  customize <file>    Customize theme file"
+  echo "  pack [filename]     Package current theme"
+  echo "  install <archive>   Install theme package"
+  echo ""
+  echo "For help: farv --help"
+}
+
+# Function to get current active theme (for pack command)
+get_current_active_theme() {
+  local theme_info
+  if ! theme_info=$(get_current_theme_info); then
+    echo "Error: No theme is currently active" >&2
+    echo "Use 'farv use <theme>' to activate a theme first" >&2
+    return 1
+  fi
+
+  local theme_name="${theme_info%:*}"
+  local theme_category="${theme_info#*:}"
+
+  echo "$theme_name:$theme_category"
+}
+
+# ----------------------------------------------------------------------------
+# Command: List
+# ----------------------------------------------------------------------------
+
+# Function to list available themes
+list_themes() {
+  local verbose="$1"
+  if [[ "$verbose" == "true" ]]; then
+    discover_themes_verbose "light"
+    discover_themes_verbose "dark"
+  else
+    discover_themes "light"
+    discover_themes "dark"
+  fi
+}
+
+# ----------------------------------------------------------------------------
+# Command: Current
+# ----------------------------------------------------------------------------
+
+# Function to show current active theme
+show_current_theme() {
+  local verbose="$1"
+  local current_theme
+
+  if ! current_theme=$(get_current_theme_info); then
+    echo "No theme is currently active" >&2
+    echo "Use 'farv use <theme>' to activate a theme" >&2
+    return 1
+  fi
+
+  local theme_name="${current_theme%:*}"
+  local theme_category="${current_theme#*:}"
+
+  if [[ "$verbose" == "true" ]]; then
+    # Check if it's a user theme or system theme and if customized
+    local user_theme_dir="$FARV_USER_THEMES/$theme_category/$theme_name"
+    local system_theme_dir="$FARV_SYSTEM_THEMES/$theme_category/$theme_name"
+
+    if [[ -d "$user_theme_dir" ]]; then
+      if [[ -d "$system_theme_dir" ]]; then
+        echo "$theme_name (customized $theme_category system theme)"
+      else
+        echo "$theme_name ($theme_category user theme)"
+      fi
+    else
+      echo "$theme_name ($theme_category system theme)"
+    fi
+  else
+    echo "$theme_name"
+  fi
+}
+
+# ----------------------------------------------------------------------------
+# Command: Reload
+# ----------------------------------------------------------------------------
+
+# Function to reload current active theme
+reload_current_theme() {
+  local current_theme
+
+  if ! current_theme=$(get_current_theme_info); then
+    echo "No theme is currently active" >&2
+    echo "Use 'farv use <theme>' to activate a theme first" >&2
+    return 1
+  fi
+
+  local theme_name="${current_theme%:*}"
+  local theme_category="${current_theme#*:}"
+
+  echo "Reloading current theme: $theme_name ($theme_category)"
+  apply_theme "$theme_name" "$theme_category"
+}
+
+# ----------------------------------------------------------------------------
+# Command: Theme Cycling (Next/Previous/Random)
+# ----------------------------------------------------------------------------
+
+# Helper function to get all available themes in sorted order
+get_all_themes_sorted() {
+  local themes=()
+
+  # Get all themes and sort them
+  while IFS= read -r theme; do
+    if [[ -n "$theme" ]]; then
+      themes+=("$theme")
+    fi
+  done < <(list_themes | sort)
+
+  printf '%s\n' "${themes[@]}"
+}
+
+# Helper function to find current theme in sorted list and get next/prev
+find_theme_in_cycle() {
+  local current_theme="$1"
+  local direction="$2" # "next" or "prev"
+
+  local themes=()
+  readarray -t themes < <(get_all_themes_sorted)
+
+  if [[ ${#themes[@]} -eq 0 ]]; then
+    echo "Error: No themes available" >&2
+    return 1
+  fi
+
+  # Find current theme index
+  local current_index=-1
+  for i in "${!themes[@]}"; do
+    if [[ "${themes[$i]}" == "$current_theme" ]]; then
+      current_index=$i
+      break
+    fi
+  done
+
+  if [[ $current_index -eq -1 ]]; then
+    echo "Error: Current theme '$current_theme' not found in available themes" >&2
+    return 1
+  fi
+
+  # Calculate next/previous index with wrapping
+  local target_index
+  if [[ "$direction" == "next" ]]; then
+    target_index=$(((current_index + 1) % ${#themes[@]}))
+  else
+    target_index=$(((current_index - 1 + ${#themes[@]}) % ${#themes[@]}))
+  fi
+
+  echo "${themes[$target_index]}"
+}
+
+# Function to cycle to next theme
+cycle_to_next_theme() {
+  local current_theme
+  if ! current_theme=$(get_current_theme_info); then
+    echo "No theme is currently active" >&2
+    echo "Use 'farv use <theme>' to activate a theme first" >&2
+    return 1
+  fi
+
+  local theme_name="${current_theme%:*}"
+  local next_theme
+  if ! next_theme=$(find_theme_in_cycle "$theme_name" "next"); then
+    return 1
+  fi
+
+  echo "Cycling from $theme_name to $next_theme"
+  use_theme_by_name "$next_theme"
+}
+
+# Function to cycle to previous theme
+cycle_to_prev_theme() {
+  local current_theme
+  if ! current_theme=$(get_current_theme_info); then
+    echo "No theme is currently active" >&2
+    echo "Use 'farv use <theme>' to activate a theme first" >&2
+    return 1
+  fi
+
+  local theme_name="${current_theme%:*}"
+  local prev_theme
+  if ! prev_theme=$(find_theme_in_cycle "$theme_name" "prev"); then
+    return 1
+  fi
+
+  echo "Cycling from $theme_name to $prev_theme"
+  use_theme_by_name "$prev_theme"
+}
+
+# Function to switch to random theme (excluding current)
+switch_to_random_theme() {
+  local current_theme
+  local current_theme_name=""
+
+  # Get current theme if any (don't fail if none active)
+  if current_theme=$(get_current_theme_info 2>/dev/null); then
+    current_theme_name="${current_theme%:*}"
+  fi
+
+  local themes=()
+  readarray -t themes < <(get_all_themes_sorted)
+
+  if [[ ${#themes[@]} -eq 0 ]]; then
+    echo "Error: No themes available" >&2
+    return 1
+  fi
+
+  # Remove current theme from available options
+  local available_themes=()
+  for theme in "${themes[@]}"; do
+    if [[ "$theme" != "$current_theme_name" ]]; then
+      available_themes+=("$theme")
+    fi
+  done
+
+  if [[ ${#available_themes[@]} -eq 0 ]]; then
+    echo "Error: No other themes available" >&2
+    return 1
+  fi
+
+  # Pick random theme
+  local random_index=$((RANDOM % ${#available_themes[@]}))
+  local random_theme="${available_themes[$random_index]}"
+
+  if [[ -n "$current_theme_name" ]]; then
+    echo "Switching from $current_theme_name to $random_theme"
+  else
+    echo "Switching to random theme: $random_theme"
+  fi
+
+  use_theme_by_name "$random_theme"
+}
+
+# ----------------------------------------------------------------------------
+# Command: Use
+# ----------------------------------------------------------------------------
+
+# Function to apply theme using new layering system
+apply_theme() {
+  local theme_name="$1"
+  local theme_category="$2"
+
+  # Create directories
+  mkdir -p "$FARV_CURRENT_LINK"
+
+  # 1. Clear current symlinks
+  rm -rf "${FARV_CURRENT_LINK:?}"/*
+
+  # 2. Discover all files in theme hierarchy
+  local files
+  readarray -t files < <(discover_theme_files "$theme_category" "$theme_name")
+
+  # 3. For each unique filename, resolve and symlink highest priority version
+  local filename
+  for filename in "${files[@]}"; do
+    if [ "$filename" = "backgrounds" ]; then
+      # Handle backgrounds folder specially
+      local resolved_backgrounds_path
+      resolved_backgrounds_path=$(resolve_backgrounds_path "$theme_category" "$theme_name")
+      if [ -n "$resolved_backgrounds_path" ]; then
+        # Create backgrounds directory in current theme
+        mkdir -p "$FARV_CURRENT_LINK/backgrounds"
+        # Symlink all background files
+        local first_background=""
+        for bg_file in "$resolved_backgrounds_path"/*; do
+          if [ -f "$bg_file" ] && [[ ! "$(basename "$bg_file")" == "current-background" ]]; then
+            ln -sf "$bg_file" "$FARV_CURRENT_LINK/backgrounds/$(basename "$bg_file")"
+            # Remember the first background for default selection
+            if [ -z "$first_background" ]; then
+              first_background="$(basename "$bg_file")"
+            fi
+          fi
+        done
+        # Create current-background symlink to first available background
+        if [ -n "$first_background" ]; then
+          ln -sf "$first_background" "$FARV_CURRENT_LINK/backgrounds/current-background"
+        fi
+      fi
+    else
+      # Existing file resolution logic
+      local resolved_path
+      resolved_path=$(resolve_file_path "$theme_category" "$theme_name" "$filename")
+      if [ -n "$resolved_path" ]; then
+        ln -sf "$resolved_path" "$FARV_CURRENT_LINK/$filename"
+      fi
+    fi
+  done
+
+  # 4. Discover and execute all scripts in priority order
+  local scripts
+  readarray -t scripts < <(discover_theme_scripts "$theme_category" "$theme_name")
+
+  for script in "${scripts[@]}"; do
+    if [ -x "$script" ]; then
+      echo "  - $(basename "$script")"
+      "$script" "$(dirname "$script")" "$theme_name" "$theme_category" "$FARV_CURRENT_LINK"
+    fi
+  done
+}
+
+# Function to use theme (main entry point)
+use_theme_by_name() {
+  local theme_input="$1"
+  local theme_name theme_category
+
+  # Parse theme input to extract name and category
+  if [[ "$theme_input" == *" (light) [user]" ]]; then
+    theme_name="${theme_input%% \(light\) \[user\]}"
+    theme_category="light"
+  elif [[ "$theme_input" == *" (dark) [user]" ]]; then
+    theme_name="${theme_input%% \(dark\) \[user\]}"
+    theme_category="dark"
+  elif [[ "$theme_input" == *" (light)" ]]; then
+    theme_name="${theme_input%% \(light\)}"
+    theme_category="light"
+  elif [[ "$theme_input" == *" (dark)" ]]; then
+    theme_name="${theme_input%% \(dark\)}"
+    theme_category="dark"
+  else
+    # Try to find theme in both categories
+    theme_name="$theme_input"
+    if resolve_theme_path "$theme_name" "light" >/dev/null; then
+      theme_category="light"
+    elif resolve_theme_path "$theme_name" "dark" >/dev/null; then
+      theme_category="dark"
+    else
+      echo "Error: Theme '$theme_input' not found"
+      echo ""
+      list_themes
+      return 1
+    fi
+  fi
+
+  # Verify theme exists
+  if ! resolve_theme_path "$theme_name" "$theme_category" >/dev/null; then
+    echo "Error: Theme '$theme_input' not found"
+    echo ""
+    list_themes
+    return 1
+  fi
+
+  # Create user config directory if it doesn't exist
+  mkdir -p "$FARV_CONFIG_HOME"
+
+  echo "Using theme: $theme_name ($theme_category)"
+  apply_theme "$theme_name" "$theme_category"
+  echo "Switched to theme: $theme_name"
+}
+
+# Interactive theme selection using fzf
+interactive_selection() {
+  if has_command fzf; then
+    local selected_theme
+    selected_theme=$(list_themes | fzf --prompt="Select theme to use: " --height=10 --border)
+    if [[ -n "$selected_theme" ]]; then
+      use_theme_by_name "$selected_theme"
+    fi
+  else
+    echo "Usage: farv use [theme-name]"
+    echo ""
+    list_themes
+  fi
+}
+
+# ----------------------------------------------------------------------------
+# Command: New
+# ----------------------------------------------------------------------------
+
+# Function to validate theme name
+validate_theme_name() {
+  local name="$1"
+  # Check for empty name
+  [[ -n "$name" ]] || return 1
+  # Check for valid characters (letters, numbers, hyphens, underscores)
+  [[ "$name" =~ ^[a-zA-Z0-9_-]+$ ]] || return 1
+  # Check length (reasonable limit)
+  [[ ${#name} -le 50 ]] || return 1
+  return 0
+}
+
+# Function to create a new theme
+create_new_theme() {
+  local theme_name="$1"
+  local category="$2"
+
+  # Validate theme name
+  if ! validate_theme_name "$theme_name"; then
+    echo "Error: Invalid theme name '$theme_name'"
+    echo "Theme names must contain only letters, numbers, hyphens, and underscores"
+    return 1
+  fi
+
+  # Validate category
+  if [[ "$category" != "light" && "$category" != "dark" ]]; then
+    echo "Error: Category must be 'light' or 'dark'"
+    return 1
+  fi
+
+  # Check if theme already exists in user directory
+  local target_dir="$FARV_USER_THEMES/$category/$theme_name"
+  if [[ -d "$target_dir" ]]; then
+    echo "Error: Theme '$theme_name' already exists in $category category (user)"
+    echo "Location: $target_dir"
+    return 1
+  fi
+
+  # Check if theme already exists in system directory
+  local system_dir="$FARV_SYSTEM_THEMES/$category/$theme_name"
+  if [[ -d "$system_dir" ]]; then
+    echo "Error: Theme '$theme_name' already exists in $category category (system)"
+    echo "Location: $system_dir"
+    echo "Choose a different name or use 'farv customize <filename>' to modify the existing theme"
+    return 1
+  fi
+
+  # Create empty directory
+  mkdir -p "$target_dir"
+
+  echo "Created new theme: $theme_name ($category)"
+  echo "Location: $target_dir"
+  echo ""
+  echo "Next steps:"
+  echo "  1. Add configuration files to $target_dir"
+  echo "  2. Test with: farv use $theme_name"
+  echo ""
+  echo "Note: Any executable files in the theme directory will be run when"
+  echo "      switching to this theme. Use this for custom setup and reload scripts."
+}
+
+# ----------------------------------------------------------------------------
+# Command: Customize
+# ----------------------------------------------------------------------------
+
+# Function to list files in current theme
+list_current_theme_files() {
+  echo "Available files in current theme:"
+  if [ -d "$FARV_CURRENT_LINK" ]; then
+    for file in "$FARV_CURRENT_LINK"/*; do
+      if [ -L "$file" ]; then
+        echo "  - $(basename "$file")"
+      fi
+    done
+  else
+    echo "  No current theme active"
+  fi
+}
+
+# Function to detect the best available editor
+detect_editor() {
+  # Check environment variables first
+  if [[ -n "$VISUAL" ]] && command -v "$VISUAL" >/dev/null 2>&1; then
+    echo "$VISUAL"
+    return 0
+  fi
+
+  if [[ -n "$EDITOR" ]] && command -v "$EDITOR" >/dev/null 2>&1; then
+    echo "$EDITOR"
+    return 0
+  fi
+
+  # Try common editors in order of preference
+  local editors=("nvim" "vim" "nano" "code" "subl" "gedit" "kate" "emacs")
+
+  for editor in "${editors[@]}"; do
+    if command -v "$editor" >/dev/null 2>&1; then
+      echo "$editor"
+      return 0
+    fi
+  done
+
+  # Fallback to vi (should be available on most systems)
+  if command -v "vi" >/dev/null 2>&1; then
+    echo "vi"
+    return 0
+  fi
+
+  return 1
+}
+
+# Function to customize a theme file
+customize_theme_file() {
+  local filename="$1"
+  local current_symlink="$FARV_CURRENT_LINK/$filename"
+
+  # Validate symlink exists
+  if [ ! -L "$current_symlink" ]; then
+    echo "Error: File '$filename' is not part of the current theme"
+    echo ""
+    list_current_theme_files
+    return 1
+  fi
+
+  # Get source file path
+  local source_path
+  source_path=$(readlink "$current_symlink")
+
+  # Determine current theme info
+  local theme_info
+  theme_info=$(get_current_theme_info)
+  if [ -z "$theme_info" ]; then
+    echo "Error: Could not determine current theme information"
+    return 1
+  fi
+
+  local theme_name
+  theme_name=$(echo "$theme_info" | cut -d: -f1)
+  local theme_category
+  theme_category=$(echo "$theme_info" | cut -d: -f2)
+
+  # Create target directory
+  local target_dir="$FARV_USER_THEMES/$theme_category/$theme_name"
+  mkdir -p "$target_dir"
+
+  # Copy file
+  local target_path="$target_dir/$filename"
+  if [ -f "$target_path" ]; then
+    echo "Warning: File already customized at $target_path"
+    read -p "Overwrite? (y/N): " -n 1 -r
+    echo
+    [[ ! $REPLY =~ ^[Yy]$ ]] && return 1
+  fi
+
+  if ! cp "$source_path" "$target_path"; then
+    echo "Error: Failed to copy file to $target_path"
+    return 1
+  fi
+
+  echo "Copied $filename to $target_path"
+
+  # Re-apply theme to update symlinks
+  echo "Updating theme symlinks..."
+  local original_filename="$filename"
+  apply_theme "$theme_name" "$theme_category"
+  echo "Theme reapplied - $original_filename now points to your custom copy"
+
+  # Detect and open editor
+  local editor
+  if editor=$(detect_editor); then
+    echo "Opening $target_path in $editor..."
+    "$editor" "$target_path"
+    echo ""
+    echo "Changes saved. Run 'farv reload' if you need to refresh applications."
+  else
+    echo "No suitable editor found. Please manually edit: $target_path"
+    echo "After editing, run 'farv reload' to refresh applications."
+    echo ""
+    echo "You can set your preferred editor using:"
+    echo "  export EDITOR=your_editor_name"
+    echo "  export VISUAL=your_editor_name"
+  fi
+}
+
+# ----------------------------------------------------------------------------
+# Command: Clone
+# ----------------------------------------------------------------------------
+
+# Helper function to check if theme exists locally
+theme_exists_locally() {
+  local theme_name="$1"
+
+  # Check through all available themes
+  while IFS= read -r theme_line; do
+    if [[ -n "$theme_line" ]]; then
+      local parsed_name
+      if [[ "$theme_line" == *" (light)"* ]]; then
+        parsed_name="${theme_line%% \(light\)*}"
+      elif [[ "$theme_line" == *" (dark)"* ]]; then
+        parsed_name="${theme_line%% \(dark\)*}"
+      else
+        parsed_name="$theme_line"
+      fi
+
+      if [[ "$parsed_name" == "$theme_name" ]]; then
+        return 0
+      fi
+    fi
+  done < <(list_themes)
+
+  return 1
+}
+
+# Get source theme path and category information
+get_theme_source_info() {
+  local theme_name="$1"
+
+  # Try to resolve theme path in both categories
+  local light_path dark_path source_path source_category
+
+  light_path=$(resolve_theme_path "$theme_name" "light" 2>/dev/null)
+  dark_path=$(resolve_theme_path "$theme_name" "dark" 2>/dev/null)
+
+  if [[ -n "$light_path" ]]; then
+    source_path="$light_path"
+    source_category="light"
+  elif [[ -n "$dark_path" ]]; then
+    source_path="$dark_path"
+    source_category="dark"
+  else
+    echo "Error: Could not resolve path for theme '$theme_name'"
+    return 1
+  fi
+
+  echo "$source_path:$source_category"
+}
+
+# Validate clone request
+validate_clone_request() {
+  local source_theme="$1"
+  local target_name="$2"
+  local target_category="$3"
+
+  # Validate source theme exists
+  if ! theme_exists_locally "$source_theme"; then
+    echo "Error: Source theme '$source_theme' not found" >&2
+    echo "" >&2
+    echo "Available themes:" >&2
+    list_themes >&2
+    return 1
+  fi
+
+  # Validate target name if provided
+  if [[ -n "$target_name" ]] && ! validate_theme_name "$target_name"; then
+    echo "Error: Invalid target theme name '$target_name'" >&2
+    echo "Theme names must contain only letters, numbers, hyphens, and underscores" >&2
+    return 1
+  fi
+
+  # If no target name, use source name (for system → user cloning)
+  if [[ -z "$target_name" ]]; then
+    target_name="$source_theme"
+  fi
+
+  # Get source info to determine default category
+  local source_info
+  if ! source_info=$(get_theme_source_info "$source_theme"); then
+    return 1
+  fi
+
+  local source_category="${source_info#*:}"
+  target_category="${target_category:-$source_category}"
+
+  # Check if target already exists (either as user or system theme)
+  local target_user_dir="$FARV_USER_THEMES/$target_category/$target_name"
+  local target_system_dir="$FARV_SYSTEM_THEMES/$target_category/$target_name"
+
+  if [[ -d "$target_user_dir" ]]; then
+    echo "Error: Theme '$target_name' already exists in $target_category category (user)" >&2
+    echo "Location: $target_user_dir" >&2
+    return 1
+  fi
+
+  if [[ -d "$target_system_dir" ]]; then
+    echo "Error: Theme '$target_name' already exists in $target_category category (system)" >&2
+    echo "Location: $target_system_dir" >&2
+    echo "Choose a different name to avoid confusion" >&2
+    return 1
+  fi
+
+  echo "$target_name:$target_category"
+}
+
+# Core clone function
+clone_local_theme() {
+  local source_theme="$1"
+  local target_name="$2"
+  local target_category="$3"
+
+  # Resolve source theme information
+  local source_info
+  if ! source_info=$(get_theme_source_info "$source_theme"); then
+    return 1
+  fi
+
+  local source_path="${source_info%:*}"
+  local source_category="${source_info#*:}"
+
+  # Use source category if target category not specified
+  target_category="${target_category:-$source_category}"
+
+  # Use source name if target name not specified
+  target_name="${target_name:-$source_theme}"
+
+  # Create target directory
+  local target_dir="$FARV_USER_THEMES/$target_category/$target_name"
+
+  # Validate we're not trying to clone to the same location
+  if [[ "$source_path" == "$target_dir" ]]; then
+    echo "Error: Cannot clone theme to itself"
+    echo "Source and target are the same: $target_dir"
+    return 1
+  fi
+
+  # Copy files only from theme-specific directories
+  mkdir -p "$target_dir"
+
+  # Get theme-specific paths only (not category or global)
+  local theme_paths=(
+    "$FARV_USER_THEMES/$source_category/$source_theme"
+    "$FARV_SYSTEM_THEMES/$source_category/$source_theme"
+  )
+
+  local copied_count=0
+  local found_theme=false
+
+  # Copy files from theme-specific directories only
+  for theme_path in "${theme_paths[@]}"; do
+    if [[ -d "$theme_path" ]]; then
+      found_theme=true
+      for file in "$theme_path"/*; do
+        if [[ -f "$file" ]]; then
+          local filename
+          filename=$(basename "$file")
+          # Only copy if we haven't already copied this file (user overrides system)
+          if [[ ! -f "$target_dir/$filename" ]]; then
+            if cp "$file" "$target_dir/$filename"; then
+              # Preserve executable permissions
+              if [[ -x "$file" ]]; then
+                chmod +x "$target_dir/$filename"
+              fi
+              ((copied_count++))
+            else
+              echo "Warning: Failed to copy $filename"
+            fi
+          fi
+        fi
+      done
+    fi
+  done
+
+  if [[ "$found_theme" == false ]]; then
+    echo "Error: Theme '$source_theme' not found in category '$source_category'"
+    rm -rf "$target_dir"
+    return 1
+  fi
+
+  if [[ $copied_count -eq 0 ]]; then
+    echo "Error: No files were found in theme directories"
+    rm -rf "$target_dir"
+    return 1
+  fi
+
+  # Determine source type for informative message
+  local source_type="system"
+  local has_user_files=false
+  local has_system_files=false
+
+  if [[ -d "$FARV_USER_THEMES/$source_category/$source_theme" ]]; then
+    has_user_files=true
+  fi
+  if [[ -d "$FARV_SYSTEM_THEMES/$source_category/$source_theme" ]]; then
+    has_system_files=true
+  fi
+
+  if [[ "$has_user_files" == true && "$has_system_files" == true ]]; then
+    source_type="user + system"
+  elif [[ "$has_user_files" == true ]]; then
+    source_type="user"
+  fi
+
+  echo "Cloned theme: $source_theme ($source_type) → $target_name ($target_category)"
+  echo "Location: $target_dir"
+  echo "Copied $copied_count theme-specific files"
+  echo ""
+  echo "Next steps:"
+  echo "  1. Customize theme files in $target_dir"
+  echo "  2. Test with: farv use $target_name"
+}
+
+# Main clone function
+clone_theme() {
+  local source_theme="$1"
+  local target_name="$2"
+  local target_category="$3"
+
+  # Validate clone request
+  local validation_result
+  if ! validation_result=$(validate_clone_request "$source_theme" "$target_name" "$target_category"); then
+    # Error occurred during validation - the error message was already printed by validate_clone_request
+    return 1
+  fi
+
+  # Parse validation result
+  target_name="${validation_result%:*}"
+  target_category="${validation_result#*:}"
+
+  # Perform the clone
+  clone_local_theme "$source_theme" "$target_name" "$target_category"
+}
+
+# ----------------------------------------------------------------------------
+# Command: Pack
+# ----------------------------------------------------------------------------
+
+# Function to collect all source files for current theme
+collect_theme_sources() {
+  local theme_name="$1"
+  local theme_category="$2"
+  local temp_dir="$3"
+
+  echo "Collecting theme files for $theme_name ($theme_category)..."
+
+  # Create directory structure in temp location
+  local pack_theme_dir="$temp_dir/themes/$theme_category/$theme_name"
+  mkdir -p "$pack_theme_dir"
+
+  # Process each symlink in current theme
+  if [[ -d "$FARV_CURRENT_LINK" ]]; then
+    for symlink in "$FARV_CURRENT_LINK"/*; do
+      if [[ -L "$symlink" ]]; then
+        local filename
+        filename=$(basename "$symlink")
+        local source_path
+        source_path=$(readlink "$symlink")
+
+        # Copy source file to pack directory
+        if [[ -f "$source_path" ]]; then
+          cp "$source_path" "$pack_theme_dir/$filename"
+          echo "  + $filename"
+        fi
+      fi
+    done
+  fi
+
+  # Also collect any executable scripts
+  collect_theme_scripts "$theme_name" "$theme_category" "$pack_theme_dir"
+}
+
+# Function to collect executable scripts for theme
+collect_theme_scripts() {
+  local theme_name="$1"
+  local theme_category="$2"
+  local pack_theme_dir="$3"
+
+  # Get scripts in priority order
+  local scripts
+  readarray -t scripts < <(discover_theme_scripts "$theme_category" "$theme_name")
+
+  for script_path in "${scripts[@]}"; do
+    if [[ -f "$script_path" && -x "$script_path" ]]; then
+      local script_name
+      script_name=$(basename "$script_path")
+      cp "$script_path" "$pack_theme_dir/$script_name"
+      chmod +x "$pack_theme_dir/$script_name"
+      echo "  + $script_name (executable)"
+    fi
+  done
+}
+
+# Function to create metadata file for theme package
+create_theme_metadata() {
+  local theme_dir="$1"
+
+  cat >"$theme_dir/FARV_THEME_INFO" <<EOF
+# Farv Theme Package Information
+# Generated on: $(date -Iseconds)
+# Farv version: $(farv --version 2>/dev/null || echo "unknown")
+
+THEME_NAME="$(basename "$theme_dir")"
+THEME_CATEGORY="$(basename "$(dirname "$theme_dir")")"
+PACKAGE_VERSION="1.0"
+PACKED_BY="$(whoami)@$(hostname)"
+PACKED_FROM="$(pwd)"
+
+# Files included in this package:
+$(find "$theme_dir" -type f ! -name "FARV_THEME_INFO" | sort | sed 's|^.*/||' | sed 's/^/# - /')
+EOF
+}
+
+# Function to create tar.gz archive from collected files
+create_theme_archive() {
+  local temp_dir="$1"
+  local output_file="$2"
+  local theme_name="$3"
+  local theme_category="$4"
+
+  # Create archive from temp directory
+  local current_dir
+  current_dir=$(pwd)
+  cd "$temp_dir" || return 1
+
+  # Include metadata file
+  create_theme_metadata "themes/$theme_category/$theme_name"
+
+  if tar -czf "$current_dir/$output_file" themes/; then
+    echo "Theme packed successfully: $output_file"
+    echo "Archive contains:"
+    tar -tzf "$current_dir/$output_file" | sed 's/^/  /'
+  else
+    echo "Error: Failed to create archive" >&2
+    return 1
+  fi
+
+  cd "$current_dir" || return 1
+}
+
+# Main pack function
+pack_theme() {
+  local output_file="$1"
+  local output_dir="$2"
+
+  # Get current theme info
+  local current_theme
+  if ! current_theme=$(get_current_active_theme); then
+    return 1
+  fi
+
+  local theme_name="${current_theme%:*}"
+  local theme_category="${current_theme#*:}"
+
+  # Determine output filename
+  if [[ -z "$output_file" ]]; then
+    output_file="farv-${theme_name}-$(date +%Y%m%d).tar.gz"
+  fi
+
+  # Ensure .tar.gz extension
+  if [[ "$output_file" != *.tar.gz ]]; then
+    output_file="${output_file%.tar}.tar.gz"
+  fi
+
+  # Add output directory if specified
+  if [[ -n "$output_dir" ]]; then
+    output_file="$output_dir/$output_file"
+  fi
+
+  # Check if output file already exists
+  if [[ -f "$output_file" ]]; then
+    echo "Error: Output file already exists: $output_file" >&2
+    echo "Use a different name or remove the existing file" >&2
+    return 1
+  fi
+
+  # Create temporary directory
+  local temp_dir
+  temp_dir=$(mktemp -d)
+  trap 'rm -rf "$temp_dir"' EXIT
+
+  # Collect theme files
+  collect_theme_sources "$theme_name" "$theme_category" "$temp_dir"
+
+  # Create archive
+  create_theme_archive "$temp_dir" "$output_file" "$theme_name" "$theme_category"
+}
+
+# ----------------------------------------------------------------------------
+# Command: Install
+# ----------------------------------------------------------------------------
+
+# Function to validate theme archive before installation
+validate_theme_archive() {
+  local archive_file="$1"
+
+  # Check file exists and is readable
+  if [[ ! -f "$archive_file" ]]; then
+    echo "Error: Archive file not found: $archive_file" >&2
+    return 1
+  fi
+
+  # Check if it's a valid tar.gz file
+  if ! tar -tzf "$archive_file" >/dev/null 2>&1; then
+    echo "Error: Invalid or corrupted archive file" >&2
+    return 1
+  fi
+
+  # Check for required directory structure
+  if ! tar -tzf "$archive_file" | grep -q "^themes/\(light\|dark\)/[^/]\+/"; then
+    echo "Error: Archive does not contain valid farv theme structure" >&2
+    echo "Expected: themes/{light|dark}/{theme-name}/..." >&2
+    echo "Found structure:" >&2
+    tar -tzf "$archive_file" | head -5 | sed 's/^/  /' >&2
+    return 1
+  fi
+
+  echo "Archive validation successful"
+  return 0
+}
+
+# Function to extract theme information from archive
+extract_theme_info() {
+  local archive_file="$1"
+
+  # Try to extract metadata if it exists
+  if tar -tzf "$archive_file" | grep -q "FARV_THEME_INFO$"; then
+    local temp_file
+    temp_file=$(mktemp)
+    tar -xzf "$archive_file" -O '*/FARV_THEME_INFO' >"$temp_file" 2>/dev/null
+
+    if [[ -s "$temp_file" ]]; then
+      source "$temp_file"
+      echo "$theme_name:$theme_category"
+      rm -f "$temp_file"
+      return 0
+    fi
+    rm -f "$temp_file"
+  fi
+
+  # Fallback: parse from directory structure
+  local first_entry
+  first_entry=$(tar -tzf "$archive_file" | grep -E "^themes/(light|dark)/[^/]+/$" | head -1)
+  if [[ -n "$first_entry" ]]; then
+    local theme_name
+    theme_name=$(basename "${first_entry%/}")
+    local theme_category
+    theme_category=$(basename "$(dirname "${first_entry%/}")")
+    echo "$theme_name:$theme_category"
+    return 0
+  fi
+
+  echo "Error: Could not determine theme information from archive" >&2
+  return 1
+}
+
+# Function to install theme from archive
+install_theme() {
+  local archive_file="$1"
+  local custom_name="$2"
+  local preview_only="$3"
+
+  # Validate archive
+  if ! validate_theme_archive "$archive_file"; then
+    return 1
+  fi
+
+  # Extract theme information
+  local theme_info
+  if ! theme_info=$(extract_theme_info "$archive_file"); then
+    return 1
+  fi
+
+  local original_name="${theme_info%:*}"
+  local theme_category="${theme_info#*:}"
+  local install_name="${custom_name:-$original_name}"
+
+  # Preview mode
+  if [[ "$preview_only" == "true" ]]; then
+    echo "Theme archive contents:"
+    echo "  Original name: $original_name"
+    echo "  Category: $theme_category"
+    echo "  Install name: $install_name"
+    echo ""
+    echo "Files:"
+    tar -tzf "$archive_file" | grep -v "/$" | sort | sed 's/^/  /'
+    return 0
+  fi
+
+  # Check for existing theme
+  local target_dir="$FARV_USER_THEMES/$theme_category/$install_name"
+  if [[ -d "$target_dir" ]]; then
+    echo "Error: Theme '$install_name' already exists in $theme_category category" >&2
+    echo "Location: $target_dir" >&2
+    echo "Use --name to install with a different name" >&2
+    return 1
+  fi
+
+  # Create temporary extraction directory
+  local temp_dir
+  temp_dir=$(mktemp -d)
+  trap 'rm -rf "$temp_dir"' EXIT
+
+  # Extract archive
+  if ! tar -xzf "$archive_file" -C "$temp_dir"; then
+    echo "Error: Failed to extract archive" >&2
+    return 1
+  fi
+
+  # Find the theme directory in extracted files
+  local source_theme_dir
+  source_theme_dir=$(find "$temp_dir" -type d -path "*/themes/$theme_category/$original_name" | head -1)
+
+  if [[ ! -d "$source_theme_dir" ]]; then
+    echo "Error: Could not find theme directory in extracted archive" >&2
+    return 1
+  fi
+
+  # Install theme
+  mkdir -p "$FARV_USER_THEMES/$theme_category"
+  if cp -r "$source_theme_dir" "$target_dir"; then
+    echo "Theme installed successfully: $install_name ($theme_category)"
+    echo "Location: $target_dir"
+    echo ""
+    echo "Files installed:"
+    find "$target_dir" -type f | sort | sed "s|$target_dir/|  |"
+    echo ""
+    echo "Next steps:"
+    echo "  1. Test with: farv use $install_name"
+    echo "  2. Customize files in $target_dir if needed"
+  else
+    echo "Error: Failed to install theme files" >&2
+    return 1
+  fi
+}
+
+# ----------------------------------------------------------------------------
+# Shell Completions
+# ----------------------------------------------------------------------------
+
+# Generate zsh completion script
+generate_zsh_completion() {
+  cat <<'EOF'
+#compdef farv
+
+_farv() {
+    local curcontext="$curcontext" state line
+    typeset -A opt_args
+
+    _arguments -C \
+        '1: :_farv_commands_only' \
+        '2: :_farv_second_arg' \
+        '3: :_farv_third_arg' \
+        '*::arg:->args'
+}
+
+_farv_commands_only() {
+    local -a commands
+    commands=(
+        'use:Use a theme'
+        'list:List all available themes'
+        'current:Show current active theme'
+        'background:Manage theme backgrounds'
+        'bg:Manage theme backgrounds (alias for background)'
+        'reload:Reload current active theme'
+        'next:Cycle to next theme'
+        'prev:Cycle to previous theme'
+        'random:Switch to random theme'
+        'customize:Customize a theme file'
+        'new:Create a new user theme'
+        'clone:Clone existing local theme'
+        'pack:Package current theme'
+        'install:Install theme package'
+    )
+    _describe 'commands' commands
+}
+
+_farv_second_arg() {
+    case $words[2] in
+        use)
+            # Show themes for use command - simpler approach to avoid variable leakage
+            local -a themes theme_name description
+            local theme_list
+            theme_list=$(farv list --verbose 2>/dev/null)
+            
+            while IFS= read -r line; do
+                if [[ -n "$line" ]]; then
+                    # Parse: "theme-name (description)"
+                    case "$line" in
+                        *' ('*')')
+                            theme_name="${line%% *}"
+                            description="${line#*\(}"
+                            description="${description%\)}"
+                            themes+=("${theme_name}:${description}")
+                            ;;
+                    esac
+                fi
+            done <<< "$theme_list"
+            _describe 'themes' themes
+            ;;
+        clone)
+            # Show local themes for cloning
+            local -a themes
+            local theme_list
+            theme_list=$(farv list --verbose 2>/dev/null)
+            
+            while IFS= read -r line; do
+                if [[ -n "$line" ]]; then
+                    # Parse: "theme-name (description)"
+                    case "$line" in
+                        *' ('*')')
+                            theme_name="${line%% *}"
+                            description="${line#*\(}"
+                            description="${description%\)}"
+                            themes+=("${theme_name}:${description}")
+                            ;;
+                    esac
+                fi
+            done <<< "$theme_list"
+            _describe 'themes to clone' themes
+            ;;
+        customize)
+            # Show current theme files for customize
+            local -a current_files
+            if [[ -d "${XDG_CONFIG_HOME:-$HOME/.config}/farv/current" ]]; then
+                for file in "${XDG_CONFIG_HOME:-$HOME/.config}/farv/current"/*; do
+                    if [[ -L "$file" ]]; then
+                        current_files+=("$(basename "$file"):theme file")
+                    fi
+                done
+            fi
+            _describe 'current theme files' current_files
+            ;;
+        new)
+            # Show categories for new command
+            local -a categories
+            categories=(
+                'light:Create light theme'
+                'dark:Create dark theme'
+            )
+            _describe 'categories' categories
+            ;;
+        install)
+            # Complete .tar.gz files
+            _files -g "*.tar.gz"
+            ;;
+        list|ls)
+            # Complete list command flags
+            local -a list_flags
+            list_flags=(
+                '-v:Show verbose descriptions'
+                '--verbose:Show verbose descriptions'
+            )
+            _describe 'list options' list_flags
+            ;;
+        current)
+            # Complete current command flags
+            local -a current_flags
+            current_flags=(
+                '-v:Show verbose descriptions'
+                '--verbose:Show verbose descriptions'
+            )
+            _describe 'current options' current_flags
+            ;;
+        background|bg)
+            # Complete background subcommands
+            local -a background_commands
+            background_commands=(
+                'list:List available backgrounds'
+                'current:Show current background'
+                'set:Set current background'
+                'next:Switch to next background'
+                'prev:Switch to previous background'
+                'random:Switch to random background'
+            )
+            _describe 'background commands' background_commands
+            ;;
+    esac
+}
+
+_farv_third_arg() {
+    if [[ $words[2] == "new" && ($words[3] == "light" || $words[3] == "dark") ]]; then
+        # Third argument after "farv new [category]" - allow free text for theme name
+        return 0
+    fi
+
+    if [[ ($words[2] == "background" || $words[2] == "bg") && $words[3] == "set" ]]; then
+        # Complete background filenames for "farv background set" or "farv bg set"
+        local -a background_files
+        if [[ -d "${XDG_CONFIG_HOME:-$HOME/.config}/farv/current/backgrounds" ]]; then
+            for file in "${XDG_CONFIG_HOME:-$HOME/.config}/farv/current/backgrounds"/*.{jpg,jpeg,png}; do
+                if [[ -f "$file" && "$(basename "$file")" != "current-background" ]]; then
+                    background_files+=("$(basename "$file")")
+                fi
+            done
+        fi
+        _describe 'background files' background_files
+        return 0
+    fi
+}
+
+_farv "$@"
+EOF
+}
+
+# Generate bash completion script
+generate_bash_completion() {
+  cat <<'EOF'
+_farv() {
+    local cur prev opts
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+    
+    # Handle use subcommand
+    if [[ ${prev} == "use" ]]; then
+        local themes
+        themes=$(farv list --verbose 2>/dev/null | sed 's/ (light).*//; s/ (dark).*//')
+        COMPREPLY=( $(compgen -W "${themes}" -- ${cur}) )
+        return 0
+    fi
+    
+    # Handle clone subcommand
+    if [[ ${prev} == "clone" ]]; then
+        # Complete with local theme names only
+        local themes
+        themes=$(farv list --verbose 2>/dev/null | sed 's/ (light).*//; s/ (dark).*//')
+        COMPREPLY=( $(compgen -W "${themes}" -- ${cur}) )
+        return 0
+    fi
+    
+    # Handle customize subcommand
+    if [[ ${prev} == "customize" ]]; then
+        local current_files=""
+        if [ -d "${XDG_CONFIG_HOME:-$HOME/.config}/farv/current" ]; then
+            current_files=$(ls "${XDG_CONFIG_HOME:-$HOME/.config}/farv/current" 2>/dev/null | tr '\n' ' ')
+        fi
+        COMPREPLY=( $(compgen -W "${current_files}" -- ${cur}) )
+        return 0
+    fi
+
+    # Handle background subcommand
+    if [[ ${prev} == "background" || ${prev} == "bg" ]]; then
+        local subcommands="list current set next prev random"
+        COMPREPLY=( $(compgen -W "${subcommands}" -- ${cur}) )
+        return 0
+    fi
+
+    # Handle background set subcommand
+    if [[ (${COMP_WORDS[COMP_CWORD-2]} == "background" || ${COMP_WORDS[COMP_CWORD-2]} == "bg") && ${prev} == "set" ]]; then
+        local background_files=""
+        if [ -d "${XDG_CONFIG_HOME:-$HOME/.config}/farv/current/backgrounds" ]; then
+            background_files=$(ls "${XDG_CONFIG_HOME:-$HOME/.config}/farv/current/backgrounds"/*.{jpg,jpeg,png} 2>/dev/null | grep -v "current-background" | xargs -n1 basename | tr '\n' ' ')
+        fi
+        COMPREPLY=( $(compgen -W "${background_files}" -- ${cur}) )
+        return 0
+    fi
+
+    # Handle new subcommand
+    if [[ ${prev} == "new" ]]; then
+        # Complete with categories (required)
+        COMPREPLY=( $(compgen -W "light dark" -- ${cur}) )
+        return 0
+    fi
+    
+    # Handle new subcommand with category already specified
+    if [[ ${COMP_CWORD} == 3 && ${COMP_WORDS[1]} == "new" && (${COMP_WORDS[2]} == "light" || ${COMP_WORDS[2]} == "dark") ]]; then
+        # Third argument after "farv new [category]" - no completion, user types theme name
+        return 0
+    fi
+    
+    if [[ ${cur} == -* ]]; then
+        opts="--help -h --generate-completion list ls customize"
+        COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
+        return 0
+    fi
+    
+    # Handle install subcommand - complete .tar.gz files
+    if [[ ${prev} == "install" ]]; then
+        COMPREPLY=( $(compgen -f -X "!*.tar.gz" -- ${cur}) )
+        return 0
+    fi
+    
+    # Handle list subcommand
+    if [[ ${prev} == "list" || ${prev} == "ls" ]]; then
+        COMPREPLY=( $(compgen -W "-v --verbose" -- ${cur}) )
+        return 0
+    fi
+    
+    # Handle current subcommand
+    if [[ ${prev} == "current" ]]; then
+        COMPREPLY=( $(compgen -W "-v --verbose" -- ${cur}) )
+        return 0
+    fi
+    
+    # First argument - show commands only
+    if [[ ${COMP_CWORD} == 1 ]]; then
+        local commands="use list current background bg reload next prev random customize new clone pack install"
+        COMPREPLY=( $(compgen -W "${commands}" -- ${cur}) )
+        return 0
+    fi
+}
+
+complete -F _farv farv
+EOF
+}
+
+# Generate fish completion script
+generate_fish_completion() {
+  cat <<'EOF'
+function __farv_complete_themes
+    farv list --verbose 2>/dev/null | sed 's/ (light).*//; s/ (dark).*//'
+end
+
+function __farv_complete_themes_with_desc
+    farv list --verbose 2>/dev/null | while read -l line
+        # Parse light themes
+        if string match -q '* (light)*' -- "$line"
+            set theme_name (string replace -r ' \(light\).*$' '' -- "$line")
+            if string match -q '*[user]*' -- "$line"
+                if test -d "$FARV_SYSTEM_THEMES/light/$theme_name"
+                    set description "customized light system theme"
+                else
+                    set description "light user theme"
+                end
+            else
+                set description "light system theme"
+            end
+            printf "%s\t%s\n" "$theme_name" "$description"
+        # Parse dark themes
+        else if string match -q '* (dark)*' -- "$line"
+            set theme_name (string replace -r ' \(dark\).*$' '' -- "$line")
+            if string match -q '*[user]*' -- "$line"
+                if test -d "$FARV_SYSTEM_THEMES/dark/$theme_name"
+                    set description "customized dark system theme"
+                else
+                    set description "dark user theme"
+                end
+            else
+                set description "dark system theme"
+            end
+            printf "%s\t%s\n" "$theme_name" "$description"
+        else
+            # Fallback
+            echo "$line"
+        end
+    end
+end
+
+function __farv_complete_current_files
+    if test -d "$XDG_CONFIG_HOME/farv/current"; or test -d "$HOME/.config/farv/current"
+        for file in "$XDG_CONFIG_HOME/farv/current"/* "$HOME/.config/farv/current"/*
+            if test -L "$file"
+                basename "$file"
+            end
+        end
+    end
+end
+
+# Complete themes only after 'use' command
+function __farv_setup_theme_completions_for_use
+    farv list --verbose 2>/dev/null | while read -l line
+        # Parse: "theme-name (description)"
+        if string match -qr '^([^ ]+) \((.+)\)$' -- "$line"
+            set theme_name (string replace -r ' \(.*$' '' -- "$line")
+            set description (string replace -r '^[^ ]+ \(' '' -- "$line" | string replace -r '\)$' '' )
+            complete -c farv -f -n '__fish_seen_subcommand_from use' -a "$theme_name" -d "$description"
+        end
+    end
+end
+
+__farv_setup_theme_completions_for_use
+
+# Commands only at top level
+complete -c farv -f -n '__fish_is_first_token' -a 'use' -d 'Use a theme'
+complete -c farv -f -n '__fish_is_first_token' -a 'list' -d 'List available themes'
+complete -c farv -f -n '__fish_is_first_token' -a 'current' -d 'Show current active theme'
+complete -c farv -f -n '__fish_is_first_token' -a 'background' -d 'Manage theme backgrounds'
+complete -c farv -f -n '__fish_is_first_token' -a 'bg' -d 'Manage theme backgrounds (alias)'
+complete -c farv -f -n '__fish_is_first_token' -a 'reload' -d 'Reload current active theme'
+complete -c farv -f -n '__fish_is_first_token' -a 'next' -d 'Cycle to next theme'
+complete -c farv -f -n '__fish_is_first_token' -a 'prev' -d 'Cycle to previous theme'
+complete -c farv -f -n '__fish_is_first_token' -a 'random' -d 'Switch to random theme'
+complete -c farv -f -n '__fish_is_first_token' -a 'customize' -d 'Customize theme file'
+complete -c farv -f -n '__fish_is_first_token' -a 'new' -d 'Create new theme'
+complete -c farv -f -n '__fish_is_first_token' -a 'clone' -d 'Clone existing theme'
+complete -c farv -f -n '__fish_is_first_token' -a 'pack' -d 'Package current theme'
+complete -c farv -f -n '__fish_is_first_token' -a 'install' -d 'Install theme package'
+
+# Complete categories after 'new'
+complete -c farv -f -n '__fish_seen_subcommand_from new; and test (count (commandline -opc)) -eq 2' -a 'light dark'
+
+# Complete themes after 'clone' - use the same detailed completions as 'use'
+function __farv_setup_theme_completions_for_clone
+    farv list --verbose 2>/dev/null | while read -l line
+        # Parse: "theme-name (description)"
+        if string match -qr '^([^ ]+) \((.+)\)$' -- "$line"
+            set theme_name (string replace -r ' \(.*$' '' -- "$line")
+            set description (string replace -r '^[^ ]+ \(' '' -- "$line" | string replace -r '\)$' '' )
+            complete -c farv -f -n '__fish_seen_subcommand_from clone' -a "$theme_name" -d "$description"
+        end
+    end
+end
+
+__farv_setup_theme_completions_for_clone
+
+# Complete current theme files for customize command
+complete -c farv -f -n '__fish_seen_subcommand_from customize' -a '(__farv_complete_current_files)' -d 'Current theme files'
+
+# Complete .tar.gz files for install
+complete -c farv -f -n '__fish_seen_subcommand_from install' -a '*.tar.gz' -d 'Theme package'
+
+# Complete flags for list command
+complete -c farv -f -n '__fish_seen_subcommand_from list ls' -s v -d 'Show verbose descriptions'
+complete -c farv -f -n '__fish_seen_subcommand_from list ls' -l verbose -d 'Show verbose descriptions'
+
+# Complete flags for current command
+complete -c farv -f -n '__fish_seen_subcommand_from current' -s v -d 'Show verbose descriptions'
+complete -c farv -f -n '__fish_seen_subcommand_from current' -l verbose -d 'Show verbose descriptions'
+
+# Complete background subcommands
+complete -c farv -f -n '__fish_seen_subcommand_from background bg' -a 'list' -d 'List available backgrounds'
+complete -c farv -f -n '__fish_seen_subcommand_from background bg' -a 'current' -d 'Show current background'
+complete -c farv -f -n '__fish_seen_subcommand_from background bg' -a 'set' -d 'Set current background'
+complete -c farv -f -n '__fish_seen_subcommand_from background bg' -a 'next' -d 'Switch to next background'
+complete -c farv -f -n '__fish_seen_subcommand_from background bg' -a 'prev' -d 'Switch to previous background'
+complete -c farv -f -n '__fish_seen_subcommand_from background bg' -a 'random' -d 'Switch to random background'
+
+# Complete background filenames for 'set' subcommand
+function __farv_complete_background_files
+    if test -d "$XDG_CONFIG_HOME/farv/current/backgrounds"; or test -d "$HOME/.config/farv/current/backgrounds"
+        for file in "$XDG_CONFIG_HOME/farv/current/backgrounds"/*.{jpg,jpeg,png} "$HOME/.config/farv/current/backgrounds"/*.{jpg,jpeg,png}
+            if test -f "$file"; and not string match -q "*current-background*" -- "$file"
+                basename "$file"
+            end
+        end
+    end
+end
+
+complete -c farv -f -n '__fish_seen_subcommand_from background bg; and __fish_seen_subcommand_from set' -a '(__farv_complete_background_files)' -d 'Background files'
+
+# Standard options
+complete -c farv -s l -l list -d 'List available themes'
+complete -c farv -l help -d 'Show help'
+EOF
+}
+
+# ----------------------------------------------------------------------------
+# Help System
+# ----------------------------------------------------------------------------
+
+# Show help information
+show_help() {
+  cat <<'EOF'
+farv - A friend in rice is a friend that's nice :-)
+
+USAGE:
+    farv use [THEME]                     Use specified theme
+    farv use                             Interactive theme selection (requires fzf)
+    farv list [-v|--verbose]             List all available themes
+    farv current [-v|--verbose]          Show current active theme
+    farv background|bg <command>         Manage theme backgrounds
+    farv reload                          Reload current active theme
+    farv next                            Cycle to next theme
+    farv prev                            Cycle to previous theme
+    farv random                          Switch to random theme
+    farv new <category> <name>           Create a new user theme
+    farv clone <source> [name]           Clone existing local theme
+    farv customize <filename>            Copy theme file to user directory and open editor
+    farv pack [filename]                 Package current theme for sharing
+    farv install <archive>               Install theme from package
+    farv --help                          Show this help message
+    farv --generate-completion SHELL     Generate completion script for shell
+
+EXAMPLES:
+    farv list                            Show all available themes
+    farv use                             Open interactive theme selector
+    farv use rose-pine-dawn              Use rose-pine-dawn theme
+    farv background list                 List available backgrounds for current theme
+    farv background set wallpaper.jpg    Set specific background
+    farv background next                 Switch to next background
+    farv background prev                 Switch to previous background
+    farv background random               Switch to random background
+    farv new dark my-theme               Create new dark theme
+    farv new light my-theme              Create new light theme
+    farv clone rose-pine-dawn            Clone system theme to user space
+    farv clone rose-pine-dawn my-rose    Clone local theme with new name
+    farv clone rose-pine-dawn --category dark
+                                         Clone with different category
+    farv customize btop.theme            Copy btop.theme to user directory and open editor
+    farv pack                            Pack current theme as farv-theme-name-date.tar.gz
+    farv pack my-theme.tar.gz            Pack with custom filename
+    farv pack --output ~/themes/         Pack to specific directory
+    farv install theme.tar.gz            Install theme package
+    farv install theme.tar.gz --name foo Install theme package with different name
+    farv install theme.tar.gz --preview  Preview package contents
+
+NEW THEME CREATION:
+    After running 'farv new <category> <name>', add configuration files to:
+    ~/.config/farv/themes/{category}/{name}/
+    
+    Use 'farv customize <filename>' to copy files from current theme
+    as a starting point for your new theme.
+
+CUSTOMIZATION:
+    The 'farv customize <filename>' command will:
+    1. Copy the file to: ~/.config/farv/themes/{category}/{theme}/{filename}
+    2. Update theme symlinks to use your custom copy
+    3. Open the file in your preferred editor
+
+    After making changes, use 'farv reload' to apply them immediately.
+    Your custom version will be used automatically for this theme.
+
+BACKGROUND MANAGEMENT:
+    Themes can include multiple background images in a 'backgrounds' folder.
+    Use the 'farv background' command to manage them:
+
+    farv background list      - Show all available backgrounds
+    farv background current   - Show current background selection
+    farv background set <file> - Set a specific background
+    farv background next      - Cycle to next background
+    farv background prev      - Cycle to previous background
+    farv background random    - Switch to a random background
+
+    To add backgrounds to a theme, place images in:
+    ~/.config/farv/themes/{category}/{theme}/backgrounds/
+EOF
+}
+
+# ----------------------------------------------------------------------------
+# Background Management Functions
+# ----------------------------------------------------------------------------
+
+list_backgrounds() {
+    if [[ ! -d "$FARV_CURRENT_LINK/backgrounds" ]]; then
+        echo "No backgrounds folder found for current theme"
+        return 1
+    fi
+
+    echo "Available backgrounds for current theme:"
+
+    # Get current selection
+    local current_bg=""
+    if [[ -L "$FARV_CURRENT_LINK/backgrounds/current-background" ]]; then
+        current_bg=$(basename "$(readlink "$FARV_CURRENT_LINK/backgrounds/current-background")")
+    fi
+
+    # List all backgrounds
+    local found_any=false
+    for bg in "$FARV_CURRENT_LINK/backgrounds"/*.{jpg,jpeg,png}; do
+        if [[ -f "$bg" ]]; then
+            local bg_name=$(basename "$bg")
+            if [[ "$bg_name" == "$current_bg" ]]; then
+                echo "  * $bg_name (current)"
+            else
+                echo "    $bg_name"
+            fi
+            found_any=true
+        fi
+    done
+
+    if [[ "$found_any" == "false" ]]; then
+        echo "  No background images found"
+    fi
+}
+
+set_background() {
+    local background_name="$1"
+
+    if [[ -z "$background_name" ]]; then
+        echo "Error: Background filename required"
+        return 1
+    fi
+
+    # Check if the background exists in current theme
+    if [[ ! -f "$FARV_CURRENT_LINK/backgrounds/$background_name" ]]; then
+        echo "Error: Background file '$background_name' not found"
+        echo "Available backgrounds:"
+        list_backgrounds
+        return 1
+    fi
+
+    # Update the current-background symlink in current theme
+    ln -sf "$background_name" "$FARV_CURRENT_LINK/backgrounds/current-background"
+
+    # Run wallpaper scripts to apply the new background
+    echo "Setting background to $background_name..."
+    local scripts
+    readarray -t scripts < <(find "$FARV_SYSTEM_DIR/themes" "$FARV_USER_THEMES" -name "*wallpaper*" -type f -executable 2>/dev/null)
+
+    for script in "${scripts[@]}"; do
+        if [[ -x "$script" ]]; then
+            echo "  - $(basename "$script")"
+            "$script"
+        fi
+    done
+}
+
+show_current_background() {
+    if [[ -L "$FARV_CURRENT_LINK/backgrounds/current-background" ]]; then
+        local current_bg
+        current_bg=$(basename "$(readlink "$FARV_CURRENT_LINK/backgrounds/current-background")")
+        echo "Current background: $current_bg"
+    else
+        echo "No background selection found"
+    fi
+}
+
+cycle_to_next_background() {
+    if [[ ! -d "$FARV_CURRENT_LINK/backgrounds" ]]; then
+        echo "No backgrounds folder found for current theme"
+        return 1
+    fi
+
+    # Get current background
+    local current_bg=""
+    if [[ -L "$FARV_CURRENT_LINK/backgrounds/current-background" ]]; then
+        current_bg=$(basename "$(readlink "$FARV_CURRENT_LINK/backgrounds/current-background")")
+    fi
+
+    # Get all available backgrounds (sorted)
+    local backgrounds=()
+    for bg in "$FARV_CURRENT_LINK/backgrounds"/*.{jpg,jpeg,png}; do
+        if [[ -f "$bg" ]]; then
+            local bg_name=$(basename "$bg")
+            if [[ "$bg_name" != "current-background" ]]; then
+                backgrounds+=("$bg_name")
+            fi
+        fi
+    done
+
+    if [[ ${#backgrounds[@]} -eq 0 ]]; then
+        echo "No background images found"
+        return 1
+    fi
+
+    # Sort the backgrounds array
+    IFS=$'\n' backgrounds=($(sort <<<"${backgrounds[*]}"))
+    unset IFS
+
+    # Find next background
+    local next_bg=""
+    if [[ -z "$current_bg" ]]; then
+        # No current background, use first one
+        next_bg="${backgrounds[0]}"
+    else
+        # Find current background in sorted list and get next one
+        for i in "${!backgrounds[@]}"; do
+            if [[ "${backgrounds[i]}" == "$current_bg" ]]; then
+                # Get next background (wrap around to first if at end)
+                local next_index=$(( (i + 1) % ${#backgrounds[@]} ))
+                next_bg="${backgrounds[next_index]}"
+                break
+            fi
+        done
+
+        # If current background not found, use first one
+        if [[ -z "$next_bg" ]]; then
+            next_bg="${backgrounds[0]}"
+        fi
+    fi
+
+    # Set the next background
+    if [[ -n "$next_bg" ]]; then
+        ln -sf "$next_bg" "$FARV_CURRENT_LINK/backgrounds/current-background"
+        echo "Switched to background: $next_bg"
+
+        # Run wallpaper scripts to apply the new background
+        local scripts
+        readarray -t scripts < <(find "$FARV_SYSTEM_DIR/themes" "$FARV_USER_THEMES" -name "*wallpaper*" -type f -executable 2>/dev/null)
+
+        for script in "${scripts[@]}"; do
+            if [[ -x "$script" ]]; then
+                "$script"
+            fi
+        done
+    fi
+}
+
+cycle_to_prev_background() {
+    if [[ ! -d "$FARV_CURRENT_LINK/backgrounds" ]]; then
+        echo "No backgrounds folder found for current theme"
+        return 1
+    fi
+
+    # Get current background
+    local current_bg=""
+    if [[ -L "$FARV_CURRENT_LINK/backgrounds/current-background" ]]; then
+        current_bg=$(basename "$(readlink "$FARV_CURRENT_LINK/backgrounds/current-background")")
+    fi
+
+    # Get all available backgrounds (sorted)
+    local backgrounds=()
+    for bg in "$FARV_CURRENT_LINK/backgrounds"/*.{jpg,jpeg,png}; do
+        if [[ -f "$bg" ]]; then
+            local bg_name=$(basename "$bg")
+            if [[ "$bg_name" != "current-background" ]]; then
+                backgrounds+=("$bg_name")
+            fi
+        fi
+    done
+
+    if [[ ${#backgrounds[@]} -eq 0 ]]; then
+        echo "No background images found"
+        return 1
+    fi
+
+    # Sort the backgrounds array
+    IFS=$'\n' backgrounds=($(sort <<<"${backgrounds[*]}"))
+    unset IFS
+
+    # Find previous background
+    local prev_bg=""
+    if [[ -z "$current_bg" ]]; then
+        # No current background, use last one
+        prev_bg="${backgrounds[-1]}"
+    else
+        # Find current background in sorted list and get previous one
+        for i in "${!backgrounds[@]}"; do
+            if [[ "${backgrounds[i]}" == "$current_bg" ]]; then
+                # Get previous background (wrap around to last if at beginning)
+                if [[ $i -eq 0 ]]; then
+                    prev_bg="${backgrounds[-1]}"
+                else
+                    local prev_index=$(( i - 1 ))
+                    prev_bg="${backgrounds[prev_index]}"
+                fi
+                break
+            fi
+        done
+
+        # If current background not found, use last one
+        if [[ -z "$prev_bg" ]]; then
+            prev_bg="${backgrounds[-1]}"
+        fi
+    fi
+
+    # Set the previous background
+    if [[ -n "$prev_bg" ]]; then
+        ln -sf "$prev_bg" "$FARV_CURRENT_LINK/backgrounds/current-background"
+        echo "Switched to background: $prev_bg"
+
+        # Run wallpaper scripts to apply the new background
+        local scripts
+        readarray -t scripts < <(find "$FARV_SYSTEM_DIR/themes" "$FARV_USER_THEMES" -name "*wallpaper*" -type f -executable 2>/dev/null)
+
+        for script in "${scripts[@]}"; do
+            if [[ -x "$script" ]]; then
+                "$script"
+            fi
+        done
+    fi
+}
+
+cycle_to_random_background() {
+    if [[ ! -d "$FARV_CURRENT_LINK/backgrounds" ]]; then
+        echo "No backgrounds folder found for current theme"
+        return 1
+    fi
+
+    # Get current background
+    local current_bg=""
+    if [[ -L "$FARV_CURRENT_LINK/backgrounds/current-background" ]]; then
+        current_bg=$(basename "$(readlink "$FARV_CURRENT_LINK/backgrounds/current-background")")
+    fi
+
+    # Get all available backgrounds
+    local backgrounds=()
+    for bg in "$FARV_CURRENT_LINK/backgrounds"/*.{jpg,jpeg,png}; do
+        if [[ -f "$bg" ]]; then
+            local bg_name=$(basename "$bg")
+            if [[ "$bg_name" != "current-background" ]]; then
+                backgrounds+=("$bg_name")
+            fi
+        fi
+    done
+
+    if [[ ${#backgrounds[@]} -eq 0 ]]; then
+        echo "No background images found"
+        return 1
+    fi
+
+    # If only one background, just use it
+    if [[ ${#backgrounds[@]} -eq 1 ]]; then
+        local random_bg="${backgrounds[0]}"
+    else
+        # Choose a random background (different from current if possible)
+        local random_bg=""
+        local attempts=0
+        while [[ -z "$random_bg" || ("$random_bg" == "$current_bg" && $attempts -lt 10) ]]; do
+            local random_index=$((RANDOM % ${#backgrounds[@]}))
+            random_bg="${backgrounds[random_index]}"
+            ((attempts++))
+        done
+    fi
+
+    # Set the random background
+    if [[ -n "$random_bg" ]]; then
+        ln -sf "$random_bg" "$FARV_CURRENT_LINK/backgrounds/current-background"
+        echo "Switched to background: $random_bg"
+
+        # Run wallpaper scripts to apply the new background
+        local scripts
+        readarray -t scripts < <(find "$FARV_SYSTEM_DIR/themes" "$FARV_USER_THEMES" -name "*wallpaper*" -type f -executable 2>/dev/null)
+
+        for script in "${scripts[@]}"; do
+            if [[ -x "$script" ]]; then
+                "$script"
+            fi
+        done
+    fi
+}
+
+# ----------------------------------------------------------------------------
+# Main Logic
+# ----------------------------------------------------------------------------
+
+# Main logic
+case "${1:-}" in
+"--help" | "-h")
+  show_help
+  ;;
+"--generate-completion")
+  case "${2:-}" in
+  "zsh") generate_zsh_completion ;;
+  "bash") generate_bash_completion ;;
+  "fish") generate_fish_completion ;;
+  *)
+    echo "Usage: farv --generate-completion {zsh|bash|fish}"
+    exit 1
+    ;;
+  esac
+  ;;
+"list" | "ls")
+  verbose="false"
+
+  # Parse arguments for list command
+  shift
+  while [[ $# -gt 0 ]]; do
+    case $1 in
+    -v | --verbose)
+      verbose="true"
+      shift
+      ;;
+    -*)
+      echo "Error: Unknown option '$1'"
+      echo "Usage: farv list [-v|--verbose]"
+      exit 1
+      ;;
+    *)
+      echo "Error: Unexpected argument '$1'"
+      echo "Usage: farv list [-v|--verbose]"
+      exit 1
+      ;;
+    esac
+  done
+
+  list_themes "$verbose"
+  ;;
+"current")
+  verbose="false"
+
+  # Parse arguments for current command
+  shift
+  while [[ $# -gt 0 ]]; do
+    case $1 in
+    -v | --verbose)
+      verbose="true"
+      shift
+      ;;
+    -*)
+      echo "Error: Unknown option '$1'"
+      echo "Usage: farv current [-v|--verbose]"
+      exit 1
+      ;;
+    *)
+      echo "Error: Unexpected argument '$1'"
+      echo "Usage: farv current [-v|--verbose]"
+      exit 1
+      ;;
+    esac
+  done
+
+  show_current_theme "$verbose"
+  ;;
+"background"|"bg")
+  case "${2:-}" in
+    "list"|"ls")
+      list_backgrounds
+      ;;
+    "set")
+      if [[ -z "$3" ]]; then
+        echo "Usage: farv background set <filename>"
+        echo ""
+        list_backgrounds
+        exit 1
+      fi
+      set_background "$3"
+      ;;
+    "current")
+      show_current_background
+      ;;
+    "next")
+      cycle_to_next_background
+      ;;
+    "prev"|"previous")
+      cycle_to_prev_background
+      ;;
+    "random")
+      cycle_to_random_background
+      ;;
+    "")
+      echo "Usage: farv background <command>"
+      echo ""
+      echo "Commands:"
+      echo "  list           List available backgrounds"
+      echo "  set <filename> Set current background"
+      echo "  current        Show current background"
+      echo "  next           Switch to next background"
+      echo "  prev           Switch to previous background"
+      echo "  random         Switch to random background"
+      exit 1
+      ;;
+    *)
+      echo "Error: Unknown background command '$2'"
+      echo ""
+      echo "Usage: farv background <command>"
+      echo ""
+      echo "Commands:"
+      echo "  list           List available backgrounds"
+      echo "  set <filename> Set current background"
+      echo "  current        Show current background"
+      echo "  next           Switch to next background"
+      echo "  prev           Switch to previous background"
+      echo "  random         Switch to random background"
+      exit 1
+      ;;
+  esac
+  ;;
+"reload")
+  reload_current_theme
+  ;;
+"next")
+  cycle_to_next_theme
+  ;;
+"prev" | "previous")
+  cycle_to_prev_theme
+  ;;
+"random")
+  switch_to_random_theme
+  ;;
+"customize")
+  if [ -z "$2" ]; then
+    echo "Usage: farv customize <filename>"
+    echo ""
+    echo "This command will copy the file to your user theme directory and open it in your editor."
+    echo "Files are stored at: ~/.config/farv/themes/{category}/{theme}/{filename}"
+    echo "After editing, use 'farv reload' to apply changes."
+    echo ""
+    list_current_theme_files
+    exit 1
+  fi
+  customize_theme_file "$2"
+  ;;
+"new")
+  if [ -z "$2" ] || [ -z "$3" ]; then
+    echo "Usage: farv new <category> <theme_name>"
+    echo ""
+    echo "Examples:"
+    echo "  farv new light my-theme"
+    echo "  farv new dark my-theme"
+    exit 1
+  fi
+
+  # Parse arguments - category is required as first argument
+  category="$2"
+  theme_name="$3"
+
+  # Validate category
+  if [[ "$category" != "light" && "$category" != "dark" ]]; then
+    echo "Error: Invalid category '$category'. Category must be 'light' or 'dark'"
+    echo "Usage: farv new <category> <theme_name>"
+    exit 1
+  fi
+
+  create_new_theme "$theme_name" "$category"
+  ;;
+"clone")
+  if [ -z "$2" ]; then
+    echo "Usage: farv clone <source-theme> [new-name] [--category light|dark]"
+    echo ""
+    echo "Examples:"
+    echo "  farv clone rose-pine-dawn my-theme              Clone with new name"
+    echo "  farv clone rose-pine-dawn                       Clone system theme to user space"
+    echo "  farv clone tokyonight-night --category light    Clone with different category"
+    echo ""
+    echo "Available themes:"
+    list_themes
+    exit 1
+  fi
+
+  # Parse arguments including --category flag
+  source_theme="$2"
+  target_name=""
+  category_override=""
+
+  # Process all arguments to find --category and target name
+  shift 2 # Remove 'clone' and source_theme
+  while [[ $# -gt 0 ]]; do
+    case $1 in
+    --category)
+      if [[ -z "$2" ]]; then
+        echo "Error: --category requires a value (light|dark)"
+        exit 1
+      fi
+      category_override="$2"
+      if [[ "$category_override" != "light" && "$category_override" != "dark" ]]; then
+        echo "Error: Category must be 'light' or 'dark'"
+        exit 1
+      fi
+      shift 2
+      ;;
+    -*)
+      echo "Error: Unknown option '$1'"
+      exit 1
+      ;;
+    *)
+      # This should be the target name
+      if [[ -z "$target_name" ]]; then
+        target_name="$1"
+      else
+        echo "Error: Too many arguments. Expected: <source-theme> [new-name] [--category light|dark]"
+        exit 1
+      fi
+      shift
+      ;;
+    esac
+  done
+
+  clone_theme "$source_theme" "$target_name" "$category_override"
+  ;;
+"pack")
+  output_file=""
+  output_dir=""
+
+  # Parse arguments
+  shift
+  while [[ $# -gt 0 ]]; do
+    case $1 in
+    --output)
+      output_dir="$2"
+      if [[ ! -d "$output_dir" ]]; then
+        echo "Error: Output directory does not exist: $output_dir"
+        exit 1
+      fi
+      shift 2
+      ;;
+    -*)
+      echo "Error: Unknown option '$1'"
+      exit 1
+      ;;
+    *)
+      if [[ -z "$output_file" ]]; then
+        output_file="$1"
+      else
+        echo "Error: Too many arguments"
+        exit 1
+      fi
+      shift
+      ;;
+    esac
+  done
+
+  pack_theme "$output_file" "$output_dir"
+  ;;
+"install")
+  if [[ -z "$2" ]]; then
+    echo "Usage: farv install [options] <theme-archive>"
+    echo ""
+    echo "Options:"
+    echo "  --name <name>     Install with different name"
+    echo "  --preview         Show archive contents without installing"
+    echo ""
+    echo "Examples:"
+    echo "  farv install theme.tar.gz"
+    echo "  farv install --name my-theme theme.tar.gz"
+    echo "  farv install --preview theme.tar.gz"
+    exit 1
+  fi
+
+  archive_file=""
+  custom_name=""
+  preview_only="false"
+
+  # Parse arguments
+  shift
+  while [[ $# -gt 0 ]]; do
+    case $1 in
+    --name)
+      custom_name="$2"
+      shift 2
+      ;;
+    --preview)
+      preview_only="true"
+      shift
+      ;;
+    -*)
+      echo "Error: Unknown option '$1'"
+      exit 1
+      ;;
+    *)
+      if [[ -z "$archive_file" ]]; then
+        archive_file="$1"
+      else
+        echo "Error: Too many arguments"
+        exit 1
+      fi
+      shift
+      ;;
+    esac
+  done
+
+  if [[ -z "$archive_file" ]]; then
+    echo "Error: No archive file specified"
+    exit 1
+  fi
+
+  install_theme "$archive_file" "$custom_name" "$preview_only"
+  ;;
+"use")
+  if [ -z "$2" ]; then
+    # Interactive selection when no theme specified
+    interactive_selection
+  else
+    # Use specific theme
+    use_theme_by_name "$2"
+  fi
+  ;;
+"")
+  # Show available commands when no argument provided
+  show_commands
+  ;;
+*)
+  # Unknown command
+  echo "Error: Unknown command '$1'"
+  show_commands
+  exit 1
+  ;;
+esac
