@@ -808,6 +808,33 @@
 @test 'more_src has _bandwhich' {
     assert "$xsrc/_bandwhich" is_file
 }
+@test 'more_src has _barman-cloud-backup' {
+    assert "$xsrc/_barman-cloud-backup" is_file
+}
+@test 'more_src has _barman-cloud-backup-delete' {
+    assert "$xsrc/_barman-cloud-backup-delete" is_file
+}
+@test 'more_src has _barman-cloud-backup-keep' {
+    assert "$xsrc/_barman-cloud-backup-keep" is_file
+}
+@test 'more_src has _barman-cloud-backup-list' {
+    assert "$xsrc/_barman-cloud-backup-list" is_file
+}
+@test 'more_src has _barman-cloud-backup-show' {
+    assert "$xsrc/_barman-cloud-backup-show" is_file
+}
+@test 'more_src has _barman-cloud-check-wal-archive' {
+    assert "$xsrc/_barman-cloud-check-wal-archive" is_file
+}
+@test 'more_src has _barman-cloud-restore' {
+    assert "$xsrc/_barman-cloud-restore" is_file
+}
+@test 'more_src has _barman-cloud-wal-archive' {
+    assert "$xsrc/_barman-cloud-wal-archive" is_file
+}
+@test 'more_src has _barman-cloud-wal-restore' {
+    assert "$xsrc/_barman-cloud-wal-restore" is_file
+}
 @test 'more_src has _barcode' {
     assert "$xsrc/_barcode" is_file
 }
@@ -1717,6 +1744,9 @@
 }
 @test 'more_src has _checksec' {
     assert "$xsrc/_checksec" is_file
+}
+@test 'more_src has _chefctl' {
+    assert "$xsrc/_chefctl" is_file
 }
 @test 'more_src has _chef-cli' {
     assert "$xsrc/_chef-cli" is_file
@@ -5928,6 +5958,9 @@
 @test 'more_src has _ldpd' {
     assert "$xsrc/_ldpd" is_file
 }
+@test 'more_src has _ldoc' {
+    assert "$xsrc/_ldoc" is_file
+}
 @test 'more_src has _ldid' {
     assert "$xsrc/_ldid" is_file
 }
@@ -7196,6 +7229,9 @@
 @test 'more_src has _nurl' {
     assert "$xsrc/_nurl" is_file
 }
+@test 'more_src has _nutch' {
+    assert "$xsrc/_nutch" is_file
+}
 @test 'more_src has _nushell' {
     assert "$xsrc/_nushell" is_file
 }
@@ -7761,8 +7797,17 @@
 @test 'more_src has _pfetch' {
     assert "$xsrc/_pfetch" is_file
 }
+@test 'more_src has _pg_filedump' {
+    assert "$xsrc/_pg_filedump" is_file
+}
+@test 'more_src has _pg_visibility' {
+    assert "$xsrc/_pg_visibility" is_file
+}
 @test 'more_src has _pgbadger' {
     assert "$xsrc/_pgbadger" is_file
+}
+@test 'more_src has _pgcompacttable' {
+    assert "$xsrc/_pgcompacttable" is_file
 }
 @test 'more_src has _pgbouncer' {
     assert "$xsrc/_pgbouncer" is_file
@@ -7772,6 +7817,21 @@
 }
 @test 'more_src has _pgloader' {
     assert "$xsrc/_pgloader" is_file
+}
+@test 'more_src has _pghoard' {
+    assert "$xsrc/_pghoard" is_file
+}
+@test 'more_src has _pglogical_create_subscriber' {
+    assert "$xsrc/_pglogical_create_subscriber" is_file
+}
+@test 'more_src has _pgmoneta' {
+    assert "$xsrc/_pgmoneta" is_file
+}
+@test 'more_src has _pgstats' {
+    assert "$xsrc/_pgstats" is_file
+}
+@test 'more_src has _pgwatch2' {
+    assert "$xsrc/_pgwatch2" is_file
 }
 @test 'more_src has _pgsql_utils' {
     assert "$xsrc/_pgsql_utils" is_file
@@ -8685,6 +8745,9 @@
 }
 @test 'more_src has _resticprofile' {
     assert "$xsrc/_resticprofile" is_file
+}
+@test 'more_src has _retty' {
+    assert "$xsrc/_retty" is_file
 }
 @test 'more_src has _retire' {
     assert "$xsrc/_retire" is_file
@@ -9907,6 +9970,15 @@
 }
 @test 'more_src has _synergy' {
     assert "$xsrc/_synergy" is_file
+}
+@test 'more_src has _systemd-journal-gatewayd' {
+    assert "$xsrc/_systemd-journal-gatewayd" is_file
+}
+@test 'more_src has _systemd-journal-remote' {
+    assert "$xsrc/_systemd-journal-remote" is_file
+}
+@test 'more_src has _systemd-journal-upload' {
+    assert "$xsrc/_systemd-journal-upload" is_file
 }
 @test 'more_src has _sysdig' {
     assert "$xsrc/_sysdig" is_file
@@ -11661,6 +11733,9 @@
 }
 @test 'more_src has _xmlif' {
     assert "$xsrc/_xmlif" is_file
+}
+@test 'more_src has _xolint' {
+    assert "$xsrc/_xolint" is_file
 }
 @test 'more_src has _xonsh' {
     assert "$xsrc/_xonsh" is_file
