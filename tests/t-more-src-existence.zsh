@@ -454,6 +454,12 @@
 @test 'more_src has _aos' {
     assert "$xsrc/_aos" is_file
 }
+@test 'more_src has _apcaccess' {
+    assert "$xsrc/_apcaccess" is_file
+}
+@test 'more_src has _apctest' {
+    assert "$xsrc/_apctest" is_file
+}
 @test 'more_src has _apib' {
     assert "$xsrc/_apib" is_file
 }
@@ -7134,6 +7140,9 @@
 @test 'more_src has _pbm' {
     assert "$xsrc/_pbm" is_file
 }
+@test 'more_src has _pbsdsh' {
+    assert "$xsrc/_pbsdsh" is_file
+}
 @test 'more_src has _pbzip2' {
     assert "$xsrc/_pbzip2" is_file
 }
@@ -7743,6 +7752,9 @@
 @test 'more_src has _qli' {
     assert "$xsrc/_qli" is_file
 }
+@test 'more_src has _qmgr' {
+    assert "$xsrc/_qmgr" is_file
+}
 @test 'more_src has _qnap' {
     assert "$xsrc/_qnap" is_file
 }
@@ -7763,6 +7775,9 @@
 }
 @test 'more_src has _qshell' {
     assert "$xsrc/_qshell" is_file
+}
+@test 'more_src has _qstat' {
+    assert "$xsrc/_qstat" is_file
 }
 @test 'more_src has _qsub' {
     assert "$xsrc/_qsub" is_file
@@ -9596,6 +9611,9 @@
 @test 'more_src has _tracee' {
     assert "$xsrc/_tracee" is_file
 }
+@test 'more_src has _tracejob' {
+    assert "$xsrc/_tracejob" is_file
+}
 @test 'more_src has _trackma' {
     assert "$xsrc/_trackma" is_file
 }
@@ -9882,6 +9900,18 @@
 }
 @test 'more_src has _uplare' {
     assert "$xsrc/_uplare" is_file
+}
+@test 'more_src has _upsc' {
+    assert "$xsrc/_upsc" is_file
+}
+@test 'more_src has _upscmd' {
+    assert "$xsrc/_upscmd" is_file
+}
+@test 'more_src has _upsd' {
+    assert "$xsrc/_upsd" is_file
+}
+@test 'more_src has _upsmon' {
+    assert "$xsrc/_upsmon" is_file
 }
 @test 'more_src has _upterm' {
     assert "$xsrc/_upterm" is_file
