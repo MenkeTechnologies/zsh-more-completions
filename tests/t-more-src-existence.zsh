@@ -425,6 +425,9 @@
 @test 'more_src has _ansible-navigator' {
     assert "$xsrc/_ansible-navigator" is_file
 }
+@test 'more_src has _anthropic' {
+    assert "$xsrc/_anthropic" is_file
+}
 @test 'more_src has _antidote' {
     assert "$xsrc/_antidote" is_file
 }
@@ -1807,6 +1810,9 @@
 @test 'more_src has _codeclimate' {
     assert "$xsrc/_codeclimate" is_file
 }
+@test 'more_src has _codecompanion' {
+    assert "$xsrc/_codecompanion" is_file
+}
 @test 'more_src has _codelimit' {
     assert "$xsrc/_codelimit" is_file
 }
@@ -1917,6 +1923,9 @@
 }
 @test 'more_src has _container' {
     assert "$xsrc/_container" is_file
+}
+@test 'more_src has _continue' {
+    assert "$xsrc/_continue" is_file
 }
 @test 'more_src has _container-builder-local' {
     assert "$xsrc/_container-builder-local" is_file
@@ -4191,6 +4200,9 @@
 }
 @test 'more_src has _hayabusa' {
     assert "$xsrc/_hayabusa" is_file
+}
+@test 'more_src has _hayhooks' {
+    assert "$xsrc/_hayhooks" is_file
 }
 @test 'more_src has _hc' {
     assert "$xsrc/_hc" is_file
@@ -7779,6 +7791,9 @@
 }
 @test 'more_src has _rojo' {
     assert "$xsrc/_rojo" is_file
+}
+@test 'more_src has _roo-cli' {
+    assert "$xsrc/_roo-cli" is_file
 }
 @test 'more_src has _rooster' {
     assert "$xsrc/_rooster" is_file
