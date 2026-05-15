@@ -5455,6 +5455,9 @@
 @test 'more_src has _lsyncd' {
     assert "$xsrc/_lsyncd" is_file
 }
+@test 'more_src has _ltex-ls' {
+    assert "$xsrc/_ltex-ls" is_file
+}
 @test 'more_src has _ltrs' {
     assert "$xsrc/_ltrs" is_file
 }
@@ -9217,6 +9220,9 @@
 }
 @test 'more_src has _typst' {
     assert "$xsrc/_typst" is_file
+}
+@test 'more_src has _typst-lsp' {
+    assert "$xsrc/_typst-lsp" is_file
 }
 @test 'more_src has _ua' {
     assert "$xsrc/_ua" is_file
