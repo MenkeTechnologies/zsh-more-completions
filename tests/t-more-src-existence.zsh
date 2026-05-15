@@ -248,6 +248,9 @@
 @test 'more_src has _afinfo' {
     assert "$xsrc/_afinfo" is_file
 }
+@test 'more_src has _afmtopl' {
+    assert "$xsrc/_afmtopl" is_file
+}
 @test 'more_src has _aftman' {
     assert "$xsrc/_aftman" is_file
 }
@@ -1853,11 +1856,29 @@
 @test 'more_src has _cfssl' {
     assert "$xsrc/_cfssl" is_file
 }
+@test 'more_src has _cgconfig' {
+    assert "$xsrc/_cgconfig" is_file
+}
+@test 'more_src has _cgmanager' {
+    assert "$xsrc/_cgmanager" is_file
+}
+@test 'more_src has _cgmanager-proxy' {
+    assert "$xsrc/_cgmanager-proxy" is_file
+}
+@test 'more_src has _cgmodprobe' {
+    assert "$xsrc/_cgmodprobe" is_file
+}
 @test 'more_src has _cgoban' {
     assert "$xsrc/_cgoban" is_file
 }
+@test 'more_src has _cgproxy' {
+    assert "$xsrc/_cgproxy" is_file
+}
 @test 'more_src has _cgps' {
     assert "$xsrc/_cgps" is_file
+}
+@test 'more_src has _cgrulesengd' {
+    assert "$xsrc/_cgrulesengd" is_file
 }
 @test 'more_src has _cgrep' {
     assert "$xsrc/_cgrep" is_file
@@ -2845,6 +2866,12 @@
 @test 'more_src has _deadfinder' {
     assert "$xsrc/_deadfinder" is_file
 }
+@test 'more_src has _deb-systemd-helper' {
+    assert "$xsrc/_deb-systemd-helper" is_file
+}
+@test 'more_src has _deb-systemd-invoke' {
+    assert "$xsrc/_deb-systemd-invoke" is_file
+}
 @test 'more_src has _debian_rules' {
     assert "$xsrc/_debian_rules" is_file
 }
@@ -2974,6 +3001,9 @@
 }
 @test 'more_src has _dfu-suffix' {
     assert "$xsrc/_dfu-suffix" is_file
+}
+@test 'more_src has _dh-php' {
+    assert "$xsrc/_dh-php" is_file
 }
 @test 'more_src has _dhall' {
     assert "$xsrc/_dhall" is_file
@@ -4069,6 +4099,9 @@
 }
 @test 'more_src has _folderify' {
     assert "$xsrc/_folderify" is_file
+}
+@test 'more_src has _fontinst' {
+    assert "$xsrc/_fontinst" is_file
 }
 @test 'more_src has _fontmatrix' {
     assert "$xsrc/_fontmatrix" is_file
@@ -6614,6 +6647,9 @@
 }
 @test 'more_src has _lf' {
     assert "$xsrc/_lf" is_file
+}
+@test 'more_src has _lguest' {
+    assert "$xsrc/_lguest" is_file
 }
 @test 'more_src has _lilo' {
     assert "$xsrc/_lilo" is_file
@@ -9402,6 +9438,18 @@
 @test 'more_src has _qmail-smtpd' {
     assert "$xsrc/_qmail-smtpd" is_file
 }
+@test 'more_src has _qemu-bridge-helper' {
+    assert "$xsrc/_qemu-bridge-helper" is_file
+}
+@test 'more_src has _qemu-riscv32' {
+    assert "$xsrc/_qemu-riscv32" is_file
+}
+@test 'more_src has _qemu-riscv64' {
+    assert "$xsrc/_qemu-riscv64" is_file
+}
+@test 'more_src has _qmp-shell' {
+    assert "$xsrc/_qmp-shell" is_file
+}
 @test 'more_src has _qnap' {
     assert "$xsrc/_qnap" is_file
 }
@@ -11351,6 +11399,12 @@
 @test 'more_src has _testkube' {
     assert "$xsrc/_testkube" is_file
 }
+@test 'more_src has _tex2lyx' {
+    assert "$xsrc/_tex2lyx" is_file
+}
+@test 'more_src has _tex4ht' {
+    assert "$xsrc/_tex4ht" is_file
+}
 @test 'more_src has _texlab' {
     assert "$xsrc/_texlab" is_file
 }
@@ -11750,6 +11804,9 @@
 }
 @test 'more_src has _tsup' {
     assert "$xsrc/_tsup" is_file
+}
+@test 'more_src has _ttftodvi' {
+    assert "$xsrc/_ttftodvi" is_file
 }
 @test 'more_src has _ttyd' {
     assert "$xsrc/_ttyd" is_file
@@ -12388,8 +12445,20 @@
 @test 'more_src has _vbam' {
     assert "$xsrc/_vbam" is_file
 }
+@test 'more_src has _vboxautostart' {
+    assert "$xsrc/_vboxautostart" is_file
+}
+@test 'more_src has _vboxballoonctrl' {
+    assert "$xsrc/_vboxballoonctrl" is_file
+}
+@test 'more_src has _vboxdtrace' {
+    assert "$xsrc/_vboxdtrace" is_file
+}
 @test 'more_src has _vboximg-mount' {
     assert "$xsrc/_vboximg-mount" is_file
+}
+@test 'more_src has _vboxsdl' {
+    assert "$xsrc/_vboxsdl" is_file
 }
 @test 'more_src has _vcfkit' {
     assert "$xsrc/_vcfkit" is_file
@@ -12508,6 +12577,9 @@
 @test 'more_src has _viper' {
     assert "$xsrc/_viper" is_file
 }
+@test 'more_src has _virt-convert' {
+    assert "$xsrc/_virt-convert" is_file
+}
 @test 'more_src has _virtiofsd' {
     assert "$xsrc/_virtiofsd" is_file
 }
@@ -12555,6 +12627,9 @@
 }
 @test 'more_src has _vmvpn' {
     assert "$xsrc/_vmvpn" is_file
+}
+@test 'more_src has _vmware' {
+    assert "$xsrc/_vmware" is_file
 }
 @test 'more_src has _vmware-toolbox-cmd' {
     assert "$xsrc/_vmware-toolbox-cmd" is_file
