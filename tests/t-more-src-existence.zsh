@@ -14424,3 +14424,78 @@
 @test 'more_src has _pika-backup' {
     assert "$xsrc/_pika-backup" is_file
 }
+@test 'more_src has _bareos-fd' {
+    assert "$xsrc/_bareos-fd" is_file
+}
+@test 'more_src has _bareos-sd' {
+    assert "$xsrc/_bareos-sd" is_file
+}
+@test 'more_src has _bareos-dir' {
+    assert "$xsrc/_bareos-dir" is_file
+}
+@test 'more_src has _bareos-dbcheck' {
+    assert "$xsrc/_bareos-dbcheck" is_file
+}
+@test 'more_src has _bareos-bscan' {
+    assert "$xsrc/_bareos-bscan" is_file
+}
+@test 'more_src has _bareos-bextract' {
+    assert "$xsrc/_bareos-bextract" is_file
+}
+@test 'more_src has _bareos-bls' {
+    assert "$xsrc/_bareos-bls" is_file
+}
+@test 'more_src has _bareos-bcopy' {
+    assert "$xsrc/_bareos-bcopy" is_file
+}
+@test 'more_src has _bareos-btape' {
+    assert "$xsrc/_bareos-btape" is_file
+}
+@test 'more_src has _bareos-bsmtp' {
+    assert "$xsrc/_bareos-bsmtp" is_file
+}
+@test 'more_src has _bareos-bregex' {
+    assert "$xsrc/_bareos-bregex" is_file
+}
+@test 'more_src has _bareos-bwild' {
+    assert "$xsrc/_bareos-bwild" is_file
+}
+@test 'more_src has _bareos-bconsole' {
+    assert "$xsrc/_bareos-bconsole" is_file
+}
+@test 'more_src has _fbsetbg' {
+    assert "$xsrc/_fbsetbg" is_file
+}
+@test 'more_src has _fbrun' {
+    assert "$xsrc/_fbrun" is_file
+}
+@test 'more_src has _bsetbg' {
+    assert "$xsrc/_bsetbg" is_file
+}
+@test 'more_src has _bsetroot' {
+    assert "$xsrc/_bsetroot" is_file
+}
+@test 'more_src has _fluxbox-update_configs' {
+    assert "$xsrc/_fluxbox-update_configs" is_file
+}
+@test 'more_src has _fluxbox-generate_menu' {
+    assert "$xsrc/_fluxbox-generate_menu" is_file
+}
+@test 'more_src has _openbox-session' {
+    assert "$xsrc/_openbox-session" is_file
+}
+@test 'more_src has _openbox-xdg-autostart' {
+    assert "$xsrc/_openbox-xdg-autostart" is_file
+}
+@test 'more_src has _pamtester' {
+    assert "$xsrc/_pamtester" is_file
+}
+@test 'more_src has _pamu2fcfg' {
+    assert "$xsrc/_pamu2fcfg" is_file
+}
+@test 'more_src has _poldek' {
+    assert "$xsrc/_poldek" is_file
+}
+@test 'more_src has _polkit-mate' {
+    assert "$xsrc/_polkit-mate" is_file
+}
