@@ -13749,3 +13749,78 @@
 @test 'more_src has _palapeli' {
     assert "$xsrc/_palapeli" is_file
 }
+@test 'more_src has _gcompris-qt' {
+    assert "$xsrc/_gcompris-qt" is_file
+}
+@test 'more_src has _childsplay' {
+    assert "$xsrc/_childsplay" is_file
+}
+@test 'more_src has _tuxmath' {
+    assert "$xsrc/_tuxmath" is_file
+}
+@test 'more_src has _tuxtype' {
+    assert "$xsrc/_tuxtype" is_file
+}
+@test 'more_src has _tuxpaint' {
+    assert "$xsrc/_tuxpaint" is_file
+}
+@test 'more_src has _gbrainy' {
+    assert "$xsrc/_gbrainy" is_file
+}
+@test 'more_src has _marsshooter' {
+    assert "$xsrc/_marsshooter" is_file
+}
+@test 'more_src has _widelands' {
+    assert "$xsrc/_widelands" is_file
+}
+@test 'more_src has _hedgewars' {
+    assert "$xsrc/_hedgewars" is_file
+}
+@test 'more_src has _warzone2100' {
+    assert "$xsrc/_warzone2100" is_file
+}
+@test 'more_src has _warmux' {
+    assert "$xsrc/_warmux" is_file
+}
+@test 'more_src has _freedm' {
+    assert "$xsrc/_freedm" is_file
+}
+@test 'more_src has _freedoom1' {
+    assert "$xsrc/_freedoom1" is_file
+}
+@test 'more_src has _freedoom2' {
+    assert "$xsrc/_freedoom2" is_file
+}
+@test 'more_src has _quake' {
+    assert "$xsrc/_quake" is_file
+}
+@test 'more_src has _springlobby' {
+    assert "$xsrc/_springlobby" is_file
+}
+@test 'more_src has _teeworlds' {
+    assert "$xsrc/_teeworlds" is_file
+}
+@test 'more_src has _kasumi' {
+    assert "$xsrc/_kasumi" is_file
+}
+@test 'more_src has _anthy-agent' {
+    assert "$xsrc/_anthy-agent" is_file
+}
+@test 'more_src has _uim-fep' {
+    assert "$xsrc/_uim-fep" is_file
+}
+@test 'more_src has _uim-sh' {
+    assert "$xsrc/_uim-sh" is_file
+}
+@test 'more_src has _fcitx-skk' {
+    assert "$xsrc/_fcitx-skk" is_file
+}
+@test 'more_src has _ibus-pinyin' {
+    assert "$xsrc/_ibus-pinyin" is_file
+}
+@test 'more_src has _ibus-anthy' {
+    assert "$xsrc/_ibus-anthy" is_file
+}
+@test 'more_src has _mozc-tool' {
+    assert "$xsrc/_mozc-tool" is_file
+}
