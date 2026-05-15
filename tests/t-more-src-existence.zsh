@@ -13674,3 +13674,78 @@
 @test 'more_src has _zx' {
     assert "$xsrc/_zx" is_file
 }
+@test 'more_src has _cuyo' {
+    assert "$xsrc/_cuyo" is_file
+}
+@test 'more_src has _cgoban3' {
+    assert "$xsrc/_cgoban3" is_file
+}
+@test 'more_src has _gnugo' {
+    assert "$xsrc/_gnugo" is_file
+}
+@test 'more_src has _kshisen' {
+    assert "$xsrc/_kshisen" is_file
+}
+@test 'more_src has _ksudoku' {
+    assert "$xsrc/_ksudoku" is_file
+}
+@test 'more_src has _kbreakout' {
+    assert "$xsrc/_kbreakout" is_file
+}
+@test 'more_src has _kollision' {
+    assert "$xsrc/_kollision" is_file
+}
+@test 'more_src has _konquest' {
+    assert "$xsrc/_konquest" is_file
+}
+@test 'more_src has _kbounce' {
+    assert "$xsrc/_kbounce" is_file
+}
+@test 'more_src has _ksquares' {
+    assert "$xsrc/_ksquares" is_file
+}
+@test 'more_src has _kanagram' {
+    assert "$xsrc/_kanagram" is_file
+}
+@test 'more_src has _kgeography' {
+    assert "$xsrc/_kgeography" is_file
+}
+@test 'more_src has _ktouch' {
+    assert "$xsrc/_ktouch" is_file
+}
+@test 'more_src has _kalzium' {
+    assert "$xsrc/_kalzium" is_file
+}
+@test 'more_src has _kig' {
+    assert "$xsrc/_kig" is_file
+}
+@test 'more_src has _kbruch' {
+    assert "$xsrc/_kbruch" is_file
+}
+@test 'more_src has _khangman' {
+    assert "$xsrc/_khangman" is_file
+}
+@test 'more_src has _keurocalc' {
+    assert "$xsrc/_keurocalc" is_file
+}
+@test 'more_src has _kjumpingcube' {
+    assert "$xsrc/_kjumpingcube" is_file
+}
+@test 'more_src has _blinken' {
+    assert "$xsrc/_blinken" is_file
+}
+@test 'more_src has _bovo' {
+    assert "$xsrc/_bovo" is_file
+}
+@test 'more_src has _granatier' {
+    assert "$xsrc/_granatier" is_file
+}
+@test 'more_src has _kanjipad' {
+    assert "$xsrc/_kanjipad" is_file
+}
+@test 'more_src has _kdiamond' {
+    assert "$xsrc/_kdiamond" is_file
+}
+@test 'more_src has _palapeli' {
+    assert "$xsrc/_palapeli" is_file
+}
