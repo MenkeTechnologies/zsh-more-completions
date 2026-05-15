@@ -787,6 +787,9 @@
 @test 'more_src has _bemenu' {
     assert "$xsrc/_bemenu" is_file
 }
+@test 'more_src has _bemoji' {
+    assert "$xsrc/_bemoji" is_file
+}
 @test 'more_src has _bench' {
     assert "$xsrc/_bench" is_file
 }
@@ -5179,6 +5182,9 @@
 @test 'more_src has _libcamera-vid' {
     assert "$xsrc/_libcamera-vid" is_file
 }
+@test 'more_src has _libgen-cli' {
+    assert "$xsrc/_libgen-cli" is_file
+}
 @test 'more_src has _librespot' {
     assert "$xsrc/_librespot" is_file
 }
@@ -7506,6 +7512,9 @@
 }
 @test 'more_src has _rofi' {
     assert "$xsrc/_rofi" is_file
+}
+@test 'more_src has _rofimoji' {
+    assert "$xsrc/_rofimoji" is_file
 }
 @test 'more_src has _rojo' {
     assert "$xsrc/_rojo" is_file
