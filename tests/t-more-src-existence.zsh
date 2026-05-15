@@ -6193,6 +6193,9 @@
 @test 'more_src has _nifi-cli' {
     assert "$xsrc/_nifi-cli" is_file
 }
+@test 'more_src has _nimbus_beacon_node' {
+    assert "$xsrc/_nimbus_beacon_node" is_file
+}
 @test 'more_src has _nil' {
     assert "$xsrc/_nil" is_file
 }
@@ -8553,6 +8556,9 @@
 }
 @test 'more_src has _subrepo' {
     assert "$xsrc/_subrepo" is_file
+}
+@test 'more_src has _substrate-node' {
+    assert "$xsrc/_substrate-node" is_file
 }
 @test 'more_src has _sui' {
     assert "$xsrc/_sui" is_file
