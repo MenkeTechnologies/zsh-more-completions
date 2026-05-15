@@ -14049,3 +14049,78 @@
 @test 'more_src has _sndfile-mix-to-mono' {
     assert "$xsrc/_sndfile-mix-to-mono" is_file
 }
+@test 'more_src has _innoextract' {
+    assert "$xsrc/_innoextract" is_file
+}
+@test 'more_src has _rpmdev-bumpspec' {
+    assert "$xsrc/_rpmdev-bumpspec" is_file
+}
+@test 'more_src has _rpmdev-extract' {
+    assert "$xsrc/_rpmdev-extract" is_file
+}
+@test 'more_src has _rpmdev-checksig' {
+    assert "$xsrc/_rpmdev-checksig" is_file
+}
+@test 'more_src has _rpmdev-md5' {
+    assert "$xsrc/_rpmdev-md5" is_file
+}
+@test 'more_src has _rpmdev-packager' {
+    assert "$xsrc/_rpmdev-packager" is_file
+}
+@test 'more_src has _rpmdev-newinit' {
+    assert "$xsrc/_rpmdev-newinit" is_file
+}
+@test 'more_src has _rpmdev-rmdevelrpms' {
+    assert "$xsrc/_rpmdev-rmdevelrpms" is_file
+}
+@test 'more_src has _rpmdev-rpmlintian' {
+    assert "$xsrc/_rpmdev-rpmlintian" is_file
+}
+@test 'more_src has _rpmdev-sortpkgs' {
+    assert "$xsrc/_rpmdev-sortpkgs" is_file
+}
+@test 'more_src has _rpmdev-sourcesum' {
+    assert "$xsrc/_rpmdev-sourcesum" is_file
+}
+@test 'more_src has _rpmdev-srcdir' {
+    assert "$xsrc/_rpmdev-srcdir" is_file
+}
+@test 'more_src has _rpmgrill' {
+    assert "$xsrc/_rpmgrill" is_file
+}
+@test 'more_src has _zulucrypt' {
+    assert "$xsrc/_zulucrypt" is_file
+}
+@test 'more_src has _booster' {
+    assert "$xsrc/_booster" is_file
+}
+@test 'more_src has _plymouth-create-initrd' {
+    assert "$xsrc/_plymouth-create-initrd" is_file
+}
+@test 'more_src has _plymouth-list-fonts' {
+    assert "$xsrc/_plymouth-list-fonts" is_file
+}
+@test 'more_src has _grub-customizer' {
+    assert "$xsrc/_grub-customizer" is_file
+}
+@test 'more_src has _refind-install' {
+    assert "$xsrc/_refind-install" is_file
+}
+@test 'more_src has _refind-mkdefault' {
+    assert "$xsrc/_refind-mkdefault" is_file
+}
+@test 'more_src has _refind-mkfont' {
+    assert "$xsrc/_refind-mkfont" is_file
+}
+@test 'more_src has _cabarc' {
+    assert "$xsrc/_cabarc" is_file
+}
+@test 'more_src has _adbsync' {
+    assert "$xsrc/_adbsync" is_file
+}
+@test 'more_src has _plyr' {
+    assert "$xsrc/_plyr" is_file
+}
+@test 'more_src has _tzdata-update' {
+    assert "$xsrc/_tzdata-update" is_file
+}
