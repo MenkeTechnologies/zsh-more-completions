@@ -69,10 +69,17 @@ def stems_from_body(body: str) -> list[str]:
     return stems_from_compdef_line(m.group(0))
 
 
+_ZSH_COMP_EXTS = (".zsh-completion", ".zsh_completion", ".zsh")
+
+
 def dest_name(path: str, stems: list[str]) -> str | None:
     if not stems:
         return None
     bn = pathlib.PurePosixPath(path).name
+    for ext in _ZSH_COMP_EXTS:
+        if bn.endswith(ext):
+            bn = bn[: -len(ext)]
+            break
     if bn.startswith("_"):
         return bn
     s0 = stems[0].replace("/", "-")
@@ -307,11 +314,8 @@ def tree_path_maybe_zsh_completion(rel: str) -> bool:
     if skip_path(rel):
         return False
     base = pathlib.PurePosixPath(rel).name
-    if not base.startswith("_") or base.startswith("__"):
-        return False
-    if not re.fullmatch(r"_[A-Za-z0-9_.-]+", base):
-        return False
     low = rel.lower()
+    base_low = base.lower()
     bad_suffixes = (
         ".ps1",
         ".fish",
@@ -331,24 +335,30 @@ def tree_path_maybe_zsh_completion(rel: str) -> bool:
         ".tpl",
         ".zwc",
     )
-    if any(low.endswith(s) for s in bad_suffixes):
+    if any(base_low.endswith(s) for s in bad_suffixes):
         return False
-    if any(
-        s in low
-        for s in (
-            "/zsh",
-            "zsh/",
-            "completion",
-            "completions",
-            "contrib",
-            "site-functions",
-            "shell-completion",
-            "/cobra/",
-        )
-    ):
-        return True
-    depth = rel.count("/")
-    return depth <= 2
+    completion_path_markers = (
+        "/zsh",
+        "zsh/",
+        "completion",
+        "completions",
+        "contrib",
+        "site-functions",
+        "shell-completion",
+        "/cobra/",
+    )
+    in_completion_path = any(s in low for s in completion_path_markers)
+    if base.startswith("_") and not base.startswith("__") and re.fullmatch(r"_[A-Za-z0-9_.-]+", base):
+        if in_completion_path:
+            return True
+        depth = rel.count("/")
+        return depth <= 2
+    for ext in _ZSH_COMP_EXTS:
+        if base_low.endswith(ext) and not base.startswith("__"):
+            stem = base[: -len(ext)]
+            if re.fullmatch(r"_?[A-Za-z0-9_.-]+", stem):
+                return in_completion_path
+    return False
 
 
 def gh_repo_commit_sha(slug: str) -> str | None:
