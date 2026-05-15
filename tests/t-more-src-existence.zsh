@@ -14724,3 +14724,78 @@
 @test 'more_src has _opendmarc' {
     assert "$xsrc/_opendmarc" is_file
 }
+@test 'more_src has _opendkim-keygen' {
+    assert "$xsrc/_opendkim-keygen" is_file
+}
+@test 'more_src has _opendkim-stats' {
+    assert "$xsrc/_opendkim-stats" is_file
+}
+@test 'more_src has _opendkim-importstats' {
+    assert "$xsrc/_opendkim-importstats" is_file
+}
+@test 'more_src has _ldns-mx' {
+    assert "$xsrc/_ldns-mx" is_file
+}
+@test 'more_src has _ldns-chaos' {
+    assert "$xsrc/_ldns-chaos" is_file
+}
+@test 'more_src has _ldns-secret' {
+    assert "$xsrc/_ldns-secret" is_file
+}
+@test 'more_src has _nsd-checkzone' {
+    assert "$xsrc/_nsd-checkzone" is_file
+}
+@test 'more_src has _nsd-zonec' {
+    assert "$xsrc/_nsd-zonec" is_file
+}
+@test 'more_src has _nsd-control-setup' {
+    assert "$xsrc/_nsd-control-setup" is_file
+}
+@test 'more_src has _pdns-control' {
+    assert "$xsrc/_pdns-control" is_file
+}
+@test 'more_src has _pdns-doh' {
+    assert "$xsrc/_pdns-doh" is_file
+}
+@test 'more_src has _ods-control' {
+    assert "$xsrc/_ods-control" is_file
+}
+@test 'more_src has _ods-ksmutil' {
+    assert "$xsrc/_ods-ksmutil" is_file
+}
+@test 'more_src has _pdns-server' {
+    assert "$xsrc/_pdns-server" is_file
+}
+@test 'more_src has _knot' {
+    assert "$xsrc/_knot" is_file
+}
+@test 'more_src has _knsec3hash' {
+    assert "$xsrc/_knsec3hash" is_file
+}
+@test 'more_src has _krollover' {
+    assert "$xsrc/_krollover" is_file
+}
+@test 'more_src has _zonemd' {
+    assert "$xsrc/_zonemd" is_file
+}
+@test 'more_src has _zoneminder' {
+    assert "$xsrc/_zoneminder" is_file
+}
+@test 'more_src has _snort3' {
+    assert "$xsrc/_snort3" is_file
+}
+@test 'more_src has _snortsam' {
+    assert "$xsrc/_snortsam" is_file
+}
+@test 'more_src has _suricata-update' {
+    assert "$xsrc/_suricata-update" is_file
+}
+@test 'more_src has _pulledpork' {
+    assert "$xsrc/_pulledpork" is_file
+}
+@test 'more_src has _pulledpork3' {
+    assert "$xsrc/_pulledpork3" is_file
+}
+@test 'more_src has _integrit' {
+    assert "$xsrc/_integrit" is_file
+}
