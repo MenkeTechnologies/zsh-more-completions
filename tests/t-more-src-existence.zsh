@@ -2365,6 +2365,9 @@
 @test 'more_src has _ddgr' {
     assert "$xsrc/_ddgr" is_file
 }
+@test 'more_src has _ddtrace-run' {
+    assert "$xsrc/_ddtrace-run" is_file
+}
 @test 'more_src has _ddlctl' {
     assert "$xsrc/_ddlctl" is_file
 }
