@@ -641,6 +641,9 @@
 @test 'more_src has _av1an' {
     assert "$xsrc/_av1an" is_file
 }
+@test 'more_src has _avante' {
+    assert "$xsrc/_avante" is_file
+}
 @test 'more_src has _avanor' {
     assert "$xsrc/_avanor" is_file
 }
@@ -1674,6 +1677,9 @@
 }
 @test 'more_src has _class-dump' {
     assert "$xsrc/_class-dump" is_file
+}
+@test 'more_src has _claude-trace' {
+    assert "$xsrc/_claude-trace" is_file
 }
 @test 'more_src has _claude-cage' {
     assert "$xsrc/_claude-cage" is_file
@@ -4359,6 +4365,9 @@
 @test 'more_src has _hubble' {
     assert "$xsrc/_hubble" is_file
 }
+@test 'more_src has _huh' {
+    assert "$xsrc/_huh" is_file
+}
 @test 'more_src has _humanize' {
     assert "$xsrc/_humanize" is_file
 }
@@ -5433,6 +5442,9 @@
 }
 @test 'more_src has _lldpcli' {
     assert "$xsrc/_lldpcli" is_file
+}
+@test 'more_src has _llama-stack' {
+    assert "$xsrc/_llama-stack" is_file
 }
 @test 'more_src has _llm' {
     assert "$xsrc/_llm" is_file
@@ -9989,6 +10001,9 @@
 }
 @test 'more_src has _warp-cli' {
     assert "$xsrc/_warp-cli" is_file
+}
+@test 'more_src has _warp-terminal' {
+    assert "$xsrc/_warp-terminal" is_file
 }
 @test 'more_src has _wasm-bindgen' {
     assert "$xsrc/_wasm-bindgen" is_file
