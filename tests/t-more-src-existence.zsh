@@ -15174,3 +15174,78 @@
 @test 'more_src has _osmo' {
     assert "$xsrc/_osmo" is_file
 }
+@test 'more_src has _kpackagetool6' {
+    assert "$xsrc/_kpackagetool6" is_file
+}
+@test 'more_src has _gnome-packagekit' {
+    assert "$xsrc/_gnome-packagekit" is_file
+}
+@test 'more_src has _packagekitd' {
+    assert "$xsrc/_packagekitd" is_file
+}
+@test 'more_src has _appstream-generator' {
+    assert "$xsrc/_appstream-generator" is_file
+}
+@test 'more_src has _alpine-info' {
+    assert "$xsrc/_alpine-info" is_file
+}
+@test 'more_src has _gnome-disk-utility' {
+    assert "$xsrc/_gnome-disk-utility" is_file
+}
+@test 'more_src has _systemsettings5' {
+    assert "$xsrc/_systemsettings5" is_file
+}
+@test 'more_src has _systemsettings6' {
+    assert "$xsrc/_systemsettings6" is_file
+}
+@test 'more_src has _kded6' {
+    assert "$xsrc/_kded6" is_file
+}
+@test 'more_src has _kdeinit6' {
+    assert "$xsrc/_kdeinit6" is_file
+}
+@test 'more_src has _krunner5' {
+    assert "$xsrc/_krunner5" is_file
+}
+@test 'more_src has _krunner6' {
+    assert "$xsrc/_krunner6" is_file
+}
+@test 'more_src has _gnome-extensions-cli' {
+    assert "$xsrc/_gnome-extensions-cli" is_file
+}
+@test 'more_src has _pamac-cli' {
+    assert "$xsrc/_pamac-cli" is_file
+}
+@test 'more_src has _pamac-manager' {
+    assert "$xsrc/_pamac-manager" is_file
+}
+@test 'more_src has _xfce4-volumed-pulse' {
+    assert "$xsrc/_xfce4-volumed-pulse" is_file
+}
+@test 'more_src has _xfce4-screensaver' {
+    assert "$xsrc/_xfce4-screensaver" is_file
+}
+@test 'more_src has _xfce4-screensaver-command' {
+    assert "$xsrc/_xfce4-screensaver-command" is_file
+}
+@test 'more_src has _xfce4-screensaver-preferences' {
+    assert "$xsrc/_xfce4-screensaver-preferences" is_file
+}
+@test 'more_src has _xfce4-orage' {
+    assert "$xsrc/_xfce4-orage" is_file
+}
+@test 'more_src has _pidgin-otr' {
+    assert "$xsrc/_pidgin-otr" is_file
+}
+@test 'more_src has _vokoscreenng' {
+    assert "$xsrc/_vokoscreenng" is_file
+}
+@test 'more_src has _gtk-recordmydesktop' {
+    assert "$xsrc/_gtk-recordmydesktop" is_file
+}
+@test 'more_src has _ffcast' {
+    assert "$xsrc/_ffcast" is_file
+}
+@test 'more_src has _apt-clone-cli' {
+    assert "$xsrc/_apt-clone-cli" is_file
+}
