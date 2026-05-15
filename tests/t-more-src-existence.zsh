@@ -808,6 +808,9 @@
 @test 'more_src has _bedtools' {
     assert "$xsrc/_bedtools" is_file
 }
+@test 'more_src has _beekeeper-studio' {
+    assert "$xsrc/_beekeeper-studio" is_file
+}
 @test 'more_src has _beet' {
     assert "$xsrc/_beet" is_file
 }
@@ -1631,6 +1634,9 @@
 @test 'more_src has _chroma' {
     assert "$xsrc/_chroma" is_file
 }
+@test 'more_src has _chromadb' {
+    assert "$xsrc/_chromadb" is_file
+}
 @test 'more_src has _chromatic' {
     assert "$xsrc/_chromatic" is_file
 }
@@ -2376,6 +2382,9 @@
 }
 @test 'more_src has _dbeaver-cli' {
     assert "$xsrc/_dbeaver-cli" is_file
+}
+@test 'more_src has _dbgate' {
+    assert "$xsrc/_dbgate" is_file
 }
 @test 'more_src has _dbhash' {
     assert "$xsrc/_dbhash" is_file
@@ -5683,6 +5692,9 @@
 @test 'more_src has _markdown-extract' {
     assert "$xsrc/_markdown-extract" is_file
 }
+@test 'more_src has _marqo' {
+    assert "$xsrc/_marqo" is_file
+}
 @test 'more_src has _markdown2' {
     assert "$xsrc/_markdown2" is_file
 }
@@ -8570,6 +8582,9 @@
 }
 @test 'more_src has _sqlite3mysql' {
     assert "$xsrc/_sqlite3mysql" is_file
+}
+@test 'more_src has _sqlectron' {
+    assert "$xsrc/_sqlectron" is_file
 }
 @test 'more_src has _sqlx' {
     assert "$xsrc/_sqlx" is_file
