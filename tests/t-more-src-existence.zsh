@@ -14574,3 +14574,78 @@
 @test 'more_src has _memcached-cli' {
     assert "$xsrc/_memcached-cli" is_file
 }
+@test 'more_src has _cyrus-imapd' {
+    assert "$xsrc/_cyrus-imapd" is_file
+}
+@test 'more_src has _cyrus-master' {
+    assert "$xsrc/_cyrus-master" is_file
+}
+@test 'more_src has _cyrus-quota' {
+    assert "$xsrc/_cyrus-quota" is_file
+}
+@test 'more_src has _cyrus-deliver' {
+    assert "$xsrc/_cyrus-deliver" is_file
+}
+@test 'more_src has _cyrus-fud' {
+    assert "$xsrc/_cyrus-fud" is_file
+}
+@test 'more_src has _cyrus-tls_prune' {
+    assert "$xsrc/_cyrus-tls_prune" is_file
+}
+@test 'more_src has _cyrus-arbitron' {
+    assert "$xsrc/_cyrus-arbitron" is_file
+}
+@test 'more_src has _cyrus-chk_cyrus' {
+    assert "$xsrc/_cyrus-chk_cyrus" is_file
+}
+@test 'more_src has _cyrus-cyradm' {
+    assert "$xsrc/_cyrus-cyradm" is_file
+}
+@test 'more_src has _cyrus-cvt_cyrusdb' {
+    assert "$xsrc/_cyrus-cvt_cyrusdb" is_file
+}
+@test 'more_src has _cyrus-ipurge' {
+    assert "$xsrc/_cyrus-ipurge" is_file
+}
+@test 'more_src has _cyrus-mbexamine' {
+    assert "$xsrc/_cyrus-mbexamine" is_file
+}
+@test 'more_src has _cyrus-mbpath' {
+    assert "$xsrc/_cyrus-mbpath" is_file
+}
+@test 'more_src has _cyrus-mbtest' {
+    assert "$xsrc/_cyrus-mbtest" is_file
+}
+@test 'more_src has _cyrus-pop3d' {
+    assert "$xsrc/_cyrus-pop3d" is_file
+}
+@test 'more_src has _cyrus-promstatsd' {
+    assert "$xsrc/_cyrus-promstatsd" is_file
+}
+@test 'more_src has _cyrus-rehash' {
+    assert "$xsrc/_cyrus-rehash" is_file
+}
+@test 'more_src has _cyrus-reconstruct' {
+    assert "$xsrc/_cyrus-reconstruct" is_file
+}
+@test 'more_src has _cyrus-smmapd' {
+    assert "$xsrc/_cyrus-smmapd" is_file
+}
+@test 'more_src has _cyrus-squatter' {
+    assert "$xsrc/_cyrus-squatter" is_file
+}
+@test 'more_src has _cyrus-sync_client' {
+    assert "$xsrc/_cyrus-sync_client" is_file
+}
+@test 'more_src has _cyrus-sync_reset' {
+    assert "$xsrc/_cyrus-sync_reset" is_file
+}
+@test 'more_src has _cyrus-sync_server' {
+    assert "$xsrc/_cyrus-sync_server" is_file
+}
+@test 'more_src has _cyrus-timsieved' {
+    assert "$xsrc/_cyrus-timsieved" is_file
+}
+@test 'more_src has _cyrus-unexpunge' {
+    assert "$xsrc/_cyrus-unexpunge" is_file
+}
