@@ -13824,3 +13824,78 @@
 @test 'more_src has _mozc-tool' {
     assert "$xsrc/_mozc-tool" is_file
 }
+@test 'more_src has _rocminfo' {
+    assert "$xsrc/_rocminfo" is_file
+}
+@test 'more_src has _rocm-smi' {
+    assert "$xsrc/_rocm-smi" is_file
+}
+@test 'more_src has _rocm-bandwidth-test' {
+    assert "$xsrc/_rocm-bandwidth-test" is_file
+}
+@test 'more_src has _hipify-clang' {
+    assert "$xsrc/_hipify-clang" is_file
+}
+@test 'more_src has _cuobjdump' {
+    assert "$xsrc/_cuobjdump" is_file
+}
+@test 'more_src has _nvdisasm' {
+    assert "$xsrc/_nvdisasm" is_file
+}
+@test 'more_src has _ptxas' {
+    assert "$xsrc/_ptxas" is_file
+}
+@test 'more_src has _fatbinary' {
+    assert "$xsrc/_fatbinary" is_file
+}
+@test 'more_src has _compute-sanitizer' {
+    assert "$xsrc/_compute-sanitizer" is_file
+}
+@test 'more_src has _cuda-memcheck' {
+    assert "$xsrc/_cuda-memcheck" is_file
+}
+@test 'more_src has _nvprof' {
+    assert "$xsrc/_nvprof" is_file
+}
+@test 'more_src has _nvidia-bug-report' {
+    assert "$xsrc/_nvidia-bug-report" is_file
+}
+@test 'more_src has _nvidia-detect' {
+    assert "$xsrc/_nvidia-detect" is_file
+}
+@test 'more_src has _orte-ps' {
+    assert "$xsrc/_orte-ps" is_file
+}
+@test 'more_src has _mpifc' {
+    assert "$xsrc/_mpifc" is_file
+}
+@test 'more_src has _mpiexec.mpich' {
+    assert "$xsrc/_mpiexec.mpich" is_file
+}
+@test 'more_src has _mpiexec.ompi' {
+    assert "$xsrc/_mpiexec.ompi" is_file
+}
+@test 'more_src has _cudaminer' {
+    assert "$xsrc/_cudaminer" is_file
+}
+@test 'more_src has _sgminer' {
+    assert "$xsrc/_sgminer" is_file
+}
+@test 'more_src has _ethminer' {
+    assert "$xsrc/_ethminer" is_file
+}
+@test 'more_src has _amdtop' {
+    assert "$xsrc/_amdtop" is_file
+}
+@test 'more_src has _mpicc-mpich' {
+    assert "$xsrc/_mpicc-mpich" is_file
+}
+@test 'more_src has _mpicc-openmpi' {
+    assert "$xsrc/_mpicc-openmpi" is_file
+}
+@test 'more_src has _mpirun-mpich' {
+    assert "$xsrc/_mpirun-mpich" is_file
+}
+@test 'more_src has _mpirun-ompi' {
+    assert "$xsrc/_mpirun-ompi" is_file
+}
