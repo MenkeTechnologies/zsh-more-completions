@@ -8430,6 +8430,9 @@
 @test 'more_src has _starlark' {
     assert "$xsrc/_starlark" is_file
 }
+@test 'more_src has _starpls' {
+    assert "$xsrc/_starpls" is_file
+}
 @test 'more_src has _starman' {
     assert "$xsrc/_starman" is_file
 }
@@ -10205,6 +10208,9 @@
 }
 @test 'more_src has _yadm' {
     assert "$xsrc/_yadm" is_file
+}
+@test 'more_src has _yacron' {
+    assert "$xsrc/_yacron" is_file
 }
 @test 'more_src has _yamlfmt' {
     assert "$xsrc/_yamlfmt" is_file
