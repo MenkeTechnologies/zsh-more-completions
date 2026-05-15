@@ -15099,3 +15099,78 @@
 @test 'more_src has _softhsm-bin' {
     assert "$xsrc/_softhsm-bin" is_file
 }
+@test 'more_src has _mythtv-setup' {
+    assert "$xsrc/_mythtv-setup" is_file
+}
+@test 'more_src has _mythbackend' {
+    assert "$xsrc/_mythbackend" is_file
+}
+@test 'more_src has _mythfrontend' {
+    assert "$xsrc/_mythfrontend" is_file
+}
+@test 'more_src has _mythwelcome' {
+    assert "$xsrc/_mythwelcome" is_file
+}
+@test 'more_src has _mythcommflag' {
+    assert "$xsrc/_mythcommflag" is_file
+}
+@test 'more_src has _mythccextractor' {
+    assert "$xsrc/_mythccextractor" is_file
+}
+@test 'more_src has _mythutil' {
+    assert "$xsrc/_mythutil" is_file
+}
+@test 'more_src has _mythffmpeg' {
+    assert "$xsrc/_mythffmpeg" is_file
+}
+@test 'more_src has _mythreplex' {
+    assert "$xsrc/_mythreplex" is_file
+}
+@test 'more_src has _mythfilldatabase' {
+    assert "$xsrc/_mythfilldatabase" is_file
+}
+@test 'more_src has _mythlogserver' {
+    assert "$xsrc/_mythlogserver" is_file
+}
+@test 'more_src has _mythmetadatalookup' {
+    assert "$xsrc/_mythmetadatalookup" is_file
+}
+@test 'more_src has _mythpreviewgen' {
+    assert "$xsrc/_mythpreviewgen" is_file
+}
+@test 'more_src has _mythscreenwizard' {
+    assert "$xsrc/_mythscreenwizard" is_file
+}
+@test 'more_src has _mythshutdown' {
+    assert "$xsrc/_mythshutdown" is_file
+}
+@test 'more_src has _mythtranscode' {
+    assert "$xsrc/_mythtranscode" is_file
+}
+@test 'more_src has _mythstoragegroup' {
+    assert "$xsrc/_mythstoragegroup" is_file
+}
+@test 'more_src has _mythlcdserver' {
+    assert "$xsrc/_mythlcdserver" is_file
+}
+@test 'more_src has _mythipxe' {
+    assert "$xsrc/_mythipxe" is_file
+}
+@test 'more_src has _tvheadend' {
+    assert "$xsrc/_tvheadend" is_file
+}
+@test 'more_src has _kaffeine' {
+    assert "$xsrc/_kaffeine" is_file
+}
+@test 'more_src has _kmplayer' {
+    assert "$xsrc/_kmplayer" is_file
+}
+@test 'more_src has _kplayer' {
+    assert "$xsrc/_kplayer" is_file
+}
+@test 'more_src has _dragonplayer' {
+    assert "$xsrc/_dragonplayer" is_file
+}
+@test 'more_src has _osmo' {
+    assert "$xsrc/_osmo" is_file
+}
