@@ -733,6 +733,12 @@
 @test 'more_src has _awless' {
     assert "$xsrc/_awless" is_file
 }
+@test 'more_src has _awstats' {
+    assert "$xsrc/_awstats" is_file
+}
+@test 'more_src has _awffull' {
+    assert "$xsrc/_awffull" is_file
+}
 @test 'more_src has _aws-es-proxy' {
     assert "$xsrc/_aws-es-proxy" is_file
 }
@@ -1999,6 +2005,9 @@
 @test 'more_src has _cntr' {
     assert "$xsrc/_cntr" is_file
 }
+@test 'more_src has _cobbler' {
+    assert "$xsrc/_cobbler" is_file
+}
 @test 'more_src has _cobra-cli' {
     assert "$xsrc/_cobra-cli" is_file
 }
@@ -2697,6 +2706,9 @@
 }
 @test 'more_src has _denominator' {
     assert "$xsrc/_denominator" is_file
+}
+@test 'more_src has _denyhosts' {
+    assert "$xsrc/_denyhosts" is_file
 }
 @test 'more_src has _depcheck' {
     assert "$xsrc/_depcheck" is_file
@@ -4390,6 +4402,9 @@
 }
 @test 'more_src has _gojson' {
     assert "$xsrc/_gojson" is_file
+}
+@test 'more_src has _goldendict' {
+    assert "$xsrc/_goldendict" is_file
 }
 @test 'more_src has _golab' {
     assert "$xsrc/_golab" is_file
@@ -6961,6 +6976,9 @@
 @test 'more_src has _naabu' {
     assert "$xsrc/_naabu" is_file
 }
+@test 'more_src has _nagiosgraph' {
+    assert "$xsrc/_nagiosgraph" is_file
+}
 @test 'more_src has _nag' {
     assert "$xsrc/_nag" is_file
 }
@@ -7836,6 +7854,15 @@
 @test 'more_src has _pbsdsh' {
     assert "$xsrc/_pbsdsh" is_file
 }
+@test 'more_src has _pbs_iff' {
+    assert "$xsrc/_pbs_iff" is_file
+}
+@test 'more_src has _pbs_sched' {
+    assert "$xsrc/_pbs_sched" is_file
+}
+@test 'more_src has _pbs_tclsh' {
+    assert "$xsrc/_pbs_tclsh" is_file
+}
 @test 'more_src has _pbzip2' {
     assert "$xsrc/_pbzip2" is_file
 }
@@ -8182,6 +8209,12 @@
 @test 'more_src has _podlet' {
     assert "$xsrc/_podlet" is_file
 }
+@test 'more_src has _podget' {
+    assert "$xsrc/_podget" is_file
+}
+@test 'more_src has _podracer' {
+    assert "$xsrc/_podracer" is_file
+}
 @test 'more_src has _podman' {
     assert "$xsrc/_podman" is_file
 }
@@ -8199,6 +8232,12 @@
 }
 @test 'more_src has _pokeget' {
     assert "$xsrc/_pokeget" is_file
+}
+@test 'more_src has _policyd-spf' {
+    assert "$xsrc/_policyd-spf" is_file
+}
+@test 'more_src has _policyd-weight' {
+    assert "$xsrc/_policyd-weight" is_file
 }
 @test 'more_src has _polaris' {
     assert "$xsrc/_polaris" is_file
@@ -8591,6 +8630,18 @@
 }
 @test 'more_src has _qshell' {
     assert "$xsrc/_qshell" is_file
+}
+@test 'more_src has _qrun' {
+    assert "$xsrc/_qrun" is_file
+}
+@test 'more_src has _qstart' {
+    assert "$xsrc/_qstart" is_file
+}
+@test 'more_src has _qstop' {
+    assert "$xsrc/_qstop" is_file
+}
+@test 'more_src has _qtouch' {
+    assert "$xsrc/_qtouch" is_file
 }
 @test 'more_src has _qstat' {
     assert "$xsrc/_qstat" is_file
@@ -9510,8 +9561,14 @@
 @test 'more_src has _slpkg' {
     assert "$xsrc/_slpkg" is_file
 }
+@test 'more_src has _slurmrestd' {
+    assert "$xsrc/_slurmrestd" is_file
+}
 @test 'more_src has _slurp' {
     assert "$xsrc/_slurp" is_file
+}
+@test 'more_src has _sjstat' {
+    assert "$xsrc/_sjstat" is_file
 }
 @test 'more_src has _smart-sudo.zsh' {
     assert "$xsrc/_smart-sudo.zsh" is_file
@@ -9650,6 +9707,12 @@
 }
 @test 'more_src has _sourcekitten' {
     assert "$xsrc/_sourcekitten" is_file
+}
+@test 'more_src has _spampd' {
+    assert "$xsrc/_spampd" is_file
+}
+@test 'more_src has _spamdyke' {
+    assert "$xsrc/_spamdyke" is_file
 }
 @test 'more_src has _spacecmd' {
     assert "$xsrc/_spacecmd" is_file
@@ -9998,6 +10061,9 @@
     assert "$xsrc/_supp" is_file
 }
 
+@test 'more_src has _sview' {
+    assert "$xsrc/_sview" is_file
+}
 @test 'more_src has _surface' {
     assert "$xsrc/_surface" is_file
 }
@@ -10111,6 +10177,9 @@
 }
 @test 'more_src has _systemd-bootchart' {
     assert "$xsrc/_systemd-bootchart" is_file
+}
+@test 'more_src has _systemd-network-generator' {
+    assert "$xsrc/_systemd-network-generator" is_file
 }
 @test 'more_src has _systemd-sysinstall' {
     assert "$xsrc/_systemd-sysinstall" is_file
@@ -11458,6 +11527,9 @@
 @test 'more_src has _viu' {
     assert "$xsrc/_viu" is_file
 }
+@test 'more_src has _vlogger' {
+    assert "$xsrc/_vlogger" is_file
+}
 @test 'more_src has _vlt' {
     assert "$xsrc/_vlt" is_file
 }
@@ -11622,6 +11694,9 @@
 }
 @test 'more_src has _wdocker' {
     assert "$xsrc/_wdocker" is_file
+}
+@test 'more_src has _webalizer' {
+    assert "$xsrc/_webalizer" is_file
 }
 @test 'more_src has _webhttrack' {
     assert "$xsrc/_webhttrack" is_file
