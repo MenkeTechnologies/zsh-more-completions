@@ -8086,6 +8086,9 @@
 @test 'more_src has _spytrap-adb' {
     assert "$xsrc/_spytrap-adb" is_file
 }
+@test 'more_src has _srain' {
+    assert "$xsrc/_srain" is_file
+}
 @test 'more_src has _sq' {
     assert "$xsrc/_sq" is_file
 }
@@ -8799,6 +8802,9 @@
 }
 @test 'more_src has _tracee' {
     assert "$xsrc/_tracee" is_file
+}
+@test 'more_src has _trackma' {
+    assert "$xsrc/_trackma" is_file
 }
 @test 'more_src has _traefik' {
     assert "$xsrc/_traefik" is_file
