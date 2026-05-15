@@ -6439,6 +6439,9 @@
 @test 'more_src has _om' {
     assert "$xsrc/_om" is_file
 }
+@test 'more_src has _omf' {
+    assert "$xsrc/_omf" is_file
+}
 @test 'more_src has _omx' {
     assert "$xsrc/_omx" is_file
 }
