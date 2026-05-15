@@ -2056,6 +2056,9 @@
 @test 'more_src has _crane' {
     assert "$xsrc/_crane" is_file
 }
+@test 'more_src has _crawlee' {
+    assert "$xsrc/_crawlee" is_file
+}
 @test 'more_src has _crap4rs' {
     assert "$xsrc/_crap4rs" is_file
 }
@@ -5358,6 +5361,9 @@
 @test 'more_src has _lammps' {
     assert "$xsrc/_lammps" is_file
 }
+@test 'more_src has _lance' {
+    assert "$xsrc/_lance" is_file
+}
 @test 'more_src has _landing-portal-api.sh' {
     assert "$xsrc/_landing-portal-api.sh" is_file
 }
@@ -6975,6 +6981,9 @@
 @test 'more_src has _pcorelist' {
     assert "$xsrc/_pcorelist" is_file
 }
+@test 'more_src has _pd-ctl' {
+    assert "$xsrc/_pd-ctl" is_file
+}
 @test 'more_src has _pdd' {
     assert "$xsrc/_pdd" is_file
 }
@@ -7733,6 +7742,9 @@
 }
 @test 'more_src has _redstr' {
     assert "$xsrc/_redstr" is_file
+}
+@test 'more_src has _refact-lsp' {
+    assert "$xsrc/_refact-lsp" is_file
 }
 @test 'more_src has _reflex' {
     assert "$xsrc/_reflex" is_file
@@ -9173,6 +9185,9 @@
 }
 @test 'more_src has _tibet' {
     assert "$xsrc/_tibet" is_file
+}
+@test 'more_src has _tidb' {
+    assert "$xsrc/_tidb" is_file
 }
 @test 'more_src has _tidy-browser' {
     assert "$xsrc/_tidy-browser" is_file
