@@ -1595,6 +1595,9 @@
 @test 'more_src has _cdls_popdls_pushdls' {
     assert "$xsrc/_cdls_popdls_pushdls" is_file
 }
+@test 'more_src has _cdrskin' {
+    assert "$xsrc/_cdrskin" is_file
+}
 @test 'more_src has _cekit' {
     assert "$xsrc/_cekit" is_file
 }
@@ -2320,6 +2323,9 @@
 @test 'more_src has _cueprint' {
     assert "$xsrc/_cueprint" is_file
 }
+@test 'more_src has _cuetag' {
+    assert "$xsrc/_cuetag" is_file
+}
 @test 'more_src has _cuetools' {
     assert "$xsrc/_cuetools" is_file
 }
@@ -2340,6 +2346,9 @@
 }
 @test 'more_src has _cutter' {
     assert "$xsrc/_cutter" is_file
+}
+@test 'more_src has _cvlc' {
+    assert "$xsrc/_cvlc" is_file
 }
 @test 'more_src has _cvsconvert' {
     assert "$xsrc/_cvsconvert" is_file
@@ -6310,6 +6319,9 @@
 @test 'more_src has _morie' {
     assert "$xsrc/_morie" is_file
 }
+@test 'more_src has _morituri' {
+    assert "$xsrc/_morituri" is_file
+}
 @test 'more_src has _mosh' {
     assert "$xsrc/_mosh" is_file
 }
@@ -6797,6 +6809,9 @@
 @test 'more_src has _nvimx' {
     assert "$xsrc/_nvimx" is_file
 }
+@test 'more_src has _nvlc' {
+    assert "$xsrc/_nvlc" is_file
+}
 @test 'more_src has _nvme' {
     assert "$xsrc/_nvme" is_file
 }
@@ -6997,6 +7012,9 @@
 }
 @test 'more_src has _optipng' {
     assert "$xsrc/_optipng" is_file
+}
+@test 'more_src has _opusgain' {
+    assert "$xsrc/_opusgain" is_file
 }
 @test 'more_src has _opustags' {
     assert "$xsrc/_opustags" is_file
@@ -7884,6 +7902,9 @@
 @test 'more_src has _quicktype' {
     assert "$xsrc/_quicktype" is_file
 }
+@test 'more_src has _qvlc' {
+    assert "$xsrc/_qvlc" is_file
+}
 @test 'more_src has _qwen' {
     assert "$xsrc/_qwen" is_file
 }
@@ -8182,6 +8203,9 @@
 @test 'more_src has _rip2' {
     assert "$xsrc/_rip2" is_file
 }
+@test 'more_src has _ripit' {
+    assert "$xsrc/_ripit" is_file
+}
 @test 'more_src has _rippkgs' {
     assert "$xsrc/_rippkgs" is_file
 }
@@ -8345,6 +8369,9 @@
 }
 @test 'more_src has _rv' {
     assert "$xsrc/_rv" is_file
+}
+@test 'more_src has _rvlc' {
+    assert "$xsrc/_rvlc" is_file
 }
 @test 'more_src has _rvm' {
     assert "$xsrc/_rvm" is_file
@@ -9184,6 +9211,9 @@
 }
 @test 'more_src has _svgr' {
     assert "$xsrc/_svgr" is_file
+}
+@test 'more_src has _svlc' {
+    assert "$xsrc/_svlc" is_file
 }
 @test 'more_src has _svlint' {
     assert "$xsrc/_svlint" is_file
