@@ -1,6 +1,6 @@
+#compdef editdt
 # Source: https://github.com/ausungju/editdt/blob/95f8ba7193b4e37beb634537d00a1794f9d75d09/completion/_cpdt.zsh
 # Repository: ausungju/editdt (completion/_cpdt.zsh)
-#compdef editdt
 
 _editdt() {
     local context state line

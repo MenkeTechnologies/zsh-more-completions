@@ -1,3 +1,4 @@
+#compdef copy_from_container.sh
 # Source: https://github.com/yale-nova/weave/blob/7ac76a09da111177e300568ee0ff25c427989344/azure/common/install_fzf_autocomplete.sh
 # Repository: yale-nova/weave (azure/common/install_fzf_autocomplete.sh)
 #!/bin/bash
@@ -45,7 +46,6 @@ write_zsh_completion() {
     fi
 
     cat > "$ZSH_COMPLETION_FILE" <<'EOF'
-#compdef copy_from_container.sh
 
 _container_autocomplete() {
   __get_arg_val_zsh() {

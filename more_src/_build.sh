@@ -1,3 +1,4 @@
+#compdef build.sh
 # Source: https://github.com/Raudbjorn/gaud/blob/e13f7ef05c25596c63c718725877331dc6b320f4/build.sh
 # Repository: Raudbjorn/gaud (build.sh)
 #!/bin/bash
@@ -714,7 +715,6 @@ BASH_COMPLETION
 
     # Zsh completion
     cat > "$completion_dir/build.zsh" << 'ZSH_COMPLETION'
-#compdef build.sh
 
 _build_sh() {
     local -a commands options

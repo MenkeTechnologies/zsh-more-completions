@@ -1,6 +1,6 @@
+#compdef ssl-opt.sh compat.sh
 # Source: https://github.com/Mbed-TLS/mbedtls-docs/blob/b6f493df13504cf43806bc99de3ea8f6f9b18d46/tools/zsh/_ssl-opt.sh
 # Repository: Mbed-TLS/mbedtls-docs (tools/zsh/_ssl-opt.sh)
-#compdef ssl-opt.sh compat.sh
 ## Completion for tests/ssl-opt.sh and tests/compat.sh in Mbed TLS.
 
 _compat_sh_set_values () {

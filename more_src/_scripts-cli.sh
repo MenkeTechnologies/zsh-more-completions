@@ -1,3 +1,4 @@
+#compdef scripts/cli.sh
 # Source: https://github.com/datastaxdevs/terraform-nvidia-runai-stack/blob/69c1d69bf7f46f6c683d47bbd1aecb3ed1ad7f32/scripts/cli.sh
 # Repository: datastaxdevs/terraform-nvidia-runai-stack (scripts/cli.sh)
 #!/bin/bash
@@ -175,7 +176,6 @@ BASH_EOF
 		;;
 	zsh)
 		cat <<'ZSH_EOF'
-#compdef scripts/cli.sh
 _ds_cli_commands=(nginx deploy ingress nv-ingest nims runai monitor validate preflight fix status diagnose env port-forward troubleshoot configure destroy completion help)
 _arguments '*:command:(_ds_cli_commands)'
 ZSH_EOF

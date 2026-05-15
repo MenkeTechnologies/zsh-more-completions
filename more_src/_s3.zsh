@@ -1,6 +1,6 @@
+#compdef s3
 # Source: https://github.com/haskell-mafia/mismi/blob/f6df07a52c6c8b1cf195b58d20ef109e390be014/mismi-cli/_s3.zsh
 # Repository: haskell-mafia/mismi (mismi-cli/_s3.zsh)
-#compdef s3
 
 if (($CURRENT == 2)); then
   local -a commands

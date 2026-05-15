@@ -1,6 +1,6 @@
+#compdef pssql
 # Source: https://github.com/faustobranco/pssql/blob/8ea430291a33cfd9cf343f0534b7a9a3d1b2f5b3/completion/_pssql.zsh
 # Repository: faustobranco/pssql (completion/_pssql.zsh)
-#compdef pssql
 
 _pssql() {
     local -a servers

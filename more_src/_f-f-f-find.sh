@@ -1,6 +1,6 @@
+#compdef f-f-f-find.sh
 # Source: https://github.com/juuran/.juuran/blob/8cb44aef904af94492500ae5ecfa4a65f92ca69f/omat/.config/omat/skriptit/auto_completions/_f-f-f-find.sh
 # Repository: juuran/.juuran (omat/.config/omat/skriptit/auto_completions/_f-f-f-find.sh)
-#compdef f-f-f-find.sh
 
 
 ## VIPUJA

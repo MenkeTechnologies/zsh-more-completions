@@ -1,6 +1,6 @@
+#compdef totpc
 # Source: https://github.com/jost-s/totpc/blob/e21442c6e2e557a765d6c5c4683ede9ac067d062/_totpc.zsh
 # Repository: jost-s/totpc (_totpc.zsh)
-#compdef totpc
 
 _totpc() {
     _arguments '1:command:->command'
@@ -19,4 +19,3 @@ _totpc() {
     esac
 }
 
-compdef _totpc totpc

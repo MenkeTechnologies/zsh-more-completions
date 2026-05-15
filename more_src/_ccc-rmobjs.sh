@@ -1,6 +1,6 @@
+#compdef ccc-rmobjs.sh
 # Source: https://github.com/bogner/scripts/blob/88fa565cd90a83abd71110237815e6c5275f80d1/completion/zsh/_ccc-rmobjs.sh
 # Repository: bogner/scripts (completion/zsh/_ccc-rmobjs.sh)
-#compdef ccc-rmobjs.sh
 
 (( $+functions[_ccc_object_files] )) ||
 _ccc_object_files() {

@@ -1,6 +1,6 @@
+#compdef clabstop
 # Source: https://github.com/tboudreaux/ZSH_conda/blob/90c306855f1fcba696d0242b7d8a335908e6c72b/_clabstop.sh
 # Repository: tboudreaux/ZSH_conda (_clabstop.sh)
-#compdef clabstop
 
 function get_running_envs()
 {

@@ -1,6 +1,6 @@
+#compdef tec
 # Source: https://github.com/roachme/tec/blob/79c8781183fff39d269e52ed600598af8edea1a7/completion/_tec.zsh
 # Repository: roachme/tec (completion/_tec.zsh)
-#compdef tec
 
 # TODO:
 # 1. Add support to suggest objects (env, desk, task ID)

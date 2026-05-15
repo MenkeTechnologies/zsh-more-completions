@@ -1,6 +1,6 @@
+#compdef agat_sp_filter_by_ORF_size.pl
 # Source: https://github.com/yamaton/zsh-completions-bio/blob/d485f76b4d9c03e9fbf70baf2c5ccd85653558a2/completions/_agat_sp_filter_by_ORF_size.pl
 # Repository: yamaton/zsh-completions-bio (completions/_agat_sp_filter_by_ORF_size.pl)
-#compdef agat_sp_filter_by_ORF_size.pl
 
 # Auto-generated with h2o
 

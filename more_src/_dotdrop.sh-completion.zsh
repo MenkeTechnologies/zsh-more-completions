@@ -1,6 +1,6 @@
+#compdef dotdrop.sh
 # Source: https://github.com/deadc0de6/dotdrop/blob/abbad363f5994b845517db53a01da28b0e40324f/completion/_dotdrop.sh-completion.zsh
 # Repository: deadc0de6/dotdrop (completion/_dotdrop.sh-completion.zsh)
-#compdef dotdrop.sh
 
 _message_next_arg()
 {

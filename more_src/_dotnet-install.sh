@@ -1,6 +1,6 @@
+#compdef dotnet-install.sh
 # Source: https://github.com/syohex/zsh-misc-completions/blob/8966e3a82cf3d0f17d2c4d52cc23aababb66d496/dotnet/_dotnet-install.sh
 # Repository: syohex/zsh-misc-completions (dotnet/_dotnet-install.sh)
-#compdef dotnet-install.sh
 
 # The MIT License (MIT)
 #

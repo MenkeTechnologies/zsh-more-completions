@@ -1,6 +1,6 @@
+#compdef shellgenius
 # Source: https://github.com/sderev/shellgenius/blob/df864cd9298cd07f4ad676257f20e7189e3ae4da/completion/_complete_shellgenius.zsh
 # Repository: sderev/shellgenius (completion/_complete_shellgenius.zsh)
-#compdef shellgenius
 
 _shellgenius_completion() {
     local -a completions

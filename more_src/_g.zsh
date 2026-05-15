@@ -1,6 +1,6 @@
+#compdef g
 # Source: https://github.com/ray-kast/zrc/blob/b765d536beb42adda1286582d57e3242f0312c2a/completion/_g.zsh
 # Repository: ray-kast/zrc (completion/_g.zsh)
-#compdef g
 
 function _g() {
   words[1]="git"

@@ -1,6 +1,6 @@
+#compdef akv
 # Source: https://github.com/shelken/nix-config/blob/b9c2ce4c11775ac07c600396bfabed67f1b62c8f/home/base/core/zsh/functions/_akv.zsh
 # Repository: shelken/nix-config (home/base/core/zsh/functions/_akv.zsh)
-#compdef akv
 
 # _akv - akv 命令的 zsh 补全函数
 # 按 Tab 时自动从 shelken-homelab vault 拉取 secret 名称列表

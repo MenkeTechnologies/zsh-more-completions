@@ -1,6 +1,6 @@
+#compdef vocabmaster
 # Source: https://github.com/sderev/vocabmaster/blob/de9ac94bae85919fef73e60d3dd094d7fc1cc768/completion/_complete_vocabmaster.zsh
 # Repository: sderev/vocabmaster (completion/_complete_vocabmaster.zsh)
-#compdef vocabmaster
 
 _vocabmaster_completion() {
     local -a completions
@@ -33,5 +33,4 @@ _vocabmaster_completion() {
     fi
 }
 
-compdef _vocabmaster_completion vocabmaster;
 

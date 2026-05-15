@@ -1,6 +1,6 @@
+#compdef appcfg.py
 # Source: https://github.com/littleq0903/gcloud-zsh-completion/blob/94ff005e7fadc817e86b07199515085ed40ded20/src/_appcfg.py
 # Repository: littleq0903/gcloud-zsh-completion (src/_appcfg.py)
-#compdef appcfg.py
 #------------------------------------------------------------
 # Description:
 #

@@ -1,6 +1,6 @@
+#compdef factorix
 # Source: https://github.com/sakuro/factorix/blob/800cf51b0aed3aee6e48bdeee6fb4ea0a5e551c9/completion/_factorix.zsh
 # Repository: sakuro/factorix (completion/_factorix.zsh)
-#compdef factorix
 
 # Zsh completion for factorix
 # Output by: factorix completion zsh
@@ -562,4 +562,3 @@ _factorix_cache() {
 }
 
 # Register the completion function
-compdef _factorix factorix

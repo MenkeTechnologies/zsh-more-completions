@@ -1,3 +1,4 @@
+#compdef manage.sh
 # Source: https://github.com/8bit-wraith/8q-is/blob/96b1f24d28fc2a5222a918994be3ea71b18fd21f/scripts/manage.sh
 # Repository: 8bit-wraith/8q-is (scripts/manage.sh)
 #!/bin/bash
@@ -332,7 +333,6 @@ EOF
     
     # Zsh completion
     cat > /tmp/m8q_manage_completion.zsh << 'EOF'
-#compdef manage.sh
 
 _manage() {
     local -a commands

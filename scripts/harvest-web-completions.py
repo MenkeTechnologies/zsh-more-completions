@@ -103,19 +103,41 @@ def zsh_nf(path: pathlib.Path) -> bool:
     return r.returncode == 0
 
 
+def _render_with_headers(body: str, source_url: str, repo_display: str) -> str | None:
+    """Build the final file text: `#compdef` line first, then provenance headers,
+    then the rest of body. Returns None if body lacks a `#compdef` line.
+    Also strips redundant cobra-emitted `compdef _func cmd` runtime calls."""
+    body = re.sub(r"^compdef _\S+\s.*\n?", "", body, flags=re.M)
+    lines = body.lstrip("\ufeff").lstrip().splitlines(keepends=True)
+    compdef_idx = next(
+        (i for i, l in enumerate(lines) if l.lstrip().startswith("#compdef")),
+        None,
+    )
+    if compdef_idx is None:
+        return None
+    headers = [f"# Source: {source_url}\n", f"# Repository: {repo_display}\n"]
+    rest = [l for i, l in enumerate(lines) if i != compdef_idx]
+    return lines[compdef_idx] + "".join(headers) + "".join(rest)
+
+
 def trial_zsh_completion_syntax(dest: str, body: str, source_url: str, repo_display: str) -> bool:
     """Run zsh -nf the same way as install (header + body) without touching more_src/."""
+    rendered = _render_with_headers(body, source_url, repo_display)
+    if rendered is None:
+        return False
     with tempfile.TemporaryDirectory(prefix="zsh-nf-trial-") as d:
         p = pathlib.Path(d) / dest
-        header = f"# Source: {source_url}\n# Repository: {repo_display}\n"
-        p.write_text(header + body.lstrip("\ufeff"), encoding="utf-8")
+        p.write_text(rendered, encoding="utf-8")
         return zsh_nf(p)
 
 
 def write_file(dest: str, body: str, source_url: str, repo_display: str) -> None:
     out = MORE / dest
-    header = f"# Source: {source_url}\n# Repository: {repo_display}\n"
-    out.write_text(header + body.lstrip("\ufeff"), encoding="utf-8")
+    rendered = _render_with_headers(body, source_url, repo_display)
+    if rendered is None:
+        # Fallback: write as-is so the caller's zsh_nf check can reject it.
+        rendered = body.lstrip("\ufeff")
+    out.write_text(rendered, encoding="utf-8")
 
 
 def skip_path(path: str) -> bool:
