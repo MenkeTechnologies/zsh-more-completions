@@ -2452,6 +2452,9 @@
 @test 'more_src has _deepseek-tui' {
     assert "$xsrc/_deepseek-tui" is_file
 }
+@test 'more_src has _deeplake' {
+    assert "$xsrc/_deeplake" is_file
+}
 @test 'more_src has _deepsource' {
     assert "$xsrc/_deepsource" is_file
 }
@@ -4265,6 +4268,9 @@
 }
 @test 'more_src has _hatch' {
     assert "$xsrc/_hatch" is_file
+}
+@test 'more_src has _hatchet' {
+    assert "$xsrc/_hatchet" is_file
 }
 @test 'more_src has _haxe' {
     assert "$xsrc/_haxe" is_file
@@ -6578,6 +6584,9 @@
 @test 'more_src has _nwchem' {
     assert "$xsrc/_nwchem" is_file
 }
+@test 'more_src has _o2' {
+    assert "$xsrc/_o2" is_file
+}
 @test 'more_src has _oag' {
     assert "$xsrc/_oag" is_file
 }
@@ -6709,6 +6718,9 @@
 }
 @test 'more_src has _openhands' {
     assert "$xsrc/_openhands" is_file
+}
+@test 'more_src has _openobserve' {
+    assert "$xsrc/_openobserve" is_file
 }
 @test 'more_src has _openmeteo' {
     assert "$xsrc/_openmeteo" is_file
@@ -9043,6 +9055,9 @@
 }
 @test 'more_src has _temporal' {
     assert "$xsrc/_temporal" is_file
+}
+@test 'more_src has _temporal-cli' {
+    assert "$xsrc/_temporal-cli" is_file
 }
 @test 'more_src has _tensor-tools' {
     assert "$xsrc/_tensor-tools" is_file
