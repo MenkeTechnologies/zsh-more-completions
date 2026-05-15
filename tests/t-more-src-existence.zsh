@@ -14874,3 +14874,78 @@
 @test 'more_src has _vpnc-script' {
     assert "$xsrc/_vpnc-script" is_file
 }
+@test 'more_src has _ipa-csr-gen' {
+    assert "$xsrc/_ipa-csr-gen" is_file
+}
+@test 'more_src has _ipa-ca-install' {
+    assert "$xsrc/_ipa-ca-install" is_file
+}
+@test 'more_src has _ipa-certupdate' {
+    assert "$xsrc/_ipa-certupdate" is_file
+}
+@test 'more_src has _ipa-dns-install' {
+    assert "$xsrc/_ipa-dns-install" is_file
+}
+@test 'more_src has _ipa-kra-install' {
+    assert "$xsrc/_ipa-kra-install" is_file
+}
+@test 'more_src has _ipa-otptoken-import' {
+    assert "$xsrc/_ipa-otptoken-import" is_file
+}
+@test 'more_src has _ipa-ldap-updater' {
+    assert "$xsrc/_ipa-ldap-updater" is_file
+}
+@test 'more_src has _ipa-nis-manage' {
+    assert "$xsrc/_ipa-nis-manage" is_file
+}
+@test 'more_src has _ipa-pwd-extop' {
+    assert "$xsrc/_ipa-pwd-extop" is_file
+}
+@test 'more_src has _ipa-server-certinstall' {
+    assert "$xsrc/_ipa-server-certinstall" is_file
+}
+@test 'more_src has _ipa-winsync-migrate' {
+    assert "$xsrc/_ipa-winsync-migrate" is_file
+}
+@test 'more_src has _ipa-backup' {
+    assert "$xsrc/_ipa-backup" is_file
+}
+@test 'more_src has _ipa-restore' {
+    assert "$xsrc/_ipa-restore" is_file
+}
+@test 'more_src has _ipa-advise' {
+    assert "$xsrc/_ipa-advise" is_file
+}
+@test 'more_src has _ipa-adtrust-install' {
+    assert "$xsrc/_ipa-adtrust-install" is_file
+}
+@test 'more_src has _ipa-trust-add' {
+    assert "$xsrc/_ipa-trust-add" is_file
+}
+@test 'more_src has _ipa-trust-mod' {
+    assert "$xsrc/_ipa-trust-mod" is_file
+}
+@test 'more_src has _ipa-trust-del' {
+    assert "$xsrc/_ipa-trust-del" is_file
+}
+@test 'more_src has _ipa-client-automount' {
+    assert "$xsrc/_ipa-client-automount" is_file
+}
+@test 'more_src has _ds-replcheck' {
+    assert "$xsrc/_ds-replcheck" is_file
+}
+@test 'more_src has _ds-logpipe' {
+    assert "$xsrc/_ds-logpipe" is_file
+}
+@test 'more_src has _dsidm' {
+    assert "$xsrc/_dsidm" is_file
+}
+@test 'more_src has _dsctl' {
+    assert "$xsrc/_dsctl" is_file
+}
+@test 'more_src has _dsconf' {
+    assert "$xsrc/_dsconf" is_file
+}
+@test 'more_src has _tdbrestore' {
+    assert "$xsrc/_tdbrestore" is_file
+}
