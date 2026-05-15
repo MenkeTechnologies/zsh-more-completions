@@ -397,6 +397,21 @@
 @test 'more_src has _amon2-setup.pl' {
     assert "$xsrc/_amon2-setup.pl" is_file
 }
+@test 'more_src has _amqp-consume' {
+    assert "$xsrc/_amqp-consume" is_file
+}
+@test 'more_src has _amqp-declare-queue' {
+    assert "$xsrc/_amqp-declare-queue" is_file
+}
+@test 'more_src has _amqp-delete-queue' {
+    assert "$xsrc/_amqp-delete-queue" is_file
+}
+@test 'more_src has _amqp-get' {
+    assert "$xsrc/_amqp-get" is_file
+}
+@test 'more_src has _amqp-publish' {
+    assert "$xsrc/_amqp-publish" is_file
+}
 @test 'more_src has _ampelos' {
     assert "$xsrc/_ampelos" is_file
 }
@@ -7767,6 +7782,18 @@
 @test 'more_src has _qmgr' {
     assert "$xsrc/_qmgr" is_file
 }
+@test 'more_src has _qmail-inject' {
+    assert "$xsrc/_qmail-inject" is_file
+}
+@test 'more_src has _qmail-qread' {
+    assert "$xsrc/_qmail-qread" is_file
+}
+@test 'more_src has _qmail-qstat' {
+    assert "$xsrc/_qmail-qstat" is_file
+}
+@test 'more_src has _qmail-showctl' {
+    assert "$xsrc/_qmail-showctl" is_file
+}
 @test 'more_src has _qnap' {
     assert "$xsrc/_qnap" is_file
 }
@@ -9448,6 +9475,9 @@
 }
 @test 'more_src has _thinkfan' {
     assert "$xsrc/_thinkfan" is_file
+}
+@test 'more_src has _throttle' {
+    assert "$xsrc/_throttle" is_file
 }
 @test 'more_src has _thulp' {
     assert "$xsrc/_thulp" is_file
