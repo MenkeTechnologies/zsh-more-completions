@@ -4139,6 +4139,9 @@
 @test 'more_src has _grex' {
     assert "$xsrc/_grex" is_file
 }
+@test 'more_src has _griffe' {
+    assert "$xsrc/_griffe" is_file
+}
 @test 'more_src has _grimaur.zsh' {
     assert "$xsrc/_grimaur.zsh" is_file
 }
@@ -5954,6 +5957,9 @@
 }
 @test 'more_src has _mkdocs' {
     assert "$xsrc/_mkdocs" is_file
+}
+@test 'more_src has _mkdocstrings' {
+    assert "$xsrc/_mkdocstrings" is_file
 }
 @test 'more_src has _mkdwarfs' {
     assert "$xsrc/_mkdwarfs" is_file
@@ -8175,6 +8181,12 @@
 @test 'more_src has _scpr' {
     assert "$xsrc/_scpr" is_file
 }
+@test 'more_src has _scrapyd' {
+    assert "$xsrc/_scrapyd" is_file
+}
+@test 'more_src has _scrapyd-client' {
+    assert "$xsrc/_scrapyd-client" is_file
+}
 @test 'more_src has _scrcpy' {
     assert "$xsrc/_scrcpy" is_file
 }
@@ -9194,6 +9206,9 @@
 }
 @test 'more_src has _tidyp' {
     assert "$xsrc/_tidyp" is_file
+}
+@test 'more_src has _tiflash' {
+    assert "$xsrc/_tiflash" is_file
 }
 @test 'more_src has _tigris' {
     assert "$xsrc/_tigris" is_file
