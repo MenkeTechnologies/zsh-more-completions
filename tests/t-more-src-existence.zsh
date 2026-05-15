@@ -5125,6 +5125,9 @@
 @test 'more_src has _lazyworktree' {
     assert "$xsrc/_lazyworktree" is_file
 }
+@test 'more_src has _lc0' {
+    assert "$xsrc/_lc0" is_file
+}
 @test 'more_src has _ldid' {
     assert "$xsrc/_ldid" is_file
 }
@@ -7405,6 +7408,9 @@
 @test 'more_src has _resticprofile' {
     assert "$xsrc/_resticprofile" is_file
 }
+@test 'more_src has _retroarch-cli' {
+    assert "$xsrc/_retroarch-cli" is_file
+}
 @test 'more_src has _retire' {
     assert "$xsrc/_retire" is_file
 }
@@ -8226,6 +8232,9 @@
 }
 @test 'more_src has _sti' {
     assert "$xsrc/_sti" is_file
+}
+@test 'more_src has _stockfish' {
+    assert "$xsrc/_stockfish" is_file
 }
 @test 'more_src has _storagectl' {
     assert "$xsrc/_storagectl" is_file
