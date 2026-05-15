@@ -118,6 +118,18 @@
 @test 'more_src has _Zzz' {
     assert "$xsrc/_Zzz" is_file
 }
+@test 'more_src has _9base' {
+    assert "$xsrc/_9base" is_file
+}
+@test 'more_src has _9mount' {
+    assert "$xsrc/_9mount" is_file
+}
+@test 'more_src has _9pfuse' {
+    assert "$xsrc/_9pfuse" is_file
+}
+@test 'more_src has _9pserve' {
+    assert "$xsrc/_9pserve" is_file
+}
 @test 'more_src has _aa-log.zsh' {
     assert "$xsrc/_aa-log.zsh" is_file
 }
@@ -732,6 +744,9 @@
 }
 @test 'more_src has _autocode' {
     assert "$xsrc/_autocode" is_file
+}
+@test 'more_src has _autoexpect' {
+    assert "$xsrc/_autoexpect" is_file
 }
 @test 'more_src has _autosub' {
     assert "$xsrc/_autosub" is_file
@@ -1759,6 +1774,9 @@
 }
 @test 'more_src has _cdg.zsh' {
     assert "$xsrc/_cdg.zsh" is_file
+}
+@test 'more_src has _cdialog' {
+    assert "$xsrc/_cdialog" is_file
 }
 @test 'more_src has _cdist' {
     assert "$xsrc/_cdist" is_file
@@ -2821,6 +2839,9 @@
 @test 'more_src has _dek' {
     assert "$xsrc/_dek" is_file
 }
+@test 'more_src has _dejagnu' {
+    assert "$xsrc/_dejagnu" is_file
+}
 @test 'more_src has _demucs' {
     assert "$xsrc/_demucs" is_file
 }
@@ -3544,6 +3565,9 @@
     assert "$xsrc/_envroll" is_file
 }
 
+@test 'more_src has _envuidgid' {
+    assert "$xsrc/_envuidgid" is_file
+}
 @test 'more_src has _envvault' {
     assert "$xsrc/_envvault" is_file
 }
@@ -6829,6 +6853,9 @@
 @test 'more_src has _mate-session-manager' {
     assert "$xsrc/_mate-session-manager" is_file
 }
+@test 'more_src has _matedialog' {
+    assert "$xsrc/_matedialog" is_file
+}
 @test 'more_src has _math' {
     assert "$xsrc/_math" is_file
 }
@@ -7341,6 +7368,9 @@
 }
 @test 'more_src has _mullvad' {
     assert "$xsrc/_mullvad" is_file
+}
+@test 'more_src has _multilog' {
+    assert "$xsrc/_multilog" is_file
 }
 @test 'more_src has _multipass' {
     assert "$xsrc/_multipass" is_file
@@ -9372,6 +9402,9 @@
 @test 'more_src has _readable' {
     assert "$xsrc/_readable" is_file
 }
+@test 'more_src has _readproctitle' {
+    assert "$xsrc/_readproctitle" is_file
+}
 @test 'more_src has _reattach-to-user-namespace' {
     assert "$xsrc/_reattach-to-user-namespace" is_file
 }
@@ -9722,8 +9755,14 @@
 @test 'more_src has _runsv' {
     assert "$xsrc/_runsv" is_file
 }
+@test 'more_src has _runsvchdir' {
+    assert "$xsrc/_runsvchdir" is_file
+}
 @test 'more_src has _runsvdir' {
     assert "$xsrc/_runsvdir" is_file
+}
+@test 'more_src has _runtest' {
+    assert "$xsrc/_runtest" is_file
 }
 @test 'more_src has _ruplacer' {
     assert "$xsrc/_ruplacer" is_file
@@ -9788,6 +9827,21 @@
 }
 @test 'more_src has _s5cmd' {
     assert "$xsrc/_s5cmd" is_file
+}
+@test 'more_src has _s6-clock' {
+    assert "$xsrc/_s6-clock" is_file
+}
+@test 'more_src has _s6-mkfifo' {
+    assert "$xsrc/_s6-mkfifo" is_file
+}
+@test 'more_src has _s6-supervise' {
+    assert "$xsrc/_s6-supervise" is_file
+}
+@test 'more_src has _s6-svscanctl' {
+    assert "$xsrc/_s6-svscanctl" is_file
+}
+@test 'more_src has _s6-test' {
+    assert "$xsrc/_s6-test" is_file
 }
 @test 'more_src has _sacc' {
     assert "$xsrc/_sacc" is_file
@@ -10009,8 +10063,14 @@
     assert "$xsrc/_sessionguard" is_file
 }
 
+@test 'more_src has _setlock' {
+    assert "$xsrc/_setlock" is_file
+}
 @test 'more_src has _setsebool' {
     assert "$xsrc/_setsebool" is_file
+}
+@test 'more_src has _setuidgid' {
+    assert "$xsrc/_setuidgid" is_file
 }
 @test 'more_src has _settle' {
     assert "$xsrc/_settle" is_file
@@ -10301,6 +10361,9 @@
 }
 @test 'more_src has _soft-serve' {
     assert "$xsrc/_soft-serve" is_file
+}
+@test 'more_src has _softlimit' {
+    assert "$xsrc/_softlimit" is_file
 }
 @test 'more_src has _softwareupdate' {
     assert "$xsrc/_softwareupdate" is_file
@@ -10693,10 +10756,22 @@
 @test 'more_src has _supersigil' {
     assert "$xsrc/_supersigil" is_file
 }
+@test 'more_src has _supervise' {
+    assert "$xsrc/_supervise" is_file
+}
 @test 'more_src has _supp' {
     assert "$xsrc/_supp" is_file
 }
 
+@test 'more_src has _svc' {
+    assert "$xsrc/_svc" is_file
+}
+@test 'more_src has _svscan' {
+    assert "$xsrc/_svscan" is_file
+}
+@test 'more_src has _svstat' {
+    assert "$xsrc/_svstat" is_file
+}
 @test 'more_src has _sview' {
     assert "$xsrc/_sview" is_file
 }
