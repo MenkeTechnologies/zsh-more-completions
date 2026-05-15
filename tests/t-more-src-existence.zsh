@@ -649,6 +649,9 @@
 @test 'more_src has _aria2c' {
     assert "$xsrc/_aria2c" is_file
 }
+@test 'more_src has _armagetronad' {
+    assert "$xsrc/_armagetronad" is_file
+}
 @test 'more_src has _artic' {
     assert "$xsrc/_artic" is_file
 }
@@ -1146,6 +1149,9 @@
 }
 @test 'more_src has _blaze' {
     assert "$xsrc/_blaze" is_file
+}
+@test 'more_src has _blockattack' {
+    assert "$xsrc/_blockattack" is_file
 }
 @test 'more_src has _blockhash' {
     assert "$xsrc/_blockhash" is_file
@@ -1853,6 +1859,9 @@
 @test 'more_src has _cekit' {
     assert "$xsrc/_cekit" is_file
 }
+@test 'more_src has _celestia' {
+    assert "$xsrc/_celestia" is_file
+}
 @test 'more_src has _celeste_standalone' {
     assert "$xsrc/_celeste_standalone" is_file
 }
@@ -1945,6 +1954,9 @@
 }
 @test 'more_src has _chef-cli' {
     assert "$xsrc/_chef-cli" is_file
+}
+@test 'more_src has _chessx' {
+    assert "$xsrc/_chessx" is_file
 }
 @test 'more_src has _chezmoi' {
     assert "$xsrc/_chezmoi" is_file
@@ -2694,6 +2706,12 @@
 }
 @test 'more_src has _cutecom' {
     assert "$xsrc/_cutecom" is_file
+}
+@test 'more_src has _cutechess' {
+    assert "$xsrc/_cutechess" is_file
+}
+@test 'more_src has _cutechess-cli' {
+    assert "$xsrc/_cutechess-cli" is_file
 }
 @test 'more_src has _cutter' {
     assert "$xsrc/_cutter" is_file
@@ -3818,6 +3836,9 @@
 @test 'more_src has _ext4magic' {
     assert "$xsrc/_ext4magic" is_file
 }
+@test 'more_src has _extremetuxracer' {
+    assert "$xsrc/_extremetuxracer" is_file
+}
 @test 'more_src has _extresso' {
     assert "$xsrc/_extresso" is_file
 }
@@ -4222,6 +4243,9 @@
 }
 @test 'more_src has _freecadcmd' {
     assert "$xsrc/_freecadcmd" is_file
+}
+@test 'more_src has _freeciv' {
+    assert "$xsrc/_freeciv" is_file
 }
 @test 'more_src has _freeciv-client' {
     assert "$xsrc/_freeciv-client" is_file
@@ -4672,6 +4696,9 @@
 @test 'more_src has _glab' {
     assert "$xsrc/_glab" is_file
 }
+@test 'more_src has _glaurung' {
+    assert "$xsrc/_glaurung" is_file
+}
 @test 'more_src has _glf' {
     assert "$xsrc/_glf" is_file
 }
@@ -4774,6 +4801,9 @@
 }
 @test 'more_src has _gnatxref' {
     assert "$xsrc/_gnatxref" is_file
+}
+@test 'more_src has _gnubackgammon' {
+    assert "$xsrc/_gnubackgammon" is_file
 }
 @test 'more_src has _gnubg' {
     assert "$xsrc/_gnubg" is_file
@@ -6223,6 +6253,9 @@
 @test 'more_src has _kata' {
     assert "$xsrc/_kata" is_file
 }
+@test 'more_src has _katago' {
+    assert "$xsrc/_katago" is_file
+}
 @test 'more_src has _katana' {
     assert "$xsrc/_katana" is_file
 }
@@ -6519,6 +6552,9 @@
 @test 'more_src has _kst' {
     assert "$xsrc/_kst" is_file
 }
+@test 'more_src has _kstars' {
+    assert "$xsrc/_kstars" is_file
+}
 @test 'more_src has _kt' {
     assert "$xsrc/_kt" is_file
 }
@@ -6719,6 +6755,9 @@
 }
 @test 'more_src has _ledger' {
     assert "$xsrc/_ledger" is_file
+}
+@test 'more_src has _leela-zero' {
+    assert "$xsrc/_leela-zero" is_file
 }
 @test 'more_src has _leeloo' {
     assert "$xsrc/_leeloo" is_file
@@ -7065,6 +7104,9 @@
 }
 @test 'more_src has _mapcidr' {
     assert "$xsrc/_mapcidr" is_file
+}
+@test 'more_src has _marble' {
+    assert "$xsrc/_marble" is_file
 }
 @test 'more_src has _marcel' {
     assert "$xsrc/_marcel" is_file
@@ -7842,8 +7884,14 @@
 @test 'more_src has _netmaker' {
     assert "$xsrc/_netmaker" is_file
 }
+@test 'more_src has _neverball' {
+    assert "$xsrc/_neverball" is_file
+}
 @test 'more_src has _neverest' {
     assert "$xsrc/_neverest" is_file
+}
+@test 'more_src has _neverputt' {
+    assert "$xsrc/_neverputt" is_file
 }
 @test 'more_src has _nestopia' {
     assert "$xsrc/_nestopia" is_file
@@ -8378,6 +8426,12 @@
 @test 'more_src has _openocd' {
     assert "$xsrc/_openocd" is_file
 }
+@test 'more_src has _openra' {
+    assert "$xsrc/_openra" is_file
+}
+@test 'more_src has _openrct2' {
+    assert "$xsrc/_openrct2" is_file
+}
 @test 'more_src has _openring' {
     assert "$xsrc/_openring" is_file
 }
@@ -8398,6 +8452,9 @@
 }
 @test 'more_src has _opentofu' {
     assert "$xsrc/_opentofu" is_file
+}
+@test 'more_src has _openttd' {
+    assert "$xsrc/_openttd" is_file
 }
 @test 'more_src has _operant' {
     assert "$xsrc/_operant" is_file
@@ -10632,6 +10689,9 @@
 @test 'more_src has _slurp' {
     assert "$xsrc/_slurp" is_file
 }
+@test 'more_src has _sjeng' {
+    assert "$xsrc/_sjeng" is_file
+}
 @test 'more_src has _sjstat' {
     assert "$xsrc/_sjstat" is_file
 }
@@ -11145,6 +11205,9 @@
 }
 @test 'more_src has _superctl' {
     assert "$xsrc/_superctl" is_file
+}
+@test 'more_src has _supertux' {
+    assert "$xsrc/_supertux" is_file
 }
 @test 'more_src has _supertuxkart' {
     assert "$xsrc/_supertuxkart" is_file
@@ -11786,6 +11849,9 @@
 @test 'more_src has _tofu' {
     assert "$xsrc/_tofu" is_file
 }
+@test 'more_src has _toga2' {
+    assert "$xsrc/_toga2" is_file
+}
 @test 'more_src has _toggl' {
     assert "$xsrc/_toggl" is_file
 }
@@ -11827,6 +11893,9 @@
 }
 @test 'more_src has _torc' {
     assert "$xsrc/_torc" is_file
+}
+@test 'more_src has _torcs' {
+    assert "$xsrc/_torcs" is_file
 }
 @test 'more_src has _torify' {
     assert "$xsrc/_torify" is_file
@@ -12002,6 +12071,9 @@
 }
 @test 'more_src has _tux' {
     assert "$xsrc/_tux" is_file
+}
+@test 'more_src has _tuxracer' {
+    assert "$xsrc/_tuxracer" is_file
 }
 @test 'more_src has _tvtime' {
     assert "$xsrc/_tvtime" is_file
@@ -13580,6 +13652,9 @@
 }
 @test 'more_src has _zsh_source.sh' {
     assert "$xsrc/_zsh_source.sh" is_file
+}
+@test 'more_src has _zsnes' {
+    assert "$xsrc/_zsnes" is_file
 }
 @test 'more_src has _zstdgrep' {
     assert "$xsrc/_zstdgrep" is_file
