@@ -2491,6 +2491,9 @@
 @test 'more_src has _dbilogstrip' {
     assert "$xsrc/_dbilogstrip" is_file
 }
+@test 'more_src has _dblatex' {
+    assert "$xsrc/_dblatex" is_file
+}
 @test 'more_src has _dbmate' {
     assert "$xsrc/_dbmate" is_file
 }
@@ -2774,6 +2777,9 @@
 }
 @test 'more_src has _dnsx' {
     assert "$xsrc/_dnsx" is_file
+}
+@test 'more_src has _docbook2dvi' {
+    assert "$xsrc/_docbook2dvi" is_file
 }
 @test 'more_src has _doc-comparator.py' {
     assert "$xsrc/_doc-comparator.py" is_file
@@ -3599,6 +3605,9 @@
 @test 'more_src has _freeswitch' {
     assert "$xsrc/_freeswitch" is_file
 }
+@test 'more_src has _freecadcmd' {
+    assert "$xsrc/_freecadcmd" is_file
+}
 @test 'more_src has _frg' {
     assert "$xsrc/_frg" is_file
 }
@@ -3750,6 +3759,9 @@
 @test 'more_src has _gerbil' {
     assert "$xsrc/_gerbil" is_file
 }
+@test 'more_src has _geda' {
+    assert "$xsrc/_geda" is_file
+}
 @test 'more_src has _get-repo' {
     assert "$xsrc/_get-repo" is_file
 }
@@ -3758,6 +3770,9 @@
 }
 @test 'more_src has _getraw' {
     assert "$xsrc/_getraw" is_file
+}
+@test 'more_src has _ginsh' {
+    assert "$xsrc/_ginsh" is_file
 }
 @test 'more_src has _gf' {
     assert "$xsrc/_gf" is_file
@@ -4331,6 +4346,9 @@
 }
 @test 'more_src has _gsan' {
     assert "$xsrc/_gsan" is_file
+}
+@test 'more_src has _gschem' {
+    assert "$xsrc/_gschem" is_file
 }
 @test 'more_src has _gtop' {
     assert "$xsrc/_gtop" is_file
@@ -7260,6 +7278,9 @@
 @test 'more_src has _pbzip2' {
     assert "$xsrc/_pbzip2" is_file
 }
+@test 'more_src has _pcb' {
+    assert "$xsrc/_pcb" is_file
+}
 @test 'more_src has _pcb2gcode' {
     assert "$xsrc/_pcb2gcode" is_file
 }
@@ -8295,6 +8316,9 @@
 }
 @test 'more_src has _ros' {
     assert "$xsrc/_ros" is_file
+}
+@test 'more_src has _rosegarden' {
+    assert "$xsrc/_rosegarden" is_file
 }
 @test 'more_src has _rotz' {
     assert "$xsrc/_rotz" is_file
@@ -10912,6 +10936,9 @@
 @test 'more_src has _wwd.sh' {
     assert "$xsrc/_wwd.sh" is_file
 }
+@test 'more_src has _wxmaxima' {
+    assert "$xsrc/_wxmaxima" is_file
+}
 @test 'more_src has _x-cmd' {
     assert "$xsrc/_x-cmd" is_file
 }
@@ -11001,6 +11028,9 @@
 }
 @test 'more_src has _xq' {
     assert "$xsrc/_xq" is_file
+}
+@test 'more_src has _xqilla' {
+    assert "$xsrc/_xqilla" is_file
 }
 @test 'more_src has _xr' {
     assert "$xsrc/_xr" is_file
