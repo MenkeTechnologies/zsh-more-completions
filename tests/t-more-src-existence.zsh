@@ -2850,6 +2850,12 @@
 @test 'more_src has _dwarfsextract' {
     assert "$xsrc/_dwarfsextract" is_file
 }
+@test 'more_src has _dwg2pdf' {
+    assert "$xsrc/_dwg2pdf" is_file
+}
+@test 'more_src has _dwginfo' {
+    assert "$xsrc/_dwginfo" is_file
+}
 @test 'more_src has _dyff' {
     assert "$xsrc/_dyff" is_file
 }
@@ -5292,6 +5298,9 @@
 }
 @test 'more_src has _libgen-cli' {
     assert "$xsrc/_libgen-cli" is_file
+}
+@test 'more_src has _librecad' {
+    assert "$xsrc/_librecad" is_file
 }
 @test 'more_src has _librespot' {
     assert "$xsrc/_librespot" is_file
