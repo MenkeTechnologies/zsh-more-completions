@@ -5125,6 +5125,48 @@
 @test 'more_src has _ioping' {
     assert "$xsrc/_ioping" is_file
 }
+@test 'more_src has _ipa-acme-manage' {
+    assert "$xsrc/_ipa-acme-manage" is_file
+}
+@test 'more_src has _ipa-cacert-manage' {
+    assert "$xsrc/_ipa-cacert-manage" is_file
+}
+@test 'more_src has _ipa-compat-manage' {
+    assert "$xsrc/_ipa-compat-manage" is_file
+}
+@test 'more_src has _ipa-csreplica-manage' {
+    assert "$xsrc/_ipa-csreplica-manage" is_file
+}
+@test 'more_src has _ipa-managed-entries' {
+    assert "$xsrc/_ipa-managed-entries" is_file
+}
+@test 'more_src has _ipa-otpd' {
+    assert "$xsrc/_ipa-otpd" is_file
+}
+@test 'more_src has _ipa-pki-retrieve-key' {
+    assert "$xsrc/_ipa-pki-retrieve-key" is_file
+}
+@test 'more_src has _ipa-pkinit-manage' {
+    assert "$xsrc/_ipa-pkinit-manage" is_file
+}
+@test 'more_src has _ipa-pwd-extop-manage' {
+    assert "$xsrc/_ipa-pwd-extop-manage" is_file
+}
+@test 'more_src has _ipa-replica-conncheck' {
+    assert "$xsrc/_ipa-replica-conncheck" is_file
+}
+@test 'more_src has _ipa-replica-install' {
+    assert "$xsrc/_ipa-replica-install" is_file
+}
+@test 'more_src has _ipa-replica-manage' {
+    assert "$xsrc/_ipa-replica-manage" is_file
+}
+@test 'more_src has _ipa-replica-prepare' {
+    assert "$xsrc/_ipa-replica-prepare" is_file
+}
+@test 'more_src has _ipa-server-upgrade' {
+    assert "$xsrc/_ipa-server-upgrade" is_file
+}
 @test 'more_src has _ipam' {
     assert "$xsrc/_ipam" is_file
 }
@@ -5792,6 +5834,15 @@
 }
 @test 'more_src has _kqml' {
     assert "$xsrc/_kqml" is_file
+}
+@test 'more_src has _krb5-send-pr' {
+    assert "$xsrc/_krb5-send-pr" is_file
+}
+@test 'more_src has _krb5kdc' {
+    assert "$xsrc/_krb5kdc" is_file
+}
+@test 'more_src has _k5srvutil' {
+    assert "$xsrc/_k5srvutil" is_file
 }
 @test 'more_src has _krabby' {
     assert "$xsrc/_krabby" is_file
@@ -7004,6 +7055,9 @@
 }
 @test 'more_src has _nerdfonts' {
     assert "$xsrc/_nerdfonts" is_file
+}
+@test 'more_src has _netfilter-persistent' {
+    assert "$xsrc/_netfilter-persistent" is_file
 }
 @test 'more_src has _netbird' {
     assert "$xsrc/_netbird" is_file
@@ -9354,6 +9408,18 @@
 @test 'more_src has _shnote' {
     assert "$xsrc/_shnote" is_file
 }
+@test 'more_src has _shorewall-init' {
+    assert "$xsrc/_shorewall-init" is_file
+}
+@test 'more_src has _shorewall-lite' {
+    assert "$xsrc/_shorewall-lite" is_file
+}
+@test 'more_src has _shorewall6' {
+    assert "$xsrc/_shorewall6" is_file
+}
+@test 'more_src has _shorewall6-lite' {
+    assert "$xsrc/_shorewall6-lite" is_file
+}
 @test 'more_src has _shopify' {
     assert "$xsrc/_shopify" is_file
 }
@@ -9701,6 +9767,12 @@
 }
 @test 'more_src has _srt-tunnel' {
     assert "$xsrc/_srt-tunnel" is_file
+}
+@test 'more_src has _sclient' {
+    assert "$xsrc/_sclient" is_file
+}
+@test 'more_src has _sserver' {
+    assert "$xsrc/_sserver" is_file
 }
 @test 'more_src has _sscli' {
     assert "$xsrc/_sscli" is_file
@@ -10753,6 +10825,9 @@
     assert "$xsrc/_ubxtool" is_file
 }
 
+@test 'more_src has _uci' {
+    assert "$xsrc/_uci" is_file
+}
 @test 'more_src has _udiskie-umount' {
     assert "$xsrc/_udiskie-umount" is_file
 }
