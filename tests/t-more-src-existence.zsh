@@ -1885,6 +1885,9 @@
 @test 'more_src has _codecompanion' {
     assert "$xsrc/_codecompanion" is_file
 }
+@test 'more_src has _codecrafters' {
+    assert "$xsrc/_codecrafters" is_file
+}
 @test 'more_src has _codelimit' {
     assert "$xsrc/_codelimit" is_file
 }
@@ -3696,6 +3699,9 @@
 @test 'more_src has _get-repo' {
     assert "$xsrc/_get-repo" is_file
 }
+@test 'more_src has _getdns_query' {
+    assert "$xsrc/_getdns_query" is_file
+}
 @test 'more_src has _getraw' {
     assert "$xsrc/_getraw" is_file
 }
@@ -5346,6 +5352,9 @@
 @test 'more_src has _krane' {
     assert "$xsrc/_krane" is_file
 }
+@test 'more_src has _kresctl' {
+    assert "$xsrc/_kresctl" is_file
+}
 @test 'more_src has _krew' {
     assert "$xsrc/_krew" is_file
 }
@@ -5453,6 +5462,9 @@
 }
 @test 'more_src has _kyverno' {
     assert "$xsrc/_kyverno" is_file
+}
+@test 'more_src has _kzonecheck' {
+    assert "$xsrc/_kzonecheck" is_file
 }
 @test 'more_src has _lacheck' {
     assert "$xsrc/_lacheck" is_file
@@ -6452,6 +6464,9 @@
 }
 @test 'more_src has _newman' {
     assert "$xsrc/_newman" is_file
+}
+@test 'more_src has _newsbeuter' {
+    assert "$xsrc/_newsbeuter" is_file
 }
 @test 'more_src has _newsboat' {
     assert "$xsrc/_newsboat" is_file
@@ -8577,6 +8592,9 @@
 @test 'more_src has _smart-sudo.zsh' {
     assert "$xsrc/_smart-sudo.zsh" is_file
 }
+@test 'more_src has _smartdns' {
+    assert "$xsrc/_smartdns" is_file
+}
 @test 'more_src has _smartlog' {
     assert "$xsrc/_smartlog" is_file
 }
@@ -8913,6 +8931,9 @@
 }
 @test 'more_src has _stow' {
     assert "$xsrc/_stow" is_file
+}
+@test 'more_src has _stratoshark' {
+    assert "$xsrc/_stratoshark" is_file
 }
 @test 'more_src has _streamlink' {
     assert "$xsrc/_streamlink" is_file
@@ -9844,6 +9865,9 @@
 @test 'more_src has _urxvt-cli' {
     assert "$xsrc/_urxvt-cli" is_file
 }
+@test 'more_src has _urxvtcd' {
+    assert "$xsrc/_urxvtcd" is_file
+}
 @test 'more_src has _urlview' {
     assert "$xsrc/_urlview" is_file
 }
@@ -10480,6 +10504,9 @@
 @test 'more_src has _waypoint' {
     assert "$xsrc/_waypoint" is_file
 }
+@test 'more_src has _wayst' {
+    assert "$xsrc/_wayst" is_file
+}
 @test 'more_src has _wazero' {
     assert "$xsrc/_wazero" is_file
 }
@@ -10692,6 +10719,9 @@
 }
 @test 'more_src has _xournalpp' {
     assert "$xsrc/_xournalpp" is_file
+}
+@test 'more_src has _xpipe' {
+    assert "$xsrc/_xpipe" is_file
 }
 @test 'more_src has _xplr' {
     assert "$xsrc/_xplr" is_file
