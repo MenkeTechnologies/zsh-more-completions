@@ -5782,6 +5782,10 @@
 @test 'more_src has _nitrogen' {
     assert "$xsrc/_nitrogen" is_file
 }
+@test 'more_src has _nitropy' {
+    assert "$xsrc/_nitropy" is_file
+}
+
 @test 'more_src has _nix' {
     assert "$xsrc/_nix" is_file
 }
@@ -6319,6 +6323,10 @@
 @test 'more_src has _pcorelist' {
     assert "$xsrc/_pcorelist" is_file
 }
+@test 'more_src has _pdd' {
+    assert "$xsrc/_pdd" is_file
+}
+
 @test 'more_src has _pdfgrep' {
     assert "$xsrc/_pdfgrep" is_file
 }
@@ -6379,6 +6387,10 @@
 @test 'more_src has _ph' {
     assert "$xsrc/_ph" is_file
 }
+@test 'more_src has _philipstv' {
+    assert "$xsrc/_philipstv" is_file
+}
+
 @test 'more_src has _phockup' {
     assert "$xsrc/_phockup" is_file
 }
@@ -9679,7 +9691,6 @@
 @test 'more_src has _zsh-completion' {
     assert "$xsrc/_zsh-completion" is_file
 }
-
 @test 'more_src has _zsh-defer' {
     assert "$xsrc/_zsh-defer" is_file
 }
