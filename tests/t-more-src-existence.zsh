@@ -406,6 +406,9 @@
 @test 'more_src has _amfora' {
     assert "$xsrc/_amfora" is_file
 }
+@test 'more_src has _amavisd' {
+    assert "$xsrc/_amavisd" is_file
+}
 @test 'more_src has _amon2-setup.pl' {
     assert "$xsrc/_amon2-setup.pl" is_file
 }
@@ -3189,6 +3192,12 @@
 @test 'more_src has _ecotokens' {
     assert "$xsrc/_ecotokens" is_file
 }
+@test 'more_src has _edac-ctl' {
+    assert "$xsrc/_edac-ctl" is_file
+}
+@test 'more_src has _edac-util' {
+    assert "$xsrc/_edac-util" is_file
+}
 @test 'more_src has _edactl' {
     assert "$xsrc/_edactl" is_file
 }
@@ -4144,6 +4153,12 @@
 @test 'more_src has _glum' {
     assert "$xsrc/_glum" is_file
 }
+@test 'more_src has _glmark2' {
+    assert "$xsrc/_glmark2" is_file
+}
+@test 'more_src has _glslang' {
+    assert "$xsrc/_glslang" is_file
+}
 
 @test 'more_src has _gmx' {
     assert "$xsrc/_gmx" is_file
@@ -4505,6 +4520,9 @@
 }
 @test 'more_src has _guacenc' {
     assert "$xsrc/_guacenc" is_file
+}
+@test 'more_src has _gummiboot' {
+    assert "$xsrc/_gummiboot" is_file
 }
 @test 'more_src has _gummi' {
     assert "$xsrc/_gummi" is_file
@@ -4956,6 +4974,9 @@
 }
 @test 'more_src has _instmodsh' {
     assert "$xsrc/_instmodsh" is_file
+}
+@test 'more_src has _intel_gpu_frequency' {
+    assert "$xsrc/_intel_gpu_frequency" is_file
 }
 @test 'more_src has _interactsh-client' {
     assert "$xsrc/_interactsh-client" is_file
@@ -5861,6 +5882,9 @@
 }
 @test 'more_src has _lf' {
     assert "$xsrc/_lf" is_file
+}
+@test 'more_src has _lilo' {
+    assert "$xsrc/_lilo" is_file
 }
 @test 'more_src has _libcamera-hello' {
     assert "$xsrc/_libcamera-hello" is_file
@@ -7076,6 +7100,24 @@
 @test 'more_src has _nushell' {
     assert "$xsrc/_nushell" is_file
 }
+@test 'more_src has _nvidia-debugdump' {
+    assert "$xsrc/_nvidia-debugdump" is_file
+}
+@test 'more_src has _nvidia-modprobe' {
+    assert "$xsrc/_nvidia-modprobe" is_file
+}
+@test 'more_src has _nvidia-persistenced' {
+    assert "$xsrc/_nvidia-persistenced" is_file
+}
+@test 'more_src has _nvidia-powerd' {
+    assert "$xsrc/_nvidia-powerd" is_file
+}
+@test 'more_src has _nvidia-settings' {
+    assert "$xsrc/_nvidia-settings" is_file
+}
+@test 'more_src has _nvidia-xconfig' {
+    assert "$xsrc/_nvidia-xconfig" is_file
+}
 @test 'more_src has _nvim' {
     assert "$xsrc/_nvim" is_file
 }
@@ -7894,6 +7936,12 @@
 @test 'more_src has _porter' {
     assert "$xsrc/_porter" is_file
 }
+@test 'more_src has _postgrey' {
+    assert "$xsrc/_postgrey" is_file
+}
+@test 'more_src has _postscreen' {
+    assert "$xsrc/_postscreen" is_file
+}
 @test 'more_src has _portmap' {
     assert "$xsrc/_portmap" is_file
 }
@@ -8264,6 +8312,9 @@
 }
 @test 'more_src has _raps' {
     assert "$xsrc/_raps" is_file
+}
+@test 'more_src has _rasdaemon' {
+    assert "$xsrc/_rasdaemon" is_file
 }
 @test 'more_src has _rargs' {
     assert "$xsrc/_rargs" is_file
@@ -8760,6 +8811,9 @@
 @test 'more_src has _sassc' {
     assert "$xsrc/_sassc" is_file
 }
+@test 'more_src has _sbsigntool' {
+    assert "$xsrc/_sbsigntool" is_file
+}
 @test 'more_src has _sbopkg' {
     assert "$xsrc/_sbopkg" is_file
 }
@@ -9240,6 +9294,12 @@
 @test 'more_src has _spiped' {
     assert "$xsrc/_spiped" is_file
 }
+@test 'more_src has _spirv-cross' {
+    assert "$xsrc/_spirv-cross" is_file
+}
+@test 'more_src has _spirv-link' {
+    assert "$xsrc/_spirv-link" is_file
+}
 @test 'more_src has _spicedb' {
     assert "$xsrc/_spicedb" is_file
 }
@@ -9643,6 +9703,9 @@
 }
 @test 'more_src has _sysdig' {
     assert "$xsrc/_sysdig" is_file
+}
+@test 'more_src has _systemd-bootchart' {
+    assert "$xsrc/_systemd-bootchart" is_file
 }
 @test 'more_src has _systemd-sysinstall' {
     assert "$xsrc/_systemd-sysinstall" is_file
@@ -10950,6 +11013,18 @@
 }
 @test 'more_src has _virtualbox' {
     assert "$xsrc/_virtualbox" is_file
+}
+@test 'more_src has _vkconfig' {
+    assert "$xsrc/_vkconfig" is_file
+}
+@test 'more_src has _vkcube' {
+    assert "$xsrc/_vkcube" is_file
+}
+@test 'more_src has _vkmark' {
+    assert "$xsrc/_vkmark" is_file
+}
+@test 'more_src has _vkrunner' {
+    assert "$xsrc/_vkrunner" is_file
 }
 @test 'more_src has _visidata' {
     assert "$xsrc/_visidata" is_file
