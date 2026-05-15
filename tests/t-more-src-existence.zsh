@@ -14949,3 +14949,78 @@
 @test 'more_src has _tdbrestore' {
     assert "$xsrc/_tdbrestore" is_file
 }
+@test 'more_src has _pkimanage' {
+    assert "$xsrc/_pkimanage" is_file
+}
+@test 'more_src has _pkispawn' {
+    assert "$xsrc/_pkispawn" is_file
+}
+@test 'more_src has _pkidestroy' {
+    assert "$xsrc/_pkidestroy" is_file
+}
+@test 'more_src has _pki-server' {
+    assert "$xsrc/_pki-server" is_file
+}
+@test 'more_src has _pki-healthcheck' {
+    assert "$xsrc/_pki-healthcheck" is_file
+}
+@test 'more_src has _uacme' {
+    assert "$xsrc/_uacme" is_file
+}
+@test 'more_src has _ocserv-client' {
+    assert "$xsrc/_ocserv-client" is_file
+}
+@test 'more_src has _ocserv-fwd' {
+    assert "$xsrc/_ocserv-fwd" is_file
+}
+@test 'more_src has _ipsec-iked' {
+    assert "$xsrc/_ipsec-iked" is_file
+}
+@test 'more_src has _ipsec-iked-ctl' {
+    assert "$xsrc/_ipsec-iked-ctl" is_file
+}
+@test 'more_src has _ipsec-charon' {
+    assert "$xsrc/_ipsec-charon" is_file
+}
+@test 'more_src has _clevis-encrypt-tang' {
+    assert "$xsrc/_clevis-encrypt-tang" is_file
+}
+@test 'more_src has _clevis-encrypt-sss' {
+    assert "$xsrc/_clevis-encrypt-sss" is_file
+}
+@test 'more_src has _clevis-encrypt-tpm2' {
+    assert "$xsrc/_clevis-encrypt-tpm2" is_file
+}
+@test 'more_src has _clevis-decrypt' {
+    assert "$xsrc/_clevis-decrypt" is_file
+}
+@test 'more_src has _clevis-luks-list' {
+    assert "$xsrc/_clevis-luks-list" is_file
+}
+@test 'more_src has _clevis-luks-bind' {
+    assert "$xsrc/_clevis-luks-bind" is_file
+}
+@test 'more_src has _clevis-luks-unbind' {
+    assert "$xsrc/_clevis-luks-unbind" is_file
+}
+@test 'more_src has _clevis-luks-pass' {
+    assert "$xsrc/_clevis-luks-pass" is_file
+}
+@test 'more_src has _tangd' {
+    assert "$xsrc/_tangd" is_file
+}
+@test 'more_src has _tang-show-keys' {
+    assert "$xsrc/_tang-show-keys" is_file
+}
+@test 'more_src has _luksmeta' {
+    assert "$xsrc/_luksmeta" is_file
+}
+@test 'more_src has _yubikey-luks' {
+    assert "$xsrc/_yubikey-luks" is_file
+}
+@test 'more_src has _certbot-renew' {
+    assert "$xsrc/_certbot-renew" is_file
+}
+@test 'more_src has _acmeman' {
+    assert "$xsrc/_acmeman" is_file
+}
