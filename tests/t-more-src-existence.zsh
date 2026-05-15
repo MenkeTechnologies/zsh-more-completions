@@ -13974,3 +13974,78 @@
 @test 'more_src has _nmake' {
     assert "$xsrc/_nmake" is_file
 }
+@test 'more_src has _mac' {
+    assert "$xsrc/_mac" is_file
+}
+@test 'more_src has _neroAacEnc' {
+    assert "$xsrc/_neroAacEnc" is_file
+}
+@test 'more_src has _neroAacDec' {
+    assert "$xsrc/_neroAacDec" is_file
+}
+@test 'more_src has _neroAacTag' {
+    assert "$xsrc/_neroAacTag" is_file
+}
+@test 'more_src has _id3tool' {
+    assert "$xsrc/_id3tool" is_file
+}
+@test 'more_src has _puddletag' {
+    assert "$xsrc/_puddletag" is_file
+}
+@test 'more_src has _konsole5' {
+    assert "$xsrc/_konsole5" is_file
+}
+@test 'more_src has _w3mimgdisplay' {
+    assert "$xsrc/_w3mimgdisplay" is_file
+}
+@test 'more_src has _lightworks' {
+    assert "$xsrc/_lightworks" is_file
+}
+@test 'more_src has _olive-editor' {
+    assert "$xsrc/_olive-editor" is_file
+}
+@test 'more_src has _xine' {
+    assert "$xsrc/_xine" is_file
+}
+@test 'more_src has _xine-ui' {
+    assert "$xsrc/_xine-ui" is_file
+}
+@test 'more_src has _aqualung' {
+    assert "$xsrc/_aqualung" is_file
+}
+@test 'more_src has _pithos' {
+    assert "$xsrc/_pithos" is_file
+}
+@test 'more_src has _cd-discid' {
+    assert "$xsrc/_cd-discid" is_file
+}
+@test 'more_src has _vdr' {
+    assert "$xsrc/_vdr" is_file
+}
+@test 'more_src has _vdradmin' {
+    assert "$xsrc/_vdradmin" is_file
+}
+@test 'more_src has _svdrpsend' {
+    assert "$xsrc/_svdrpsend" is_file
+}
+@test 'more_src has _nut-monitor' {
+    assert "$xsrc/_nut-monitor" is_file
+}
+@test 'more_src has _vidalia' {
+    assert "$xsrc/_vidalia" is_file
+}
+@test 'more_src has _terminix' {
+    assert "$xsrc/_terminix" is_file
+}
+@test 'more_src has _nxterm' {
+    assert "$xsrc/_nxterm" is_file
+}
+@test 'more_src has _sndfile-resample' {
+    assert "$xsrc/_sndfile-resample" is_file
+}
+@test 'more_src has _sndfile-jackplay' {
+    assert "$xsrc/_sndfile-jackplay" is_file
+}
+@test 'more_src has _sndfile-mix-to-mono' {
+    assert "$xsrc/_sndfile-mix-to-mono" is_file
+}
