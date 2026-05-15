@@ -4042,6 +4042,9 @@
 @test 'more_src has _hap' {
     assert "$xsrc/_hap" is_file
 }
+@test 'more_src has _happy' {
+    assert "$xsrc/_happy" is_file
+}
 @test 'more_src has _harlequin' {
     assert "$xsrc/_harlequin" is_file
 }
@@ -5448,6 +5451,9 @@
 }
 @test 'more_src has _math' {
     assert "$xsrc/_math" is_file
+}
+@test 'more_src has _mathsat' {
+    assert "$xsrc/_mathsat" is_file
 }
 @test 'more_src has _mathu' {
     assert "$xsrc/_mathu" is_file
