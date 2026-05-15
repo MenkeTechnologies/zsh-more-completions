@@ -14274,3 +14274,78 @@
 @test 'more_src has _geoserver' {
     assert "$xsrc/_geoserver" is_file
 }
+@test 'more_src has _xsane' {
+    assert "$xsrc/_xsane" is_file
+}
+@test 'more_src has _xscanimage' {
+    assert "$xsrc/_xscanimage" is_file
+}
+@test 'more_src has _gocr' {
+    assert "$xsrc/_gocr" is_file
+}
+@test 'more_src has _ocrad' {
+    assert "$xsrc/_ocrad" is_file
+}
+@test 'more_src has _cuneiform' {
+    assert "$xsrc/_cuneiform" is_file
+}
+@test 'more_src has _ocropy' {
+    assert "$xsrc/_ocropy" is_file
+}
+@test 'more_src has _paperless' {
+    assert "$xsrc/_paperless" is_file
+}
+@test 'more_src has _paperwork' {
+    assert "$xsrc/_paperwork" is_file
+}
+@test 'more_src has _hp-toolbox' {
+    assert "$xsrc/_hp-toolbox" is_file
+}
+@test 'more_src has _hp-systray' {
+    assert "$xsrc/_hp-systray" is_file
+}
+@test 'more_src has _hp-mkuri' {
+    assert "$xsrc/_hp-mkuri" is_file
+}
+@test 'more_src has _hp-fab' {
+    assert "$xsrc/_hp-fab" is_file
+}
+@test 'more_src has _hp-fax' {
+    assert "$xsrc/_hp-fax" is_file
+}
+@test 'more_src has _hp-faxsetup' {
+    assert "$xsrc/_hp-faxsetup" is_file
+}
+@test 'more_src has _hp-makecopies' {
+    assert "$xsrc/_hp-makecopies" is_file
+}
+@test 'more_src has _hp-print' {
+    assert "$xsrc/_hp-print" is_file
+}
+@test 'more_src has _hp-sendfax' {
+    assert "$xsrc/_hp-sendfax" is_file
+}
+@test 'more_src has _hp-unload' {
+    assert "$xsrc/_hp-unload" is_file
+}
+@test 'more_src has _hp-uninstall' {
+    assert "$xsrc/_hp-uninstall" is_file
+}
+@test 'more_src has _hp-upgrade' {
+    assert "$xsrc/_hp-upgrade" is_file
+}
+@test 'more_src has _hp-wificonfig' {
+    assert "$xsrc/_hp-wificonfig" is_file
+}
+@test 'more_src has _ippproxy' {
+    assert "$xsrc/_ippproxy" is_file
+}
+@test 'more_src has _ippdiscover' {
+    assert "$xsrc/_ippdiscover" is_file
+}
+@test 'more_src has _foomatic-cleanupdrivers' {
+    assert "$xsrc/_foomatic-cleanupdrivers" is_file
+}
+@test 'more_src has _ippregfile' {
+    assert "$xsrc/_ippregfile" is_file
+}
