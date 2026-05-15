@@ -6978,6 +6978,9 @@
 @test 'more_src has _plforge' {
     assert "$xsrc/_plforge" is_file
 }
+@test 'more_src has _ploticus' {
+    assert "$xsrc/_ploticus" is_file
+}
 @test 'more_src has _plow' {
     assert "$xsrc/_plow" is_file
 }
@@ -10106,6 +10109,9 @@
 }
 @test 'more_src has _xmake' {
     assert "$xsrc/_xmake" is_file
+}
+@test 'more_src has _xmgrace' {
+    assert "$xsrc/_xmgrace" is_file
 }
 @test 'more_src has _xml2man' {
     assert "$xsrc/_xml2man" is_file
