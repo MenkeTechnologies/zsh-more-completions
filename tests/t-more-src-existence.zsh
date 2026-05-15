@@ -8578,8 +8578,14 @@
 @test 'more_src has _svgcleaner' {
     assert "$xsrc/_svgcleaner" is_file
 }
+@test 'more_src has _svgexport' {
+    assert "$xsrc/_svgexport" is_file
+}
 @test 'more_src has _svgo' {
     assert "$xsrc/_svgo" is_file
+}
+@test 'more_src has _svgr' {
+    assert "$xsrc/_svgr" is_file
 }
 @test 'more_src has _svlint' {
     assert "$xsrc/_svlint" is_file
