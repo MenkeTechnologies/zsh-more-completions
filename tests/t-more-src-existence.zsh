@@ -1237,6 +1237,9 @@
 @test 'more_src has _c3c' {
     assert "$xsrc/_c3c" is_file
 }
+@test 'more_src has _cabbage' {
+    assert "$xsrc/_cabbage" is_file
+}
 @test 'more_src has _cabin' {
     assert "$xsrc/_cabin" is_file
 }
@@ -1275,6 +1278,12 @@
 }
 @test 'more_src has _cai' {
     assert "$xsrc/_cai" is_file
+}
+@test 'more_src has _cala' {
+    assert "$xsrc/_cala" is_file
+}
+@test 'more_src has _calabrese' {
+    assert "$xsrc/_calabrese" is_file
 }
 @test 'more_src has _calc' {
     assert "$xsrc/_calc" is_file
@@ -2175,6 +2184,18 @@
 }
 @test 'more_src has _csvformat' {
     assert "$xsrc/_csvformat" is_file
+}
+@test 'more_src has _csv-merge' {
+    assert "$xsrc/_csv-merge" is_file
+}
+@test 'more_src has _csv2json' {
+    assert "$xsrc/_csv2json" is_file
+}
+@test 'more_src has _csv2parquet' {
+    assert "$xsrc/_csv2parquet" is_file
+}
+@test 'more_src has _csv2sqlite' {
+    assert "$xsrc/_csv2sqlite" is_file
 }
 @test 'more_src has _csvgrep' {
     assert "$xsrc/_csvgrep" is_file
@@ -7815,6 +7836,9 @@
 @test 'more_src has _redo' {
     assert "$xsrc/_redo" is_file
 }
+@test 'more_src has _redmine-cli' {
+    assert "$xsrc/_redmine-cli" is_file
+}
 @test 'more_src has _redress' {
     assert "$xsrc/_redress" is_file
 }
@@ -10630,6 +10654,12 @@
 }
 @test 'more_src has _xsv' {
     assert "$xsrc/_xsv" is_file
+}
+@test 'more_src has _xsv2' {
+    assert "$xsrc/_xsv2" is_file
+}
+@test 'more_src has _xsvfmt' {
+    assert "$xsrc/_xsvfmt" is_file
 }
 @test 'more_src has _xwallpaper' {
     assert "$xsrc/_xwallpaper" is_file
