@@ -637,6 +637,9 @@
 @test 'more_src has _autocode' {
     assert "$xsrc/_autocode" is_file
 }
+@test 'more_src has _autosub' {
+    assert "$xsrc/_autosub" is_file
+}
 @test 'more_src has _autogen' {
     assert "$xsrc/_autogen" is_file
 }
@@ -2978,6 +2981,9 @@
 }
 @test 'more_src has _dynomite' {
     assert "$xsrc/_dynomite" is_file
+}
+@test 'more_src has _dwmblocks' {
+    assert "$xsrc/_dwmblocks" is_file
 }
 @test 'more_src has _dzil' {
     assert "$xsrc/_dzil" is_file
@@ -6151,6 +6157,9 @@
 @test 'more_src has _moonup' {
     assert "$xsrc/_moonup" is_file
 }
+@test 'more_src has _moosh' {
+    assert "$xsrc/_moosh" is_file
+}
 @test 'more_src has _moosex-app-zsh' {
     assert "$xsrc/_moosex-app-zsh" is_file
 }
@@ -8427,6 +8436,9 @@
 @test 'more_src has _silicon' {
     assert "$xsrc/_silicon" is_file
 }
+@test 'more_src has _simh' {
+    assert "$xsrc/_simh" is_file
+}
 @test 'more_src has _sizelint' {
     assert "$xsrc/_sizelint" is_file
 }
@@ -8884,6 +8896,9 @@
 @test 'more_src has _substrate-node' {
     assert "$xsrc/_substrate-node" is_file
 }
+@test 'more_src has _subsync' {
+    assert "$xsrc/_subsync" is_file
+}
 @test 'more_src has _sui' {
     assert "$xsrc/_sui" is_file
 }
@@ -8956,6 +8971,9 @@
 }
 @test 'more_src has _svnsync' {
     assert "$xsrc/_svnsync" is_file
+}
+@test 'more_src has _svtplay-dl' {
+    assert "$xsrc/_svtplay-dl" is_file
 }
 @test 'more_src has _svu' {
     assert "$xsrc/_svu" is_file
@@ -9070,6 +9088,9 @@
 }
 @test 'more_src has _taskopen' {
     assert "$xsrc/_taskopen" is_file
+}
+@test 'more_src has _taskpaper' {
+    assert "$xsrc/_taskpaper" is_file
 }
 @test 'more_src has _taskwarrior-tui' {
     assert "$xsrc/_taskwarrior-tui" is_file
@@ -9576,6 +9597,9 @@
 @test 'more_src has _tuc' {
     assert "$xsrc/_tuc" is_file
 }
+@test 'more_src has _tubeup' {
+    assert "$xsrc/_tubeup" is_file
+}
 @test 'more_src has _tugboat' {
     assert "$xsrc/_tugboat" is_file
 }
@@ -9614,6 +9638,9 @@
 }
 @test 'more_src has _tw_gtasks_sync' {
     assert "$xsrc/_tw_gtasks_sync" is_file
+}
+@test 'more_src has _twint' {
+    assert "$xsrc/_twint" is_file
 }
 @test 'more_src has _twips' {
     assert "$xsrc/_twips" is_file
@@ -10530,6 +10557,9 @@
 }
 @test 'more_src has _x.py' {
     assert "$xsrc/_x.py" is_file
+}
+@test 'more_src has _xbar' {
+    assert "$xsrc/_xbar" is_file
 }
 @test 'more_src has _xc' {
     assert "$xsrc/_xc" is_file
