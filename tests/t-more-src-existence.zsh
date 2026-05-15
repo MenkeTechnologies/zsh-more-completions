@@ -1059,6 +1059,9 @@
 @test 'more_src has _brush' {
     assert "$xsrc/_brush" is_file
 }
+@test 'more_src has _brz' {
+    assert "$xsrc/_brz" is_file
+}
 @test 'more_src has _bsdsfv' {
     assert "$xsrc/_bsdsfv" is_file
 }
