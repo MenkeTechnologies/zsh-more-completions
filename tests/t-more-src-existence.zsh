@@ -1544,6 +1544,9 @@
 @test 'more_src has _cava' {
     assert "$xsrc/_cava" is_file
 }
+@test 'more_src has _cave' {
+    assert "$xsrc/_cave" is_file
+}
 @test 'more_src has _cayley' {
     assert "$xsrc/_cayley" is_file
 }
@@ -7098,6 +7101,9 @@
 @test 'more_src has _paka' {
     assert "$xsrc/_paka" is_file
 }
+@test 'more_src has _paludis' {
+    assert "$xsrc/_paludis" is_file
+}
 @test 'more_src has _pamac' {
     assert "$xsrc/_pamac" is_file
 }
@@ -8636,6 +8642,9 @@
 }
 @test 'more_src has _skytable' {
     assert "$xsrc/_skytable" is_file
+}
+@test 'more_src has _slackpkg' {
+    assert "$xsrc/_slackpkg" is_file
 }
 @test 'more_src has _slides' {
     assert "$xsrc/_slides" is_file
@@ -10378,6 +10387,9 @@
 @test 'more_src has _vcluster' {
     assert "$xsrc/_vcluster" is_file
 }
+@test 'more_src has _vconfig' {
+    assert "$xsrc/_vconfig" is_file
+}
 @test 'more_src has _vcpkg' {
     assert "$xsrc/_vcpkg" is_file
 }
@@ -10788,6 +10800,24 @@
 }
 @test 'more_src has _xbar' {
     assert "$xsrc/_xbar" is_file
+}
+@test 'more_src has _xbps-alternatives' {
+    assert "$xsrc/_xbps-alternatives" is_file
+}
+@test 'more_src has _xbps-create' {
+    assert "$xsrc/_xbps-create" is_file
+}
+@test 'more_src has _xbps-fbulk' {
+    assert "$xsrc/_xbps-fbulk" is_file
+}
+@test 'more_src has _xbps-reconfigure' {
+    assert "$xsrc/_xbps-reconfigure" is_file
+}
+@test 'more_src has _xbps-uchroot' {
+    assert "$xsrc/_xbps-uchroot" is_file
+}
+@test 'more_src has _xbps-uunshare' {
+    assert "$xsrc/_xbps-uunshare" is_file
 }
 @test 'more_src has _xc' {
     assert "$xsrc/_xc" is_file
