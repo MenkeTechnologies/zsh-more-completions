@@ -372,6 +372,9 @@
 @test 'more_src has _aichat' {
     assert "$xsrc/_aichat" is_file
 }
+@test 'more_src has _aisleriot' {
+    assert "$xsrc/_aisleriot" is_file
+}
 @test 'more_src has _aideinit' {
     assert "$xsrc/_aideinit" is_file
 }
@@ -607,6 +610,15 @@
 @test 'more_src has _ardour' {
     assert "$xsrc/_ardour" is_file
 }
+@test 'more_src has _ardour6' {
+    assert "$xsrc/_ardour6" is_file
+}
+@test 'more_src has _ardour7' {
+    assert "$xsrc/_ardour7" is_file
+}
+@test 'more_src has _ardour8' {
+    assert "$xsrc/_ardour8" is_file
+}
 @test 'more_src has _arduino-builder' {
     assert "$xsrc/_arduino-builder" is_file
 }
@@ -681,6 +693,9 @@
 }
 @test 'more_src has _asterisk' {
     assert "$xsrc/_asterisk" is_file
+}
+@test 'more_src has _at-spi-bus-launcher' {
+    assert "$xsrc/_at-spi-bus-launcher" is_file
 }
 @test 'more_src has _atac' {
     assert "$xsrc/_atac" is_file
@@ -4389,6 +4404,9 @@
 @test 'more_src has _genkernel' {
     assert "$xsrc/_genkernel" is_file
 }
+@test 'more_src has _genseusers' {
+    assert "$xsrc/_genseusers" is_file
+}
 @test 'more_src has _genlop' {
     assert "$xsrc/_genlop" is_file
 }
@@ -4694,6 +4712,18 @@
 @test 'more_src has _gmic' {
     assert "$xsrc/_gmic" is_file
 }
+@test 'more_src has _gnome-five-or-more' {
+    assert "$xsrc/_gnome-five-or-more" is_file
+}
+@test 'more_src has _gnome-iagno' {
+    assert "$xsrc/_gnome-iagno" is_file
+}
+@test 'more_src has _gnome-quadrapassel' {
+    assert "$xsrc/_gnome-quadrapassel" is_file
+}
+@test 'more_src has _gnome-tali' {
+    assert "$xsrc/_gnome-tali" is_file
+}
 @test 'more_src has _gnt-cluster' {
     assert "$xsrc/_gnt-cluster" is_file
 }
@@ -4789,6 +4819,9 @@
 }
 @test 'more_src has _go_windapsearch' {
     assert "$xsrc/_go_windapsearch" is_file
+}
+@test 'more_src has _goa-daemon' {
+    assert "$xsrc/_goa-daemon" is_file
 }
 @test 'more_src has _goaccess' {
     assert "$xsrc/_goaccess" is_file
@@ -6278,6 +6311,9 @@
 @test 'more_src has _kglobalaccel5' {
     assert "$xsrc/_kglobalaccel5" is_file
 }
+@test 'more_src has _kgx' {
+    assert "$xsrc/_kgx" is_file
+}
 @test 'more_src has _khal' {
     assert "$xsrc/_khal" is_file
 }
@@ -6295,6 +6331,9 @@
 }
 @test 'more_src has _kickstart' {
     assert "$xsrc/_kickstart" is_file
+}
+@test 'more_src has _killbots' {
+    assert "$xsrc/_killbots" is_file
 }
 @test 'more_src has _killport' {
     assert "$xsrc/_killport" is_file
@@ -6314,6 +6353,9 @@
 @test 'more_src has _kine' {
     assert "$xsrc/_kine" is_file
 }
+@test 'more_src has _king-phisher' {
+    assert "$xsrc/_king-phisher" is_file
+}
 @test 'more_src has _kion' {
     assert "$xsrc/_kion" is_file
 }
@@ -6330,6 +6372,9 @@
     assert "$xsrc/_klef" is_file
 }
 
+@test 'more_src has _klines' {
+    assert "$xsrc/_klines" is_file
+}
 @test 'more_src has _klippy' {
     assert "$xsrc/_klippy" is_file
 }
@@ -6339,8 +6384,14 @@
 @test 'more_src has _km' {
     assert "$xsrc/_km" is_file
 }
+@test 'more_src has _kmines' {
+    assert "$xsrc/_kmines" is_file
+}
 @test 'more_src has _kn' {
     assert "$xsrc/_kn" is_file
+}
+@test 'more_src has _knetwalk' {
+    assert "$xsrc/_knetwalk" is_file
 }
 @test 'more_src has _knife' {
     assert "$xsrc/_knife" is_file
@@ -6399,6 +6450,9 @@
 @test 'more_src has _kpasswd' {
     assert "$xsrc/_kpasswd" is_file
 }
+@test 'more_src has _kpat' {
+    assert "$xsrc/_kpat" is_file
+}
 @test 'more_src has _kpt' {
     assert "$xsrc/_kpt" is_file
 }
@@ -6425,6 +6479,9 @@
 }
 @test 'more_src has _kresctl' {
     assert "$xsrc/_kresctl" is_file
+}
+@test 'more_src has _kreversi' {
+    assert "$xsrc/_kreversi" is_file
 }
 @test 'more_src has _krew' {
     assert "$xsrc/_krew" is_file
@@ -7304,6 +7361,12 @@
 }
 @test 'more_src has _mitsuba' {
     assert "$xsrc/_mitsuba" is_file
+}
+@test 'more_src has _mixbus' {
+    assert "$xsrc/_mixbus" is_file
+}
+@test 'more_src has _mixbus32c' {
+    assert "$xsrc/_mixbus32c" is_file
 }
 @test 'more_src has _mixxx' {
     assert "$xsrc/_mixxx" is_file
@@ -10308,6 +10371,9 @@
 @test 'more_src has _sdkman' {
     assert "$xsrc/_sdkman" is_file
 }
+@test 'more_src has _sealert' {
+    assert "$xsrc/_sealert" is_file
+}
 @test 'more_src has _search-cmd' {
     assert "$xsrc/_search-cmd" is_file
 }
@@ -10374,6 +10440,9 @@
 
 @test 'more_src has _setlock' {
     assert "$xsrc/_setlock" is_file
+}
+@test 'more_src has _setools' {
+    assert "$xsrc/_setools" is_file
 }
 @test 'more_src has _setsebool' {
     assert "$xsrc/_setsebool" is_file
@@ -12006,6 +12075,12 @@
 }
 @test 'more_src has _udiskie-umount' {
     assert "$xsrc/_udiskie-umount" is_file
+}
+@test 'more_src has _udisks2' {
+    assert "$xsrc/_udisks2" is_file
+}
+@test 'more_src has _udisksd' {
+    assert "$xsrc/_udisksd" is_file
 }
 @test 'more_src has _udp-receiver' {
     assert "$xsrc/_udp-receiver" is_file
