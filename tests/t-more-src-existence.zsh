@@ -2044,6 +2044,9 @@
 @test 'more_src has _cscope-indexer' {
     assert "$xsrc/_cscope-indexer" is_file
 }
+@test 'more_src has _csi' {
+    assert "$xsrc/_csi" is_file
+}
 @test 'more_src has _csmith' {
     assert "$xsrc/_csmith" is_file
 }
@@ -6304,6 +6307,9 @@
 }
 @test 'more_src has _oil' {
     assert "$xsrc/_oil" is_file
+}
+@test 'more_src has _oils-for-unix' {
+    assert "$xsrc/_oils-for-unix" is_file
 }
 @test 'more_src has _ojph_compress' {
     assert "$xsrc/_ojph_compress" is_file
