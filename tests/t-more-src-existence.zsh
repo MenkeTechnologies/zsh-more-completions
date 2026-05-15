@@ -2718,6 +2718,9 @@
 @test 'more_src has _dotnet-install.sh' {
     assert "$xsrc/_dotnet-install.sh" is_file
 }
+@test 'more_src has _dotnet-suggest' {
+    assert "$xsrc/_dotnet-suggest" is_file
+}
 @test 'more_src has _dots' {
     assert "$xsrc/_dots" is_file
 }
@@ -6483,6 +6486,9 @@
 }
 @test 'more_src has _omf' {
     assert "$xsrc/_omf" is_file
+}
+@test 'more_src has _omnisharp' {
+    assert "$xsrc/_omnisharp" is_file
 }
 @test 'more_src has _omx' {
     assert "$xsrc/_omx" is_file
