@@ -622,6 +622,9 @@
 @test 'more_src has _ast-grep' {
     assert "$xsrc/_ast-grep" is_file
 }
+@test 'more_src has _asunder' {
+    assert "$xsrc/_asunder" is_file
+}
 @test 'more_src has _asterisk' {
     assert "$xsrc/_asterisk" is_file
 }
@@ -1679,6 +1682,18 @@
 @test 'more_src has _cdrskin' {
     assert "$xsrc/_cdrskin" is_file
 }
+@test 'more_src has _cdda2mp3' {
+    assert "$xsrc/_cdda2mp3" is_file
+}
+@test 'more_src has _cdda2ogg' {
+    assert "$xsrc/_cdda2ogg" is_file
+}
+@test 'more_src has _cdtool' {
+    assert "$xsrc/_cdtool" is_file
+}
+@test 'more_src has _cdtxt' {
+    assert "$xsrc/_cdtxt" is_file
+}
 @test 'more_src has _cekit' {
     assert "$xsrc/_cekit" is_file
 }
@@ -2079,6 +2094,9 @@
 }
 @test 'more_src has _compstyle' {
     assert "$xsrc/_compstyle" is_file
+}
+@test 'more_src has _connmand' {
+    assert "$xsrc/_connmand" is_file
 }
 @test 'more_src has _conceal' {
     assert "$xsrc/_conceal" is_file
@@ -4183,6 +4201,9 @@
 @test 'more_src has _gix' {
     assert "$xsrc/_gix" is_file
 }
+@test 'more_src has _gkrellm' {
+    assert "$xsrc/_gkrellm" is_file
+}
 @test 'more_src has _gke-gcloud-auth-plugin' {
     assert "$xsrc/_gke-gcloud-auth-plugin" is_file
 }
@@ -4209,6 +4230,9 @@
 }
 @test 'more_src has _glmark2' {
     assert "$xsrc/_glmark2" is_file
+}
+@test 'more_src has _gpac' {
+    assert "$xsrc/_gpac" is_file
 }
 @test 'more_src has _glslang' {
     assert "$xsrc/_glslang" is_file
@@ -4956,6 +4980,9 @@
 }
 @test 'more_src has _iCoreMgr' {
     assert "$xsrc/_iCoreMgr" is_file
+}
+@test 'more_src has _iat' {
+    assert "$xsrc/_iat" is_file
 }
 @test 'more_src has _iamb' {
     assert "$xsrc/_iamb" is_file
@@ -5952,6 +5979,15 @@
 @test 'more_src has _lazyworktree' {
     assert "$xsrc/_lazyworktree" is_file
 }
+@test 'more_src has _lcdproc' {
+    assert "$xsrc/_lcdproc" is_file
+}
+@test 'more_src has _lcdshow' {
+    assert "$xsrc/_lcdshow" is_file
+}
+@test 'more_src has _lcdtest' {
+    assert "$xsrc/_lcdtest" is_file
+}
 @test 'more_src has _lc0' {
     assert "$xsrc/_lc0" is_file
 }
@@ -6736,6 +6772,9 @@
 @test 'more_src has _morituri' {
     assert "$xsrc/_morituri" is_file
 }
+@test 'more_src has _mosquitto_rr' {
+    assert "$xsrc/_mosquitto_rr" is_file
+}
 @test 'more_src has _mosh' {
     assert "$xsrc/_mosh" is_file
 }
@@ -6750,6 +6789,12 @@
 }
 @test 'more_src has _movim' {
     assert "$xsrc/_movim" is_file
+}
+@test 'more_src has _mppdec' {
+    assert "$xsrc/_mppdec" is_file
+}
+@test 'more_src has _mppenc' {
+    assert "$xsrc/_mppenc" is_file
 }
 @test 'more_src has _mp3unicode' {
     assert "$xsrc/_mp3unicode" is_file
@@ -7147,6 +7192,9 @@
 @test 'more_src has _nono' {
     assert "$xsrc/_nono" is_file
 }
+@test 'more_src has _noip2' {
+    assert "$xsrc/_noip2" is_file
+}
 @test 'more_src has _nordnet' {
     assert "$xsrc/_nordnet" is_file
 }
@@ -7351,6 +7399,12 @@
 }
 @test 'more_src has _oddjob' {
     assert "$xsrc/_oddjob" is_file
+}
+@test 'more_src has _ods-enforcer' {
+    assert "$xsrc/_ods-enforcer" is_file
+}
+@test 'more_src has _ods-signer' {
+    assert "$xsrc/_ods-signer" is_file
 }
 @test 'more_src has _ofelia' {
     assert "$xsrc/_ofelia" is_file
@@ -10338,6 +10392,9 @@
 @test 'more_src has _timoni' {
     assert "$xsrc/_timoni" is_file
 }
+@test 'more_src has _tinydns' {
+    assert "$xsrc/_tinydns" is_file
+}
 @test 'more_src has _tinfo' {
     assert "$xsrc/_tinfo" is_file
 }
@@ -10447,6 +10504,9 @@
 }
 @test 'more_src has _tombi' {
     assert "$xsrc/_tombi" is_file
+}
+@test 'more_src has _toolame' {
+    assert "$xsrc/_toolame" is_file
 }
 @test 'more_src has _toot' {
     assert "$xsrc/_toot" is_file
@@ -11542,6 +11602,18 @@
 @test 'more_src has _wid' {
     assert "$xsrc/_wid" is_file
 }
+@test 'more_src has _wicd-cli' {
+    assert "$xsrc/_wicd-cli" is_file
+}
+@test 'more_src has _wicd-client' {
+    assert "$xsrc/_wicd-client" is_file
+}
+@test 'more_src has _wicd-curses' {
+    assert "$xsrc/_wicd-curses" is_file
+}
+@test 'more_src has _wicd-gtk' {
+    assert "$xsrc/_wicd-gtk" is_file
+}
 @test 'more_src has _wiki-tui' {
     assert "$xsrc/_wiki-tui" is_file
 }
@@ -11631,6 +11703,9 @@
 }
 @test 'more_src has _wwd.sh' {
     assert "$xsrc/_wwd.sh" is_file
+}
+@test 'more_src has _wvpack' {
+    assert "$xsrc/_wvpack" is_file
 }
 @test 'more_src has _wxmaxima' {
     assert "$xsrc/_wxmaxima" is_file
