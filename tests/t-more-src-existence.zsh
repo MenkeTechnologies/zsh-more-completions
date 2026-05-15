@@ -2682,6 +2682,9 @@
 @test 'more_src has _dolt' {
     assert "$xsrc/_dolt" is_file
 }
+@test 'more_src has _dolthub' {
+    assert "$xsrc/_dolthub" is_file
+}
 @test 'more_src has _don' {
     assert "$xsrc/_don" is_file
 }
@@ -4023,6 +4026,9 @@
 @test 'more_src has _grcat' {
     assert "$xsrc/_grcat" is_file
 }
+@test 'more_src has _gremlin' {
+    assert "$xsrc/_gremlin" is_file
+}
 @test 'more_src has _grex' {
     assert "$xsrc/_grex" is_file
 }
@@ -4544,6 +4550,9 @@
 }
 @test 'more_src has _janitor' {
     assert "$xsrc/_janitor" is_file
+}
+@test 'more_src has _janusgraph' {
+    assert "$xsrc/_janusgraph" is_file
 }
 @test 'more_src has _jaq' {
     assert "$xsrc/_jaq" is_file
