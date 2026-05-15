@@ -1123,6 +1123,9 @@
 @test 'more_src has _bookokrat' {
     assert "$xsrc/_bookokrat" is_file
 }
+@test 'more_src has _bookworm' {
+    assert "$xsrc/_bookworm" is_file
+}
 @test 'more_src has _bootterm' {
     assert "$xsrc/_bootterm" is_file
 }
@@ -1389,6 +1392,9 @@
 }
 @test 'more_src has _c3c' {
     assert "$xsrc/_c3c" is_file
+}
+@test 'more_src has _cabal-fmt' {
+    assert "$xsrc/_cabal-fmt" is_file
 }
 @test 'more_src has _cabbage' {
     assert "$xsrc/_cabbage" is_file
@@ -3698,6 +3704,9 @@
 @test 'more_src has _fblog' {
     assert "$xsrc/_fblog" is_file
 }
+@test 'more_src has _fbreader' {
+    assert "$xsrc/_fbreader" is_file
+}
 @test 'more_src has _fclones' {
     assert "$xsrc/_fclones" is_file
 }
@@ -5996,6 +6005,9 @@
 @test 'more_src has _kind' {
     assert "$xsrc/_kind" is_file
 }
+@test 'more_src has _kindlegen' {
+    assert "$xsrc/_kindlegen" is_file
+}
 @test 'more_src has _kine' {
     assert "$xsrc/_kine" is_file
 }
@@ -6101,6 +6113,9 @@
 }
 @test 'more_src has _krabby' {
     assert "$xsrc/_krabby" is_file
+}
+@test 'more_src has _kramdown-rfc' {
+    assert "$xsrc/_kramdown-rfc" is_file
 }
 @test 'more_src has _krane' {
     assert "$xsrc/_krane" is_file
@@ -6658,6 +6673,9 @@
 @test 'more_src has _marked' {
     assert "$xsrc/_marked" is_file
 }
+@test 'more_src has _marked-cli' {
+    assert "$xsrc/_marked-cli" is_file
+}
 @test 'more_src has _marketplace' {
     assert "$xsrc/_marketplace" is_file
 }
@@ -6716,6 +6734,9 @@
 @test 'more_src has _md2gslides' {
     assert "$xsrc/_md2gslides" is_file
 }
+@test 'more_src has _md-toc' {
+    assert "$xsrc/_md-toc" is_file
+}
 @test 'more_src has _mdbook' {
     assert "$xsrc/_mdbook" is_file
 }
@@ -6739,6 +6760,9 @@
 }
 @test 'more_src has _mdsh' {
     assert "$xsrc/_mdsh" is_file
+}
+@test 'more_src has _mdtoc' {
+    assert "$xsrc/_mdtoc" is_file
 }
 @test 'more_src has _mdtsql' {
     assert "$xsrc/_mdtsql" is_file
@@ -6878,6 +6902,12 @@
 }
 @test 'more_src has _minikube' {
     assert "$xsrc/_minikube" is_file
+}
+@test 'more_src has _minify-html' {
+    assert "$xsrc/_minify-html" is_file
+}
+@test 'more_src has _minify-js' {
+    assert "$xsrc/_minify-js" is_file
 }
 @test 'more_src has _minil' {
     assert "$xsrc/_minil" is_file
@@ -9881,6 +9911,9 @@
 }
 @test 'more_src has _sic' {
     assert "$xsrc/_sic" is_file
+}
+@test 'more_src has _sigil' {
+    assert "$xsrc/_sigil" is_file
 }
 @test 'more_src has _signal-cli' {
     assert "$xsrc/_signal-cli" is_file
