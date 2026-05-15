@@ -2979,6 +2979,9 @@
 @test 'more_src has _ember-cli' {
     assert "$xsrc/_ember-cli" is_file
 }
+@test 'more_src has _embark' {
+    assert "$xsrc/_embark" is_file
+}
 @test 'more_src has _emcc' {
     assert "$xsrc/_emcc" is_file
 }
