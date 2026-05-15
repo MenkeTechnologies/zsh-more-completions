@@ -1681,6 +1681,9 @@
 @test 'more_src has _clever' {
     assert "$xsrc/_clever" is_file
 }
+@test 'more_src has _clearml-agent' {
+    assert "$xsrc/_clearml-agent" is_file
+}
 @test 'more_src has _cliapp' {
     assert "$xsrc/_cliapp" is_file
 }
