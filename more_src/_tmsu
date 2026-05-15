@@ -1,0 +1,530 @@
+# Source: https://github.com/oniony/tmsu/blob/0bf4b8031cbeffc0347007d85647062953e90571/misc/zsh/_tmsu
+# Repository: oniony/tmsu (misc/zsh/_tmsu)
+#compdef tmsu
+
+# Zsh completion script for tmsu. Copy this file to
+# your Zsh function path, e.g. /usr/share/zsh/site-functions/_tmsu.
+
+local context curcontext="$curcontext" state state_descr line
+typeset -A opt_args
+
+local db
+
+autoload -U regexp-replace
+
+_tmsu() {
+    local cmd db ret=1
+    integer i=2
+
+    # store which database to use
+    while (( i < $#words ))
+    do
+        if [[ $words[$i] == --database=* ]];
+        then
+            db="$words[$i]"
+        fi
+
+        if [[ $words[$i] == -D ]];
+        then
+            db="--database=$words[$i+1]"
+        fi
+
+        (( i++ ))
+    done
+
+    _arguments -C \
+        {--verbose,-v}'[show verbose messages]' \
+        {--version,-V}'[show version information and exit]' \
+        {--database=,-D}'[use the specified database]:file:_files' \
+        --color='[colorize the output]:when:((auto always never))' \
+        {--help,-h}'[show help and exit]' \
+        ': :_tmsu_commands' \
+        '*::arg:->args' \
+        && ret=0
+
+    case $state in
+        (args)
+            cmd="$words[1]"
+            if (( $+functions[_tmsu_cmd_${cmd}] ))
+            then
+                _tmsu_cmd_$cmd
+            fi
+        ;;
+    esac
+}
+
+_tmsu_commands() {
+    typeset -a command_list
+    local line
+
+    _call_program tmsu tmsu help --list | \
+    while read -A line
+    do
+        command_list+=($line[1])
+    done
+
+    _describe -t commands 'command' command_list "$@"
+}
+
+# the set of tag names
+_tmsu_tags() {
+    typeset -a tag_list
+    local tag
+
+    _call_program tmsu tmsu $db tags | \
+    while read tag
+    do
+        local escapedTag=$tag:gs/:/\\:/:gs/=/\\\\=/
+        tag_list+=("$escapedTag")
+    done
+
+    _describe -t tags 'tags' tag_list
+}
+
+# the set of values
+_tmsu_values() {
+    typeset -a value_list
+    local value
+
+    _call_program tmsu tmsu $db values | \
+    while read value
+    do
+        local escapedValue=$value:gs/:/\\:/
+        escapedValue=$escapedValue:gs/=/\\=/
+
+        value_list+=("$escapedValue")
+    done
+
+    _describe -t values 'values' value_list
+}
+
+# the set of values for a tag
+_tmsu_tag_values() {
+    typeset -a value_list
+    local line
+
+    local tag=${PREFIX%=*}
+    local escapedTag=$tag:gs/:/\\:/:gs/=/\\\\=/
+
+    # set PREFIX to partial value
+    if (( ${(w)#PREFIX#*=} ))
+    then
+        PREFIX="${PREFIX#*=}"
+    # or an empty string
+    else
+        PREFIX=""
+    fi
+
+    IPREFIX="${IPREFIX}${tag}="
+
+    _call_program tmsu tmsu $db values $tag 2>/dev/null | \
+    while read value
+    do
+        local escapedValue=$value:gs/:/\\:/
+        escapedValue=$escapedValue:gs/=/\\=/
+
+        value_list+=("$escapedValue")
+    done
+
+    _describe -t values 'values' value_list
+}
+
+# the set of tags, or values for that tag if ending =
+_tmsu_tags_with_values() {
+
+    # add quote to end of IPREFIX if missing.
+    if [[ $IPREFIX =~ '--.*' || IPREFIX =~ '.*\"' ]]
+    then
+        IPREFIX="${IPREFIX}\""
+    fi
+
+    if [[ ${PREFIX} == '' ]] # if prefix is empty
+    then
+        _tmsu_tags
+        return
+    fi
+
+    # if following a space
+    if [[ ${(Q)PREFIX[-1]} == ' ' ]]
+    then
+        if (( ${(w)#PREFIX} >= 1 ))
+        then
+            IPREFIX="${(Q)IPREFIX}${(Q)PREFIX}"
+            PREFIX=""
+        fi
+
+        _tmsu_tags
+        return
+
+    else
+        # If theres more than one word, append to IPREFIX
+        if (( ${(w)#PREFIX} > 1 ))
+        then
+            IPREFIX="${(Q)IPREFIX}${(Q)PREFIX[1,(w)-2]} "
+            PREFIX="${PREFIX[(w)-1]}"
+        fi
+
+        # If last inputted word contains =
+        if [[ ${PREFIX} =~ '.+\=.*' ]]
+        then
+            _tmsu_tag_values
+        else
+            _tmsu_tags
+        fi
+    fi
+}
+
+# file query words: tags, values, operators
+# escaping: completion, !, =, <, >, (, ), whitespace
+_tmsu_query() {
+    if [[ -prefix *= ]]
+    then
+        typeset -a value_list
+        local line
+
+        local tag=${PREFIX%=*}
+        local escapedTag=$tag:gs/:/\\:/
+        escapedTag=${escapedTag:gs/=/\\\\&}
+        escapedTag=${escapedTag:gs/!/\\\\&}
+        escapedTag=${escapedTag:gs/</\\\\&}
+        escapedTag=${escapedTag:gs/>/\\\\&}
+        escapedTag=${escapedTag:gs/(/\\\\&}
+        escapedTag=${escapedTag:gs/)/\\\\&}
+        escapedTag=${escapedTag:gs/ /\\\\&}
+
+        _call_program tmsu tmsu $db values $tag2>/dev/null | \
+        while read value
+        do
+            local escapedValue=$value:gs/:/\\:/
+            escapedValue=${escapedValue:gs/=/\\\\&}
+            escapedValue=${escapedValue:gs/!/\\\\&}
+            escapedValue=${escapedValue:gs/</\\\\&}
+            escapedValue=${escapedValue:gs/>/\\\\&}
+            escapedValue=${escapedValue:gs/(/\\\\&}
+            escapedValue=${escapedValue:gs/)/\\\\&}
+            escapedValue=${escapedValue:gs/ /\\\\&}
+
+            value_list+=("$escapedTag=$escapedValue")
+        done
+
+        _describe -t values 'values' value_list
+    elif [[ $words[$#words-1] =~ '^(=|==|!=|<|>|<=|>=|eq|ne|lt|gt|le|ge)$' ]]
+    then
+        typeset -a value_list
+        local line
+
+        local tag=$words[$#words-2]
+        local escapedTag=$tag:gs/:/\\:/
+        escapedTag=${escapedTag:gs/=/\\\\&}
+        escapedTag=${escapedTag:gs/!/\\\\&}
+        escapedTag=${escapedTag:gs/</\\\\&}
+        escapedTag=${escapedTag:gs/>/\\\\&}
+        escapedTag=${escapedTag:gs/(/\\\\&}
+        escapedTag=${escapedTag:gs/)/\\\\&}
+        escapedTag=${escapedTag:gs/ /\\\\&}
+
+        _call_program tmsu tmsu $db values "$tag" | \
+        while read value
+        do
+            local escapedValue=$value:gs/:/\\:/
+            escapedValue=${escapedValue:gs/=/\\\\&}
+            escapedValue=${escapedValue:gs/!/\\\\&}
+            escapedValue=${escapedValue:gs/</\\\\&}
+            escapedValue=${escapedValue:gs/>/\\\\&}
+            escapedValue=${escapedValue:gs/(/\\\\&}
+            escapedValue=${escapedValue:gs/)/\\\\&}
+            escapedValue=${escapedValue:gs/ /\\\\&}
+
+            value_list+=("$escapedValue")
+        done
+
+        _describe -t values 'values' value_list
+    else
+        typeset -a tag_list
+        local tag
+
+        _call_program tmsu tmsu $db tags | \
+        while read tag
+        do
+            local escapedTag=$tag:gs/:/\\:/
+            escapedTag=${escapedTag:gs/=/\\\\&}
+            escapedTag=${escapedTag:gs/!/\\\\&}
+            escapedTag=${escapedTag:gs/</\\\\&}
+            escapedTag=${escapedTag:gs/>/\\\\&}
+            escapedTag=${escapedTag:gs/(/\\\\&}
+            escapedTag=${escapedTag:gs/)/\\\\&}
+            escapedTag=${escapedTag:gs/ /\\\\&}
+
+            tag_list+=("$escapedTag")
+        done
+
+        _describe -t tags 'tags' tag_list
+
+        typeset -a operator_list
+
+        operator_list+='and'
+        operator_list+='or'
+        operator_list+='not'
+        operator_list+='='
+        operator_list+='\!='
+        operator_list+='\<'
+        operator_list+='\>'
+        operator_list+='\<='
+        operator_list+='\>='
+        operator_list+='eq'
+        operator_list+='ne'
+        operator_list+='lt'
+        operator_list+='gt'
+        operator_list+='ge'
+        operator_list+='le'
+
+        _describe -t operators 'operators' operator_list
+    fi
+}
+
+# set of files
+_tmsu_setting_names() {
+    if [[ -prefix *^= ]]
+    then
+        typeset -a setting_names
+        local name
+
+        _call_program tmsu tmsu $db config | cut -d = -f 1 | while read -A name
+        do
+            setting_names+=$name
+        done
+
+        _describe -t names 'names' setting_names
+    fi
+}
+
+# commands
+
+_tmsu_cmd_config() {
+    _arguments -s -w '*:setting:_tmsu_setting_names' && ret=0
+}
+
+_tmsu_cmd_copy() {
+    _arguments -s -w ':tag:_tmsu_tags' && ret=0
+}
+
+_tmsu_cmd_delete() {
+    _arguments -s -w ''--value'[delete a value]' \
+                     '*:: :-> items'\
+    && ret=0
+
+    case $state in
+        (items)
+            if (( ${+opt_args[--value]} ))
+            then
+                _wanted values expl 'values' _tmsu_values
+            else
+                _wanted tags expl 'tags' _tmsu_tags
+            fi
+    esac
+}
+
+_tmsu_cmd_dupes() {
+    _arguments -s -w ''{--recursive,-r}'[recursively check directory contents]' \
+                     '*:file:_files' \
+    && ret=0
+}
+
+_tmsu_cmd_files() {
+    _arguments -s -w ''{--directory,-d}'[list only items that are directories]' \
+                     ''{--file,-f}'[list only items that are files]' \
+                     ''{--count,-c}'[lists the number of files rather than their names]' \
+                     ''{--path=,-p}'[list only items under PATH]':path:_files \
+                     ''{--sort=,-s}'[sort items]:sort:(id name none size time)' \
+                     ''{--explicit,-e}'[list only explicitly tagged files]' \
+                     '*:tag:_tmsu_query' \
+    && ret=0
+}
+
+_tmsu_cmd_help() {
+    _arguments -s -w ''{--list,-l}'[list commands]' \
+                     '1:command:_tmsu_commands' \
+    && ret=0
+}
+
+_tmsu_cmd_imply() {
+    _arguments -s -w ''{--delete,-d}'[deletes the tag implication]' \
+                     '*:tags:_tmsu_tags_with_values' \
+    && ret=0
+}
+
+_tmsu_cmd_info() {
+    _arguments -s -w ''{--stats,-s}'[show statistics]' \
+                     ''{--usage,-u}'[show tag usage breakdown]' \
+    && ret=0
+}
+
+_tmsu_cmd_init() {
+    _arguments -s -w '*:file:_files' && ret=0
+}
+
+_tmsu_cmd_merge() {
+    _arguments -s -w ''--value'[merge values]' \
+                     '*:: :-> items' \
+    && ret=0
+
+    case $state in
+        (items)
+            if (( ${+opt_args[--value]} ))
+            then
+                _wanted values expl 'values' _tmsu_values
+            else
+                _wanted tags expl 'tags' _tmsu_tags
+            fi
+    esac
+}
+
+_tmsu_cmd_mount() {
+    _arguments -s -w ''{--options=,-o}'[mount options (passed to fusermount)]' \
+                     ':file:_files' \
+                     ':mountpoint:_dirs' \
+    && ret=0
+}
+
+_tmsu_cmd_rename() {
+    _arguments -s -w ''--value'[rename a value]' \
+                     '1:: :-> items' \
+    && ret=0
+
+    case $state in
+        (items)
+            if (( ${+opt_args[--value]} ))
+            then
+                _wanted values expl 'values' _tmsu_values
+            else
+                _wanted tags expl 'tags' _tmsu_tags
+            fi
+    esac
+}
+
+_tmsu_cmd_repair() {
+    _arguments -s -w ''{--path=,-p}'[limit repair to files under a path]':path:_files \
+                     ''{--remove,-R}'[remove missing files from the database]' \
+                     ''{--unmodified,-u}'[recalculate fingerprints for unmodified files]' \
+                     ''{--pretend,-P}'[do not make any changes]' \
+                     ''{--manual,-m}'[manually relocate files]' \
+                     ''--rationalize'[remove explicit taggings where an implicit tagging exists]' \
+                     '*:file:_files' \
+    && ret=0
+}
+
+_tmsu_cmd_status() {
+    _arguments -s -w ''{--directory,-d}'[do not examine directory contents (non-recursive)]' \
+                     ''{--no-dereference,-P}'[never follow symbolic links]' \
+	                 '*:file:_files' \
+	&& ret=0
+}
+
+_tmsu_cmd_tag() {
+	_arguments -s -w ''{--tags=,-t}'[apply set of tags to multiple files]:tags:_tmsu_tags_with_values' \
+	                 ''{--recursive,-r}'[apply tags recursively to contents of directories]' \
+	                 ''{--explicit,-e}'[explicitly apply tags even if they are already implied]' \
+	                 ''{--from=,-f}'[copy tags from the specified file]:source:_files' \
+	                 ''{--where=,-w}'[apply tags to files meeting the query]:query:_tmsu_query' \
+	                 ''{--create+,-c}'[create a tag without tagging any files]:source:_files' \
+	                 ''{--force,-F}'[apply tags to non-existant or non-permissioned paths]' \
+                     ''{--no-dereference,-P}'[never follow symlinks (tag link itself)]' \
+	                 '*:: :->items' \
+	&& ret=0
+
+    case $state in
+        (items)
+            if (( ${+opt_args[--tags]} || ${+opt_args[-t]} || ${+opt_args[--from]} || ${+opt_args[-f]} ))
+            then
+                _wanted files expl 'files' _files
+            elif (( ${+opt_args[--where]} || ${+opt_args[-w]} ))
+            then
+                _wanted tags expl 'tags' _tmsu_tags_with_values
+            else
+                if (( CURRENT == 1 ))
+                then
+                    _wanted files expl 'file' _files
+                else
+                    _wanted tags expl 'tags' _tmsu_tags_with_values
+                fi
+            fi
+    esac
+}
+
+_tmsu_cmd_tags() {
+	_arguments -s -w ''{--count,-c}'[lists the number of tags rather than their names]' \
+	                 '-1[list one tag per line]' \
+	                 ''{--explicit,-e}'[do not show implied tags]' \
+                     ''{--no-dereference,-P}'[never follow symlinks (show tags for link itself)]' \
+                     ''{--value,-u}'[show tags utilising value]' \
+	                 '*:: :->items' \
+	&& ret=0
+
+	case $state in
+        (items)
+            if (( ${+opt_args[--value]} ))
+            then
+                _wanted values expl 'values' _tmsu_values
+            else
+                _wanted files expl 'files' _files
+            fi
+    esac
+}
+
+_tmsu_cmd_unmount() {
+    _arguments -s -w ''{--all,-a}'[unmount all]' \
+                     ':mountpoint:_files' \
+    && ret=0
+}
+
+_tmsu_cmd_untag() {
+	_arguments -s -w ''{--all,-a}'[remove all tags]' \
+	                 ''{--tags=,-t}'[remove set of tags from multiple files]:tags:_tmsu_tags_with_values' \
+	                 ''{--recursive,-r}'[remove tags recursively from contents of directories]' \
+                     ''{--no-dereference,-P}'[never follow symlinks (untag link itself)]' \
+	                 '*:: :->items' \
+	&& ret=0
+
+	case $state in
+		(items)
+			if (( ${+opt_args[--tags]} || ${+opt_args[-t]} || ${+opt_args[--all]} || ${+opt_args[-a]} ))
+			then
+                _wanted files expl 'files' _files
+			else
+				if (( CURRENT == 1 ))
+				then
+					_wanted files expl 'files' _files
+				else
+					_wanted tags expl 'tags' _tmsu_tags_with_values
+				fi
+			fi
+	esac
+}
+
+_tmsu_cmd_untagged() {
+    _arguments -s -w ''{--directory,-d}'[do not examine directory contents (non-recursive)]' \
+                     ''{--count,-c}'[lists the number of files rather than their names]' \
+                     ''{--no-dereference,-P}'[never follow symlinks (list untagged links)]' \
+                     '*:file:_files' \
+    && ret=0
+}
+
+_tmsu_cmd_values() {
+    _arguments -s -w ''{--count,-c}'[lists the number of values rather than their names]' \
+                     '-1[lists on value per line]' \
+                     '*:tag:_tmsu_tags' \
+    && ret=0
+}
+
+_tmsu_cmd_version() {
+    # no arguments
+}
+
+_tmsu_cmd_vfs() {
+    _arguments -s -w ''{--options,-o}'[mount options (passed to fusermount)]' \
+                     '1:file:_files' \
+                     '2:mountpoint:_dirs' \
+    && ret=0
+}
+
+_tmsu "$@"
