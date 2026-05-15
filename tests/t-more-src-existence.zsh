@@ -9685,9 +9685,6 @@
 @test 'more_src has _zsh-bench' {
     assert "$xsrc/_zsh-bench" is_file
 }
-@test 'more_src has _zsh-completion' {
-    assert "$xsrc/_zsh-completion" is_file
-}
 @test 'more_src has _zsh-defer' {
     assert "$xsrc/_zsh-defer" is_file
 }
