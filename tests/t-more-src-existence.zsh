@@ -7268,6 +7268,9 @@
 @test 'more_src has _pyenv' {
     assert "$xsrc/_pyenv" is_file
 }
+@test 'more_src has _pyftinspect' {
+    assert "$xsrc/_pyftinspect" is_file
+}
 @test 'more_src has _pyinfra' {
     assert "$xsrc/_pyinfra" is_file
 }
@@ -7979,6 +7982,9 @@
 }
 @test 'more_src has _sfopen' {
     assert "$xsrc/_sfopen" is_file
+}
+@test 'more_src has _sfnt2woff-zopfli' {
+    assert "$xsrc/_sfnt2woff-zopfli" is_file
 }
 @test 'more_src has _sgpt' {
     assert "$xsrc/_sgpt" is_file
