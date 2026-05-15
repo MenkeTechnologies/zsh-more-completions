@@ -4029,6 +4029,9 @@
 @test 'more_src has _grafatui' {
     assert "$xsrc/_grafatui" is_file
 }
+@test 'more_src has _graylog-sidecar' {
+    assert "$xsrc/_graylog-sidecar" is_file
+}
 @test 'more_src has _granian' {
     assert "$xsrc/_granian" is_file
 }
