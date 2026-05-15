@@ -1715,6 +1715,9 @@
 @test 'more_src has _claude-vault' {
     assert "$xsrc/_claude-vault" is_file
 }
+@test 'more_src has _claudia' {
+    assert "$xsrc/_claudia" is_file
+}
 
 @test 'more_src has _claudectx' {
     assert "$xsrc/_claudectx" is_file
@@ -3218,6 +3221,9 @@
 @test 'more_src has _faas-cli' {
     assert "$xsrc/_faas-cli" is_file
 }
+@test 'more_src has _faasd' {
+    assert "$xsrc/_faasd" is_file
+}
 @test 'more_src has _factorix.zsh' {
     assert "$xsrc/_factorix.zsh" is_file
 }
@@ -3355,6 +3361,9 @@
 }
 @test 'more_src has _firefoxpwa' {
     assert "$xsrc/_firefoxpwa" is_file
+}
+@test 'more_src has _fission' {
+    assert "$xsrc/_fission" is_file
 }
 @test 'more_src has _fisher' {
     assert "$xsrc/_fisher" is_file
@@ -6566,6 +6575,9 @@
 @test 'more_src has _numbat' {
     assert "$xsrc/_numbat" is_file
 }
+@test 'more_src has _nuv' {
+    assert "$xsrc/_nuv" is_file
+}
 @test 'more_src has _nun' {
     assert "$xsrc/_nun" is_file
 }
@@ -6730,6 +6742,9 @@
 }
 @test 'more_src has _openhands' {
     assert "$xsrc/_openhands" is_file
+}
+@test 'more_src has _openfaas' {
+    assert "$xsrc/_openfaas" is_file
 }
 @test 'more_src has _openobserve' {
     assert "$xsrc/_openobserve" is_file
