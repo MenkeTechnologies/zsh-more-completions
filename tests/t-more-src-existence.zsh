@@ -1437,6 +1437,9 @@
 @test 'more_src has _carla' {
     assert "$xsrc/_carla" is_file
 }
+@test 'more_src has _cardano-wallet' {
+    assert "$xsrc/_cardano-wallet" is_file
+}
 @test 'more_src has _carmel' {
     assert "$xsrc/_carmel" is_file
 }
@@ -4641,6 +4644,9 @@
 }
 @test 'more_src has _joker' {
     assert "$xsrc/_joker" is_file
+}
+@test 'more_src has _jormungandr' {
+    assert "$xsrc/_jormungandr" is_file
 }
 @test 'more_src has _joshuto' {
     assert "$xsrc/_joshuto" is_file
