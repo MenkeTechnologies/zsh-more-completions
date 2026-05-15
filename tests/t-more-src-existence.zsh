@@ -6523,6 +6523,9 @@
 @test 'more_src has _plex' {
     assert "$xsrc/_plex" is_file
 }
+@test 'more_src has _plextraktsync' {
+    assert "$xsrc/_plextraktsync" is_file
+}
 @test 'more_src has _plforge' {
     assert "$xsrc/_plforge" is_file
 }
@@ -7699,6 +7702,9 @@
 @test 'more_src has _sourcekitten' {
     assert "$xsrc/_sourcekitten" is_file
 }
+@test 'more_src has _spacecmd' {
+    assert "$xsrc/_spacecmd" is_file
+}
 @test 'more_src has _spacer' {
     assert "$xsrc/_spacer" is_file
 }
@@ -8685,6 +8691,9 @@
 }
 @test 'more_src has _urlview' {
     assert "$xsrc/_urlview" is_file
+}
+@test 'more_src has _usacloud' {
+    assert "$xsrc/_usacloud" is_file
 }
 @test 'more_src has _usage' {
     assert "$xsrc/_usage" is_file
