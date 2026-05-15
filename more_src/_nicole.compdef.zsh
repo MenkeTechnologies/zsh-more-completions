@@ -1,6 +1,6 @@
+#compdef nicole
 # Source: https://github.com/MatthiasQuintern/nicole/blob/b5a26f2f4a03ce329166491e3a7b607ca05b56f2/_nicole.compdef.zsh
 # Repository: MatthiasQuintern/nicole (_nicole.compdef.zsh)
-#compdef nicole
 # https://zsh.sourceforge.io/Doc/Release/Completion-System.html#Completion-Functions
 _lyrics-site()
 {

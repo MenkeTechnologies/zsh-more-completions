@@ -1,6 +1,6 @@
+#compdef landing-portal-api.sh
 # Source: https://github.com/gbrrestoration/landing-portal-api-bash-wrapper/blob/e97a478c65de09d767998cce593d47a68fade30d/_landing-portal-api.sh
 # Repository: gbrrestoration/landing-portal-api-bash-wrapper (_landing-portal-api.sh)
-#compdef landing-portal-api.sh
 
 # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 # !

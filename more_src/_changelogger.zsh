@@ -1,6 +1,6 @@
+#compdef changelogger
 # Source: https://github.com/KDesp73/changelogger/blob/5861d8a1b5fb79a1f08a6834200c52ede3757423/docs/_changelogger.zsh
 # Repository: KDesp73/changelogger (docs/_changelogger.zsh)
-#compdef changelogger
 
 _changelogger_cmd_0 () {
     _path_files

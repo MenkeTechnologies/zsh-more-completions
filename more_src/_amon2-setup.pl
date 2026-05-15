@@ -1,6 +1,6 @@
+#compdef amon2-setup.pl
 # Source: https://github.com/syohex/zsh-perl-completions/blob/be325132fc53381b596552487f7e0d6637b82781/_amon2-setup.pl
 # Repository: syohex/zsh-perl-completions (_amon2-setup.pl)
-#compdef amon2-setup.pl
 
 # The MIT License (MIT)
 #

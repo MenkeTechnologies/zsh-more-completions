@@ -1,6 +1,6 @@
+#compdef mon.zsh
 # Source: https://github.com/dablenparty/.hyprland/blob/289e16f07d4e2621d1501eef2e104c92d1e0efef/scripts/completions/_mon.zsh
 # Repository: dablenparty/.hyprland (scripts/completions/_mon.zsh)
-#compdef mon.zsh
 
 _mon_bare_cmd() {
   # WARN: _files respects 'list-dirs-first' which recurses into the active dir and adds it to the

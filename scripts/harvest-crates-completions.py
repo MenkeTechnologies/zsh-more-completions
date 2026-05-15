@@ -339,13 +339,25 @@ def write_completion(
     repository: str,
     probe_args: list[str],
 ) -> None:
+    # zsh's compinit requires `#compdef` on line 1. Pull the #compdef line out,
+    # write it first, then the provenance header, then the rest of the body.
     out = MORE / dest
+    body = body.lstrip("﻿")
+    lines = body.splitlines(keepends=True)
+    compdef_idx = next(
+        (i for i, ln in enumerate(lines) if ln.lstrip().startswith("#compdef")),
+        None,
+    )
+    if compdef_idx is None:
+        return
+    compdef_line = lines[compdef_idx]
+    rest = "".join(lines[:compdef_idx] + lines[compdef_idx + 1:])
     header = (
         f"# Source: cargo binstall {crate}@{version}\n"
         f"# Probed via: {' '.join(probe_args)}\n"
         f"# Repository: {repository or 'https://crates.io/crates/' + crate}\n"
     )
-    out.write_text(header + body.lstrip("﻿"), encoding="utf-8")
+    out.write_text(compdef_line + header + rest, encoding="utf-8")
 
 
 def try_install_capture(

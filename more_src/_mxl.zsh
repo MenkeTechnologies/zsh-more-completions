@@ -1,6 +1,6 @@
+#compdef mxl
 # Source: https://github.com/tmpfs-archive/mxl/blob/5f1d82629f72d933c2ca227340a2140dab58d6da/completion/_mxl.zsh
 # Repository: tmpfs-archive/mxl (completion/_mxl.zsh)
-#compdef mxl
 # vim: ft=zsh sw=2 ts=2 et
 # ------------------------------------------------------------------------------
 # Description

@@ -1,6 +1,6 @@
+#compdef my_cheat.sh
 # Source: https://github.com/beardnick/dotfiles/blob/65a2aff2b61e55f37a844970900571828149a70d/shell/.zinit/completions/_my_cheat.sh
 # Repository: beardnick/dotfiles (shell/.zinit/completions/_my_cheat.sh)
-#compdef my_cheat.sh
 # ------------------------------------------------------------------------------
 # Copyright (c) 2016 Github zsh-users - http://github.com/zsh-users
 # All rights reserved.

@@ -1,3 +1,4 @@
+#compdef ogit.sh ogit
 # Source: https://github.com/aIrseneO/aIrseneO/blob/1ec5121a87fbafc23cd5b902752a408dd393e0b3/ogit.sh
 # Repository: aIrseneO/aIrseneO (ogit.sh)
 #!/bin/bash
@@ -474,7 +475,6 @@ EOF
 #
 generate_zsh_completion() {
     cat <<'EOF'
-#compdef ogit.sh ogit
 _ogit_sh() {
     local -a _options
     _options=(

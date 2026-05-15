@@ -1,6 +1,6 @@
+#compdef ccc-override.sh
 # Source: https://github.com/bogner/scripts/blob/88fa565cd90a83abd71110237815e6c5275f80d1/completion/zsh/_ccc-override.sh
 # Repository: bogner/scripts (completion/zsh/_ccc-override.sh)
-#compdef ccc-override.sh
 
 (( $+functions[_ccc_override_commands] )) ||
 _ccc_override_commands() {

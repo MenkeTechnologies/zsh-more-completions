@@ -1,6 +1,6 @@
+#compdef toggl1
 # Source: https://github.com/Voronenko/dotfiles/blob/93559d875bba2eaac109c43a5fb31bcc9090d2e0/completions/_toggl.zsh
 # Repository: Voronenko/dotfiles (completions/_toggl.zsh)
-#compdef toggl1
 
 __toggl-workspaces() {
     toggl workspaces

@@ -1,6 +1,6 @@
+#compdef kd
 # Source: https://github.com/shini4i/kd/blob/90e4ee46c879e174e477bd5dc069c7609e7857c4/completion/_kd.zsh
 # Repository: shini4i/kd (completion/_kd.zsh)
-#compdef kd
 
 # Zsh completion script for kd (Kubernetes secrets Decoder)
 #

@@ -1,6 +1,6 @@
+#compdef uub
 # Source: https://github.com/ray-kast/zrc/blob/b765d536beb42adda1286582d57e3242f0312c2a/completion/_uub.zsh
 # Repository: ray-kast/zrc (completion/_uub.zsh)
-#compdef uub
 
 function _uub() {
   words[1]="uub"

@@ -1,6 +1,6 @@
+#compdef reginald
 # Source: https://github.com/schilkp/dot/blob/3d49597b6259571e1eff122d2ac22c6776e62766/zsh/.zsh/completion/_reginald.zsh
 # Repository: schilkp/dot (zsh/.zsh/completion/_reginald.zsh)
-#compdef reginald
 
 autoload -U is-at-least
 

@@ -1,6 +1,6 @@
+#compdef {0}
 # Source: https://github.com/Garcia6l20/reflex/blob/9df692430b6ab24bfa7a4193ca4b428422a5fc61/cli/src/_zsh_source.sh
 # Repository: Garcia6l20/reflex (cli/src/_zsh_source.sh)
-#compdef {0}
 
 if [[ -n "{3}" && -d "{3}" ]]; then
     case ":$PATH:" in
