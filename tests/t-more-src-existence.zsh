@@ -301,6 +301,9 @@
 @test 'more_src has _agentvm' {
     assert "$xsrc/_agentvm" is_file
 }
+@test 'more_src has _agent_control' {
+    assert "$xsrc/_agent_control" is_file
+}
 @test 'more_src has _agrep' {
     assert "$xsrc/_agrep" is_file
 }
@@ -8112,6 +8115,9 @@
 @test 'more_src has _slint' {
     assert "$xsrc/_slint" is_file
 }
+@test 'more_src has _sliver-client' {
+    assert "$xsrc/_sliver-client" is_file
+}
 @test 'more_src has _slipd' {
     assert "$xsrc/_slipd" is_file
 }
@@ -9917,6 +9923,9 @@
 }
 @test 'more_src has _wazuh' {
     assert "$xsrc/_wazuh" is_file
+}
+@test 'more_src has _wazuh-control' {
+    assert "$xsrc/_wazuh-control" is_file
 }
 @test 'more_src has _wdocker' {
     assert "$xsrc/_wdocker" is_file
