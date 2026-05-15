@@ -1,0 +1,667 @@
+# Source: https://github.com/imranscripts/mugit/blob/103ac4ad9bc26dbd54b6c9557f966c264a601633/mugit
+# Repository: imranscripts/mugit (mugit)
+#!/usr/bin/env bash
+# mugit — run git commands across multiple repos
+# Config: ~/.config/mugit/roots (one root folder per line)
+
+set -uo pipefail
+
+VERSION="1.0.0"
+
+CONFIG_DIR="$HOME/.config/mugit"
+ROOTS_FILE="$CONFIG_DIR/roots"
+
+# Colors — disabled when stdout is not a TTY or NO_COLOR is set
+if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
+    RED='\033[0;31m'
+    GREEN='\033[0;32m'
+    YELLOW='\033[0;33m'
+    CYAN='\033[0;36m'
+    BOLD='\033[1m'
+    RESET='\033[0m'
+else
+    RED='' GREEN='' YELLOW='' CYAN='' BOLD='' RESET=''
+fi
+
+# ── helpers ────────────────────────────────────────────────────────────────────
+
+die() { echo -e "${RED}error:${RESET} $*" >&2; exit 1; }
+
+_realpath() {
+    local p="${1/#\~/$HOME}"
+    [[ "$p" != /* ]] && p="$(pwd)/$p"
+    ( cd "$p" 2>/dev/null && pwd -P ) || printf '%s' "$p"
+}
+
+# Expand an input to matching filesystem directories.
+# On ambiguity: prints "AMBIGUOUS" then the candidates and returns 1.
+# 1. Exact resolved path  2. Wildcard glob  3. Substring match in parent dir
+_expand_path() {
+    local input="$1"
+    local resolved
+    resolved="$(_realpath "$input")"
+    if [[ -d "$resolved" ]]; then
+        echo "$resolved"
+        return 0
+    fi
+    local parent base abs_parent
+    parent="$(dirname "$input")"
+    base="$(basename "$input")"
+    abs_parent="$(_realpath "$parent")"
+    if [[ "$input" == *'*'* || "$input" == *'?'* ]]; then
+        for match in "$abs_parent"/$base; do
+            [[ -d "$match" ]] && echo "$match"
+        done
+        return 0
+    fi
+    local matches=()
+    for match in "$abs_parent"/*/; do
+        [[ -d "$match" ]] || continue
+        local name
+        name="$(basename "${match%/}")"
+        [[ "$name" == *"$base"* ]] && matches+=("${match%/}")
+    done
+    if [[ ${#matches[@]} -eq 1 ]]; then
+        echo "${matches[0]}"
+    elif [[ ${#matches[@]} -gt 1 ]]; then
+        echo "AMBIGUOUS"
+        printf '%s\n' "${matches[@]}"
+        return 1
+    fi
+}
+
+# Match an input against registered roots.
+# 1. Exact full-path  2. Exact basename  3. Substring basename  4. Wildcard basename
+# Returns matching paths on stdout; prints an error and returns 1 on ambiguity.
+_match_roots() {
+    local input="$1"
+    local resolved
+    resolved="$(_realpath "$input")"
+    if grep -qxF "$resolved" "$ROOTS_FILE" 2>/dev/null; then
+        echo "$resolved"
+        return 0
+    fi
+    local matches=()
+    while IFS= read -r root; do
+        local base
+        base="$(basename "$root")"
+        if [[ "$base" == "$input" ]]; then
+            matches+=("$root")
+        fi
+    done < <(get_roots)
+    if [[ ${#matches[@]} -gt 0 ]]; then
+        printf '%s\n' "${matches[@]}"
+        return 0
+    fi
+    # Substring match
+    while IFS= read -r root; do
+        local base
+        base="$(basename "$root")"
+        if [[ "$base" == *"$input"* ]]; then
+            matches+=("$root")
+        fi
+    done < <(get_roots)
+    if [[ ${#matches[@]} -eq 1 ]]; then
+        echo "${matches[0]}"
+        return 0
+    elif [[ ${#matches[@]} -gt 1 ]]; then
+        echo "AMBIGUOUS"
+        printf '%s\n' "${matches[@]}"
+        return 1
+    fi
+    # Wildcard match
+    if [[ "$input" == *'*'* || "$input" == *'?'* ]]; then
+        while IFS= read -r root; do
+            case "$(basename "$root")" in
+                $input) printf '%s\n' "$root" ;;
+            esac
+        done < <(get_roots)
+    fi
+}
+
+ensure_config() {
+    mkdir -p "$CONFIG_DIR"
+    touch "$ROOTS_FILE"
+}
+
+get_roots() {
+    ensure_config
+    grep -v '^\s*$' "$ROOTS_FILE" || true
+}
+
+# Walk a directory tree and emit the path of every git repo found,
+# stopping descent into a directory once a .git is found inside it
+# (so nested repos don't get double-counted). Hidden dirs are skipped.
+# Max depth is controlled by MUGIT_DEPTH (default: 5).
+_find_repos() {
+    local dir="$1" depth="$2" max_depth="$3"
+    if [[ -d "$dir/.git" ]]; then
+        echo "$dir"
+        return
+    fi
+    [[ $depth -ge $max_depth ]] && return
+    local subdir base
+    for subdir in "$dir"/*/; do
+        [[ -d "$subdir" ]] || continue
+        base="$(basename "${subdir%/}")"
+        [[ "$base" == .* ]] && continue
+        _find_repos "$subdir" "$(( depth + 1 ))" "$max_depth"
+    done
+}
+
+repos_in_root() {
+    local root="$1"
+    _find_repos "$root" 0 "${MUGIT_DEPTH:-5}"
+}
+
+discover_repos() {
+    while IFS= read -r root; do
+        [[ -z "$root" ]] && continue
+        root="${root/#\~/$HOME}"
+        if [[ ! -d "$root" ]]; then
+            echo -e "${YELLOW}warn:${RESET} root '$root' does not exist, skipping" >&2
+            continue
+        fi
+        repos_in_root "$root"
+    done < <(get_roots)
+}
+
+# ── config subcommand ──────────────────────────────────────────────────────────
+
+cmd_config() {
+    ensure_config
+    local action="${1:-}"
+    case "$action" in
+        --add|-a)
+            [[ $# -lt 2 ]] && die "usage: mugit config --add <folder> [folder2...]"
+            local added=0
+            local lines=()
+            local inputs=()
+            while IFS= read -r _line; do inputs+=("$_line"); done < <(printf '%s\n' "${@:2}" | sort)
+            for input in "${inputs[@]}"; do
+                local _out _rc
+                _out="$(_expand_path "$input")"
+                _rc=$?
+                if [[ $_rc -ne 0 ]]; then
+                    local _cands=()
+                    while IFS= read -r _line; do
+                        [[ "$_line" != "AMBIGUOUS" ]] && _cands+=("$_line")
+                    done <<< "$_out"
+                    lines+=("${YELLOW}ambiguous:${RESET} '$input' matches:")
+                    local _c; for _c in "${_cands[@]+"${_cands[@]}"}"; do lines+=("  $(basename "$_c")  ${YELLOW}($_c)${RESET}"); done
+                    continue
+                fi
+                local expanded=()
+                while IFS= read -r _line; do [[ -n "$_line" ]] && expanded+=("$_line"); done <<< "$_out"
+                if [[ ${#expanded[@]} -eq 0 ]]; then
+                    lines+=("${RED}not found:${RESET} $input")
+                    continue
+                fi
+                for folder in "${expanded[@]}"; do
+                    if grep -qxF "$folder" "$ROOTS_FILE" 2>/dev/null; then
+                        lines+=("${YELLOW}already registered:${RESET} $folder")
+                    else
+                        local count
+                        count=$(repos_in_root "$folder" | grep -c . || true)
+                        if [[ $count -eq 0 ]]; then
+                            lines+=("${RED}skipped:${RESET} $folder ${YELLOW}(no repos found)${RESET}")
+                        else
+                            echo "$folder" >> "$ROOTS_FILE"
+                            (( added++ )) || true
+                            if [[ -d "$folder/.git" ]]; then
+                                lines+=("${GREEN}added:${RESET} $folder ${CYAN}(is a repo)${RESET}")
+                            else
+                                lines+=("${GREEN}added:${RESET} $folder ${CYAN}(has $count repo(s))${RESET}")
+                            fi
+                        fi
+                    fi
+                done
+            done
+            echo -e "${BOLD}$added root(s) added${RESET}"
+            local _l; for _l in "${lines[@]+"${lines[@]}"}"; do echo -e "  $_l"; done
+            ;;
+        --rm|-r)
+            [[ $# -lt 2 ]] && die "usage: mugit config --rm <folder> [folder2...]"
+            local removed=0
+            local lines=()
+            for input in "${@:2}"; do
+                local _out _rc
+                _out="$(_match_roots "$input")"
+                _rc=$?
+                if [[ $_rc -ne 0 ]]; then
+                    local _cands=()
+                    while IFS= read -r _line; do
+                        [[ "$_line" != "AMBIGUOUS" ]] && _cands+=("$_line")
+                    done <<< "$_out"
+                    lines+=("${YELLOW}ambiguous:${RESET} '$input' matches:")
+                    local _c; for _c in "${_cands[@]+"${_cands[@]}"}"; do lines+=("  $(basename "$_c")  ${YELLOW}($_c)${RESET}"); done
+                    continue
+                fi
+                local matches=()
+                while IFS= read -r _line; do [[ -n "$_line" ]] && matches+=("$_line"); done <<< "$_out"
+                if [[ ${#matches[@]} -eq 0 ]]; then
+                    lines+=("${YELLOW}not found:${RESET} $input")
+                    continue
+                fi
+                for folder in "${matches[@]}"; do
+                    sed -i '' "\|^${folder}$|d" "$ROOTS_FILE"
+                    (( removed++ )) || true
+                    lines+=("${RED}removed:${RESET} $folder")
+                done
+            done
+            echo -e "${BOLD}$removed root(s) removed${RESET}"
+            local _l; for _l in "${lines[@]+"${lines[@]}"}"; do echo -e "  $_l"; done
+            ;;
+        --clean|-c)
+            > "$ROOTS_FILE"
+            echo -e "${RED}cleared:${RESET} all roots removed"
+            ;;
+        --list|-l|"")
+            local roots
+            roots="$(get_roots)"
+            if [[ -z "$roots" ]]; then
+                echo -e "${BOLD}No roots registered.${RESET} Use: mugit config --add <folder>"
+            else
+                local total_repos=0
+                local root_count=0
+                while IFS= read -r root; do
+                    (( root_count++ )) || true
+                    local c
+                    c=$(repos_in_root "$root" | grep -c . || true)
+                    (( total_repos += c )) || true
+                done <<< "$roots"
+                echo -e "${BOLD}$root_count root(s), $total_repos repo(s) total${RESET}"
+                echo
+                while IFS= read -r root; do
+                    if [[ -d "$root/.git" ]]; then
+                        echo -e "  ${CYAN}$(basename "$root")${RESET}  ${YELLOW}$root${RESET}"
+                    else
+                        local sub_repos=()
+                        while IFS= read -r _line; do sub_repos+=("$_line"); done < <(repos_in_root "$root" | sort)
+                        local count=${#sub_repos[@]}
+                        echo -e "  ${CYAN}$root${RESET}  ${YELLOW}($count repo(s))${RESET}"
+                        for i in "${!sub_repos[@]}"; do
+                            local rel="${sub_repos[$i]#$root/}"
+                            if (( i < count - 1 )); then
+                                echo -e "    ├─ ${rel}"
+                            else
+                                echo -e "    └─ ${rel}"
+                            fi
+                        done
+                    fi
+                done <<< "$roots"
+            fi
+            ;;
+        *)
+            die "unknown config option '$action'. Use --add, --rm, --clean, or --list"
+            ;;
+    esac
+}
+
+# ── completions ────────────────────────────────────────────────────────────────
+
+cmd_completions() {
+    local shell="${1:-}"
+    case "$shell" in
+        bash) _completions_bash ;;
+        zsh)  _completions_zsh ;;
+        *)    die "usage: mugit completions <bash|zsh>" ;;
+    esac
+}
+
+_completions_bash() {
+    cat <<'EOF'
+_mugit() {
+    local cur prev
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+
+    local mugit_flags="--only -o --except -x --dry-run -n --yes -y"
+    local git_cmds="add bisect branch checkout clean clone commit diff fetch grep init log merge mv pull push rebase reset restore revert rm show stash status submodule switch tag worktree"
+
+    if [[ "${COMP_WORDS[1]}" == "config" ]]; then
+        COMPREPLY=( $(compgen -W "--add -a --rm -r --clean -c --list -l" -- "$cur") )
+        return
+    fi
+
+    if [[ "${COMP_WORDS[1]}" == "completions" ]]; then
+        COMPREPLY=( $(compgen -W "bash zsh" -- "$cur") )
+        return
+    fi
+
+    case "$prev" in
+        --only|-o|--except|-x) return ;;
+    esac
+
+    if [[ $COMP_CWORD -eq 1 ]]; then
+        COMPREPLY=( $(compgen -W "config completions --version $mugit_flags $git_cmds" -- "$cur") )
+        return
+    fi
+
+    if [[ "$cur" == -* ]]; then
+        COMPREPLY=( $(compgen -W "$mugit_flags" -- "$cur") )
+        return
+    fi
+}
+complete -F _mugit mugit
+EOF
+}
+
+_completions_zsh() {
+    cat <<'EOF'
+#compdef mugit
+
+_mugit() {
+    local context state line
+    typeset -A opt_args
+
+    local -a mugit_flags
+    mugit_flags=(
+        '(--only -o)'{--only,-o}'[limit to repos (comma-separated)]:repos'
+        '(--except -x)'{--except,-x}'[exclude repos (comma-separated)]:repos'
+        '(--dry-run -n)'{--dry-run,-n}'[print commands without executing]'
+        '(--yes -y)'{--yes,-y}'[skip safety confirmation]'
+        '--version[show version and exit]'
+    )
+
+    local -a git_cmds
+    git_cmds=(
+        'add:add file contents to the index'
+        'bisect:use binary search to find the commit that introduced a bug'
+        'branch:list, create, or delete branches'
+        'checkout:switch branches or restore working tree files'
+        'clean:remove untracked files from the working tree'
+        'clone:clone a repository into a new directory'
+        'commit:record changes to the repository'
+        'diff:show changes between commits, commit and working tree, etc'
+        'fetch:download objects and refs from another repository'
+        'log:show commit logs'
+        'merge:join two or more development histories together'
+        'mv:move or rename a file, a directory, or a symlink'
+        'pull:fetch from and integrate with another repository or local branch'
+        'push:update remote refs along with associated objects'
+        'rebase:reapply commits on top of another base tip'
+        'reset:reset current HEAD to the specified state'
+        'restore:restore working tree files'
+        'revert:revert some existing commits'
+        'rm:remove files from the working tree and from the index'
+        'show:show various types of objects'
+        'stash:stash the changes in a dirty working directory away'
+        'status:show the working tree status'
+        'submodule:initialize, update or inspect submodules'
+        'switch:switch branches'
+        'tag:create, list, delete or verify a tag object signed with GPG'
+        'worktree:manage multiple working trees'
+    )
+
+    _arguments -C \
+        "${mugit_flags[@]}" \
+        '1:command:->command' \
+        '*::args:->args'
+
+    case $state in
+        command)
+            _alternative \
+                'mugit-cmds:mugit command:((config\:"manage root folders" completions\:"output shell completion script"))' \
+                'git-cmds:git command:(($git_cmds))'
+            ;;
+        args)
+            case ${words[1]} in
+                config)
+                    _arguments \
+                        '(--add -a)'{--add,-a}'[add root folder]:folder:_files -/' \
+                        '(--rm -r)'{--rm,-r}'[remove root folder]:folder:_files -/' \
+                        '(--clean -c)'{--clean,-c}'[remove all roots]' \
+                        '(--list -l)'{--list,-l}'[show registered roots]'
+                    ;;
+                completions)
+                    _values 'shell' bash zsh
+                    ;;
+            esac
+            ;;
+    esac
+}
+
+_mugit "$@"
+EOF
+}
+
+# ── safety confirmation ────────────────────────────────────────────────────────
+
+DANGEROUS_PATTERNS=(
+    "push --force"
+    "push -f"
+    "push --force-with-lease"
+    "push --mirror"
+    "push --delete"
+    "reset --hard"
+    "clean -f"
+    "branch -D"
+    "checkout --force"
+    "checkout -f"
+)
+
+is_dangerous() {
+    local -a args=("$@")
+    local subcmd="${args[0]:-}"
+    for pattern in "${DANGEROUS_PATTERNS[@]}"; do
+        local pcmd="${pattern%% *}"
+        local pflag="${pattern#* }"
+        [[ "$subcmd" != "$pcmd" ]] && continue
+        for arg in "${args[@]}"; do
+            # also catch combined short flags like -fd, -df
+            if [[ "$arg" == "$pflag" ]] || \
+               [[ "$pflag" == "-f" && "$arg" =~ ^-[a-zA-Z]*f[a-zA-Z]*$ ]]; then
+                echo "$pattern"
+                return 0
+            fi
+        done
+    done
+    return 1
+}
+
+confirm_dangerous() {
+    local pattern="$1"
+    local repo_count="$2"
+    echo -e "\n${RED}${BOLD}⚠  DANGEROUS OPERATION${RESET}"
+    echo -e "  Matched pattern: ${BOLD}${pattern}${RESET}"
+    echo -e "  This will run across ${BOLD}${repo_count} repo(s)${RESET}."
+    echo -e "  ${YELLOW}Use --dry-run / -n to preview first.${RESET}"
+    echo
+    printf "  Type ${BOLD}yes${RESET} to continue, anything else aborts: "
+    local answer
+    read -r answer
+    if [[ "$answer" != "yes" ]]; then
+        echo -e "${RED}aborted.${RESET}"
+        exit 1
+    fi
+}
+
+# ── main git runner ────────────────────────────────────────────────────────────
+
+run_git() {
+    local dry_run=0
+    local yes=0
+    local only_filter=""
+    local except_filter=""
+    local git_args=()
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --dry-run|-n) dry_run=1; shift ;;
+            --yes|-y)     yes=1; shift ;;
+            --only|-o)    only_filter="${2:-}"; shift 2 ;;
+            --except|-x)  except_filter="${2:-}"; shift 2 ;;
+            *)            git_args=("$@"); break ;;
+        esac
+    done
+
+    if [[ ${#git_args[@]} -eq 0 ]]; then die "no git command provided"; fi
+
+    local repos
+    repos="$(discover_repos)"
+    if [[ -z "$repos" ]]; then die "no repos found. Add roots with: mugit config --add <folder>"; fi
+
+    if [[ $dry_run -eq 0 ]]; then
+        local matched_pattern
+        if matched_pattern="$(is_dangerous "${git_args[@]}")"; then
+            local repo_count
+            repo_count="$(echo "$repos" | grep -c .)"
+            if [[ $yes -eq 1 ]]; then
+                : # --yes bypasses confirmation
+            elif [[ ! -t 0 ]]; then
+                die "dangerous operation '${matched_pattern}' in non-interactive shell — pass --yes to confirm"
+            else
+                confirm_dangerous "$matched_pattern" "$repo_count"
+            fi
+        fi
+    fi
+
+    local failed_repos=()
+    local ok_count=0
+
+    while IFS= read -r repo; do
+        local name
+        name="$(basename "$repo")"
+
+        if [[ -n "$only_filter" ]]; then
+            local match=0
+            IFS=',' read -ra filters <<< "$only_filter"
+            for f in "${filters[@]}"; do
+                if [[ "$name" == *"$f"* ]]; then match=1; break; fi
+            done
+            if [[ $match -eq 0 ]]; then continue; fi
+        fi
+
+        if [[ -n "$except_filter" ]]; then
+            local excluded=0
+            IFS=',' read -ra filters <<< "$except_filter"
+            for f in "${filters[@]}"; do
+                if [[ "$name" == *"$f"* ]]; then excluded=1; break; fi
+            done
+            if [[ $excluded -eq 1 ]]; then continue; fi
+        fi
+
+        echo -e "\n${BOLD}${CYAN}━━━ $name ${RESET}${CYAN}($repo)${RESET}"
+
+        if [[ $dry_run -eq 1 ]]; then
+            echo -e "  ${YELLOW}[dry-run]${RESET} git ${git_args[*]}"
+            continue
+        fi
+
+        if git -C "$repo" "${git_args[@]}"; then
+            (( ok_count++ )) || true
+        else
+            echo -e "${RED}failed${RESET}"
+            failed_repos+=("$name")
+        fi
+    done <<< "$repos"
+
+    if [[ ${#failed_repos[@]} -gt 0 ]]; then
+        echo -e "\n${RED}failed:${RESET} ${failed_repos[*]}"
+        exit 1
+    fi
+}
+
+# ── entry point ────────────────────────────────────────────────────────────────
+
+if [[ $# -eq 0 ]]; then
+    echo -e "☕ ${BOLD}mugit${RESET} — run git commands across multiple repos"
+    echo
+    echo -e "${BOLD}USAGE${RESET}"
+    echo "  mugit config --add <folder> [folder2...]  register root folders containing git repos"
+    echo "  mugit config --rm  <folder> [folder2...]  unregister root folders"
+    echo "  mugit config --clean              remove all registered roots"
+    echo "  mugit config --list               show registered roots and discovered repos"
+    echo
+    echo "  mugit [mugit-options] <git-command> [git-args...]  run any git command across all repos"
+    echo
+    echo -e "${BOLD}MUGIT OPTIONS${RESET}"
+    echo "  --only,   -o repo1,repo2         limit to specific repo names (comma-separated)"
+    echo "  --except, -x repo1,repo2         exclude specific repo names (comma-separated)"
+    echo "  --dry-run,-n                     print commands without executing them"
+    echo "  --yes,    -y                     skip safety confirmation (for scripts / CI)"
+    echo
+    echo -e "${BOLD}EXAMPLES${RESET}"
+    echo
+    echo -e "  ${BOLD}configuration${RESET}"
+    echo "    mugit config --add ~/myprojects"
+    echo "    mugit config --add ~/work ~/personal"
+    echo "    mugit config --list"
+    echo "    mugit config --rm ~/myprojects"
+    echo
+    echo -e "  ${BOLD}git commands across all repos${RESET}"
+    echo "    mugit status"
+    echo "    mugit checkout -b feature/xyz"
+    echo "    mugit pull --rebase"
+    echo "    mugit commit -m \"fix: something\""
+    echo "    mugit push --dry-run"
+    echo
+    echo -e "  ${BOLD}filtering repos${RESET}"
+    echo "    mugit --only repo-one,repo-two status"
+    echo "    mugit -o api,front pull --rebase"
+    echo "    mugit --except legacy,archived status"
+    echo "    mugit -x legacy,archived pull --rebase"
+    echo
+    echo -e "  ${BOLD}previewing without executing${RESET}"
+    echo "    mugit --dry-run checkout main"
+    echo "    mugit -n --only repo-one push origin main"
+    echo "    mugit -n -o repo-one push origin main"
+    echo
+    echo -e "  ${BOLD}shell completions${RESET}"
+    echo "    mugit completions bash >> ~/.bash_completion"
+    echo "    mugit completions zsh > \$(brew --prefix)/share/zsh/site-functions/_mugit"
+    echo
+    echo -e "${BOLD}ENVIRONMENT${RESET}"
+    echo "  MUGIT_DEPTH   max directory depth when discovering repos (default: 5)"
+    echo "  NO_COLOR      disable colored output when set"
+    echo
+    echo -e "${BOLD}RESPONSES${RESET}"
+    echo
+    echo -e "  ${BOLD}config --list${RESET}"
+    echo -e "    ${BOLD}2 root(s), 4 repo(s) total${RESET}"
+    echo
+    echo -e "    ${CYAN}~/work${RESET}  ${YELLOW}(3 repo(s))${RESET}"
+    echo "      ├─ api"
+    echo "      ├─ front"
+    echo "      └─ shared"
+    echo -e "    ${CYAN}~/personal${RESET}  ${YELLOW}(1 repo(s))${RESET}"
+    echo "      └─ side-project"
+    echo
+    echo -e "  ${BOLD}git command across multiple repos${RESET}"
+    echo -e "    ${BOLD}${CYAN}━━━ api ${RESET}${CYAN}(~/work/api)${RESET}"
+    echo "    Already up to date."
+    echo
+    echo -e "    ${BOLD}${CYAN}━━━ front ${RESET}${CYAN}(~/work/front)${RESET}"
+    echo "    Updating abc1234..def5678"
+    echo "    Fast-forward"
+    echo "     src/index.js | 2 +-"
+    echo
+    echo -e "    ${BOLD}${CYAN}━━━ shared ${RESET}${CYAN}(~/work/shared)${RESET}"
+    echo "    Already up to date."
+    echo
+    echo -e "  ${BOLD}dry-run across multiple repos${RESET}"
+    echo -e "    ${BOLD}${CYAN}━━━ api ${RESET}${CYAN}(~/work/api)${RESET}"
+    echo -e "    ${YELLOW}[dry-run]${RESET} git checkout main"
+    echo
+    echo -e "    ${BOLD}${CYAN}━━━ front ${RESET}${CYAN}(~/work/front)${RESET}"
+    echo -e "    ${YELLOW}[dry-run]${RESET} git checkout main"
+    echo
+    echo -e "  ${BOLD}failure summary${RESET}"
+    echo -e "    ${BOLD}${CYAN}━━━ api ${RESET}${CYAN}(~/work/api)${RESET}"
+    echo "    Already up to date."
+    echo
+    echo -e "    ${BOLD}${CYAN}━━━ front ${RESET}${CYAN}(~/work/front)${RESET}"
+    echo -e "    ${RED}failed${RESET}"
+    echo
+    echo -e "    ${RED}failed:${RESET} front"
+    exit 0
+fi
+
+case "$1" in
+    --version|-V)  echo "mugit $VERSION" ;;
+    config)        shift; cmd_config "$@" ;;
+    completions)   shift; cmd_completions "$@" ;;
+    *)             run_git "$@" ;;
+esac

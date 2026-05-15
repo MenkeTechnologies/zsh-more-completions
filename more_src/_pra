@@ -1,0 +1,193 @@
+# Source: https://github.com/pstaylor-patrick/utility-scripts/blob/582d55d2d48f16fea3593ece43242207178bc122/ai/pra.sh
+# Repository: pstaylor-patrick/utility-scripts (ai/pra.sh)
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=ai/lib/provider.sh
+. "${SCRIPT_DIR}/lib/provider.sh"
+
+command_name="pra"
+
+usage() {
+    cat <<EOF
+Usage: $0 [-c] [-d] [-x] [--fix] <base-branch>
+
+Options:
+  -c, --claude              Use Claude Code CLI for AI operations.
+  -d, --deepseek            Use DeepSeek API for AI operations (default).
+  -x, --codex               Use OpenAI Codex for AI operations.
+  --completion [bash|zsh]   Print shell completion script for ${command_name}.
+  --fix                     After generating the report, ask AI to apply the recommended improvements and show git status.
+EOF
+}
+
+print_completion_script() {
+    local target_shell="${1:-}"
+
+    if [ -z "$target_shell" ]; then
+        if [ -n "${ZSH_VERSION:-}" ] || [ "$(basename "${SHELL:-}")" = "zsh" ]; then
+            target_shell="zsh"
+        else
+            target_shell="bash"
+        fi
+    fi
+
+    case "$target_shell" in
+        bash)
+            cat <<'EOF'
+_pra_branch_completions() {
+    if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+        return
+    fi
+
+    git for-each-ref --format='%(refname:short)' refs/heads refs/remotes 2>/dev/null \
+        | grep -vE '^origin/HEAD$' \
+        | LC_ALL=C sort -u
+}
+
+_pra_complete() {
+    local cur
+    cur="${COMP_WORDS[COMP_CWORD]}"
+
+    COMPREPLY=()
+    local branches
+    branches=$(_pra_branch_completions)
+
+    if [ -n "$branches" ]; then
+        mapfile -t COMPREPLY < <(compgen -W "$branches" -- "$cur")
+    fi
+}
+
+complete -o default -F _pra_complete pra
+EOF
+            ;;
+        zsh)
+            cat <<'EOF'
+#compdef pra
+
+_pra_branch_completions() {
+    if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+        return
+    fi
+
+    git for-each-ref --format='%(refname:short)' refs/heads refs/remotes 2>/dev/null \
+        | grep -vE '^origin/HEAD$' \
+        | LC_ALL=C sort -u
+}
+
+_pra_complete() {
+    local -a branches
+    branches=(${(f)$(_pra_branch_completions)})
+    _describe 'branch' branches
+}
+
+compdef _pra_complete pra
+EOF
+            ;;
+        *)
+            echo "Error: unsupported shell '${target_shell}'. Use 'bash' or 'zsh'." >&2
+            exit 1
+            ;;
+    esac
+}
+
+fix_mode=false
+base_branch=""
+
+while [[ "$#" -gt 0 ]]; do
+    case "$1" in
+        --help|-h)
+            usage
+            exit 0
+            ;;
+        --completion)
+            print_completion_script "${2:-}"
+            exit 0
+            ;;
+        --fix)
+            fix_mode=true
+            ;;
+        -c|--claude)
+            ai_set_provider claude
+            ;;
+        -d|--deepseek)
+            ai_set_provider deepseek
+            ;;
+        -x|--codex)
+            ai_set_provider codex
+            ;;
+        --*)
+            echo "Error: unknown option '$1'." >&2
+            usage >&2
+            exit 1
+            ;;
+        -*)
+            echo "Error: unknown option '$1'." >&2
+            usage >&2
+            exit 1
+            ;;
+        *)
+            if [ -z "$base_branch" ]; then
+                base_branch="$1"
+            else
+                echo "Error: too many arguments provided." >&2
+                usage >&2
+                exit 1
+            fi
+            ;;
+    esac
+    shift
+done
+
+if [ -z "$base_branch" ]; then
+    usage >&2
+    exit 1
+fi
+
+ai_require_provider
+
+if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    echo "Error: This script must be run inside a git repository." >&2
+    exit 1
+fi
+
+echo "AI provider: $(ai_provider_name)" >&2
+
+diff_stat=$(git diff "$base_branch" --stat)
+commit_log=$(git log --oneline "${base_branch}"..HEAD)
+
+if [ -z "$commit_log" ]; then
+    commit_log="(no commits between HEAD and ${base_branch})"
+fi
+
+prompt=$(cat <<EOF
+study each file in this diff and report back on any major code quality issues, recommended refactors, or security vulnerabilities.
+
+Diff against ${base_branch}:
+${diff_stat}
+
+Commit log from HEAD back to ${base_branch}:
+${commit_log}
+EOF
+)
+
+report_file=""
+if [ "$fix_mode" = true ]; then
+    report_file=$(mktemp)
+    trap '[[ -n "${report_file:-}" ]] && rm -f "$report_file"' EXIT
+    ai_exec "${prompt}" | tee "$report_file"
+else
+    ai_exec "${prompt}"
+fi
+
+if [ "$fix_mode" = true ]; then
+    improvement_prompt="Use the code quality report below to implement the recommended improvements directly in this repository (current working directory). Make the suggested changes to the codebase.
+
+Code quality report:
+$(cat "$report_file")"
+
+    ai_exec "${improvement_prompt}"
+    git status -sb
+fi

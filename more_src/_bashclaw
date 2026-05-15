@@ -1,0 +1,1013 @@
+# Source: https://github.com/shareAI-lab/BashClaw/blob/fb2fc385c20625dba98f56d3f22d30acb0091cfe/bashclaw
+# Repository: shareAI-lab/BashClaw (bashclaw)
+#!/usr/bin/env bash
+set -euo pipefail
+
+BASHCLAW_VERSION="1.0.0"
+
+# Resolve symlinks to find the real script location
+_bashclaw_resolve_root() {
+  local source="${BASH_SOURCE[0]}"
+  while [[ -L "$source" ]]; do
+    local dir
+    dir="$(cd "$(dirname "$source")" && pwd)"
+    source="$(readlink "$source")"
+    # Resolve relative symlink
+    [[ "$source" != /* ]] && source="$dir/$source"
+  done
+  cd "$(dirname "$source")" && pwd
+}
+BASHCLAW_ROOT="$(_bashclaw_resolve_root)"
+unset -f _bashclaw_resolve_root
+BASHCLAW_STATE_DIR="${BASHCLAW_STATE_DIR:-${HOME}/.bashclaw}"
+
+export BASHCLAW_VERSION BASHCLAW_ROOT BASHCLAW_STATE_DIR
+
+# Source library modules
+for _lib in "${BASHCLAW_ROOT}"/lib/*.sh; do
+  [[ -f "$_lib" ]] && source "$_lib"
+done
+unset _lib
+
+# Load .env if present
+_load_env() {
+  local env_file="${BASHCLAW_STATE_DIR}/.env"
+  if [[ -f "$env_file" ]]; then
+    while IFS= read -r line || [[ -n "$line" ]]; do
+      # Skip comments and empty lines
+      [[ -z "$line" || "$line" == \#* ]] && continue
+      # Only export valid var=value lines
+      if [[ "$line" =~ ^[A-Za-z_][A-Za-z_0-9]*= ]]; then
+        export "$line"
+      fi
+    done < "$env_file"
+  fi
+}
+
+# Check state dir and give helpful error
+_require_state_dir() {
+  if [[ ! -d "$BASHCLAW_STATE_DIR" ]]; then
+    log_error "State directory missing: $BASHCLAW_STATE_DIR"
+    printf 'Run "bashclaw onboard" to initialize, or create it manually:\n' >&2
+    printf '  mkdir -p %s\n' "$BASHCLAW_STATE_DIR" >&2
+    exit 1
+  fi
+}
+
+usage() {
+  cat <<EOF
+BashClaw v${BASHCLAW_VERSION} - Bash-native AI agent framework
+
+Usage: bashclaw <command> [options]
+
+Commands:
+  agent             Manage agents (start, stop, list, logs)
+  gateway           Start/stop the HTTP gateway
+  daemon            Manage system service (install, status, logs)
+  message  (msg)    Send a message to an agent
+  config   (cfg)    Manage configuration
+  session  (sess)   Manage conversation sessions
+  memory   (mem)    Manage persistent key-value memory
+  cron              Manage scheduled jobs
+  hooks             Manage event hooks
+  boot              Run or check agent boot sequence
+  security (sec)    Security policy and pairing management
+  onboard  (setup)  Interactive setup wizard
+  status            Show system status
+  doctor            Run diagnostics
+  selftest          Run unit tests
+  tool              Invoke a BashClaw tool directly
+  mcp-serve         Run as MCP server (stdio)
+  update            Update bashclaw to latest version
+  completion        Generate shell completion scripts
+  version           Show version info
+
+Options:
+  -h, --help      Show this help
+  -v, --version   Show version
+
+Environment:
+  BASHCLAW_STATE_DIR   State directory (default: ~/.bashclaw)
+  BASHCLAW_CONFIG      Config file path override
+  LOG_LEVEL            Log level: debug|info|warn|error|fatal|silent
+  MODEL_ID             Default model ID
+
+EOF
+}
+
+cmd_version() {
+  printf 'BashClaw %s\n' "$BASHCLAW_VERSION"
+}
+
+_version_compare() {
+  local v1="$1" v2="$2"
+  if [[ "$v1" == "$v2" ]]; then
+    return 0
+  fi
+  local IFS='.'
+  local -a parts1=($v1) parts2=($v2)
+  local i
+  for i in 0 1 2; do
+    local n1="${parts1[$i]:-0}"
+    local n2="${parts2[$i]:-0}"
+    if (( n1 > n2 )); then
+      return 1
+    elif (( n1 < n2 )); then
+      return 2
+    fi
+  done
+  return 0
+}
+
+_extract_version() {
+  local script="$1"
+  local ver
+  ver="$(sed -n 's/^BASHCLAW_VERSION="\([^"]*\)".*/\1/p' "$script" | head -1)"
+  printf '%s' "$ver"
+}
+
+cmd_update() {
+  local install_dir="$BASHCLAW_ROOT"
+  local old_version="$BASHCLAW_VERSION"
+
+  if [[ -d "${install_dir}/.git" ]]; then
+    log_info "Updating via git pull..."
+    if (cd "$install_dir" && git pull --ff-only); then
+      local new_version
+      new_version="$(_extract_version "${install_dir}/bashclaw")"
+      new_version="${new_version:-$old_version}"
+      local cmp_result=0
+      _version_compare "$old_version" "$new_version" || cmp_result=$?
+      if [[ "$cmp_result" -eq 0 ]]; then
+        printf 'Already up to date: %s\n' "$old_version"
+      else
+        printf 'Updated: %s -> %s\n' "$old_version" "$new_version"
+      fi
+    else
+      log_error "Git pull failed"
+      return 1
+    fi
+  elif [[ -f "${install_dir}/install.sh" ]]; then
+    log_info "Re-running installer..."
+    bash "${install_dir}/install.sh"
+    local new_version
+    new_version="$(_extract_version "${install_dir}/bashclaw")"
+    new_version="${new_version:-$old_version}"
+    local cmp_result=0
+    _version_compare "$old_version" "$new_version" || cmp_result=$?
+    if [[ "$cmp_result" -eq 0 ]]; then
+      printf 'Already up to date: %s\n' "$old_version"
+    else
+      printf 'Updated: %s -> %s\n' "$old_version" "$new_version"
+    fi
+  else
+    log_error "Cannot determine installation method. Please re-run the installer."
+    return 1
+  fi
+}
+
+cmd_completion() {
+  local shell_type="${1:-bash}"
+
+  case "$shell_type" in
+    bash) _completion_bash ;;
+    zsh)  _completion_zsh ;;
+    *)
+      log_error "Unknown shell: $shell_type (supported: bash, zsh)"
+      return 1
+      ;;
+  esac
+}
+
+_completion_bash() {
+  cat <<'COMP'
+_bashclaw() {
+  local cur prev commands subcommands
+  COMPREPLY=()
+  cur="${COMP_WORDS[COMP_CWORD]}"
+  prev="${COMP_WORDS[COMP_CWORD-1]}"
+  commands="agent gateway daemon message config session memory cron hooks boot security onboard status doctor tool mcp-serve update completion version help"
+
+  case "$prev" in
+    bashclaw)
+      COMPREPLY=($(compgen -W "$commands" -- "$cur"))
+      ;;
+    agent)
+      COMPREPLY=($(compgen -W "-m --message -a --agent -i --interactive -v --verbose -h --help" -- "$cur"))
+      ;;
+    gateway)
+      COMPREPLY=($(compgen -W "-p --port -v --verbose -d --daemon --stop -h --help" -- "$cur"))
+      ;;
+    daemon)
+      COMPREPLY=($(compgen -W "install uninstall status logs restart stop" -- "$cur"))
+      ;;
+    config)
+      COMPREPLY=($(compgen -W "show get set init validate edit path" -- "$cur"))
+      ;;
+    session)
+      COMPREPLY=($(compgen -W "list show clear delete export" -- "$cur"))
+      ;;
+    memory)
+      COMPREPLY=($(compgen -W "list search get set delete export import compact stats" -- "$cur"))
+      ;;
+    cron)
+      COMPREPLY=($(compgen -W "list add remove enable disable run history" -- "$cur"))
+      ;;
+    hooks)
+      COMPREPLY=($(compgen -W "list add remove enable disable test" -- "$cur"))
+      ;;
+    boot)
+      COMPREPLY=($(compgen -W "run find status reset" -- "$cur"))
+      ;;
+    security)
+      COMPREPLY=($(compgen -W "pair-generate pair-verify tool-check elevated-check audit" -- "$cur"))
+      ;;
+    message)
+      COMPREPLY=($(compgen -W "send" -- "$cur"))
+      ;;
+    completion)
+      COMPREPLY=($(compgen -W "bash zsh" -- "$cur"))
+      ;;
+  esac
+}
+complete -F _bashclaw bashclaw
+COMP
+}
+
+_completion_zsh() {
+  cat <<'COMP'
+#compdef bashclaw
+
+_bashclaw() {
+  local -a commands
+  commands=(
+    'agent:Manage agents'
+    'gateway:Start/stop the HTTP gateway'
+    'daemon:Manage system service'
+    'message:Send a message to an agent'
+    'config:Manage configuration'
+    'session:Manage conversation sessions'
+    'memory:Manage persistent memory'
+    'cron:Manage scheduled jobs'
+    'hooks:Manage event hooks'
+    'boot:Run or check agent boot sequence'
+    'security:Security policy and pairing management'
+    'onboard:Interactive setup wizard'
+    'status:Show system status'
+    'doctor:Run diagnostics'
+    'tool:Invoke a BashClaw tool directly'
+    'mcp-serve:Run as MCP server (stdio)'
+    'update:Update bashclaw'
+    'completion:Generate shell completions'
+    'version:Show version info'
+    'help:Show help'
+  )
+
+  _arguments '1:command:->command' '*::arg:->args'
+
+  case "$state" in
+    command)
+      _describe 'command' commands
+      ;;
+    args)
+      case "${words[1]}" in
+        daemon)
+          _values 'subcommand' install uninstall status logs restart stop
+          ;;
+        config)
+          _values 'subcommand' show get set init validate edit path
+          ;;
+        session)
+          _values 'subcommand' list show clear delete export
+          ;;
+        memory)
+          _values 'subcommand' list search get set delete export import compact stats
+          ;;
+        cron)
+          _values 'subcommand' list add remove enable disable run history
+          ;;
+        hooks)
+          _values 'subcommand' list add remove enable disable test
+          ;;
+        boot)
+          _values 'subcommand' run find status reset
+          ;;
+        security)
+          _values 'subcommand' pair-generate pair-verify tool-check elevated-check audit
+          ;;
+        message)
+          _values 'subcommand' send
+          ;;
+        completion)
+          _values 'shell' bash zsh
+          ;;
+      esac
+      ;;
+  esac
+}
+
+_bashclaw "$@"
+COMP
+}
+
+cmd_status() {
+  printf '=== BashClaw status ===\n'
+  printf 'Version:    %s\n' "$BASHCLAW_VERSION"
+  printf 'State dir:  %s\n' "$BASHCLAW_STATE_DIR"
+  local cfg_file
+  cfg_file="$(config_path)"
+  if [[ -f "$cfg_file" ]]; then
+    printf 'Config:     %s\n' "$cfg_file"
+  else
+    printf 'Config:     not found (run: bashclaw config init)\n'
+  fi
+
+  local gw_port
+  gw_port="$(config_get '.gateway.port' '18789')"
+  if ! is_port_available "$gw_port"; then
+    printf 'Gateway:    running (port %s)\n' "$gw_port"
+  else
+    printf 'Gateway:    stopped\n'
+  fi
+
+  local session_count=0
+  local session_dir="${BASHCLAW_STATE_DIR}/sessions"
+  if [[ -d "$session_dir" ]]; then
+    session_count="$(find "$session_dir" -name '*.jsonl' 2>/dev/null | wc -l | tr -d ' ')"
+  fi
+  printf 'Sessions:   %s\n' "$session_count"
+}
+
+cmd_doctor() {
+  local issues=0
+  printf '=== BashClaw doctor ===\n\n'
+
+  # Check required commands
+  local curl_available=false
+  local cmds=(bash jq curl)
+  for cmd in "${cmds[@]}"; do
+    if is_command_available "$cmd"; then
+      printf '[OK]   %s found: %s\n' "$cmd" "$(command -v "$cmd")"
+      [[ "$cmd" == "curl" ]] && curl_available=true
+    else
+      printf '[FAIL] %s not found\n' "$cmd"
+      issues=$((issues + 1))
+    fi
+  done
+
+  # wget fallback if curl is missing
+  if [[ "$curl_available" == "false" ]]; then
+    if is_command_available wget; then
+      printf '[INFO] wget found as potential fallback: %s\n' "$(command -v wget)"
+    else
+      printf '[WARN] Neither curl nor wget available\n'
+    fi
+  fi
+
+  # Check git
+  if is_command_available git; then
+    printf '[OK]   git found: %s\n' "$(command -v git)"
+  else
+    printf '[WARN] git not found (needed for git-based updates)\n'
+  fi
+
+  # Check gateway HTTP server capability
+  local http_server=""
+  if is_command_available socat; then
+    local socat_ver
+    socat_ver="$(socat -V 2>/dev/null | head -1 || printf 'unknown')"
+    printf '[OK]   socat found (gateway: concurrent HTTP) - %s\n' "$socat_ver"
+    http_server="socat"
+  elif is_command_available nc; then
+    printf '[OK]   nc found (gateway: serial HTTP via FIFO): %s\n' "$(command -v nc)"
+    http_server="nc"
+  elif is_command_available ncat; then
+    printf '[OK]   ncat found (gateway: serial HTTP): %s\n' "$(command -v ncat)"
+    http_server="ncat"
+  else
+    printf '[WARN] No HTTP server tool found (socat, nc, or ncat). Gateway will not serve HTTP.\n'
+    issues=$((issues + 1))
+  fi
+
+  # Check other optional commands
+  local opt_cmds=(python3 uuidgen)
+  for cmd in "${opt_cmds[@]}"; do
+    if is_command_available "$cmd"; then
+      printf '[OK]   %s found (optional)\n' "$cmd"
+    else
+      printf '[WARN] %s not found (optional)\n' "$cmd"
+    fi
+  done
+
+  # Check agent CLI engines
+  printf '\n  --- Engine Detection ---\n'
+  if is_command_available claude; then
+    local claude_ver
+    claude_ver="$(claude --version 2>/dev/null || printf 'unknown')"
+    printf '[OK]   Claude Code CLI: %s\n' "$claude_ver"
+  else
+    printf '[INFO] Claude Code CLI: not installed\n'
+  fi
+  if is_command_available codex; then
+    local codex_ver
+    codex_ver="$(codex --version 2>/dev/null || printf 'unknown')"
+    printf '[OK]   Codex CLI: %s\n' "$codex_ver"
+  else
+    printf '[INFO] Codex CLI: not installed\n'
+  fi
+
+  local default_engine
+  default_engine="$(config_get '.agents.defaults.engine' 'builtin')"
+  printf '[INFO] Default engine: %s\n' "$default_engine"
+  if [[ "$default_engine" == "auto" ]]; then
+    local detected
+    detected="$(engine_detect)"
+    printf '[INFO] Auto-detected: %s\n' "$detected"
+  fi
+
+  printf '\n'
+
+  # Check state directory
+  if [[ -d "$BASHCLAW_STATE_DIR" ]]; then
+    printf '[OK]   State dir exists: %s\n' "$BASHCLAW_STATE_DIR"
+  else
+    printf '[WARN] State dir missing: %s (run: bashclaw onboard)\n' "$BASHCLAW_STATE_DIR"
+  fi
+
+  # Check config
+  local cfg_path
+  cfg_path="$(config_path)"
+  if [[ -f "$cfg_path" ]]; then
+    printf '[OK]   Config found: %s\n' "$cfg_path"
+    if config_validate; then
+      printf '[OK]   Config is valid JSON\n'
+    else
+      printf '[FAIL] Config validation failed\n'
+      issues=$((issues + 1))
+    fi
+  else
+    printf '[WARN] No config file (run: bashclaw config init)\n'
+  fi
+
+  # Check .env file and API keys
+  local env_file="${BASHCLAW_STATE_DIR}/.env"
+  local env_has_key=false
+  if [[ -f "$env_file" ]]; then
+    printf '[OK]   .env file found: %s\n' "$env_file"
+    if grep -q 'ANTHROPIC_API_KEY\|OPENAI_API_KEY\|DEEPSEEK_API_KEY' "$env_file" 2>/dev/null; then
+      env_has_key=true
+      printf '[OK]   .env contains API key(s)\n'
+    else
+      printf '[WARN] .env exists but contains no API keys\n'
+    fi
+  else
+    printf '[WARN] No .env file found: %s\n' "$env_file"
+  fi
+
+  # Check API key in environment
+  if [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
+    printf '[OK]   ANTHROPIC_API_KEY is set\n'
+  else
+    printf '[WARN] ANTHROPIC_API_KEY not set\n'
+    if [[ "$env_has_key" == "true" ]]; then
+      printf '       Hint: .env has API keys. They are loaded automatically on command startup.\n'
+      printf '       For your current shell, run: source %s\n' "$env_file"
+    fi
+  fi
+
+  # Check disk space on state directory filesystem
+  if [[ -d "$BASHCLAW_STATE_DIR" ]]; then
+    local free_kb
+    free_kb="$(df -k "$BASHCLAW_STATE_DIR" 2>/dev/null | awk 'NR==2{print $4}')"
+    if [[ -n "$free_kb" && "$free_kb" =~ ^[0-9]+$ ]]; then
+      local free_mb=$((free_kb / 1024))
+      if (( free_mb >= 1024 )); then
+        local free_gb
+        free_gb="$(awk "BEGIN{printf \"%.1f\", $free_mb / 1024}")"
+        printf '[OK]   Disk: %sGB free\n' "$free_gb"
+      else
+        printf '[OK]   Disk: %dMB free\n' "$free_mb"
+      fi
+      if (( free_mb < 100 )); then
+        printf '[WARN] Low disk space on %s (less than 100MB free)\n' "$BASHCLAW_STATE_DIR"
+        issues=$((issues + 1))
+      fi
+    fi
+  fi
+
+  # Check file permissions on sensitive files
+  local cfg_perms env_perms
+  if [[ -f "$cfg_path" ]]; then
+    if [[ "$(uname)" == "Darwin" ]]; then
+      cfg_perms="$(stat -f '%Lp' "$cfg_path" 2>/dev/null)"
+    else
+      cfg_perms="$(stat -c '%a' "$cfg_path" 2>/dev/null)"
+    fi
+    if [[ -n "$cfg_perms" ]]; then
+      if [[ "$cfg_perms" == "600" ]]; then
+        printf '[OK]   Config permissions: %s\n' "$cfg_perms"
+      elif [[ "${cfg_perms: -1}" != "0" ]]; then
+        printf '[WARN] Config file is world-readable (mode %s, expected 600): %s\n' "$cfg_perms" "$cfg_path"
+        issues=$((issues + 1))
+      else
+        printf '[OK]   Config permissions: %s\n' "$cfg_perms"
+      fi
+    fi
+  fi
+  if [[ -f "$env_file" ]]; then
+    if [[ "$(uname)" == "Darwin" ]]; then
+      env_perms="$(stat -f '%Lp' "$env_file" 2>/dev/null)"
+    else
+      env_perms="$(stat -c '%a' "$env_file" 2>/dev/null)"
+    fi
+    if [[ -n "$env_perms" ]]; then
+      if [[ "$env_perms" == "600" ]]; then
+        printf '[OK]   .env permissions: %s\n' "$env_perms"
+      elif [[ "${env_perms: -1}" != "0" ]]; then
+        printf '[WARN] .env file is world-readable (mode %s, expected 600): %s\n' "$env_perms" "$env_file"
+        issues=$((issues + 1))
+      else
+        printf '[OK]   .env permissions: %s\n' "$env_perms"
+      fi
+    fi
+  fi
+
+  printf '\n'
+  if (( issues > 0 )); then
+    printf 'Found %d issue(s)\n' "$issues"
+    return 1
+  else
+    printf 'All checks passed\n'
+    return 0
+  fi
+}
+
+cmd_boot() {
+  local subcmd="${1:-status}"
+  shift || true
+
+  case "$subcmd" in
+    run)
+      local agent_id="${1:-main}"
+      boot_auto "$agent_id"
+      ;;
+    find)
+      local agent_id="${1:-main}"
+      local found
+      found="$(boot_find "$agent_id" 2>/dev/null)" && {
+        printf 'BOOT.md found: %s\n' "$found"
+      } || {
+        printf 'No BOOT.md found for agent: %s\n' "$agent_id"
+      }
+      ;;
+    status)
+      local agent_id="${1:-}"
+      boot_status "$agent_id"
+      ;;
+    reset)
+      local agent_id="${1:-}"
+      boot_reset "$agent_id"
+      ;;
+    *)
+      printf 'Usage: bashclaw boot <run|find|status|reset> [agent_id]\n'
+      ;;
+  esac
+}
+
+cmd_security() {
+  local subcmd="${1:-}"
+  shift || true
+
+  case "$subcmd" in
+    pair-generate)
+      local channel="${1:?channel required}"
+      local sender="${2:?sender required}"
+      local code
+      code="$(security_pairing_code_generate "$channel" "$sender")"
+      printf 'Pairing code: %s\n' "$code"
+      ;;
+    pair-verify)
+      local channel="${1:?channel required}"
+      local sender="${2:?sender required}"
+      local code="${3:?code required}"
+      if security_pairing_code_verify "$channel" "$sender" "$code"; then
+        printf 'Pairing verified.\n'
+      else
+        printf 'Pairing failed.\n'
+        return 1
+      fi
+      ;;
+    tool-check)
+      local agent_id="${1:?agent_id required}"
+      local tool_name="${2:?tool_name required}"
+      local session_type="${3:-main}"
+      if security_tool_policy_check "$agent_id" "$tool_name" "$session_type"; then
+        printf 'Tool allowed: %s for agent %s (session: %s)\n' "$tool_name" "$agent_id" "$session_type"
+      else
+        printf 'Tool denied: %s for agent %s (session: %s)\n' "$tool_name" "$agent_id" "$session_type"
+        return 1
+      fi
+      ;;
+    elevated-check)
+      local tool_name="${1:?tool_name required}"
+      local sender="${2:-}"
+      local channel="${3:-}"
+      local result
+      result="$(security_elevated_check "$tool_name" "$sender" "$channel")"
+      printf '%s\n' "$result"
+      ;;
+    audit)
+      local audit_file="${BASHCLAW_STATE_DIR}/logs/audit.jsonl"
+      if [[ -f "$audit_file" ]]; then
+        local lines="${1:-20}"
+        tail -n "$lines" "$audit_file"
+      else
+        printf 'No audit log found.\n'
+      fi
+      ;;
+    *)
+      printf 'Usage: bashclaw security <pair-generate|pair-verify|tool-check|elevated-check|audit> [args]\n'
+      ;;
+  esac
+}
+
+cmd_selftest() {
+  local test_script="${BASHCLAW_ROOT}/tests/run_all.sh"
+  if [[ ! -f "$test_script" ]]; then
+    log_error "Test suite not found: $test_script"
+    return 1
+  fi
+  bash "$test_script" --unit "$@"
+}
+
+# Direct tool invocation CLI - allows agent CLIs to call BashClaw tools via Bash tool.
+# Supports both flag-style and raw JSON input:
+#   bashclaw tool memory --action get --key notes
+#   bashclaw tool memory '{"action":"get","key":"notes"}'
+cmd_tool() {
+  local tool_name="${1:-}"
+  shift || true
+
+  if [[ -z "$tool_name" ]]; then
+    printf 'Usage: bashclaw tool <tool_name> [--param value ...]\n\n'
+    printf 'Examples:\n'
+    printf '  bashclaw tool memory --action get --key notes\n'
+    printf '  bashclaw tool memory --action set --key notes --value "hello world"\n'
+    printf '  bashclaw tool cron --action list\n'
+    printf '  bashclaw tool spawn --task "research topic" --label research\n\n'
+    printf 'Available tools:\n'
+    local t
+    for t in $(_tool_list); do
+      printf '  %s\n' "$t"
+    done
+    return 1
+  fi
+
+  # Validate tool exists
+  local handler
+  handler="$(_tool_handler "$tool_name")"
+  if [[ -z "$handler" ]]; then
+    printf '{"error":"unknown tool: %s"}\n' "$tool_name" >&2
+    return 1
+  fi
+
+  # Load config if available
+  local cfg_file
+  cfg_file="$(config_path 2>/dev/null)"
+  if [[ -f "$cfg_file" ]]; then
+    _CONFIG_CACHE=""
+    config_load 2>/dev/null || true
+  fi
+
+  # Build tool_input: if first arg starts with '{', treat as raw JSON; otherwise parse --key value flags
+  local tool_input="{}"
+  if [[ $# -gt 0 ]]; then
+    if [[ "${1:0:1}" == "{" ]]; then
+      tool_input="$1"
+    else
+      tool_input="$(_tool_parse_flags "$@")"
+    fi
+  fi
+
+  # Fire pre_tool hook
+  if declare -f hooks_run &>/dev/null; then
+    local hook_data
+    hook_data="$(jq -nc --arg tn "$tool_name" --arg ti "$tool_input" \
+      '{tool_name: $tn, tool_input: $ti}' 2>/dev/null)" || hook_data="{}"
+    hook_data="$(hooks_run "pre_tool" "$hook_data" 2>/dev/null)" || true
+    local modified_input
+    modified_input="$(printf '%s' "$hook_data" | jq -r '.tool_input // empty' 2>/dev/null)"
+    if [[ -n "$modified_input" && "$modified_input" != "null" ]]; then
+      tool_input="$modified_input"
+    fi
+  fi
+
+  local result
+  result="$(tool_execute "$tool_name" "$tool_input")"
+  local rc=$?
+
+  # Fire post_tool hook
+  if declare -f hooks_run &>/dev/null; then
+    hooks_run "post_tool" "$(jq -nc --arg tn "$tool_name" --arg res "${result:0:500}" \
+      '{tool_name: $tn, result: $res}' 2>/dev/null)" 2>/dev/null || true
+  fi
+
+  printf '%s' "$result"
+  return $rc
+}
+
+# Parse --key value pairs into JSON object
+_tool_parse_flags() {
+  local json_parts=()
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --*)
+        local key="${1#--}"
+        if [[ $# -lt 2 ]]; then
+          # Flag with no value, treat as true
+          json_parts+=("$(printf '"%s":true' "$key")")
+          shift
+        else
+          local val="$2"
+          # Auto-detect type: number, boolean, or string
+          if [[ "$val" =~ ^-?[0-9]+$ ]]; then
+            json_parts+=("$(printf '"%s":%s' "$key" "$val")")
+          elif [[ "$val" == "true" || "$val" == "false" ]]; then
+            json_parts+=("$(printf '"%s":%s' "$key" "$val")")
+          else
+            local escaped
+            escaped="$(printf '%s' "$val" | jq -Rs '.' 2>/dev/null)" || escaped="\"$val\""
+            json_parts+=("$(printf '"%s":%s' "$key" "$escaped")")
+          fi
+          shift 2
+        fi
+        ;;
+      *)
+        shift
+        ;;
+    esac
+  done
+
+  local IFS=','
+  printf '{%s}' "${json_parts[*]}"
+}
+
+# MCP server mode - exposes all BashClaw tools as MCP server via stdio
+# Usage: bashclaw hooks-bridge <event_type>
+# Called by Claude Code CLI as hook command. Bridges Claude Code hook events
+# to BashClaw's hook system. Reads hook JSON from stdin, outputs JSON to stdout.
+# Exit code 0 = proceed, 2 = block.
+cmd_hooks_bridge() {
+  local event_type="${1:-}"
+  if [[ -z "$event_type" ]]; then
+    printf '{}' >&2
+    return 0
+  fi
+
+  # Load config
+  local cfg_file
+  cfg_file="$(config_path 2>/dev/null)"
+  if [[ -f "$cfg_file" ]]; then
+    _CONFIG_CACHE=""
+    config_load 2>/dev/null || true
+  fi
+
+  # Read Claude Code hook JSON from stdin
+  local input=""
+  if [[ ! -t 0 ]]; then
+    input="$(cat)"
+  fi
+  if [[ -z "$input" ]]; then
+    input="{}"
+  fi
+
+  case "$event_type" in
+    pre_compact)
+      _hooks_bridge_pre_compact "$input"
+      ;;
+    post_tool_use)
+      _hooks_bridge_post_tool_use "$input"
+      ;;
+    *)
+      printf '{}'
+      ;;
+  esac
+}
+
+# PreCompact: flush memory to disk before Claude CLI compacts context
+_hooks_bridge_pre_compact() {
+  local input="$1"
+
+  # Fire BashClaw's before_compaction hook
+  if declare -f hooks_run &>/dev/null; then
+    hooks_run "before_compaction" "$input" 2>/dev/null || true
+  fi
+
+  # Trigger memory flush if memory tool is available
+  if declare -f tool_memory &>/dev/null; then
+    local today
+    today="$(date '+%Y-%m-%d')"
+    local flush_keys
+    flush_keys="$(tool_memory '{"action":"list"}' 2>/dev/null)" || true
+    if [[ -n "$flush_keys" ]]; then
+      log_info "hooks_bridge: pre_compact memory flush triggered"
+    fi
+  fi
+
+  # Return additionalContext to tell Claude to save important info
+  local additional="Context is about to be compacted. If you have important intermediate state or findings, save them to memory now using bashclaw tool memory --action set before they are lost."
+  printf '{"hookSpecificOutput":{"hookEventName":"PreCompact","additionalContext":"%s"}}' "$additional"
+}
+
+# PostToolUse: inject reflection prompt after tool execution
+_hooks_bridge_post_tool_use() {
+  local input="$1"
+
+  # Fire BashClaw's post_tool hook (for Claude CLI native tools: Read, Write, Bash, etc.)
+  local tool_name
+  tool_name="$(printf '%s' "$input" | jq -r '.tool_name // empty' 2>/dev/null)"
+  if [[ -n "$tool_name" ]] && declare -f hooks_run &>/dev/null; then
+    local tool_response
+    tool_response="$(printf '%s' "$input" | jq -r '.tool_response // empty' 2>/dev/null)"
+    hooks_run "post_tool" "$(jq -nc --arg tn "$tool_name" --arg res "${tool_response:0:500}" \
+      '{tool_name: $tn, result: $res}' 2>/dev/null)" 2>/dev/null || true
+  fi
+
+  # Check if reflection prompts are enabled
+  local reflection_disabled
+  reflection_disabled="$(config_get '.agents.defaults.reflectionPrompt' '' 2>/dev/null)"
+  if [[ "$reflection_disabled" == "false" ]]; then
+    printf '{}'
+    return
+  fi
+
+  # Get custom or default reflection prompt
+  local reflection
+  reflection="$(config_get '.agents.defaults.reflectionPrompt' '')"
+  if [[ -z "$reflection" ]]; then
+    reflection="Analyze the tool result. If the task is complete, provide a final response. If not, decide the next action."
+  fi
+
+  # Escape for JSON
+  local escaped_reflection
+  escaped_reflection="$(printf '%s' "$reflection" | jq -Rs '.' 2>/dev/null)"
+  # Remove surrounding quotes from jq output
+  escaped_reflection="${escaped_reflection:1:${#escaped_reflection}-2}"
+
+  printf '{"hookSpecificOutput":{"hookEventName":"PostToolUse","additionalContext":"%s"}}' "$escaped_reflection"
+}
+
+# Usage: bashclaw mcp-serve
+cmd_mcp_serve() {
+  local mcp_server="${BASHCLAW_ROOT}/mcp/server.sh"
+  if [[ ! -f "$mcp_server" ]]; then
+    log_error "MCP server not found: $mcp_server"
+    return 1
+  fi
+
+  # Load config
+  local cfg_file
+  cfg_file="$(config_path 2>/dev/null)"
+  if [[ -f "$cfg_file" ]]; then
+    export BASHCLAW_CONFIG="$cfg_file"
+  fi
+
+  exec bash "$mcp_server"
+}
+
+_suggest_command() {
+  local input="$1"
+  local known_cmds="agent message msg config cfg session sess memory mem doctor gateway daemon cron hook security sec plugin skill onboard setup status selftest tool mcp-serve hooks-bridge version help update"
+  local best_match=""
+
+  if [[ "${#input}" -lt 2 ]]; then
+    return
+  fi
+
+  # Check prefix match: input is a prefix of a known command
+  for cmd in $known_cmds; do
+    if [[ "$cmd" == "${input}"* ]]; then
+      best_match="$cmd"
+      break
+    fi
+  done
+
+  # Check reverse: known command is a prefix of input
+  if [[ -z "$best_match" ]]; then
+    for cmd in $known_cmds; do
+      if [[ "${input}" == "${cmd}"* ]]; then
+        best_match="$cmd"
+        break
+      fi
+    done
+  fi
+
+  # Check shared first 2+ characters and length difference <= 2
+  if [[ -z "$best_match" ]]; then
+    local input_prefix="${input:0:2}"
+    for cmd in $known_cmds; do
+      local cmd_prefix="${cmd:0:2}"
+      if [[ "$input_prefix" == "$cmd_prefix" ]]; then
+        local len_diff=$(( ${#input} - ${#cmd} ))
+        if [[ "$len_diff" -lt 0 ]]; then
+          len_diff=$(( -len_diff ))
+        fi
+        if [[ "$len_diff" -le 2 ]]; then
+          best_match="$cmd"
+          break
+        fi
+      fi
+    done
+  fi
+
+  if [[ -n "$best_match" ]]; then
+    printf 'Did you mean: bashclaw %s?\n\n' "$best_match" >&2
+  fi
+}
+
+# Route to sub-commands
+main() {
+  local cmd="${1:-}"
+  shift || true
+
+  # Initialize state directories and load environment
+  ensure_state_dir
+  _load_env
+
+  case "$cmd" in
+    agent)
+      cmd_agent "$@"
+      ;;
+    gateway)
+      cmd_gateway "$@"
+      ;;
+    daemon)
+      cmd_daemon "$@"
+      ;;
+    message|msg)
+      cmd_message "$@"
+      ;;
+    config|cfg)
+      cmd_config "$@"
+      ;;
+    session|sess)
+      cmd_session "$@"
+      ;;
+    memory|mem)
+      cmd_memory "$@"
+      ;;
+    cron)
+      cmd_cron "$@"
+      ;;
+    hooks)
+      cmd_hooks "$@"
+      ;;
+    boot)
+      cmd_boot "$@"
+      ;;
+    security|sec)
+      cmd_security "$@"
+      ;;
+    onboard|setup)
+      cmd_onboard "$@"
+      ;;
+    status)
+      cmd_status
+      ;;
+    doctor)
+      cmd_doctor
+      ;;
+    selftest)
+      cmd_selftest "$@"
+      ;;
+    tool)
+      cmd_tool "$@"
+      ;;
+    mcp-serve)
+      cmd_mcp_serve
+      ;;
+    hooks-bridge)
+      cmd_hooks_bridge "$@"
+      ;;
+    update)
+      cmd_update
+      ;;
+    completion)
+      cmd_completion "$@"
+      ;;
+    version|-v|--version)
+      cmd_version
+      ;;
+    help|-h|--help|"")
+      usage
+      ;;
+    *)
+      log_error "Unknown command: $cmd"
+      _suggest_command "$cmd"
+      usage
+      exit 1
+      ;;
+  esac
+}
+
+main "$@"

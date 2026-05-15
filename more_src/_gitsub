@@ -1,0 +1,829 @@
+# Source: https://github.com/5nik7/gitsub/blob/da821d2211ab26c892bce13a828b8bc486b9537c/gitsub
+# Repository: 5nik7/gitsub (gitsub)
+#!/usr/bin/env bash
+
+set -u
+
+canon_dir() {
+	(
+		cd "$1" 2>/dev/null && pwd -P
+	)
+}
+
+usage() {
+	cat <<'EOF'
+Usage: gitsub [options] [path]
+
+Check whether the current directory, or an optional provided path, is inside a
+Git repository that is a submodule of one or more parent Git repositories
+located higher on the same filesystem path.
+
+This version walks the full upward path, discovers every Git repository root
+on that path, and verifies adjacent parent/child submodule relationships.
+That makes nested submodule chains work correctly.
+
+Arguments:
+  path
+      Optional path to inspect. Defaults to the current working directory.
+
+Options:
+  -q, --quiet
+      Print nothing; use exit status only
+
+  -e, --exists-only
+      Same as --quiet; useful for scripting
+
+  --status
+      Print explicit status text:
+        submodule
+        not-submodule
+
+  -r, --raw
+      Print raw absolute paths instead of replacing $HOME with ~
+
+  -p, --parent
+      Print the immediate parent repository root
+
+  -o, --outermost, --toplevel
+      Print the outermost parent repository root in the verified submodule chain
+
+  --chain
+      Print the verified repository chain from outermost parent to current repo,
+      one repository root per line
+
+  -a, --array
+      Print the verified repository chain as a shell array literal
+
+  --chain-paths
+      Print the verified relative submodule path for each chain hop,
+      one path per line
+
+  -s, --path
+      Print the submodule path relative to the reference selected by
+      --relative-to (default: parent)
+
+  --path-parent
+      Print the path relative to the immediate parent repository
+
+  -O, --path-outermost
+      Print the path relative to the outermost parent repository
+
+  --relative-to parent|outermost|current
+      Select how --path and %S are resolved (default: parent)
+
+  -c, --current
+      Print the current submodule repository root
+
+  --parent-dirname
+      Print the dirname of the outermost parent repository root
+
+  --parent-basename
+      Print the basename of the outermost parent repository root
+
+  --submodule-prefix
+      Print the path from the outermost parent repository root to, but not
+      including, the current submodule repository root basename
+
+  --submodule-basename
+      Print the basename of the current submodule repository root
+
+  --cwd-prefix
+      Print the path from the current submodule repository root to the
+      inspected path (equivalent to git rev-parse --show-prefix with trailing
+      slash removed)
+
+  -j, --json
+      Print JSON output
+
+  -f, --format FORMAT
+      Print custom formatted output using tokens:
+
+        %P  immediate parent repository root
+        %O  outermost parent repository root
+        %S  path relative to reference selected by --relative-to
+        %T  path relative to outermost parent repository
+        %C  current submodule repository root
+        %D  dirname of outermost parent repository root
+        %M  basename of outermost parent repository root
+        %G  path from outermost parent root to, but not including,
+            the submodule root basename
+        %B  basename of current submodule repository root
+        %W  path from current submodule root to inspected path
+        %L  verified repo chain length
+        %%  literal percent sign
+
+  --completion bash|zsh
+      Print completion script for the selected shell
+
+  -h, --help
+      Show this help message
+
+Default output:
+  yes   if the current repo is part of a verified submodule chain
+  no    otherwise
+
+Exit codes:
+  0  current repo is part of a verified submodule chain
+  1  current repo is not part of a verified submodule chain
+  2  not inside a git repository / usage error
+EOF
+}
+
+print_bash_completion() {
+	cat <<'EOF'
+_gitsub() {
+	local cur prev
+	cur="${COMP_WORDS[COMP_CWORD]}"
+	prev="${COMP_WORDS[COMP_CWORD-1]}"
+
+	local opts=(
+		-q --quiet
+		-e --exists-only
+		--status
+		-r --raw
+		-p --parent
+		-o --outermost
+		--toplevel
+		--chain
+		-a --array
+		--chain-paths
+		-s --path
+		--path-parent
+		-O --path-outermost
+		--relative-to
+		-c --current
+		--parent-dirname
+		--parent-basename
+		--submodule-prefix
+		--submodule-basename
+		--cwd-prefix
+		-j --json
+		-f --format
+		--completion
+		-h --help
+	)
+
+	case "$prev" in
+		--relative-to)
+			COMPREPLY=( $(compgen -W "parent outermost current" -- "$cur") )
+			return 0
+			;;
+		--completion)
+			COMPREPLY=( $(compgen -W "bash zsh" -- "$cur") )
+			return 0
+			;;
+		-f|--format)
+			COMPREPLY=()
+			return 0
+			;;
+	esac
+
+	if [[ "$cur" == -* ]]; then
+		COMPREPLY=( $(compgen -W "${opts[*]}" -- "$cur") )
+		return 0
+	fi
+
+	COMPREPLY=()
+}
+
+complete -F _gitsub gitsub
+EOF
+}
+
+print_zsh_completion() {
+	cat <<'EOF'
+#compdef gitsub
+
+_gitsub() {
+	local -a opts
+	opts=(
+		'-q[Print nothing; use exit status only]'
+		'--quiet[Print nothing; use exit status only]'
+		'-e[Same as --quiet; useful for scripting]'
+		'--exists-only[Same as --quiet; useful for scripting]'
+		'--status[Print explicit status text]'
+		'-r[Print raw absolute paths instead of replacing $HOME with ~]'
+		'--raw[Print raw absolute paths instead of replacing $HOME with ~]'
+		'-p[Print the immediate parent repository root]'
+		'--parent[Print the immediate parent repository root]'
+		'-o[Print the outermost parent repository root]'
+		'--outermost[Print the outermost parent repository root]'
+		'--toplevel[Alias for --outermost]'
+		'--chain[Print verified repository chain]'
+		'-a[Print verified repository chain as a shell array literal]'
+		'--array[Print verified repository chain as a shell array literal]'
+		'--chain-paths[Print verified chain hop paths]'
+		'-s[Print path according to --relative-to]'
+		'--path[Print path according to --relative-to]'
+		'--path-parent[Print the path relative to the immediate parent repository]'
+		'-O[Print the path relative to the outermost parent repository]'
+		'--path-outermost[Print the path relative to the outermost parent repository]'
+		'--relative-to[Select how --path and %S are resolved]:reference:(parent outermost current)'
+		'-c[Print the current submodule repository root]'
+		'--current[Print the current submodule repository root]'
+		'--parent-dirname[Print dirname of outermost parent repository root]'
+		'--parent-basename[Print basename of outermost parent repository root]'
+		'--submodule-prefix[Print path to but not including submodule basename]'
+		'--submodule-basename[Print basename of current submodule repository root]'
+		'--cwd-prefix[Print path from submodule root to inspected path]'
+		'-j[Print JSON output]'
+		'--json[Print JSON output]'
+		'-f[Print custom formatted output]:format string: '
+		'--format[Print custom formatted output]:format string: '
+		'--completion[Print completion script]:shell:(bash zsh)'
+		'-h[Show help message]'
+		'--help[Show help message]'
+		'*:path:_files'
+	)
+
+	_arguments -s $opts
+}
+
+_gitsub "$@"
+EOF
+}
+
+quiet=0
+status_mode=0
+raw=0
+print_parent=0
+print_outermost=0
+print_chain=0
+print_array=0
+print_chain_paths=0
+print_path=0
+print_path_outermost=0
+print_current=0
+print_parent_dirname=0
+print_parent_basename=0
+print_submodule_prefix=0
+print_submodule_basename=0
+print_cwd_prefix=0
+json=0
+format=''
+relative_to='parent'
+completion_shell=''
+target_path=''
+
+while [[ $# -gt 0 ]]; do
+	case "$1" in
+		-q|--quiet|-e|--exists-only)
+			quiet=1
+			;;
+		--status)
+			status_mode=1
+			;;
+		-r|--raw)
+			raw=1
+			;;
+		-p|--parent)
+			print_parent=1
+			;;
+		-o|--outermost|--toplevel)
+			print_outermost=1
+			;;
+		--chain)
+			print_chain=1
+			;;
+		-a|--array)
+			print_array=1
+			;;
+		--chain-paths)
+			print_chain_paths=1
+			;;
+		-s|--path)
+			print_path=1
+			;;
+		--path-parent)
+			print_path=1
+			relative_to='parent'
+			;;
+		-O|--path-outermost)
+			print_path_outermost=1
+			;;
+		--relative-to)
+			shift
+			if [[ $# -eq 0 ]]; then
+				printf 'Error: --relative-to requires an argument\n' >&2
+				usage >&2
+				exit 2
+			fi
+			case "$1" in
+				parent|outermost|current)
+					relative_to=$1
+					;;
+				*)
+					printf 'Error: invalid --relative-to value: %s\n' "$1" >&2
+					usage >&2
+					exit 2
+					;;
+			esac
+			;;
+		-c|--current)
+			print_current=1
+			;;
+		--parent-dirname)
+			print_parent_dirname=1
+			;;
+		--parent-basename)
+			print_parent_basename=1
+			;;
+		--submodule-prefix)
+			print_submodule_prefix=1
+			;;
+		--submodule-basename)
+			print_submodule_basename=1
+			;;
+		--cwd-prefix)
+			print_cwd_prefix=1
+			;;
+		-j|--json)
+			json=1
+			;;
+		-f|--format)
+			shift
+			if [[ $# -eq 0 ]]; then
+				printf 'Error: --format requires an argument\n' >&2
+				usage >&2
+				exit 2
+			fi
+			format=$1
+			;;
+		--completion)
+			shift
+			if [[ $# -eq 0 ]]; then
+				printf 'Error: --completion requires an argument (bash|zsh)\n' >&2
+				usage >&2
+				exit 2
+			fi
+			case "$1" in
+				bash|zsh)
+					completion_shell=$1
+					;;
+				*)
+					printf 'Error: invalid --completion value: %s\n' "$1" >&2
+					usage >&2
+					exit 2
+					;;
+			esac
+			;;
+		-h|--help)
+			usage
+			exit 0
+			;;
+		--)
+			shift
+			break
+			;;
+		-*)
+			printf 'Error: unknown option: %s\n' "$1" >&2
+			usage >&2
+			exit 2
+			;;
+		*)
+			if [[ -z "$target_path" ]]; then
+				target_path=$1
+			else
+				printf 'Error: unexpected argument: %s\n' "$1" >&2
+				usage >&2
+				exit 2
+			fi
+			;;
+	esac
+	shift
+done
+
+if [[ -n "$completion_shell" ]]; then
+	case "$completion_shell" in
+		bash) print_bash_completion ;;
+		zsh)  print_zsh_completion ;;
+	esac
+	exit 0
+fi
+
+if [[ -z "$target_path" ]]; then
+	target_path='.'
+fi
+
+if ! inspect_dir=$(canon_dir "$target_path"); then
+	(( quiet )) || printf 'Error: invalid path: %s\n' "$target_path" >&2
+	exit 2
+fi
+
+basename_sh() {
+	local s=$1
+	s=${s%/}
+	printf '%s\n' "${s##*/}"
+}
+
+dirname_sh() {
+	local s=$1
+	s=${s%/}
+	case "$s" in
+		/)
+			printf '/\n'
+			;;
+		*/*)
+			printf '%s\n' "${s%/*}"
+			;;
+		*)
+			printf '.\n'
+			;;
+	esac
+}
+
+path_display() {
+	local p=$1
+	if (( raw )); then
+		printf '%s\n' "$p"
+	else
+		case "$p" in
+			"$HOME")
+				printf '~\n'
+				;;
+			"$HOME"/*)
+				printf '~/%s\n' "${p#"$HOME"/}"
+				;;
+			*)
+				printf '%s\n' "$p"
+				;;
+		esac
+	fi
+}
+
+json_escape() {
+	local s=$1
+	s=${s//\\/\\\\}
+	s=${s//\"/\\\"}
+	s=${s//$'\n'/\\n}
+	s=${s//$'\r'/\\r}
+	s=${s//$'\t'/\\t}
+	printf '%s' "$s"
+}
+
+path_from_base() {
+	local base=$1
+	local target=$2
+
+	case "$target" in
+		"$base")
+			printf '.\n'
+			;;
+		"$base"/*)
+			printf '%s\n' "${target#"$base"/}"
+			;;
+		*)
+			return 1
+			;;
+	esac
+}
+
+show_prefix_from_root() {
+	local root=$1
+	local cwd=$2
+	local p
+
+	p=$(path_from_base "$root" "$cwd") || return 1
+	if [[ "$p" == "." ]]; then
+		printf '\n'
+	else
+		printf '%s\n' "$p"
+	fi
+}
+
+print_shell_array() {
+	local name=$1
+	shift
+	local item
+
+	printf '%s=(\n' "$name"
+	for item in "$@"; do
+		item=${item//\\/\\\\}
+		item=${item//\"/\\\"}
+		printf '  "%s"\n' "$item"
+	done
+	printf ')\n'
+}
+
+is_submodule_edge() {
+	local parent_repo=$1
+	local child_repo=$2
+	local rel_path
+
+	case "$child_repo" in
+		"$parent_repo"/*)
+			rel_path=${child_repo#"$parent_repo"/}
+			;;
+		*)
+			return 1
+			;;
+	esac
+
+	if git -C "$parent_repo" config -f .gitmodules --get-regexp '^submodule\..*\.path$' 2>/dev/null \
+		| awk '{print $2}' \
+		| grep -Fx -- "$rel_path" >/dev/null 2>&1; then
+		printf '%s\n' "$rel_path"
+		return 0
+	fi
+
+	if git -C "$parent_repo" ls-files --stage -- "$rel_path" 2>/dev/null \
+		| awk '$1 == "160000" { found=1 } END { exit(found ? 0 : 1) }'; then
+		printf '%s\n' "$rel_path"
+		return 0
+	fi
+
+	return 1
+}
+
+discover_repo_roots_on_path() {
+	local search_dir
+	local repo_root
+	local roots_rev=''
+	local roots=''
+
+	repo_root=$current_root
+	roots_rev=$repo_root
+
+	search_dir=$(dirname "$current_root")
+	while [[ "$search_dir" != "/" && -n "$search_dir" ]]; do
+		if repo_root=$(git -C "$search_dir" rev-parse --show-toplevel 2>/dev/null); then
+			repo_root=$(canon_dir "$repo_root") || return 1
+			if [[ "$repo_root" != "$current_root" ]]; then
+				case "$current_root" in
+					"$repo_root"/*)
+						case "
+$roots_rev
+" in
+							*"
+$repo_root
+"*) ;;
+							*) roots_rev="$roots_rev
+$repo_root" ;;
+						esac
+						;;
+				esac
+			fi
+		fi
+		search_dir=$(dirname "$search_dir")
+	done
+
+	while IFS= read -r line; do
+		[[ -z "$line" ]] && continue
+		roots="$line
+$roots"
+	done <<EOF
+$roots_rev
+EOF
+
+	printf '%s' "$roots"
+}
+
+build_verified_chain() {
+	local roots_data root_count i
+	local -a roots
+	local -a edge_paths
+
+	roots_data=$(discover_repo_roots_on_path) || return 1
+	while IFS= read -r line; do
+		[[ -z "$line" ]] && continue
+		roots+=("$line")
+	done <<EOF
+$roots_data
+EOF
+
+	root_count=${#roots[@]}
+	(( root_count >= 2 )) || return 1
+
+	for (( i=0; i<root_count-1; i++ )); do
+		if ! edge_paths[i]=$(is_submodule_edge "${roots[i]}" "${roots[i+1]}"); then
+			return 1
+		fi
+	done
+
+	printf '%s\n' "${roots[0]}"
+	printf '%s\n' "${roots[root_count-2]}"
+	printf '%s\n' "${roots[root_count-1]}"
+	printf '%s\n' "${edge_paths[0]}"
+	printf '%s\n' "${edge_paths[root_count-2]}"
+	for (( i=0; i<root_count-1; i++ )); do
+		printf '%s\t%s\n' "${roots[i]}" "${edge_paths[i]}"
+	done
+	printf '%s\t\n' "${roots[root_count-1]}"
+}
+
+format_output() {
+	local fmt=$1
+	local out=
+	local i ch next
+	local len=${#fmt}
+
+	for (( i=0; i<len; i++ )); do
+		ch=${fmt:i:1}
+		if [[ "$ch" == "%" && $((i + 1)) -lt $len ]]; then
+			next=${fmt:i+1:1}
+			case "$next" in
+				P) out+=$parent_repo_disp; ((i++)) ;;
+				O) out+=$outermost_repo_disp; ((i++)) ;;
+				S) out+=$selected_path; ((i++)) ;;
+				T) out+=$outermost_path; ((i++)) ;;
+				C) out+=$current_root_disp; ((i++)) ;;
+				D) out+=$parent_dirname_disp; ((i++)) ;;
+				M) out+=$parent_basename; ((i++)) ;;
+				G) out+=$submodule_prefix; ((i++)) ;;
+				B) out+=$submodule_basename; ((i++)) ;;
+				W) out+=$cwd_prefix; ((i++)) ;;
+				L) out+=$chain_length; ((i++)) ;;
+				%) out+='%'; ((i++)) ;;
+				*)
+					out+="$ch$next"
+					((i++))
+					;;
+			esac
+		else
+			out+="$ch"
+		fi
+	done
+
+	printf '%s\n' "$out"
+}
+
+if ! current_root=$(git -C "$inspect_dir" rev-parse --show-toplevel 2>/dev/null); then
+	(( quiet )) || printf 'Not inside a git repository: %s\n' "$inspect_dir" >&2
+	exit 2
+fi
+
+current_root=$(canon_dir "$current_root") || exit 2
+current_pwd=$inspect_dir
+
+if chain_result=$(build_verified_chain); then
+	outermost_repo=$(printf '%s\n' "$chain_result" | sed -n '1p')
+	parent_repo=$(printf '%s\n' "$chain_result" | sed -n '2p')
+	current_root=$(printf '%s\n' "$chain_result" | sed -n '3p')
+	outermost_path=$(printf '%s\n' "$chain_result" | sed -n '4p')
+	parent_path=$(printf '%s\n' "$chain_result" | sed -n '5p')
+	chain_rows=$(printf '%s\n' "$chain_result" | sed -n '6,$p')
+
+	cwd_prefix=$(show_prefix_from_root "$current_root" "$current_pwd") || exit 1
+
+	case "$relative_to" in
+		parent)
+			selected_path=$parent_path
+			;;
+		outermost)
+			selected_path=$outermost_path
+			;;
+		current)
+			selected_path='.'
+			;;
+	esac
+
+	parent_dirname=$(dirname_sh "$outermost_repo")
+	parent_basename=$(basename_sh "$outermost_repo")
+	submodule_basename=$(basename_sh "$current_root")
+
+	case "$outermost_path" in
+		.)
+			submodule_prefix='.'
+			;;
+		"$submodule_basename")
+			submodule_prefix='.'
+			;;
+		*/"$submodule_basename")
+			submodule_prefix=${outermost_path%/"$submodule_basename"}
+			;;
+		*)
+			submodule_prefix='.'
+			;;
+	esac
+
+	current_root_disp=$(path_display "$current_root")
+	parent_repo_disp=$(path_display "$parent_repo")
+	outermost_repo_disp=$(path_display "$outermost_repo")
+	parent_dirname_disp=$(path_display "$parent_dirname")
+
+	chain_repos=''
+	chain_paths=''
+	chain_length=0
+	chain_array=()
+	while IFS=$'\t' read -r repo edge; do
+		[[ -z "$repo" ]] && continue
+		chain_length=$((chain_length + 1))
+		repo_disp=$(path_display "$repo")
+		chain_repos="${chain_repos}${repo_disp}
+"
+		chain_array+=("$repo_disp")
+		if [[ -n "$edge" ]]; then
+			chain_paths="${chain_paths}${edge}
+"
+		fi
+	done <<EOF
+$chain_rows
+EOF
+
+	chain_repos=${chain_repos%$'\n'}
+	chain_paths=${chain_paths%$'\n'}
+
+	if (( quiet )); then
+		exit 0
+	fi
+
+	if (( json )); then
+		printf '{\n'
+		printf '  "is_submodule": true,\n'
+		printf '  "inspected_path": "%s",\n' "$(json_escape "$(path_display "$current_pwd")")"
+		printf '  "current": "%s",\n' "$(json_escape "$current_root_disp")"
+		printf '  "parent": "%s",\n' "$(json_escape "$parent_repo_disp")"
+		printf '  "outermost": "%s",\n' "$(json_escape "$outermost_repo_disp")"
+		printf '  "parent_dirname": "%s",\n' "$(json_escape "$parent_dirname_disp")"
+		printf '  "parent_basename": "%s",\n' "$(json_escape "$parent_basename")"
+		printf '  "submodule_prefix": "%s",\n' "$(json_escape "$submodule_prefix")"
+		printf '  "submodule_basename": "%s",\n' "$(json_escape "$submodule_basename")"
+		printf '  "cwd_prefix": "%s",\n' "$(json_escape "$cwd_prefix")"
+		printf '  "path": "%s",\n' "$(json_escape "$selected_path")"
+		printf '  "path_parent": "%s",\n' "$(json_escape "$parent_path")"
+		printf '  "path_outermost": "%s",\n' "$(json_escape "$outermost_path")"
+		printf '  "relative_to": "%s",\n' "$(json_escape "$relative_to")"
+		printf '  "chain_length": %s,\n' "$chain_length"
+		printf '  "chain_repos": [\n'
+		first=1
+		while IFS= read -r line; do
+			[[ -z "$line" ]] && continue
+			if (( first )); then first=0; else printf ',\n'; fi
+			printf '    "%s"' "$(json_escape "$line")"
+		done <<EOF
+$chain_repos
+EOF
+		printf '\n  ],\n'
+		printf '  "chain_paths": [\n'
+		first=1
+		while IFS= read -r line; do
+			[[ -z "$line" ]] && continue
+			if (( first )); then first=0; else printf ',\n'; fi
+			printf '    "%s"' "$(json_escape "$line")"
+		done <<EOF
+$chain_paths
+EOF
+		printf '\n  ]\n'
+		printf '}\n'
+		exit 0
+	fi
+
+	if (( status_mode )); then
+		printf 'submodule\n'
+		exit 0
+	fi
+
+	if [[ -n "$format" ]]; then
+		format_output "$format"
+		exit 0
+	fi
+
+	if (( print_parent || print_outermost || print_chain || print_array || print_chain_paths || print_path || print_path_outermost || print_current || print_parent_dirname || print_parent_basename || print_submodule_prefix || print_submodule_basename || print_cwd_prefix )); then
+		(( print_parent )) && printf '%s\n' "$parent_repo_disp"
+		(( print_outermost )) && printf '%s\n' "$outermost_repo_disp"
+		(( print_chain )) && printf '%s\n' "$chain_repos"
+		(( print_array )) && print_shell_array chain "${chain_array[@]}"
+		(( print_chain_paths )) && printf '%s\n' "$chain_paths"
+		(( print_path )) && printf '%s\n' "$selected_path"
+		(( print_path_outermost )) && printf '%s\n' "$outermost_path"
+		(( print_current )) && printf '%s\n' "$current_root_disp"
+		(( print_parent_dirname )) && printf '%s\n' "$parent_dirname_disp"
+		(( print_parent_basename )) && printf '%s\n' "$parent_basename"
+		(( print_submodule_prefix )) && printf '%s\n' "$submodule_prefix"
+		(( print_submodule_basename )) && printf '%s\n' "$submodule_basename"
+		(( print_cwd_prefix )) && printf '%s\n' "$cwd_prefix"
+	else
+		printf 'yes\n'
+	fi
+
+	exit 0
+else
+	if (( quiet )); then
+		exit 1
+	fi
+
+	if (( json )); then
+		printf '{\n'
+		printf '  "is_submodule": false,\n'
+		printf '  "inspected_path": "%s"\n' "$(json_escape "$(path_display "$current_pwd")")"
+		printf '}\n'
+		exit 1
+	fi
+
+	if (( status_mode )); then
+		printf 'not-submodule\n'
+		exit 1
+	fi
+
+	if [[ -n "$format" ]]; then
+		exit 1
+	fi
+
+	if (( print_parent || print_outermost || print_chain || print_array || print_chain_paths || print_path || print_path_outermost || print_current || print_parent_dirname || print_parent_basename || print_submodule_prefix || print_submodule_basename || print_cwd_prefix )); then
+		exit 1
+	else
+		printf 'no\n'
+	fi
+
+	exit 1
+fi

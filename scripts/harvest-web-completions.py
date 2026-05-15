@@ -161,6 +161,8 @@ def try_install(
         return None
     if dest.startswith("__"):
         return None
+    if dest.endswith(".zsh.src"):
+        return None
     if dest in existing or dest in written_dests:
         return None
     if skip_path(path):
@@ -391,6 +393,12 @@ JUNK_COMPDEF_STEMS = frozenset(
         "myapp",
         "mysimpleapp",
         "nometa",
+        "agat_convert_sp_gxf2gxf.pl",
+        "conf",
+        "hellos",
+        "rep",
+        "sysc",
+        "usepkg",
     }
 )
 
