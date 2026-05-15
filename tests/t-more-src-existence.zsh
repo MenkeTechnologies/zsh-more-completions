@@ -1717,6 +1717,9 @@
 @test 'more_src has _clouds' {
     assert "$xsrc/_clouds" is_file
 }
+@test 'more_src has _clusterssh' {
+    assert "$xsrc/_clusterssh" is_file
+}
 @test 'more_src has _cmctl' {
     assert "$xsrc/_cmctl" is_file
 }
@@ -3295,6 +3298,9 @@
 @test 'more_src has _frankenphp' {
     assert "$xsrc/_frankenphp" is_file
 }
+@test 'more_src has _freerdp' {
+    assert "$xsrc/_freerdp" is_file
+}
 @test 'more_src has _freckles' {
     assert "$xsrc/_freckles" is_file
 }
@@ -3975,6 +3981,9 @@
 }
 @test 'more_src has _gtop' {
     assert "$xsrc/_gtop" is_file
+}
+@test 'more_src has _guacenc' {
+    assert "$xsrc/_guacenc" is_file
 }
 @test 'more_src has _guild' {
     assert "$xsrc/_guild" is_file
