@@ -14199,3 +14199,78 @@
 @test 'more_src has _kfilebox' {
     assert "$xsrc/_kfilebox" is_file
 }
+@test 'more_src has _osmium-tool' {
+    assert "$xsrc/_osmium-tool" is_file
+}
+@test 'more_src has _osmconvert' {
+    assert "$xsrc/_osmconvert" is_file
+}
+@test 'more_src has _osmfilter' {
+    assert "$xsrc/_osmfilter" is_file
+}
+@test 'more_src has _osmupdate' {
+    assert "$xsrc/_osmupdate" is_file
+}
+@test 'more_src has _mkgmap' {
+    assert "$xsrc/_mkgmap" is_file
+}
+@test 'more_src has _routino' {
+    assert "$xsrc/_routino" is_file
+}
+@test 'more_src has _mapnik' {
+    assert "$xsrc/_mapnik" is_file
+}
+@test 'more_src has _mb-util' {
+    assert "$xsrc/_mb-util" is_file
+}
+@test 'more_src has _mapsoft' {
+    assert "$xsrc/_mapsoft" is_file
+}
+@test 'more_src has _geos-config' {
+    assert "$xsrc/_geos-config" is_file
+}
+@test 'more_src has _postgis' {
+    assert "$xsrc/_postgis" is_file
+}
+@test 'more_src has _spatialite_tool' {
+    assert "$xsrc/_spatialite_tool" is_file
+}
+@test 'more_src has _spatialite_network' {
+    assert "$xsrc/_spatialite_network" is_file
+}
+@test 'more_src has _spatialite_gml' {
+    assert "$xsrc/_spatialite_gml" is_file
+}
+@test 'more_src has _spatialite_dem' {
+    assert "$xsrc/_spatialite_dem" is_file
+}
+@test 'more_src has _spatialite_osm' {
+    assert "$xsrc/_spatialite_osm" is_file
+}
+@test 'more_src has _spatialite_xml2sql' {
+    assert "$xsrc/_spatialite_xml2sql" is_file
+}
+@test 'more_src has _gdallocationinfo' {
+    assert "$xsrc/_gdallocationinfo" is_file
+}
+@test 'more_src has _gdaltindex' {
+    assert "$xsrc/_gdaltindex" is_file
+}
+@test 'more_src has _tilemill' {
+    assert "$xsrc/_tilemill" is_file
+}
+@test 'more_src has _josm' {
+    assert "$xsrc/_josm" is_file
+}
+@test 'more_src has _gosmore' {
+    assert "$xsrc/_gosmore" is_file
+}
+@test 'more_src has _merkaartor' {
+    assert "$xsrc/_merkaartor" is_file
+}
+@test 'more_src has _qmapshack' {
+    assert "$xsrc/_qmapshack" is_file
+}
+@test 'more_src has _geoserver' {
+    assert "$xsrc/_geoserver" is_file
+}
