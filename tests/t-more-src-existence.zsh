@@ -8482,6 +8482,9 @@
 @test 'more_src has _surreal' {
     assert "$xsrc/_surreal" is_file
 }
+@test 'more_src has _sv' {
+    assert "$xsrc/_sv" is_file
+}
 @test 'more_src has _svgcleaner' {
     assert "$xsrc/_svgcleaner" is_file
 }
