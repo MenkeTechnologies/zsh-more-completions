@@ -205,6 +205,12 @@
 @test 'more_src has _addlicense' {
     assert "$xsrc/_addlicense" is_file
 }
+@test 'more_src has _adns_resolve' {
+    assert "$xsrc/_adns_resolve" is_file
+}
+@test 'more_src has _adns_test' {
+    assert "$xsrc/_adns_test" is_file
+}
 @test 'more_src has _aderyn' {
     assert "$xsrc/_aderyn" is_file
 }
@@ -792,6 +798,12 @@
 }
 @test 'more_src has _awww' {
     assert "$xsrc/_awww" is_file
+}
+@test 'more_src has _axfr-get' {
+    assert "$xsrc/_axfr-get" is_file
+}
+@test 'more_src has _axfrdns' {
+    assert "$xsrc/_axfrdns" is_file
 }
 @test 'more_src has _axiom' {
     assert "$xsrc/_axiom" is_file
@@ -2988,6 +3000,9 @@
 @test 'more_src has _dive' {
     assert "$xsrc/_dive" is_file
 }
+@test 'more_src has _djbdns' {
+    assert "$xsrc/_djbdns" is_file
+}
 @test 'more_src has _dkimproxy' {
     assert "$xsrc/_dkimproxy" is_file
 }
@@ -3035,6 +3050,15 @@
 }
 @test 'more_src has _dnsproxy' {
     assert "$xsrc/_dnsproxy" is_file
+}
+@test 'more_src has _dnsq' {
+    assert "$xsrc/_dnsq" is_file
+}
+@test 'more_src has _dnsqr' {
+    assert "$xsrc/_dnsqr" is_file
+}
+@test 'more_src has _dnstrace' {
+    assert "$xsrc/_dnstrace" is_file
 }
 @test 'more_src has _dnstwist' {
     assert "$xsrc/_dnstwist" is_file
@@ -3643,6 +3667,45 @@
 }
 @test 'more_src has _ezgdal' {
     assert "$xsrc/_ezgdal" is_file
+}
+@test 'more_src has _ezmlm' {
+    assert "$xsrc/_ezmlm" is_file
+}
+@test 'more_src has _ezmlm-archive' {
+    assert "$xsrc/_ezmlm-archive" is_file
+}
+@test 'more_src has _ezmlm-clean' {
+    assert "$xsrc/_ezmlm-clean" is_file
+}
+@test 'more_src has _ezmlm-get' {
+    assert "$xsrc/_ezmlm-get" is_file
+}
+@test 'more_src has _ezmlm-issubn' {
+    assert "$xsrc/_ezmlm-issubn" is_file
+}
+@test 'more_src has _ezmlm-list' {
+    assert "$xsrc/_ezmlm-list" is_file
+}
+@test 'more_src has _ezmlm-make' {
+    assert "$xsrc/_ezmlm-make" is_file
+}
+@test 'more_src has _ezmlm-manage' {
+    assert "$xsrc/_ezmlm-manage" is_file
+}
+@test 'more_src has _ezmlm-return' {
+    assert "$xsrc/_ezmlm-return" is_file
+}
+@test 'more_src has _ezmlm-send' {
+    assert "$xsrc/_ezmlm-send" is_file
+}
+@test 'more_src has _ezmlm-store' {
+    assert "$xsrc/_ezmlm-store" is_file
+}
+@test 'more_src has _ezmlm-sub' {
+    assert "$xsrc/_ezmlm-sub" is_file
+}
+@test 'more_src has _ezmlm-unsub' {
+    assert "$xsrc/_ezmlm-unsub" is_file
 }
 @test 'more_src has _f-f-f-find.sh' {
     assert "$xsrc/_f-f-f-find.sh" is_file
@@ -6341,6 +6404,18 @@
 }
 @test 'more_src has _lc0' {
     assert "$xsrc/_lc0" is_file
+}
+@test 'more_src has _ldns-host' {
+    assert "$xsrc/_ldns-host" is_file
+}
+@test 'more_src has _ldns-rrsig' {
+    assert "$xsrc/_ldns-rrsig" is_file
+}
+@test 'more_src has _ldns-update' {
+    assert "$xsrc/_ldns-update" is_file
+}
+@test 'more_src has _ldns-version' {
+    assert "$xsrc/_ldns-version" is_file
 }
 @test 'more_src has _ldpd' {
     assert "$xsrc/_ldpd" is_file
