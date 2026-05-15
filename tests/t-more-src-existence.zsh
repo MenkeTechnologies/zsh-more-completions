@@ -665,6 +665,9 @@
 @test 'more_src has _awww' {
     assert "$xsrc/_awww" is_file
 }
+@test 'more_src has _axolotl' {
+    assert "$xsrc/_axolotl" is_file
+}
 @test 'more_src has _az' {
     assert "$xsrc/_az" is_file
 }
@@ -3331,6 +3334,9 @@
 @test 'more_src has _florestad' {
     assert "$xsrc/_florestad" is_file
 }
+@test 'more_src has _flowise' {
+    assert "$xsrc/_flowise" is_file
+}
 @test 'more_src has _floss' {
     assert "$xsrc/_floss" is_file
 }
@@ -5847,6 +5853,15 @@
 }
 @test 'more_src has _mlx' {
     assert "$xsrc/_mlx" is_file
+}
+@test 'more_src has _mlx_lm.convert' {
+    assert "$xsrc/_mlx_lm.convert" is_file
+}
+@test 'more_src has _mlx_lm.generate' {
+    assert "$xsrc/_mlx_lm.generate" is_file
+}
+@test 'more_src has _mlx_lm.lora' {
+    assert "$xsrc/_mlx_lm.lora" is_file
 }
 @test 'more_src has _mm' {
     assert "$xsrc/_mm" is_file
