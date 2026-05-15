@@ -2700,6 +2700,9 @@
 @test 'more_src has _dochelp' {
     assert "$xsrc/_dochelp" is_file
 }
+@test 'more_src has _doom' {
+    assert "$xsrc/_doom" is_file
+}
 @test 'more_src has _docker-app' {
     assert "$xsrc/_docker-app" is_file
 }
@@ -4495,6 +4498,9 @@
 @test 'more_src has _hydra-check' {
     assert "$xsrc/_hydra-check" is_file
 }
+@test 'more_src has _hydroxide' {
+    assert "$xsrc/_hydroxide" is_file
+}
 @test 'more_src has _hyperdu' {
     assert "$xsrc/_hyperdu" is_file
 }
@@ -5241,6 +5247,9 @@
 @test 'more_src has _kops' {
     assert "$xsrc/_kops" is_file
 }
+@test 'more_src has _koreader' {
+    assert "$xsrc/_koreader" is_file
+}
 @test 'more_src has _korrect' {
     assert "$xsrc/_korrect" is_file
 }
@@ -5582,6 +5591,9 @@
 }
 @test 'more_src has _logcli' {
     assert "$xsrc/_logcli" is_file
+}
+@test 'more_src has _logseq' {
+    assert "$xsrc/_logseq" is_file
 }
 @test 'more_src has _logstash' {
     assert "$xsrc/_logstash" is_file
@@ -7620,6 +7632,9 @@
 @test 'more_src has _qnap' {
     assert "$xsrc/_qnap" is_file
 }
+@test 'more_src has _qpdfview' {
+    assert "$xsrc/_qpdfview" is_file
+}
 @test 'more_src has _qpwgraph' {
     assert "$xsrc/_qpwgraph" is_file
 }
@@ -8585,6 +8600,9 @@
 }
 @test 'more_src has _spacecmd' {
     assert "$xsrc/_spacecmd" is_file
+}
+@test 'more_src has _spacemacs' {
+    assert "$xsrc/_spacemacs" is_file
 }
 @test 'more_src has _spacer' {
     assert "$xsrc/_spacer" is_file
@@ -10536,6 +10554,9 @@
 }
 @test 'more_src has _xonsh' {
     assert "$xsrc/_xonsh" is_file
+}
+@test 'more_src has _xournalpp' {
+    assert "$xsrc/_xournalpp" is_file
 }
 @test 'more_src has _xplr' {
     assert "$xsrc/_xplr" is_file
