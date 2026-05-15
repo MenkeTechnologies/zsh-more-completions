@@ -15024,3 +15024,78 @@
 @test 'more_src has _acmeman' {
     assert "$xsrc/_acmeman" is_file
 }
+@test 'more_src has _genkey' {
+    assert "$xsrc/_genkey" is_file
+}
+@test 'more_src has _nss-cert-import' {
+    assert "$xsrc/_nss-cert-import" is_file
+}
+@test 'more_src has _nss-policy-check' {
+    assert "$xsrc/_nss-policy-check" is_file
+}
+@test 'more_src has _nss-list-trust-records' {
+    assert "$xsrc/_nss-list-trust-records" is_file
+}
+@test 'more_src has _cmstool' {
+    assert "$xsrc/_cmstool" is_file
+}
+@test 'more_src has _ckbiutil' {
+    assert "$xsrc/_ckbiutil" is_file
+}
+@test 'more_src has _ckpasswd' {
+    assert "$xsrc/_ckpasswd" is_file
+}
+@test 'more_src has _keepass' {
+    assert "$xsrc/_keepass" is_file
+}
+@test 'more_src has _keepass2' {
+    assert "$xsrc/_keepass2" is_file
+}
+@test 'more_src has _pass-rotate' {
+    assert "$xsrc/_pass-rotate" is_file
+}
+@test 'more_src has _gopass-jsonapi' {
+    assert "$xsrc/_gopass-jsonapi" is_file
+}
+@test 'more_src has _pwsafe-cli' {
+    assert "$xsrc/_pwsafe-cli" is_file
+}
+@test 'more_src has _systemd-coredump' {
+    assert "$xsrc/_systemd-coredump" is_file
+}
+@test 'more_src has _kwalletmanager5' {
+    assert "$xsrc/_kwalletmanager5" is_file
+}
+@test 'more_src has _fwupd-helpers' {
+    assert "$xsrc/_fwupd-helpers" is_file
+}
+@test 'more_src has _vbe-tools' {
+    assert "$xsrc/_vbe-tools" is_file
+}
+@test 'more_src has _passenger-config' {
+    assert "$xsrc/_passenger-config" is_file
+}
+@test 'more_src has _passenger-install-apache2-module' {
+    assert "$xsrc/_passenger-install-apache2-module" is_file
+}
+@test 'more_src has _passenger-status' {
+    assert "$xsrc/_passenger-status" is_file
+}
+@test 'more_src has _mod_md' {
+    assert "$xsrc/_mod_md" is_file
+}
+@test 'more_src has _dovecot-sysreport' {
+    assert "$xsrc/_dovecot-sysreport" is_file
+}
+@test 'more_src has _dovecot-lda' {
+    assert "$xsrc/_dovecot-lda" is_file
+}
+@test 'more_src has _phpass' {
+    assert "$xsrc/_phpass" is_file
+}
+@test 'more_src has _p11tool-cli' {
+    assert "$xsrc/_p11tool-cli" is_file
+}
+@test 'more_src has _softhsm-bin' {
+    assert "$xsrc/_softhsm-bin" is_file
+}
