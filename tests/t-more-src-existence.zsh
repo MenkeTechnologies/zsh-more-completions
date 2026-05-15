@@ -14349,3 +14349,78 @@
 @test 'more_src has _ippregfile' {
     assert "$xsrc/_ippregfile" is_file
 }
+@test 'more_src has _pencil' {
+    assert "$xsrc/_pencil" is_file
+}
+@test 'more_src has _azpainter' {
+    assert "$xsrc/_azpainter" is_file
+}
+@test 'more_src has _mtpaint' {
+    assert "$xsrc/_mtpaint" is_file
+}
+@test 'more_src has _kolourpaint' {
+    assert "$xsrc/_kolourpaint" is_file
+}
+@test 'more_src has _xpaint' {
+    assert "$xsrc/_xpaint" is_file
+}
+@test 'more_src has _pinta' {
+    assert "$xsrc/_pinta" is_file
+}
+@test 'more_src has _drawpile' {
+    assert "$xsrc/_drawpile" is_file
+}
+@test 'more_src has _deluged' {
+    assert "$xsrc/_deluged" is_file
+}
+@test 'more_src has _deluge-gtk' {
+    assert "$xsrc/_deluge-gtk" is_file
+}
+@test 'more_src has _deluge-web' {
+    assert "$xsrc/_deluge-web" is_file
+}
+@test 'more_src has _ariang' {
+    assert "$xsrc/_ariang" is_file
+}
+@test 'more_src has _mldonkey-server' {
+    assert "$xsrc/_mldonkey-server" is_file
+}
+@test 'more_src has _amule-daemon' {
+    assert "$xsrc/_amule-daemon" is_file
+}
+@test 'more_src has _freerapid' {
+    assert "$xsrc/_freerapid" is_file
+}
+@test 'more_src has _notecase' {
+    assert "$xsrc/_notecase" is_file
+}
+@test 'more_src has _rednotebook' {
+    assert "$xsrc/_rednotebook" is_file
+}
+@test 'more_src has _leo-editor' {
+    assert "$xsrc/_leo-editor" is_file
+}
+@test 'more_src has _photoflow' {
+    assert "$xsrc/_photoflow" is_file
+}
+@test 'more_src has _photofilmstrip' {
+    assert "$xsrc/_photofilmstrip" is_file
+}
+@test 'more_src has _entangle' {
+    assert "$xsrc/_entangle" is_file
+}
+@test 'more_src has _syncthing-relaysrv' {
+    assert "$xsrc/_syncthing-relaysrv" is_file
+}
+@test 'more_src has _syncthing-discosrv' {
+    assert "$xsrc/_syncthing-discosrv" is_file
+}
+@test 'more_src has _grsync' {
+    assert "$xsrc/_grsync" is_file
+}
+@test 'more_src has _luckybackup' {
+    assert "$xsrc/_luckybackup" is_file
+}
+@test 'more_src has _pika-backup' {
+    assert "$xsrc/_pika-backup" is_file
+}
