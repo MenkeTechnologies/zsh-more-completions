@@ -5962,6 +5962,9 @@
 @test 'more_src has _multitail' {
     assert "$xsrc/_multitail" is_file
 }
+@test 'more_src has _muon' {
+    assert "$xsrc/_muon" is_file
+}
 @test 'more_src has _murex' {
     assert "$xsrc/_murex" is_file
 }
