@@ -2593,6 +2593,9 @@
 @test 'more_src has _demumble' {
     assert "$xsrc/_demumble" is_file
 }
+@test 'more_src has _denemo' {
+    assert "$xsrc/_denemo" is_file
+}
 @test 'more_src has _deno' {
     assert "$xsrc/_deno" is_file
 }
@@ -9625,9 +9628,6 @@
 }
 @test 'more_src has _tclsh' {
     assert "$xsrc/_tclsh" is_file
-}
-@test 'more_src has _tclsh8.6' {
-    assert "$xsrc/_tclsh8.6" is_file
 }
 @test 'more_src has _tcplay' {
     assert "$xsrc/_tcplay" is_file
