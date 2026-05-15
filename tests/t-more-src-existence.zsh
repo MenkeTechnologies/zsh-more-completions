@@ -1837,6 +1837,9 @@
 @test 'more_src has _codeclimate' {
     assert "$xsrc/_codeclimate" is_file
 }
+@test 'more_src has _codacy-cli' {
+    assert "$xsrc/_codacy-cli" is_file
+}
 @test 'more_src has _codecompanion' {
     assert "$xsrc/_codecompanion" is_file
 }
@@ -2013,6 +2016,9 @@
 }
 @test 'more_src has _coverage' {
     assert "$xsrc/_coverage" is_file
+}
+@test 'more_src has _coveralls' {
+    assert "$xsrc/_coveralls" is_file
 }
 @test 'more_src has _cpdt.zsh' {
     assert "$xsrc/_cpdt.zsh" is_file
@@ -5807,6 +5813,9 @@
 @test 'more_src has _memtier_benchmark' {
     assert "$xsrc/_memtier_benchmark" is_file
 }
+@test 'more_src has _mend' {
+    assert "$xsrc/_mend" is_file
+}
 @test 'more_src has _mender-artifact' {
     assert "$xsrc/_mender-artifact" is_file
 }
@@ -9055,6 +9064,9 @@
 }
 @test 'more_src has _terrascan' {
     assert "$xsrc/_terrascan" is_file
+}
+@test 'more_src has _tern' {
+    assert "$xsrc/_tern" is_file
 }
 @test 'more_src has _tersify' {
     assert "$xsrc/_tersify" is_file
