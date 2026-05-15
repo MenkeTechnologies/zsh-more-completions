@@ -4717,6 +4717,9 @@
 @test 'more_src has _k9s' {
     assert "$xsrc/_k9s" is_file
 }
+@test 'more_src has _kak-tree-sitter' {
+    assert "$xsrc/_kak-tree-sitter" is_file
+}
 @test 'more_src has _kabu' {
     assert "$xsrc/_kabu" is_file
 }
@@ -5096,6 +5099,9 @@
 }
 @test 'more_src has _kto' {
     assert "$xsrc/_kto" is_file
+}
+@test 'more_src has _ktsctl' {
+    assert "$xsrc/_ktsctl" is_file
 }
 @test 'more_src has _kube-linter' {
     assert "$xsrc/_kube-linter" is_file
