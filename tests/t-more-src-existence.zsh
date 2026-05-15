@@ -12546,6 +12546,9 @@
 @test 'more_src has _zuul' {
     assert "$xsrc/_zuul" is_file
 }
+@test 'more_src has _zynaddsubfx' {
+    assert "$xsrc/_zynaddsubfx" is_file
+}
 @test 'more_src has _zx' {
     assert "$xsrc/_zx" is_file
 }
