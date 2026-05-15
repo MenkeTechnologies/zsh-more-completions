@@ -6775,6 +6775,9 @@
 @test 'more_src has _phonebook' {
     assert "$xsrc/_phonebook" is_file
 }
+@test 'more_src has _phonegap' {
+    assert "$xsrc/_phonegap" is_file
+}
 @test 'more_src has _photoprism' {
     assert "$xsrc/_photoprism" is_file
 }
