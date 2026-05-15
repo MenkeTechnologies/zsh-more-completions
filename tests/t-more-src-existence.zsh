@@ -7780,6 +7780,9 @@
 @test 'more_src has _rspamadm' {
     assert "$xsrc/_rspamadm" is_file
 }
+@test 'more_src has _rsyslogd' {
+    assert "$xsrc/_rsyslogd" is_file
+}
 @test 'more_src has _rsvm' {
     assert "$xsrc/_rsvm" is_file
 }
