@@ -14124,3 +14124,78 @@
 @test 'more_src has _tzdata-update' {
     assert "$xsrc/_tzdata-update" is_file
 }
+@test 'more_src has _kgpg' {
+    assert "$xsrc/_kgpg" is_file
+}
+@test 'more_src has _kleopatra' {
+    assert "$xsrc/_kleopatra" is_file
+}
+@test 'more_src has _akonadi' {
+    assert "$xsrc/_akonadi" is_file
+}
+@test 'more_src has _kjournal' {
+    assert "$xsrc/_kjournal" is_file
+}
+@test 'more_src has _kmymoney' {
+    assert "$xsrc/_kmymoney" is_file
+}
+@test 'more_src has _skrooge' {
+    assert "$xsrc/_skrooge" is_file
+}
+@test 'more_src has _kcharselect' {
+    assert "$xsrc/_kcharselect" is_file
+}
+@test 'more_src has _ksysguard5' {
+    assert "$xsrc/_ksysguard5" is_file
+}
+@test 'more_src has _ksysguardd' {
+    assert "$xsrc/_ksysguardd" is_file
+}
+@test 'more_src has _ksystemlog' {
+    assert "$xsrc/_ksystemlog" is_file
+}
+@test 'more_src has _ksnapshot' {
+    assert "$xsrc/_ksnapshot" is_file
+}
+@test 'more_src has _kscreenlocker_greet' {
+    assert "$xsrc/_kscreenlocker_greet" is_file
+}
+@test 'more_src has _kvkbd' {
+    assert "$xsrc/_kvkbd" is_file
+}
+@test 'more_src has _cellwriter' {
+    assert "$xsrc/_cellwriter" is_file
+}
+@test 'more_src has _xfontscale' {
+    assert "$xsrc/_xfontscale" is_file
+}
+@test 'more_src has _dolphin5' {
+    assert "$xsrc/_dolphin5" is_file
+}
+@test 'more_src has _kget' {
+    assert "$xsrc/_kget" is_file
+}
+@test 'more_src has _kio-fuse' {
+    assert "$xsrc/_kio-fuse" is_file
+}
+@test 'more_src has _kioworker' {
+    assert "$xsrc/_kioworker" is_file
+}
+@test 'more_src has _fish-pager' {
+    assert "$xsrc/_fish-pager" is_file
+}
+@test 'more_src has _fish-key-reader' {
+    assert "$xsrc/_fish-key-reader" is_file
+}
+@test 'more_src has _fish-update-completions' {
+    assert "$xsrc/_fish-update-completions" is_file
+}
+@test 'more_src has _kjsembed' {
+    assert "$xsrc/_kjsembed" is_file
+}
+@test 'more_src has _kclock' {
+    assert "$xsrc/_kclock" is_file
+}
+@test 'more_src has _kfilebox' {
+    assert "$xsrc/_kfilebox" is_file
+}
