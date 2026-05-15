@@ -3145,6 +3145,9 @@
 @test 'more_src has _falco' {
     assert "$xsrc/_falco" is_file
 }
+@test 'more_src has _falconctl' {
+    assert "$xsrc/_falconctl" is_file
+}
 @test 'more_src has _falkor' {
     assert "$xsrc/_falkor" is_file
 }
