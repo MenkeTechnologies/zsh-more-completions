@@ -7771,6 +7771,9 @@
 @test 'more_src has _ruff' {
     assert "$xsrc/_ruff" is_file
 }
+@test 'more_src has _ruff-lsp' {
+    assert "$xsrc/_ruff-lsp" is_file
+}
 @test 'more_src has _ruflo' {
     assert "$xsrc/_ruflo" is_file
 }
