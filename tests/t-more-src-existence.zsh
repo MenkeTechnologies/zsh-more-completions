@@ -2170,6 +2170,15 @@
 @test 'more_src has _cue' {
     assert "$xsrc/_cue" is_file
 }
+@test 'more_src has _cuebreakpoints' {
+    assert "$xsrc/_cuebreakpoints" is_file
+}
+@test 'more_src has _cueconvert' {
+    assert "$xsrc/_cueconvert" is_file
+}
+@test 'more_src has _cueprint' {
+    assert "$xsrc/_cueprint" is_file
+}
 @test 'more_src has _cuetools' {
     assert "$xsrc/_cuetools" is_file
 }
@@ -3099,6 +3108,9 @@
 }
 @test 'more_src has _expressvpn' {
     assert "$xsrc/_expressvpn" is_file
+}
+@test 'more_src has _extresso' {
+    assert "$xsrc/_extresso" is_file
 }
 @test 'more_src has _ezgdal' {
     assert "$xsrc/_ezgdal" is_file
