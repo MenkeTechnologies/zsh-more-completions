@@ -793,6 +793,9 @@
 @test 'more_src has _bb' {
     assert "$xsrc/_bb" is_file
 }
+@test 'more_src has _bbe' {
+    assert "$xsrc/_bbe" is_file
+}
 @test 'more_src has _bbedit' {
     assert "$xsrc/_bbedit" is_file
 }
@@ -1639,6 +1642,9 @@
 }
 @test 'more_src has _chezscheme' {
     assert "$xsrc/_chezscheme" is_file
+}
+@test 'more_src has _chiaki' {
+    assert "$xsrc/_chiaki" is_file
 }
 @test 'more_src has _chuck' {
     assert "$xsrc/_chuck" is_file
@@ -2871,6 +2877,9 @@
 @test 'more_src has _drizzle-kit' {
     assert "$xsrc/_drizzle-kit" is_file
 }
+@test 'more_src has _droidcam-cli' {
+    assert "$xsrc/_droidcam-cli" is_file
+}
 @test 'more_src has _drone' {
     assert "$xsrc/_drone" is_file
 }
@@ -3322,6 +3331,9 @@
 }
 @test 'more_src has _favico' {
     assert "$xsrc/_favico" is_file
+}
+@test 'more_src has _fbcat' {
+    assert "$xsrc/_fbcat" is_file
 }
 @test 'more_src has _fbd' {
     assert "$xsrc/_fbd" is_file
@@ -4421,6 +4433,9 @@
 }
 @test 'more_src has _hexapoda' {
     assert "$xsrc/_hexapoda" is_file
+}
+@test 'more_src has _hexcurse' {
+    assert "$xsrc/_hexcurse" is_file
 }
 @test 'more_src has _hey' {
     assert "$xsrc/_hey" is_file
@@ -6685,6 +6700,9 @@
 }
 @test 'more_src has _ntlmrelayx' {
     assert "$xsrc/_ntlmrelayx" is_file
+}
+@test 'more_src has _ntopng' {
+    assert "$xsrc/_ntopng" is_file
 }
 @test 'more_src has _nuclei' {
     assert "$xsrc/_nuclei" is_file
@@ -9386,6 +9404,9 @@
 @test 'more_src has _the_silver_searcher' {
     assert "$xsrc/_the_silver_searcher" is_file
 }
+@test 'more_src has _thinkfan' {
+    assert "$xsrc/_thinkfan" is_file
+}
 @test 'more_src has _thulp' {
     assert "$xsrc/_thulp" is_file
 }
@@ -9783,6 +9804,12 @@
 
 @test 'more_src has _udiskie-umount' {
     assert "$xsrc/_udiskie-umount" is_file
+}
+@test 'more_src has _udp-receiver' {
+    assert "$xsrc/_udp-receiver" is_file
+}
+@test 'more_src has _udp-sender' {
+    assert "$xsrc/_udp-sender" is_file
 }
 @test 'more_src has _udp2raw_mp' {
     assert "$xsrc/_udp2raw_mp" is_file
@@ -10437,6 +10464,9 @@
 }
 @test 'more_src has _wake' {
     assert "$xsrc/_wake" is_file
+}
+@test 'more_src has _wakelan' {
+    assert "$xsrc/_wakelan" is_file
 }
 @test 'more_src has _walk' {
     assert "$xsrc/_walk" is_file
