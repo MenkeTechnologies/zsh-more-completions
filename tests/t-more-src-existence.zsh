@@ -3876,6 +3876,9 @@
 @test 'more_src has _golang' {
     assert "$xsrc/_golang" is_file
 }
+@test 'more_src has _golang-migrate' {
+    assert "$xsrc/_golang-migrate" is_file
+}
 @test 'more_src has _golangci-lint' {
     assert "$xsrc/_golangci-lint" is_file
 }
@@ -9178,6 +9181,9 @@
 }
 @test 'more_src has _turbo' {
     assert "$xsrc/_turbo" is_file
+}
+@test 'more_src has _turborepo' {
+    assert "$xsrc/_turborepo" is_file
 }
 @test 'more_src has _turso' {
     assert "$xsrc/_turso" is_file
