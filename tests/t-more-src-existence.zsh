@@ -1770,6 +1770,9 @@
 @test 'more_src has _clipcat-notify' {
     assert "$xsrc/_clipcat-notify" is_file
 }
+@test 'more_src has _cliphist-cli' {
+    assert "$xsrc/_cliphist-cli" is_file
+}
 @test 'more_src has _clipcatctl' {
     assert "$xsrc/_clipcatctl" is_file
 }
@@ -3570,6 +3573,9 @@
 @test 'more_src has _gammaray' {
     assert "$xsrc/_gammaray" is_file
 }
+@test 'more_src has _gammastep' {
+    assert "$xsrc/_gammastep" is_file
+}
 @test 'more_src has _gap' {
     assert "$xsrc/_gap" is_file
 }
@@ -4355,6 +4361,9 @@
 }
 @test 'more_src has _hetzner-kube' {
     assert "$xsrc/_hetzner-kube" is_file
+}
+@test 'more_src has _hexchat-cli' {
+    assert "$xsrc/_hexchat-cli" is_file
 }
 @test 'more_src has _hexapoda' {
     assert "$xsrc/_hexapoda" is_file
@@ -7156,6 +7165,9 @@
 @test 'more_src has _pidge' {
     assert "$xsrc/_pidge" is_file
 }
+@test 'more_src has _pidgin' {
+    assert "$xsrc/_pidgin" is_file
+}
 @test 'more_src has _pie' {
     assert "$xsrc/_pie" is_file
 }
@@ -8797,6 +8809,9 @@
 @test 'more_src has _stg' {
     assert "$xsrc/_stg" is_file
 }
+@test 'more_src has _st' {
+    assert "$xsrc/_st" is_file
+}
 @test 'more_src has _sti' {
     assert "$xsrc/_sti" is_file
 }
@@ -9279,6 +9294,9 @@
 @test 'more_src has _tiflash' {
     assert "$xsrc/_tiflash" is_file
 }
+@test 'more_src has _tigervncserver' {
+    assert "$xsrc/_tigervncserver" is_file
+}
 @test 'more_src has _tigris' {
     assert "$xsrc/_tigris" is_file
 }
@@ -9720,6 +9738,9 @@
 }
 @test 'more_src has _uri-encode' {
     assert "$xsrc/_uri-encode" is_file
+}
+@test 'more_src has _urxvt-cli' {
+    assert "$xsrc/_urxvt-cli" is_file
 }
 @test 'more_src has _urlview' {
     assert "$xsrc/_urlview" is_file
@@ -10435,6 +10456,9 @@
 @test 'more_src has _wkhtmltopdf' {
     assert "$xsrc/_wkhtmltopdf" is_file
 }
+@test 'more_src has _wl-clipboard-cli' {
+    assert "$xsrc/_wl-clipboard-cli" is_file
+}
 @test 'more_src has _wl-copy' {
     assert "$xsrc/_wl-copy" is_file
 }
@@ -10588,6 +10612,9 @@
 }
 @test 'more_src has _yabai' {
     assert "$xsrc/_yabai" is_file
+}
+@test 'more_src has _ydotoold' {
+    assert "$xsrc/_ydotoold" is_file
 }
 @test 'more_src has _yabb' {
     assert "$xsrc/_yabb" is_file
