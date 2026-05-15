@@ -5809,6 +5809,9 @@
 @test 'more_src has _molecule' {
     assert "$xsrc/_molecule" is_file
 }
+@test 'more_src has _mommy' {
+    assert "$xsrc/_mommy" is_file
+}
 @test 'more_src has _mon.zsh' {
     assert "$xsrc/_mon.zsh" is_file
 }
