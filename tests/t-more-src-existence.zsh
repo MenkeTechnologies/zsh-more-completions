@@ -391,6 +391,9 @@
 @test 'more_src has _all.sh' {
     assert "$xsrc/_all.sh" is_file
 }
+@test 'more_src has _alock' {
+    assert "$xsrc/_alock" is_file
+}
 @test 'more_src has _alot' {
     assert "$xsrc/_alot" is_file
 }
@@ -633,6 +636,9 @@
 }
 @test 'more_src has _atac' {
     assert "$xsrc/_atac" is_file
+}
+@test 'more_src has _aterm' {
+    assert "$xsrc/_aterm" is_file
 }
 @test 'more_src has _atlantis' {
     assert "$xsrc/_atlantis" is_file
@@ -1423,6 +1429,15 @@
 @test 'more_src has _camunda' {
     assert "$xsrc/_camunda" is_file
 }
+@test 'more_src has _canto-curses' {
+    assert "$xsrc/_canto-curses" is_file
+}
+@test 'more_src has _canto-fetch' {
+    assert "$xsrc/_canto-fetch" is_file
+}
+@test 'more_src has _canto-remote' {
+    assert "$xsrc/_canto-remote" is_file
+}
 @test 'more_src has _canvas-downloader' {
     assert "$xsrc/_canvas-downloader" is_file
 }
@@ -1693,6 +1708,9 @@
 }
 @test 'more_src has _cdls_popdls_pushdls' {
     assert "$xsrc/_cdls_popdls_pushdls" is_file
+}
+@test 'more_src has _cdpr' {
+    assert "$xsrc/_cdpr" is_file
 }
 @test 'more_src has _cdrskin' {
     assert "$xsrc/_cdrskin" is_file
@@ -3482,6 +3500,18 @@
 @test 'more_src has _eugene' {
     assert "$xsrc/_eugene" is_file
 }
+@test 'more_src has _evemu-describe' {
+    assert "$xsrc/_evemu-describe" is_file
+}
+@test 'more_src has _evemu-event' {
+    assert "$xsrc/_evemu-event" is_file
+}
+@test 'more_src has _evemu-play' {
+    assert "$xsrc/_evemu-play" is_file
+}
+@test 'more_src has _evemu-record' {
+    assert "$xsrc/_evemu-record" is_file
+}
 @test 'more_src has _evans' {
     assert "$xsrc/_evans" is_file
 }
@@ -3640,6 +3670,9 @@
 }
 @test 'more_src has _ff2mpv' {
     assert "$xsrc/_ff2mpv" is_file
+}
+@test 'more_src has _ffmpeg2theora' {
+    assert "$xsrc/_ffmpeg2theora" is_file
 }
 @test 'more_src has _ffmpeg-normalize' {
     assert "$xsrc/_ffmpeg-normalize" is_file
@@ -3962,6 +3995,18 @@
 }
 @test 'more_src has _gcsfuse' {
     assert "$xsrc/_gcsfuse" is_file
+}
+@test 'more_src has _gdkpixbuf-pixdata' {
+    assert "$xsrc/_gdkpixbuf-pixdata" is_file
+}
+@test 'more_src has _gdkpixbuf-print-mime-types' {
+    assert "$xsrc/_gdkpixbuf-print-mime-types" is_file
+}
+@test 'more_src has _gdkpixbuf-query-loaders' {
+    assert "$xsrc/_gdkpixbuf-query-loaders" is_file
+}
+@test 'more_src has _gdkpixbuf-thumbnailer' {
+    assert "$xsrc/_gdkpixbuf-thumbnailer" is_file
 }
 @test 'more_src has _gdb-multiarch' {
     assert "$xsrc/_gdb-multiarch" is_file
@@ -6367,6 +6412,9 @@
 @test 'more_src has _lychee' {
     assert "$xsrc/_lychee" is_file
 }
+@test 'more_src has _lzbench' {
+    assert "$xsrc/_lzbench" is_file
+}
 @test 'more_src has _lzfse' {
     assert "$xsrc/_lzfse" is_file
 }
@@ -6973,6 +7021,9 @@
 @test 'more_src has _mupen64plus' {
     assert "$xsrc/_mupen64plus" is_file
 }
+@test 'more_src has _mupdf-gl' {
+    assert "$xsrc/_mupdf-gl" is_file
+}
 @test 'more_src has _musescore' {
     assert "$xsrc/_musescore" is_file
 }
@@ -7091,6 +7142,9 @@
 }
 @test 'more_src has _nemesis' {
     assert "$xsrc/_nemesis" is_file
+}
+@test 'more_src has _nemiver' {
+    assert "$xsrc/_nemiver" is_file
 }
 @test 'more_src has _nemu' {
     assert "$xsrc/_nemu" is_file
@@ -8593,6 +8647,9 @@
 }
 @test 'more_src has _pxar' {
     assert "$xsrc/_pxar" is_file
+}
+@test 'more_src has _pxz' {
+    assert "$xsrc/_pxz" is_file
 }
 @test 'more_src has _py-spy' {
     assert "$xsrc/_py-spy" is_file
@@ -10899,6 +10956,9 @@
 @test 'more_src has _tux' {
     assert "$xsrc/_tux" is_file
 }
+@test 'more_src has _tvtime' {
+    assert "$xsrc/_tvtime" is_file
+}
 @test 'more_src has _tv' {
     assert "$xsrc/_tv" is_file
 }
@@ -11427,6 +11487,9 @@
 }
 @test 'more_src has _v' {
     assert "$xsrc/_v" is_file
+}
+@test 'more_src has _v4lctl' {
+    assert "$xsrc/_v4lctl" is_file
 }
 @test 'more_src has _vagrant-box-search' {
     assert "$xsrc/_vagrant-box-search" is_file
@@ -11971,6 +12034,9 @@
 @test 'more_src has _xc' {
     assert "$xsrc/_xc" is_file
 }
+@test 'more_src has _xcowsay' {
+    assert "$xsrc/_xcowsay" is_file
+}
 @test 'more_src has _xcaddy' {
     assert "$xsrc/_xcaddy" is_file
 }
@@ -12018,6 +12084,9 @@
 }
 @test 'more_src has _xkbutils' {
     assert "$xsrc/_xkbutils" is_file
+}
+@test 'more_src has _xlockmore' {
+    assert "$xsrc/_xlockmore" is_file
 }
 @test 'more_src has _xlsx2csv' {
     assert "$xsrc/_xlsx2csv" is_file
