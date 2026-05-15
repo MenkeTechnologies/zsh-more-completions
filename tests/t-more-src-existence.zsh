@@ -424,8 +424,14 @@
 @test 'more_src has _amfora' {
     assert "$xsrc/_amfora" is_file
 }
+@test 'more_src has _amavis' {
+    assert "$xsrc/_amavis" is_file
+}
 @test 'more_src has _amavisd' {
     assert "$xsrc/_amavisd" is_file
+}
+@test 'more_src has _amavisd-new' {
+    assert "$xsrc/_amavisd-new" is_file
 }
 @test 'more_src has _amon2-setup.pl' {
     assert "$xsrc/_amon2-setup.pl" is_file
@@ -1931,6 +1937,9 @@
 @test 'more_src has _clam' {
     assert "$xsrc/_clam" is_file
 }
+@test 'more_src has _clamtk' {
+    assert "$xsrc/_clamtk" is_file
+}
 @test 'more_src has _clang-uml' {
     assert "$xsrc/_clang-uml" is_file
 }
@@ -2295,6 +2304,12 @@
 }
 @test 'more_src has _cot' {
     assert "$xsrc/_cot" is_file
+}
+@test 'more_src has _courier-pop' {
+    assert "$xsrc/_courier-pop" is_file
+}
+@test 'more_src has _courierimap' {
+    assert "$xsrc/_courierimap" is_file
 }
 @test 'more_src has _coverage' {
     assert "$xsrc/_coverage" is_file
@@ -2973,6 +2988,9 @@
 @test 'more_src has _dive' {
     assert "$xsrc/_dive" is_file
 }
+@test 'more_src has _dkimproxy' {
+    assert "$xsrc/_dkimproxy" is_file
+}
 @test 'more_src has _dkit' {
     assert "$xsrc/_dkit" is_file
 }
@@ -3005,6 +3023,9 @@
 }
 @test 'more_src has _dns-sd' {
     assert "$xsrc/_dns-sd" is_file
+}
+@test 'more_src has _dnscap' {
+    assert "$xsrc/_dnscap" is_file
 }
 @test 'more_src has _dnscontrol' {
     assert "$xsrc/_dnscontrol" is_file
@@ -3956,6 +3977,9 @@
 @test 'more_src has _freeciv-client' {
     assert "$xsrc/_freeciv-client" is_file
 }
+@test 'more_src has _freshclam-cron' {
+    assert "$xsrc/_freshclam-cron" is_file
+}
 @test 'more_src has _frozen-bubble' {
     assert "$xsrc/_frozen-bubble" is_file
 }
@@ -4772,6 +4796,9 @@
 @test 'more_src has _grex' {
     assert "$xsrc/_grex" is_file
 }
+@test 'more_src has _greylistd' {
+    assert "$xsrc/_greylistd" is_file
+}
 @test 'more_src has _griffe' {
     assert "$xsrc/_griffe" is_file
 }
@@ -5394,6 +5421,9 @@
 }
 @test 'more_src has _ipcalc-ng' {
     assert "$xsrc/_ipcalc-ng" is_file
+}
+@test 'more_src has _ipcheck' {
+    assert "$xsrc/_ipcheck" is_file
 }
 @test 'more_src has _ipconfig' {
     assert "$xsrc/_ipconfig" is_file
@@ -6621,6 +6651,15 @@
 }
 @test 'more_src has _mago' {
     assert "$xsrc/_mago" is_file
+}
+@test 'more_src has _maildirlock' {
+    assert "$xsrc/_maildirlock" is_file
+}
+@test 'more_src has _maildirmake' {
+    assert "$xsrc/_maildirmake" is_file
+}
+@test 'more_src has _maildirsync' {
+    assert "$xsrc/_maildirsync" is_file
 }
 @test 'more_src has _mailpit' {
     assert "$xsrc/_mailpit" is_file
@@ -8587,6 +8626,9 @@
 @test 'more_src has _pokeget' {
     assert "$xsrc/_pokeget" is_file
 }
+@test 'more_src has _policyd-greylist' {
+    assert "$xsrc/_policyd-greylist" is_file
+}
 @test 'more_src has _policyd-spf' {
     assert "$xsrc/_policyd-spf" is_file
 }
@@ -8637,6 +8679,9 @@
 }
 @test 'more_src has _postscreen' {
     assert "$xsrc/_postscreen" is_file
+}
+@test 'more_src has _postsrsd' {
+    assert "$xsrc/_postsrsd" is_file
 }
 @test 'more_src has _portmap' {
     assert "$xsrc/_portmap" is_file
@@ -8988,8 +9033,23 @@
 @test 'more_src has _qmgr' {
     assert "$xsrc/_qmgr" is_file
 }
+@test 'more_src has _qmail' {
+    assert "$xsrc/_qmail" is_file
+}
+@test 'more_src has _qmail-clean' {
+    assert "$xsrc/_qmail-clean" is_file
+}
 @test 'more_src has _qmail-inject' {
     assert "$xsrc/_qmail-inject" is_file
+}
+@test 'more_src has _qmail-lspawn' {
+    assert "$xsrc/_qmail-lspawn" is_file
+}
+@test 'more_src has _qmail-newu' {
+    assert "$xsrc/_qmail-newu" is_file
+}
+@test 'more_src has _qmail-pop3d' {
+    assert "$xsrc/_qmail-pop3d" is_file
 }
 @test 'more_src has _qmail-qread' {
     assert "$xsrc/_qmail-qread" is_file
@@ -8997,8 +9057,17 @@
 @test 'more_src has _qmail-qstat' {
     assert "$xsrc/_qmail-qstat" is_file
 }
+@test 'more_src has _qmail-rspawn' {
+    assert "$xsrc/_qmail-rspawn" is_file
+}
+@test 'more_src has _qmail-send' {
+    assert "$xsrc/_qmail-send" is_file
+}
 @test 'more_src has _qmail-showctl' {
     assert "$xsrc/_qmail-showctl" is_file
+}
+@test 'more_src has _qmail-smtpd' {
+    assert "$xsrc/_qmail-smtpd" is_file
 }
 @test 'more_src has _qnap' {
     assert "$xsrc/_qnap" is_file
@@ -9483,6 +9552,9 @@
 }
 @test 'more_src has _rspamadm' {
     assert "$xsrc/_rspamadm" is_file
+}
+@test 'more_src has _rspamd-cli' {
+    assert "$xsrc/_rspamd-cli" is_file
 }
 @test 'more_src has _rsvm' {
     assert "$xsrc/_rsvm" is_file
@@ -10142,6 +10214,9 @@
 }
 @test 'more_src has _sourcekitten' {
     assert "$xsrc/_sourcekitten" is_file
+}
+@test 'more_src has _spamd' {
+    assert "$xsrc/_spamd" is_file
 }
 @test 'more_src has _spampd' {
     assert "$xsrc/_spampd" is_file
