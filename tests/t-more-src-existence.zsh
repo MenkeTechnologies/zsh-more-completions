@@ -14649,3 +14649,78 @@
 @test 'more_src has _cyrus-unexpunge' {
     assert "$xsrc/_cyrus-unexpunge" is_file
 }
+@test 'more_src has _mailgraph' {
+    assert "$xsrc/_mailgraph" is_file
+}
+@test 'more_src has _pflogsumm' {
+    assert "$xsrc/_pflogsumm" is_file
+}
+@test 'more_src has _pfqueue' {
+    assert "$xsrc/_pfqueue" is_file
+}
+@test 'more_src has _mhonarc' {
+    assert "$xsrc/_mhonarc" is_file
+}
+@test 'more_src has _mimedefang' {
+    assert "$xsrc/_mimedefang" is_file
+}
+@test 'more_src has _spamprobe' {
+    assert "$xsrc/_spamprobe" is_file
+}
+@test 'more_src has _eximon' {
+    assert "$xsrc/_eximon" is_file
+}
+@test 'more_src has _exim_dumpdb' {
+    assert "$xsrc/_exim_dumpdb" is_file
+}
+@test 'more_src has _exim_fixdb' {
+    assert "$xsrc/_exim_fixdb" is_file
+}
+@test 'more_src has _exim_tidydb' {
+    assert "$xsrc/_exim_tidydb" is_file
+}
+@test 'more_src has _exinext' {
+    assert "$xsrc/_exinext" is_file
+}
+@test 'more_src has _exiwhat' {
+    assert "$xsrc/_exiwhat" is_file
+}
+@test 'more_src has _notmuch-mutt' {
+    assert "$xsrc/_notmuch-mutt" is_file
+}
+@test 'more_src has _mailpile' {
+    assert "$xsrc/_mailpile" is_file
+}
+@test 'more_src has _mailman3' {
+    assert "$xsrc/_mailman3" is_file
+}
+@test 'more_src has _postfwd' {
+    assert "$xsrc/_postfwd" is_file
+}
+@test 'more_src has _policyd' {
+    assert "$xsrc/_policyd" is_file
+}
+@test 'more_src has _exim_convert4r4' {
+    assert "$xsrc/_exim_convert4r4" is_file
+}
+@test 'more_src has _postfix-policyd-spf-perl' {
+    assert "$xsrc/_postfix-policyd-spf-perl" is_file
+}
+@test 'more_src has _claws-mail-archiver' {
+    assert "$xsrc/_claws-mail-archiver" is_file
+}
+@test 'more_src has _mutt-wizard' {
+    assert "$xsrc/_mutt-wizard" is_file
+}
+@test 'more_src has _clawsker' {
+    assert "$xsrc/_clawsker" is_file
+}
+@test 'more_src has _imapbackup' {
+    assert "$xsrc/_imapbackup" is_file
+}
+@test 'more_src has _mailfilter' {
+    assert "$xsrc/_mailfilter" is_file
+}
+@test 'more_src has _opendmarc' {
+    assert "$xsrc/_opendmarc" is_file
+}
