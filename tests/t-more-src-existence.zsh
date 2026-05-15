@@ -4028,6 +4028,18 @@
 @test 'more_src has _gmx' {
     assert "$xsrc/_gmx" is_file
 }
+@test 'more_src has _gnt-cluster' {
+    assert "$xsrc/_gnt-cluster" is_file
+}
+@test 'more_src has _gnt-instance' {
+    assert "$xsrc/_gnt-instance" is_file
+}
+@test 'more_src has _gnt-job' {
+    assert "$xsrc/_gnt-job" is_file
+}
+@test 'more_src has _gnt-node' {
+    assert "$xsrc/_gnt-node" is_file
+}
 @test 'more_src has _gnvm' {
     assert "$xsrc/_gnvm" is_file
 }
@@ -4449,6 +4461,9 @@
 @test 'more_src has _hayhooks' {
     assert "$xsrc/_hayhooks" is_file
 }
+@test 'more_src has _hbal' {
+    assert "$xsrc/_hbal" is_file
+}
 @test 'more_src has _hc' {
     assert "$xsrc/_hc" is_file
 }
@@ -4584,6 +4599,9 @@
 }
 @test 'more_src has _hoverfly' {
     assert "$xsrc/_hoverfly" is_file
+}
+@test 'more_src has _hroller' {
+    assert "$xsrc/_hroller" is_file
 }
 @test 'more_src has _htmlq' {
     assert "$xsrc/_htmlq" is_file
@@ -10980,6 +10998,18 @@
 }
 @test 'more_src has _xdg-ninja' {
     assert "$xsrc/_xdg-ninja" is_file
+}
+@test 'more_src has _xenpm' {
+    assert "$xsrc/_xenpm" is_file
+}
+@test 'more_src has _xenstored' {
+    assert "$xsrc/_xenstored" is_file
+}
+@test 'more_src has _xentop' {
+    assert "$xsrc/_xentop" is_file
+}
+@test 'more_src has _xentrace' {
+    assert "$xsrc/_xentrace" is_file
 }
 @test 'more_src has _xeol' {
     assert "$xsrc/_xeol" is_file
