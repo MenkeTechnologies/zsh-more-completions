@@ -173,6 +173,8 @@ touch /work/progress.txt
 
 echo "=== building candidate list ==="
 > /work/candidates.txt
+
+# Pass 1: by-name layout (modern convention) — dir name == attr name
 for d in "$NIXPKGS"/pkgs/by-name/*/*/; do
     f="${d}package.nix"
     [ -f "$f" ] || continue
@@ -180,8 +182,39 @@ for d in "$NIXPKGS"/pkgs/by-name/*/*/; do
         basename "$d" >> /work/candidates.txt
     fi
 done
+byname=$(wc -l < /work/candidates.txt)
+echo "by-name candidates: $byname"
+
+# Pass 2: legacy layout (pkgs/applications/, pkgs/development/, etc.) —
+# default.nix in a leaf dir; attr name guessed as the leaf dir basename.
+# Skip lib/, top-level/, build-support/, dev-aux paths.
+if [ "${NIX_INCLUDE_LEGACY:-1}" = "1" ]; then
+    find "$NIXPKGS"/pkgs \
+        -path "*/by-name" -prune -o \
+        -path "*/lib" -prune -o \
+        -path "*/top-level" -prune -o \
+        -path "*/build-support" -prune -o \
+        -path "*/test" -prune -o \
+        -path "*/tests" -prune -o \
+        -name default.nix -print 2>/dev/null \
+      | while read -r f; do
+            if grep -qE "installShellCompletion|site-functions|completions/zsh|share/zsh" "$f"; then
+                attr=$(basename "$(dirname "$f")")
+                # Only accept attr names that look like valid nix attrs.
+                case "$attr" in
+                    [a-z]*) echo "$attr" ;;
+                esac
+            fi
+        done >> /work/candidates.txt
+fi
+
+# Dedup the combined list (sort -u is order-losing but the nixos/nix image
+# doesn't ship awk).
+sort -u /work/candidates.txt > /work/candidates.dedup
+mv /work/candidates.dedup /work/candidates.txt
+
 total=$(wc -l < /work/candidates.txt)
-echo "candidates: $total"
+echo "candidates (deduped): $total"
 
 n=0
 captured=0
