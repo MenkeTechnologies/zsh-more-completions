@@ -355,6 +355,9 @@
 @test 'more_src has _airshare' {
     assert "$xsrc/_airshare" is_file
 }
+@test 'more_src has _akonadictl' {
+    assert "$xsrc/_akonadictl" is_file
+}
 @test 'more_src has _akv.zsh' {
     assert "$xsrc/_akv.zsh" is_file
 }
@@ -5291,6 +5294,15 @@
 @test 'more_src has _keytool' {
     assert "$xsrc/_keytool" is_file
 }
+@test 'more_src has _kfind' {
+    assert "$xsrc/_kfind" is_file
+}
+@test 'more_src has _kfontview' {
+    assert "$xsrc/_kfontview" is_file
+}
+@test 'more_src has _kglobalaccel5' {
+    assert "$xsrc/_kglobalaccel5" is_file
+}
 @test 'more_src has _khal' {
     assert "$xsrc/_khal" is_file
 }
@@ -5370,6 +5382,9 @@
 @test 'more_src has _kondo' {
     assert "$xsrc/_kondo" is_file
 }
+@test 'more_src has _konversation' {
+    assert "$xsrc/_konversation" is_file
+}
 @test 'more_src has _konqueror-cli' {
     assert "$xsrc/_konqueror-cli" is_file
 }
@@ -5438,6 +5453,18 @@
 }
 @test 'more_src has _kscreen-doctor' {
     assert "$xsrc/_kscreen-doctor" is_file
+}
+@test 'more_src has _kactivities5' {
+    assert "$xsrc/_kactivities5" is_file
+}
+@test 'more_src has _krunner' {
+    assert "$xsrc/_krunner" is_file
+}
+@test 'more_src has _kruler' {
+    assert "$xsrc/_kruler" is_file
+}
+@test 'more_src has _ksysguard' {
+    assert "$xsrc/_ksysguard" is_file
 }
 @test 'more_src has _kst' {
     assert "$xsrc/_kst" is_file
@@ -7461,6 +7488,9 @@
 }
 @test 'more_src has _planus' {
     assert "$xsrc/_planus" is_file
+}
+@test 'more_src has _plasmashell' {
+    assert "$xsrc/_plasmashell" is_file
 }
 @test 'more_src has _plasmoidviewer' {
     assert "$xsrc/_plasmoidviewer" is_file
