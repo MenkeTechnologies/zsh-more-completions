@@ -345,6 +345,9 @@
 @test 'more_src has _airis' {
     assert "$xsrc/_airis" is_file
 }
+@test 'more_src has _airbyte-ci' {
+    assert "$xsrc/_airbyte-ci" is_file
+}
 
 @test 'more_src has _airlift' {
     assert "$xsrc/_airlift" is_file
@@ -1281,6 +1284,9 @@
 }
 @test 'more_src has _calico' {
     assert "$xsrc/_calico" is_file
+}
+@test 'more_src has _camunda' {
+    assert "$xsrc/_camunda" is_file
 }
 @test 'more_src has _canvas-downloader' {
     assert "$xsrc/_canvas-downloader" is_file
@@ -8519,6 +8525,9 @@
 }
 @test 'more_src has _spectral' {
     assert "$xsrc/_spectral" is_file
+}
+@test 'more_src has _spiped' {
+    assert "$xsrc/_spiped" is_file
 }
 @test 'more_src has _spicedb' {
     assert "$xsrc/_spicedb" is_file
