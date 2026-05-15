@@ -568,6 +568,9 @@
 @test 'more_src has _ast-grep' {
     assert "$xsrc/_ast-grep" is_file
 }
+@test 'more_src has _asterisk' {
+    assert "$xsrc/_asterisk" is_file
+}
 @test 'more_src has _atac' {
     assert "$xsrc/_atac" is_file
 }
@@ -3539,6 +3542,9 @@
 @test 'more_src has _freerdp' {
     assert "$xsrc/_freerdp" is_file
 }
+@test 'more_src has _freeswitch' {
+    assert "$xsrc/_freeswitch" is_file
+}
 @test 'more_src has _frg' {
     assert "$xsrc/_frg" is_file
 }
@@ -4335,6 +4341,12 @@
 @test 'more_src has _harsh' {
     assert "$xsrc/_harsh" is_file
 }
+@test 'more_src has _hass' {
+    assert "$xsrc/_hass" is_file
+}
+@test 'more_src has _hass-cli' {
+    assert "$xsrc/_hass-cli" is_file
+}
 @test 'more_src has _hatch' {
     assert "$xsrc/_hatch" is_file
 }
@@ -4584,6 +4596,9 @@
 }
 @test 'more_src has _icdiff' {
     assert "$xsrc/_icdiff" is_file
+}
+@test 'more_src has _icedove' {
+    assert "$xsrc/_icedove" is_file
 }
 @test 'more_src has _idea' {
     assert "$xsrc/_idea" is_file
@@ -5076,6 +5091,12 @@
 }
 @test 'more_src has _kalker' {
     assert "$xsrc/_kalker" is_file
+}
+@test 'more_src has _kalliope' {
+    assert "$xsrc/_kalliope" is_file
+}
+@test 'more_src has _kamailio' {
+    assert "$xsrc/_kamailio" is_file
 }
 @test 'more_src has _kamal' {
     assert "$xsrc/_kamal" is_file
@@ -6847,6 +6868,9 @@
 }
 @test 'more_src has _opensearch-cli' {
     assert "$xsrc/_opensearch-cli" is_file
+}
+@test 'more_src has _opensips' {
+    assert "$xsrc/_opensips" is_file
 }
 @test 'more_src has _openspec' {
     assert "$xsrc/_openspec" is_file
@@ -9047,6 +9071,9 @@
 @test 'more_src has _syft' {
     assert "$xsrc/_syft" is_file
 }
+@test 'more_src has _sylpheed' {
+    assert "$xsrc/_sylpheed" is_file
+}
 @test 'more_src has _synadm' {
     assert "$xsrc/_synadm" is_file
 }
@@ -9586,6 +9613,9 @@
 }
 @test 'more_src has _trivy' {
     assert "$xsrc/_trivy" is_file
+}
+@test 'more_src has _trojita' {
+    assert "$xsrc/_trojita" is_file
 }
 @test 'more_src has _trop-cli' {
     assert "$xsrc/_trop-cli" is_file
