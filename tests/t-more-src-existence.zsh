@@ -4208,6 +4208,15 @@
 @test 'more_src has _gpgv-sq' {
     assert "$xsrc/_gpgv-sq" is_file
 }
+@test 'more_src has _gpsctl' {
+    assert "$xsrc/_gpsctl" is_file
+}
+@test 'more_src has _gpsmon' {
+    assert "$xsrc/_gpsmon" is_file
+}
+@test 'more_src has _gpspipe' {
+    assert "$xsrc/_gpspipe" is_file
+}
 @test 'more_src has _gpt' {
     assert "$xsrc/_gpt" is_file
 }
@@ -6731,6 +6740,9 @@
 @test 'more_src has _ntopng' {
     assert "$xsrc/_ntopng" is_file
 }
+@test 'more_src has _ntpdig' {
+    assert "$xsrc/_ntpdig" is_file
+}
 @test 'more_src has _nuclei' {
     assert "$xsrc/_nuclei" is_file
 }
@@ -7383,6 +7395,9 @@
 }
 @test 'more_src has _pkgbuild' {
     assert "$xsrc/_pkgbuild" is_file
+}
+@test 'more_src has _pki' {
+    assert "$xsrc/_pki" is_file
 }
 @test 'more_src has _pkl' {
     assert "$xsrc/_pkl" is_file
@@ -8373,6 +8388,12 @@
 @test 'more_src has _sassc' {
     assert "$xsrc/_sassc" is_file
 }
+@test 'more_src has _sbopkg' {
+    assert "$xsrc/_sbopkg" is_file
+}
+@test 'more_src has _sbotools' {
+    assert "$xsrc/_sbotools" is_file
+}
 @test 'more_src has _sbozyp' {
     assert "$xsrc/_sbozyp" is_file
 }
@@ -8477,6 +8498,9 @@
 }
 @test 'more_src has _selene' {
     assert "$xsrc/_selene" is_file
+}
+@test 'more_src has _selfserv' {
+    assert "$xsrc/_selfserv" is_file
 }
 @test 'more_src has _sema' {
     assert "$xsrc/_sema" is_file
@@ -8669,6 +8693,9 @@
 }
 @test 'more_src has _sloth' {
     assert "$xsrc/_sloth" is_file
+}
+@test 'more_src has _slpkg' {
+    assert "$xsrc/_slpkg" is_file
 }
 @test 'more_src has _slurp' {
     assert "$xsrc/_slurp" is_file
@@ -9884,6 +9911,9 @@
 }
 @test 'more_src has _ubt' {
     assert "$xsrc/_ubt" is_file
+}
+@test 'more_src has _ubxtool' {
+    assert "$xsrc/_ubxtool" is_file
 }
 
 @test 'more_src has _udiskie-umount' {
