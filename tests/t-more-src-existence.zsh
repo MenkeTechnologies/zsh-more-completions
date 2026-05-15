@@ -3753,6 +3753,9 @@
 @test 'more_src has _gmx' {
     assert "$xsrc/_gmx" is_file
 }
+@test 'more_src has _gnvm' {
+    assert "$xsrc/_gnvm" is_file
+}
 @test 'more_src has _go' {
     assert "$xsrc/_go" is_file
 }
@@ -3794,6 +3797,9 @@
 }
 @test 'more_src has _goawk' {
     assert "$xsrc/_goawk" is_file
+}
+@test 'more_src has _gobrew' {
+    assert "$xsrc/_gobrew" is_file
 }
 @test 'more_src has _gocatcli' {
     assert "$xsrc/_gocatcli" is_file
