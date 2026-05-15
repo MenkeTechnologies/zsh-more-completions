@@ -13899,3 +13899,78 @@
 @test 'more_src has _mpirun-ompi' {
     assert "$xsrc/_mpirun-ompi" is_file
 }
+@test 'more_src has _jikes' {
+    assert "$xsrc/_jikes" is_file
+}
+@test 'more_src has _kjc' {
+    assert "$xsrc/_kjc" is_file
+}
+@test 'more_src has _jvc' {
+    assert "$xsrc/_jvc" is_file
+}
+@test 'more_src has _gjar' {
+    assert "$xsrc/_gjar" is_file
+}
+@test 'more_src has _gjavah' {
+    assert "$xsrc/_gjavah" is_file
+}
+@test 'more_src has _gnative2ascii' {
+    assert "$xsrc/_gnative2ascii" is_file
+}
+@test 'more_src has _gappletviewer' {
+    assert "$xsrc/_gappletviewer" is_file
+}
+@test 'more_src has _icedtea7' {
+    assert "$xsrc/_icedtea7" is_file
+}
+@test 'more_src has _proguardgui' {
+    assert "$xsrc/_proguardgui" is_file
+}
+@test 'more_src has _clojurec' {
+    assert "$xsrc/_clojurec" is_file
+}
+@test 'more_src has _rebel-readline' {
+    assert "$xsrc/_rebel-readline" is_file
+}
+@test 'more_src has _sentinel' {
+    assert "$xsrc/_sentinel" is_file
+}
+@test 'more_src has _scala3' {
+    assert "$xsrc/_scala3" is_file
+}
+@test 'more_src has _jpackager' {
+    assert "$xsrc/_jpackager" is_file
+}
+@test 'more_src has _antlr' {
+    assert "$xsrc/_antlr" is_file
+}
+@test 'more_src has _antlrworks' {
+    assert "$xsrc/_antlrworks" is_file
+}
+@test 'more_src has _rust-bindgen' {
+    assert "$xsrc/_rust-bindgen" is_file
+}
+@test 'more_src has _rust-objcopy' {
+    assert "$xsrc/_rust-objcopy" is_file
+}
+@test 'more_src has _rust-objdump' {
+    assert "$xsrc/_rust-objdump" is_file
+}
+@test 'more_src has _rust-readobj' {
+    assert "$xsrc/_rust-readobj" is_file
+}
+@test 'more_src has _rust-size' {
+    assert "$xsrc/_rust-size" is_file
+}
+@test 'more_src has _rust-strings' {
+    assert "$xsrc/_rust-strings" is_file
+}
+@test 'more_src has _rust-strip' {
+    assert "$xsrc/_rust-strip" is_file
+}
+@test 'more_src has _genie' {
+    assert "$xsrc/_genie" is_file
+}
+@test 'more_src has _nmake' {
+    assert "$xsrc/_nmake" is_file
+}
