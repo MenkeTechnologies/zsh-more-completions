@@ -1721,6 +1721,9 @@
 @test 'more_src has _cilium' {
     assert "$xsrc/_cilium" is_file
 }
+@test 'more_src has _cinnamon-settings' {
+    assert "$xsrc/_cinnamon-settings" is_file
+}
 @test 'more_src has _circleci' {
     assert "$xsrc/_circleci" is_file
 }
@@ -3624,6 +3627,9 @@
 @test 'more_src has _fvm' {
     assert "$xsrc/_fvm" is_file
 }
+@test 'more_src has _fvwm' {
+    assert "$xsrc/_fvwm" is_file
+}
 @test 'more_src has _fx' {
     assert "$xsrc/_fx" is_file
 }
@@ -4990,6 +4996,9 @@
 @test 'more_src has _just' {
     assert "$xsrc/_just" is_file
 }
+@test 'more_src has _jwm' {
+    assert "$xsrc/_jwm" is_file
+}
 @test 'more_src has _jux-keygen' {
     assert "$xsrc/_jux-keygen" is_file
 }
@@ -5800,6 +5809,15 @@
 @test 'more_src has _lx' {
     assert "$xsrc/_lx" is_file
 }
+@test 'more_src has _lxqt-panel' {
+    assert "$xsrc/_lxqt-panel" is_file
+}
+@test 'more_src has _lxqt-session' {
+    assert "$xsrc/_lxqt-session" is_file
+}
+@test 'more_src has _lxrandr' {
+    assert "$xsrc/_lxrandr" is_file
+}
 @test 'more_src has _ly-fu' {
     assert "$xsrc/_ly-fu" is_file
 }
@@ -5910,6 +5928,9 @@
 }
 @test 'more_src has _massren' {
     assert "$xsrc/_massren" is_file
+}
+@test 'more_src has _mate-session-manager' {
+    assert "$xsrc/_mate-session-manager" is_file
 }
 @test 'more_src has _math' {
     assert "$xsrc/_math" is_file
@@ -6382,6 +6403,9 @@
 @test 'more_src has _muxx' {
     assert "$xsrc/_muxx" is_file
 }
+@test 'more_src has _mwm' {
+    assert "$xsrc/_mwm" is_file
+}
 @test 'more_src has _mxl.zsh' {
     assert "$xsrc/_mxl.zsh" is_file
 }
@@ -6784,6 +6808,9 @@
 }
 @test 'more_src has _nwchem' {
     assert "$xsrc/_nwchem" is_file
+}
+@test 'more_src has _nwg-launchers' {
+    assert "$xsrc/_nwg-launchers" is_file
 }
 @test 'more_src has _o2' {
     assert "$xsrc/_o2" is_file
@@ -7214,6 +7241,9 @@
 }
 @test 'more_src has _peek' {
     assert "$xsrc/_peek" is_file
+}
+@test 'more_src has _pekwm' {
+    assert "$xsrc/_pekwm" is_file
 }
 @test 'more_src has _pencil2d' {
     assert "$xsrc/_pencil2d" is_file
