@@ -754,6 +754,9 @@
 @test 'more_src has _autocode' {
     assert "$xsrc/_autocode" is_file
 }
+@test 'more_src has _autocutsel' {
+    assert "$xsrc/_autocutsel" is_file
+}
 @test 'more_src has _autoexpect' {
     assert "$xsrc/_autoexpect" is_file
 }
@@ -1324,6 +1327,9 @@
 @test 'more_src has _btrfs-check' {
     assert "$xsrc/_btrfs-check" is_file
 }
+@test 'more_src has _btrfs-corrupt-block' {
+    assert "$xsrc/_btrfs-corrupt-block" is_file
+}
 @test 'more_src has _btrfs-receive' {
     assert "$xsrc/_btrfs-receive" is_file
 }
@@ -1332,6 +1338,9 @@
 }
 @test 'more_src has _btrfs-send' {
     assert "$xsrc/_btrfs-send" is_file
+}
+@test 'more_src has _btrfs-snap' {
+    assert "$xsrc/_btrfs-snap" is_file
 }
 @test 'more_src has _buck2' {
     assert "$xsrc/_buck2" is_file
@@ -1988,6 +1997,9 @@
 @test 'more_src has _cinnamon-settings' {
     assert "$xsrc/_cinnamon-settings" is_file
 }
+@test 'more_src has _ciptest' {
+    assert "$xsrc/_ciptest" is_file
+}
 @test 'more_src has _circleci' {
     assert "$xsrc/_circleci" is_file
 }
@@ -2145,6 +2157,9 @@
 }
 @test 'more_src has _cmigemo' {
     assert "$xsrc/_cmigemo" is_file
+}
+@test 'more_src has _cmix' {
+    assert "$xsrc/_cmix" is_file
 }
 @test 'more_src has _cmus' {
     assert "$xsrc/_cmus" is_file
@@ -3417,6 +3432,9 @@
 @test 'more_src has _dump1090' {
     assert "$xsrc/_dump1090" is_file
 }
+@test 'more_src has _dund' {
+    assert "$xsrc/_dund" is_file
+}
 @test 'more_src has _dunstctl' {
     assert "$xsrc/_dunstctl" is_file
 }
@@ -3479,6 +3497,9 @@
 }
 @test 'more_src has _e' {
     assert "$xsrc/_e" is_file
+}
+@test 'more_src has _e2undel' {
+    assert "$xsrc/_e2undel" is_file
 }
 @test 'more_src has _earbuds' {
     assert "$xsrc/_earbuds" is_file
@@ -3713,6 +3734,9 @@
 @test 'more_src has _eternal-terminal' {
     assert "$xsrc/_eternal-terminal" is_file
 }
+@test 'more_src has _ettercap-curses' {
+    assert "$xsrc/_ettercap-curses" is_file
+}
 @test 'more_src has _ets' {
     assert "$xsrc/_ets" is_file
 }
@@ -3776,6 +3800,9 @@
 @test 'more_src has _expressvpn' {
     assert "$xsrc/_expressvpn" is_file
 }
+@test 'more_src has _ext4magic' {
+    assert "$xsrc/_ext4magic" is_file
+}
 @test 'more_src has _extresso' {
     assert "$xsrc/_extresso" is_file
 }
@@ -3827,8 +3854,26 @@
 @test 'more_src has _f2' {
     assert "$xsrc/_f2" is_file
 }
+@test 'more_src has _f3' {
+    assert "$xsrc/_f3" is_file
+}
+@test 'more_src has _f3brew' {
+    assert "$xsrc/_f3brew" is_file
+}
 @test 'more_src has _f3d' {
     assert "$xsrc/_f3d" is_file
+}
+@test 'more_src has _f3fix' {
+    assert "$xsrc/_f3fix" is_file
+}
+@test 'more_src has _f3probe' {
+    assert "$xsrc/_f3probe" is_file
+}
+@test 'more_src has _f3read' {
+    assert "$xsrc/_f3read" is_file
+}
+@test 'more_src has _f3write' {
+    assert "$xsrc/_f3write" is_file
 }
 @test 'more_src has _faas-cli' {
     assert "$xsrc/_faas-cli" is_file
@@ -4185,11 +4230,17 @@
 @test 'more_src has _frum' {
     assert "$xsrc/_frum" is_file
 }
+@test 'more_src has _fsck.btrfs' {
+    assert "$xsrc/_fsck.btrfs" is_file
+}
 @test 'more_src has _fselect' {
     assert "$xsrc/_fselect" is_file
 }
 @test 'more_src has _fstar.exe' {
     assert "$xsrc/_fstar.exe" is_file
+}
+@test 'more_src has _fsverity' {
+    assert "$xsrc/_fsverity" is_file
 }
 @test 'more_src has _fswebcam' {
     assert "$xsrc/_fswebcam" is_file
@@ -6501,6 +6552,9 @@
 @test 'more_src has _kzonecheck' {
     assert "$xsrc/_kzonecheck" is_file
 }
+@test 'more_src has _l2test' {
+    assert "$xsrc/_l2test" is_file
+}
 @test 'more_src has _lacheck' {
     assert "$xsrc/_lacheck" is_file
 }
@@ -7501,6 +7555,9 @@
 @test 'more_src has _mscore4' {
     assert "$xsrc/_mscore4" is_file
 }
+@test 'more_src has _msunpack' {
+    assert "$xsrc/_msunpack" is_file
+}
 @test 'more_src has _msync' {
     assert "$xsrc/_msync" is_file
 }
@@ -7755,6 +7812,9 @@
 
 @test 'more_src has _nfpm' {
     assert "$xsrc/_nfpm" is_file
+}
+@test 'more_src has _nfsen' {
+    assert "$xsrc/_nfsen" is_file
 }
 @test 'more_src has _nftables' {
     assert "$xsrc/_nftables" is_file
@@ -8062,6 +8122,9 @@
 }
 @test 'more_src has _obabel' {
     assert "$xsrc/_obabel" is_file
+}
+@test 'more_src has _obex_test' {
+    assert "$xsrc/_obex_test" is_file
 }
 @test 'more_src has _obexd' {
     assert "$xsrc/_obexd" is_file
@@ -8462,6 +8525,9 @@
 }
 @test 'more_src has _panache' {
     assert "$xsrc/_panache" is_file
+}
+@test 'more_src has _pand' {
+    assert "$xsrc/_pand" is_file
 }
 @test 'more_src has _panoglview' {
     assert "$xsrc/_panoglview" is_file
@@ -10131,6 +10197,9 @@
 @test 'more_src has _sarif' {
     assert "$xsrc/_sarif" is_file
 }
+@test 'more_src has _sasquatch' {
+    assert "$xsrc/_sasquatch" is_file
+}
 @test 'more_src has _sassc' {
     assert "$xsrc/_sassc" is_file
 }
@@ -11577,6 +11646,9 @@
 @test 'more_src has _tlf' {
     assert "$xsrc/_tlf" is_file
 }
+@test 'more_src has _tlp-pcilist' {
+    assert "$xsrc/_tlp-pcilist" is_file
+}
 @test 'more_src has _tlp-radio-device' {
     assert "$xsrc/_tlp-radio-device" is_file
 }
@@ -11585,6 +11657,9 @@
 }
 @test 'more_src has _tlp-run-on' {
     assert "$xsrc/_tlp-run-on" is_file
+}
+@test 'more_src has _tlp-usblist' {
+    assert "$xsrc/_tlp-usblist" is_file
 }
 @test 'more_src has _tlsx' {
     assert "$xsrc/_tlsx" is_file
