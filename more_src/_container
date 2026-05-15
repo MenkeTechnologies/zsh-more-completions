@@ -1,0 +1,1307 @@
+#compdef container
+# Source: Homebrew bottle
+# Formula: container
+# Type: maintainer-shipped (Homebrew)
+# Harvested: 2026-05-15
+
+__container_complete() {
+    local -ar non_empty_completions=("${@:#(|:*)}")
+    local -ar empty_completions=("${(M)@:#(|:*)}")
+    _describe -V '' non_empty_completions -- empty_completions -P $'\'\''
+}
+
+__container_custom_complete() {
+    local -a completions
+    completions=("${(@f)"$("${command_name}" "${@}" "${command_line[@]}")"}")
+    if [[ "${#completions[@]}" -gt 1 ]]; then
+        __container_complete "${completions[@]:0:-1}"
+    fi
+}
+
+__container_cursor_index_in_current_word() {
+    if [[ -z "${QIPREFIX}${IPREFIX}${PREFIX}" ]]; then
+        printf 0
+    else
+        printf %s "${#${(z)LBUFFER}[-1]}"
+    fi
+}
+
+_container() {
+    emulate -RL zsh -G
+    setopt extendedglob nullglob numericglobsort
+    unsetopt aliases banghist
+
+    local -xr SAP_SHELL=zsh
+    local -x SAP_SHELL_VERSION
+    SAP_SHELL_VERSION="$(builtin emulate zsh -c 'printf %s "${ZSH_VERSION}"')"
+    local -r SAP_SHELL_VERSION
+
+    local context state state_descr line
+    local -A opt_args
+
+    local -r command_name="${words[1]}"
+    local -ar command_line=("${words[@]}")
+    local -ir current_word_index="$((CURRENT - 1))"
+
+    local -i ret=1
+    local -ar arg_specs=(
+        '--debug[Enable debug output \[environment\: CONTAINER_DEBUG\]]'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+        '(-): :->command'
+        '(-)*:: :->arg'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+    case "${state}" in
+    command)
+        local -ar subcommands=(
+            'create:Create a new container'
+            'delete:Delete one or more containers'
+            'exec:Run a new command in a running container'
+            'export:Export a container'\''s filesystem as a tar archive'
+            'inspect:Display information about one or more containers'
+            'kill:Kill or signal one or more running containers'
+            'list:List running containers'
+            'logs:Fetch container logs'
+            'run:Run a container'
+            'start:Start a container'
+            'stats:Display resource usage statistics for containers'
+            'stop:Stop one or more running containers'
+            'prune:Remove all stopped containers'
+            'build:Build an image from a Dockerfile or Containerfile'
+            'image:Manage images'
+            'registry:Manage registry logins'
+            'volume:Manage container volumes'
+            'builder:Manage an image builder instance'
+            'network:Manage container networks'
+            'system:Manage system components'
+            'help:Show subcommand help information.'
+        )
+        _describe -V subcommand subcommands
+        ;;
+    arg)
+        case "${words[1]}" in
+        create|delete|exec|export|inspect|kill|list|logs|run|start|stats|stop|prune|build|image|registry|volume|builder|network|system|help)
+            "_container_${words[1]}"
+            ;;
+        esac
+        ;;
+    esac
+
+    return "${ret}"
+}
+
+_container_create() {
+    local -i ret=1
+    local -ar arg_specs=(
+        '*'{--env,-e}'[Set environment variables (key=value, or just key to inherit from host)]:env:'
+        '*--env-file[Read in a file of environment variables (key=value format, ignores # comments and blank lines)]:env-file:'
+        '--gid[Set the group ID for the process]:gid:'
+        '(--interactive -i)'{--interactive,-i}'[Keep the standard input open even if not attached]'
+        '(--tty -t)'{--tty,-t}'[Open a TTY with the process]'
+        '(--user -u)'{--user,-u}'[Set the user for the process (format\: name|uid\[\:gid\])]:user:'
+        '--uid[Set the user ID for the process]:uid:'
+        '(-w --workdir --cwd)'{-w,--workdir,--cwd}'[Set the initial working directory inside the container]:dir:'
+        '*--ulimit[Set resource limits (format\: <type>=<soft>\[\:<hard>\])]:limit:'
+        '(--cpus -c)'{--cpus,-c}'[Number of CPUs to allocate to the container]:cpus:'
+        '(--memory -m)'{--memory,-m}'[Amount of memory (1MiByte granularity), with optional K, M, G, T, or P suffix]:memory:'
+        '(--arch -a)'{--arch,-a}'[Set arch if image can target multiple architectures]:arch:'
+        '*--cap-add[Add a Linux capability (e.g. CAP_NET_RAW, or ALL)]:cap:'
+        '*--cap-drop[Drop a Linux capability (e.g. CAP_NET_RAW, or ALL)]:cap:'
+        '--cidfile[Write the container ID to the path provided]:cidfile:'
+        '(--detach -d)'{--detach,-d}'[Run the container and detach from the process]'
+        '*--dns[DNS nameserver IP address]:ip:'
+        '--dns-domain[Default DNS domain]:domain:'
+        '*--dns-option[DNS options]:option:'
+        '*--dns-search[DNS search domains]:domain:'
+        '--entrypoint[Override the entrypoint of the image]:cmd:'
+        '--init[Run an init process inside the container that forwards signals and reaps processes]'
+        '--init-image[Use a custom init image instead of the default]:image:'
+        '(--kernel -k)'{--kernel,-k}'[Set a custom kernel path]:path:_files'
+        '*'{-l,--label}'[Add a key=value label to the container]:label:'
+        '*--mount[Add a mount to the container (format\: type=<>,source=<>,target=<>,readonly)]:mount:'
+        '--name[Use the specified name as the container ID]:name:'
+        '*--network[Attach the container to a network (format\: <name>\[,mac=XX\:XX\:XX\:XX\:XX\:XX\]\[,mtu=VALUE\])]:network:'
+        '--no-dns[Do not configure DNS in the container]'
+        '--os[Set OS if image can target multiple operating systems]:os:'
+        '*'{-p,--publish}'[Publish a port from container to host (format\: \[host-ip\:\]host-port\:container-port\[/protocol\])]:spec:'
+        '--platform[Platform for the image if it'\''s multi-platform. This takes precedence over --os and --arch \[environment\: CONTAINER_DEFAULT_PLATFORM\]]:platform:'
+        '*--publish-socket[Publish a socket from container to host (format\: host_path\:container_path)]:spec:'
+        '--read-only[Mount the container'\''s root filesystem as read-only]'
+        '(--rm --remove)'{--rm,--remove}'[Remove the container after it stops]'
+        '--rosetta[Enable Rosetta in the container]'
+        '--runtime[Set the runtime handler for the container (default\: container-runtime-linux)]:runtime:'
+        '--ssh[Forward SSH agent socket to container]'
+        '*--tmpfs[Add a tmpfs mount to the container at the given path]:tmpfs:'
+        '--virtualization[Expose virtualization capabilities to the container (requires host and guest support)]'
+        '*'{--volume,-v}'[Bind mount a volume into the container]:volume:'
+        '--scheme[Scheme to use when connecting to the container registry. One of (http, https, auto)]:scheme:'
+        '--max-concurrent-downloads[Maximum number of concurrent downloads (default\: 3)]:max-concurrent-downloads:'
+        '--debug[Enable debug output \[environment\: CONTAINER_DEBUG\]]'
+        ':image:'
+        '*:arguments:'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+
+    return "${ret}"
+}
+
+_container_delete() {
+    local -i ret=1
+    local -ar arg_specs=(
+        '(--all -a)'{--all,-a}'[Delete all containers]'
+        '(--force -f)'{--force,-f}'[Delete containers even if they are running]'
+        '--debug[Enable debug output \[environment\: CONTAINER_DEBUG\]]'
+        '*:container-ids:'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+
+    return "${ret}"
+}
+
+_container_exec() {
+    local -i ret=1
+    local -ar arg_specs=(
+        '*'{--env,-e}'[Set environment variables (key=value, or just key to inherit from host)]:env:'
+        '*--env-file[Read in a file of environment variables (key=value format, ignores # comments and blank lines)]:env-file:'
+        '--gid[Set the group ID for the process]:gid:'
+        '(--interactive -i)'{--interactive,-i}'[Keep the standard input open even if not attached]'
+        '(--tty -t)'{--tty,-t}'[Open a TTY with the process]'
+        '(--user -u)'{--user,-u}'[Set the user for the process (format\: name|uid\[\:gid\])]:user:'
+        '--uid[Set the user ID for the process]:uid:'
+        '(-w --workdir --cwd)'{-w,--workdir,--cwd}'[Set the initial working directory inside the container]:dir:'
+        '*--ulimit[Set resource limits (format\: <type>=<soft>\[\:<hard>\])]:limit:'
+        '--debug[Enable debug output \[environment\: CONTAINER_DEBUG\]]'
+        '(--detach -d)'{--detach,-d}'[Run the process and detach from it]'
+        ':container-id:'
+        '*:arguments:'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+
+    return "${ret}"
+}
+
+_container_export() {
+    local -i ret=1
+    local -ar arg_specs=(
+        '--debug[Enable debug output \[environment\: CONTAINER_DEBUG\]]'
+        '(--output -o)'{--output,-o}'[Pathname for the saved container filesystem (defaults to stdout)]:output:_files'
+        ':id:'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+
+    return "${ret}"
+}
+
+_container_inspect() {
+    local -i ret=1
+    local -ar arg_specs=(
+        '--debug[Enable debug output \[environment\: CONTAINER_DEBUG\]]'
+        '*:container-ids:'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+
+    return "${ret}"
+}
+
+_container_kill() {
+    local -i ret=1
+    local -ar arg_specs=(
+        '(--all -a)'{--all,-a}'[Kill or signal all running containers]'
+        '(--signal -s)'{--signal,-s}'[Signal to send to the container(s)]:signal:'
+        '--debug[Enable debug output \[environment\: CONTAINER_DEBUG\]]'
+        '*:container-ids:'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+
+    return "${ret}"
+}
+
+_container_list() {
+    local -i ret=1
+    local -ar ___format=('json' 'table' 'yaml')
+    local -ar arg_specs=(
+        '(--all -a)'{--all,-a}'[Include containers that are not running]'
+        '--format[Format of the output]:format:{__container_complete "${___format[@]}"}'
+        '(--quiet -q)'{--quiet,-q}'[Only output the container ID]'
+        '--debug[Enable debug output \[environment\: CONTAINER_DEBUG\]]'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+
+    return "${ret}"
+}
+
+_container_logs() {
+    local -i ret=1
+    local -ar arg_specs=(
+        '--boot[Display the boot log for the container instead of stdio]'
+        '(--follow -f)'{--follow,-f}'[Follow log output]'
+        '-n[Number of lines to show from the end of the logs. If not provided this will print all of the logs]:n:'
+        '--debug[Enable debug output \[environment\: CONTAINER_DEBUG\]]'
+        ':container-id:'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+
+    return "${ret}"
+}
+
+_container_run() {
+    local -i ret=1
+    local -ar arg_specs=(
+        '*'{--env,-e}'[Set environment variables (key=value, or just key to inherit from host)]:env:'
+        '*--env-file[Read in a file of environment variables (key=value format, ignores # comments and blank lines)]:env-file:'
+        '--gid[Set the group ID for the process]:gid:'
+        '(--interactive -i)'{--interactive,-i}'[Keep the standard input open even if not attached]'
+        '(--tty -t)'{--tty,-t}'[Open a TTY with the process]'
+        '(--user -u)'{--user,-u}'[Set the user for the process (format\: name|uid\[\:gid\])]:user:'
+        '--uid[Set the user ID for the process]:uid:'
+        '(-w --workdir --cwd)'{-w,--workdir,--cwd}'[Set the initial working directory inside the container]:dir:'
+        '*--ulimit[Set resource limits (format\: <type>=<soft>\[\:<hard>\])]:limit:'
+        '(--cpus -c)'{--cpus,-c}'[Number of CPUs to allocate to the container]:cpus:'
+        '(--memory -m)'{--memory,-m}'[Amount of memory (1MiByte granularity), with optional K, M, G, T, or P suffix]:memory:'
+        '(--arch -a)'{--arch,-a}'[Set arch if image can target multiple architectures]:arch:'
+        '*--cap-add[Add a Linux capability (e.g. CAP_NET_RAW, or ALL)]:cap:'
+        '*--cap-drop[Drop a Linux capability (e.g. CAP_NET_RAW, or ALL)]:cap:'
+        '--cidfile[Write the container ID to the path provided]:cidfile:'
+        '(--detach -d)'{--detach,-d}'[Run the container and detach from the process]'
+        '*--dns[DNS nameserver IP address]:ip:'
+        '--dns-domain[Default DNS domain]:domain:'
+        '*--dns-option[DNS options]:option:'
+        '*--dns-search[DNS search domains]:domain:'
+        '--entrypoint[Override the entrypoint of the image]:cmd:'
+        '--init[Run an init process inside the container that forwards signals and reaps processes]'
+        '--init-image[Use a custom init image instead of the default]:image:'
+        '(--kernel -k)'{--kernel,-k}'[Set a custom kernel path]:path:_files'
+        '*'{-l,--label}'[Add a key=value label to the container]:label:'
+        '*--mount[Add a mount to the container (format\: type=<>,source=<>,target=<>,readonly)]:mount:'
+        '--name[Use the specified name as the container ID]:name:'
+        '*--network[Attach the container to a network (format\: <name>\[,mac=XX\:XX\:XX\:XX\:XX\:XX\]\[,mtu=VALUE\])]:network:'
+        '--no-dns[Do not configure DNS in the container]'
+        '--os[Set OS if image can target multiple operating systems]:os:'
+        '*'{-p,--publish}'[Publish a port from container to host (format\: \[host-ip\:\]host-port\:container-port\[/protocol\])]:spec:'
+        '--platform[Platform for the image if it'\''s multi-platform. This takes precedence over --os and --arch \[environment\: CONTAINER_DEFAULT_PLATFORM\]]:platform:'
+        '*--publish-socket[Publish a socket from container to host (format\: host_path\:container_path)]:spec:'
+        '--read-only[Mount the container'\''s root filesystem as read-only]'
+        '(--rm --remove)'{--rm,--remove}'[Remove the container after it stops]'
+        '--rosetta[Enable Rosetta in the container]'
+        '--runtime[Set the runtime handler for the container (default\: container-runtime-linux)]:runtime:'
+        '--ssh[Forward SSH agent socket to container]'
+        '*--tmpfs[Add a tmpfs mount to the container at the given path]:tmpfs:'
+        '--virtualization[Expose virtualization capabilities to the container (requires host and guest support)]'
+        '*'{--volume,-v}'[Bind mount a volume into the container]:volume:'
+        '--scheme[Scheme to use when connecting to the container registry. One of (http, https, auto)]:scheme:'
+        '--progress[Progress type (format\: auto|none|ansi|plain|color)]:type:'
+        '--max-concurrent-downloads[Maximum number of concurrent downloads (default\: 3)]:max-concurrent-downloads:'
+        '--debug[Enable debug output \[environment\: CONTAINER_DEBUG\]]'
+        ':image:'
+        '*:arguments:'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+
+    return "${ret}"
+}
+
+_container_start() {
+    local -i ret=1
+    local -ar arg_specs=(
+        '(--attach -a)'{--attach,-a}'[Attach stdout/stderr]'
+        '(--interactive -i)'{--interactive,-i}'[Attach stdin]'
+        '--debug[Enable debug output \[environment\: CONTAINER_DEBUG\]]'
+        ':container-id:'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+
+    return "${ret}"
+}
+
+_container_stats() {
+    local -i ret=1
+    local -ar ___format=('json' 'table' 'yaml')
+    local -ar arg_specs=(
+        '*:containers:'
+        '--format[Format of the output]:format:{__container_complete "${___format[@]}"}'
+        '--no-stream[Disable streaming stats and only pull the first result]'
+        '--debug[Enable debug output \[environment\: CONTAINER_DEBUG\]]'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+
+    return "${ret}"
+}
+
+_container_stop() {
+    local -i ret=1
+    local -ar arg_specs=(
+        '(--all -a)'{--all,-a}'[Stop all running containers]'
+        '(--signal -s)'{--signal,-s}'[Signal to send to the containers]:signal:'
+        '(--time -t)'{--time,-t}'[Seconds to wait before killing the containers]:time:'
+        '--debug[Enable debug output \[environment\: CONTAINER_DEBUG\]]'
+        '*:container-ids:'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+
+    return "${ret}"
+}
+
+_container_prune() {
+    local -i ret=1
+    local -ar arg_specs=(
+        '--debug[Enable debug output \[environment\: CONTAINER_DEBUG\]]'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+
+    return "${ret}"
+}
+
+_container_build() {
+    local -i ret=1
+    local -ar arg_specs=(
+        '*'{--arch,-a}'[Add the architecture type to the build]:value:'
+        '*--build-arg[Set build-time variables]:key=val:'
+        '(--cpus -c)'{--cpus,-c}'[Number of CPUs to allocate to the builder container]:cpus:'
+        '(--file -f)'{--file,-f}'[Path to Dockerfile]:path:'
+        '*'{--label,-l}'[Set a label]:key=val:'
+        '(--memory -m)'{--memory,-m}'[Amount of builder container memory (1MiByte granularity), with optional K, M, G, T, or P suffix]:memory:'
+        '--no-cache[Do not use cache]'
+        '*'{--output,-o}'[Output configuration for the build (format\: type=<oci|tar|local>\[,dest=\])]:value:'
+        '*--os[Add the OS type to the build]:value:'
+        '*--platform[Add the platform to the build (format\: os/arch\[/variant\], takes precedence over --os and --arch) \[environment\: CONTAINER_DEFAULT_PLATFORM\]]:platform:'
+        '--progress[Progress type (format\: auto|plain|tty)]:type:'
+        '(--quiet -q)'{--quiet,-q}'[Suppress build output]'
+        '*--secret[Set build-time secrets (format\: id=<key>\[,env=<ENV_VAR>|,src=<local/path>\])]:id=key,...:'
+        '*'{-t,--tag}'[Name for the built image]:name:'
+        '--target[Set the target build stage]:stage:'
+        '--vsock-port[Builder shim vsock port]:port:'
+        '--debug[Enable debug output \[environment\: CONTAINER_DEBUG\]]'
+        '*--dns[DNS nameserver IP address]:ip:'
+        '--dns-domain[Default DNS domain]:domain:'
+        '*--dns-option[DNS options]:option:'
+        '*--dns-search[DNS search domains]:domain:'
+        ':context-dir:'
+        '--pull[Pull latest image]'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+
+    return "${ret}"
+}
+
+_container_image() {
+    local -i ret=1
+    local -ar arg_specs=(
+        '--debug[Enable debug output \[environment\: CONTAINER_DEBUG\]]'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+        '(-): :->command'
+        '(-)*:: :->arg'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+    case "${state}" in
+    command)
+        local -ar subcommands=(
+            'delete:Delete one or more images'
+            'inspect:Display information about one or more images'
+            'list:List images'
+            'load:Load images from an OCI compatible tar archive'
+            'prune:Remove all dangling images. If -a is specified, also remove all images not referenced by any container.'
+            'pull:Pull an image'
+            'push:Push an image'
+            'save:Save one or more images as an OCI compatible tar archive'
+            'tag:Create a new reference for an existing image'
+        )
+        _describe -V subcommand subcommands
+        ;;
+    arg)
+        case "${words[1]}" in
+        delete|inspect|list|load|prune|pull|push|save|tag)
+            "_container_image_${words[1]}"
+            ;;
+        esac
+        ;;
+    esac
+
+    return "${ret}"
+}
+
+_container_image_delete() {
+    local -i ret=1
+    local -ar arg_specs=(
+        '(--all -a)'{--all,-a}'[Delete all images]'
+        '(--force -f)'{--force,-f}'[Ignore errors for images that are not found]'
+        '*:images:'
+        '--debug[Enable debug output \[environment\: CONTAINER_DEBUG\]]'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+
+    return "${ret}"
+}
+
+_container_image_inspect() {
+    local -i ret=1
+    local -ar arg_specs=(
+        '--debug[Enable debug output \[environment\: CONTAINER_DEBUG\]]'
+        '*:images:'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+
+    return "${ret}"
+}
+
+_container_image_list() {
+    local -i ret=1
+    local -ar ___format=('json' 'table' 'yaml')
+    local -ar arg_specs=(
+        '--format[Format of the output]:format:{__container_complete "${___format[@]}"}'
+        '(--quiet -q)'{--quiet,-q}'[Only output the image name]'
+        '(--verbose -v)'{--verbose,-v}'[Verbose output]'
+        '--debug[Enable debug output \[environment\: CONTAINER_DEBUG\]]'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+
+    return "${ret}"
+}
+
+_container_image_load() {
+    local -i ret=1
+    local -ar arg_specs=(
+        '(--input -i)'{--input,-i}'[Path to the image tar archive]:input:_files'
+        '(--force -f)'{--force,-f}'[Load images even if the archive contains invalid files]'
+        '--debug[Enable debug output \[environment\: CONTAINER_DEBUG\]]'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+
+    return "${ret}"
+}
+
+_container_image_prune() {
+    local -i ret=1
+    local -ar arg_specs=(
+        '--debug[Enable debug output \[environment\: CONTAINER_DEBUG\]]'
+        '(--all -a)'{--all,-a}'[Remove all unused images, not just dangling ones]'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+
+    return "${ret}"
+}
+
+_container_image_pull() {
+    local -i ret=1
+    local -ar arg_specs=(
+        '--scheme[Scheme to use when connecting to the container registry. One of (http, https, auto)]:scheme:'
+        '--progress[Progress type (format\: auto|none|ansi|plain|color)]:type:'
+        '--max-concurrent-downloads[Maximum number of concurrent downloads (default\: 3)]:max-concurrent-downloads:'
+        '(--arch -a)'{--arch,-a}'[Limit the pull to the specified architecture]:arch:'
+        '--os[Limit the pull to the specified OS]:os:'
+        '--platform[Limit the pull to the specified platform (format\: os/arch\[/variant\], takes precedence over --os and --arch) \[environment\: CONTAINER_DEFAULT_PLATFORM\]]:platform:'
+        '--debug[Enable debug output \[environment\: CONTAINER_DEBUG\]]'
+        ':reference:'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+
+    return "${ret}"
+}
+
+_container_image_push() {
+    local -i ret=1
+    local -ar arg_specs=(
+        '--scheme[Scheme to use when connecting to the container registry. One of (http, https, auto)]:scheme:'
+        '--progress[Progress type (format\: auto|none|ansi|plain|color)]:type:'
+        '(--arch -a)'{--arch,-a}'[Limit the push to the specified architecture]:arch:'
+        '--os[Limit the push to the specified OS]:os:'
+        '--platform[Limit the push to the specified platform (format\: os/arch\[/variant\], takes precedence over --os and --arch) \[environment\: CONTAINER_DEFAULT_PLATFORM\]]:platform:'
+        '--debug[Enable debug output \[environment\: CONTAINER_DEBUG\]]'
+        ':reference:'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+
+    return "${ret}"
+}
+
+_container_image_save() {
+    local -i ret=1
+    local -ar arg_specs=(
+        '(--arch -a)'{--arch,-a}'[Architecture for the saved image]:arch:'
+        '--os[OS for the saved image]:os:'
+        '(--output -o)'{--output,-o}'[Pathname for the saved image]:output:_files'
+        '--platform[Platform for the saved image (format\: os/arch\[/variant\], takes precedence over --os and --arch) \[environment\: CONTAINER_DEFAULT_PLATFORM\]]:platform:'
+        '--debug[Enable debug output \[environment\: CONTAINER_DEBUG\]]'
+        '*:references:'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+
+    return "${ret}"
+}
+
+_container_image_tag() {
+    local -i ret=1
+    local -ar arg_specs=(
+        ':source:'
+        ':target:'
+        '--debug[Enable debug output \[environment\: CONTAINER_DEBUG\]]'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+
+    return "${ret}"
+}
+
+_container_registry() {
+    local -i ret=1
+    local -ar arg_specs=(
+        '--debug[Enable debug output \[environment\: CONTAINER_DEBUG\]]'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+        '(-): :->command'
+        '(-)*:: :->arg'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+    case "${state}" in
+    command)
+        local -ar subcommands=(
+            'login:Log in to a registry'
+            'logout:Log out from a registry'
+            'list:List image registry logins'
+        )
+        _describe -V subcommand subcommands
+        ;;
+    arg)
+        case "${words[1]}" in
+        login|logout|list)
+            "_container_registry_${words[1]}"
+            ;;
+        esac
+        ;;
+    esac
+
+    return "${ret}"
+}
+
+_container_registry_login() {
+    local -i ret=1
+    local -ar arg_specs=(
+        '--scheme[Scheme to use when connecting to the container registry. One of (http, https, auto)]:scheme:'
+        '--password-stdin[Take the password from stdin]'
+        '(--username -u)'{--username,-u}'[Registry user name]:username:'
+        '--debug[Enable debug output \[environment\: CONTAINER_DEBUG\]]'
+        ':server:'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+
+    return "${ret}"
+}
+
+_container_registry_logout() {
+    local -i ret=1
+    local -ar arg_specs=(
+        '--debug[Enable debug output \[environment\: CONTAINER_DEBUG\]]'
+        ':registry:'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+
+    return "${ret}"
+}
+
+_container_registry_list() {
+    local -i ret=1
+    local -ar ___format=('json' 'table' 'yaml')
+    local -ar arg_specs=(
+        '--debug[Enable debug output \[environment\: CONTAINER_DEBUG\]]'
+        '--format[Format of the output]:format:{__container_complete "${___format[@]}"}'
+        '(--quiet -q)'{--quiet,-q}'[Only output the registry hostname]'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+
+    return "${ret}"
+}
+
+_container_volume() {
+    local -i ret=1
+    local -ar arg_specs=(
+        '--debug[Enable debug output \[environment\: CONTAINER_DEBUG\]]'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+        '(-): :->command'
+        '(-)*:: :->arg'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+    case "${state}" in
+    command)
+        local -ar subcommands=(
+            'create:Create a new volume'
+            'delete:Delete one or more volumes'
+            'list:List volumes'
+            'inspect:Display information about one or more volumes'
+            'prune:Remove volumes with no container references'
+        )
+        _describe -V subcommand subcommands
+        ;;
+    arg)
+        case "${words[1]}" in
+        create|delete|list|inspect|prune)
+            "_container_volume_${words[1]}"
+            ;;
+        esac
+        ;;
+    esac
+
+    return "${ret}"
+}
+
+_container_volume_create() {
+    local -i ret=1
+    local -ar arg_specs=(
+        '*--label[Set metadata for a volume]:label:'
+        '*--opt[Set driver specific options]:opt:'
+        '-s[Size of the volume in bytes, with optional K, M, G, T, or P suffix]:s:'
+        '--debug[Enable debug output \[environment\: CONTAINER_DEBUG\]]'
+        ':name:'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+
+    return "${ret}"
+}
+
+_container_volume_delete() {
+    local -i ret=1
+    local -ar arg_specs=(
+        '(--all -a)'{--all,-a}'[Delete all volumes]'
+        '--debug[Enable debug output \[environment\: CONTAINER_DEBUG\]]'
+        '*:names:'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+
+    return "${ret}"
+}
+
+_container_volume_list() {
+    local -i ret=1
+    local -ar ___format=('json' 'table' 'yaml')
+    local -ar arg_specs=(
+        '--format[Format of the output]:format:{__container_complete "${___format[@]}"}'
+        '(--quiet -q)'{--quiet,-q}'[Only output the volume name]'
+        '--debug[Enable debug output \[environment\: CONTAINER_DEBUG\]]'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+
+    return "${ret}"
+}
+
+_container_volume_inspect() {
+    local -i ret=1
+    local -ar arg_specs=(
+        '--debug[Enable debug output \[environment\: CONTAINER_DEBUG\]]'
+        '*:names:'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+
+    return "${ret}"
+}
+
+_container_volume_prune() {
+    local -i ret=1
+    local -ar arg_specs=(
+        '--debug[Enable debug output \[environment\: CONTAINER_DEBUG\]]'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+
+    return "${ret}"
+}
+
+_container_builder() {
+    local -i ret=1
+    local -ar arg_specs=(
+        '--debug[Enable debug output \[environment\: CONTAINER_DEBUG\]]'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+        '(-): :->command'
+        '(-)*:: :->arg'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+    case "${state}" in
+    command)
+        local -ar subcommands=(
+            'start:Start the builder container'
+            'status:Display the builder container status'
+            'stop:Stop the builder container'
+            'delete:Delete the builder container'
+        )
+        _describe -V subcommand subcommands
+        ;;
+    arg)
+        case "${words[1]}" in
+        start|status|stop|delete)
+            "_container_builder_${words[1]}"
+            ;;
+        esac
+        ;;
+    esac
+
+    return "${ret}"
+}
+
+_container_builder_start() {
+    local -i ret=1
+    local -ar arg_specs=(
+        '(--cpus -c)'{--cpus,-c}'[Number of CPUs to allocate to the builder container]:cpus:'
+        '(--memory -m)'{--memory,-m}'[Amount of builder container memory (1MiByte granularity), with optional K, M, G, T, or P suffix]:memory:'
+        '*--dns[DNS nameserver IP address]:ip:'
+        '--dns-domain[Default DNS domain]:domain:'
+        '*--dns-option[DNS options]:option:'
+        '*--dns-search[DNS search domains]:domain:'
+        '--debug[Enable debug output \[environment\: CONTAINER_DEBUG\]]'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+
+    return "${ret}"
+}
+
+_container_builder_status() {
+    local -i ret=1
+    local -ar ___format=('json' 'table' 'yaml')
+    local -ar arg_specs=(
+        '--format[Format of the output]:format:{__container_complete "${___format[@]}"}'
+        '(--quiet -q)'{--quiet,-q}'[Only output the container ID]'
+        '--debug[Enable debug output \[environment\: CONTAINER_DEBUG\]]'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+
+    return "${ret}"
+}
+
+_container_builder_stop() {
+    local -i ret=1
+    local -ar arg_specs=(
+        '--debug[Enable debug output \[environment\: CONTAINER_DEBUG\]]'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+
+    return "${ret}"
+}
+
+_container_builder_delete() {
+    local -i ret=1
+    local -ar arg_specs=(
+        '(--force -f)'{--force,-f}'[Delete the builder even if it is running]'
+        '--debug[Enable debug output \[environment\: CONTAINER_DEBUG\]]'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+
+    return "${ret}"
+}
+
+_container_network() {
+    local -i ret=1
+    local -ar arg_specs=(
+        '--debug[Enable debug output \[environment\: CONTAINER_DEBUG\]]'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+        '(-): :->command'
+        '(-)*:: :->arg'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+    case "${state}" in
+    command)
+        local -ar subcommands=(
+            'create:Create a new network'
+            'delete:Delete one or more networks'
+            'list:List networks'
+            'inspect:Display information about one or more networks'
+            'prune:Remove networks with no container connections'
+        )
+        _describe -V subcommand subcommands
+        ;;
+    arg)
+        case "${words[1]}" in
+        create|delete|list|inspect|prune)
+            "_container_network_${words[1]}"
+            ;;
+        esac
+        ;;
+    esac
+
+    return "${ret}"
+}
+
+_container_network_create() {
+    local -i ret=1
+    local -ar arg_specs=(
+        '*--label[Set metadata for a network]:label:'
+        '--internal[Restrict to host-only network]'
+        '--subnet[Set subnet for a network]:subnet:'
+        '--subnet-v6[Set the IPv6 prefix for a network]:subnet-v6:'
+        '--plugin[Set the plugin to use to create this network.]:plugin:'
+        '--plugin-variant[Set the variant of the network plugin to use.]:plugin-variant:'
+        '--debug[Enable debug output \[environment\: CONTAINER_DEBUG\]]'
+        ':name:'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+
+    return "${ret}"
+}
+
+_container_network_delete() {
+    local -i ret=1
+    local -ar arg_specs=(
+        '(--all -a)'{--all,-a}'[Delete all networks]'
+        '--debug[Enable debug output \[environment\: CONTAINER_DEBUG\]]'
+        '*:network-names:'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+
+    return "${ret}"
+}
+
+_container_network_list() {
+    local -i ret=1
+    local -ar ___format=('json' 'table' 'yaml')
+    local -ar arg_specs=(
+        '--format[Format of the output]:format:{__container_complete "${___format[@]}"}'
+        '(--quiet -q)'{--quiet,-q}'[Only output the network name]'
+        '--debug[Enable debug output \[environment\: CONTAINER_DEBUG\]]'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+
+    return "${ret}"
+}
+
+_container_network_inspect() {
+    local -i ret=1
+    local -ar arg_specs=(
+        '*:networks:'
+        '--debug[Enable debug output \[environment\: CONTAINER_DEBUG\]]'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+
+    return "${ret}"
+}
+
+_container_network_prune() {
+    local -i ret=1
+    local -ar arg_specs=(
+        '--debug[Enable debug output \[environment\: CONTAINER_DEBUG\]]'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+
+    return "${ret}"
+}
+
+_container_system() {
+    local -i ret=1
+    local -ar arg_specs=(
+        '--debug[Enable debug output \[environment\: CONTAINER_DEBUG\]]'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+        '(-): :->command'
+        '(-)*:: :->arg'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+    case "${state}" in
+    command)
+        local -ar subcommands=(
+            'df:Show disk usage for images, containers, and volumes'
+            'dns:Manage local DNS domains'
+            'kernel:Manage the default kernel configuration'
+            'logs:Fetch system logs for `container` services'
+            'property:Manage system property values'
+            'start:Start `container` services'
+            'status:Show the status of `container` services'
+            'stop:Stop all `container` services'
+            'version:Show version information'
+        )
+        _describe -V subcommand subcommands
+        ;;
+    arg)
+        case "${words[1]}" in
+        df|dns|kernel|logs|property|start|status|stop|version)
+            "_container_system_${words[1]}"
+            ;;
+        esac
+        ;;
+    esac
+
+    return "${ret}"
+}
+
+_container_system_df() {
+    local -i ret=1
+    local -ar ___format=('json' 'table' 'yaml')
+    local -ar arg_specs=(
+        '--format[Format of the output]:format:{__container_complete "${___format[@]}"}'
+        '--debug[Enable debug output \[environment\: CONTAINER_DEBUG\]]'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+
+    return "${ret}"
+}
+
+_container_system_dns() {
+    local -i ret=1
+    local -ar arg_specs=(
+        '--debug[Enable debug output \[environment\: CONTAINER_DEBUG\]]'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+        '(-): :->command'
+        '(-)*:: :->arg'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+    case "${state}" in
+    command)
+        local -ar subcommands=(
+            'create:Create a local DNS domain for containers (must run as an administrator)'
+            'delete:Delete a local DNS domain (must run as an administrator)'
+            'list:List local DNS domains'
+        )
+        _describe -V subcommand subcommands
+        ;;
+    arg)
+        case "${words[1]}" in
+        create|delete|list)
+            "_container_system_dns_${words[1]}"
+            ;;
+        esac
+        ;;
+    esac
+
+    return "${ret}"
+}
+
+_container_system_dns_create() {
+    local -i ret=1
+    local -ar arg_specs=(
+        '--debug[Enable debug output \[environment\: CONTAINER_DEBUG\]]'
+        '--localhost[Set the ip address to be redirected to localhost]:localhost:'
+        ':domain-name:'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+
+    return "${ret}"
+}
+
+_container_system_dns_delete() {
+    local -i ret=1
+    local -ar arg_specs=(
+        '--debug[Enable debug output \[environment\: CONTAINER_DEBUG\]]'
+        ':domain-name:'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+
+    return "${ret}"
+}
+
+_container_system_dns_list() {
+    local -i ret=1
+    local -ar ___format=('json' 'table' 'yaml')
+    local -ar arg_specs=(
+        '--format[Format of the output]:format:{__container_complete "${___format[@]}"}'
+        '(--quiet -q)'{--quiet,-q}'[Only output the domain]'
+        '--debug[Enable debug output \[environment\: CONTAINER_DEBUG\]]'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+
+    return "${ret}"
+}
+
+_container_system_kernel() {
+    local -i ret=1
+    local -ar arg_specs=(
+        '--debug[Enable debug output \[environment\: CONTAINER_DEBUG\]]'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+        '(-): :->command'
+        '(-)*:: :->arg'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+    case "${state}" in
+    command)
+        local -ar subcommands=(
+            'set:Set the default kernel'
+        )
+        _describe -V subcommand subcommands
+        ;;
+    arg)
+        case "${words[1]}" in
+        set)
+            "_container_system_kernel_${words[1]}"
+            ;;
+        esac
+        ;;
+    esac
+
+    return "${ret}"
+}
+
+_container_system_kernel_set() {
+    local -i ret=1
+    local -ar arg_specs=(
+        '--arch[The architecture of the kernel binary (values\: amd64, arm64)]:arch:'
+        '--binary[Path to the kernel file (or archive member, if used with --tar)]:binary:'
+        '--force[Overwrites an existing kernel with the same name]'
+        '--recommended[Download and install the recommended kernel as the default (takes precedence over all other flags)]'
+        '--tar[Filesystem path or remote URL to a tar archive containing a kernel file]:tar:'
+        '--debug[Enable debug output \[environment\: CONTAINER_DEBUG\]]'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+
+    return "${ret}"
+}
+
+_container_system_logs() {
+    local -i ret=1
+    local -ar arg_specs=(
+        '(--follow -f)'{--follow,-f}'[Follow log output]'
+        '--last[Fetch logs starting from the specified time period (minus the current time); supported formats\: m, h, d]:last:'
+        '--debug[Enable debug output \[environment\: CONTAINER_DEBUG\]]'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+
+    return "${ret}"
+}
+
+_container_system_property() {
+    local -i ret=1
+    local -ar arg_specs=(
+        '--debug[Enable debug output \[environment\: CONTAINER_DEBUG\]]'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+        '(-): :->command'
+        '(-)*:: :->arg'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+    case "${state}" in
+    command)
+        local -ar subcommands=(
+            'clear:Clear a property value'
+            'get:Retrieve a property value'
+            'list:List system properties'
+            'set:Set a property value'
+        )
+        _describe -V subcommand subcommands
+        ;;
+    arg)
+        case "${words[1]}" in
+        clear|get|list|set)
+            "_container_system_property_${words[1]}"
+            ;;
+        esac
+        ;;
+    esac
+
+    return "${ret}"
+}
+
+_container_system_property_clear() {
+    local -i ret=1
+    local -ar arg_specs=(
+        '--debug[Enable debug output \[environment\: CONTAINER_DEBUG\]]'
+        ':id:'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+
+    return "${ret}"
+}
+
+_container_system_property_get() {
+    local -i ret=1
+    local -ar arg_specs=(
+        '--debug[Enable debug output \[environment\: CONTAINER_DEBUG\]]'
+        ':id:'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+
+    return "${ret}"
+}
+
+_container_system_property_list() {
+    local -i ret=1
+    local -ar ___format=('json' 'table' 'yaml')
+    local -ar arg_specs=(
+        '--format[Format of the output]:format:{__container_complete "${___format[@]}"}'
+        '(--quiet -q)'{--quiet,-q}'[Only output the property ID]'
+        '--debug[Enable debug output \[environment\: CONTAINER_DEBUG\]]'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+
+    return "${ret}"
+}
+
+_container_system_property_set() {
+    local -i ret=1
+    local -ar arg_specs=(
+        '--debug[Enable debug output \[environment\: CONTAINER_DEBUG\]]'
+        ':id:'
+        ':value:'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+
+    return "${ret}"
+}
+
+_container_system_start() {
+    local -i ret=1
+    local -ar arg_specs=(
+        '(--app-root -a)'{--app-root,-a}'[Path to the root directory for application data]:app-root:'
+        '--install-root[Path to the root directory for application executables and plugins]:install-root:'
+        '--log-root[Path to the root directory for log data, using macOS log facility if not set]:log-root:'
+        '--enable-kernel-install[Specify whether the default kernel should be installed or not (default\: prompt user)]'
+        '--disable-kernel-install[Specify whether the default kernel should be installed or not (default\: prompt user)]'
+        '--timeout[Number of seconds to wait for API service to become responsive]:timeout:'
+        '--debug[Enable debug output \[environment\: CONTAINER_DEBUG\]]'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+
+    return "${ret}"
+}
+
+_container_system_status() {
+    local -i ret=1
+    local -ar ___format=('json' 'table' 'yaml')
+    local -ar arg_specs=(
+        '(--prefix -p)'{--prefix,-p}'[Launchd prefix for services]:prefix:'
+        '--format[Format of the output]:format:{__container_complete "${___format[@]}"}'
+        '--debug[Enable debug output \[environment\: CONTAINER_DEBUG\]]'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+
+    return "${ret}"
+}
+
+_container_system_stop() {
+    local -i ret=1
+    local -ar arg_specs=(
+        '(--prefix -p)'{--prefix,-p}'[Launchd prefix for services]:prefix:'
+        '--debug[Enable debug output \[environment\: CONTAINER_DEBUG\]]'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+
+    return "${ret}"
+}
+
+_container_system_version() {
+    local -i ret=1
+    local -ar ___format=('json' 'table' 'yaml')
+    local -ar arg_specs=(
+        '--format[Format of the output]:format:{__container_complete "${___format[@]}"}'
+        '--debug[Enable debug output \[environment\: CONTAINER_DEBUG\]]'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+
+    return "${ret}"
+}
+
+_container_help() {
+    local -i ret=1
+    local -ar arg_specs=(
+        '*:subcommands:'
+        '--version[Show the version.]'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+
+    return "${ret}"
+}
+
+_container
