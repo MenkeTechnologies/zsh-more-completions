@@ -342,6 +342,9 @@
 @test 'more_src has _aichat' {
     assert "$xsrc/_aichat" is_file
 }
+@test 'more_src has _aideinit' {
+    assert "$xsrc/_aideinit" is_file
+}
 @test 'more_src has _aider' {
     assert "$xsrc/_aider" is_file
 }
@@ -3464,6 +3467,9 @@
 @test 'more_src has _falkor' {
     assert "$xsrc/_falkor" is_file
 }
+@test 'more_src has _fapolicyd' {
+    assert "$xsrc/_fapolicyd" is_file
+}
 @test 'more_src has _farv' {
     assert "$xsrc/_farv" is_file
 }
@@ -6378,6 +6384,12 @@
 @test 'more_src has _migrate' {
     assert "$xsrc/_migrate" is_file
 }
+@test 'more_src has _milter-greylist' {
+    assert "$xsrc/_milter-greylist" is_file
+}
+@test 'more_src has _milter-regex' {
+    assert "$xsrc/_milter-regex" is_file
+}
 @test 'more_src has _mill' {
     assert "$xsrc/_mill" is_file
 }
@@ -7292,6 +7304,21 @@
 @test 'more_src has _openmw' {
     assert "$xsrc/_openmw" is_file
 }
+@test 'more_src has _opendkim-genkey' {
+    assert "$xsrc/_opendkim-genkey" is_file
+}
+@test 'more_src has _opendkim-testkey' {
+    assert "$xsrc/_opendkim-testkey" is_file
+}
+@test 'more_src has _opendkim-testmsg' {
+    assert "$xsrc/_opendkim-testmsg" is_file
+}
+@test 'more_src has _opendkim-testssp' {
+    assert "$xsrc/_opendkim-testssp" is_file
+}
+@test 'more_src has _opendmarc-tools' {
+    assert "$xsrc/_opendmarc-tools" is_file
+}
 @test 'more_src has _opendiff' {
     assert "$xsrc/_opendiff" is_file
 }
@@ -8083,8 +8110,53 @@
 @test 'more_src has _psub' {
     assert "$xsrc/_psub" is_file
 }
+@test 'more_src has _pt-config-diff' {
+    assert "$xsrc/_pt-config-diff" is_file
+}
+@test 'more_src has _pt-duplicate-key-checker' {
+    assert "$xsrc/_pt-duplicate-key-checker" is_file
+}
+@test 'more_src has _pt-fifo-split' {
+    assert "$xsrc/_pt-fifo-split" is_file
+}
+@test 'more_src has _pt-find' {
+    assert "$xsrc/_pt-find" is_file
+}
+@test 'more_src has _pt-fk-error-logger' {
+    assert "$xsrc/_pt-fk-error-logger" is_file
+}
+@test 'more_src has _pt-heartbeat' {
+    assert "$xsrc/_pt-heartbeat" is_file
+}
+@test 'more_src has _pt-index-usage' {
+    assert "$xsrc/_pt-index-usage" is_file
+}
+@test 'more_src has _pt-ioprofile' {
+    assert "$xsrc/_pt-ioprofile" is_file
+}
+@test 'more_src has _pt-mext' {
+    assert "$xsrc/_pt-mext" is_file
+}
+@test 'more_src has _pt-mongodb' {
+    assert "$xsrc/_pt-mongodb" is_file
+}
+@test 'more_src has _pt-pmp' {
+    assert "$xsrc/_pt-pmp" is_file
+}
 @test 'more_src has _pt-query-digest' {
     assert "$xsrc/_pt-query-digest" is_file
+}
+@test 'more_src has _pt-secure-collect' {
+    assert "$xsrc/_pt-secure-collect" is_file
+}
+@test 'more_src has _pt-show-grants' {
+    assert "$xsrc/_pt-show-grants" is_file
+}
+@test 'more_src has _pt-sift' {
+    assert "$xsrc/_pt-sift" is_file
+}
+@test 'more_src has _pt-slave-delay' {
+    assert "$xsrc/_pt-slave-delay" is_file
 }
 @test 'more_src has _ptar' {
     assert "$xsrc/_ptar" is_file
@@ -8780,6 +8852,9 @@
 }
 @test 'more_src has _sagoin' {
     assert "$xsrc/_sagoin" is_file
+}
+@test 'more_src has _samhain' {
+    assert "$xsrc/_samhain" is_file
 }
 @test 'more_src has _sam' {
     assert "$xsrc/_sam" is_file
