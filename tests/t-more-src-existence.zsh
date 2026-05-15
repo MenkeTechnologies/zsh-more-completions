@@ -1513,6 +1513,9 @@
 @test 'more_src has _choose' {
     assert "$xsrc/_choose" is_file
 }
+@test 'more_src has _choose-rust' {
+    assert "$xsrc/_choose-rust" is_file
+}
 @test 'more_src has _chpst' {
     assert "$xsrc/_chpst" is_file
 }
@@ -8008,6 +8011,9 @@
 @test 'more_src has _syft' {
     assert "$xsrc/_syft" is_file
 }
+@test 'more_src has _synadm' {
+    assert "$xsrc/_synadm" is_file
+}
 @test 'more_src has _synctex' {
     assert "$xsrc/_synctex" is_file
 }
@@ -8127,6 +8133,9 @@
 }
 @test 'more_src has _tctl' {
     assert "$xsrc/_tctl" is_file
+}
+@test 'more_src has _tdl' {
+    assert "$xsrc/_tdl" is_file
 }
 @test 'more_src has _tdns-mgr' {
     assert "$xsrc/_tdns-mgr" is_file
