@@ -610,6 +610,9 @@
 @test 'more_src has _asmcli' {
     assert "$xsrc/_asmcli" is_file
 }
+@test 'more_src has _asn1c' {
+    assert "$xsrc/_asn1c" is_file
+}
 @test 'more_src has _asnmap' {
     assert "$xsrc/_asnmap" is_file
 }
@@ -1385,6 +1388,12 @@
 @test 'more_src has _capnp' {
     assert "$xsrc/_capnp" is_file
 }
+@test 'more_src has _carbon-c-relay' {
+    assert "$xsrc/_carbon-c-relay" is_file
+}
+@test 'more_src has _carbonate' {
+    assert "$xsrc/_carbonate" is_file
+}
 @test 'more_src has _carapace' {
     assert "$xsrc/_carapace" is_file
 }
@@ -1944,6 +1953,9 @@
 }
 @test 'more_src has _cobra-cli' {
     assert "$xsrc/_cobra-cli" is_file
+}
+@test 'more_src has _coco' {
+    assert "$xsrc/_coco" is_file
 }
 @test 'more_src has _cockroach' {
     assert "$xsrc/_cockroach" is_file
@@ -4181,6 +4193,45 @@
 @test 'more_src has _gnt-node' {
     assert "$xsrc/_gnt-node" is_file
 }
+@test 'more_src has _gnatbind' {
+    assert "$xsrc/_gnatbind" is_file
+}
+@test 'more_src has _gnatchop' {
+    assert "$xsrc/_gnatchop" is_file
+}
+@test 'more_src has _gnatclean' {
+    assert "$xsrc/_gnatclean" is_file
+}
+@test 'more_src has _gnatdoc' {
+    assert "$xsrc/_gnatdoc" is_file
+}
+@test 'more_src has _gnatfind' {
+    assert "$xsrc/_gnatfind" is_file
+}
+@test 'more_src has _gnatkr' {
+    assert "$xsrc/_gnatkr" is_file
+}
+@test 'more_src has _gnatlink' {
+    assert "$xsrc/_gnatlink" is_file
+}
+@test 'more_src has _gnatls' {
+    assert "$xsrc/_gnatls" is_file
+}
+@test 'more_src has _gnatmake' {
+    assert "$xsrc/_gnatmake" is_file
+}
+@test 'more_src has _gnatmem' {
+    assert "$xsrc/_gnatmem" is_file
+}
+@test 'more_src has _gnatname' {
+    assert "$xsrc/_gnatname" is_file
+}
+@test 'more_src has _gnatprep' {
+    assert "$xsrc/_gnatprep" is_file
+}
+@test 'more_src has _gnatxref' {
+    assert "$xsrc/_gnatxref" is_file
+}
 @test 'more_src has _gnubg' {
     assert "$xsrc/_gnubg" is_file
 }
@@ -4402,6 +4453,15 @@
 }
 @test 'more_src has _gpredict' {
     assert "$xsrc/_gpredict" is_file
+}
+@test 'more_src has _gprbuild' {
+    assert "$xsrc/_gprbuild" is_file
+}
+@test 'more_src has _gprclean' {
+    assert "$xsrc/_gprclean" is_file
+}
+@test 'more_src has _gprinstall' {
+    assert "$xsrc/_gprinstall" is_file
 }
 @test 'more_src has _gprof2dot' {
     assert "$xsrc/_gprof2dot" is_file
@@ -5064,6 +5124,9 @@
 }
 @test 'more_src has _jc' {
     assert "$xsrc/_jc" is_file
+}
+@test 'more_src has _javacc' {
+    assert "$xsrc/_javacc" is_file
 }
 @test 'more_src has _jcli' {
     assert "$xsrc/_jcli" is_file
@@ -6332,6 +6395,9 @@
 @test 'more_src has _mentat' {
     assert "$xsrc/_mentat" is_file
 }
+@test 'more_src has _menhir' {
+    assert "$xsrc/_menhir" is_file
+}
 @test 'more_src has _menyoki' {
     assert "$xsrc/_menyoki" is_file
 }
@@ -6636,6 +6702,9 @@
 }
 @test 'more_src has _mp3unicode' {
     assert "$xsrc/_mp3unicode" is_file
+}
+@test 'more_src has _mpdcron' {
+    assert "$xsrc/_mpdcron" is_file
 }
 @test 'more_src has _mpdscribble' {
     assert "$xsrc/_mpdscribble" is_file
@@ -7449,6 +7518,9 @@
     assert "$xsrc/_oxo-flow" is_file
 }
 
+@test 'more_src has _packcc' {
+    assert "$xsrc/_packcc" is_file
+}
 @test 'more_src has _paccapability' {
     assert "$xsrc/_paccapability" is_file
 }
@@ -8357,6 +8429,9 @@
 }
 @test 'more_src has _rage' {
     assert "$xsrc/_rage" is_file
+}
+@test 'more_src has _ragel' {
+    assert "$xsrc/_ragel" is_file
 }
 @test 'more_src has _ragenix' {
     assert "$xsrc/_ragenix" is_file
