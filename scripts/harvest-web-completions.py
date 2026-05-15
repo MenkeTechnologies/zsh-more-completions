@@ -11,6 +11,7 @@ import shlex
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.parse
@@ -102,6 +103,15 @@ def zsh_nf(path: pathlib.Path) -> bool:
     return r.returncode == 0
 
 
+def trial_zsh_completion_syntax(dest: str, body: str, source_url: str, repo_display: str) -> bool:
+    """Run zsh -nf the same way as install (header + body) without touching more_src/."""
+    with tempfile.TemporaryDirectory(prefix="zsh-nf-trial-") as d:
+        p = pathlib.Path(d) / dest
+        header = f"# Source: {source_url}\n# Repository: {repo_display}\n"
+        p.write_text(header + body.lstrip("\ufeff"), encoding="utf-8")
+        return zsh_nf(p)
+
+
 def write_file(dest: str, body: str, source_url: str, repo_display: str) -> None:
     out = MORE / dest
     header = f"# Source: {source_url}\n# Repository: {repo_display}\n"
@@ -140,15 +150,35 @@ def skip_path(path: str) -> bool:
     return False
 
 
-def try_install(
+# Stems that are almost always fixtures / ambiguous (not real CLI names).
+JUNK_COMPDEF_STEMS = frozenset(
+    {
+        "foo",
+        "bar",
+        "baz",
+        "qux",
+        "HEAD",
+        "myapp",
+        "mysimpleapp",
+        "nometa",
+        "agat_convert_sp_gxf2gxf.pl",
+        "conf",
+        "hellos",
+        "rep",
+        "sysc",
+        "usepkg",
+    }
+)
+
+
+def install_precheck(
     body: str,
     path: str,
-    source_url: str,
-    repo_display: str,
     bl: set[str],
     existing: set[str],
     written_dests: set[str],
 ) -> tuple[str, list[str]] | None:
+    """Return (dest, stems) if the candidate passes all checks except write and zsh -nf."""
     stems = stems_from_body(body)
     if not stems:
         return None
@@ -176,6 +206,22 @@ def try_install(
         return None
     if len(body) > 400_000:
         return None
+    return dest, stems
+
+
+def try_install(
+    body: str,
+    path: str,
+    source_url: str,
+    repo_display: str,
+    bl: set[str],
+    existing: set[str],
+    written_dests: set[str],
+) -> tuple[str, list[str]] | None:
+    hit = install_precheck(body, path, bl, existing, written_dests)
+    if not hit:
+        return None
+    dest, stems = hit
     write_file(dest, body, source_url, repo_display)
     if not zsh_nf(MORE / dest):
         (MORE / dest).unlink(missing_ok=True)
@@ -389,26 +435,6 @@ SKIP_TREE_SLUGS = frozenset(
         "menketechnologies/zsh-more-completions",
         "zsh-users/zsh-completions",
         "nevesnunes/sh-manpage-completions",
-    }
-)
-
-# Stems that are almost always fixtures / ambiguous (not real CLI names).
-JUNK_COMPDEF_STEMS = frozenset(
-    {
-        "foo",
-        "bar",
-        "baz",
-        "qux",
-        "HEAD",
-        "myapp",
-        "mysimpleapp",
-        "nometa",
-        "agat_convert_sp_gxf2gxf.pl",
-        "conf",
-        "hellos",
-        "rep",
-        "sysc",
-        "usepkg",
     }
 )
 
