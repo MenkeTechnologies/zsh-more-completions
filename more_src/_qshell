@@ -1,0 +1,6551 @@
+#compdef qshell
+# Source: Homebrew bottle
+# Formula: qshell
+# Type: maintainer-shipped (Homebrew)
+# Harvested: 2026-05-15
+
+__qshell_bash_source() {
+	alias shopt=':'
+	alias _expand=_bash_expand
+	alias _complete=_bash_comp
+	emulate -L sh
+	setopt kshglob noshglob braceexpand
+	source "$@"
+}
+__qshell_type() {
+	# -t is not supported by zsh
+	if [ "$1" == "-t" ]; then
+		shift
+		# fake Bash 4 to disable "complete -o nospace". Instead
+		# "compopt +-o nospace" is used in the code to toggle trailing
+		# spaces. We don't support that, but leave trailing spaces on
+		# all the time
+		if [ "$1" = "__qshell_compopt" ]; then
+			echo builtin
+			return 0
+		fi
+	fi
+	type "$@"
+}
+__qshell_compgen() {
+	local completions w
+	completions=( $(compgen "$@") ) || return $?
+	# filter by given word as prefix
+	while [[ "$1" = -* && "$1" != -- ]]; do
+		shift
+		shift
+	done
+	if [[ "$1" == -- ]]; then
+		shift
+	fi
+	for w in "${completions[@]}"; do
+		if [[ "${w}" = "$1"* ]]; then
+			echo "${w}"
+		fi
+	done
+}
+__qshell_compopt() {
+	true # don't do anything. Not supported by bashcompinit in zsh
+}
+__qshell_ltrim_colon_completions()
+{
+	if [[ "$1" == *:* && "$COMP_WORDBREAKS" == *:* ]]; then
+		# Remove colon-word prefix from COMPREPLY items
+		local colon_word=${1%${1##*:}}
+		local i=${#COMPREPLY[*]}
+		while [[ $((--i)) -ge 0 ]]; do
+			COMPREPLY[$i]=${COMPREPLY[$i]#"$colon_word"}
+		done
+	fi
+}
+__qshell_get_comp_words_by_ref() {
+	cur="${COMP_WORDS[COMP_CWORD]}"
+	prev="${COMP_WORDS[${COMP_CWORD}-1]}"
+	words=("${COMP_WORDS[@]}")
+	cword=("${COMP_CWORD[@]}")
+}
+__qshell_filedir() {
+	local RET OLD_IFS w qw
+	__qshell_debug "_filedir $@ cur=$cur"
+	if [[ "$1" = \~* ]]; then
+		# somehow does not work. Maybe, zsh does not call this at all
+		eval echo "$1"
+		return 0
+	fi
+	OLD_IFS="$IFS"
+	IFS=$'\n'
+	if [ "$1" = "-d" ]; then
+		shift
+		RET=( $(compgen -d) )
+	else
+		RET=( $(compgen -f) )
+	fi
+	IFS="$OLD_IFS"
+	IFS="," __qshell_debug "RET=${RET[@]} len=${#RET[@]}"
+	for w in ${RET[@]}; do
+		if [[ ! "${w}" = "${cur}"* ]]; then
+			continue
+		fi
+		if eval "[[ \"\${w}\" = *.$1 || -d \"\${w}\" ]]"; then
+			qw="$(__qshell_quote "${w}")"
+			if [ -d "${w}" ]; then
+				COMPREPLY+=("${qw}/")
+			else
+				COMPREPLY+=("${qw}")
+			fi
+		fi
+	done
+}
+__qshell_quote() {
+    if [[ $1 == \'* || $1 == \"* ]]; then
+        # Leave out first character
+        printf %q "${1:1}"
+    else
+	printf %q "$1"
+    fi
+}
+autoload -U +X bashcompinit && bashcompinit
+# use word boundary patterns for BSD or GNU sed
+LWORD='[[:<:]]'
+RWORD='[[:>:]]'
+if sed --help 2>&1 | grep -q GNU; then
+	LWORD='\<'
+	RWORD='\>'
+fi
+__qshell_convert_bash_to_zsh() {
+	sed \
+	-e 's/declare -F/whence -w/' \
+	-e 's/_get_comp_words_by_ref "\$@"/_get_comp_words_by_ref "\$*"/' \
+	-e 's/local \([a-zA-Z0-9_]*\)=/local \1; \1=/' \
+	-e 's/flags+=("\(--.*\)=")/flags+=("\1"); two_word_flags+=("\1")/' \
+	-e 's/must_have_one_flag+=("\(--.*\)=")/must_have_one_flag+=("\1")/' \
+	-e "s/${LWORD}_filedir${RWORD}/__qshell_filedir/g" \
+	-e "s/${LWORD}_get_comp_words_by_ref${RWORD}/__qshell_get_comp_words_by_ref/g" \
+	-e "s/${LWORD}__ltrim_colon_completions${RWORD}/__qshell_ltrim_colon_completions/g" \
+	-e "s/${LWORD}compgen${RWORD}/__qshell_compgen/g" \
+	-e "s/${LWORD}compopt${RWORD}/__qshell_compopt/g" \
+	-e "s/${LWORD}declare${RWORD}/builtin declare/g" \
+	-e "s/\\\$(type${RWORD}/\$(__qshell_type/g" \
+	<<'BASH_COMPLETION_EOF'
+# bash completion for qshell                               -*- shell-script -*-
+
+__qshell_debug()
+{
+    if [[ -n ${BASH_COMP_DEBUG_FILE} ]]; then
+        echo "$*" >> "${BASH_COMP_DEBUG_FILE}"
+    fi
+}
+
+# Homebrew on Macs have version 1.3 of bash-completion which doesn't include
+# _init_completion. This is a very minimal version of that function.
+__qshell_init_completion()
+{
+    COMPREPLY=()
+    _get_comp_words_by_ref "$@" cur prev words cword
+}
+
+__qshell_index_of_word()
+{
+    local w word=$1
+    shift
+    index=0
+    for w in "$@"; do
+        [[ $w = "$word" ]] && return
+        index=$((index+1))
+    done
+    index=-1
+}
+
+__qshell_contains_word()
+{
+    local w word=$1; shift
+    for w in "$@"; do
+        [[ $w = "$word" ]] && return
+    done
+    return 1
+}
+
+__qshell_handle_go_custom_completion()
+{
+    __qshell_debug "${FUNCNAME[0]}: cur is ${cur}, words[*] is ${words[*]}, #words[@] is ${#words[@]}"
+
+    local shellCompDirectiveError=1
+    local shellCompDirectiveNoSpace=2
+    local shellCompDirectiveNoFileComp=4
+    local shellCompDirectiveFilterFileExt=8
+    local shellCompDirectiveFilterDirs=16
+
+    local out requestComp lastParam lastChar comp directive args
+
+    # Prepare the command to request completions for the program.
+    # Calling ${words[0]} instead of directly qshell allows to handle aliases
+    args=("${words[@]:1}")
+    requestComp="${words[0]} __completeNoDesc ${args[*]}"
+
+    lastParam=${words[$((${#words[@]}-1))]}
+    lastChar=${lastParam:$((${#lastParam}-1)):1}
+    __qshell_debug "${FUNCNAME[0]}: lastParam ${lastParam}, lastChar ${lastChar}"
+
+    if [ -z "${cur}" ] && [ "${lastChar}" != "=" ]; then
+        # If the last parameter is complete (there is a space following it)
+        # We add an extra empty parameter so we can indicate this to the go method.
+        __qshell_debug "${FUNCNAME[0]}: Adding extra empty parameter"
+        requestComp="${requestComp} \"\""
+    fi
+
+    __qshell_debug "${FUNCNAME[0]}: calling ${requestComp}"
+    # Use eval to handle any environment variables and such
+    out=$(eval "${requestComp}" 2>/dev/null)
+
+    # Extract the directive integer at the very end of the output following a colon (:)
+    directive=${out##*:}
+    # Remove the directive
+    out=${out%:*}
+    if [ "${directive}" = "${out}" ]; then
+        # There is not directive specified
+        directive=0
+    fi
+    __qshell_debug "${FUNCNAME[0]}: the completion directive is: ${directive}"
+    __qshell_debug "${FUNCNAME[0]}: the completions are: ${out[*]}"
+
+    if [ $((directive & shellCompDirectiveError)) -ne 0 ]; then
+        # Error code.  No completion.
+        __qshell_debug "${FUNCNAME[0]}: received error from custom completion go code"
+        return
+    else
+        if [ $((directive & shellCompDirectiveNoSpace)) -ne 0 ]; then
+            if [[ $(type -t compopt) = "builtin" ]]; then
+                __qshell_debug "${FUNCNAME[0]}: activating no space"
+                compopt -o nospace
+            fi
+        fi
+        if [ $((directive & shellCompDirectiveNoFileComp)) -ne 0 ]; then
+            if [[ $(type -t compopt) = "builtin" ]]; then
+                __qshell_debug "${FUNCNAME[0]}: activating no file completion"
+                compopt +o default
+            fi
+        fi
+    fi
+
+    if [ $((directive & shellCompDirectiveFilterFileExt)) -ne 0 ]; then
+        # File extension filtering
+        local fullFilter filter filteringCmd
+        # Do not use quotes around the $out variable or else newline
+        # characters will be kept.
+        for filter in ${out[*]}; do
+            fullFilter+="$filter|"
+        done
+
+        filteringCmd="_filedir $fullFilter"
+        __qshell_debug "File filtering command: $filteringCmd"
+        $filteringCmd
+    elif [ $((directive & shellCompDirectiveFilterDirs)) -ne 0 ]; then
+        # File completion for directories only
+        local subDir
+        # Use printf to strip any trailing newline
+        subdir=$(printf "%s" "${out[0]}")
+        if [ -n "$subdir" ]; then
+            __qshell_debug "Listing directories in $subdir"
+            __qshell_handle_subdirs_in_dir_flag "$subdir"
+        else
+            __qshell_debug "Listing directories in ."
+            _filedir -d
+        fi
+    else
+        while IFS='' read -r comp; do
+            COMPREPLY+=("$comp")
+        done < <(compgen -W "${out[*]}" -- "$cur")
+    fi
+}
+
+__qshell_handle_reply()
+{
+    __qshell_debug "${FUNCNAME[0]}"
+    local comp
+    case $cur in
+        -*)
+            if [[ $(type -t compopt) = "builtin" ]]; then
+                compopt -o nospace
+            fi
+            local allflags
+            if [ ${#must_have_one_flag[@]} -ne 0 ]; then
+                allflags=("${must_have_one_flag[@]}")
+            else
+                allflags=("${flags[*]} ${two_word_flags[*]}")
+            fi
+            while IFS='' read -r comp; do
+                COMPREPLY+=("$comp")
+            done < <(compgen -W "${allflags[*]}" -- "$cur")
+            if [[ $(type -t compopt) = "builtin" ]]; then
+                [[ "${COMPREPLY[0]}" == *= ]] || compopt +o nospace
+            fi
+
+            # complete after --flag=abc
+            if [[ $cur == *=* ]]; then
+                if [[ $(type -t compopt) = "builtin" ]]; then
+                    compopt +o nospace
+                fi
+
+                local index flag
+                flag="${cur%=*}"
+                __qshell_index_of_word "${flag}" "${flags_with_completion[@]}"
+                COMPREPLY=()
+                if [[ ${index} -ge 0 ]]; then
+                    PREFIX=""
+                    cur="${cur#*=}"
+                    ${flags_completion[${index}]}
+                    if [ -n "${ZSH_VERSION}" ]; then
+                        # zsh completion needs --flag= prefix
+                        eval "COMPREPLY=( \"\${COMPREPLY[@]/#/${flag}=}\" )"
+                    fi
+                fi
+            fi
+            return 0;
+            ;;
+    esac
+
+    # check if we are handling a flag with special work handling
+    local index
+    __qshell_index_of_word "${prev}" "${flags_with_completion[@]}"
+    if [[ ${index} -ge 0 ]]; then
+        ${flags_completion[${index}]}
+        return
+    fi
+
+    # we are parsing a flag and don't have a special handler, no completion
+    if [[ ${cur} != "${words[cword]}" ]]; then
+        return
+    fi
+
+    local completions
+    completions=("${commands[@]}")
+    if [[ ${#must_have_one_noun[@]} -ne 0 ]]; then
+        completions+=("${must_have_one_noun[@]}")
+    elif [[ -n "${has_completion_function}" ]]; then
+        # if a go completion function is provided, defer to that function
+        __qshell_handle_go_custom_completion
+    fi
+    if [[ ${#must_have_one_flag[@]} -ne 0 ]]; then
+        completions+=("${must_have_one_flag[@]}")
+    fi
+    while IFS='' read -r comp; do
+        COMPREPLY+=("$comp")
+    done < <(compgen -W "${completions[*]}" -- "$cur")
+
+    if [[ ${#COMPREPLY[@]} -eq 0 && ${#noun_aliases[@]} -gt 0 && ${#must_have_one_noun[@]} -ne 0 ]]; then
+        while IFS='' read -r comp; do
+            COMPREPLY+=("$comp")
+        done < <(compgen -W "${noun_aliases[*]}" -- "$cur")
+    fi
+
+    if [[ ${#COMPREPLY[@]} -eq 0 ]]; then
+		if declare -F __qshell_custom_func >/dev/null; then
+			# try command name qualified custom func
+			__qshell_custom_func
+		else
+			# otherwise fall back to unqualified for compatibility
+			declare -F __custom_func >/dev/null && __custom_func
+		fi
+    fi
+
+    # available in bash-completion >= 2, not always present on macOS
+    if declare -F __ltrim_colon_completions >/dev/null; then
+        __ltrim_colon_completions "$cur"
+    fi
+
+    # If there is only 1 completion and it is a flag with an = it will be completed
+    # but we don't want a space after the =
+    if [[ "${#COMPREPLY[@]}" -eq "1" ]] && [[ $(type -t compopt) = "builtin" ]] && [[ "${COMPREPLY[0]}" == --*= ]]; then
+       compopt -o nospace
+    fi
+}
+
+# The arguments should be in the form "ext1|ext2|extn"
+__qshell_handle_filename_extension_flag()
+{
+    local ext="$1"
+    _filedir "@(${ext})"
+}
+
+__qshell_handle_subdirs_in_dir_flag()
+{
+    local dir="$1"
+    pushd "${dir}" >/dev/null 2>&1 && _filedir -d && popd >/dev/null 2>&1 || return
+}
+
+__qshell_handle_flag()
+{
+    __qshell_debug "${FUNCNAME[0]}: c is $c words[c] is ${words[c]}"
+
+    # if a command required a flag, and we found it, unset must_have_one_flag()
+    local flagname=${words[c]}
+    local flagvalue
+    # if the word contained an =
+    if [[ ${words[c]} == *"="* ]]; then
+        flagvalue=${flagname#*=} # take in as flagvalue after the =
+        flagname=${flagname%=*} # strip everything after the =
+        flagname="${flagname}=" # but put the = back
+    fi
+    __qshell_debug "${FUNCNAME[0]}: looking for ${flagname}"
+    if __qshell_contains_word "${flagname}" "${must_have_one_flag[@]}"; then
+        must_have_one_flag=()
+    fi
+
+    # if you set a flag which only applies to this command, don't show subcommands
+    if __qshell_contains_word "${flagname}" "${local_nonpersistent_flags[@]}"; then
+      commands=()
+    fi
+
+    # keep flag value with flagname as flaghash
+    # flaghash variable is an associative array which is only supported in bash > 3.
+    if [[ -z "${BASH_VERSION}" || "${BASH_VERSINFO[0]}" -gt 3 ]]; then
+        if [ -n "${flagvalue}" ] ; then
+            flaghash[${flagname}]=${flagvalue}
+        elif [ -n "${words[ $((c+1)) ]}" ] ; then
+            flaghash[${flagname}]=${words[ $((c+1)) ]}
+        else
+            flaghash[${flagname}]="true" # pad "true" for bool flag
+        fi
+    fi
+
+    # skip the argument to a two word flag
+    if [[ ${words[c]} != *"="* ]] && __qshell_contains_word "${words[c]}" "${two_word_flags[@]}"; then
+			  __qshell_debug "${FUNCNAME[0]}: found a flag ${words[c]}, skip the next argument"
+        c=$((c+1))
+        # if we are looking for a flags value, don't show commands
+        if [[ $c -eq $cword ]]; then
+            commands=()
+        fi
+    fi
+
+    c=$((c+1))
+
+}
+
+__qshell_handle_noun()
+{
+    __qshell_debug "${FUNCNAME[0]}: c is $c words[c] is ${words[c]}"
+
+    if __qshell_contains_word "${words[c]}" "${must_have_one_noun[@]}"; then
+        must_have_one_noun=()
+    elif __qshell_contains_word "${words[c]}" "${noun_aliases[@]}"; then
+        must_have_one_noun=()
+    fi
+
+    nouns+=("${words[c]}")
+    c=$((c+1))
+}
+
+__qshell_handle_command()
+{
+    __qshell_debug "${FUNCNAME[0]}: c is $c words[c] is ${words[c]}"
+
+    local next_command
+    if [[ -n ${last_command} ]]; then
+        next_command="_${last_command}_${words[c]//:/__}"
+    else
+        if [[ $c -eq 0 ]]; then
+            next_command="_qshell_root_command"
+        else
+            next_command="_${words[c]//:/__}"
+        fi
+    fi
+    c=$((c+1))
+    __qshell_debug "${FUNCNAME[0]}: looking for ${next_command}"
+    declare -F "$next_command" >/dev/null && $next_command
+}
+
+__qshell_handle_word()
+{
+    if [[ $c -ge $cword ]]; then
+        __qshell_handle_reply
+        return
+    fi
+    __qshell_debug "${FUNCNAME[0]}: c is $c words[c] is ${words[c]}"
+    if [[ "${words[c]}" == -* ]]; then
+        __qshell_handle_flag
+    elif __qshell_contains_word "${words[c]}" "${commands[@]}"; then
+        __qshell_handle_command
+    elif [[ $c -eq 0 ]]; then
+        __qshell_handle_command
+    elif __qshell_contains_word "${words[c]}" "${command_aliases[@]}"; then
+        # aliashash variable is an associative array which is only supported in bash > 3.
+        if [[ -z "${BASH_VERSION}" || "${BASH_VERSINFO[0]}" -gt 3 ]]; then
+            words[c]=${aliashash[${words[c]}]}
+            __qshell_handle_command
+        else
+            __qshell_handle_noun
+        fi
+    else
+        __qshell_handle_noun
+    fi
+    __qshell_handle_word
+}
+
+__qshell_parse_get()
+{
+    local qshell_output out
+    if qshell_output=$(qshell user ls --name 2>/dev/null); then
+        out=($(echo "${qshell_output}"))
+        COMPREPLY=( $( compgen -W "${out[*]}" -- "$cur" ) )
+    fi
+}
+
+__qshell_get_resource()
+{
+    __qshell_parse_get
+    if [[ $? -eq 0 ]]; then
+        return 0
+    fi
+}
+
+__custom_func() {
+    case ${last_command} in
+        qshell_user_cu)
+            __qshell_get_resource
+            return
+            ;;
+        *)
+            ;;
+    esac
+}
+
+_qshell_abfetch()
+{
+    last_command="qshell_abfetch"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--callback-body=")
+    two_word_flags+=("--callback-body")
+    two_word_flags+=("-b")
+    local_nonpersistent_flags+=("--callback-body")
+    local_nonpersistent_flags+=("--callback-body=")
+    local_nonpersistent_flags+=("-b")
+    flags+=("--callback-host=")
+    two_word_flags+=("--callback-host")
+    two_word_flags+=("-T")
+    local_nonpersistent_flags+=("--callback-host")
+    local_nonpersistent_flags+=("--callback-host=")
+    local_nonpersistent_flags+=("-T")
+    flags+=("--callback-url=")
+    two_word_flags+=("--callback-url")
+    two_word_flags+=("-a")
+    local_nonpersistent_flags+=("--callback-url")
+    local_nonpersistent_flags+=("--callback-url=")
+    local_nonpersistent_flags+=("-a")
+    flags+=("--disable-check-fetch-result")
+    local_nonpersistent_flags+=("--disable-check-fetch-result")
+    flags+=("--enable-record")
+    local_nonpersistent_flags+=("--enable-record")
+    flags+=("--failure-list=")
+    two_word_flags+=("--failure-list")
+    two_word_flags+=("-e")
+    local_nonpersistent_flags+=("--failure-list")
+    local_nonpersistent_flags+=("--failure-list=")
+    local_nonpersistent_flags+=("-e")
+    flags+=("--file-type=")
+    two_word_flags+=("--file-type")
+    local_nonpersistent_flags+=("--file-type")
+    local_nonpersistent_flags+=("--file-type=")
+    flags+=("--host=")
+    two_word_flags+=("--host")
+    two_word_flags+=("-t")
+    local_nonpersistent_flags+=("--host")
+    local_nonpersistent_flags+=("--host=")
+    local_nonpersistent_flags+=("-t")
+    flags+=("--input-file=")
+    two_word_flags+=("--input-file")
+    two_word_flags+=("-i")
+    local_nonpersistent_flags+=("--input-file")
+    local_nonpersistent_flags+=("--input-file=")
+    local_nonpersistent_flags+=("-i")
+    flags+=("--overwrite")
+    local_nonpersistent_flags+=("--overwrite")
+    flags+=("--record-redo-while-error")
+    local_nonpersistent_flags+=("--record-redo-while-error")
+    flags+=("--success-list=")
+    two_word_flags+=("--success-list")
+    two_word_flags+=("-s")
+    local_nonpersistent_flags+=("--success-list")
+    local_nonpersistent_flags+=("--success-list=")
+    local_nonpersistent_flags+=("-s")
+    flags+=("--thread-count=")
+    two_word_flags+=("--thread-count")
+    two_word_flags+=("-c")
+    local_nonpersistent_flags+=("--thread-count")
+    local_nonpersistent_flags+=("--thread-count=")
+    local_nonpersistent_flags+=("-c")
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_account()
+{
+    last_command="qshell_account"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--overwrite")
+    flags+=("-w")
+    local_nonpersistent_flags+=("--overwrite")
+    local_nonpersistent_flags+=("-w")
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_acheck()
+{
+    last_command="qshell_acheck"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_alilistbucket()
+{
+    last_command="qshell_alilistbucket"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_awsfetch()
+{
+    last_command="qshell_awsfetch"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--aws-id=")
+    two_word_flags+=("--aws-id")
+    two_word_flags+=("-A")
+    local_nonpersistent_flags+=("--aws-id")
+    local_nonpersistent_flags+=("--aws-id=")
+    local_nonpersistent_flags+=("-A")
+    flags+=("--aws-secret-key=")
+    two_word_flags+=("--aws-secret-key")
+    two_word_flags+=("-S")
+    local_nonpersistent_flags+=("--aws-secret-key")
+    local_nonpersistent_flags+=("--aws-secret-key=")
+    local_nonpersistent_flags+=("-S")
+    flags+=("--continuation-token=")
+    two_word_flags+=("--continuation-token")
+    two_word_flags+=("-m")
+    local_nonpersistent_flags+=("--continuation-token")
+    local_nonpersistent_flags+=("--continuation-token=")
+    local_nonpersistent_flags+=("-m")
+    flags+=("--enable-record")
+    local_nonpersistent_flags+=("--enable-record")
+    flags+=("--failure-list=")
+    two_word_flags+=("--failure-list")
+    two_word_flags+=("-e")
+    local_nonpersistent_flags+=("--failure-list")
+    local_nonpersistent_flags+=("--failure-list=")
+    local_nonpersistent_flags+=("-e")
+    flags+=("--max-keys=")
+    two_word_flags+=("--max-keys")
+    two_word_flags+=("-n")
+    local_nonpersistent_flags+=("--max-keys")
+    local_nonpersistent_flags+=("--max-keys=")
+    local_nonpersistent_flags+=("-n")
+    flags+=("--prefix=")
+    two_word_flags+=("--prefix")
+    two_word_flags+=("-p")
+    local_nonpersistent_flags+=("--prefix")
+    local_nonpersistent_flags+=("--prefix=")
+    local_nonpersistent_flags+=("-p")
+    flags+=("--record-redo-while-error")
+    local_nonpersistent_flags+=("--record-redo-while-error")
+    flags+=("--success-list=")
+    two_word_flags+=("--success-list")
+    two_word_flags+=("-s")
+    local_nonpersistent_flags+=("--success-list")
+    local_nonpersistent_flags+=("--success-list=")
+    local_nonpersistent_flags+=("-s")
+    flags+=("--thread-count=")
+    two_word_flags+=("--thread-count")
+    two_word_flags+=("-c")
+    local_nonpersistent_flags+=("--thread-count")
+    local_nonpersistent_flags+=("--thread-count=")
+    local_nonpersistent_flags+=("-c")
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_awslist()
+{
+    last_command="qshell_awslist"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--aws-id=")
+    two_word_flags+=("--aws-id")
+    two_word_flags+=("-A")
+    local_nonpersistent_flags+=("--aws-id")
+    local_nonpersistent_flags+=("--aws-id=")
+    local_nonpersistent_flags+=("-A")
+    flags+=("--aws-secret-key=")
+    two_word_flags+=("--aws-secret-key")
+    two_word_flags+=("-S")
+    local_nonpersistent_flags+=("--aws-secret-key")
+    local_nonpersistent_flags+=("--aws-secret-key=")
+    local_nonpersistent_flags+=("-S")
+    flags+=("--continuation-token=")
+    two_word_flags+=("--continuation-token")
+    two_word_flags+=("-m")
+    local_nonpersistent_flags+=("--continuation-token")
+    local_nonpersistent_flags+=("--continuation-token=")
+    local_nonpersistent_flags+=("-m")
+    flags+=("--max-keys=")
+    two_word_flags+=("--max-keys")
+    two_word_flags+=("-n")
+    local_nonpersistent_flags+=("--max-keys")
+    local_nonpersistent_flags+=("--max-keys=")
+    local_nonpersistent_flags+=("-n")
+    flags+=("--prefix=")
+    two_word_flags+=("--prefix")
+    two_word_flags+=("-p")
+    local_nonpersistent_flags+=("--prefix")
+    local_nonpersistent_flags+=("--prefix=")
+    local_nonpersistent_flags+=("-p")
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_b64decode()
+{
+    last_command="qshell_b64decode"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--safe")
+    flags+=("-s")
+    local_nonpersistent_flags+=("--safe")
+    local_nonpersistent_flags+=("-s")
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_b64encode()
+{
+    last_command="qshell_b64encode"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--safe")
+    flags+=("-s")
+    local_nonpersistent_flags+=("--safe")
+    local_nonpersistent_flags+=("-s")
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_batchchgm()
+{
+    last_command="qshell_batchchgm"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--enable-record")
+    local_nonpersistent_flags+=("--enable-record")
+    flags+=("--failure-list=")
+    two_word_flags+=("--failure-list")
+    two_word_flags+=("-e")
+    local_nonpersistent_flags+=("--failure-list")
+    local_nonpersistent_flags+=("--failure-list=")
+    local_nonpersistent_flags+=("-e")
+    flags+=("--force")
+    flags+=("-y")
+    local_nonpersistent_flags+=("--force")
+    local_nonpersistent_flags+=("-y")
+    flags+=("--input-file=")
+    two_word_flags+=("--input-file")
+    two_word_flags+=("-i")
+    local_nonpersistent_flags+=("--input-file")
+    local_nonpersistent_flags+=("--input-file=")
+    local_nonpersistent_flags+=("-i")
+    flags+=("--min-worker=")
+    two_word_flags+=("--min-worker")
+    local_nonpersistent_flags+=("--min-worker")
+    local_nonpersistent_flags+=("--min-worker=")
+    flags+=("--record-redo-while-error")
+    local_nonpersistent_flags+=("--record-redo-while-error")
+    flags+=("--sep=")
+    two_word_flags+=("--sep")
+    two_word_flags+=("-F")
+    local_nonpersistent_flags+=("--sep")
+    local_nonpersistent_flags+=("--sep=")
+    local_nonpersistent_flags+=("-F")
+    flags+=("--success-list=")
+    two_word_flags+=("--success-list")
+    two_word_flags+=("-s")
+    local_nonpersistent_flags+=("--success-list")
+    local_nonpersistent_flags+=("--success-list=")
+    local_nonpersistent_flags+=("-s")
+    flags+=("--worker=")
+    two_word_flags+=("--worker")
+    two_word_flags+=("-c")
+    local_nonpersistent_flags+=("--worker")
+    local_nonpersistent_flags+=("--worker=")
+    local_nonpersistent_flags+=("-c")
+    flags+=("--worker-count-increase-period=")
+    two_word_flags+=("--worker-count-increase-period")
+    local_nonpersistent_flags+=("--worker-count-increase-period")
+    local_nonpersistent_flags+=("--worker-count-increase-period=")
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_batchchlifecycle()
+{
+    last_command="qshell_batchchlifecycle"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--delete-after-days=")
+    two_word_flags+=("--delete-after-days")
+    local_nonpersistent_flags+=("--delete-after-days")
+    local_nonpersistent_flags+=("--delete-after-days=")
+    flags+=("--enable-record")
+    local_nonpersistent_flags+=("--enable-record")
+    flags+=("--failure-list=")
+    two_word_flags+=("--failure-list")
+    two_word_flags+=("-e")
+    local_nonpersistent_flags+=("--failure-list")
+    local_nonpersistent_flags+=("--failure-list=")
+    local_nonpersistent_flags+=("-e")
+    flags+=("--force")
+    flags+=("-y")
+    local_nonpersistent_flags+=("--force")
+    local_nonpersistent_flags+=("-y")
+    flags+=("--input-file=")
+    two_word_flags+=("--input-file")
+    two_word_flags+=("-i")
+    local_nonpersistent_flags+=("--input-file")
+    local_nonpersistent_flags+=("--input-file=")
+    local_nonpersistent_flags+=("-i")
+    flags+=("--min-worker=")
+    two_word_flags+=("--min-worker")
+    local_nonpersistent_flags+=("--min-worker")
+    local_nonpersistent_flags+=("--min-worker=")
+    flags+=("--record-redo-while-error")
+    local_nonpersistent_flags+=("--record-redo-while-error")
+    flags+=("--sep=")
+    two_word_flags+=("--sep")
+    two_word_flags+=("-F")
+    local_nonpersistent_flags+=("--sep")
+    local_nonpersistent_flags+=("--sep=")
+    local_nonpersistent_flags+=("-F")
+    flags+=("--success-list=")
+    two_word_flags+=("--success-list")
+    two_word_flags+=("-s")
+    local_nonpersistent_flags+=("--success-list")
+    local_nonpersistent_flags+=("--success-list=")
+    local_nonpersistent_flags+=("-s")
+    flags+=("--to-archive-after-days=")
+    two_word_flags+=("--to-archive-after-days")
+    local_nonpersistent_flags+=("--to-archive-after-days")
+    local_nonpersistent_flags+=("--to-archive-after-days=")
+    flags+=("--to-archive-ir-after-days=")
+    two_word_flags+=("--to-archive-ir-after-days")
+    local_nonpersistent_flags+=("--to-archive-ir-after-days")
+    local_nonpersistent_flags+=("--to-archive-ir-after-days=")
+    flags+=("--to-deep-archive-after-days=")
+    two_word_flags+=("--to-deep-archive-after-days")
+    local_nonpersistent_flags+=("--to-deep-archive-after-days")
+    local_nonpersistent_flags+=("--to-deep-archive-after-days=")
+    flags+=("--to-ia-after-days=")
+    two_word_flags+=("--to-ia-after-days")
+    local_nonpersistent_flags+=("--to-ia-after-days")
+    local_nonpersistent_flags+=("--to-ia-after-days=")
+    flags+=("--to-intelligent-tiering-after-days=")
+    two_word_flags+=("--to-intelligent-tiering-after-days")
+    local_nonpersistent_flags+=("--to-intelligent-tiering-after-days")
+    local_nonpersistent_flags+=("--to-intelligent-tiering-after-days=")
+    flags+=("--worker=")
+    two_word_flags+=("--worker")
+    two_word_flags+=("-c")
+    local_nonpersistent_flags+=("--worker")
+    local_nonpersistent_flags+=("--worker=")
+    local_nonpersistent_flags+=("-c")
+    flags+=("--worker-count-increase-period=")
+    two_word_flags+=("--worker-count-increase-period")
+    local_nonpersistent_flags+=("--worker-count-increase-period")
+    local_nonpersistent_flags+=("--worker-count-increase-period=")
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_batchchtype()
+{
+    last_command="qshell_batchchtype"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--enable-record")
+    local_nonpersistent_flags+=("--enable-record")
+    flags+=("--failure-list=")
+    two_word_flags+=("--failure-list")
+    two_word_flags+=("-e")
+    local_nonpersistent_flags+=("--failure-list")
+    local_nonpersistent_flags+=("--failure-list=")
+    local_nonpersistent_flags+=("-e")
+    flags+=("--force")
+    flags+=("-y")
+    local_nonpersistent_flags+=("--force")
+    local_nonpersistent_flags+=("-y")
+    flags+=("--input-file=")
+    two_word_flags+=("--input-file")
+    two_word_flags+=("-i")
+    local_nonpersistent_flags+=("--input-file")
+    local_nonpersistent_flags+=("--input-file=")
+    local_nonpersistent_flags+=("-i")
+    flags+=("--min-worker=")
+    two_word_flags+=("--min-worker")
+    local_nonpersistent_flags+=("--min-worker")
+    local_nonpersistent_flags+=("--min-worker=")
+    flags+=("--record-redo-while-error")
+    local_nonpersistent_flags+=("--record-redo-while-error")
+    flags+=("--sep=")
+    two_word_flags+=("--sep")
+    two_word_flags+=("-F")
+    local_nonpersistent_flags+=("--sep")
+    local_nonpersistent_flags+=("--sep=")
+    local_nonpersistent_flags+=("-F")
+    flags+=("--success-list=")
+    two_word_flags+=("--success-list")
+    two_word_flags+=("-s")
+    local_nonpersistent_flags+=("--success-list")
+    local_nonpersistent_flags+=("--success-list=")
+    local_nonpersistent_flags+=("-s")
+    flags+=("--worker=")
+    two_word_flags+=("--worker")
+    two_word_flags+=("-c")
+    local_nonpersistent_flags+=("--worker")
+    local_nonpersistent_flags+=("--worker=")
+    local_nonpersistent_flags+=("-c")
+    flags+=("--worker-count-increase-period=")
+    two_word_flags+=("--worker-count-increase-period")
+    local_nonpersistent_flags+=("--worker-count-increase-period")
+    local_nonpersistent_flags+=("--worker-count-increase-period=")
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_batchcopy()
+{
+    last_command="qshell_batchcopy"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--enable-record")
+    local_nonpersistent_flags+=("--enable-record")
+    flags+=("--failure-list=")
+    two_word_flags+=("--failure-list")
+    two_word_flags+=("-e")
+    local_nonpersistent_flags+=("--failure-list")
+    local_nonpersistent_flags+=("--failure-list=")
+    local_nonpersistent_flags+=("-e")
+    flags+=("--force")
+    flags+=("-y")
+    local_nonpersistent_flags+=("--force")
+    local_nonpersistent_flags+=("-y")
+    flags+=("--input-file=")
+    two_word_flags+=("--input-file")
+    two_word_flags+=("-i")
+    local_nonpersistent_flags+=("--input-file")
+    local_nonpersistent_flags+=("--input-file=")
+    local_nonpersistent_flags+=("-i")
+    flags+=("--min-worker=")
+    two_word_flags+=("--min-worker")
+    local_nonpersistent_flags+=("--min-worker")
+    local_nonpersistent_flags+=("--min-worker=")
+    flags+=("--overwrite")
+    flags+=("-w")
+    local_nonpersistent_flags+=("--overwrite")
+    local_nonpersistent_flags+=("-w")
+    flags+=("--record-redo-while-error")
+    local_nonpersistent_flags+=("--record-redo-while-error")
+    flags+=("--sep=")
+    two_word_flags+=("--sep")
+    two_word_flags+=("-F")
+    local_nonpersistent_flags+=("--sep")
+    local_nonpersistent_flags+=("--sep=")
+    local_nonpersistent_flags+=("-F")
+    flags+=("--success-list=")
+    two_word_flags+=("--success-list")
+    two_word_flags+=("-s")
+    local_nonpersistent_flags+=("--success-list")
+    local_nonpersistent_flags+=("--success-list=")
+    local_nonpersistent_flags+=("-s")
+    flags+=("--worker=")
+    two_word_flags+=("--worker")
+    two_word_flags+=("-c")
+    local_nonpersistent_flags+=("--worker")
+    local_nonpersistent_flags+=("--worker=")
+    local_nonpersistent_flags+=("-c")
+    flags+=("--worker-count-increase-period=")
+    two_word_flags+=("--worker-count-increase-period")
+    local_nonpersistent_flags+=("--worker-count-increase-period")
+    local_nonpersistent_flags+=("--worker-count-increase-period=")
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_batchdelete()
+{
+    last_command="qshell_batchdelete"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--enable-record")
+    local_nonpersistent_flags+=("--enable-record")
+    flags+=("--failure-list=")
+    two_word_flags+=("--failure-list")
+    two_word_flags+=("-e")
+    local_nonpersistent_flags+=("--failure-list")
+    local_nonpersistent_flags+=("--failure-list=")
+    local_nonpersistent_flags+=("-e")
+    flags+=("--force")
+    flags+=("-y")
+    local_nonpersistent_flags+=("--force")
+    local_nonpersistent_flags+=("-y")
+    flags+=("--input-file=")
+    two_word_flags+=("--input-file")
+    two_word_flags+=("-i")
+    local_nonpersistent_flags+=("--input-file")
+    local_nonpersistent_flags+=("--input-file=")
+    local_nonpersistent_flags+=("-i")
+    flags+=("--min-worker=")
+    two_word_flags+=("--min-worker")
+    local_nonpersistent_flags+=("--min-worker")
+    local_nonpersistent_flags+=("--min-worker=")
+    flags+=("--record-redo-while-error")
+    local_nonpersistent_flags+=("--record-redo-while-error")
+    flags+=("--sep=")
+    two_word_flags+=("--sep")
+    two_word_flags+=("-F")
+    local_nonpersistent_flags+=("--sep")
+    local_nonpersistent_flags+=("--sep=")
+    local_nonpersistent_flags+=("-F")
+    flags+=("--success-list=")
+    two_word_flags+=("--success-list")
+    two_word_flags+=("-s")
+    local_nonpersistent_flags+=("--success-list")
+    local_nonpersistent_flags+=("--success-list=")
+    local_nonpersistent_flags+=("-s")
+    flags+=("--worker=")
+    two_word_flags+=("--worker")
+    two_word_flags+=("-c")
+    local_nonpersistent_flags+=("--worker")
+    local_nonpersistent_flags+=("--worker=")
+    local_nonpersistent_flags+=("-c")
+    flags+=("--worker-count-increase-period=")
+    two_word_flags+=("--worker-count-increase-period")
+    local_nonpersistent_flags+=("--worker-count-increase-period")
+    local_nonpersistent_flags+=("--worker-count-increase-period=")
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_batchexpire()
+{
+    last_command="qshell_batchexpire"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--enable-record")
+    local_nonpersistent_flags+=("--enable-record")
+    flags+=("--failure-list=")
+    two_word_flags+=("--failure-list")
+    two_word_flags+=("-e")
+    local_nonpersistent_flags+=("--failure-list")
+    local_nonpersistent_flags+=("--failure-list=")
+    local_nonpersistent_flags+=("-e")
+    flags+=("--force")
+    flags+=("-y")
+    local_nonpersistent_flags+=("--force")
+    local_nonpersistent_flags+=("-y")
+    flags+=("--input-file=")
+    two_word_flags+=("--input-file")
+    two_word_flags+=("-i")
+    local_nonpersistent_flags+=("--input-file")
+    local_nonpersistent_flags+=("--input-file=")
+    local_nonpersistent_flags+=("-i")
+    flags+=("--min-worker=")
+    two_word_flags+=("--min-worker")
+    local_nonpersistent_flags+=("--min-worker")
+    local_nonpersistent_flags+=("--min-worker=")
+    flags+=("--record-redo-while-error")
+    local_nonpersistent_flags+=("--record-redo-while-error")
+    flags+=("--sep=")
+    two_word_flags+=("--sep")
+    two_word_flags+=("-F")
+    local_nonpersistent_flags+=("--sep")
+    local_nonpersistent_flags+=("--sep=")
+    local_nonpersistent_flags+=("-F")
+    flags+=("--success-list=")
+    two_word_flags+=("--success-list")
+    two_word_flags+=("-s")
+    local_nonpersistent_flags+=("--success-list")
+    local_nonpersistent_flags+=("--success-list=")
+    local_nonpersistent_flags+=("-s")
+    flags+=("--worker=")
+    two_word_flags+=("--worker")
+    two_word_flags+=("-c")
+    local_nonpersistent_flags+=("--worker")
+    local_nonpersistent_flags+=("--worker=")
+    local_nonpersistent_flags+=("-c")
+    flags+=("--worker-count-increase-period=")
+    two_word_flags+=("--worker-count-increase-period")
+    local_nonpersistent_flags+=("--worker-count-increase-period")
+    local_nonpersistent_flags+=("--worker-count-increase-period=")
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_batchfetch()
+{
+    last_command="qshell_batchfetch"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--enable-record")
+    local_nonpersistent_flags+=("--enable-record")
+    flags+=("--failure-list=")
+    two_word_flags+=("--failure-list")
+    two_word_flags+=("-e")
+    local_nonpersistent_flags+=("--failure-list")
+    local_nonpersistent_flags+=("--failure-list=")
+    local_nonpersistent_flags+=("-e")
+    flags+=("--force")
+    flags+=("-y")
+    local_nonpersistent_flags+=("--force")
+    local_nonpersistent_flags+=("-y")
+    flags+=("--input-file=")
+    two_word_flags+=("--input-file")
+    two_word_flags+=("-i")
+    local_nonpersistent_flags+=("--input-file")
+    local_nonpersistent_flags+=("--input-file=")
+    local_nonpersistent_flags+=("-i")
+    flags+=("--record-redo-while-error")
+    local_nonpersistent_flags+=("--record-redo-while-error")
+    flags+=("--sep=")
+    two_word_flags+=("--sep")
+    two_word_flags+=("-F")
+    local_nonpersistent_flags+=("--sep")
+    local_nonpersistent_flags+=("--sep=")
+    local_nonpersistent_flags+=("-F")
+    flags+=("--success-list=")
+    two_word_flags+=("--success-list")
+    two_word_flags+=("-s")
+    local_nonpersistent_flags+=("--success-list")
+    local_nonpersistent_flags+=("--success-list=")
+    local_nonpersistent_flags+=("-s")
+    flags+=("--up-host=")
+    two_word_flags+=("--up-host")
+    two_word_flags+=("-u")
+    local_nonpersistent_flags+=("--up-host")
+    local_nonpersistent_flags+=("--up-host=")
+    local_nonpersistent_flags+=("-u")
+    flags+=("--worker=")
+    two_word_flags+=("--worker")
+    two_word_flags+=("-c")
+    local_nonpersistent_flags+=("--worker")
+    local_nonpersistent_flags+=("--worker=")
+    local_nonpersistent_flags+=("-c")
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_batchforbidden()
+{
+    last_command="qshell_batchforbidden"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--enable-record")
+    local_nonpersistent_flags+=("--enable-record")
+    flags+=("--failure-list=")
+    two_word_flags+=("--failure-list")
+    two_word_flags+=("-e")
+    local_nonpersistent_flags+=("--failure-list")
+    local_nonpersistent_flags+=("--failure-list=")
+    local_nonpersistent_flags+=("-e")
+    flags+=("--force")
+    flags+=("-y")
+    local_nonpersistent_flags+=("--force")
+    local_nonpersistent_flags+=("-y")
+    flags+=("--input-file=")
+    two_word_flags+=("--input-file")
+    two_word_flags+=("-i")
+    local_nonpersistent_flags+=("--input-file")
+    local_nonpersistent_flags+=("--input-file=")
+    local_nonpersistent_flags+=("-i")
+    flags+=("--min-worker=")
+    two_word_flags+=("--min-worker")
+    local_nonpersistent_flags+=("--min-worker")
+    local_nonpersistent_flags+=("--min-worker=")
+    flags+=("--record-redo-while-error")
+    local_nonpersistent_flags+=("--record-redo-while-error")
+    flags+=("--reverse")
+    flags+=("-r")
+    local_nonpersistent_flags+=("--reverse")
+    local_nonpersistent_flags+=("-r")
+    flags+=("--success-list=")
+    two_word_flags+=("--success-list")
+    two_word_flags+=("-s")
+    local_nonpersistent_flags+=("--success-list")
+    local_nonpersistent_flags+=("--success-list=")
+    local_nonpersistent_flags+=("-s")
+    flags+=("--worker=")
+    two_word_flags+=("--worker")
+    two_word_flags+=("-c")
+    local_nonpersistent_flags+=("--worker")
+    local_nonpersistent_flags+=("--worker=")
+    local_nonpersistent_flags+=("-c")
+    flags+=("--worker-count-increase-period=")
+    two_word_flags+=("--worker-count-increase-period")
+    local_nonpersistent_flags+=("--worker-count-increase-period")
+    local_nonpersistent_flags+=("--worker-count-increase-period=")
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_batchmatch()
+{
+    last_command="qshell_batchmatch"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--enable-record")
+    local_nonpersistent_flags+=("--enable-record")
+    flags+=("--failure-list=")
+    two_word_flags+=("--failure-list")
+    two_word_flags+=("-e")
+    local_nonpersistent_flags+=("--failure-list")
+    local_nonpersistent_flags+=("--failure-list=")
+    local_nonpersistent_flags+=("-e")
+    flags+=("--input-file=")
+    two_word_flags+=("--input-file")
+    two_word_flags+=("-i")
+    local_nonpersistent_flags+=("--input-file")
+    local_nonpersistent_flags+=("--input-file=")
+    local_nonpersistent_flags+=("-i")
+    flags+=("--record-redo-while-error")
+    local_nonpersistent_flags+=("--record-redo-while-error")
+    flags+=("--sep=")
+    two_word_flags+=("--sep")
+    two_word_flags+=("-F")
+    local_nonpersistent_flags+=("--sep")
+    local_nonpersistent_flags+=("--sep=")
+    local_nonpersistent_flags+=("-F")
+    flags+=("--success-list=")
+    two_word_flags+=("--success-list")
+    two_word_flags+=("-s")
+    local_nonpersistent_flags+=("--success-list")
+    local_nonpersistent_flags+=("--success-list=")
+    local_nonpersistent_flags+=("-s")
+    flags+=("--worker=")
+    two_word_flags+=("--worker")
+    two_word_flags+=("-c")
+    local_nonpersistent_flags+=("--worker")
+    local_nonpersistent_flags+=("--worker=")
+    local_nonpersistent_flags+=("-c")
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_batchmove()
+{
+    last_command="qshell_batchmove"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--enable-record")
+    local_nonpersistent_flags+=("--enable-record")
+    flags+=("--failure-list=")
+    two_word_flags+=("--failure-list")
+    two_word_flags+=("-e")
+    local_nonpersistent_flags+=("--failure-list")
+    local_nonpersistent_flags+=("--failure-list=")
+    local_nonpersistent_flags+=("-e")
+    flags+=("--force")
+    flags+=("-y")
+    local_nonpersistent_flags+=("--force")
+    local_nonpersistent_flags+=("-y")
+    flags+=("--input-file=")
+    two_word_flags+=("--input-file")
+    two_word_flags+=("-i")
+    local_nonpersistent_flags+=("--input-file")
+    local_nonpersistent_flags+=("--input-file=")
+    local_nonpersistent_flags+=("-i")
+    flags+=("--min-worker=")
+    two_word_flags+=("--min-worker")
+    local_nonpersistent_flags+=("--min-worker")
+    local_nonpersistent_flags+=("--min-worker=")
+    flags+=("--overwrite")
+    flags+=("-w")
+    local_nonpersistent_flags+=("--overwrite")
+    local_nonpersistent_flags+=("-w")
+    flags+=("--record-redo-while-error")
+    local_nonpersistent_flags+=("--record-redo-while-error")
+    flags+=("--sep=")
+    two_word_flags+=("--sep")
+    two_word_flags+=("-F")
+    local_nonpersistent_flags+=("--sep")
+    local_nonpersistent_flags+=("--sep=")
+    local_nonpersistent_flags+=("-F")
+    flags+=("--success-list=")
+    two_word_flags+=("--success-list")
+    two_word_flags+=("-s")
+    local_nonpersistent_flags+=("--success-list")
+    local_nonpersistent_flags+=("--success-list=")
+    local_nonpersistent_flags+=("-s")
+    flags+=("--worker=")
+    two_word_flags+=("--worker")
+    two_word_flags+=("-c")
+    local_nonpersistent_flags+=("--worker")
+    local_nonpersistent_flags+=("--worker=")
+    local_nonpersistent_flags+=("-c")
+    flags+=("--worker-count-increase-period=")
+    two_word_flags+=("--worker-count-increase-period")
+    local_nonpersistent_flags+=("--worker-count-increase-period")
+    local_nonpersistent_flags+=("--worker-count-increase-period=")
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_batchrename()
+{
+    last_command="qshell_batchrename"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--enable-record")
+    local_nonpersistent_flags+=("--enable-record")
+    flags+=("--failure-list=")
+    two_word_flags+=("--failure-list")
+    two_word_flags+=("-e")
+    local_nonpersistent_flags+=("--failure-list")
+    local_nonpersistent_flags+=("--failure-list=")
+    local_nonpersistent_flags+=("-e")
+    flags+=("--force")
+    flags+=("-y")
+    local_nonpersistent_flags+=("--force")
+    local_nonpersistent_flags+=("-y")
+    flags+=("--input-file=")
+    two_word_flags+=("--input-file")
+    two_word_flags+=("-i")
+    local_nonpersistent_flags+=("--input-file")
+    local_nonpersistent_flags+=("--input-file=")
+    local_nonpersistent_flags+=("-i")
+    flags+=("--min-worker=")
+    two_word_flags+=("--min-worker")
+    local_nonpersistent_flags+=("--min-worker")
+    local_nonpersistent_flags+=("--min-worker=")
+    flags+=("--overwrite")
+    flags+=("-w")
+    local_nonpersistent_flags+=("--overwrite")
+    local_nonpersistent_flags+=("-w")
+    flags+=("--record-redo-while-error")
+    local_nonpersistent_flags+=("--record-redo-while-error")
+    flags+=("--sep=")
+    two_word_flags+=("--sep")
+    two_word_flags+=("-F")
+    local_nonpersistent_flags+=("--sep")
+    local_nonpersistent_flags+=("--sep=")
+    local_nonpersistent_flags+=("-F")
+    flags+=("--success-list=")
+    two_word_flags+=("--success-list")
+    two_word_flags+=("-s")
+    local_nonpersistent_flags+=("--success-list")
+    local_nonpersistent_flags+=("--success-list=")
+    local_nonpersistent_flags+=("-s")
+    flags+=("--worker=")
+    two_word_flags+=("--worker")
+    two_word_flags+=("-c")
+    local_nonpersistent_flags+=("--worker")
+    local_nonpersistent_flags+=("--worker=")
+    local_nonpersistent_flags+=("-c")
+    flags+=("--worker-count-increase-period=")
+    two_word_flags+=("--worker-count-increase-period")
+    local_nonpersistent_flags+=("--worker-count-increase-period")
+    local_nonpersistent_flags+=("--worker-count-increase-period=")
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_batchrestorear()
+{
+    last_command="qshell_batchrestorear"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--enable-record")
+    local_nonpersistent_flags+=("--enable-record")
+    flags+=("--failure-list=")
+    two_word_flags+=("--failure-list")
+    two_word_flags+=("-e")
+    local_nonpersistent_flags+=("--failure-list")
+    local_nonpersistent_flags+=("--failure-list=")
+    local_nonpersistent_flags+=("-e")
+    flags+=("--force")
+    flags+=("-y")
+    local_nonpersistent_flags+=("--force")
+    local_nonpersistent_flags+=("-y")
+    flags+=("--input-file=")
+    two_word_flags+=("--input-file")
+    two_word_flags+=("-i")
+    local_nonpersistent_flags+=("--input-file")
+    local_nonpersistent_flags+=("--input-file=")
+    local_nonpersistent_flags+=("-i")
+    flags+=("--min-worker=")
+    two_word_flags+=("--min-worker")
+    local_nonpersistent_flags+=("--min-worker")
+    local_nonpersistent_flags+=("--min-worker=")
+    flags+=("--record-redo-while-error")
+    local_nonpersistent_flags+=("--record-redo-while-error")
+    flags+=("--sep=")
+    two_word_flags+=("--sep")
+    two_word_flags+=("-F")
+    local_nonpersistent_flags+=("--sep")
+    local_nonpersistent_flags+=("--sep=")
+    local_nonpersistent_flags+=("-F")
+    flags+=("--success-list=")
+    two_word_flags+=("--success-list")
+    two_word_flags+=("-s")
+    local_nonpersistent_flags+=("--success-list")
+    local_nonpersistent_flags+=("--success-list=")
+    local_nonpersistent_flags+=("-s")
+    flags+=("--worker=")
+    two_word_flags+=("--worker")
+    two_word_flags+=("-c")
+    local_nonpersistent_flags+=("--worker")
+    local_nonpersistent_flags+=("--worker=")
+    local_nonpersistent_flags+=("-c")
+    flags+=("--worker-count-increase-period=")
+    two_word_flags+=("--worker-count-increase-period")
+    local_nonpersistent_flags+=("--worker-count-increase-period")
+    local_nonpersistent_flags+=("--worker-count-increase-period=")
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_batchsign()
+{
+    last_command="qshell_batchsign"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--deadline=")
+    two_word_flags+=("--deadline")
+    two_word_flags+=("-e")
+    local_nonpersistent_flags+=("--deadline")
+    local_nonpersistent_flags+=("--deadline=")
+    local_nonpersistent_flags+=("-e")
+    flags+=("--enable-record")
+    local_nonpersistent_flags+=("--enable-record")
+    flags+=("--input-file=")
+    two_word_flags+=("--input-file")
+    two_word_flags+=("-i")
+    local_nonpersistent_flags+=("--input-file")
+    local_nonpersistent_flags+=("--input-file=")
+    local_nonpersistent_flags+=("-i")
+    flags+=("--outfile=")
+    two_word_flags+=("--outfile")
+    two_word_flags+=("-o")
+    local_nonpersistent_flags+=("--outfile")
+    local_nonpersistent_flags+=("--outfile=")
+    local_nonpersistent_flags+=("-o")
+    flags+=("--record-redo-while-error")
+    local_nonpersistent_flags+=("--record-redo-while-error")
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_batchstat()
+{
+    last_command="qshell_batchstat"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--enable-record")
+    local_nonpersistent_flags+=("--enable-record")
+    flags+=("--failure-list=")
+    two_word_flags+=("--failure-list")
+    two_word_flags+=("-e")
+    local_nonpersistent_flags+=("--failure-list")
+    local_nonpersistent_flags+=("--failure-list=")
+    local_nonpersistent_flags+=("-e")
+    flags+=("--force")
+    flags+=("-y")
+    local_nonpersistent_flags+=("--force")
+    local_nonpersistent_flags+=("-y")
+    flags+=("--input-file=")
+    two_word_flags+=("--input-file")
+    two_word_flags+=("-i")
+    local_nonpersistent_flags+=("--input-file")
+    local_nonpersistent_flags+=("--input-file=")
+    local_nonpersistent_flags+=("-i")
+    flags+=("--min-worker=")
+    two_word_flags+=("--min-worker")
+    local_nonpersistent_flags+=("--min-worker")
+    local_nonpersistent_flags+=("--min-worker=")
+    flags+=("--outfile=")
+    two_word_flags+=("--outfile")
+    two_word_flags+=("-o")
+    local_nonpersistent_flags+=("--outfile")
+    local_nonpersistent_flags+=("--outfile=")
+    local_nonpersistent_flags+=("-o")
+    flags+=("--record-redo-while-error")
+    local_nonpersistent_flags+=("--record-redo-while-error")
+    flags+=("--success-list=")
+    two_word_flags+=("--success-list")
+    two_word_flags+=("-s")
+    local_nonpersistent_flags+=("--success-list")
+    local_nonpersistent_flags+=("--success-list=")
+    local_nonpersistent_flags+=("-s")
+    flags+=("--worker=")
+    two_word_flags+=("--worker")
+    two_word_flags+=("-c")
+    local_nonpersistent_flags+=("--worker")
+    local_nonpersistent_flags+=("--worker=")
+    local_nonpersistent_flags+=("-c")
+    flags+=("--worker-count-increase-period=")
+    two_word_flags+=("--worker-count-increase-period")
+    local_nonpersistent_flags+=("--worker-count-increase-period")
+    local_nonpersistent_flags+=("--worker-count-increase-period=")
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_bucket()
+{
+    last_command="qshell_bucket"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_buckets()
+{
+    last_command="qshell_buckets"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--detail")
+    local_nonpersistent_flags+=("--detail")
+    flags+=("--region=")
+    two_word_flags+=("--region")
+    local_nonpersistent_flags+=("--region")
+    local_nonpersistent_flags+=("--region=")
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_cdnprefetch()
+{
+    last_command="qshell_cdnprefetch"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--input-file=")
+    two_word_flags+=("--input-file")
+    two_word_flags+=("-i")
+    local_nonpersistent_flags+=("--input-file")
+    local_nonpersistent_flags+=("--input-file=")
+    local_nonpersistent_flags+=("-i")
+    flags+=("--qps=")
+    two_word_flags+=("--qps")
+    local_nonpersistent_flags+=("--qps")
+    local_nonpersistent_flags+=("--qps=")
+    flags+=("--size=")
+    two_word_flags+=("--size")
+    two_word_flags+=("-s")
+    local_nonpersistent_flags+=("--size")
+    local_nonpersistent_flags+=("--size=")
+    local_nonpersistent_flags+=("-s")
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_cdnrefresh()
+{
+    last_command="qshell_cdnrefresh"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--dirs")
+    flags+=("-r")
+    local_nonpersistent_flags+=("--dirs")
+    local_nonpersistent_flags+=("-r")
+    flags+=("--input-file=")
+    two_word_flags+=("--input-file")
+    two_word_flags+=("-i")
+    local_nonpersistent_flags+=("--input-file")
+    local_nonpersistent_flags+=("--input-file=")
+    local_nonpersistent_flags+=("-i")
+    flags+=("--qps=")
+    two_word_flags+=("--qps")
+    local_nonpersistent_flags+=("--qps")
+    local_nonpersistent_flags+=("--qps=")
+    flags+=("--size=")
+    two_word_flags+=("--size")
+    two_word_flags+=("-s")
+    local_nonpersistent_flags+=("--size")
+    local_nonpersistent_flags+=("--size=")
+    local_nonpersistent_flags+=("-s")
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_chgm()
+{
+    last_command="qshell_chgm"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_chlifecycle()
+{
+    last_command="qshell_chlifecycle"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--delete-after-days=")
+    two_word_flags+=("--delete-after-days")
+    local_nonpersistent_flags+=("--delete-after-days")
+    local_nonpersistent_flags+=("--delete-after-days=")
+    flags+=("--to-archive-after-days=")
+    two_word_flags+=("--to-archive-after-days")
+    local_nonpersistent_flags+=("--to-archive-after-days")
+    local_nonpersistent_flags+=("--to-archive-after-days=")
+    flags+=("--to-archive-ir-after-days=")
+    two_word_flags+=("--to-archive-ir-after-days")
+    local_nonpersistent_flags+=("--to-archive-ir-after-days")
+    local_nonpersistent_flags+=("--to-archive-ir-after-days=")
+    flags+=("--to-deep-archive-after-days=")
+    two_word_flags+=("--to-deep-archive-after-days")
+    local_nonpersistent_flags+=("--to-deep-archive-after-days")
+    local_nonpersistent_flags+=("--to-deep-archive-after-days=")
+    flags+=("--to-ia-after-days=")
+    two_word_flags+=("--to-ia-after-days")
+    local_nonpersistent_flags+=("--to-ia-after-days")
+    local_nonpersistent_flags+=("--to-ia-after-days=")
+    flags+=("--to-intelligent-tiering-after-days=")
+    two_word_flags+=("--to-intelligent-tiering-after-days")
+    local_nonpersistent_flags+=("--to-intelligent-tiering-after-days")
+    local_nonpersistent_flags+=("--to-intelligent-tiering-after-days=")
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_chtype()
+{
+    last_command="qshell_chtype"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_completion()
+{
+    last_command="qshell_completion"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--help")
+    flags+=("-h")
+    local_nonpersistent_flags+=("--help")
+    local_nonpersistent_flags+=("-h")
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_copy()
+{
+    last_command="qshell_copy"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--key=")
+    two_word_flags+=("--key")
+    two_word_flags+=("-k")
+    local_nonpersistent_flags+=("--key")
+    local_nonpersistent_flags+=("--key=")
+    local_nonpersistent_flags+=("-k")
+    flags+=("--overwrite")
+    flags+=("-w")
+    local_nonpersistent_flags+=("--overwrite")
+    local_nonpersistent_flags+=("-w")
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_create-share()
+{
+    last_command="qshell_create-share"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--extract-code=")
+    two_word_flags+=("--extract-code")
+    local_nonpersistent_flags+=("--extract-code")
+    local_nonpersistent_flags+=("--extract-code=")
+    flags+=("--output=")
+    two_word_flags+=("--output")
+    local_nonpersistent_flags+=("--output")
+    local_nonpersistent_flags+=("--output=")
+    flags+=("--validity-period=")
+    two_word_flags+=("--validity-period")
+    local_nonpersistent_flags+=("--validity-period")
+    local_nonpersistent_flags+=("--validity-period=")
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_d2ts()
+{
+    last_command="qshell_d2ts"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_delete()
+{
+    last_command="qshell_delete"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_dircache()
+{
+    last_command="qshell_dircache"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--outfile=")
+    two_word_flags+=("--outfile")
+    two_word_flags+=("-o")
+    local_nonpersistent_flags+=("--outfile")
+    local_nonpersistent_flags+=("--outfile=")
+    local_nonpersistent_flags+=("-o")
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_domains()
+{
+    last_command="qshell_domains"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--detail")
+    local_nonpersistent_flags+=("--detail")
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_expire()
+{
+    last_command="qshell_expire"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_fetch()
+{
+    last_command="qshell_fetch"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--key=")
+    two_word_flags+=("--key")
+    two_word_flags+=("-k")
+    local_nonpersistent_flags+=("--key")
+    local_nonpersistent_flags+=("--key=")
+    local_nonpersistent_flags+=("-k")
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_forbidden()
+{
+    last_command="qshell_forbidden"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--reverse")
+    flags+=("-r")
+    local_nonpersistent_flags+=("--reverse")
+    local_nonpersistent_flags+=("-r")
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_fput()
+{
+    last_command="qshell_fput"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--accelerate")
+    local_nonpersistent_flags+=("--accelerate")
+    flags+=("--callback-body=")
+    two_word_flags+=("--callback-body")
+    local_nonpersistent_flags+=("--callback-body")
+    local_nonpersistent_flags+=("--callback-body=")
+    flags+=("--callback-body-type=")
+    two_word_flags+=("--callback-body-type")
+    local_nonpersistent_flags+=("--callback-body-type")
+    local_nonpersistent_flags+=("--callback-body-type=")
+    flags+=("--callback-host=")
+    two_word_flags+=("--callback-host")
+    two_word_flags+=("-T")
+    local_nonpersistent_flags+=("--callback-host")
+    local_nonpersistent_flags+=("--callback-host=")
+    local_nonpersistent_flags+=("-T")
+    flags+=("--callback-urls=")
+    two_word_flags+=("--callback-urls")
+    two_word_flags+=("-l")
+    local_nonpersistent_flags+=("--callback-urls")
+    local_nonpersistent_flags+=("--callback-urls=")
+    local_nonpersistent_flags+=("-l")
+    flags+=("--detect-mime=")
+    two_word_flags+=("--detect-mime")
+    local_nonpersistent_flags+=("--detect-mime")
+    local_nonpersistent_flags+=("--detect-mime=")
+    flags+=("--end-user=")
+    two_word_flags+=("--end-user")
+    local_nonpersistent_flags+=("--end-user")
+    local_nonpersistent_flags+=("--end-user=")
+    flags+=("--file-type=")
+    two_word_flags+=("--file-type")
+    local_nonpersistent_flags+=("--file-type")
+    local_nonpersistent_flags+=("--file-type=")
+    flags+=("--mimetype=")
+    two_word_flags+=("--mimetype")
+    two_word_flags+=("-t")
+    local_nonpersistent_flags+=("--mimetype")
+    local_nonpersistent_flags+=("--mimetype=")
+    local_nonpersistent_flags+=("-t")
+    flags+=("--overwrite")
+    local_nonpersistent_flags+=("--overwrite")
+    flags+=("--persistent-notify-url=")
+    two_word_flags+=("--persistent-notify-url")
+    local_nonpersistent_flags+=("--persistent-notify-url")
+    local_nonpersistent_flags+=("--persistent-notify-url=")
+    flags+=("--persistent-ops=")
+    two_word_flags+=("--persistent-ops")
+    local_nonpersistent_flags+=("--persistent-ops")
+    local_nonpersistent_flags+=("--persistent-ops=")
+    flags+=("--persistent-pipeline=")
+    two_word_flags+=("--persistent-pipeline")
+    local_nonpersistent_flags+=("--persistent-pipeline")
+    local_nonpersistent_flags+=("--persistent-pipeline=")
+    flags+=("--traffic-limit=")
+    two_word_flags+=("--traffic-limit")
+    local_nonpersistent_flags+=("--traffic-limit")
+    local_nonpersistent_flags+=("--traffic-limit=")
+    flags+=("--up-host=")
+    two_word_flags+=("--up-host")
+    two_word_flags+=("-u")
+    local_nonpersistent_flags+=("--up-host")
+    local_nonpersistent_flags+=("--up-host=")
+    local_nonpersistent_flags+=("-u")
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_func()
+{
+    last_command="qshell_func"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_get()
+{
+    last_command="qshell_get"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--check-hash")
+    local_nonpersistent_flags+=("--check-hash")
+    flags+=("--check-size")
+    local_nonpersistent_flags+=("--check-size")
+    flags+=("--domain=")
+    two_word_flags+=("--domain")
+    local_nonpersistent_flags+=("--domain")
+    local_nonpersistent_flags+=("--domain=")
+    flags+=("--enable-slice")
+    local_nonpersistent_flags+=("--enable-slice")
+    flags+=("--get-file-api")
+    local_nonpersistent_flags+=("--get-file-api")
+    flags+=("--outfile=")
+    two_word_flags+=("--outfile")
+    two_word_flags+=("-o")
+    local_nonpersistent_flags+=("--outfile")
+    local_nonpersistent_flags+=("--outfile=")
+    local_nonpersistent_flags+=("-o")
+    flags+=("--remove-temp-while-error")
+    local_nonpersistent_flags+=("--remove-temp-while-error")
+    flags+=("--slice-concurrent-count=")
+    two_word_flags+=("--slice-concurrent-count")
+    local_nonpersistent_flags+=("--slice-concurrent-count")
+    local_nonpersistent_flags+=("--slice-concurrent-count=")
+    flags+=("--slice-file-size-threshold=")
+    two_word_flags+=("--slice-file-size-threshold")
+    local_nonpersistent_flags+=("--slice-file-size-threshold")
+    local_nonpersistent_flags+=("--slice-file-size-threshold=")
+    flags+=("--slice-size=")
+    two_word_flags+=("--slice-size")
+    local_nonpersistent_flags+=("--slice-size")
+    local_nonpersistent_flags+=("--slice-size=")
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_help()
+{
+    last_command="qshell_help"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    has_completion_function=1
+    noun_aliases=()
+}
+
+_qshell_ip()
+{
+    last_command="qshell_ip"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_listbucket()
+{
+    last_command="qshell_listbucket"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--out=")
+    two_word_flags+=("--out")
+    two_word_flags+=("-o")
+    local_nonpersistent_flags+=("--out")
+    local_nonpersistent_flags+=("--out=")
+    local_nonpersistent_flags+=("-o")
+    flags+=("--prefix=")
+    two_word_flags+=("--prefix")
+    two_word_flags+=("-p")
+    local_nonpersistent_flags+=("--prefix")
+    local_nonpersistent_flags+=("--prefix=")
+    local_nonpersistent_flags+=("-p")
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_listbucket2()
+{
+    last_command="qshell_listbucket2"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--api-limit=")
+    two_word_flags+=("--api-limit")
+    local_nonpersistent_flags+=("--api-limit")
+    local_nonpersistent_flags+=("--api-limit=")
+    flags+=("--append")
+    flags+=("-a")
+    local_nonpersistent_flags+=("--append")
+    local_nonpersistent_flags+=("-a")
+    flags+=("--enable-record")
+    local_nonpersistent_flags+=("--enable-record")
+    flags+=("--end=")
+    two_word_flags+=("--end")
+    two_word_flags+=("-e")
+    local_nonpersistent_flags+=("--end")
+    local_nonpersistent_flags+=("--end=")
+    local_nonpersistent_flags+=("-e")
+    flags+=("--file-types=")
+    two_word_flags+=("--file-types")
+    local_nonpersistent_flags+=("--file-types")
+    local_nonpersistent_flags+=("--file-types=")
+    flags+=("--limit=")
+    two_word_flags+=("--limit")
+    local_nonpersistent_flags+=("--limit")
+    local_nonpersistent_flags+=("--limit=")
+    flags+=("--marker=")
+    two_word_flags+=("--marker")
+    two_word_flags+=("-m")
+    local_nonpersistent_flags+=("--marker")
+    local_nonpersistent_flags+=("--marker=")
+    local_nonpersistent_flags+=("-m")
+    flags+=("--max-file-size=")
+    two_word_flags+=("--max-file-size")
+    local_nonpersistent_flags+=("--max-file-size")
+    local_nonpersistent_flags+=("--max-file-size=")
+    flags+=("--max-retry=")
+    two_word_flags+=("--max-retry")
+    two_word_flags+=("-x")
+    local_nonpersistent_flags+=("--max-retry")
+    local_nonpersistent_flags+=("--max-retry=")
+    local_nonpersistent_flags+=("-x")
+    flags+=("--mimetypes=")
+    two_word_flags+=("--mimetypes")
+    local_nonpersistent_flags+=("--mimetypes")
+    local_nonpersistent_flags+=("--mimetypes=")
+    flags+=("--min-file-size=")
+    two_word_flags+=("--min-file-size")
+    local_nonpersistent_flags+=("--min-file-size")
+    local_nonpersistent_flags+=("--min-file-size=")
+    flags+=("--outfile=")
+    two_word_flags+=("--outfile")
+    two_word_flags+=("-o")
+    local_nonpersistent_flags+=("--outfile")
+    local_nonpersistent_flags+=("--outfile=")
+    local_nonpersistent_flags+=("-o")
+    flags+=("--output-fields-sep=")
+    two_word_flags+=("--output-fields-sep")
+    local_nonpersistent_flags+=("--output-fields-sep")
+    local_nonpersistent_flags+=("--output-fields-sep=")
+    flags+=("--output-file-max-lines=")
+    two_word_flags+=("--output-file-max-lines")
+    local_nonpersistent_flags+=("--output-file-max-lines")
+    local_nonpersistent_flags+=("--output-file-max-lines=")
+    flags+=("--output-file-max-size=")
+    two_word_flags+=("--output-file-max-size")
+    local_nonpersistent_flags+=("--output-file-max-size")
+    local_nonpersistent_flags+=("--output-file-max-size=")
+    flags+=("--prefix=")
+    two_word_flags+=("--prefix")
+    two_word_flags+=("-p")
+    local_nonpersistent_flags+=("--prefix")
+    local_nonpersistent_flags+=("--prefix=")
+    local_nonpersistent_flags+=("-p")
+    flags+=("--readable")
+    flags+=("-r")
+    local_nonpersistent_flags+=("--readable")
+    local_nonpersistent_flags+=("-r")
+    flags+=("--show-fields=")
+    two_word_flags+=("--show-fields")
+    local_nonpersistent_flags+=("--show-fields")
+    local_nonpersistent_flags+=("--show-fields=")
+    flags+=("--start=")
+    two_word_flags+=("--start")
+    two_word_flags+=("-s")
+    local_nonpersistent_flags+=("--start")
+    local_nonpersistent_flags+=("--start=")
+    local_nonpersistent_flags+=("-s")
+    flags+=("--suffixes=")
+    two_word_flags+=("--suffixes")
+    two_word_flags+=("-q")
+    local_nonpersistent_flags+=("--suffixes")
+    local_nonpersistent_flags+=("--suffixes=")
+    local_nonpersistent_flags+=("-q")
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_m3u8delete()
+{
+    last_command="qshell_m3u8delete"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_m3u8replace()
+{
+    last_command="qshell_m3u8replace"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--remove-spare-pre-slash")
+    flags+=("-r")
+    local_nonpersistent_flags+=("--remove-spare-pre-slash")
+    local_nonpersistent_flags+=("-r")
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_match()
+{
+    last_command="qshell_match"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_mirrorupdate()
+{
+    last_command="qshell_mirrorupdate"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_mkbucket()
+{
+    last_command="qshell_mkbucket"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--private")
+    local_nonpersistent_flags+=("--private")
+    flags+=("--region=")
+    two_word_flags+=("--region")
+    local_nonpersistent_flags+=("--region")
+    local_nonpersistent_flags+=("--region=")
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_move()
+{
+    last_command="qshell_move"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--key=")
+    two_word_flags+=("--key")
+    two_word_flags+=("-k")
+    local_nonpersistent_flags+=("--key")
+    local_nonpersistent_flags+=("--key=")
+    local_nonpersistent_flags+=("-k")
+    flags+=("--overwrite")
+    flags+=("-w")
+    local_nonpersistent_flags+=("--overwrite")
+    local_nonpersistent_flags+=("-w")
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_pfop()
+{
+    last_command="qshell_pfop"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--force")
+    flags+=("-y")
+    local_nonpersistent_flags+=("--force")
+    local_nonpersistent_flags+=("-y")
+    flags+=("--notify-url=")
+    two_word_flags+=("--notify-url")
+    two_word_flags+=("-u")
+    local_nonpersistent_flags+=("--notify-url")
+    local_nonpersistent_flags+=("--notify-url=")
+    local_nonpersistent_flags+=("-u")
+    flags+=("--pipeline=")
+    two_word_flags+=("--pipeline")
+    two_word_flags+=("-p")
+    local_nonpersistent_flags+=("--pipeline")
+    local_nonpersistent_flags+=("--pipeline=")
+    local_nonpersistent_flags+=("-p")
+    flags+=("--type=")
+    two_word_flags+=("--type")
+    local_nonpersistent_flags+=("--type")
+    local_nonpersistent_flags+=("--type=")
+    flags+=("--workflow-template-id=")
+    two_word_flags+=("--workflow-template-id")
+    local_nonpersistent_flags+=("--workflow-template-id")
+    local_nonpersistent_flags+=("--workflow-template-id=")
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_prefetch()
+{
+    last_command="qshell_prefetch"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_prefop()
+{
+    last_command="qshell_prefop"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--bucket=")
+    two_word_flags+=("--bucket")
+    local_nonpersistent_flags+=("--bucket")
+    local_nonpersistent_flags+=("--bucket=")
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_privateurl()
+{
+    last_command="qshell_privateurl"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_qdownload()
+{
+    last_command="qshell_qdownload"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--failure-list=")
+    two_word_flags+=("--failure-list")
+    two_word_flags+=("-e")
+    local_nonpersistent_flags+=("--failure-list")
+    local_nonpersistent_flags+=("--failure-list=")
+    local_nonpersistent_flags+=("-e")
+    flags+=("--success-list=")
+    two_word_flags+=("--success-list")
+    two_word_flags+=("-s")
+    local_nonpersistent_flags+=("--success-list")
+    local_nonpersistent_flags+=("--success-list=")
+    local_nonpersistent_flags+=("-s")
+    flags+=("--thread-count=")
+    two_word_flags+=("--thread-count")
+    two_word_flags+=("-c")
+    local_nonpersistent_flags+=("--thread-count")
+    local_nonpersistent_flags+=("--thread-count=")
+    local_nonpersistent_flags+=("-c")
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_qdownload2()
+{
+    last_command="qshell_qdownload2"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--bucket=")
+    two_word_flags+=("--bucket")
+    local_nonpersistent_flags+=("--bucket")
+    local_nonpersistent_flags+=("--bucket=")
+    flags+=("--check-hash")
+    local_nonpersistent_flags+=("--check-hash")
+    flags+=("--check-size")
+    local_nonpersistent_flags+=("--check-size")
+    flags+=("--dest-dir=")
+    two_word_flags+=("--dest-dir")
+    local_nonpersistent_flags+=("--dest-dir")
+    local_nonpersistent_flags+=("--dest-dir=")
+    flags+=("--domain=")
+    two_word_flags+=("--domain")
+    local_nonpersistent_flags+=("--domain")
+    local_nonpersistent_flags+=("--domain=")
+    flags+=("--enable-slice")
+    local_nonpersistent_flags+=("--enable-slice")
+    flags+=("--failure-list=")
+    two_word_flags+=("--failure-list")
+    two_word_flags+=("-e")
+    local_nonpersistent_flags+=("--failure-list")
+    local_nonpersistent_flags+=("--failure-list=")
+    local_nonpersistent_flags+=("-e")
+    flags+=("--get-file-api")
+    local_nonpersistent_flags+=("--get-file-api")
+    flags+=("--io-host=")
+    two_word_flags+=("--io-host")
+    local_nonpersistent_flags+=("--io-host")
+    local_nonpersistent_flags+=("--io-host=")
+    flags+=("--key-file=")
+    two_word_flags+=("--key-file")
+    local_nonpersistent_flags+=("--key-file")
+    local_nonpersistent_flags+=("--key-file=")
+    flags+=("--log-file=")
+    two_word_flags+=("--log-file")
+    local_nonpersistent_flags+=("--log-file")
+    local_nonpersistent_flags+=("--log-file=")
+    flags+=("--log-level=")
+    two_word_flags+=("--log-level")
+    local_nonpersistent_flags+=("--log-level")
+    local_nonpersistent_flags+=("--log-level=")
+    flags+=("--log-rotate=")
+    two_word_flags+=("--log-rotate")
+    local_nonpersistent_flags+=("--log-rotate")
+    local_nonpersistent_flags+=("--log-rotate=")
+    flags+=("--prefix=")
+    two_word_flags+=("--prefix")
+    local_nonpersistent_flags+=("--prefix")
+    local_nonpersistent_flags+=("--prefix=")
+    flags+=("--record-root=")
+    two_word_flags+=("--record-root")
+    local_nonpersistent_flags+=("--record-root")
+    local_nonpersistent_flags+=("--record-root=")
+    flags+=("--referer=")
+    two_word_flags+=("--referer")
+    local_nonpersistent_flags+=("--referer")
+    local_nonpersistent_flags+=("--referer=")
+    flags+=("--remove-temp-while-error")
+    local_nonpersistent_flags+=("--remove-temp-while-error")
+    flags+=("--save-path-handler=")
+    two_word_flags+=("--save-path-handler")
+    local_nonpersistent_flags+=("--save-path-handler")
+    local_nonpersistent_flags+=("--save-path-handler=")
+    flags+=("--slice-concurrent-count=")
+    two_word_flags+=("--slice-concurrent-count")
+    local_nonpersistent_flags+=("--slice-concurrent-count")
+    local_nonpersistent_flags+=("--slice-concurrent-count=")
+    flags+=("--slice-file-size-threshold=")
+    two_word_flags+=("--slice-file-size-threshold")
+    local_nonpersistent_flags+=("--slice-file-size-threshold")
+    local_nonpersistent_flags+=("--slice-file-size-threshold=")
+    flags+=("--slice-size=")
+    two_word_flags+=("--slice-size")
+    local_nonpersistent_flags+=("--slice-size")
+    local_nonpersistent_flags+=("--slice-size=")
+    flags+=("--success-list=")
+    two_word_flags+=("--success-list")
+    two_word_flags+=("-s")
+    local_nonpersistent_flags+=("--success-list")
+    local_nonpersistent_flags+=("--success-list=")
+    local_nonpersistent_flags+=("-s")
+    flags+=("--suffixes=")
+    two_word_flags+=("--suffixes")
+    local_nonpersistent_flags+=("--suffixes")
+    local_nonpersistent_flags+=("--suffixes=")
+    flags+=("--thread-count=")
+    two_word_flags+=("--thread-count")
+    two_word_flags+=("-c")
+    local_nonpersistent_flags+=("--thread-count")
+    local_nonpersistent_flags+=("--thread-count=")
+    local_nonpersistent_flags+=("-c")
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_qetag()
+{
+    last_command="qshell_qetag"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_qupload()
+{
+    last_command="qshell_qupload"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--callback-host=")
+    two_word_flags+=("--callback-host")
+    two_word_flags+=("-T")
+    local_nonpersistent_flags+=("--callback-host")
+    local_nonpersistent_flags+=("--callback-host=")
+    local_nonpersistent_flags+=("-T")
+    flags+=("--callback-urls=")
+    two_word_flags+=("--callback-urls")
+    two_word_flags+=("-l")
+    local_nonpersistent_flags+=("--callback-urls")
+    local_nonpersistent_flags+=("--callback-urls=")
+    local_nonpersistent_flags+=("-l")
+    flags+=("--failure-list=")
+    two_word_flags+=("--failure-list")
+    two_word_flags+=("-e")
+    local_nonpersistent_flags+=("--failure-list")
+    local_nonpersistent_flags+=("--failure-list=")
+    local_nonpersistent_flags+=("-e")
+    flags+=("--overwrite-list=")
+    two_word_flags+=("--overwrite-list")
+    two_word_flags+=("-w")
+    local_nonpersistent_flags+=("--overwrite-list")
+    local_nonpersistent_flags+=("--overwrite-list=")
+    local_nonpersistent_flags+=("-w")
+    flags+=("--success-list=")
+    two_word_flags+=("--success-list")
+    two_word_flags+=("-s")
+    local_nonpersistent_flags+=("--success-list")
+    local_nonpersistent_flags+=("--success-list=")
+    local_nonpersistent_flags+=("-s")
+    flags+=("--worker=")
+    two_word_flags+=("--worker")
+    two_word_flags+=("-c")
+    local_nonpersistent_flags+=("--worker")
+    local_nonpersistent_flags+=("--worker=")
+    local_nonpersistent_flags+=("-c")
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_qupload2()
+{
+    last_command="qshell_qupload2"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--accelerate")
+    local_nonpersistent_flags+=("--accelerate")
+    flags+=("--bucket=")
+    two_word_flags+=("--bucket")
+    local_nonpersistent_flags+=("--bucket")
+    local_nonpersistent_flags+=("--bucket=")
+    flags+=("--callback-body=")
+    two_word_flags+=("--callback-body")
+    local_nonpersistent_flags+=("--callback-body")
+    local_nonpersistent_flags+=("--callback-body=")
+    flags+=("--callback-body-type=")
+    two_word_flags+=("--callback-body-type")
+    local_nonpersistent_flags+=("--callback-body-type")
+    local_nonpersistent_flags+=("--callback-body-type=")
+    flags+=("--callback-host=")
+    two_word_flags+=("--callback-host")
+    two_word_flags+=("-T")
+    local_nonpersistent_flags+=("--callback-host")
+    local_nonpersistent_flags+=("--callback-host=")
+    local_nonpersistent_flags+=("-T")
+    flags+=("--callback-urls=")
+    two_word_flags+=("--callback-urls")
+    two_word_flags+=("-l")
+    local_nonpersistent_flags+=("--callback-urls")
+    local_nonpersistent_flags+=("--callback-urls=")
+    local_nonpersistent_flags+=("-l")
+    flags+=("--check-exists")
+    local_nonpersistent_flags+=("--check-exists")
+    flags+=("--check-hash")
+    local_nonpersistent_flags+=("--check-hash")
+    flags+=("--check-size")
+    local_nonpersistent_flags+=("--check-size")
+    flags+=("--detect-mime=")
+    two_word_flags+=("--detect-mime")
+    local_nonpersistent_flags+=("--detect-mime")
+    local_nonpersistent_flags+=("--detect-mime=")
+    flags+=("--end-user=")
+    two_word_flags+=("--end-user")
+    local_nonpersistent_flags+=("--end-user")
+    local_nonpersistent_flags+=("--end-user=")
+    flags+=("--failure-list=")
+    two_word_flags+=("--failure-list")
+    two_word_flags+=("-e")
+    local_nonpersistent_flags+=("--failure-list")
+    local_nonpersistent_flags+=("--failure-list=")
+    local_nonpersistent_flags+=("-e")
+    flags+=("--file-list=")
+    two_word_flags+=("--file-list")
+    local_nonpersistent_flags+=("--file-list")
+    local_nonpersistent_flags+=("--file-list=")
+    flags+=("--file-type=")
+    two_word_flags+=("--file-type")
+    local_nonpersistent_flags+=("--file-type")
+    local_nonpersistent_flags+=("--file-type=")
+    flags+=("--ignore-dir")
+    local_nonpersistent_flags+=("--ignore-dir")
+    flags+=("--key-prefix=")
+    two_word_flags+=("--key-prefix")
+    local_nonpersistent_flags+=("--key-prefix")
+    local_nonpersistent_flags+=("--key-prefix=")
+    flags+=("--log-file=")
+    two_word_flags+=("--log-file")
+    local_nonpersistent_flags+=("--log-file")
+    local_nonpersistent_flags+=("--log-file=")
+    flags+=("--log-level=")
+    two_word_flags+=("--log-level")
+    local_nonpersistent_flags+=("--log-level")
+    local_nonpersistent_flags+=("--log-level=")
+    flags+=("--log-rotate=")
+    two_word_flags+=("--log-rotate")
+    local_nonpersistent_flags+=("--log-rotate")
+    local_nonpersistent_flags+=("--log-rotate=")
+    flags+=("--overwrite")
+    local_nonpersistent_flags+=("--overwrite")
+    flags+=("--overwrite-list=")
+    two_word_flags+=("--overwrite-list")
+    two_word_flags+=("-w")
+    local_nonpersistent_flags+=("--overwrite-list")
+    local_nonpersistent_flags+=("--overwrite-list=")
+    local_nonpersistent_flags+=("-w")
+    flags+=("--persistent-notify-url=")
+    two_word_flags+=("--persistent-notify-url")
+    local_nonpersistent_flags+=("--persistent-notify-url")
+    local_nonpersistent_flags+=("--persistent-notify-url=")
+    flags+=("--persistent-ops=")
+    two_word_flags+=("--persistent-ops")
+    local_nonpersistent_flags+=("--persistent-ops")
+    local_nonpersistent_flags+=("--persistent-ops=")
+    flags+=("--persistent-pipeline=")
+    two_word_flags+=("--persistent-pipeline")
+    local_nonpersistent_flags+=("--persistent-pipeline")
+    local_nonpersistent_flags+=("--persistent-pipeline=")
+    flags+=("--put-threshold=")
+    two_word_flags+=("--put-threshold")
+    local_nonpersistent_flags+=("--put-threshold")
+    local_nonpersistent_flags+=("--put-threshold=")
+    flags+=("--record-root=")
+    two_word_flags+=("--record-root")
+    local_nonpersistent_flags+=("--record-root")
+    local_nonpersistent_flags+=("--record-root=")
+    flags+=("--rescan-local")
+    local_nonpersistent_flags+=("--rescan-local")
+    flags+=("--resumable-api-v2")
+    local_nonpersistent_flags+=("--resumable-api-v2")
+    flags+=("--resumable-api-v2-part-size=")
+    two_word_flags+=("--resumable-api-v2-part-size")
+    local_nonpersistent_flags+=("--resumable-api-v2-part-size")
+    local_nonpersistent_flags+=("--resumable-api-v2-part-size=")
+    flags+=("--sequential-read-file")
+    local_nonpersistent_flags+=("--sequential-read-file")
+    flags+=("--skip-file-prefixes=")
+    two_word_flags+=("--skip-file-prefixes")
+    local_nonpersistent_flags+=("--skip-file-prefixes")
+    local_nonpersistent_flags+=("--skip-file-prefixes=")
+    flags+=("--skip-fixed-strings=")
+    two_word_flags+=("--skip-fixed-strings")
+    local_nonpersistent_flags+=("--skip-fixed-strings")
+    local_nonpersistent_flags+=("--skip-fixed-strings=")
+    flags+=("--skip-path-prefixes=")
+    two_word_flags+=("--skip-path-prefixes")
+    local_nonpersistent_flags+=("--skip-path-prefixes")
+    local_nonpersistent_flags+=("--skip-path-prefixes=")
+    flags+=("--skip-suffixes=")
+    two_word_flags+=("--skip-suffixes")
+    local_nonpersistent_flags+=("--skip-suffixes")
+    local_nonpersistent_flags+=("--skip-suffixes=")
+    flags+=("--src-dir=")
+    two_word_flags+=("--src-dir")
+    local_nonpersistent_flags+=("--src-dir")
+    local_nonpersistent_flags+=("--src-dir=")
+    flags+=("--success-list=")
+    two_word_flags+=("--success-list")
+    two_word_flags+=("-s")
+    local_nonpersistent_flags+=("--success-list")
+    local_nonpersistent_flags+=("--success-list=")
+    local_nonpersistent_flags+=("-s")
+    flags+=("--thread-count=")
+    two_word_flags+=("--thread-count")
+    local_nonpersistent_flags+=("--thread-count")
+    local_nonpersistent_flags+=("--thread-count=")
+    flags+=("--traffic-limit=")
+    two_word_flags+=("--traffic-limit")
+    local_nonpersistent_flags+=("--traffic-limit")
+    local_nonpersistent_flags+=("--traffic-limit=")
+    flags+=("--up-host=")
+    two_word_flags+=("--up-host")
+    local_nonpersistent_flags+=("--up-host")
+    local_nonpersistent_flags+=("--up-host=")
+    flags+=("--worker-count=")
+    two_word_flags+=("--worker-count")
+    local_nonpersistent_flags+=("--worker-count")
+    local_nonpersistent_flags+=("--worker-count=")
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_rename()
+{
+    last_command="qshell_rename"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--overwrite")
+    flags+=("-w")
+    local_nonpersistent_flags+=("--overwrite")
+    local_nonpersistent_flags+=("-w")
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_reqid()
+{
+    last_command="qshell_reqid"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_restorear()
+{
+    last_command="qshell_restorear"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_rpcdecode()
+{
+    last_command="qshell_rpcdecode"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_rpcencode()
+{
+    last_command="qshell_rpcencode"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_rput()
+{
+    last_command="qshell_rput"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--accelerate")
+    local_nonpersistent_flags+=("--accelerate")
+    flags+=("--callback-body=")
+    two_word_flags+=("--callback-body")
+    local_nonpersistent_flags+=("--callback-body")
+    local_nonpersistent_flags+=("--callback-body=")
+    flags+=("--callback-body-type=")
+    two_word_flags+=("--callback-body-type")
+    local_nonpersistent_flags+=("--callback-body-type")
+    local_nonpersistent_flags+=("--callback-body-type=")
+    flags+=("--callback-host=")
+    two_word_flags+=("--callback-host")
+    two_word_flags+=("-T")
+    local_nonpersistent_flags+=("--callback-host")
+    local_nonpersistent_flags+=("--callback-host=")
+    local_nonpersistent_flags+=("-T")
+    flags+=("--callback-urls=")
+    two_word_flags+=("--callback-urls")
+    two_word_flags+=("-l")
+    local_nonpersistent_flags+=("--callback-urls")
+    local_nonpersistent_flags+=("--callback-urls=")
+    local_nonpersistent_flags+=("-l")
+    flags+=("--detect-mime=")
+    two_word_flags+=("--detect-mime")
+    local_nonpersistent_flags+=("--detect-mime")
+    local_nonpersistent_flags+=("--detect-mime=")
+    flags+=("--end-user=")
+    two_word_flags+=("--end-user")
+    local_nonpersistent_flags+=("--end-user")
+    local_nonpersistent_flags+=("--end-user=")
+    flags+=("--file-type=")
+    two_word_flags+=("--file-type")
+    local_nonpersistent_flags+=("--file-type")
+    local_nonpersistent_flags+=("--file-type=")
+    flags+=("--mimetype=")
+    two_word_flags+=("--mimetype")
+    two_word_flags+=("-t")
+    local_nonpersistent_flags+=("--mimetype")
+    local_nonpersistent_flags+=("--mimetype=")
+    local_nonpersistent_flags+=("-t")
+    flags+=("--overwrite")
+    local_nonpersistent_flags+=("--overwrite")
+    flags+=("--persistent-notify-url=")
+    two_word_flags+=("--persistent-notify-url")
+    local_nonpersistent_flags+=("--persistent-notify-url")
+    local_nonpersistent_flags+=("--persistent-notify-url=")
+    flags+=("--persistent-ops=")
+    two_word_flags+=("--persistent-ops")
+    local_nonpersistent_flags+=("--persistent-ops")
+    local_nonpersistent_flags+=("--persistent-ops=")
+    flags+=("--persistent-pipeline=")
+    two_word_flags+=("--persistent-pipeline")
+    local_nonpersistent_flags+=("--persistent-pipeline")
+    local_nonpersistent_flags+=("--persistent-pipeline=")
+    flags+=("--resumable-api-v2")
+    local_nonpersistent_flags+=("--resumable-api-v2")
+    flags+=("--resumable-api-v2-part-size=")
+    two_word_flags+=("--resumable-api-v2-part-size")
+    local_nonpersistent_flags+=("--resumable-api-v2-part-size")
+    local_nonpersistent_flags+=("--resumable-api-v2-part-size=")
+    flags+=("--sequential-read-file")
+    local_nonpersistent_flags+=("--sequential-read-file")
+    flags+=("--traffic-limit=")
+    two_word_flags+=("--traffic-limit")
+    local_nonpersistent_flags+=("--traffic-limit")
+    local_nonpersistent_flags+=("--traffic-limit=")
+    flags+=("--up-host=")
+    two_word_flags+=("--up-host")
+    two_word_flags+=("-u")
+    local_nonpersistent_flags+=("--up-host")
+    local_nonpersistent_flags+=("--up-host=")
+    local_nonpersistent_flags+=("-u")
+    flags+=("--worker=")
+    two_word_flags+=("--worker")
+    two_word_flags+=("-c")
+    local_nonpersistent_flags+=("--worker")
+    local_nonpersistent_flags+=("--worker=")
+    local_nonpersistent_flags+=("-c")
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_sandbox_connect()
+{
+    last_command="qshell_sandbox_connect"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_sandbox_create()
+{
+    last_command="qshell_sandbox_create"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--auto-pause")
+    local_nonpersistent_flags+=("--auto-pause")
+    flags+=("--detach")
+    local_nonpersistent_flags+=("--detach")
+    flags+=("--env-var=")
+    two_word_flags+=("--env-var")
+    two_word_flags+=("-e")
+    local_nonpersistent_flags+=("--env-var")
+    local_nonpersistent_flags+=("--env-var=")
+    local_nonpersistent_flags+=("-e")
+    flags+=("--injection-rule=")
+    two_word_flags+=("--injection-rule")
+    local_nonpersistent_flags+=("--injection-rule")
+    local_nonpersistent_flags+=("--injection-rule=")
+    flags+=("--inline-injection=")
+    two_word_flags+=("--inline-injection")
+    local_nonpersistent_flags+=("--inline-injection")
+    local_nonpersistent_flags+=("--inline-injection=")
+    flags+=("--metadata=")
+    two_word_flags+=("--metadata")
+    two_word_flags+=("-m")
+    local_nonpersistent_flags+=("--metadata")
+    local_nonpersistent_flags+=("--metadata=")
+    local_nonpersistent_flags+=("-m")
+    flags+=("--resource=")
+    two_word_flags+=("--resource")
+    local_nonpersistent_flags+=("--resource")
+    local_nonpersistent_flags+=("--resource=")
+    flags+=("--timeout=")
+    two_word_flags+=("--timeout")
+    two_word_flags+=("-t")
+    local_nonpersistent_flags+=("--timeout")
+    local_nonpersistent_flags+=("--timeout=")
+    local_nonpersistent_flags+=("-t")
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_sandbox_exec()
+{
+    last_command="qshell_sandbox_exec"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--background")
+    flags+=("-b")
+    local_nonpersistent_flags+=("--background")
+    local_nonpersistent_flags+=("-b")
+    flags+=("--cwd=")
+    two_word_flags+=("--cwd")
+    two_word_flags+=("-c")
+    local_nonpersistent_flags+=("--cwd")
+    local_nonpersistent_flags+=("--cwd=")
+    local_nonpersistent_flags+=("-c")
+    flags+=("--env=")
+    two_word_flags+=("--env")
+    two_word_flags+=("-e")
+    local_nonpersistent_flags+=("--env")
+    local_nonpersistent_flags+=("--env=")
+    local_nonpersistent_flags+=("-e")
+    flags+=("--user=")
+    two_word_flags+=("--user")
+    two_word_flags+=("-u")
+    local_nonpersistent_flags+=("--user")
+    local_nonpersistent_flags+=("--user=")
+    local_nonpersistent_flags+=("-u")
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_sandbox_injection-rule_create()
+{
+    last_command="qshell_sandbox_injection-rule_create"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--api-key=")
+    two_word_flags+=("--api-key")
+    local_nonpersistent_flags+=("--api-key")
+    local_nonpersistent_flags+=("--api-key=")
+    flags+=("--base-url=")
+    two_word_flags+=("--base-url")
+    local_nonpersistent_flags+=("--base-url")
+    local_nonpersistent_flags+=("--base-url=")
+    flags+=("--headers=")
+    two_word_flags+=("--headers")
+    local_nonpersistent_flags+=("--headers")
+    local_nonpersistent_flags+=("--headers=")
+    flags+=("--name=")
+    two_word_flags+=("--name")
+    local_nonpersistent_flags+=("--name")
+    local_nonpersistent_flags+=("--name=")
+    flags+=("--type=")
+    two_word_flags+=("--type")
+    local_nonpersistent_flags+=("--type")
+    local_nonpersistent_flags+=("--type=")
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_flag+=("--name=")
+    must_have_one_flag+=("--type=")
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_sandbox_injection-rule_delete()
+{
+    last_command="qshell_sandbox_injection-rule_delete"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--yes")
+    flags+=("-y")
+    local_nonpersistent_flags+=("--yes")
+    local_nonpersistent_flags+=("-y")
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_sandbox_injection-rule_get()
+{
+    last_command="qshell_sandbox_injection-rule_get"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_sandbox_injection-rule_list()
+{
+    last_command="qshell_sandbox_injection-rule_list"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--format=")
+    two_word_flags+=("--format")
+    local_nonpersistent_flags+=("--format")
+    local_nonpersistent_flags+=("--format=")
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_sandbox_injection-rule_update()
+{
+    last_command="qshell_sandbox_injection-rule_update"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--api-key=")
+    two_word_flags+=("--api-key")
+    local_nonpersistent_flags+=("--api-key")
+    local_nonpersistent_flags+=("--api-key=")
+    flags+=("--base-url=")
+    two_word_flags+=("--base-url")
+    local_nonpersistent_flags+=("--base-url")
+    local_nonpersistent_flags+=("--base-url=")
+    flags+=("--headers=")
+    two_word_flags+=("--headers")
+    local_nonpersistent_flags+=("--headers")
+    local_nonpersistent_flags+=("--headers=")
+    flags+=("--name=")
+    two_word_flags+=("--name")
+    local_nonpersistent_flags+=("--name")
+    local_nonpersistent_flags+=("--name=")
+    flags+=("--type=")
+    two_word_flags+=("--type")
+    local_nonpersistent_flags+=("--type")
+    local_nonpersistent_flags+=("--type=")
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_sandbox_injection-rule()
+{
+    last_command="qshell_sandbox_injection-rule"
+
+    command_aliases=()
+
+    commands=()
+    commands+=("create")
+    if [[ -z "${BASH_VERSION}" || "${BASH_VERSINFO[0]}" -gt 3 ]]; then
+        command_aliases+=("cr")
+        aliashash["cr"]="create"
+    fi
+    commands+=("delete")
+    if [[ -z "${BASH_VERSION}" || "${BASH_VERSINFO[0]}" -gt 3 ]]; then
+        command_aliases+=("dl")
+        aliashash["dl"]="delete"
+    fi
+    commands+=("get")
+    if [[ -z "${BASH_VERSION}" || "${BASH_VERSINFO[0]}" -gt 3 ]]; then
+        command_aliases+=("gt")
+        aliashash["gt"]="get"
+    fi
+    commands+=("list")
+    if [[ -z "${BASH_VERSION}" || "${BASH_VERSINFO[0]}" -gt 3 ]]; then
+        command_aliases+=("ls")
+        aliashash["ls"]="list"
+    fi
+    commands+=("update")
+    if [[ -z "${BASH_VERSION}" || "${BASH_VERSINFO[0]}" -gt 3 ]]; then
+        command_aliases+=("up")
+        aliashash["up"]="update"
+    fi
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_sandbox_kill()
+{
+    last_command="qshell_sandbox_kill"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--all")
+    flags+=("-a")
+    local_nonpersistent_flags+=("--all")
+    local_nonpersistent_flags+=("-a")
+    flags+=("--metadata=")
+    two_word_flags+=("--metadata")
+    two_word_flags+=("-m")
+    local_nonpersistent_flags+=("--metadata")
+    local_nonpersistent_flags+=("--metadata=")
+    local_nonpersistent_flags+=("-m")
+    flags+=("--state=")
+    two_word_flags+=("--state")
+    two_word_flags+=("-s")
+    local_nonpersistent_flags+=("--state")
+    local_nonpersistent_flags+=("--state=")
+    local_nonpersistent_flags+=("-s")
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_sandbox_list()
+{
+    last_command="qshell_sandbox_list"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--format=")
+    two_word_flags+=("--format")
+    two_word_flags+=("-f")
+    local_nonpersistent_flags+=("--format")
+    local_nonpersistent_flags+=("--format=")
+    local_nonpersistent_flags+=("-f")
+    flags+=("--limit=")
+    two_word_flags+=("--limit")
+    two_word_flags+=("-l")
+    local_nonpersistent_flags+=("--limit")
+    local_nonpersistent_flags+=("--limit=")
+    local_nonpersistent_flags+=("-l")
+    flags+=("--metadata=")
+    two_word_flags+=("--metadata")
+    two_word_flags+=("-m")
+    local_nonpersistent_flags+=("--metadata")
+    local_nonpersistent_flags+=("--metadata=")
+    local_nonpersistent_flags+=("-m")
+    flags+=("--state=")
+    two_word_flags+=("--state")
+    two_word_flags+=("-s")
+    local_nonpersistent_flags+=("--state")
+    local_nonpersistent_flags+=("--state=")
+    local_nonpersistent_flags+=("-s")
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_sandbox_logs()
+{
+    last_command="qshell_sandbox_logs"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--follow")
+    flags+=("-f")
+    local_nonpersistent_flags+=("--follow")
+    local_nonpersistent_flags+=("-f")
+    flags+=("--format=")
+    two_word_flags+=("--format")
+    local_nonpersistent_flags+=("--format")
+    local_nonpersistent_flags+=("--format=")
+    flags+=("--level=")
+    two_word_flags+=("--level")
+    local_nonpersistent_flags+=("--level")
+    local_nonpersistent_flags+=("--level=")
+    flags+=("--limit=")
+    two_word_flags+=("--limit")
+    local_nonpersistent_flags+=("--limit")
+    local_nonpersistent_flags+=("--limit=")
+    flags+=("--loggers=")
+    two_word_flags+=("--loggers")
+    local_nonpersistent_flags+=("--loggers")
+    local_nonpersistent_flags+=("--loggers=")
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_sandbox_metrics()
+{
+    last_command="qshell_sandbox_metrics"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--follow")
+    flags+=("-f")
+    local_nonpersistent_flags+=("--follow")
+    local_nonpersistent_flags+=("-f")
+    flags+=("--format=")
+    two_word_flags+=("--format")
+    local_nonpersistent_flags+=("--format")
+    local_nonpersistent_flags+=("--format=")
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_sandbox_pause()
+{
+    last_command="qshell_sandbox_pause"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--all")
+    flags+=("-a")
+    local_nonpersistent_flags+=("--all")
+    local_nonpersistent_flags+=("-a")
+    flags+=("--metadata=")
+    two_word_flags+=("--metadata")
+    two_word_flags+=("-m")
+    local_nonpersistent_flags+=("--metadata")
+    local_nonpersistent_flags+=("--metadata=")
+    local_nonpersistent_flags+=("-m")
+    flags+=("--state=")
+    two_word_flags+=("--state")
+    two_word_flags+=("-s")
+    local_nonpersistent_flags+=("--state")
+    local_nonpersistent_flags+=("--state=")
+    local_nonpersistent_flags+=("-s")
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_sandbox_resume()
+{
+    last_command="qshell_sandbox_resume"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--all")
+    flags+=("-a")
+    local_nonpersistent_flags+=("--all")
+    local_nonpersistent_flags+=("-a")
+    flags+=("--metadata=")
+    two_word_flags+=("--metadata")
+    two_word_flags+=("-m")
+    local_nonpersistent_flags+=("--metadata")
+    local_nonpersistent_flags+=("--metadata=")
+    local_nonpersistent_flags+=("-m")
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_sandbox_template_build()
+{
+    last_command="qshell_sandbox_template_build"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--cpu=")
+    two_word_flags+=("--cpu")
+    local_nonpersistent_flags+=("--cpu")
+    local_nonpersistent_flags+=("--cpu=")
+    flags+=("--dockerfile=")
+    two_word_flags+=("--dockerfile")
+    local_nonpersistent_flags+=("--dockerfile")
+    local_nonpersistent_flags+=("--dockerfile=")
+    flags+=("--from-image=")
+    two_word_flags+=("--from-image")
+    local_nonpersistent_flags+=("--from-image")
+    local_nonpersistent_flags+=("--from-image=")
+    flags+=("--from-template=")
+    two_word_flags+=("--from-template")
+    local_nonpersistent_flags+=("--from-template")
+    local_nonpersistent_flags+=("--from-template=")
+    flags+=("--memory=")
+    two_word_flags+=("--memory")
+    local_nonpersistent_flags+=("--memory")
+    local_nonpersistent_flags+=("--memory=")
+    flags+=("--name=")
+    two_word_flags+=("--name")
+    local_nonpersistent_flags+=("--name")
+    local_nonpersistent_flags+=("--name=")
+    flags+=("--no-cache")
+    local_nonpersistent_flags+=("--no-cache")
+    flags+=("--path=")
+    two_word_flags+=("--path")
+    local_nonpersistent_flags+=("--path")
+    local_nonpersistent_flags+=("--path=")
+    flags+=("--ready-cmd=")
+    two_word_flags+=("--ready-cmd")
+    local_nonpersistent_flags+=("--ready-cmd")
+    local_nonpersistent_flags+=("--ready-cmd=")
+    flags+=("--start-cmd=")
+    two_word_flags+=("--start-cmd")
+    local_nonpersistent_flags+=("--start-cmd")
+    local_nonpersistent_flags+=("--start-cmd=")
+    flags+=("--template-id=")
+    two_word_flags+=("--template-id")
+    local_nonpersistent_flags+=("--template-id")
+    local_nonpersistent_flags+=("--template-id=")
+    flags+=("--wait")
+    local_nonpersistent_flags+=("--wait")
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_sandbox_template_builds()
+{
+    last_command="qshell_sandbox_template_builds"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_sandbox_template_config()
+{
+    last_command="qshell_sandbox_template_config"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_sandbox_template_delete()
+{
+    last_command="qshell_sandbox_template_delete"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--yes")
+    flags+=("-y")
+    local_nonpersistent_flags+=("--yes")
+    local_nonpersistent_flags+=("-y")
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_sandbox_template_get()
+{
+    last_command="qshell_sandbox_template_get"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_sandbox_template_init()
+{
+    last_command="qshell_sandbox_template_init"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--language=")
+    two_word_flags+=("--language")
+    local_nonpersistent_flags+=("--language")
+    local_nonpersistent_flags+=("--language=")
+    flags+=("--name=")
+    two_word_flags+=("--name")
+    local_nonpersistent_flags+=("--name")
+    local_nonpersistent_flags+=("--name=")
+    flags+=("--path=")
+    two_word_flags+=("--path")
+    local_nonpersistent_flags+=("--path")
+    local_nonpersistent_flags+=("--path=")
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_sandbox_template_list()
+{
+    last_command="qshell_sandbox_template_list"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--format=")
+    two_word_flags+=("--format")
+    local_nonpersistent_flags+=("--format")
+    local_nonpersistent_flags+=("--format=")
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_sandbox_template_publish()
+{
+    last_command="qshell_sandbox_template_publish"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--yes")
+    flags+=("-y")
+    local_nonpersistent_flags+=("--yes")
+    local_nonpersistent_flags+=("-y")
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_sandbox_template_unpublish()
+{
+    last_command="qshell_sandbox_template_unpublish"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--yes")
+    flags+=("-y")
+    local_nonpersistent_flags+=("--yes")
+    local_nonpersistent_flags+=("-y")
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_sandbox_template()
+{
+    last_command="qshell_sandbox_template"
+
+    command_aliases=()
+
+    commands=()
+    commands+=("build")
+    if [[ -z "${BASH_VERSION}" || "${BASH_VERSINFO[0]}" -gt 3 ]]; then
+        command_aliases+=("bd")
+        aliashash["bd"]="build"
+    fi
+    commands+=("builds")
+    if [[ -z "${BASH_VERSION}" || "${BASH_VERSINFO[0]}" -gt 3 ]]; then
+        command_aliases+=("bds")
+        aliashash["bds"]="builds"
+    fi
+    commands+=("config")
+    if [[ -z "${BASH_VERSION}" || "${BASH_VERSINFO[0]}" -gt 3 ]]; then
+        command_aliases+=("cfg")
+        aliashash["cfg"]="config"
+    fi
+    commands+=("delete")
+    if [[ -z "${BASH_VERSION}" || "${BASH_VERSINFO[0]}" -gt 3 ]]; then
+        command_aliases+=("dl")
+        aliashash["dl"]="delete"
+    fi
+    commands+=("get")
+    if [[ -z "${BASH_VERSION}" || "${BASH_VERSINFO[0]}" -gt 3 ]]; then
+        command_aliases+=("gt")
+        aliashash["gt"]="get"
+    fi
+    commands+=("init")
+    if [[ -z "${BASH_VERSION}" || "${BASH_VERSINFO[0]}" -gt 3 ]]; then
+        command_aliases+=("it")
+        aliashash["it"]="init"
+    fi
+    commands+=("list")
+    if [[ -z "${BASH_VERSION}" || "${BASH_VERSINFO[0]}" -gt 3 ]]; then
+        command_aliases+=("ls")
+        aliashash["ls"]="list"
+    fi
+    commands+=("publish")
+    if [[ -z "${BASH_VERSION}" || "${BASH_VERSINFO[0]}" -gt 3 ]]; then
+        command_aliases+=("pb")
+        aliashash["pb"]="publish"
+    fi
+    commands+=("unpublish")
+    if [[ -z "${BASH_VERSION}" || "${BASH_VERSINFO[0]}" -gt 3 ]]; then
+        command_aliases+=("upb")
+        aliashash["upb"]="unpublish"
+    fi
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_sandbox()
+{
+    last_command="qshell_sandbox"
+
+    command_aliases=()
+
+    commands=()
+    commands+=("connect")
+    if [[ -z "${BASH_VERSION}" || "${BASH_VERSINFO[0]}" -gt 3 ]]; then
+        command_aliases+=("cn")
+        aliashash["cn"]="connect"
+    fi
+    commands+=("create")
+    if [[ -z "${BASH_VERSION}" || "${BASH_VERSINFO[0]}" -gt 3 ]]; then
+        command_aliases+=("cr")
+        aliashash["cr"]="create"
+    fi
+    commands+=("exec")
+    if [[ -z "${BASH_VERSION}" || "${BASH_VERSINFO[0]}" -gt 3 ]]; then
+        command_aliases+=("ex")
+        aliashash["ex"]="exec"
+    fi
+    commands+=("injection-rule")
+    if [[ -z "${BASH_VERSION}" || "${BASH_VERSINFO[0]}" -gt 3 ]]; then
+        command_aliases+=("ir")
+        aliashash["ir"]="injection-rule"
+    fi
+    commands+=("kill")
+    if [[ -z "${BASH_VERSION}" || "${BASH_VERSINFO[0]}" -gt 3 ]]; then
+        command_aliases+=("kl")
+        aliashash["kl"]="kill"
+    fi
+    commands+=("list")
+    if [[ -z "${BASH_VERSION}" || "${BASH_VERSINFO[0]}" -gt 3 ]]; then
+        command_aliases+=("ls")
+        aliashash["ls"]="list"
+    fi
+    commands+=("logs")
+    if [[ -z "${BASH_VERSION}" || "${BASH_VERSINFO[0]}" -gt 3 ]]; then
+        command_aliases+=("lg")
+        aliashash["lg"]="logs"
+    fi
+    commands+=("metrics")
+    if [[ -z "${BASH_VERSION}" || "${BASH_VERSINFO[0]}" -gt 3 ]]; then
+        command_aliases+=("mt")
+        aliashash["mt"]="metrics"
+    fi
+    commands+=("pause")
+    if [[ -z "${BASH_VERSION}" || "${BASH_VERSINFO[0]}" -gt 3 ]]; then
+        command_aliases+=("ps")
+        aliashash["ps"]="pause"
+    fi
+    commands+=("resume")
+    if [[ -z "${BASH_VERSION}" || "${BASH_VERSINFO[0]}" -gt 3 ]]; then
+        command_aliases+=("rs")
+        aliashash["rs"]="resume"
+    fi
+    commands+=("template")
+    if [[ -z "${BASH_VERSION}" || "${BASH_VERSINFO[0]}" -gt 3 ]]; then
+        command_aliases+=("tpl")
+        aliashash["tpl"]="template"
+    fi
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_saveas()
+{
+    last_command="qshell_saveas"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_share-cp()
+{
+    last_command="qshell_share-cp"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--extract-code=")
+    two_word_flags+=("--extract-code")
+    local_nonpersistent_flags+=("--extract-code")
+    local_nonpersistent_flags+=("--extract-code=")
+    flags+=("--from=")
+    two_word_flags+=("--from")
+    local_nonpersistent_flags+=("--from")
+    local_nonpersistent_flags+=("--from=")
+    flags+=("--recursive")
+    flags+=("-r")
+    local_nonpersistent_flags+=("--recursive")
+    local_nonpersistent_flags+=("-r")
+    flags+=("--to=")
+    two_word_flags+=("--to")
+    local_nonpersistent_flags+=("--to")
+    local_nonpersistent_flags+=("--to=")
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_share-ls()
+{
+    last_command="qshell_share-ls"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--extract-code=")
+    two_word_flags+=("--extract-code")
+    local_nonpersistent_flags+=("--extract-code")
+    local_nonpersistent_flags+=("--extract-code=")
+    flags+=("--limit=")
+    two_word_flags+=("--limit")
+    two_word_flags+=("-n")
+    local_nonpersistent_flags+=("--limit")
+    local_nonpersistent_flags+=("--limit=")
+    local_nonpersistent_flags+=("-n")
+    flags+=("--marker=")
+    two_word_flags+=("--marker")
+    two_word_flags+=("-m")
+    local_nonpersistent_flags+=("--marker")
+    local_nonpersistent_flags+=("--marker=")
+    local_nonpersistent_flags+=("-m")
+    flags+=("--prefix=")
+    two_word_flags+=("--prefix")
+    two_word_flags+=("-p")
+    local_nonpersistent_flags+=("--prefix")
+    local_nonpersistent_flags+=("--prefix=")
+    local_nonpersistent_flags+=("-p")
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_stat()
+{
+    last_command="qshell_stat"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_sync()
+{
+    last_command="qshell_sync"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--accelerate")
+    local_nonpersistent_flags+=("--accelerate")
+    flags+=("--callback-body=")
+    two_word_flags+=("--callback-body")
+    local_nonpersistent_flags+=("--callback-body")
+    local_nonpersistent_flags+=("--callback-body=")
+    flags+=("--callback-body-type=")
+    two_word_flags+=("--callback-body-type")
+    local_nonpersistent_flags+=("--callback-body-type")
+    local_nonpersistent_flags+=("--callback-body-type=")
+    flags+=("--callback-host=")
+    two_word_flags+=("--callback-host")
+    two_word_flags+=("-T")
+    local_nonpersistent_flags+=("--callback-host")
+    local_nonpersistent_flags+=("--callback-host=")
+    local_nonpersistent_flags+=("-T")
+    flags+=("--callback-urls=")
+    two_word_flags+=("--callback-urls")
+    two_word_flags+=("-l")
+    local_nonpersistent_flags+=("--callback-urls")
+    local_nonpersistent_flags+=("--callback-urls=")
+    local_nonpersistent_flags+=("-l")
+    flags+=("--detect-mime=")
+    two_word_flags+=("--detect-mime")
+    local_nonpersistent_flags+=("--detect-mime")
+    local_nonpersistent_flags+=("--detect-mime=")
+    flags+=("--end-user=")
+    two_word_flags+=("--end-user")
+    local_nonpersistent_flags+=("--end-user")
+    local_nonpersistent_flags+=("--end-user=")
+    flags+=("--file-type=")
+    two_word_flags+=("--file-type")
+    local_nonpersistent_flags+=("--file-type")
+    local_nonpersistent_flags+=("--file-type=")
+    flags+=("--key=")
+    two_word_flags+=("--key")
+    two_word_flags+=("-k")
+    local_nonpersistent_flags+=("--key")
+    local_nonpersistent_flags+=("--key=")
+    local_nonpersistent_flags+=("-k")
+    flags+=("--overwrite")
+    local_nonpersistent_flags+=("--overwrite")
+    flags+=("--persistent-notify-url=")
+    two_word_flags+=("--persistent-notify-url")
+    local_nonpersistent_flags+=("--persistent-notify-url")
+    local_nonpersistent_flags+=("--persistent-notify-url=")
+    flags+=("--persistent-ops=")
+    two_word_flags+=("--persistent-ops")
+    local_nonpersistent_flags+=("--persistent-ops")
+    local_nonpersistent_flags+=("--persistent-ops=")
+    flags+=("--persistent-pipeline=")
+    two_word_flags+=("--persistent-pipeline")
+    local_nonpersistent_flags+=("--persistent-pipeline")
+    local_nonpersistent_flags+=("--persistent-pipeline=")
+    flags+=("--resumable-api-v2")
+    local_nonpersistent_flags+=("--resumable-api-v2")
+    flags+=("--resumable-api-v2-part-size=")
+    two_word_flags+=("--resumable-api-v2-part-size")
+    local_nonpersistent_flags+=("--resumable-api-v2-part-size")
+    local_nonpersistent_flags+=("--resumable-api-v2-part-size=")
+    flags+=("--traffic-limit=")
+    two_word_flags+=("--traffic-limit")
+    local_nonpersistent_flags+=("--traffic-limit")
+    local_nonpersistent_flags+=("--traffic-limit=")
+    flags+=("--up-host=")
+    two_word_flags+=("--up-host")
+    two_word_flags+=("-u")
+    local_nonpersistent_flags+=("--up-host")
+    local_nonpersistent_flags+=("--up-host=")
+    local_nonpersistent_flags+=("-u")
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_tms2d()
+{
+    last_command="qshell_tms2d"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_tns2d()
+{
+    last_command="qshell_tns2d"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_token_qbox()
+{
+    last_command="qshell_token_qbox"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--access-key=")
+    two_word_flags+=("--access-key")
+    two_word_flags+=("-a")
+    local_nonpersistent_flags+=("--access-key")
+    local_nonpersistent_flags+=("--access-key=")
+    local_nonpersistent_flags+=("-a")
+    flags+=("--content-type=")
+    two_word_flags+=("--content-type")
+    two_word_flags+=("-t")
+    local_nonpersistent_flags+=("--content-type")
+    local_nonpersistent_flags+=("--content-type=")
+    local_nonpersistent_flags+=("-t")
+    flags+=("--http-body=")
+    two_word_flags+=("--http-body")
+    two_word_flags+=("-b")
+    local_nonpersistent_flags+=("--http-body")
+    local_nonpersistent_flags+=("--http-body=")
+    local_nonpersistent_flags+=("-b")
+    flags+=("--secret-key=")
+    two_word_flags+=("--secret-key")
+    two_word_flags+=("-s")
+    local_nonpersistent_flags+=("--secret-key")
+    local_nonpersistent_flags+=("--secret-key=")
+    local_nonpersistent_flags+=("-s")
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_token_qiniu()
+{
+    last_command="qshell_token_qiniu"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--access-key=")
+    two_word_flags+=("--access-key")
+    two_word_flags+=("-a")
+    local_nonpersistent_flags+=("--access-key")
+    local_nonpersistent_flags+=("--access-key=")
+    local_nonpersistent_flags+=("-a")
+    flags+=("--content-type=")
+    two_word_flags+=("--content-type")
+    two_word_flags+=("-t")
+    local_nonpersistent_flags+=("--content-type")
+    local_nonpersistent_flags+=("--content-type=")
+    local_nonpersistent_flags+=("-t")
+    flags+=("--http-body=")
+    two_word_flags+=("--http-body")
+    two_word_flags+=("-b")
+    local_nonpersistent_flags+=("--http-body")
+    local_nonpersistent_flags+=("--http-body=")
+    local_nonpersistent_flags+=("-b")
+    flags+=("--method=")
+    two_word_flags+=("--method")
+    two_word_flags+=("-m")
+    local_nonpersistent_flags+=("--method")
+    local_nonpersistent_flags+=("--method=")
+    local_nonpersistent_flags+=("-m")
+    flags+=("--secret-key=")
+    two_word_flags+=("--secret-key")
+    two_word_flags+=("-s")
+    local_nonpersistent_flags+=("--secret-key")
+    local_nonpersistent_flags+=("--secret-key=")
+    local_nonpersistent_flags+=("-s")
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_token_upload()
+{
+    last_command="qshell_token_upload"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--access-key=")
+    two_word_flags+=("--access-key")
+    two_word_flags+=("-a")
+    local_nonpersistent_flags+=("--access-key")
+    local_nonpersistent_flags+=("--access-key=")
+    local_nonpersistent_flags+=("-a")
+    flags+=("--secret-key=")
+    two_word_flags+=("--secret-key")
+    two_word_flags+=("-s")
+    local_nonpersistent_flags+=("--secret-key")
+    local_nonpersistent_flags+=("--secret-key=")
+    local_nonpersistent_flags+=("-s")
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_token()
+{
+    last_command="qshell_token"
+
+    command_aliases=()
+
+    commands=()
+    commands+=("qbox")
+    commands+=("qiniu")
+    commands+=("upload")
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_ts2d()
+{
+    last_command="qshell_ts2d"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_unzip()
+{
+    last_command="qshell_unzip"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--dir=")
+    two_word_flags+=("--dir")
+    local_nonpersistent_flags+=("--dir")
+    local_nonpersistent_flags+=("--dir=")
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_urldecode()
+{
+    last_command="qshell_urldecode"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_urlencode()
+{
+    last_command="qshell_urlencode"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_user_add()
+{
+    last_command="qshell_user_add"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--ak=")
+    two_word_flags+=("--ak")
+    local_nonpersistent_flags+=("--ak")
+    local_nonpersistent_flags+=("--ak=")
+    flags+=("--name=")
+    two_word_flags+=("--name")
+    local_nonpersistent_flags+=("--name")
+    local_nonpersistent_flags+=("--name=")
+    flags+=("--overwrite")
+    flags+=("-w")
+    local_nonpersistent_flags+=("--overwrite")
+    local_nonpersistent_flags+=("-w")
+    flags+=("--sk=")
+    two_word_flags+=("--sk")
+    local_nonpersistent_flags+=("--sk")
+    local_nonpersistent_flags+=("--sk=")
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_user_clean()
+{
+    last_command="qshell_user_clean"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_user_cu()
+{
+    last_command="qshell_user_cu"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_user_current()
+{
+    last_command="qshell_user_current"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_user_lookup()
+{
+    last_command="qshell_user_lookup"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_user_ls()
+{
+    last_command="qshell_user_ls"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--name")
+    flags+=("-n")
+    local_nonpersistent_flags+=("--name")
+    local_nonpersistent_flags+=("-n")
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_user_remove()
+{
+    last_command="qshell_user_remove"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_user()
+{
+    last_command="qshell_user"
+
+    command_aliases=()
+
+    commands=()
+    commands+=("add")
+    commands+=("clean")
+    commands+=("cu")
+    commands+=("current")
+    commands+=("lookup")
+    commands+=("ls")
+    commands+=("remove")
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_version()
+{
+    last_command="qshell_version"
+
+    command_aliases=()
+
+    commands=()
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+_qshell_root_command()
+{
+    last_command="qshell"
+
+    command_aliases=()
+
+    commands=()
+    commands+=("abfetch")
+    commands+=("account")
+    commands+=("acheck")
+    commands+=("alilistbucket")
+    commands+=("awsfetch")
+    commands+=("awslist")
+    commands+=("b64decode")
+    commands+=("b64encode")
+    commands+=("batchchgm")
+    commands+=("batchchlifecycle")
+    commands+=("batchchtype")
+    commands+=("batchcopy")
+    commands+=("batchdelete")
+    commands+=("batchexpire")
+    commands+=("batchfetch")
+    commands+=("batchforbidden")
+    commands+=("batchmatch")
+    commands+=("batchmove")
+    commands+=("batchrename")
+    commands+=("batchrestorear")
+    commands+=("batchsign")
+    commands+=("batchstat")
+    commands+=("bucket")
+    commands+=("buckets")
+    commands+=("cdnprefetch")
+    commands+=("cdnrefresh")
+    commands+=("chgm")
+    commands+=("chlifecycle")
+    commands+=("chtype")
+    commands+=("completion")
+    commands+=("copy")
+    commands+=("create-share")
+    commands+=("d2ts")
+    commands+=("delete")
+    commands+=("dircache")
+    commands+=("domains")
+    commands+=("expire")
+    commands+=("fetch")
+    commands+=("forbidden")
+    commands+=("fput")
+    commands+=("func")
+    commands+=("get")
+    commands+=("help")
+    commands+=("ip")
+    commands+=("listbucket")
+    commands+=("listbucket2")
+    commands+=("m3u8delete")
+    commands+=("m3u8replace")
+    commands+=("match")
+    commands+=("mirrorupdate")
+    commands+=("mkbucket")
+    commands+=("move")
+    commands+=("pfop")
+    commands+=("prefetch")
+    commands+=("prefop")
+    commands+=("privateurl")
+    commands+=("qdownload")
+    commands+=("qdownload2")
+    commands+=("qetag")
+    commands+=("qupload")
+    commands+=("qupload2")
+    commands+=("rename")
+    commands+=("reqid")
+    commands+=("restorear")
+    commands+=("rpcdecode")
+    commands+=("rpcencode")
+    commands+=("rput")
+    commands+=("sandbox")
+    if [[ -z "${BASH_VERSION}" || "${BASH_VERSINFO[0]}" -gt 3 ]]; then
+        command_aliases+=("sbx")
+        aliashash["sbx"]="sandbox"
+    fi
+    commands+=("saveas")
+    commands+=("share-cp")
+    commands+=("share-ls")
+    commands+=("stat")
+    commands+=("sync")
+    commands+=("tms2d")
+    commands+=("tns2d")
+    commands+=("token")
+    commands+=("ts2d")
+    commands+=("unzip")
+    commands+=("urldecode")
+    commands+=("urlencode")
+    commands+=("user")
+    commands+=("version")
+
+    flags=()
+    two_word_flags=()
+    local_nonpersistent_flags=()
+    flags_with_completion=()
+    flags_completion=()
+
+    flags+=("--colorful")
+    flags+=("--config=")
+    two_word_flags+=("--config")
+    two_word_flags+=("-C")
+    flags+=("--ddebug")
+    flags+=("-D")
+    flags+=("--debug")
+    flags+=("-d")
+    flags+=("--doc")
+    flags+=("--local")
+    flags+=("-L")
+    flags+=("--silence")
+
+    must_have_one_flag=()
+    must_have_one_noun=()
+    noun_aliases=()
+}
+
+__start_qshell()
+{
+    local cur prev words cword
+    declare -A flaghash 2>/dev/null || :
+    declare -A aliashash 2>/dev/null || :
+    if declare -F _init_completion >/dev/null 2>&1; then
+        _init_completion -s || return
+    else
+        __qshell_init_completion -n "=" || return
+    fi
+
+    local c=0
+    local flags=()
+    local two_word_flags=()
+    local local_nonpersistent_flags=()
+    local flags_with_completion=()
+    local flags_completion=()
+    local commands=("qshell")
+    local must_have_one_flag=()
+    local must_have_one_noun=()
+    local has_completion_function
+    local last_command
+    local nouns=()
+
+    __qshell_handle_word
+}
+
+if [[ $(type -t compopt) = "builtin" ]]; then
+    complete -o default -F __start_qshell qshell
+else
+    complete -o default -o nospace -F __start_qshell qshell
+fi
+
+# ex: ts=4 sw=4 et filetype=sh
+
+BASH_COMPLETION_EOF
+}
+__qshell_bash_source <(__qshell_convert_bash_to_zsh)
+_complete qshell 2>/dev/null
