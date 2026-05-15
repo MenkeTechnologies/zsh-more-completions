@@ -4029,6 +4029,9 @@
 @test 'more_src has _grafatui' {
     assert "$xsrc/_grafatui" is_file
 }
+@test 'more_src has _graylog-ctl' {
+    assert "$xsrc/_graylog-ctl" is_file
+}
 @test 'more_src has _graylog-sidecar' {
     assert "$xsrc/_graylog-sidecar" is_file
 }
@@ -5064,6 +5067,9 @@
 @test 'more_src has _kluctl' {
     assert "$xsrc/_kluctl" is_file
 }
+@test 'more_src has _klippy' {
+    assert "$xsrc/_klippy" is_file
+}
 @test 'more_src has _km' {
     assert "$xsrc/_km" is_file
 }
@@ -5937,6 +5943,9 @@
 }
 @test 'more_src has _moonline' {
     assert "$xsrc/_moonline" is_file
+}
+@test 'more_src has _moonraker' {
+    assert "$xsrc/_moonraker" is_file
 }
 @test 'more_src has _moonrepo' {
     assert "$xsrc/_moonrepo" is_file
@@ -6868,6 +6877,9 @@
 @test 'more_src has _ph' {
     assert "$xsrc/_ph" is_file
 }
+@test 'more_src has _phabfive' {
+    assert "$xsrc/_phabfive" is_file
+}
 @test 'more_src has _philipstv' {
     assert "$xsrc/_philipstv" is_file
 }
@@ -7676,6 +7688,9 @@
 }
 @test 'more_src has _rgxg' {
     assert "$xsrc/_rgxg" is_file
+}
+@test 'more_src has _rhasspy-cli' {
+    assert "$xsrc/_rhasspy-cli" is_file
 }
 @test 'more_src has _rhoas' {
     assert "$xsrc/_rhoas" is_file
