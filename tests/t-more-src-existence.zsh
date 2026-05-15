@@ -2110,6 +2110,12 @@
 @test 'more_src has _copyq' {
     assert "$xsrc/_copyq" is_file
 }
+@test 'more_src has _coqide' {
+    assert "$xsrc/_coqide" is_file
+}
+@test 'more_src has _coqwc' {
+    assert "$xsrc/_coqwc" is_file
+}
 @test 'more_src has _coredns' {
     assert "$xsrc/_coredns" is_file
 }
@@ -6299,6 +6305,12 @@
 @test 'more_src has _menyoki' {
     assert "$xsrc/_menyoki" is_file
 }
+@test 'more_src has _maude' {
+    assert "$xsrc/_maude" is_file
+}
+@test 'more_src has _mercury' {
+    assert "$xsrc/_mercury" is_file
+}
 @test 'more_src has _mergiraf' {
     assert "$xsrc/_mergiraf" is_file
 }
@@ -6649,6 +6661,9 @@
 @test 'more_src has _murk' {
     assert "$xsrc/_murk" is_file
 }
+@test 'more_src has _mupen64plus' {
+    assert "$xsrc/_mupen64plus" is_file
+}
 @test 'more_src has _musescore' {
     assert "$xsrc/_musescore" is_file
 }
@@ -6762,6 +6777,9 @@
 @test 'more_src has _nem2-cli' {
     assert "$xsrc/_nem2-cli" is_file
 }
+@test 'more_src has _nemesis' {
+    assert "$xsrc/_nemesis" is_file
+}
 @test 'more_src has _nemu' {
     assert "$xsrc/_nemu" is_file
 }
@@ -6797,6 +6815,12 @@
 }
 @test 'more_src has _neverest' {
     assert "$xsrc/_neverest" is_file
+}
+@test 'more_src has _nestopia' {
+    assert "$xsrc/_nestopia" is_file
+}
+@test 'more_src has _newlisp' {
+    assert "$xsrc/_newlisp" is_file
 }
 @test 'more_src has _newgidmap' {
     assert "$xsrc/_newgidmap" is_file
@@ -7222,6 +7246,9 @@
 }
 @test 'more_src has _openapi-python-client' {
     assert "$xsrc/_openapi-python-client" is_file
+}
+@test 'more_src has _openmw' {
+    assert "$xsrc/_openmw" is_file
 }
 @test 'more_src has _opendiff' {
     assert "$xsrc/_opendiff" is_file
@@ -9072,8 +9099,14 @@
 @test 'more_src has _smyrna' {
     assert "$xsrc/_smyrna" is_file
 }
+@test 'more_src has _smlnj' {
+    assert "$xsrc/_smlnj" is_file
+}
 @test 'more_src has _smug' {
     assert "$xsrc/_smug" is_file
+}
+@test 'more_src has _snes9x' {
+    assert "$xsrc/_snes9x" is_file
 }
 @test 'more_src has _snakefmt' {
     assert "$xsrc/_snakefmt" is_file
@@ -9379,6 +9412,12 @@
 @test 'more_src has _stellar-xdr' {
     assert "$xsrc/_stellar-xdr" is_file
 }
+@test 'more_src has _stella' {
+    assert "$xsrc/_stella" is_file
+}
+@test 'more_src has _stellarium' {
+    assert "$xsrc/_stellarium" is_file
+}
 @test 'more_src has _step' {
     assert "$xsrc/_step" is_file
 }
@@ -9492,6 +9531,9 @@
 }
 @test 'more_src has _superctl' {
     assert "$xsrc/_superctl" is_file
+}
+@test 'more_src has _supertuxkart' {
+    assert "$xsrc/_supertuxkart" is_file
 }
 @test 'more_src has _supercollider' {
     assert "$xsrc/_supercollider" is_file
@@ -9757,6 +9799,9 @@
 }
 @test 'more_src has _telegraf' {
     assert "$xsrc/_telegraf" is_file
+}
+@test 'more_src has _teyjus' {
+    assert "$xsrc/_teyjus" is_file
 }
 @test 'more_src has _telepresence' {
     assert "$xsrc/_telepresence" is_file
@@ -10795,6 +10840,9 @@
 @test 'more_src has _vault-tasks-tui' {
     assert "$xsrc/_vault-tasks-tui" is_file
 }
+@test 'more_src has _vbam' {
+    assert "$xsrc/_vbam" is_file
+}
 @test 'more_src has _vboximg-mount' {
     assert "$xsrc/_vboximg-mount" is_file
 }
@@ -11086,6 +11134,9 @@
 @test 'more_src has _weeder' {
     assert "$xsrc/_weeder" is_file
 }
+@test 'more_src has _wesnoth' {
+    assert "$xsrc/_wesnoth" is_file
+}
 @test 'more_src has _werf' {
     assert "$xsrc/_werf" is_file
 }
@@ -11341,6 +11392,9 @@
 
 @test 'more_src has _xray' {
     assert "$xsrc/_xray" is_file
+}
+@test 'more_src has _xsb' {
+    assert "$xsrc/_xsb" is_file
 }
 @test 'more_src has _xsv' {
     assert "$xsrc/_xsv" is_file
