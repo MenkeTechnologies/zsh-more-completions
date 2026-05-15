@@ -14499,3 +14499,78 @@
 @test 'more_src has _polkit-mate' {
     assert "$xsrc/_polkit-mate" is_file
 }
+@test 'more_src has _iptcedit' {
+    assert "$xsrc/_iptcedit" is_file
+}
+@test 'more_src has _metadata-extractor' {
+    assert "$xsrc/_metadata-extractor" is_file
+}
+@test 'more_src has _pesign' {
+    assert "$xsrc/_pesign" is_file
+}
+@test 'more_src has _xmlsec' {
+    assert "$xsrc/_xmlsec" is_file
+}
+@test 'more_src has _keysmith' {
+    assert "$xsrc/_keysmith" is_file
+}
+@test 'more_src has _rezound' {
+    assert "$xsrc/_rezound" is_file
+}
+@test 'more_src has _signal-desktop' {
+    assert "$xsrc/_signal-desktop" is_file
+}
+@test 'more_src has _session-desktop' {
+    assert "$xsrc/_session-desktop" is_file
+}
+@test 'more_src has _gnurl' {
+    assert "$xsrc/_gnurl" is_file
+}
+@test 'more_src has _toxic' {
+    assert "$xsrc/_toxic" is_file
+}
+@test 'more_src has _chains' {
+    assert "$xsrc/_chains" is_file
+}
+@test 'more_src has _bandwidthd' {
+    assert "$xsrc/_bandwidthd" is_file
+}
+@test 'more_src has _pmacct' {
+    assert "$xsrc/_pmacct" is_file
+}
+@test 'more_src has _flowd' {
+    assert "$xsrc/_flowd" is_file
+}
+@test 'more_src has _fwbuilder' {
+    assert "$xsrc/_fwbuilder" is_file
+}
+@test 'more_src has _ipfwadm' {
+    assert "$xsrc/_ipfwadm" is_file
+}
+@test 'more_src has _bro' {
+    assert "$xsrc/_bro" is_file
+}
+@test 'more_src has _zeekctl' {
+    assert "$xsrc/_zeekctl" is_file
+}
+@test 'more_src has _icingadb' {
+    assert "$xsrc/_icingadb" is_file
+}
+@test 'more_src has _icingaweb2' {
+    assert "$xsrc/_icingaweb2" is_file
+}
+@test 'more_src has _redis-stat' {
+    assert "$xsrc/_redis-stat" is_file
+}
+@test 'more_src has _clickhouse-bench' {
+    assert "$xsrc/_clickhouse-bench" is_file
+}
+@test 'more_src has _virt-pki-query' {
+    assert "$xsrc/_virt-pki-query" is_file
+}
+@test 'more_src has _ovirt-engine-cli' {
+    assert "$xsrc/_ovirt-engine-cli" is_file
+}
+@test 'more_src has _memcached-cli' {
+    assert "$xsrc/_memcached-cli" is_file
+}
