@@ -1,0 +1,101 @@
+#compdef pimsync
+# Source: nixpkgs (https://github.com/NixOS/nixpkgs)
+# Package: pimsync
+# Type: maintainer-shipped (nixpkgs)
+# Harvested: 2026-05-15
+
+_pimsync_pairs() {
+    local -a pairs cfg
+    cfg=()
+    [[ -n "$config_file" ]] && cfg=(-c "$config_file")
+    pairs=(${(f)"$(pimsync ${cfg[@]} list pairs 2>/dev/null)"})
+    compadd -F words -a pairs
+}
+
+_pimsync_storages() {
+    local -a storages cfg
+    cfg=()
+    [[ -n "$config_file" ]] && cfg=(-c "$config_file")
+    storages=(${(f)"$(pimsync ${cfg[@]} list storages 2>/dev/null)"})
+    compadd -F words -a storages
+}
+
+_pimsync() {
+    local config_file
+
+    _arguments -C \
+        '-v[log level]:level:->loglevel' \
+        '-c[configuration file]:config file:_files' \
+        '1:command:->command' \
+        '*::arg:->args'
+
+    # Save config file for use in `pimsync list` calls.
+    config_file="${opt_args[-c]}"
+
+    case "$state" in
+        loglevel)
+            local -a levels
+            levels=(
+                'error:only errors'
+                'warn:warnings and errors'
+                'info:informational messages'
+                'debug:debug messages'
+            )
+            _describe 'log level' levels
+            ;;
+        command)
+            local -a commands options
+            commands=(
+                'check:check configuration and exit'
+                'daemon:keep storages in sync'
+                'sync:sync storages once'
+                'resolve-conflicts:manually resolve conflicts'
+                'discover:print discovered collections'
+                'list:list configured pairs or storages'
+                'repair:repair invalid items in collections'
+                'version:print version'
+            )
+            options=()
+            (( ${+opt_args[-v]} )) || options+=('-v:log level')
+            (( ${+opt_args[-c]} )) || options+=('-c:configuration file')
+            if (( ${#options} )); then
+                _describe 'command' commands -- options
+            else
+                _describe 'command' commands
+            fi
+            ;;
+        args)
+            case "$words[1]" in
+                check|discover)
+                    _pimsync_pairs
+                    ;;
+                daemon)
+                    _arguments \
+                        '-r[readiness file descriptor]:fd:' \
+                        '*:pair:_pimsync_pairs'
+                    ;;
+                sync|resolve-conflicts)
+                    _arguments \
+                        '-n[dry run]' \
+                        '-i[interactive]' \
+                        '*:pair:_pimsync_pairs'
+                    ;;
+                list)
+                    local -a targets
+                    targets=(
+                        'pairs:list configured pairs'
+                        'storages:list configured storages'
+                    )
+                    _describe 'target' targets
+                    ;;
+                repair)
+                    _pimsync_storages
+                    ;;
+                version)
+                    ;;
+            esac
+            ;;
+    esac
+}
+
+_pimsync "$@"
