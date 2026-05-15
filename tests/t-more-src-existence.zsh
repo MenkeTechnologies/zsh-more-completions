@@ -1039,6 +1039,9 @@
 @test 'more_src has _brag' {
     assert "$xsrc/_brag" is_file
 }
+@test 'more_src has _brave' {
+    assert "$xsrc/_brave" is_file
+}
 @test 'more_src has _braid' {
     assert "$xsrc/_braid" is_file
 }
@@ -3149,6 +3152,9 @@
 @test 'more_src has _eolas-util' {
     assert "$xsrc/_eolas-util" is_file
 }
+@test 'more_src has _epiphany-cli' {
+    assert "$xsrc/_epiphany-cli" is_file
+}
 @test 'more_src has _epoch2date' {
     assert "$xsrc/_epoch2date" is_file
 }
@@ -3277,6 +3283,9 @@
 }
 @test 'more_src has _falconctl' {
     assert "$xsrc/_falconctl" is_file
+}
+@test 'more_src has _falkon-cli' {
+    assert "$xsrc/_falkon-cli" is_file
 }
 @test 'more_src has _falkor' {
     assert "$xsrc/_falkor" is_file
@@ -5268,6 +5277,9 @@
 @test 'more_src has _kondo' {
     assert "$xsrc/_kondo" is_file
 }
+@test 'more_src has _konqueror-cli' {
+    assert "$xsrc/_konqueror-cli" is_file
+}
 @test 'more_src has _konfig' {
     assert "$xsrc/_konfig" is_file
 }
@@ -5531,6 +5543,9 @@
 }
 @test 'more_src has _libgen-cli' {
     assert "$xsrc/_libgen-cli" is_file
+}
+@test 'more_src has _librewolf' {
+    assert "$xsrc/_librewolf" is_file
 }
 @test 'more_src has _librecad' {
     assert "$xsrc/_librecad" is_file
@@ -8193,8 +8208,14 @@
 @test 'more_src has _s5cmd' {
     assert "$xsrc/_s5cmd" is_file
 }
+@test 'more_src has _sacc' {
+    assert "$xsrc/_sacc" is_file
+}
 @test 'more_src has _sad' {
     assert "$xsrc/_sad" is_file
+}
+@test 'more_src has _safari-cli' {
+    assert "$xsrc/_safari-cli" is_file
 }
 @test 'more_src has _safe-bundle' {
     assert "$xsrc/_safe-bundle" is_file
@@ -10261,6 +10282,9 @@
 @test 'more_src has _villain' {
     assert "$xsrc/_villain" is_file
 }
+@test 'more_src has _vimb' {
+    assert "$xsrc/_vimb" is_file
+}
 @test 'more_src has _vipe' {
     assert "$xsrc/_vipe" is_file
 }
@@ -10401,6 +10425,9 @@
 }
 @test 'more_src has _watchman-diag' {
     assert "$xsrc/_watchman-diag" is_file
+}
+@test 'more_src has _waterfox' {
+    assert "$xsrc/_waterfox" is_file
 }
 @test 'more_src has _watchwoman' {
     assert "$xsrc/_watchwoman" is_file
@@ -10778,6 +10805,9 @@
 }
 @test 'more_src has _zenith' {
     assert "$xsrc/_zenith" is_file
+}
+@test 'more_src has _zen' {
+    assert "$xsrc/_zen" is_file
 }
 @test 'more_src has _zenroom' {
     assert "$xsrc/_zenroom" is_file
