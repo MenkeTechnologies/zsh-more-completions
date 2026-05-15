@@ -6413,6 +6413,9 @@
 @test 'more_src has _nbcli' {
     assert "$xsrc/_nbcli" is_file
 }
+@test 'more_src has _nbd-server' {
+    assert "$xsrc/_nbd-server" is_file
+}
 @test 'more_src has _nbfc.in' {
     assert "$xsrc/_nbfc.in" is_file
 }
@@ -6770,6 +6773,9 @@
 @test 'more_src has _obfuskit' {
     assert "$xsrc/_obfuskit" is_file
 }
+@test 'more_src has _obnam' {
+    assert "$xsrc/_obnam" is_file
+}
 @test 'more_src has _obs' {
     assert "$xsrc/_obs" is_file
 }
@@ -7106,6 +7112,9 @@
 }
 @test 'more_src has _parquet2json' {
     assert "$xsrc/_parquet2json" is_file
+}
+@test 'more_src has _partclone' {
+    assert "$xsrc/_partclone" is_file
 }
 @test 'more_src has _paru' {
     assert "$xsrc/_paru" is_file
@@ -7491,6 +7500,9 @@
 }
 @test 'more_src has _porter' {
     assert "$xsrc/_porter" is_file
+}
+@test 'more_src has _portmap' {
+    assert "$xsrc/_portmap" is_file
 }
 @test 'more_src has _portpester' {
     assert "$xsrc/_portpester" is_file
@@ -8337,6 +8349,9 @@
 @test 'more_src has _scaffold' {
     assert "$xsrc/_scaffold" is_file
 }
+@test 'more_src has _scanadf' {
+    assert "$xsrc/_scanadf" is_file
+}
 @test 'more_src has _scalafmt' {
     assert "$xsrc/_scalafmt" is_file
 }
@@ -8633,6 +8648,9 @@
 }
 @test 'more_src has _smartmontools' {
     assert "$xsrc/_smartmontools" is_file
+}
+@test 'more_src has _smbspool' {
+    assert "$xsrc/_smbspool" is_file
 }
 @test 'more_src has _smhkd' {
     assert "$xsrc/_smhkd" is_file
@@ -9410,6 +9428,15 @@
 @test 'more_src has _tgswitch' {
     assert "$xsrc/_tgswitch" is_file
 }
+@test 'more_src has _tgtadm' {
+    assert "$xsrc/_tgtadm" is_file
+}
+@test 'more_src has _tgtd' {
+    assert "$xsrc/_tgtd" is_file
+}
+@test 'more_src has _tgtimg' {
+    assert "$xsrc/_tgtimg" is_file
+}
 @test 'more_src has _tgzd' {
     assert "$xsrc/_tgzd" is_file
 }
@@ -9867,6 +9894,9 @@
 }
 @test 'more_src has _umb.zsh' {
     assert "$xsrc/_umb.zsh" is_file
+}
+@test 'more_src has _umount.cifs' {
+    assert "$xsrc/_umount.cifs" is_file
 }
 @test 'more_src has _unar' {
     assert "$xsrc/_unar" is_file
