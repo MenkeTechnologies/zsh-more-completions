@@ -16674,3 +16674,78 @@
 @test 'more_src has _nsight-systems' {
     assert "$xsrc/_nsight-systems" is_file
 }
+@test 'more_src has _kea-admin' {
+    assert "$xsrc/_kea-admin" is_file
+}
+@test 'more_src has _kea-ctrl-agent' {
+    assert "$xsrc/_kea-ctrl-agent" is_file
+}
+@test 'more_src has _kea-dhcp-ddns' {
+    assert "$xsrc/_kea-dhcp-ddns" is_file
+}
+@test 'more_src has _kea-dhcp4' {
+    assert "$xsrc/_kea-dhcp4" is_file
+}
+@test 'more_src has _kea-dhcp6' {
+    assert "$xsrc/_kea-dhcp6" is_file
+}
+@test 'more_src has _kea-lfc' {
+    assert "$xsrc/_kea-lfc" is_file
+}
+@test 'more_src has _kea-netconf' {
+    assert "$xsrc/_kea-netconf" is_file
+}
+@test 'more_src has _keactrl' {
+    assert "$xsrc/_keactrl" is_file
+}
+@test 'more_src has _kea-shell' {
+    assert "$xsrc/_kea-shell" is_file
+}
+@test 'more_src has _dibbler-server' {
+    assert "$xsrc/_dibbler-server" is_file
+}
+@test 'more_src has _dibbler-client' {
+    assert "$xsrc/_dibbler-client" is_file
+}
+@test 'more_src has _dibbler-relay' {
+    assert "$xsrc/_dibbler-relay" is_file
+}
+@test 'more_src has _dhcp_release' {
+    assert "$xsrc/_dhcp_release" is_file
+}
+@test 'more_src has _dhcp_release6' {
+    assert "$xsrc/_dhcp_release6" is_file
+}
+@test 'more_src has _dhcp_lease_time' {
+    assert "$xsrc/_dhcp_lease_time" is_file
+}
+@test 'more_src has _dhcrelay' {
+    assert "$xsrc/_dhcrelay" is_file
+}
+@test 'more_src has _dhcrelay6' {
+    assert "$xsrc/_dhcrelay6" is_file
+}
+@test 'more_src has _dhcping' {
+    assert "$xsrc/_dhcping" is_file
+}
+@test 'more_src has _omshell' {
+    assert "$xsrc/_omshell" is_file
+}
+@test 'more_src has _odhcp6c' {
+    assert "$xsrc/_odhcp6c" is_file
+}
+@test 'more_src has _odhcpd' {
+    assert "$xsrc/_odhcpd" is_file
+}
+@test 'more_src has _opensm' {
+    assert "$xsrc/_opensm" is_file
+}
+@test 'more_src has _osmtest' {
+    assert "$xsrc/_osmtest" is_file
+}
+@test 'more_src has _ibsim' {
+    assert "$xsrc/_ibsim" is_file
+}
+@test 'more_src has _ibmgtsim' {
+    assert "$xsrc/_ibmgtsim" is_file
+}
