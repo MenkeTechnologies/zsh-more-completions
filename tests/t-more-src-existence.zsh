@@ -16149,3 +16149,78 @@
 @test 'more_src has _milter-manager' {
     assert "$xsrc/_milter-manager" is_file
 }
+@test 'more_src has _xrootd' {
+    assert "$xsrc/_xrootd" is_file
+}
+@test 'more_src has _xrdcp' {
+    assert "$xsrc/_xrdcp" is_file
+}
+@test 'more_src has _xrdfs' {
+    assert "$xsrc/_xrdfs" is_file
+}
+@test 'more_src has _xrdgsiproxy' {
+    assert "$xsrc/_xrdgsiproxy" is_file
+}
+@test 'more_src has _xrdadler32' {
+    assert "$xsrc/_xrdadler32" is_file
+}
+@test 'more_src has _xrdmapc' {
+    assert "$xsrc/_xrdmapc" is_file
+}
+@test 'more_src has _xrdpwd' {
+    assert "$xsrc/_xrdpwd" is_file
+}
+@test 'more_src has _xrdsssadmin' {
+    assert "$xsrc/_xrdsssadmin" is_file
+}
+@test 'more_src has _globus-url-copy' {
+    assert "$xsrc/_globus-url-copy" is_file
+}
+@test 'more_src has _uberftp' {
+    assert "$xsrc/_uberftp" is_file
+}
+@test 'more_src has _gfal-copy' {
+    assert "$xsrc/_gfal-copy" is_file
+}
+@test 'more_src has _gfal-ls' {
+    assert "$xsrc/_gfal-ls" is_file
+}
+@test 'more_src has _gfal-rm' {
+    assert "$xsrc/_gfal-rm" is_file
+}
+@test 'more_src has _gfal-stat' {
+    assert "$xsrc/_gfal-stat" is_file
+}
+@test 'more_src has _gfal-cat' {
+    assert "$xsrc/_gfal-cat" is_file
+}
+@test 'more_src has _gfal-mkdir' {
+    assert "$xsrc/_gfal-mkdir" is_file
+}
+@test 'more_src has _gfal-rmdir' {
+    assert "$xsrc/_gfal-rmdir" is_file
+}
+@test 'more_src has _gfal-rename' {
+    assert "$xsrc/_gfal-rename" is_file
+}
+@test 'more_src has _voms-proxy-init' {
+    assert "$xsrc/_voms-proxy-init" is_file
+}
+@test 'more_src has _voms-proxy-destroy' {
+    assert "$xsrc/_voms-proxy-destroy" is_file
+}
+@test 'more_src has _voms-proxy-info' {
+    assert "$xsrc/_voms-proxy-info" is_file
+}
+@test 'more_src has _arcproxy' {
+    assert "$xsrc/_arcproxy" is_file
+}
+@test 'more_src has _arcsub' {
+    assert "$xsrc/_arcsub" is_file
+}
+@test 'more_src has _arcstat' {
+    assert "$xsrc/_arcstat" is_file
+}
+@test 'more_src has _arcget' {
+    assert "$xsrc/_arcget" is_file
+}
