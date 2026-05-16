@@ -21258,3 +21258,78 @@
 @test 'more_src has _wobble' {
     assert "$xsrc/_wobble" is_file
 }
+@test 'more_src has _wordcount' {
+    assert "$xsrc/_wordcount" is_file
+}
+@test 'more_src has _wordfinder' {
+    assert "$xsrc/_wordfinder" is_file
+}
+@test 'more_src has _wordmatch' {
+    assert "$xsrc/_wordmatch" is_file
+}
+@test 'more_src has _wossdata' {
+    assert "$xsrc/_wossdata" is_file
+}
+@test 'more_src has _wossinput' {
+    assert "$xsrc/_wossinput" is_file
+}
+@test 'more_src has _wossname' {
+    assert "$xsrc/_wossname" is_file
+}
+@test 'more_src has _wossoperation' {
+    assert "$xsrc/_wossoperation" is_file
+}
+@test 'more_src has _wossoutput' {
+    assert "$xsrc/_wossoutput" is_file
+}
+@test 'more_src has _wossparam' {
+    assert "$xsrc/_wossparam" is_file
+}
+@test 'more_src has _wosstopic' {
+    assert "$xsrc/_wosstopic" is_file
+}
+@test 'more_src has _xmlget' {
+    assert "$xsrc/_xmlget" is_file
+}
+@test 'more_src has _xmltext' {
+    assert "$xsrc/_xmltext" is_file
+}
+@test 'more_src has _stretchpuzzle' {
+    assert "$xsrc/_stretchpuzzle" is_file
+}
+@test 'more_src has _aaindexextract' {
+    assert "$xsrc/_aaindexextract" is_file
+}
+@test 'more_src has _acdgalaxy' {
+    assert "$xsrc/_acdgalaxy" is_file
+}
+@test 'more_src has _aligncopy' {
+    assert "$xsrc/_aligncopy" is_file
+}
+@test 'more_src has _aligncopypair' {
+    assert "$xsrc/_aligncopypair" is_file
+}
+@test 'more_src has _backtranambig' {
+    assert "$xsrc/_backtranambig" is_file
+}
+@test 'more_src has _banana' {
+    assert "$xsrc/_banana" is_file
+}
+@test 'more_src has _btwisted' {
+    assert "$xsrc/_btwisted" is_file
+}
+@test 'more_src has _cacheebeyesearch' {
+    assert "$xsrc/_cacheebeyesearch" is_file
+}
+@test 'more_src has _cacheensembl' {
+    assert "$xsrc/_cacheensembl" is_file
+}
+@test 'more_src has _cachedas' {
+    assert "$xsrc/_cachedas" is_file
+}
+@test 'more_src has _cachedbfetch' {
+    assert "$xsrc/_cachedbfetch" is_file
+}
+@test 'more_src has _cacheentities' {
+    assert "$xsrc/_cacheentities" is_file
+}
