@@ -16749,3 +16749,78 @@
 @test 'more_src has _ibmgtsim' {
     assert "$xsrc/_ibmgtsim" is_file
 }
+@test 'more_src has _ceph-volume' {
+    assert "$xsrc/_ceph-volume" is_file
+}
+@test 'more_src has _ceph-mon' {
+    assert "$xsrc/_ceph-mon" is_file
+}
+@test 'more_src has _ceph-osd' {
+    assert "$xsrc/_ceph-osd" is_file
+}
+@test 'more_src has _ceph-mgr' {
+    assert "$xsrc/_ceph-mgr" is_file
+}
+@test 'more_src has _ceph-mds' {
+    assert "$xsrc/_ceph-mds" is_file
+}
+@test 'more_src has _ceph-conf' {
+    assert "$xsrc/_ceph-conf" is_file
+}
+@test 'more_src has _ceph-disk' {
+    assert "$xsrc/_ceph-disk" is_file
+}
+@test 'more_src has _ceph-authtool' {
+    assert "$xsrc/_ceph-authtool" is_file
+}
+@test 'more_src has _ceph-bluestore-tool' {
+    assert "$xsrc/_ceph-bluestore-tool" is_file
+}
+@test 'more_src has _ceph-create-keys' {
+    assert "$xsrc/_ceph-create-keys" is_file
+}
+@test 'more_src has _ceph-deploy' {
+    assert "$xsrc/_ceph-deploy" is_file
+}
+@test 'more_src has _ceph-detect-init' {
+    assert "$xsrc/_ceph-detect-init" is_file
+}
+@test 'more_src has _rbd-fuse' {
+    assert "$xsrc/_rbd-fuse" is_file
+}
+@test 'more_src has _rbd-mirror' {
+    assert "$xsrc/_rbd-mirror" is_file
+}
+@test 'more_src has _rbd-nbd' {
+    assert "$xsrc/_rbd-nbd" is_file
+}
+@test 'more_src has _radosgw' {
+    assert "$xsrc/_radosgw" is_file
+}
+@test 'more_src has _radosgw-token' {
+    assert "$xsrc/_radosgw-token" is_file
+}
+@test 'more_src has _cephfs-data-scan' {
+    assert "$xsrc/_cephfs-data-scan" is_file
+}
+@test 'more_src has _cephfs-journal-tool' {
+    assert "$xsrc/_cephfs-journal-tool" is_file
+}
+@test 'more_src has _cephfs-table-tool' {
+    assert "$xsrc/_cephfs-table-tool" is_file
+}
+@test 'more_src has _ceph-syn' {
+    assert "$xsrc/_ceph-syn" is_file
+}
+@test 'more_src has _ceph-dencoder' {
+    assert "$xsrc/_ceph-dencoder" is_file
+}
+@test 'more_src has _ceph-objectstore-tool' {
+    assert "$xsrc/_ceph-objectstore-tool" is_file
+}
+@test 'more_src has _ceph-kvstore-tool' {
+    assert "$xsrc/_ceph-kvstore-tool" is_file
+}
+@test 'more_src has _ceph-clsinfo' {
+    assert "$xsrc/_ceph-clsinfo" is_file
+}
