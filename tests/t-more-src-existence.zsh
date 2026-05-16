@@ -15549,3 +15549,78 @@
 @test 'more_src has _amiberry' {
     assert "$xsrc/_amiberry" is_file
 }
+@test 'more_src has _vice' {
+    assert "$xsrc/_vice" is_file
+}
+@test 'more_src has _x64' {
+    assert "$xsrc/_x64" is_file
+}
+@test 'more_src has _x64sc' {
+    assert "$xsrc/_x64sc" is_file
+}
+@test 'more_src has _xpet' {
+    assert "$xsrc/_xpet" is_file
+}
+@test 'more_src has _xplus4' {
+    assert "$xsrc/_xplus4" is_file
+}
+@test 'more_src has _xvic' {
+    assert "$xsrc/_xvic" is_file
+}
+@test 'more_src has _xcbm2' {
+    assert "$xsrc/_xcbm2" is_file
+}
+@test 'more_src has _xcbm5x0' {
+    assert "$xsrc/_xcbm5x0" is_file
+}
+@test 'more_src has _xscpu64' {
+    assert "$xsrc/_xscpu64" is_file
+}
+@test 'more_src has _c1541' {
+    assert "$xsrc/_c1541" is_file
+}
+@test 'more_src has _petcat' {
+    assert "$xsrc/_petcat" is_file
+}
+@test 'more_src has _cartconv' {
+    assert "$xsrc/_cartconv" is_file
+}
+@test 'more_src has _q4wine' {
+    assert "$xsrc/_q4wine" is_file
+}
+@test 'more_src has _play-on-linux' {
+    assert "$xsrc/_play-on-linux" is_file
+}
+@test 'more_src has _joyserver' {
+    assert "$xsrc/_joyserver" is_file
+}
+@test 'more_src has _joystick-test' {
+    assert "$xsrc/_joystick-test" is_file
+}
+@test 'more_src has _jstest-gtk' {
+    assert "$xsrc/_jstest-gtk" is_file
+}
+@test 'more_src has _nestopia-ue' {
+    assert "$xsrc/_nestopia-ue" is_file
+}
+@test 'more_src has _scummvm-tools' {
+    assert "$xsrc/_scummvm-tools" is_file
+}
+@test 'more_src has _residualvm' {
+    assert "$xsrc/_residualvm" is_file
+}
+@test 'more_src has _gemrb' {
+    assert "$xsrc/_gemrb" is_file
+}
+@test 'more_src has _iortcw' {
+    assert "$xsrc/_iortcw" is_file
+}
+@test 'more_src has _thedarkmod' {
+    assert "$xsrc/_thedarkmod" is_file
+}
+@test 'more_src has _slade' {
+    assert "$xsrc/_slade" is_file
+}
+@test 'more_src has _sarien' {
+    assert "$xsrc/_sarien" is_file
+}
