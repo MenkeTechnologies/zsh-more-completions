@@ -16299,3 +16299,78 @@
 @test 'more_src has _lspasswd' {
     assert "$xsrc/_lspasswd" is_file
 }
+@test 'more_src has _lsadmin' {
+    assert "$xsrc/_lsadmin" is_file
+}
+@test 'more_src has _badmin' {
+    assert "$xsrc/_badmin" is_file
+}
+@test 'more_src has _bsub' {
+    assert "$xsrc/_bsub" is_file
+}
+@test 'more_src has _bjobs' {
+    assert "$xsrc/_bjobs" is_file
+}
+@test 'more_src has _bkill' {
+    assert "$xsrc/_bkill" is_file
+}
+@test 'more_src has _bhosts' {
+    assert "$xsrc/_bhosts" is_file
+}
+@test 'more_src has _bqueues' {
+    assert "$xsrc/_bqueues" is_file
+}
+@test 'more_src has _bparams' {
+    assert "$xsrc/_bparams" is_file
+}
+@test 'more_src has _bhist' {
+    assert "$xsrc/_bhist" is_file
+}
+@test 'more_src has _condor_submit' {
+    assert "$xsrc/_condor_submit" is_file
+}
+@test 'more_src has _condor_q' {
+    assert "$xsrc/_condor_q" is_file
+}
+@test 'more_src has _condor_status' {
+    assert "$xsrc/_condor_status" is_file
+}
+@test 'more_src has _condor_history' {
+    assert "$xsrc/_condor_history" is_file
+}
+@test 'more_src has _condor_rm' {
+    assert "$xsrc/_condor_rm" is_file
+}
+@test 'more_src has _condor_hold' {
+    assert "$xsrc/_condor_hold" is_file
+}
+@test 'more_src has _condor_release' {
+    assert "$xsrc/_condor_release" is_file
+}
+@test 'more_src has _condor_prio' {
+    assert "$xsrc/_condor_prio" is_file
+}
+@test 'more_src has _condor_userlog' {
+    assert "$xsrc/_condor_userlog" is_file
+}
+@test 'more_src has _condor_userprio' {
+    assert "$xsrc/_condor_userprio" is_file
+}
+@test 'more_src has _condor_off' {
+    assert "$xsrc/_condor_off" is_file
+}
+@test 'more_src has _condor_on' {
+    assert "$xsrc/_condor_on" is_file
+}
+@test 'more_src has _condor_reconfig' {
+    assert "$xsrc/_condor_reconfig" is_file
+}
+@test 'more_src has _condor_reschedule' {
+    assert "$xsrc/_condor_reschedule" is_file
+}
+@test 'more_src has _condor_restart' {
+    assert "$xsrc/_condor_restart" is_file
+}
+@test 'more_src has _condor_config_val' {
+    assert "$xsrc/_condor_config_val" is_file
+}
