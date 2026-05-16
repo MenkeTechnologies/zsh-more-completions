@@ -20433,3 +20433,78 @@
 @test 'more_src has _adf' {
     assert "$xsrc/_adf" is_file
 }
+@test 'more_src has _blast' {
+    assert "$xsrc/_blast" is_file
+}
+@test 'more_src has _psiblast' {
+    assert "$xsrc/_psiblast" is_file
+}
+@test 'more_src has _rpsblast' {
+    assert "$xsrc/_rpsblast" is_file
+}
+@test 'more_src has _deltablast' {
+    assert "$xsrc/_deltablast" is_file
+}
+@test 'more_src has _tophat' {
+    assert "$xsrc/_tophat" is_file
+}
+@test 'more_src has _tophat2' {
+    assert "$xsrc/_tophat2" is_file
+}
+@test 'more_src has _cufflinks' {
+    assert "$xsrc/_cufflinks" is_file
+}
+@test 'more_src has _cuffcompare' {
+    assert "$xsrc/_cuffcompare" is_file
+}
+@test 'more_src has _cuffdiff' {
+    assert "$xsrc/_cuffdiff" is_file
+}
+@test 'more_src has _cuffmerge' {
+    assert "$xsrc/_cuffmerge" is_file
+}
+@test 'more_src has _cuffquant' {
+    assert "$xsrc/_cuffquant" is_file
+}
+@test 'more_src has _vcftools' {
+    assert "$xsrc/_vcftools" is_file
+}
+@test 'more_src has _seqtk' {
+    assert "$xsrc/_seqtk" is_file
+}
+@test 'more_src has _plink2' {
+    assert "$xsrc/_plink2" is_file
+}
+@test 'more_src has _admixture' {
+    assert "$xsrc/_admixture" is_file
+}
+@test 'more_src has _vcfutils.pl' {
+    assert "$xsrc/_vcfutils.pl" is_file
+}
+@test 'more_src has _mosdepth' {
+    assert "$xsrc/_mosdepth" is_file
+}
+@test 'more_src has _fastqc' {
+    assert "$xsrc/_fastqc" is_file
+}
+@test 'more_src has _multiqc' {
+    assert "$xsrc/_multiqc" is_file
+}
+@test 'more_src has _trim-galore' {
+    assert "$xsrc/_trim-galore" is_file
+}
+@test 'more_src has _trimgalore' {
+    assert "$xsrc/_trimgalore" is_file
+}
+@test 'more_src has _trimmomatic' {
+    assert "$xsrc/_trimmomatic" is_file
+}
+@test 'more_src has _mafft' {
+    assert "$xsrc/_mafft" is_file
+}
+@test 'more_src has _mrbayes' {
+    assert "$xsrc/_mrbayes" is_file
+}
+@test 'more_src has _raxml-ng' {
+    assert "$xsrc/_raxml-ng" is_file
+}
