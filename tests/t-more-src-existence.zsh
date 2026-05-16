@@ -16374,3 +16374,78 @@
 @test 'more_src has _condor_config_val' {
     assert "$xsrc/_condor_config_val" is_file
 }
+@test 'more_src has _condor_master' {
+    assert "$xsrc/_condor_master" is_file
+}
+@test 'more_src has _condor_schedd' {
+    assert "$xsrc/_condor_schedd" is_file
+}
+@test 'more_src has _condor_negotiator' {
+    assert "$xsrc/_condor_negotiator" is_file
+}
+@test 'more_src has _condor_collector' {
+    assert "$xsrc/_condor_collector" is_file
+}
+@test 'more_src has _condor_startd' {
+    assert "$xsrc/_condor_startd" is_file
+}
+@test 'more_src has _condor_shadow' {
+    assert "$xsrc/_condor_shadow" is_file
+}
+@test 'more_src has _condor_starter' {
+    assert "$xsrc/_condor_starter" is_file
+}
+@test 'more_src has _condor_dagman' {
+    assert "$xsrc/_condor_dagman" is_file
+}
+@test 'more_src has _condor_compile' {
+    assert "$xsrc/_condor_compile" is_file
+}
+@test 'more_src has _condor_chirp' {
+    assert "$xsrc/_condor_chirp" is_file
+}
+@test 'more_src has _condor_advertise' {
+    assert "$xsrc/_condor_advertise" is_file
+}
+@test 'more_src has _condor_fetchlog' {
+    assert "$xsrc/_condor_fetchlog" is_file
+}
+@test 'more_src has _condor_findhost' {
+    assert "$xsrc/_condor_findhost" is_file
+}
+@test 'more_src has _condor_ping' {
+    assert "$xsrc/_condor_ping" is_file
+}
+@test 'more_src has _condor_qedit' {
+    assert "$xsrc/_condor_qedit" is_file
+}
+@test 'more_src has _condor_qsub' {
+    assert "$xsrc/_condor_qsub" is_file
+}
+@test 'more_src has _condor_run' {
+    assert "$xsrc/_condor_run" is_file
+}
+@test 'more_src has _condor_ssh_to_job' {
+    assert "$xsrc/_condor_ssh_to_job" is_file
+}
+@test 'more_src has _condor_stats' {
+    assert "$xsrc/_condor_stats" is_file
+}
+@test 'more_src has _condor_store_cred' {
+    assert "$xsrc/_condor_store_cred" is_file
+}
+@test 'more_src has _condor_tail' {
+    assert "$xsrc/_condor_tail" is_file
+}
+@test 'more_src has _condor_transform_ads' {
+    assert "$xsrc/_condor_transform_ads" is_file
+}
+@test 'more_src has _condor_update_machine_ad' {
+    assert "$xsrc/_condor_update_machine_ad" is_file
+}
+@test 'more_src has _condor_vacate' {
+    assert "$xsrc/_condor_vacate" is_file
+}
+@test 'more_src has _condor_vacate_job' {
+    assert "$xsrc/_condor_vacate_job" is_file
+}
