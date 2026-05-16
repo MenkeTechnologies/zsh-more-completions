@@ -19530,3 +19530,78 @@
 @test 'more_src has _fcoeplumb' {
     assert "$xsrc/_fcoeplumb" is_file
 }
+@test 'more_src has _pacemaker-fenced' {
+    assert "$xsrc/_pacemaker-fenced" is_file
+}
+@test 'more_src has _pacemaker-execd' {
+    assert "$xsrc/_pacemaker-execd" is_file
+}
+@test 'more_src has _pacemaker-based' {
+    assert "$xsrc/_pacemaker-based" is_file
+}
+@test 'more_src has _pacemaker-schedulerd' {
+    assert "$xsrc/_pacemaker-schedulerd" is_file
+}
+@test 'more_src has _pacemaker-controld' {
+    assert "$xsrc/_pacemaker-controld" is_file
+}
+@test 'more_src has _pacemaker-remoted' {
+    assert "$xsrc/_pacemaker-remoted" is_file
+}
+@test 'more_src has _attrd_updater' {
+    assert "$xsrc/_attrd_updater" is_file
+}
+@test 'more_src has _stonith_admin' {
+    assert "$xsrc/_stonith_admin" is_file
+}
+@test 'more_src has _crmadmin' {
+    assert "$xsrc/_crmadmin" is_file
+}
+@test 'more_src has _crm_attribute' {
+    assert "$xsrc/_crm_attribute" is_file
+}
+@test 'more_src has _crm_diff' {
+    assert "$xsrc/_crm_diff" is_file
+}
+@test 'more_src has _crm_error' {
+    assert "$xsrc/_crm_error" is_file
+}
+@test 'more_src has _crm_failcount' {
+    assert "$xsrc/_crm_failcount" is_file
+}
+@test 'more_src has _crm_master' {
+    assert "$xsrc/_crm_master" is_file
+}
+@test 'more_src has _crm_mon' {
+    assert "$xsrc/_crm_mon" is_file
+}
+@test 'more_src has _crm_node' {
+    assert "$xsrc/_crm_node" is_file
+}
+@test 'more_src has _crm_report' {
+    assert "$xsrc/_crm_report" is_file
+}
+@test 'more_src has _crm_resource' {
+    assert "$xsrc/_crm_resource" is_file
+}
+@test 'more_src has _crm_rule' {
+    assert "$xsrc/_crm_rule" is_file
+}
+@test 'more_src has _crm_shadow' {
+    assert "$xsrc/_crm_shadow" is_file
+}
+@test 'more_src has _crm_simulate' {
+    assert "$xsrc/_crm_simulate" is_file
+}
+@test 'more_src has _crm_standby' {
+    assert "$xsrc/_crm_standby" is_file
+}
+@test 'more_src has _crm_ticket' {
+    assert "$xsrc/_crm_ticket" is_file
+}
+@test 'more_src has _crm_verify' {
+    assert "$xsrc/_crm_verify" is_file
+}
+@test 'more_src has _cibadmin' {
+    assert "$xsrc/_cibadmin" is_file
+}
