@@ -15924,3 +15924,78 @@
 @test 'more_src has _heimdall-frontend' {
     assert "$xsrc/_heimdall-frontend" is_file
 }
+@test 'more_src has _heaptrack-print' {
+    assert "$xsrc/_heaptrack-print" is_file
+}
+@test 'more_src has _stapio' {
+    assert "$xsrc/_stapio" is_file
+}
+@test 'more_src has _stap-prep' {
+    assert "$xsrc/_stap-prep" is_file
+}
+@test 'more_src has _stap-report' {
+    assert "$xsrc/_stap-report" is_file
+}
+@test 'more_src has _libreport-cli' {
+    assert "$xsrc/_libreport-cli" is_file
+}
+@test 'more_src has _reportbug-ng' {
+    assert "$xsrc/_reportbug-ng" is_file
+}
+@test 'more_src has _bug-buddy' {
+    assert "$xsrc/_bug-buddy" is_file
+}
+@test 'more_src has _jiracli' {
+    assert "$xsrc/_jiracli" is_file
+}
+@test 'more_src has _cd2cue' {
+    assert "$xsrc/_cd2cue" is_file
+}
+@test 'more_src has _cdda2mp4' {
+    assert "$xsrc/_cdda2mp4" is_file
+}
+@test 'more_src has _cdda2flac' {
+    assert "$xsrc/_cdda2flac" is_file
+}
+@test 'more_src has _emacs23' {
+    assert "$xsrc/_emacs23" is_file
+}
+@test 'more_src has _emacs24' {
+    assert "$xsrc/_emacs24" is_file
+}
+@test 'more_src has _emacs25' {
+    assert "$xsrc/_emacs25" is_file
+}
+@test 'more_src has _emacs26' {
+    assert "$xsrc/_emacs26" is_file
+}
+@test 'more_src has _emacs27' {
+    assert "$xsrc/_emacs27" is_file
+}
+@test 'more_src has _emacs28' {
+    assert "$xsrc/_emacs28" is_file
+}
+@test 'more_src has _emacs29' {
+    assert "$xsrc/_emacs29" is_file
+}
+@test 'more_src has _emacs30' {
+    assert "$xsrc/_emacs30" is_file
+}
+@test 'more_src has _neovim-qt' {
+    assert "$xsrc/_neovim-qt" is_file
+}
+@test 'more_src has _vim-tiny' {
+    assert "$xsrc/_vim-tiny" is_file
+}
+@test 'more_src has _vim-athena' {
+    assert "$xsrc/_vim-athena" is_file
+}
+@test 'more_src has _vim-gtk3' {
+    assert "$xsrc/_vim-gtk3" is_file
+}
+@test 'more_src has _vim-gnome' {
+    assert "$xsrc/_vim-gnome" is_file
+}
+@test 'more_src has _rmailmm' {
+    assert "$xsrc/_rmailmm" is_file
+}
