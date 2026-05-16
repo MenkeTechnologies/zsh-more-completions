@@ -15624,3 +15624,78 @@
 @test 'more_src has _sarien' {
     assert "$xsrc/_sarien" is_file
 }
+@test 'more_src has _love' {
+    assert "$xsrc/_love" is_file
+}
+@test 'more_src has _minetest' {
+    assert "$xsrc/_minetest" is_file
+}
+@test 'more_src has _luanti' {
+    assert "$xsrc/_luanti" is_file
+}
+@test 'more_src has _minecraft-launcher' {
+    assert "$xsrc/_minecraft-launcher" is_file
+}
+@test 'more_src has _minetest-server' {
+    assert "$xsrc/_minetest-server" is_file
+}
+@test 'more_src has _endless-sky' {
+    assert "$xsrc/_endless-sky" is_file
+}
+@test 'more_src has _unknown-horizons' {
+    assert "$xsrc/_unknown-horizons" is_file
+}
+@test 'more_src has _liquidwar' {
+    assert "$xsrc/_liquidwar" is_file
+}
+@test 'more_src has _liquidwar6' {
+    assert "$xsrc/_liquidwar6" is_file
+}
+@test 'more_src has _0verkill' {
+    assert "$xsrc/_0verkill" is_file
+}
+@test 'more_src has _battle-tanks' {
+    assert "$xsrc/_battle-tanks" is_file
+}
+@test 'more_src has _springrts' {
+    assert "$xsrc/_springrts" is_file
+}
+@test 'more_src has _kgoldrunner' {
+    assert "$xsrc/_kgoldrunner" is_file
+}
+@test 'more_src has _kteatime' {
+    assert "$xsrc/_kteatime" is_file
+}
+@test 'more_src has _guayadeque' {
+    assert "$xsrc/_guayadeque" is_file
+}
+@test 'more_src has _gnome-mpv' {
+    assert "$xsrc/_gnome-mpv" is_file
+}
+@test 'more_src has _klotski' {
+    assert "$xsrc/_klotski" is_file
+}
+@test 'more_src has _kgomore' {
+    assert "$xsrc/_kgomore" is_file
+}
+@test 'more_src has _7kaa' {
+    assert "$xsrc/_7kaa" is_file
+}
+@test 'more_src has _tyrian2000' {
+    assert "$xsrc/_tyrian2000" is_file
+}
+@test 'more_src has _hyperrogue' {
+    assert "$xsrc/_hyperrogue" is_file
+}
+@test 'more_src has _freeorion' {
+    assert "$xsrc/_freeorion" is_file
+}
+@test 'more_src has _megaglest' {
+    assert "$xsrc/_megaglest" is_file
+}
+@test 'more_src has _flare' {
+    assert "$xsrc/_flare" is_file
+}
+@test 'more_src has _cataclysm-dda' {
+    assert "$xsrc/_cataclysm-dda" is_file
+}
