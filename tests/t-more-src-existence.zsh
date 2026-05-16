@@ -17349,3 +17349,78 @@
 @test 'more_src has _freezer-status' {
     assert "$xsrc/_freezer-status" is_file
 }
+@test 'more_src has _mistral-api' {
+    assert "$xsrc/_mistral-api" is_file
+}
+@test 'more_src has _mistral-db-manage' {
+    assert "$xsrc/_mistral-db-manage" is_file
+}
+@test 'more_src has _mistral-engine' {
+    assert "$xsrc/_mistral-engine" is_file
+}
+@test 'more_src has _mistral-event-engine' {
+    assert "$xsrc/_mistral-event-engine" is_file
+}
+@test 'more_src has _mistral-executor' {
+    assert "$xsrc/_mistral-executor" is_file
+}
+@test 'more_src has _mistral-notifier' {
+    assert "$xsrc/_mistral-notifier" is_file
+}
+@test 'more_src has _mistral-server' {
+    assert "$xsrc/_mistral-server" is_file
+}
+@test 'more_src has _zaqar-server' {
+    assert "$xsrc/_zaqar-server" is_file
+}
+@test 'more_src has _zaqar-gc' {
+    assert "$xsrc/_zaqar-gc" is_file
+}
+@test 'more_src has _zaqar-status' {
+    assert "$xsrc/_zaqar-status" is_file
+}
+@test 'more_src has _barbican-api' {
+    assert "$xsrc/_barbican-api" is_file
+}
+@test 'more_src has _barbican-keystone-listener' {
+    assert "$xsrc/_barbican-keystone-listener" is_file
+}
+@test 'more_src has _barbican-manage' {
+    assert "$xsrc/_barbican-manage" is_file
+}
+@test 'more_src has _barbican-retry' {
+    assert "$xsrc/_barbican-retry" is_file
+}
+@test 'more_src has _barbican-status' {
+    assert "$xsrc/_barbican-status" is_file
+}
+@test 'more_src has _tacker-server' {
+    assert "$xsrc/_tacker-server" is_file
+}
+@test 'more_src has _tacker-conductor' {
+    assert "$xsrc/_tacker-conductor" is_file
+}
+@test 'more_src has _tacker-db-manage' {
+    assert "$xsrc/_tacker-db-manage" is_file
+}
+@test 'more_src has _vitrage-api' {
+    assert "$xsrc/_vitrage-api" is_file
+}
+@test 'more_src has _vitrage-graph' {
+    assert "$xsrc/_vitrage-graph" is_file
+}
+@test 'more_src has _vitrage-notifier' {
+    assert "$xsrc/_vitrage-notifier" is_file
+}
+@test 'more_src has _senlin-api' {
+    assert "$xsrc/_senlin-api" is_file
+}
+@test 'more_src has _senlin-engine' {
+    assert "$xsrc/_senlin-engine" is_file
+}
+@test 'more_src has _senlin-manage' {
+    assert "$xsrc/_senlin-manage" is_file
+}
+@test 'more_src has _senlin-status' {
+    assert "$xsrc/_senlin-status" is_file
+}
