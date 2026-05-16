@@ -16599,3 +16599,78 @@
 @test 'more_src has _mstvpd' {
     assert "$xsrc/_mstvpd" is_file
 }
+@test 'more_src has _nvidia-installer' {
+    assert "$xsrc/_nvidia-installer" is_file
+}
+@test 'more_src has _nvidia-cuda-mps-control' {
+    assert "$xsrc/_nvidia-cuda-mps-control" is_file
+}
+@test 'more_src has _nvidia-cuda-mps-server' {
+    assert "$xsrc/_nvidia-cuda-mps-server" is_file
+}
+@test 'more_src has _nvidia-detector' {
+    assert "$xsrc/_nvidia-detector" is_file
+}
+@test 'more_src has _nvidia-uninstall' {
+    assert "$xsrc/_nvidia-uninstall" is_file
+}
+@test 'more_src has _cuda-gdbserver' {
+    assert "$xsrc/_cuda-gdbserver" is_file
+}
+@test 'more_src has _nv-nsight-cu-cli' {
+    assert "$xsrc/_nv-nsight-cu-cli" is_file
+}
+@test 'more_src has _nvprune' {
+    assert "$xsrc/_nvprune" is_file
+}
+@test 'more_src has _nvidia-driver' {
+    assert "$xsrc/_nvidia-driver" is_file
+}
+@test 'more_src has _nvidia-container-cli' {
+    assert "$xsrc/_nvidia-container-cli" is_file
+}
+@test 'more_src has _nvidia-ctk' {
+    assert "$xsrc/_nvidia-ctk" is_file
+}
+@test 'more_src has _nvidia-docker' {
+    assert "$xsrc/_nvidia-docker" is_file
+}
+@test 'more_src has _rocprof' {
+    assert "$xsrc/_rocprof" is_file
+}
+@test 'more_src has _rocgdb' {
+    assert "$xsrc/_rocgdb" is_file
+}
+@test 'more_src has _hipify-perl' {
+    assert "$xsrc/_hipify-perl" is_file
+}
+@test 'more_src has _amd-smi' {
+    assert "$xsrc/_amd-smi" is_file
+}
+@test 'more_src has _nv-fabricmanager' {
+    assert "$xsrc/_nv-fabricmanager" is_file
+}
+@test 'more_src has _nvfortran' {
+    assert "$xsrc/_nvfortran" is_file
+}
+@test 'more_src has _nvc++' {
+    assert "$xsrc/_nvc++" is_file
+}
+@test 'more_src has _nvlink' {
+    assert "$xsrc/_nvlink" is_file
+}
+@test 'more_src has _nvvp' {
+    assert "$xsrc/_nvvp" is_file
+}
+@test 'more_src has _cudafe++' {
+    assert "$xsrc/_cudafe++" is_file
+}
+@test 'more_src has _cuda-install-samples' {
+    assert "$xsrc/_cuda-install-samples" is_file
+}
+@test 'more_src has _cudafe' {
+    assert "$xsrc/_cudafe" is_file
+}
+@test 'more_src has _nsight-systems' {
+    assert "$xsrc/_nsight-systems" is_file
+}
