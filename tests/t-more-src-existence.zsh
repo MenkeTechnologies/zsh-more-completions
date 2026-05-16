@@ -15399,3 +15399,78 @@
 @test 'more_src has _warsow' {
     assert "$xsrc/_warsow" is_file
 }
+@test 'more_src has _quake4' {
+    assert "$xsrc/_quake4" is_file
+}
+@test 'more_src has _fteqw' {
+    assert "$xsrc/_fteqw" is_file
+}
+@test 'more_src has _assault-cube' {
+    assert "$xsrc/_assault-cube" is_file
+}
+@test 'more_src has _worldofpadman' {
+    assert "$xsrc/_worldofpadman" is_file
+}
+@test 'more_src has _cube2' {
+    assert "$xsrc/_cube2" is_file
+}
+@test 'more_src has _sauerbraten' {
+    assert "$xsrc/_sauerbraten" is_file
+}
+@test 'more_src has _redeclipse' {
+    assert "$xsrc/_redeclipse" is_file
+}
+@test 'more_src has _urban-terror' {
+    assert "$xsrc/_urban-terror" is_file
+}
+@test 'more_src has _tremulous' {
+    assert "$xsrc/_tremulous" is_file
+}
+@test 'more_src has _unvanquished' {
+    assert "$xsrc/_unvanquished" is_file
+}
+@test 'more_src has _pioneer' {
+    assert "$xsrc/_pioneer" is_file
+}
+@test 'more_src has _frets-on-fire' {
+    assert "$xsrc/_frets-on-fire" is_file
+}
+@test 'more_src has _fbgrab' {
+    assert "$xsrc/_fbgrab" is_file
+}
+@test 'more_src has _xtitle' {
+    assert "$xsrc/_xtitle" is_file
+}
+@test 'more_src has _xresprobe' {
+    assert "$xsrc/_xresprobe" is_file
+}
+@test 'more_src has _lxsplit' {
+    assert "$xsrc/_lxsplit" is_file
+}
+@test 'more_src has _crawl' {
+    assert "$xsrc/_crawl" is_file
+}
+@test 'more_src has _tome2' {
+    assert "$xsrc/_tome2" is_file
+}
+@test 'more_src has _zangband' {
+    assert "$xsrc/_zangband" is_file
+}
+@test 'more_src has _moria' {
+    assert "$xsrc/_moria" is_file
+}
+@test 'more_src has _omega' {
+    assert "$xsrc/_omega" is_file
+}
+@test 'more_src has _dwarffortress' {
+    assert "$xsrc/_dwarffortress" is_file
+}
+@test 'more_src has _dosemu' {
+    assert "$xsrc/_dosemu" is_file
+}
+@test 'more_src has _atari800' {
+    assert "$xsrc/_atari800" is_file
+}
+@test 'more_src has _hatari' {
+    assert "$xsrc/_hatari" is_file
+}
