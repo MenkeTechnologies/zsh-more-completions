@@ -18024,3 +18024,78 @@
 @test 'more_src has _newrelic-license-manager' {
     assert "$xsrc/_newrelic-license-manager" is_file
 }
+@test 'more_src has _pg_combinebackup' {
+    assert "$xsrc/_pg_combinebackup" is_file
+}
+@test 'more_src has _pg_createsubscriber' {
+    assert "$xsrc/_pg_createsubscriber" is_file
+}
+@test 'more_src has _pg_walsummary' {
+    assert "$xsrc/_pg_walsummary" is_file
+}
+@test 'more_src has _pgcopydb' {
+    assert "$xsrc/_pgcopydb" is_file
+}
+@test 'more_src has _pcp_attach_node' {
+    assert "$xsrc/_pcp_attach_node" is_file
+}
+@test 'more_src has _pcp_detach_node' {
+    assert "$xsrc/_pcp_detach_node" is_file
+}
+@test 'more_src has _pcp_recovery_node' {
+    assert "$xsrc/_pcp_recovery_node" is_file
+}
+@test 'more_src has _pcp_promote_node' {
+    assert "$xsrc/_pcp_promote_node" is_file
+}
+@test 'more_src has _pcp_node_count' {
+    assert "$xsrc/_pcp_node_count" is_file
+}
+@test 'more_src has _pcp_node_info' {
+    assert "$xsrc/_pcp_node_info" is_file
+}
+@test 'more_src has _pcp_pool_status' {
+    assert "$xsrc/_pcp_pool_status" is_file
+}
+@test 'more_src has _pcp_watchdog_info' {
+    assert "$xsrc/_pcp_watchdog_info" is_file
+}
+@test 'more_src has _pcp_proc_count' {
+    assert "$xsrc/_pcp_proc_count" is_file
+}
+@test 'more_src has _pcp_proc_info' {
+    assert "$xsrc/_pcp_proc_info" is_file
+}
+@test 'more_src has _pcp_health_check_stats' {
+    assert "$xsrc/_pcp_health_check_stats" is_file
+}
+@test 'more_src has _pcp_stop_pgpool' {
+    assert "$xsrc/_pcp_stop_pgpool" is_file
+}
+@test 'more_src has _pcp_reload_config' {
+    assert "$xsrc/_pcp_reload_config" is_file
+}
+@test 'more_src has _pgxc_ctl' {
+    assert "$xsrc/_pgxc_ctl" is_file
+}
+@test 'more_src has _mariadbd' {
+    assert "$xsrc/_mariadbd" is_file
+}
+@test 'more_src has _mariadb-fix-extensions' {
+    assert "$xsrc/_mariadb-fix-extensions" is_file
+}
+@test 'more_src has _mariadb-service-convert' {
+    assert "$xsrc/_mariadb-service-convert" is_file
+}
+@test 'more_src has _mysql-router' {
+    assert "$xsrc/_mysql-router" is_file
+}
+@test 'more_src has _mysql-router-bootstrap' {
+    assert "$xsrc/_mysql-router-bootstrap" is_file
+}
+@test 'more_src has _mysql-router-passwd' {
+    assert "$xsrc/_mysql-router-passwd" is_file
+}
+@test 'more_src has _mysql-shell' {
+    assert "$xsrc/_mysql-shell" is_file
+}
