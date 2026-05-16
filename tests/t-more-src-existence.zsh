@@ -19155,3 +19155,78 @@
 @test 'more_src has _aubiotrack' {
     assert "$xsrc/_aubiotrack" is_file
 }
+@test 'more_src has _aubiomfcc' {
+    assert "$xsrc/_aubiomfcc" is_file
+}
+@test 'more_src has _bristoljackstats' {
+    assert "$xsrc/_bristoljackstats" is_file
+}
+@test 'more_src has _dssi-list-plugins' {
+    assert "$xsrc/_dssi-list-plugins" is_file
+}
+@test 'more_src has _dssi-server' {
+    assert "$xsrc/_dssi-server" is_file
+}
+@test 'more_src has _hexter' {
+    assert "$xsrc/_hexter" is_file
+}
+@test 'more_src has _zynaddsubfx-jack' {
+    assert "$xsrc/_zynaddsubfx-jack" is_file
+}
+@test 'more_src has _zyn-fusion' {
+    assert "$xsrc/_zyn-fusion" is_file
+}
+@test 'more_src has _carla-control' {
+    assert "$xsrc/_carla-control" is_file
+}
+@test 'more_src has _carla-database' {
+    assert "$xsrc/_carla-database" is_file
+}
+@test 'more_src has _carla-discovery' {
+    assert "$xsrc/_carla-discovery" is_file
+}
+@test 'more_src has _a2jmidi-bridge' {
+    assert "$xsrc/_a2jmidi-bridge" is_file
+}
+@test 'more_src has _a2jmidi' {
+    assert "$xsrc/_a2jmidi" is_file
+}
+@test 'more_src has _a2jmidid' {
+    assert "$xsrc/_a2jmidid" is_file
+}
+@test 'more_src has _jackmix' {
+    assert "$xsrc/_jackmix" is_file
+}
+@test 'more_src has _jackmeter' {
+    assert "$xsrc/_jackmeter" is_file
+}
+@test 'more_src has _jack-mixer' {
+    assert "$xsrc/_jack-mixer" is_file
+}
+@test 'more_src has _ecawave' {
+    assert "$xsrc/_ecawave" is_file
+}
+@test 'more_src has _ecasignalview' {
+    assert "$xsrc/_ecasignalview" is_file
+}
+@test 'more_src has _gtick' {
+    assert "$xsrc/_gtick" is_file
+}
+@test 'more_src has _yoshimi-launcher' {
+    assert "$xsrc/_yoshimi-launcher" is_file
+}
+@test 'more_src has _fmit' {
+    assert "$xsrc/_fmit" is_file
+}
+@test 'more_src has _geonkick' {
+    assert "$xsrc/_geonkick" is_file
+}
+@test 'more_src has _whysynth' {
+    assert "$xsrc/_whysynth" is_file
+}
+@test 'more_src has _meterbridge' {
+    assert "$xsrc/_meterbridge" is_file
+}
+@test 'more_src has _linuxsampler' {
+    assert "$xsrc/_linuxsampler" is_file
+}
