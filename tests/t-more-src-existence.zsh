@@ -18555,3 +18555,78 @@
 @test 'more_src has _sectok' {
     assert "$xsrc/_sectok" is_file
 }
+@test 'more_src has _tflite_convert' {
+    assert "$xsrc/_tflite_convert" is_file
+}
+@test 'more_src has _toco' {
+    assert "$xsrc/_toco" is_file
+}
+@test 'more_src has _saved_model_cli' {
+    assert "$xsrc/_saved_model_cli" is_file
+}
+@test 'more_src has _tf2onnx' {
+    assert "$xsrc/_tf2onnx" is_file
+}
+@test 'more_src has _onnx-graphsurgeon' {
+    assert "$xsrc/_onnx-graphsurgeon" is_file
+}
+@test 'more_src has _onnxsim' {
+    assert "$xsrc/_onnxsim" is_file
+}
+@test 'more_src has _trtexec' {
+    assert "$xsrc/_trtexec" is_file
+}
+@test 'more_src has _polygraphy' {
+    assert "$xsrc/_polygraphy" is_file
+}
+@test 'more_src has _torch-model-archiver' {
+    assert "$xsrc/_torch-model-archiver" is_file
+}
+@test 'more_src has _llama-cpp-server' {
+    assert "$xsrc/_llama-cpp-server" is_file
+}
+@test 'more_src has _llama-tokenize' {
+    assert "$xsrc/_llama-tokenize" is_file
+}
+@test 'more_src has _llama-gguf-split' {
+    assert "$xsrc/_llama-gguf-split" is_file
+}
+@test 'more_src has _tabby-cli' {
+    assert "$xsrc/_tabby-cli" is_file
+}
+@test 'more_src has _text-generation-server' {
+    assert "$xsrc/_text-generation-server" is_file
+}
+@test 'more_src has _triton-inference-server' {
+    assert "$xsrc/_triton-inference-server" is_file
+}
+@test 'more_src has _xgboost' {
+    assert "$xsrc/_xgboost" is_file
+}
+@test 'more_src has _lightgbm' {
+    assert "$xsrc/_lightgbm" is_file
+}
+@test 'more_src has _seldon-batch-processor' {
+    assert "$xsrc/_seldon-batch-processor" is_file
+}
+@test 'more_src has _flyteadmin' {
+    assert "$xsrc/_flyteadmin" is_file
+}
+@test 'more_src has _flytepropeller' {
+    assert "$xsrc/_flytepropeller" is_file
+}
+@test 'more_src has _metaflow-cli' {
+    assert "$xsrc/_metaflow-cli" is_file
+}
+@test 'more_src has _zenml-cli' {
+    assert "$xsrc/_zenml-cli" is_file
+}
+@test 'more_src has _kedro-cli' {
+    assert "$xsrc/_kedro-cli" is_file
+}
+@test 'more_src has _modelmesh' {
+    assert "$xsrc/_modelmesh" is_file
+}
+@test 'more_src has _h2o-3' {
+    assert "$xsrc/_h2o-3" is_file
+}
