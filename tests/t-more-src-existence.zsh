@@ -20508,3 +20508,78 @@
 @test 'more_src has _raxml-ng' {
     assert "$xsrc/_raxml-ng" is_file
 }
+@test 'more_src has _iqtree' {
+    assert "$xsrc/_iqtree" is_file
+}
+@test 'more_src has _iqtree2' {
+    assert "$xsrc/_iqtree2" is_file
+}
+@test 'more_src has _fasttree' {
+    assert "$xsrc/_fasttree" is_file
+}
+@test 'more_src has _fasttreemp' {
+    assert "$xsrc/_fasttreemp" is_file
+}
+@test 'more_src has _clustalw' {
+    assert "$xsrc/_clustalw" is_file
+}
+@test 'more_src has _clustalw2' {
+    assert "$xsrc/_clustalw2" is_file
+}
+@test 'more_src has _clustalo' {
+    assert "$xsrc/_clustalo" is_file
+}
+@test 'more_src has _muscle3' {
+    assert "$xsrc/_muscle3" is_file
+}
+@test 'more_src has _muscle5' {
+    assert "$xsrc/_muscle5" is_file
+}
+@test 'more_src has _t-coffee' {
+    assert "$xsrc/_t-coffee" is_file
+}
+@test 'more_src has _tcoffee' {
+    assert "$xsrc/_tcoffee" is_file
+}
+@test 'more_src has _abyss' {
+    assert "$xsrc/_abyss" is_file
+}
+@test 'more_src has _spades' {
+    assert "$xsrc/_spades" is_file
+}
+@test 'more_src has _canu' {
+    assert "$xsrc/_canu" is_file
+}
+@test 'more_src has _wtdbg2' {
+    assert "$xsrc/_wtdbg2" is_file
+}
+@test 'more_src has _hifiasm' {
+    assert "$xsrc/_hifiasm" is_file
+}
+@test 'more_src has _flye' {
+    assert "$xsrc/_flye" is_file
+}
+@test 'more_src has _gatk4' {
+    assert "$xsrc/_gatk4" is_file
+}
+@test 'more_src has _picard-tools' {
+    assert "$xsrc/_picard-tools" is_file
+}
+@test 'more_src has _delly' {
+    assert "$xsrc/_delly" is_file
+}
+@test 'more_src has _manta' {
+    assert "$xsrc/_manta" is_file
+}
+@test 'more_src has _strelka2' {
+    assert "$xsrc/_strelka2" is_file
+}
+@test 'more_src has _mutect2' {
+    assert "$xsrc/_mutect2" is_file
+}
+@test 'more_src has _vep' {
+    assert "$xsrc/_vep" is_file
+}
+@test 'more_src has _ensembl-vep' {
+    assert "$xsrc/_ensembl-vep" is_file
+}
