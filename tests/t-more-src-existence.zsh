@@ -18480,3 +18480,78 @@
 @test 'more_src has _samhainctl' {
     assert "$xsrc/_samhainctl" is_file
 }
+@test 'more_src has _rekall' {
+    assert "$xsrc/_rekall" is_file
+}
+@test 'more_src has _autopsy-cli' {
+    assert "$xsrc/_autopsy-cli" is_file
+}
+@test 'more_src has _dls' {
+    assert "$xsrc/_dls" is_file
+}
+@test 'more_src has _tsk_dirstat' {
+    assert "$xsrc/_tsk_dirstat" is_file
+}
+@test 'more_src has _ssdeep-update' {
+    assert "$xsrc/_ssdeep-update" is_file
+}
+@test 'more_src has _freshclam-config' {
+    assert "$xsrc/_freshclam-config" is_file
+}
+@test 'more_src has _clamav-unofficial-sigs' {
+    assert "$xsrc/_clamav-unofficial-sigs" is_file
+}
+@test 'more_src has _bcrypt-tool' {
+    assert "$xsrc/_bcrypt-tool" is_file
+}
+@test 'more_src has _pwgen-perl' {
+    assert "$xsrc/_pwgen-perl" is_file
+}
+@test 'more_src has _passphrase' {
+    assert "$xsrc/_passphrase" is_file
+}
+@test 'more_src has _passhash' {
+    assert "$xsrc/_passhash" is_file
+}
+@test 'more_src has _scapy3k' {
+    assert "$xsrc/_scapy3k" is_file
+}
+@test 'more_src has _netcat-traditional' {
+    assert "$xsrc/_netcat-traditional" is_file
+}
+@test 'more_src has _netcat-openbsd' {
+    assert "$xsrc/_netcat-openbsd" is_file
+}
+@test 'more_src has _traceroute-paris' {
+    assert "$xsrc/_traceroute-paris" is_file
+}
+@test 'more_src has _sequoia-sq' {
+    assert "$xsrc/_sequoia-sq" is_file
+}
+@test 'more_src has _rnp' {
+    assert "$xsrc/_rnp" is_file
+}
+@test 'more_src has _rnpkeys' {
+    assert "$xsrc/_rnpkeys" is_file
+}
+@test 'more_src has _rnpv' {
+    assert "$xsrc/_rnpv" is_file
+}
+@test 'more_src has _signify-openbsd' {
+    assert "$xsrc/_signify-openbsd" is_file
+}
+@test 'more_src has _openpgp-card-tool' {
+    assert "$xsrc/_openpgp-card-tool" is_file
+}
+@test 'more_src has _openpgp-card-admin' {
+    assert "$xsrc/_openpgp-card-admin" is_file
+}
+@test 'more_src has _efitools' {
+    assert "$xsrc/_efitools" is_file
+}
+@test 'more_src has _efivarfs-test' {
+    assert "$xsrc/_efivarfs-test" is_file
+}
+@test 'more_src has _sectok' {
+    assert "$xsrc/_sectok" is_file
+}
