@@ -20733,3 +20733,78 @@
 @test 'more_src has _seqret' {
     assert "$xsrc/_seqret" is_file
 }
+@test 'more_src has _efilter' {
+    assert "$xsrc/_efilter" is_file
+}
+@test 'more_src has _epost' {
+    assert "$xsrc/_epost" is_file
+}
+@test 'more_src has _esummary' {
+    assert "$xsrc/_esummary" is_file
+}
+@test 'more_src has _embossversion' {
+    assert "$xsrc/_embossversion" is_file
+}
+@test 'more_src has _abiview' {
+    assert "$xsrc/_abiview" is_file
+}
+@test 'more_src has _acdc' {
+    assert "$xsrc/_acdc" is_file
+}
+@test 'more_src has _acdpretty' {
+    assert "$xsrc/_acdpretty" is_file
+}
+@test 'more_src has _acdtable' {
+    assert "$xsrc/_acdtable" is_file
+}
+@test 'more_src has _acdvalid' {
+    assert "$xsrc/_acdvalid" is_file
+}
+@test 'more_src has _backtranseq' {
+    assert "$xsrc/_backtranseq" is_file
+}
+@test 'more_src has _biosed' {
+    assert "$xsrc/_biosed" is_file
+}
+@test 'more_src has _charge' {
+    assert "$xsrc/_charge" is_file
+}
+@test 'more_src has _checktrans' {
+    assert "$xsrc/_checktrans" is_file
+}
+@test 'more_src has _chips' {
+    assert "$xsrc/_chips" is_file
+}
+@test 'more_src has _cirdna' {
+    assert "$xsrc/_cirdna" is_file
+}
+@test 'more_src has _codcmp' {
+    assert "$xsrc/_codcmp" is_file
+}
+@test 'more_src has _codcopy' {
+    assert "$xsrc/_codcopy" is_file
+}
+@test 'more_src has _coderet' {
+    assert "$xsrc/_coderet" is_file
+}
+@test 'more_src has _compseq' {
+    assert "$xsrc/_compseq" is_file
+}
+@test 'more_src has _cons' {
+    assert "$xsrc/_cons" is_file
+}
+@test 'more_src has _consambig' {
+    assert "$xsrc/_consambig" is_file
+}
+@test 'more_src has _cpgplot' {
+    assert "$xsrc/_cpgplot" is_file
+}
+@test 'more_src has _cpgreport' {
+    assert "$xsrc/_cpgreport" is_file
+}
+@test 'more_src has _cusp' {
+    assert "$xsrc/_cusp" is_file
+}
+@test 'more_src has _cutseq' {
+    assert "$xsrc/_cutseq" is_file
+}
