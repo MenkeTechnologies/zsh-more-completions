@@ -15249,3 +15249,78 @@
 @test 'more_src has _apt-clone-cli' {
     assert "$xsrc/_apt-clone-cli" is_file
 }
+@test 'more_src has _xinput-calibrator' {
+    assert "$xsrc/_xinput-calibrator" is_file
+}
+@test 'more_src has _wf-shell' {
+    assert "$xsrc/_wf-shell" is_file
+}
+@test 'more_src has _wcm' {
+    assert "$xsrc/_wcm" is_file
+}
+@test 'more_src has _wf-config' {
+    assert "$xsrc/_wf-config" is_file
+}
+@test 'more_src has _wf-info' {
+    assert "$xsrc/_wf-info" is_file
+}
+@test 'more_src has _wayhaus' {
+    assert "$xsrc/_wayhaus" is_file
+}
+@test 'more_src has _mako-utils' {
+    assert "$xsrc/_mako-utils" is_file
+}
+@test 'more_src has _wlinhibit' {
+    assert "$xsrc/_wlinhibit" is_file
+}
+@test 'more_src has _emptty' {
+    assert "$xsrc/_emptty" is_file
+}
+@test 'more_src has _wluma' {
+    assert "$xsrc/_wluma" is_file
+}
+@test 'more_src has _wofi-emoji' {
+    assert "$xsrc/_wofi-emoji" is_file
+}
+@test 'more_src has _wofi-pass' {
+    assert "$xsrc/_wofi-pass" is_file
+}
+@test 'more_src has _wl-clipboard-x11' {
+    assert "$xsrc/_wl-clipboard-x11" is_file
+}
+@test 'more_src has _river' {
+    assert "$xsrc/_river" is_file
+}
+@test 'more_src has _riverwm' {
+    assert "$xsrc/_riverwm" is_file
+}
+@test 'more_src has _labwc-greet' {
+    assert "$xsrc/_labwc-greet" is_file
+}
+@test 'more_src has _weston-info' {
+    assert "$xsrc/_weston-info" is_file
+}
+@test 'more_src has _weston-launch' {
+    assert "$xsrc/_weston-launch" is_file
+}
+@test 'more_src has _weston-debug' {
+    assert "$xsrc/_weston-debug" is_file
+}
+@test 'more_src has _weston-keyboard' {
+    assert "$xsrc/_weston-keyboard" is_file
+}
+@test 'more_src has _weston-screenshooter' {
+    assert "$xsrc/_weston-screenshooter" is_file
+}
+@test 'more_src has _phosh' {
+    assert "$xsrc/_phosh" is_file
+}
+@test 'more_src has _phoc' {
+    assert "$xsrc/_phoc" is_file
+}
+@test 'more_src has _squeekboard' {
+    assert "$xsrc/_squeekboard" is_file
+}
+@test 'more_src has _nwg-shell' {
+    assert "$xsrc/_nwg-shell" is_file
+}
