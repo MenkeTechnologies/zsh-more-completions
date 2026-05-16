@@ -15474,3 +15474,78 @@
 @test 'more_src has _hatari' {
     assert "$xsrc/_hatari" is_file
 }
+@test 'more_src has _yabause' {
+    assert "$xsrc/_yabause" is_file
+}
+@test 'more_src has _desmume' {
+    assert "$xsrc/_desmume" is_file
+}
+@test 'more_src has _citra' {
+    assert "$xsrc/_citra" is_file
+}
+@test 'more_src has _yuzu' {
+    assert "$xsrc/_yuzu" is_file
+}
+@test 'more_src has _ryujinx' {
+    assert "$xsrc/_ryujinx" is_file
+}
+@test 'more_src has _epsxe' {
+    assert "$xsrc/_epsxe" is_file
+}
+@test 'more_src has _mGBA' {
+    assert "$xsrc/_mGBA" is_file
+}
+@test 'more_src has _mgba-qt' {
+    assert "$xsrc/_mgba-qt" is_file
+}
+@test 'more_src has _mgba-sdl' {
+    assert "$xsrc/_mgba-sdl" is_file
+}
+@test 'more_src has _melonds' {
+    assert "$xsrc/_melonds" is_file
+}
+@test 'more_src has _raine' {
+    assert "$xsrc/_raine" is_file
+}
+@test 'more_src has _mednaffe' {
+    assert "$xsrc/_mednaffe" is_file
+}
+@test 'more_src has _sdlmame' {
+    assert "$xsrc/_sdlmame" is_file
+}
+@test 'more_src has _uxn' {
+    assert "$xsrc/_uxn" is_file
+}
+@test 'more_src has _uxntal' {
+    assert "$xsrc/_uxntal" is_file
+}
+@test 'more_src has _uxnemu' {
+    assert "$xsrc/_uxnemu" is_file
+}
+@test 'more_src has _bsnes-jg' {
+    assert "$xsrc/_bsnes-jg" is_file
+}
+@test 'more_src has _bsnes-mt' {
+    assert "$xsrc/_bsnes-mt" is_file
+}
+@test 'more_src has _pSX' {
+    assert "$xsrc/_pSX" is_file
+}
+@test 'more_src has _bochs' {
+    assert "$xsrc/_bochs" is_file
+}
+@test 'more_src has _box86' {
+    assert "$xsrc/_box86" is_file
+}
+@test 'more_src has _box64' {
+    assert "$xsrc/_box64" is_file
+}
+@test 'more_src has _fs-uae' {
+    assert "$xsrc/_fs-uae" is_file
+}
+@test 'more_src has _fs-uae-launcher' {
+    assert "$xsrc/_fs-uae-launcher" is_file
+}
+@test 'more_src has _amiberry' {
+    assert "$xsrc/_amiberry" is_file
+}
