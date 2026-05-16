@@ -19983,3 +19983,78 @@
 @test 'more_src has _zaproxy-cli' {
     assert "$xsrc/_zaproxy-cli" is_file
 }
+@test 'more_src has _impacket-secretsdump' {
+    assert "$xsrc/_impacket-secretsdump" is_file
+}
+@test 'more_src has _impacket-smbserver' {
+    assert "$xsrc/_impacket-smbserver" is_file
+}
+@test 'more_src has _impacket-getuserspns' {
+    assert "$xsrc/_impacket-getuserspns" is_file
+}
+@test 'more_src has _impacket-goldenpac' {
+    assert "$xsrc/_impacket-goldenpac" is_file
+}
+@test 'more_src has _impacket-smbexec' {
+    assert "$xsrc/_impacket-smbexec" is_file
+}
+@test 'more_src has _impacket-ntlmrelayx' {
+    assert "$xsrc/_impacket-ntlmrelayx" is_file
+}
+@test 'more_src has _impacket-addcomputer' {
+    assert "$xsrc/_impacket-addcomputer" is_file
+}
+@test 'more_src has _impacket-atexec' {
+    assert "$xsrc/_impacket-atexec" is_file
+}
+@test 'more_src has _impacket-dpapi' {
+    assert "$xsrc/_impacket-dpapi" is_file
+}
+@test 'more_src has _impacket-findDelegation' {
+    assert "$xsrc/_impacket-findDelegation" is_file
+}
+@test 'more_src has _impacket-GetADUsers' {
+    assert "$xsrc/_impacket-GetADUsers" is_file
+}
+@test 'more_src has _impacket-getNPUsers' {
+    assert "$xsrc/_impacket-getNPUsers" is_file
+}
+@test 'more_src has _impacket-getST' {
+    assert "$xsrc/_impacket-getST" is_file
+}
+@test 'more_src has _impacket-Get-GPPPassword' {
+    assert "$xsrc/_impacket-Get-GPPPassword" is_file
+}
+@test 'more_src has _impacket-karmaSMB' {
+    assert "$xsrc/_impacket-karmaSMB" is_file
+}
+@test 'more_src has _impacket-keylistattack' {
+    assert "$xsrc/_impacket-keylistattack" is_file
+}
+@test 'more_src has _impacket-kintercept' {
+    assert "$xsrc/_impacket-kintercept" is_file
+}
+@test 'more_src has _impacket-lookupsid' {
+    assert "$xsrc/_impacket-lookupsid" is_file
+}
+@test 'more_src has _impacket-mimikatz' {
+    assert "$xsrc/_impacket-mimikatz" is_file
+}
+@test 'more_src has _impacket-mssqlclient' {
+    assert "$xsrc/_impacket-mssqlclient" is_file
+}
+@test 'more_src has _impacket-mssqlinstance' {
+    assert "$xsrc/_impacket-mssqlinstance" is_file
+}
+@test 'more_src has _impacket-nmapAnswerMachine' {
+    assert "$xsrc/_impacket-nmapAnswerMachine" is_file
+}
+@test 'more_src has _impacket-owneredit' {
+    assert "$xsrc/_impacket-owneredit" is_file
+}
+@test 'more_src has _impacket-ping' {
+    assert "$xsrc/_impacket-ping" is_file
+}
+@test 'more_src has _impacket-ping6' {
+    assert "$xsrc/_impacket-ping6" is_file
+}
