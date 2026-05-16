@@ -20133,3 +20133,78 @@
 @test 'more_src has _impacket-secretsdump-py' {
     assert "$xsrc/_impacket-secretsdump-py" is_file
 }
+@test 'more_src has _povray37' {
+    assert "$xsrc/_povray37" is_file
+}
+@test 'more_src has _rpict' {
+    assert "$xsrc/_rpict" is_file
+}
+@test 'more_src has _rtrace' {
+    assert "$xsrc/_rtrace" is_file
+}
+@test 'more_src has _rcalc' {
+    assert "$xsrc/_rcalc" is_file
+}
+@test 'more_src has _rfluxmtx' {
+    assert "$xsrc/_rfluxmtx" is_file
+}
+@test 'more_src has _rhpict' {
+    assert "$xsrc/_rhpict" is_file
+}
+@test 'more_src has _ttf2pt1' {
+    assert "$xsrc/_ttf2pt1" is_file
+}
+@test 'more_src has _ttf2woff' {
+    assert "$xsrc/_ttf2woff" is_file
+}
+@test 'more_src has _ttf2woff2' {
+    assert "$xsrc/_ttf2woff2" is_file
+}
+@test 'more_src has _tfm2afm' {
+    assert "$xsrc/_tfm2afm" is_file
+}
+@test 'more_src has _makempx' {
+    assert "$xsrc/_makempx" is_file
+}
+@test 'more_src has _dvi2bitmap' {
+    assert "$xsrc/_dvi2bitmap" is_file
+}
+@test 'more_src has _hgview' {
+    assert "$xsrc/_hgview" is_file
+}
+@test 'more_src has _tikzedt' {
+    assert "$xsrc/_tikzedt" is_file
+}
+@test 'more_src has _tikzit' {
+    assert "$xsrc/_tikzit" is_file
+}
+@test 'more_src has _bibtexml' {
+    assert "$xsrc/_bibtexml" is_file
+}
+@test 'more_src has _zhmcclient' {
+    assert "$xsrc/_zhmcclient" is_file
+}
+@test 'more_src has _zhmccli' {
+    assert "$xsrc/_zhmccli" is_file
+}
+@test 'more_src has _psftostl' {
+    assert "$xsrc/_psftostl" is_file
+}
+@test 'more_src has _psftostroke' {
+    assert "$xsrc/_psftostroke" is_file
+}
+@test 'more_src has _dvi2html' {
+    assert "$xsrc/_dvi2html" is_file
+}
+@test 'more_src has _dvi2tty-ng' {
+    assert "$xsrc/_dvi2tty-ng" is_file
+}
+@test 'more_src has _radiance' {
+    assert "$xsrc/_radiance" is_file
+}
+@test 'more_src has _dv2dt' {
+    assert "$xsrc/_dv2dt" is_file
+}
+@test 'more_src has _fricas' {
+    assert "$xsrc/_fricas" is_file
+}
