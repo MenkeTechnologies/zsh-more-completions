@@ -19905,3 +19905,81 @@
 @test 'more_src has _flashutil' {
     assert "$xsrc/_flashutil" is_file
 }
+@test 'more_src has _ntpdate-debian' {
+    assert "$xsrc/_ntpdate-debian" is_file
+}
+@test 'more_src has _ntpdate-utils' {
+    assert "$xsrc/_ntpdate-utils" is_file
+}
+@test 'more_src has _ntpkeygen' {
+    assert "$xsrc/_ntpkeygen" is_file
+}
+@test 'more_src has _roughtime' {
+    assert "$xsrc/_roughtime" is_file
+}
+@test 'more_src has _cputempd' {
+    assert "$xsrc/_cputempd" is_file
+}
+@test 'more_src has _acpi-call' {
+    assert "$xsrc/_acpi-call" is_file
+}
+@test 'more_src has _obfsproxy' {
+    assert "$xsrc/_obfsproxy" is_file
+}
+@test 'more_src has _meek-client' {
+    assert "$xsrc/_meek-client" is_file
+}
+@test 'more_src has _meek-server' {
+    assert "$xsrc/_meek-server" is_file
+}
+@test 'more_src has _snowflake-client' {
+    assert "$xsrc/_snowflake-client" is_file
+}
+@test 'more_src has _snowflake-broker' {
+    assert "$xsrc/_snowflake-broker" is_file
+}
+@test 'more_src has _snowflake-proxy' {
+    assert "$xsrc/_snowflake-proxy" is_file
+}
+@test 'more_src has _onionshare-cli' {
+    assert "$xsrc/_onionshare-cli" is_file
+}
+@test 'more_src has _i2prouter' {
+    assert "$xsrc/_i2prouter" is_file
+}
+@test 'more_src has _ricochet-refresh' {
+    assert "$xsrc/_ricochet-refresh" is_file
+}
+@test 'more_src has _paros' {
+    assert "$xsrc/_paros" is_file
+}
+@test 'more_src has _w3af-console' {
+    assert "$xsrc/_w3af-console" is_file
+}
+@test 'more_src has _vega' {
+    assert "$xsrc/_vega" is_file
+}
+@test 'more_src has _arachni' {
+    assert "$xsrc/_arachni" is_file
+}
+@test 'more_src has _nikto2' {
+    assert "$xsrc/_nikto2" is_file
+}
+@test 'more_src has _radvd-config' {
+    assert "$xsrc/_radvd-config" is_file
+}
+@test 'more_src has _radvd-utils' {
+    assert "$xsrc/_radvd-utils" is_file
+}
+@test 'more_src has _ras-mc-ctl' {
+    assert "$xsrc/_ras-mc-ctl" is_file
+}
+@test 'more_src has _mcelog-cli' {
+    assert "$xsrc/_mcelog-cli" is_file
+}
+@test 'more_src has _mcelog-config' {
+    assert "$xsrc/_mcelog-config" is_file
+}
+@test 'more_src has _zaproxy-cli' {
+    assert "$xsrc/_zaproxy-cli" is_file
+}
