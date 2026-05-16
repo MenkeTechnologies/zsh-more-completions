@@ -1,4 +1,6 @@
 #compdef rstpep2html.py
+# Documentation: https://man.archlinux.org/search?q=rstpep2html.py
+# Reference accessed: 2026-05-16
 
 local -a arguments
 

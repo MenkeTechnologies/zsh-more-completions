@@ -1,4 +1,6 @@
 #compdef dos.x
+# Documentation: https://man.archlinux.org/search?q=dos.x
+# Reference accessed: 2026-05-16
 
 # Quantum ESPRESSO dos.x: reads input file via -input/-inp/-i or stdin
 local curcontext="$curcontext" ret=1

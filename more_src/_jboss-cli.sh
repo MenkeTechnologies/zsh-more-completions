@@ -1,4 +1,6 @@
 #compdef jboss-cli.sh jboss-cli
+# Documentation: https://man.archlinux.org/search?q=jboss-cli.sh
+# Reference accessed: 2026-05-16
 
 _arguments -s \
   '(- *)'{-h,--help}'[show help]' \

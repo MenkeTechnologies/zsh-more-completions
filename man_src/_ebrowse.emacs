@@ -1,4 +1,6 @@
 #compdef ebrowse.emacs
+# Documentation: https://man.archlinux.org/search?q=ebrowse.emacs
+# Reference accessed: 2026-05-16
 
 local arguments
 

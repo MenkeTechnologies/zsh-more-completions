@@ -1,4 +1,6 @@
 #compdef mw
+# Documentation: https://man.archlinux.org/search?q=mw
+# Reference accessed: 2026-05-16
 # Source: https://github.com/LukeSmithxyz/mutt-wizard/blob/b7b7f21d692048f34287615312ebc9385cd3c378/completion/_mutt-wizard.zsh
 # Repository: LukeSmithxyz/mutt-wizard (completion/_mutt-wizard.zsh)
 

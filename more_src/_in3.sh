@@ -1,4 +1,6 @@
 #compdef in3
+# Documentation: https://man.archlinux.org/search?q=in3
+# Reference accessed: 2026-05-16
 # Source: https://github.com/blockchainsllc/in3/blob/7b21d1855967ef39e64aa6f5bb6e74ab8d298f57/scripts/_in3.sh
 # Repository: blockchainsllc/in3 (scripts/_in3.sh)
 

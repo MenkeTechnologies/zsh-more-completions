@@ -1,4 +1,6 @@
 #compdef ph.x
+# Documentation: https://man.archlinux.org/search?q=ph.x
+# Reference accessed: 2026-05-16
 
 # Quantum ESPRESSO ph.x: reads input file via -input/-inp/-i or stdin
 local curcontext="$curcontext" ret=1

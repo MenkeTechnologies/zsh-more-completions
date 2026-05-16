@@ -1,4 +1,6 @@
 #compdef basic-app
+# Documentation: https://man.archlinux.org/search?q=basic-app
+# Reference accessed: 2026-05-16
 # Source: https://github.com/00JCIV00/cova/blob/39866f138e1f24e81afab37e657393bea6b9fd9e/examples/basic_app_meta/tab_completions/_basic-app-completion.zsh
 # Repository: 00JCIV00/cova (examples/basic_app_meta/tab_completions/_basic-app-completion.zsh)
 

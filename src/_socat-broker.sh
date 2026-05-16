@@ -1,4 +1,6 @@
 #compdef socat-broker.sh
+# Documentation: https://man.archlinux.org/search?q=socat-broker.sh
+# Reference accessed: 2026-05-16
 
 local -a arguments
 

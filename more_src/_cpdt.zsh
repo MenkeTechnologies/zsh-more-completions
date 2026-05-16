@@ -1,4 +1,6 @@
 #compdef editdt
+# Documentation: https://man.archlinux.org/search?q=editdt
+# Reference accessed: 2026-05-16
 # Source: https://github.com/ausungju/editdt/blob/95f8ba7193b4e37beb634537d00a1794f9d75d09/completion/_cpdt.zsh
 # Repository: ausungju/editdt (completion/_cpdt.zsh)
 

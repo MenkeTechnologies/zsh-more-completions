@@ -1,4 +1,6 @@
 #compdef peth
+# Documentation: https://man.archlinux.org/search?q=peth
+# Reference accessed: 2026-05-16
 # Source: https://github.com/sha1n/path-ethic/blob/ce1d8f8ec6abe43093a237484aba093436d30b08/completion/_peth.zsh
 # Repository: sha1n/path-ethic (completion/_peth.zsh)
 

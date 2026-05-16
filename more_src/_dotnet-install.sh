@@ -1,4 +1,6 @@
 #compdef dotnet-install.sh
+# Documentation: https://man.archlinux.org/search?q=dotnet-install.sh
+# Reference accessed: 2026-05-16
 # Source: https://github.com/syohex/zsh-misc-completions/blob/8966e3a82cf3d0f17d2c4d52cc23aababb66d496/dotnet/_dotnet-install.sh
 # Repository: syohex/zsh-misc-completions (dotnet/_dotnet-install.sh)
 

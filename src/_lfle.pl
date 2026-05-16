@@ -1,4 +1,6 @@
 #compdef lfle.pl
+# Documentation: https://man.archlinux.org/search?q=lfle.pl
+# Reference accessed: 2026-05-16
 
 local -a arguments
 

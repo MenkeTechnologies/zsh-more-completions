@@ -1,4 +1,6 @@
 #compdef x.py
+# Documentation: https://man.archlinux.org/search?q=x.py
+# Reference accessed: 2026-05-16
 # Source: https://github.com/purseclab/deepSURF/blob/69e93a5b3f454194106b868856d0f3f5361b406d/code/rust/src/etc/completions/x.py.zsh
 # Repository: purseclab/deepSURF (code/rust/src/etc/completions/x.py.zsh)
 

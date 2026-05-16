@@ -1,4 +1,6 @@
 #compdef scripts/cli.sh
+# Documentation: https://man.archlinux.org/search?q=scripts/cli.sh
+# Reference accessed: 2026-05-16
 # Source: https://github.com/datastaxdevs/terraform-nvidia-runai-stack/blob/69c1d69bf7f46f6c683d47bbd1aecb3ed1ad7f32/scripts/cli.sh
 # Repository: datastaxdevs/terraform-nvidia-runai-stack (scripts/cli.sh)
 #!/bin/bash

@@ -1,4 +1,6 @@
 #compdef log2timeline.py log2timeline
+# Documentation: https://man.archlinux.org/search?q=log2timeline.py
+# Reference accessed: 2026-05-16
 
 _arguments -s \
   '(-h --help)'{-h,--help}'[show help]' \

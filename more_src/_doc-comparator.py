@@ -1,4 +1,6 @@
 #compdef doc-comparator.py doc-anonymizer.py doc-quality.py doc-master.py doc-processor.py doc-search.py doc-merger.py doc-splitter.py dms-admin.py enterprise-admin.py
+# Documentation: https://man.archlinux.org/search?q=doc-comparator.py
+# Reference accessed: 2026-05-16
 # Source: https://github.com/svend4/daten20/blob/6ada10b80567470c87c29038150cfc04656d0f0f/scripts/completions/zsh_completion.zsh
 # Repository: svend4/daten20 (scripts/completions/zsh_completion.zsh)
 

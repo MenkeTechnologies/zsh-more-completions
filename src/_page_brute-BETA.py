@@ -1,4 +1,6 @@
 #compdef page_brute-BETA.py
+# Documentation: https://man.archlinux.org/search?q=page_brute-BETA.py
+# Reference accessed: 2026-05-16
 
 local -a arguments
 

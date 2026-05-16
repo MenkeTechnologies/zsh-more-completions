@@ -1,4 +1,6 @@
 #compdef ssl-opt.sh compat.sh
+# Documentation: https://man.archlinux.org/search?q=ssl-opt.sh
+# Reference accessed: 2026-05-16
 # Source: https://github.com/Mbed-TLS/mbedtls-docs/blob/b6f493df13504cf43806bc99de3ea8f6f9b18d46/tools/zsh/_ssl-opt.sh
 # Repository: Mbed-TLS/mbedtls-docs (tools/zsh/_ssl-opt.sh)
 ## Completion for tests/ssl-opt.sh and tests/compat.sh in Mbed TLS.

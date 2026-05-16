@@ -1,4 +1,6 @@
 #compdef dolphinscheduler-daemon.sh
+# Documentation: https://man.archlinux.org/search?q=dolphinscheduler-daemon.sh
+# Reference accessed: 2026-05-16
 
 local curcontext="$curcontext" state line ret=1
 local -a actions components

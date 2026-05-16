@@ -1,4 +1,6 @@
 #compdef psort.py psort
+# Documentation: https://man.archlinux.org/search?q=psort.py
+# Reference accessed: 2026-05-16
 
 _arguments -s \
   '(-h --help)'{-h,--help}'[show help]' \

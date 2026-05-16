@@ -1,4 +1,6 @@
 #compdef logwatch.pl
+# Documentation: https://man.archlinux.org/search?q=logwatch.pl
+# Reference accessed: 2026-05-16
 
 local -a arguments
 

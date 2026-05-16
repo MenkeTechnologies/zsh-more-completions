@@ -1,4 +1,6 @@
 #compdef idx.pl
+# Documentation: https://man.archlinux.org/search?q=idx.pl
+# Reference accessed: 2026-05-16
 
 local -a arguments
 

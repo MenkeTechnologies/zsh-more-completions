@@ -1,4 +1,6 @@
 #compdef epw.x
+# Documentation: https://man.archlinux.org/search?q=epw.x
+# Reference accessed: 2026-05-16
 
 # Quantum ESPRESSO epw.x: reads input file via -input/-inp/-i or stdin
 local curcontext="$curcontext" ret=1

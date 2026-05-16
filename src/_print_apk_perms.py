@@ -1,4 +1,6 @@
 #compdef print_apk_perms.py
+# Documentation: https://man.archlinux.org/search?q=print_apk_perms.py
+# Reference accessed: 2026-05-16
 
 local -a arguments
 

@@ -1,4 +1,6 @@
 #compdef sup sup-add sup-config sup-dump sup-sync sup-sync-back sup-tweak-labels sup-recover-sources
+# Documentation: https://man.archlinux.org/search?q=sup
+# Reference accessed: 2026-05-16
 # Source: https://github.com/jenmei/sup/blob/aaa852fbe513291144301bb31af50558177f891c/contrib/completion/_sup.zsh
 # Repository: jenmei/sup (contrib/completion/_sup.zsh)
 # vim: set et sw=2 sts=2 ts=2 ft=zsh :

@@ -1,4 +1,6 @@
 #compdef html2markdown.py3
+# Documentation: https://man.archlinux.org/search?q=html2markdown.py3
+# Reference accessed: 2026-05-16
 
 local -a arguments
 

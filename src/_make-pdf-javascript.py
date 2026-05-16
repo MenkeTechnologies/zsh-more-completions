@@ -1,4 +1,6 @@
 #compdef make-pdf-javascript.py
+# Documentation: https://man.archlinux.org/search?q=make-pdf-javascript.py
+# Reference accessed: 2026-05-16
 
 local -a arguments
 

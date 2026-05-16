@@ -1,4 +1,6 @@
 #compdef miniterm.py
+# Documentation: https://man.archlinux.org/search?q=miniterm.py
+# Reference accessed: 2026-05-16
 
 local -a arguments
 

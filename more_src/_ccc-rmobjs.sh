@@ -1,4 +1,6 @@
 #compdef ccc-rmobjs.sh
+# Documentation: https://man.archlinux.org/search?q=ccc-rmobjs.sh
+# Reference accessed: 2026-05-16
 # Source: https://github.com/bogner/scripts/blob/88fa565cd90a83abd71110237815e6c5275f80d1/completion/zsh/_ccc-rmobjs.sh
 # Repository: bogner/scripts (completion/zsh/_ccc-rmobjs.sh)
 

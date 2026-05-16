@@ -1,4 +1,6 @@
 #compdef directoryContentsSize.sh
+# Documentation: https://man.archlinux.org/search?q=directoryContentsSize.sh
+# Reference accessed: 2026-05-16
 
 local -a arguments
 

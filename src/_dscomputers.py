@@ -1,4 +1,6 @@
 #compdef dscomputers.py
+# Documentation: https://man.archlinux.org/search?q=dscomputers.py
+# Reference accessed: 2026-05-16
 
 local -a arguments
 

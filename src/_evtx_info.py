@@ -1,4 +1,6 @@
 #compdef evtx_info.py
+# Documentation: https://man.archlinux.org/search?q=evtx_info.py
+# Reference accessed: 2026-05-16
 
 local -a arguments
 
