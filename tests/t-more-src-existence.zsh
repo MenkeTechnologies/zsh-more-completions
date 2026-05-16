@@ -17874,3 +17874,78 @@
 @test 'more_src has _kn-quickstart' {
     assert "$xsrc/_kn-quickstart" is_file
 }
+@test 'more_src has _external-dns' {
+    assert "$xsrc/_external-dns" is_file
+}
+@test 'more_src has _cert-manager-controller' {
+    assert "$xsrc/_cert-manager-controller" is_file
+}
+@test 'more_src has _cert-manager-webhook' {
+    assert "$xsrc/_cert-manager-webhook" is_file
+}
+@test 'more_src has _cert-manager-cainjector' {
+    assert "$xsrc/_cert-manager-cainjector" is_file
+}
+@test 'more_src has _emissary-ingress' {
+    assert "$xsrc/_emissary-ingress" is_file
+}
+@test 'more_src has _argocd-server' {
+    assert "$xsrc/_argocd-server" is_file
+}
+@test 'more_src has _argocd-application-controller' {
+    assert "$xsrc/_argocd-application-controller" is_file
+}
+@test 'more_src has _argocd-repo-server' {
+    assert "$xsrc/_argocd-repo-server" is_file
+}
+@test 'more_src has _argocd-applicationset-controller' {
+    assert "$xsrc/_argocd-applicationset-controller" is_file
+}
+@test 'more_src has _argocd-notifications-controller' {
+    assert "$xsrc/_argocd-notifications-controller" is_file
+}
+@test 'more_src has _external-secrets' {
+    assert "$xsrc/_external-secrets" is_file
+}
+@test 'more_src has _reloader' {
+    assert "$xsrc/_reloader" is_file
+}
+@test 'more_src has _skipper' {
+    assert "$xsrc/_skipper" is_file
+}
+@test 'more_src has _eskip' {
+    assert "$xsrc/_eskip" is_file
+}
+@test 'more_src has _grafana-agentctl' {
+    assert "$xsrc/_grafana-agentctl" is_file
+}
+@test 'more_src has _grafana-image-renderer' {
+    assert "$xsrc/_grafana-image-renderer" is_file
+}
+@test 'more_src has _grafana-agent-operator' {
+    assert "$xsrc/_grafana-agent-operator" is_file
+}
+@test 'more_src has _mimir-tool' {
+    assert "$xsrc/_mimir-tool" is_file
+}
+@test 'more_src has _influxd-meta' {
+    assert "$xsrc/_influxd-meta" is_file
+}
+@test 'more_src has _influxd-data' {
+    assert "$xsrc/_influxd-data" is_file
+}
+@test 'more_src has _influxd-ctl' {
+    assert "$xsrc/_influxd-ctl" is_file
+}
+@test 'more_src has _woodpecker-agent' {
+    assert "$xsrc/_woodpecker-agent" is_file
+}
+@test 'more_src has _woodpecker-server' {
+    assert "$xsrc/_woodpecker-server" is_file
+}
+@test 'more_src has _kong-operator' {
+    assert "$xsrc/_kong-operator" is_file
+}
+@test 'more_src has _nginx-ingress' {
+    assert "$xsrc/_nginx-ingress" is_file
+}
