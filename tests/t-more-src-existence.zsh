@@ -18099,3 +18099,78 @@
 @test 'more_src has _mysql-shell' {
     assert "$xsrc/_mysql-shell" is_file
 }
+@test 'more_src has _sqlite3rsync' {
+    assert "$xsrc/_sqlite3rsync" is_file
+}
+@test 'more_src has _sqlite-web' {
+    assert "$xsrc/_sqlite-web" is_file
+}
+@test 'more_src has _sqlite-ftvs' {
+    assert "$xsrc/_sqlite-ftvs" is_file
+}
+@test 'more_src has _sqlitebiter' {
+    assert "$xsrc/_sqlitebiter" is_file
+}
+@test 'more_src has _sqlitestudio' {
+    assert "$xsrc/_sqlitestudio" is_file
+}
+@test 'more_src has _mongocryptd' {
+    assert "$xsrc/_mongocryptd" is_file
+}
+@test 'more_src has _mongokerberos' {
+    assert "$xsrc/_mongokerberos" is_file
+}
+@test 'more_src has _mongoldap' {
+    assert "$xsrc/_mongoldap" is_file
+}
+@test 'more_src has _mongocompass' {
+    assert "$xsrc/_mongocompass" is_file
+}
+@test 'more_src has _keydb-benchmark' {
+    assert "$xsrc/_keydb-benchmark" is_file
+}
+@test 'more_src has _keydb-check-aof' {
+    assert "$xsrc/_keydb-check-aof" is_file
+}
+@test 'more_src has _keydb-check-rdb' {
+    assert "$xsrc/_keydb-check-rdb" is_file
+}
+@test 'more_src has _keydb-sentinel' {
+    assert "$xsrc/_keydb-sentinel" is_file
+}
+@test 'more_src has _garnet-cli' {
+    assert "$xsrc/_garnet-cli" is_file
+}
+@test 'more_src has _dragonfly-cli' {
+    assert "$xsrc/_dragonfly-cli" is_file
+}
+@test 'more_src has _memcached-debug' {
+    assert "$xsrc/_memcached-debug" is_file
+}
+@test 'more_src has _valkey-benchmark' {
+    assert "$xsrc/_valkey-benchmark" is_file
+}
+@test 'more_src has _valkey-sentinel' {
+    assert "$xsrc/_valkey-sentinel" is_file
+}
+@test 'more_src has _valkey-check-aof' {
+    assert "$xsrc/_valkey-check-aof" is_file
+}
+@test 'more_src has _valkey-check-rdb' {
+    assert "$xsrc/_valkey-check-rdb" is_file
+}
+@test 'more_src has _tile38' {
+    assert "$xsrc/_tile38" is_file
+}
+@test 'more_src has _tile38-cli' {
+    assert "$xsrc/_tile38-cli" is_file
+}
+@test 'more_src has _tile38-benchmark' {
+    assert "$xsrc/_tile38-benchmark" is_file
+}
+@test 'more_src has _sstablekeys' {
+    assert "$xsrc/_sstablekeys" is_file
+}
+@test 'more_src has _sstable2json' {
+    assert "$xsrc/_sstable2json" is_file
+}
