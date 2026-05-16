@@ -19305,3 +19305,78 @@
 @test 'more_src has _digikam-cli' {
     assert "$xsrc/_digikam-cli" is_file
 }
+@test 'more_src has _emacs-snapshot' {
+    assert "$xsrc/_emacs-snapshot" is_file
+}
+@test 'more_src has _emacs-nox' {
+    assert "$xsrc/_emacs-nox" is_file
+}
+@test 'more_src has _xemacs21' {
+    assert "$xsrc/_xemacs21" is_file
+}
+@test 'more_src has _howl' {
+    assert "$xsrc/_howl" is_file
+}
+@test 'more_src has _viless' {
+    assert "$xsrc/_viless" is_file
+}
+@test 'more_src has _textosaurus' {
+    assert "$xsrc/_textosaurus" is_file
+}
+@test 'more_src has _focuswriter' {
+    assert "$xsrc/_focuswriter" is_file
+}
+@test 'more_src has _calligraauthor' {
+    assert "$xsrc/_calligraauthor" is_file
+}
+@test 'more_src has _calligrachart' {
+    assert "$xsrc/_calligrachart" is_file
+}
+@test 'more_src has _calligraflow' {
+    assert "$xsrc/_calligraflow" is_file
+}
+@test 'more_src has _calligraplan' {
+    assert "$xsrc/_calligraplan" is_file
+}
+@test 'more_src has _calligrasheets' {
+    assert "$xsrc/_calligrasheets" is_file
+}
+@test 'more_src has _calligrastage' {
+    assert "$xsrc/_calligrastage" is_file
+}
+@test 'more_src has _calligrawords' {
+    assert "$xsrc/_calligrawords" is_file
+}
+@test 'more_src has _cobblerd' {
+    assert "$xsrc/_cobblerd" is_file
+}
+@test 'more_src has _cockpit-bridge' {
+    assert "$xsrc/_cockpit-bridge" is_file
+}
+@test 'more_src has _cockpit-tls' {
+    assert "$xsrc/_cockpit-tls" is_file
+}
+@test 'more_src has _cockpit-ws' {
+    assert "$xsrc/_cockpit-ws" is_file
+}
+@test 'more_src has _cockpit-pcp' {
+    assert "$xsrc/_cockpit-pcp" is_file
+}
+@test 'more_src has _cockpit-machines' {
+    assert "$xsrc/_cockpit-machines" is_file
+}
+@test 'more_src has _foreman-installer' {
+    assert "$xsrc/_foreman-installer" is_file
+}
+@test 'more_src has _hammer' {
+    assert "$xsrc/_hammer" is_file
+}
+@test 'more_src has _virt-who' {
+    assert "$xsrc/_virt-who" is_file
+}
+@test 'more_src has _satellite-installer' {
+    assert "$xsrc/_satellite-installer" is_file
+}
+@test 'more_src has _pulp-admin' {
+    assert "$xsrc/_pulp-admin" is_file
+}
