@@ -18930,3 +18930,78 @@
 @test 'more_src has _entrance' {
     assert "$xsrc/_entrance" is_file
 }
+@test 'more_src has _i3-config-wizard' {
+    assert "$xsrc/_i3-config-wizard" is_file
+}
+@test 'more_src has _i3-dump-log' {
+    assert "$xsrc/_i3-dump-log" is_file
+}
+@test 'more_src has _i3-sensible-editor' {
+    assert "$xsrc/_i3-sensible-editor" is_file
+}
+@test 'more_src has _i3-sensible-pager' {
+    assert "$xsrc/_i3-sensible-pager" is_file
+}
+@test 'more_src has _i3-sensible-terminal' {
+    assert "$xsrc/_i3-sensible-terminal" is_file
+}
+@test 'more_src has _wayfire-cli' {
+    assert "$xsrc/_wayfire-cli" is_file
+}
+@test 'more_src has _wf-cmd' {
+    assert "$xsrc/_wf-cmd" is_file
+}
+@test 'more_src has _wf-msg' {
+    assert "$xsrc/_wf-msg" is_file
+}
+@test 'more_src has _labwc-tweaks' {
+    assert "$xsrc/_labwc-tweaks" is_file
+}
+@test 'more_src has _picom-trans' {
+    assert "$xsrc/_picom-trans" is_file
+}
+@test 'more_src has _openbox-gnome-session' {
+    assert "$xsrc/_openbox-gnome-session" is_file
+}
+@test 'more_src has _openbox-kde-session' {
+    assert "$xsrc/_openbox-kde-session" is_file
+}
+@test 'more_src has _obconf-qt' {
+    assert "$xsrc/_obconf-qt" is_file
+}
+@test 'more_src has _fluxbox-remote' {
+    assert "$xsrc/_fluxbox-remote" is_file
+}
+@test 'more_src has _fbsetroot' {
+    assert "$xsrc/_fbsetroot" is_file
+}
+@test 'more_src has _wmsetbg' {
+    assert "$xsrc/_wmsetbg" is_file
+}
+@test 'more_src has _wmclock' {
+    assert "$xsrc/_wmclock" is_file
+}
+@test 'more_src has _wmnetload' {
+    assert "$xsrc/_wmnetload" is_file
+}
+@test 'more_src has _wmweather' {
+    assert "$xsrc/_wmweather" is_file
+}
+@test 'more_src has _wmnd' {
+    assert "$xsrc/_wmnd" is_file
+}
+@test 'more_src has _wmtune' {
+    assert "$xsrc/_wmtune" is_file
+}
+@test 'more_src has _wmrack' {
+    assert "$xsrc/_wmrack" is_file
+}
+@test 'more_src has _icewm-toolbar' {
+    assert "$xsrc/_icewm-toolbar" is_file
+}
+@test 'more_src has _icewmhint' {
+    assert "$xsrc/_icewmhint" is_file
+}
+@test 'more_src has _flwm' {
+    assert "$xsrc/_flwm" is_file
+}
