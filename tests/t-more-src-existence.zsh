@@ -17724,3 +17724,78 @@
 @test 'more_src has _shifterimg' {
     assert "$xsrc/_shifterimg" is_file
 }
+@test 'more_src has _kube-apiserver' {
+    assert "$xsrc/_kube-apiserver" is_file
+}
+@test 'more_src has _kube-controller-manager' {
+    assert "$xsrc/_kube-controller-manager" is_file
+}
+@test 'more_src has _kube-scheduler' {
+    assert "$xsrc/_kube-scheduler" is_file
+}
+@test 'more_src has _kube-proxy' {
+    assert "$xsrc/_kube-proxy" is_file
+}
+@test 'more_src has _helm-operator' {
+    assert "$xsrc/_helm-operator" is_file
+}
+@test 'more_src has _operator-courier' {
+    assert "$xsrc/_operator-courier" is_file
+}
+@test 'more_src has _opm' {
+    assert "$xsrc/_opm" is_file
+}
+@test 'more_src has _operator-registry' {
+    assert "$xsrc/_operator-registry" is_file
+}
+@test 'more_src has _kapp-controller' {
+    assert "$xsrc/_kapp-controller" is_file
+}
+@test 'more_src has _prometheus-config-reloader' {
+    assert "$xsrc/_prometheus-config-reloader" is_file
+}
+@test 'more_src has _kube-state-metrics' {
+    assert "$xsrc/_kube-state-metrics" is_file
+}
+@test 'more_src has _karmada-aggregated-apiserver' {
+    assert "$xsrc/_karmada-aggregated-apiserver" is_file
+}
+@test 'more_src has _karmada-controller-manager' {
+    assert "$xsrc/_karmada-controller-manager" is_file
+}
+@test 'more_src has _karmada-scheduler' {
+    assert "$xsrc/_karmada-scheduler" is_file
+}
+@test 'more_src has _karmada-search' {
+    assert "$xsrc/_karmada-search" is_file
+}
+@test 'more_src has _karmada-descheduler' {
+    assert "$xsrc/_karmada-descheduler" is_file
+}
+@test 'more_src has _karmada-webhook' {
+    assert "$xsrc/_karmada-webhook" is_file
+}
+@test 'more_src has _karmada-metrics-adapter' {
+    assert "$xsrc/_karmada-metrics-adapter" is_file
+}
+@test 'more_src has _karmada-agent' {
+    assert "$xsrc/_karmada-agent" is_file
+}
+@test 'more_src has _capa-controller-manager' {
+    assert "$xsrc/_capa-controller-manager" is_file
+}
+@test 'more_src has _capi-controller-manager' {
+    assert "$xsrc/_capi-controller-manager" is_file
+}
+@test 'more_src has _rancher-agent' {
+    assert "$xsrc/_rancher-agent" is_file
+}
+@test 'more_src has _trivy-operator' {
+    assert "$xsrc/_trivy-operator" is_file
+}
+@test 'more_src has _omni-agent' {
+    assert "$xsrc/_omni-agent" is_file
+}
+@test 'more_src has _rancher-server' {
+    assert "$xsrc/_rancher-server" is_file
+}
