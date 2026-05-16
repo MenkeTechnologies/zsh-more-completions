@@ -19455,3 +19455,78 @@
 @test 'more_src has _dracut-ng' {
     assert "$xsrc/_dracut-ng" is_file
 }
+@test 'more_src has _nfs-ganesha' {
+    assert "$xsrc/_nfs-ganesha" is_file
+}
+@test 'more_src has _ganesha.nfsd' {
+    assert "$xsrc/_ganesha.nfsd" is_file
+}
+@test 'more_src has _ganesha-rados-grace' {
+    assert "$xsrc/_ganesha-rados-grace" is_file
+}
+@test 'more_src has _ganesha-grace' {
+    assert "$xsrc/_ganesha-grace" is_file
+}
+@test 'more_src has _samba-bgqd' {
+    assert "$xsrc/_samba-bgqd" is_file
+}
+@test 'more_src has _samba-dcerpcd' {
+    assert "$xsrc/_samba-dcerpcd" is_file
+}
+@test 'more_src has _samba_spotlightd' {
+    assert "$xsrc/_samba_spotlightd" is_file
+}
+@test 'more_src has _smbprint' {
+    assert "$xsrc/_smbprint" is_file
+}
+@test 'more_src has _quotastats' {
+    assert "$xsrc/_quotastats" is_file
+}
+@test 'more_src has _quota-warn' {
+    assert "$xsrc/_quota-warn" is_file
+}
+@test 'more_src has _tdbtune' {
+    assert "$xsrc/_tdbtune" is_file
+}
+@test 'more_src has _cifsdd' {
+    assert "$xsrc/_cifsdd" is_file
+}
+@test 'more_src has _tgt-admin' {
+    assert "$xsrc/_tgt-admin" is_file
+}
+@test 'more_src has _targetcli' {
+    assert "$xsrc/_targetcli" is_file
+}
+@test 'more_src has _targetcli-fb' {
+    assert "$xsrc/_targetcli-fb" is_file
+}
+@test 'more_src has _scstadmin' {
+    assert "$xsrc/_scstadmin" is_file
+}
+@test 'more_src has _corosync-blackbox' {
+    assert "$xsrc/_corosync-blackbox" is_file
+}
+@test 'more_src has _corosync-keygen' {
+    assert "$xsrc/_corosync-keygen" is_file
+}
+@test 'more_src has _corosync-quorumtool' {
+    assert "$xsrc/_corosync-quorumtool" is_file
+}
+@test 'more_src has _corosync-cfgtool' {
+    assert "$xsrc/_corosync-cfgtool" is_file
+}
+@test 'more_src has _corosync-cmapctl' {
+    assert "$xsrc/_corosync-cmapctl" is_file
+}
+@test 'more_src has _pacemaker-attrd' {
+    assert "$xsrc/_pacemaker-attrd" is_file
+}
+@test 'more_src has _pacemaker' {
+    assert "$xsrc/_pacemaker" is_file
+}
+@test 'more_src has _drbd-utils' {
+    assert "$xsrc/_drbd-utils" is_file
+}
+@test 'more_src has _fcoeplumb' {
+    assert "$xsrc/_fcoeplumb" is_file
+}
