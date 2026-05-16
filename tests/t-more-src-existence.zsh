@@ -20958,3 +20958,78 @@
 @test 'more_src has _infoalign' {
     assert "$xsrc/_infoalign" is_file
 }
+@test 'more_src has _lindna' {
+    assert "$xsrc/_lindna" is_file
+}
+@test 'more_src has _listor' {
+    assert "$xsrc/_listor" is_file
+}
+@test 'more_src has _makenucseq' {
+    assert "$xsrc/_makenucseq" is_file
+}
+@test 'more_src has _makeprotseq' {
+    assert "$xsrc/_makeprotseq" is_file
+}
+@test 'more_src has _marscan' {
+    assert "$xsrc/_marscan" is_file
+}
+@test 'more_src has _maskfeat' {
+    assert "$xsrc/_maskfeat" is_file
+}
+@test 'more_src has _maskseq' {
+    assert "$xsrc/_maskseq" is_file
+}
+@test 'more_src has _matcher' {
+    assert "$xsrc/_matcher" is_file
+}
+@test 'more_src has _megamerger' {
+    assert "$xsrc/_megamerger" is_file
+}
+@test 'more_src has _merger' {
+    assert "$xsrc/_merger" is_file
+}
+@test 'more_src has _msbar' {
+    assert "$xsrc/_msbar" is_file
+}
+@test 'more_src has _mwcontam' {
+    assert "$xsrc/_mwcontam" is_file
+}
+@test 'more_src has _mwfilter' {
+    assert "$xsrc/_mwfilter" is_file
+}
+@test 'more_src has _needleall' {
+    assert "$xsrc/_needleall" is_file
+}
+@test 'more_src has _newcpgreport' {
+    assert "$xsrc/_newcpgreport" is_file
+}
+@test 'more_src has _newcpgseek' {
+    assert "$xsrc/_newcpgseek" is_file
+}
+@test 'more_src has _newseq' {
+    assert "$xsrc/_newseq" is_file
+}
+@test 'more_src has _nohtml' {
+    assert "$xsrc/_nohtml" is_file
+}
+@test 'more_src has _noreturn' {
+    assert "$xsrc/_noreturn" is_file
+}
+@test 'more_src has _nospace' {
+    assert "$xsrc/_nospace" is_file
+}
+@test 'more_src has _notab' {
+    assert "$xsrc/_notab" is_file
+}
+@test 'more_src has _notseq' {
+    assert "$xsrc/_notseq" is_file
+}
+@test 'more_src has _nthseq' {
+    assert "$xsrc/_nthseq" is_file
+}
+@test 'more_src has _nthseqset' {
+    assert "$xsrc/_nthseqset" is_file
+}
+@test 'more_src has _oddcomp' {
+    assert "$xsrc/_oddcomp" is_file
+}
