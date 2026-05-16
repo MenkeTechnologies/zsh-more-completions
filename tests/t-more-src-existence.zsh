@@ -15774,3 +15774,78 @@
 @test 'more_src has _visualboyadvance' {
     assert "$xsrc/_visualboyadvance" is_file
 }
+@test 'more_src has _fasm' {
+    assert "$xsrc/_fasm" is_file
+}
+@test 'more_src has _fasm2' {
+    assert "$xsrc/_fasm2" is_file
+}
+@test 'more_src has _fasmg' {
+    assert "$xsrc/_fasmg" is_file
+}
+@test 'more_src has _jwasm' {
+    assert "$xsrc/_jwasm" is_file
+}
+@test 'more_src has _hjwasm' {
+    assert "$xsrc/_hjwasm" is_file
+}
+@test 'more_src has _uasm' {
+    assert "$xsrc/_uasm" is_file
+}
+@test 'more_src has _avra' {
+    assert "$xsrc/_avra" is_file
+}
+@test 'more_src has _tasm' {
+    assert "$xsrc/_tasm" is_file
+}
+@test 'more_src has _masm32' {
+    assert "$xsrc/_masm32" is_file
+}
+@test 'more_src has _objconv' {
+    assert "$xsrc/_objconv" is_file
+}
+@test 'more_src has _iaito' {
+    assert "$xsrc/_iaito" is_file
+}
+@test 'more_src has _mkboot' {
+    assert "$xsrc/_mkboot" is_file
+}
+@test 'more_src has _mkdtboimg' {
+    assert "$xsrc/_mkdtboimg" is_file
+}
+@test 'more_src has _simg2img' {
+    assert "$xsrc/_simg2img" is_file
+}
+@test 'more_src has _img2simg' {
+    assert "$xsrc/_img2simg" is_file
+}
+@test 'more_src has _angr' {
+    assert "$xsrc/_angr" is_file
+}
+@test 'more_src has _pince' {
+    assert "$xsrc/_pince" is_file
+}
+@test 'more_src has _hexer' {
+    assert "$xsrc/_hexer" is_file
+}
+@test 'more_src has _fhex' {
+    assert "$xsrc/_fhex" is_file
+}
+@test 'more_src has _bviplus' {
+    assert "$xsrc/_bviplus" is_file
+}
+@test 'more_src has _wxhexeditor' {
+    assert "$xsrc/_wxhexeditor" is_file
+}
+@test 'more_src has _okteta' {
+    assert "$xsrc/_okteta" is_file
+}
+@test 'more_src has _hyx' {
+    assert "$xsrc/_hyx" is_file
+}
+@test 'more_src has _tweak' {
+    assert "$xsrc/_tweak" is_file
+}
+@test 'more_src has _bedit' {
+    assert "$xsrc/_bedit" is_file
+}
