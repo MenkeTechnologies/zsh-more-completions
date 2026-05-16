@@ -18405,3 +18405,78 @@
 @test 'more_src has _weave-scope' {
     assert "$xsrc/_weave-scope" is_file
 }
+@test 'more_src has _wazuh-logtest' {
+    assert "$xsrc/_wazuh-logtest" is_file
+}
+@test 'more_src has _wazuh-manager' {
+    assert "$xsrc/_wazuh-manager" is_file
+}
+@test 'more_src has _wazuh-modulesd' {
+    assert "$xsrc/_wazuh-modulesd" is_file
+}
+@test 'more_src has _wazuh-syscheckd' {
+    assert "$xsrc/_wazuh-syscheckd" is_file
+}
+@test 'more_src has _wazuh-execd' {
+    assert "$xsrc/_wazuh-execd" is_file
+}
+@test 'more_src has _wazuh-monitord' {
+    assert "$xsrc/_wazuh-monitord" is_file
+}
+@test 'more_src has _wazuh-analysisd' {
+    assert "$xsrc/_wazuh-analysisd" is_file
+}
+@test 'more_src has _wazuh-remoted' {
+    assert "$xsrc/_wazuh-remoted" is_file
+}
+@test 'more_src has _ossec-control' {
+    assert "$xsrc/_ossec-control" is_file
+}
+@test 'more_src has _ossec-agent' {
+    assert "$xsrc/_ossec-agent" is_file
+}
+@test 'more_src has _ossec-agent-auth' {
+    assert "$xsrc/_ossec-agent-auth" is_file
+}
+@test 'more_src has _ossec-logtest' {
+    assert "$xsrc/_ossec-logtest" is_file
+}
+@test 'more_src has _ossec-makelists' {
+    assert "$xsrc/_ossec-makelists" is_file
+}
+@test 'more_src has _ossec-regex' {
+    assert "$xsrc/_ossec-regex" is_file
+}
+@test 'more_src has _owasp-zap' {
+    assert "$xsrc/_owasp-zap" is_file
+}
+@test 'more_src has _zap-baseline' {
+    assert "$xsrc/_zap-baseline" is_file
+}
+@test 'more_src has _zap-full-scan' {
+    assert "$xsrc/_zap-full-scan" is_file
+}
+@test 'more_src has _zap-api-scan' {
+    assert "$xsrc/_zap-api-scan" is_file
+}
+@test 'more_src has _airdrop-ng' {
+    assert "$xsrc/_airdrop-ng" is_file
+}
+@test 'more_src has _airgraph-ng' {
+    assert "$xsrc/_airgraph-ng" is_file
+}
+@test 'more_src has _wpaclean' {
+    assert "$xsrc/_wpaclean" is_file
+}
+@test 'more_src has _aide-init' {
+    assert "$xsrc/_aide-init" is_file
+}
+@test 'more_src has _aide-update' {
+    assert "$xsrc/_aide-update" is_file
+}
+@test 'more_src has _aide-check' {
+    assert "$xsrc/_aide-check" is_file
+}
+@test 'more_src has _samhainctl' {
+    assert "$xsrc/_samhainctl" is_file
+}
