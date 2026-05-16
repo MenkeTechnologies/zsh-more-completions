@@ -15699,3 +15699,78 @@
 @test 'more_src has _cataclysm-dda' {
     assert "$xsrc/_cataclysm-dda" is_file
 }
+@test 'more_src has _sdcpp' {
+    assert "$xsrc/_sdcpp" is_file
+}
+@test 'more_src has _sdasz80' {
+    assert "$xsrc/_sdasz80" is_file
+}
+@test 'more_src has _sdar' {
+    assert "$xsrc/_sdar" is_file
+}
+@test 'more_src has _sdldlink' {
+    assert "$xsrc/_sdldlink" is_file
+}
+@test 'more_src has _sdobjcopy' {
+    assert "$xsrc/_sdobjcopy" is_file
+}
+@test 'more_src has _sdldlz80' {
+    assert "$xsrc/_sdldlz80" is_file
+}
+@test 'more_src has _sdldgb' {
+    assert "$xsrc/_sdldgb" is_file
+}
+@test 'more_src has _sdas8051' {
+    assert "$xsrc/_sdas8051" is_file
+}
+@test 'more_src has _sdcclib' {
+    assert "$xsrc/_sdcclib" is_file
+}
+@test 'more_src has _makebin' {
+    assert "$xsrc/_makebin" is_file
+}
+@test 'more_src has _packihx' {
+    assert "$xsrc/_packihx" is_file
+}
+@test 'more_src has _inform' {
+    assert "$xsrc/_inform" is_file
+}
+@test 'more_src has _inform6' {
+    assert "$xsrc/_inform6" is_file
+}
+@test 'more_src has _inform7' {
+    assert "$xsrc/_inform7" is_file
+}
+@test 'more_src has _glulx' {
+    assert "$xsrc/_glulx" is_file
+}
+@test 'more_src has _gargoyle' {
+    assert "$xsrc/_gargoyle" is_file
+}
+@test 'more_src has _scott' {
+    assert "$xsrc/_scott" is_file
+}
+@test 'more_src has _srec_cat' {
+    assert "$xsrc/_srec_cat" is_file
+}
+@test 'more_src has _srec_cmp' {
+    assert "$xsrc/_srec_cmp" is_file
+}
+@test 'more_src has _srec_info' {
+    assert "$xsrc/_srec_info" is_file
+}
+@test 'more_src has _as31' {
+    assert "$xsrc/_as31" is_file
+}
+@test 'more_src has _zxbasic' {
+    assert "$xsrc/_zxbasic" is_file
+}
+@test 'more_src has _z88dk' {
+    assert "$xsrc/_z88dk" is_file
+}
+@test 'more_src has _hex2bin' {
+    assert "$xsrc/_hex2bin" is_file
+}
+@test 'more_src has _visualboyadvance' {
+    assert "$xsrc/_visualboyadvance" is_file
+}
