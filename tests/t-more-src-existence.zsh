@@ -18174,3 +18174,81 @@
 @test 'more_src has _sstable2json' {
     assert "$xsrc/_sstable2json" is_file
 }
+@test 'more_src has _elasticsearch-syskeygen' {
+    assert "$xsrc/_elasticsearch-syskeygen" is_file
+}
+@test 'more_src has _elasticsearch-certutil' {
+    assert "$xsrc/_elasticsearch-certutil" is_file
+}
+@test 'more_src has _elasticsearch-certgen' {
+    assert "$xsrc/_elasticsearch-certgen" is_file
+}
+@test 'more_src has _elasticsearch-setup-passwords' {
+    assert "$xsrc/_elasticsearch-setup-passwords" is_file
+}
+@test 'more_src has _elasticsearch-translog' {
+    assert "$xsrc/_elasticsearch-translog" is_file
+}
+@test 'more_src has _elasticsearch-node' {
+    assert "$xsrc/_elasticsearch-node" is_file
+}
+@test 'more_src has _elasticsearch-service-tokens' {
+    assert "$xsrc/_elasticsearch-service-tokens" is_file
+}
+@test 'more_src has _opensearch-plugin' {
+    assert "$xsrc/_opensearch-plugin" is_file
+}
+@test 'more_src has _opensearch-keystore' {
+    assert "$xsrc/_opensearch-keystore" is_file
+}
+@test 'more_src has _opensearch-perf-tool' {
+    assert "$xsrc/_opensearch-perf-tool" is_file
+}
+@test 'more_src has _solr-zkcli' {
+    assert "$xsrc/_solr-zkcli" is_file
+}
+@test 'more_src has _zookeeper-server' {
+    assert "$xsrc/_zookeeper-server" is_file
+}
+@test 'more_src has _zkserver' {
+    assert "$xsrc/_zkserver" is_file
+}
+@test 'more_src has _clickhouse-keeper-converter' {
+    assert "$xsrc/_clickhouse-keeper-converter" is_file
+}
+@test 'more_src has _clickhouse-git-import' {
+    assert "$xsrc/_clickhouse-git-import" is_file
+}
+@test 'more_src has _clickhouse-library-bridge' {
+    assert "$xsrc/_clickhouse-library-bridge" is_file
+}
+@test 'more_src has _clickhouse-odbc-bridge' {
+    assert "$xsrc/_clickhouse-odbc-bridge" is_file
+}
+@test 'more_src has _yugabyte' {
+    assert "$xsrc/_yugabyte" is_file
+}
+@test 'more_src has _yugabytedb' {
+    assert "$xsrc/_yugabytedb" is_file
+}
+@test 'more_src has _crate' {
+    assert "$xsrc/_crate" is_file
+}
+@test 'more_src has _crate-admin' {
+    assert "$xsrc/_crate-admin" is_file
+}
+@test 'more_src has _tigris-cli' {
+    assert "$xsrc/_tigris-cli" is_file
+}
+@test 'more_src has _edgedb-server' {
+    assert "$xsrc/_edgedb-server" is_file
+}
+@test 'more_src has _rocksdb_ldb' {
+    assert "$xsrc/_rocksdb_ldb" is_file
+}
+@test 'more_src has _rocksdb_sst_dump' {
+    assert "$xsrc/_rocksdb_sst_dump" is_file
+}
+@test 'more_src has _rocksdb_repair' {
+    assert "$xsrc/_rocksdb_repair" is_file
+}
