@@ -19080,3 +19080,78 @@
 @test 'more_src has _gtklp-utils' {
     assert "$xsrc/_gtklp-utils" is_file
 }
+@test 'more_src has _jack_midisine' {
+    assert "$xsrc/_jack_midisine" is_file
+}
+@test 'more_src has _jack_monitor_client' {
+    assert "$xsrc/_jack_monitor_client" is_file
+}
+@test 'more_src has _jack_mp3rec' {
+    assert "$xsrc/_jack_mp3rec" is_file
+}
+@test 'more_src has _jack_server_control' {
+    assert "$xsrc/_jack_server_control" is_file
+}
+@test 'more_src has _jack_session_notify' {
+    assert "$xsrc/_jack_session_notify" is_file
+}
+@test 'more_src has _jack_simple_client' {
+    assert "$xsrc/_jack_simple_client" is_file
+}
+@test 'more_src has _jack_simple_session_client' {
+    assert "$xsrc/_jack_simple_session_client" is_file
+}
+@test 'more_src has _jack_thru' {
+    assert "$xsrc/_jack_thru" is_file
+}
+@test 'more_src has _jack_transport' {
+    assert "$xsrc/_jack_transport" is_file
+}
+@test 'more_src has _jackdmp' {
+    assert "$xsrc/_jackdmp" is_file
+}
+@test 'more_src has _jackctl' {
+    assert "$xsrc/_jackctl" is_file
+}
+@test 'more_src has _jackdbus' {
+    assert "$xsrc/_jackdbus" is_file
+}
+@test 'more_src has _jackrack' {
+    assert "$xsrc/_jackrack" is_file
+}
+@test 'more_src has _gmusicbrowser' {
+    assert "$xsrc/_gmusicbrowser" is_file
+}
+@test 'more_src has _amarok' {
+    assert "$xsrc/_amarok" is_file
+}
+@test 'more_src has _tomahawk' {
+    assert "$xsrc/_tomahawk" is_file
+}
+@test 'more_src has _asoundconf' {
+    assert "$xsrc/_asoundconf" is_file
+}
+@test 'more_src has _asoundconf-gtk' {
+    assert "$xsrc/_asoundconf-gtk" is_file
+}
+@test 'more_src has _mpd-mpris' {
+    assert "$xsrc/_mpd-mpris" is_file
+}
+@test 'more_src has _spop' {
+    assert "$xsrc/_spop" is_file
+}
+@test 'more_src has _aubionotes' {
+    assert "$xsrc/_aubionotes" is_file
+}
+@test 'more_src has _aubioonset' {
+    assert "$xsrc/_aubioonset" is_file
+}
+@test 'more_src has _aubiopitch' {
+    assert "$xsrc/_aubiopitch" is_file
+}
+@test 'more_src has _aubioquiet' {
+    assert "$xsrc/_aubioquiet" is_file
+}
+@test 'more_src has _aubiotrack' {
+    assert "$xsrc/_aubiotrack" is_file
+}
