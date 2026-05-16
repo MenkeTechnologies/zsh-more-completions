@@ -21108,3 +21108,78 @@
 @test 'more_src has _recoder' {
     assert "$xsrc/_recoder" is_file
 }
+@test 'more_src has _redata' {
+    assert "$xsrc/_redata" is_file
+}
+@test 'more_src has _refseqget' {
+    assert "$xsrc/_refseqget" is_file
+}
+@test 'more_src has _remap' {
+    assert "$xsrc/_remap" is_file
+}
+@test 'more_src has _restover' {
+    assert "$xsrc/_restover" is_file
+}
+@test 'more_src has _restrict' {
+    assert "$xsrc/_restrict" is_file
+}
+@test 'more_src has _revseq' {
+    assert "$xsrc/_revseq" is_file
+}
+@test 'more_src has _seealso' {
+    assert "$xsrc/_seealso" is_file
+}
+@test 'more_src has _seqcount' {
+    assert "$xsrc/_seqcount" is_file
+}
+@test 'more_src has _seqmatchall' {
+    assert "$xsrc/_seqmatchall" is_file
+}
+@test 'more_src has _seqretsplit' {
+    assert "$xsrc/_seqretsplit" is_file
+}
+@test 'more_src has _seqxref' {
+    assert "$xsrc/_seqxref" is_file
+}
+@test 'more_src has _seqxrefget' {
+    assert "$xsrc/_seqxrefget" is_file
+}
+@test 'more_src has _servertell' {
+    assert "$xsrc/_servertell" is_file
+}
+@test 'more_src has _shuffleseq' {
+    assert "$xsrc/_shuffleseq" is_file
+}
+@test 'more_src has _sigcleave' {
+    assert "$xsrc/_sigcleave" is_file
+}
+@test 'more_src has _silent' {
+    assert "$xsrc/_silent" is_file
+}
+@test 'more_src has _sirna' {
+    assert "$xsrc/_sirna" is_file
+}
+@test 'more_src has _sixpack' {
+    assert "$xsrc/_sixpack" is_file
+}
+@test 'more_src has _sizeseq' {
+    assert "$xsrc/_sizeseq" is_file
+}
+@test 'more_src has _skipredundant' {
+    assert "$xsrc/_skipredundant" is_file
+}
+@test 'more_src has _skipseq' {
+    assert "$xsrc/_skipseq" is_file
+}
+@test 'more_src has _splitter' {
+    assert "$xsrc/_splitter" is_file
+}
+@test 'more_src has _stretcher' {
+    assert "$xsrc/_stretcher" is_file
+}
+@test 'more_src has _stssearch' {
+    assert "$xsrc/_stssearch" is_file
+}
+@test 'more_src has _supermatcher' {
+    assert "$xsrc/_supermatcher" is_file
+}
