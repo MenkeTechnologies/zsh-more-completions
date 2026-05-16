@@ -16899,3 +16899,78 @@
 @test 'more_src has _mfsrsetgoal' {
     assert "$xsrc/_mfsrsetgoal" is_file
 }
+@test 'more_src has _lfs' {
+    assert "$xsrc/_lfs" is_file
+}
+@test 'more_src has _lctl' {
+    assert "$xsrc/_lctl" is_file
+}
+@test 'more_src has _mount.lustre' {
+    assert "$xsrc/_mount.lustre" is_file
+}
+@test 'more_src has _llverdev' {
+    assert "$xsrc/_llverdev" is_file
+}
+@test 'more_src has _mkfs.lustre' {
+    assert "$xsrc/_mkfs.lustre" is_file
+}
+@test 'more_src has _tunefs.lustre' {
+    assert "$xsrc/_tunefs.lustre" is_file
+}
+@test 'more_src has _pvfs2-config' {
+    assert "$xsrc/_pvfs2-config" is_file
+}
+@test 'more_src has _pvfs2-ls' {
+    assert "$xsrc/_pvfs2-ls" is_file
+}
+@test 'more_src has _pvfs2-cp' {
+    assert "$xsrc/_pvfs2-cp" is_file
+}
+@test 'more_src has _pvfs2-rm' {
+    assert "$xsrc/_pvfs2-rm" is_file
+}
+@test 'more_src has _pvfs2-mkdir' {
+    assert "$xsrc/_pvfs2-mkdir" is_file
+}
+@test 'more_src has _pvfs2-rmdir' {
+    assert "$xsrc/_pvfs2-rmdir" is_file
+}
+@test 'more_src has _pvfs2-genconfig' {
+    assert "$xsrc/_pvfs2-genconfig" is_file
+}
+@test 'more_src has _pvfs2-server' {
+    assert "$xsrc/_pvfs2-server" is_file
+}
+@test 'more_src has _beegfs-ctl' {
+    assert "$xsrc/_beegfs-ctl" is_file
+}
+@test 'more_src has _beegfs-fsck' {
+    assert "$xsrc/_beegfs-fsck" is_file
+}
+@test 'more_src has _beegfs-net' {
+    assert "$xsrc/_beegfs-net" is_file
+}
+@test 'more_src has _beegfs-check-servers' {
+    assert "$xsrc/_beegfs-check-servers" is_file
+}
+@test 'more_src has _beegfs-df' {
+    assert "$xsrc/_beegfs-df" is_file
+}
+@test 'more_src has _beegfs-meta' {
+    assert "$xsrc/_beegfs-meta" is_file
+}
+@test 'more_src has _beegfs-mgmtd' {
+    assert "$xsrc/_beegfs-mgmtd" is_file
+}
+@test 'more_src has _beegfs-mon' {
+    assert "$xsrc/_beegfs-mon" is_file
+}
+@test 'more_src has _beegfs-storage' {
+    assert "$xsrc/_beegfs-storage" is_file
+}
+@test 'more_src has _beegfs-helperd' {
+    assert "$xsrc/_beegfs-helperd" is_file
+}
+@test 'more_src has _beegfs-mon-tool' {
+    assert "$xsrc/_beegfs-mon-tool" is_file
+}
