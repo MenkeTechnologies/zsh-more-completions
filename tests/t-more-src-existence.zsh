@@ -20658,3 +20658,78 @@
 @test 'more_src has _esl-translate' {
     assert "$xsrc/_esl-translate" is_file
 }
+@test 'more_src has _cmscan' {
+    assert "$xsrc/_cmscan" is_file
+}
+@test 'more_src has _cmsearch' {
+    assert "$xsrc/_cmsearch" is_file
+}
+@test 'more_src has _cmalign' {
+    assert "$xsrc/_cmalign" is_file
+}
+@test 'more_src has _cmbuild' {
+    assert "$xsrc/_cmbuild" is_file
+}
+@test 'more_src has _cmcalibrate' {
+    assert "$xsrc/_cmcalibrate" is_file
+}
+@test 'more_src has _cmconvert' {
+    assert "$xsrc/_cmconvert" is_file
+}
+@test 'more_src has _cmemit' {
+    assert "$xsrc/_cmemit" is_file
+}
+@test 'more_src has _cmfetch' {
+    assert "$xsrc/_cmfetch" is_file
+}
+@test 'more_src has _cmpress' {
+    assert "$xsrc/_cmpress" is_file
+}
+@test 'more_src has _cmstat' {
+    assert "$xsrc/_cmstat" is_file
+}
+@test 'more_src has _RNAfold' {
+    assert "$xsrc/_RNAfold" is_file
+}
+@test 'more_src has _RNAplot' {
+    assert "$xsrc/_RNAplot" is_file
+}
+@test 'more_src has _RNAheat' {
+    assert "$xsrc/_RNAheat" is_file
+}
+@test 'more_src has _RNALfold' {
+    assert "$xsrc/_RNALfold" is_file
+}
+@test 'more_src has _rnaeval' {
+    assert "$xsrc/_rnaeval" is_file
+}
+@test 'more_src has _rnaalifold' {
+    assert "$xsrc/_rnaalifold" is_file
+}
+@test 'more_src has _rnacofold' {
+    assert "$xsrc/_rnacofold" is_file
+}
+@test 'more_src has _rnaduplex' {
+    assert "$xsrc/_rnaduplex" is_file
+}
+@test 'more_src has _rnainverse' {
+    assert "$xsrc/_rnainverse" is_file
+}
+@test 'more_src has _rnasubopt' {
+    assert "$xsrc/_rnasubopt" is_file
+}
+@test 'more_src has _rnaplfold' {
+    assert "$xsrc/_rnaplfold" is_file
+}
+@test 'more_src has _esearch' {
+    assert "$xsrc/_esearch" is_file
+}
+@test 'more_src has _efetch' {
+    assert "$xsrc/_efetch" is_file
+}
+@test 'more_src has _elink' {
+    assert "$xsrc/_elink" is_file
+}
+@test 'more_src has _seqret' {
+    assert "$xsrc/_seqret" is_file
+}
