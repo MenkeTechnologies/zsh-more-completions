@@ -19830,3 +19830,78 @@
 @test 'more_src has _sd-mux-ctrl' {
     assert "$xsrc/_sd-mux-ctrl" is_file
 }
+@test 'more_src has _fwupdoffline' {
+    assert "$xsrc/_fwupdoffline" is_file
+}
+@test 'more_src has _fwupd-refresh' {
+    assert "$xsrc/_fwupd-refresh" is_file
+}
+@test 'more_src has _firmware-test-suite' {
+    assert "$xsrc/_firmware-test-suite" is_file
+}
+@test 'more_src has _firmware-update' {
+    assert "$xsrc/_firmware-update" is_file
+}
+@test 'more_src has _flashprog' {
+    assert "$xsrc/_flashprog" is_file
+}
+@test 'more_src has _amdvbflash' {
+    assert "$xsrc/_amdvbflash" is_file
+}
+@test 'more_src has _atiflash' {
+    assert "$xsrc/_atiflash" is_file
+}
+@test 'more_src has _pcm-power' {
+    assert "$xsrc/_pcm-power" is_file
+}
+@test 'more_src has _pcm-pcie' {
+    assert "$xsrc/_pcm-pcie" is_file
+}
+@test 'more_src has _pcm-memory' {
+    assert "$xsrc/_pcm-memory" is_file
+}
+@test 'more_src has _pcm-numa' {
+    assert "$xsrc/_pcm-numa" is_file
+}
+@test 'more_src has _pcm-iio' {
+    assert "$xsrc/_pcm-iio" is_file
+}
+@test 'more_src has _pcm-tsx' {
+    assert "$xsrc/_pcm-tsx" is_file
+}
+@test 'more_src has _pcm-msr' {
+    assert "$xsrc/_pcm-msr" is_file
+}
+@test 'more_src has _pcm-raw' {
+    assert "$xsrc/_pcm-raw" is_file
+}
+@test 'more_src has _intel-cmt-cat' {
+    assert "$xsrc/_intel-cmt-cat" is_file
+}
+@test 'more_src has _nvidia-vbiosflash' {
+    assert "$xsrc/_nvidia-vbiosflash" is_file
+}
+@test 'more_src has _fwupd-cli' {
+    assert "$xsrc/_fwupd-cli" is_file
+}
+@test 'more_src has _fwupd-update' {
+    assert "$xsrc/_fwupd-update" is_file
+}
+@test 'more_src has _bios-update' {
+    assert "$xsrc/_bios-update" is_file
+}
+@test 'more_src has _uefi-update' {
+    assert "$xsrc/_uefi-update" is_file
+}
+@test 'more_src has _intel-fw-tools' {
+    assert "$xsrc/_intel-fw-tools" is_file
+}
+@test 'more_src has _flashrom-config' {
+    assert "$xsrc/_flashrom-config" is_file
+}
+@test 'more_src has _flashrom-stable' {
+    assert "$xsrc/_flashrom-stable" is_file
+}
+@test 'more_src has _flashutil' {
+    assert "$xsrc/_flashutil" is_file
+}
