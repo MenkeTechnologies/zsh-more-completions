@@ -19755,3 +19755,78 @@
 @test 'more_src has _sensors-applet' {
     assert "$xsrc/_sensors-applet" is_file
 }
+@test 'more_src has _uefitool' {
+    assert "$xsrc/_uefitool" is_file
+}
+@test 'more_src has _uefi-firmware-parser' {
+    assert "$xsrc/_uefi-firmware-parser" is_file
+}
+@test 'more_src has _grub-menulst2cfg' {
+    assert "$xsrc/_grub-menulst2cfg" is_file
+}
+@test 'more_src has _grub-ofpathname' {
+    assert "$xsrc/_grub-ofpathname" is_file
+}
+@test 'more_src has _grub-protect' {
+    assert "$xsrc/_grub-protect" is_file
+}
+@test 'more_src has _grub-sparc64-setup' {
+    assert "$xsrc/_grub-sparc64-setup" is_file
+}
+@test 'more_src has _syslinux-utils' {
+    assert "$xsrc/_syslinux-utils" is_file
+}
+@test 'more_src has _syslinux-common' {
+    assert "$xsrc/_syslinux-common" is_file
+}
+@test 'more_src has _pxelinux' {
+    assert "$xsrc/_pxelinux" is_file
+}
+@test 'more_src has _extlinux-update' {
+    assert "$xsrc/_extlinux-update" is_file
+}
+@test 'more_src has _isolinux' {
+    assert "$xsrc/_isolinux" is_file
+}
+@test 'more_src has _mshowfat' {
+    assert "$xsrc/_mshowfat" is_file
+}
+@test 'more_src has _unsquashfs4' {
+    assert "$xsrc/_unsquashfs4" is_file
+}
+@test 'more_src has _cramfsck' {
+    assert "$xsrc/_cramfsck" is_file
+}
+@test 'more_src has _mkcramfs' {
+    assert "$xsrc/_mkcramfs" is_file
+}
+@test 'more_src has _cramfsswap' {
+    assert "$xsrc/_cramfsswap" is_file
+}
+@test 'more_src has _edk2' {
+    assert "$xsrc/_edk2" is_file
+}
+@test 'more_src has _edk2-tools' {
+    assert "$xsrc/_edk2-tools" is_file
+}
+@test 'more_src has _edk2-build' {
+    assert "$xsrc/_edk2-build" is_file
+}
+@test 'more_src has _bootloader-grub2' {
+    assert "$xsrc/_bootloader-grub2" is_file
+}
+@test 'more_src has _bootloader-systemd' {
+    assert "$xsrc/_bootloader-systemd" is_file
+}
+@test 'more_src has _refind-mkrlconf' {
+    assert "$xsrc/_refind-mkrlconf" is_file
+}
+@test 'more_src has _elilo' {
+    assert "$xsrc/_elilo" is_file
+}
+@test 'more_src has _kexec-tools' {
+    assert "$xsrc/_kexec-tools" is_file
+}
+@test 'more_src has _sd-mux-ctrl' {
+    assert "$xsrc/_sd-mux-ctrl" is_file
+}
