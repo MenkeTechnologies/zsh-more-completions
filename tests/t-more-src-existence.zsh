@@ -17649,3 +17649,78 @@
 @test 'more_src has _xenballoond' {
     assert "$xsrc/_xenballoond" is_file
 }
+@test 'more_src has _xenbaked' {
+    assert "$xsrc/_xenbaked" is_file
+}
+@test 'more_src has _xenwatch' {
+    assert "$xsrc/_xenwatch" is_file
+}
+@test 'more_src has _xenhypfs' {
+    assert "$xsrc/_xenhypfs" is_file
+}
+@test 'more_src has _xen-livepatch' {
+    assert "$xsrc/_xen-livepatch" is_file
+}
+@test 'more_src has _xenpvnetboot' {
+    assert "$xsrc/_xenpvnetboot" is_file
+}
+@test 'more_src has _xenmon' {
+    assert "$xsrc/_xenmon" is_file
+}
+@test 'more_src has _xen-pciback' {
+    assert "$xsrc/_xen-pciback" is_file
+}
+@test 'more_src has _xen-watchdogd' {
+    assert "$xsrc/_xen-watchdogd" is_file
+}
+@test 'more_src has _xenconsoled' {
+    assert "$xsrc/_xenconsoled" is_file
+}
+@test 'more_src has _xendomains' {
+    assert "$xsrc/_xendomains" is_file
+}
+@test 'more_src has _jailer' {
+    assert "$xsrc/_jailer" is_file
+}
+@test 'more_src has _kata-monitor' {
+    assert "$xsrc/_kata-monitor" is_file
+}
+@test 'more_src has _kata-collect-data' {
+    assert "$xsrc/_kata-collect-data" is_file
+}
+@test 'more_src has _containerd-shim-kata-v2' {
+    assert "$xsrc/_containerd-shim-kata-v2" is_file
+}
+@test 'more_src has _ctr-remote' {
+    assert "$xsrc/_ctr-remote" is_file
+}
+@test 'more_src has _ctr-enc' {
+    assert "$xsrc/_ctr-enc" is_file
+}
+@test 'more_src has _ctd-decoder' {
+    assert "$xsrc/_ctd-decoder" is_file
+}
+@test 'more_src has _conmon-rs' {
+    assert "$xsrc/_conmon-rs" is_file
+}
+@test 'more_src has _sif' {
+    assert "$xsrc/_sif" is_file
+}
+@test 'more_src has _sif-info' {
+    assert "$xsrc/_sif-info" is_file
+}
+@test 'more_src has _ch-build' {
+    assert "$xsrc/_ch-build" is_file
+}
+@test 'more_src has _ch-image' {
+    assert "$xsrc/_ch-image" is_file
+}
+@test 'more_src has _ch-mount' {
+    assert "$xsrc/_ch-mount" is_file
+}
+@test 'more_src has _shifter' {
+    assert "$xsrc/_shifter" is_file
+}
+@test 'more_src has _shifterimg' {
+    assert "$xsrc/_shifterimg" is_file
+}
