@@ -17124,3 +17124,78 @@
 @test 'more_src has _glance-manage' {
     assert "$xsrc/_glance-manage" is_file
 }
+@test 'more_src has _cinder-api' {
+    assert "$xsrc/_cinder-api" is_file
+}
+@test 'more_src has _cinder-backup' {
+    assert "$xsrc/_cinder-backup" is_file
+}
+@test 'more_src has _cinder-scheduler' {
+    assert "$xsrc/_cinder-scheduler" is_file
+}
+@test 'more_src has _cinder-volume' {
+    assert "$xsrc/_cinder-volume" is_file
+}
+@test 'more_src has _cinder-manage' {
+    assert "$xsrc/_cinder-manage" is_file
+}
+@test 'more_src has _cinder-rootwrap' {
+    assert "$xsrc/_cinder-rootwrap" is_file
+}
+@test 'more_src has _cinder-status' {
+    assert "$xsrc/_cinder-status" is_file
+}
+@test 'more_src has _cinder-rtstool' {
+    assert "$xsrc/_cinder-rtstool" is_file
+}
+@test 'more_src has _keystone-manage' {
+    assert "$xsrc/_keystone-manage" is_file
+}
+@test 'more_src has _keystone-status' {
+    assert "$xsrc/_keystone-status" is_file
+}
+@test 'more_src has _keystone-wsgi-admin' {
+    assert "$xsrc/_keystone-wsgi-admin" is_file
+}
+@test 'more_src has _keystone-wsgi-public' {
+    assert "$xsrc/_keystone-wsgi-public" is_file
+}
+@test 'more_src has _heat-api' {
+    assert "$xsrc/_heat-api" is_file
+}
+@test 'more_src has _heat-api-cfn' {
+    assert "$xsrc/_heat-api-cfn" is_file
+}
+@test 'more_src has _heat-api-cloudwatch' {
+    assert "$xsrc/_heat-api-cloudwatch" is_file
+}
+@test 'more_src has _heat-engine' {
+    assert "$xsrc/_heat-engine" is_file
+}
+@test 'more_src has _heat-manage' {
+    assert "$xsrc/_heat-manage" is_file
+}
+@test 'more_src has _heat-status' {
+    assert "$xsrc/_heat-status" is_file
+}
+@test 'more_src has _heat-db-setup' {
+    assert "$xsrc/_heat-db-setup" is_file
+}
+@test 'more_src has _ironic-api' {
+    assert "$xsrc/_ironic-api" is_file
+}
+@test 'more_src has _ironic-conductor' {
+    assert "$xsrc/_ironic-conductor" is_file
+}
+@test 'more_src has _ironic-dbsync' {
+    assert "$xsrc/_ironic-dbsync" is_file
+}
+@test 'more_src has _ironic-rootwrap' {
+    assert "$xsrc/_ironic-rootwrap" is_file
+}
+@test 'more_src has _ironic-status' {
+    assert "$xsrc/_ironic-status" is_file
+}
+@test 'more_src has _octavia-api' {
+    assert "$xsrc/_octavia-api" is_file
+}
