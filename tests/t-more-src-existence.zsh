@@ -20883,3 +20883,78 @@
 @test 'more_src has _epestfind' {
     assert "$xsrc/_epestfind" is_file
 }
+@test 'more_src has _eprimer3' {
+    assert "$xsrc/_eprimer3" is_file
+}
+@test 'more_src has _eprimer32' {
+    assert "$xsrc/_eprimer32" is_file
+}
+@test 'more_src has _equicktandem' {
+    assert "$xsrc/_equicktandem" is_file
+}
+@test 'more_src has _est2genome' {
+    assert "$xsrc/_est2genome" is_file
+}
+@test 'more_src has _etandem' {
+    assert "$xsrc/_etandem" is_file
+}
+@test 'more_src has _extractalign' {
+    assert "$xsrc/_extractalign" is_file
+}
+@test 'more_src has _extractfeat' {
+    assert "$xsrc/_extractfeat" is_file
+}
+@test 'more_src has _extractseq' {
+    assert "$xsrc/_extractseq" is_file
+}
+@test 'more_src has _featcopy' {
+    assert "$xsrc/_featcopy" is_file
+}
+@test 'more_src has _featmerge' {
+    assert "$xsrc/_featmerge" is_file
+}
+@test 'more_src has _featreport' {
+    assert "$xsrc/_featreport" is_file
+}
+@test 'more_src has _findkm' {
+    assert "$xsrc/_findkm" is_file
+}
+@test 'more_src has _freak' {
+    assert "$xsrc/_freak" is_file
+}
+@test 'more_src has _fuzznuc' {
+    assert "$xsrc/_fuzznuc" is_file
+}
+@test 'more_src has _fuzzpro' {
+    assert "$xsrc/_fuzzpro" is_file
+}
+@test 'more_src has _fuzztran' {
+    assert "$xsrc/_fuzztran" is_file
+}
+@test 'more_src has _garnier' {
+    assert "$xsrc/_garnier" is_file
+}
+@test 'more_src has _geecee' {
+    assert "$xsrc/_geecee" is_file
+}
+@test 'more_src has _getorf' {
+    assert "$xsrc/_getorf" is_file
+}
+@test 'more_src has _godef' {
+    assert "$xsrc/_godef" is_file
+}
+@test 'more_src has _goname' {
+    assert "$xsrc/_goname" is_file
+}
+@test 'more_src has _helixturnhelix' {
+    assert "$xsrc/_helixturnhelix" is_file
+}
+@test 'more_src has _hmoment' {
+    assert "$xsrc/_hmoment" is_file
+}
+@test 'more_src has _iep' {
+    assert "$xsrc/_iep" is_file
+}
+@test 'more_src has _infoalign' {
+    assert "$xsrc/_infoalign" is_file
+}
