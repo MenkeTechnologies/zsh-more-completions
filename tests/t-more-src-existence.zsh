@@ -18855,3 +18855,78 @@
 @test 'more_src has _lxqt-wallet' {
     assert "$xsrc/_lxqt-wallet" is_file
 }
+@test 'more_src has _cinnamon-settings-daemon' {
+    assert "$xsrc/_cinnamon-settings-daemon" is_file
+}
+@test 'more_src has _cinnamon-killer-daemon' {
+    assert "$xsrc/_cinnamon-killer-daemon" is_file
+}
+@test 'more_src has _cinnamon-menu-editor' {
+    assert "$xsrc/_cinnamon-menu-editor" is_file
+}
+@test 'more_src has _cinnamon-screensaver-lock-dialog' {
+    assert "$xsrc/_cinnamon-screensaver-lock-dialog" is_file
+}
+@test 'more_src has _nemo-autorun-software' {
+    assert "$xsrc/_nemo-autorun-software" is_file
+}
+@test 'more_src has _nemo-preview' {
+    assert "$xsrc/_nemo-preview" is_file
+}
+@test 'more_src has _budgie-desktop' {
+    assert "$xsrc/_budgie-desktop" is_file
+}
+@test 'more_src has _budgie-wm' {
+    assert "$xsrc/_budgie-wm" is_file
+}
+@test 'more_src has _budgie-rundialog' {
+    assert "$xsrc/_budgie-rundialog" is_file
+}
+@test 'more_src has _wingpanel' {
+    assert "$xsrc/_wingpanel" is_file
+}
+@test 'more_src has _pantheon-files' {
+    assert "$xsrc/_pantheon-files" is_file
+}
+@test 'more_src has _pantheon-terminal' {
+    assert "$xsrc/_pantheon-terminal" is_file
+}
+@test 'more_src has _pantheon-photos' {
+    assert "$xsrc/_pantheon-photos" is_file
+}
+@test 'more_src has _enlightenment' {
+    assert "$xsrc/_enlightenment" is_file
+}
+@test 'more_src has _enlightenment_start' {
+    assert "$xsrc/_enlightenment_start" is_file
+}
+@test 'more_src has _enlightenment_filemanager' {
+    assert "$xsrc/_enlightenment_filemanager" is_file
+}
+@test 'more_src has _enlightenment_imc' {
+    assert "$xsrc/_enlightenment_imc" is_file
+}
+@test 'more_src has _enlightenment_open' {
+    assert "$xsrc/_enlightenment_open" is_file
+}
+@test 'more_src has _enlightenment_remote' {
+    assert "$xsrc/_enlightenment_remote" is_file
+}
+@test 'more_src has _enlightenment_thumb' {
+    assert "$xsrc/_enlightenment_thumb" is_file
+}
+@test 'more_src has _enlightenment_backlight' {
+    assert "$xsrc/_enlightenment_backlight" is_file
+}
+@test 'more_src has _edje_decc' {
+    assert "$xsrc/_edje_decc" is_file
+}
+@test 'more_src has _edje_player' {
+    assert "$xsrc/_edje_player" is_file
+}
+@test 'more_src has _edje_recc' {
+    assert "$xsrc/_edje_recc" is_file
+}
+@test 'more_src has _entrance' {
+    assert "$xsrc/_entrance" is_file
+}
