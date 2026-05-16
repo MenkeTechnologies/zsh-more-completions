@@ -16824,3 +16824,78 @@
 @test 'more_src has _ceph-clsinfo' {
     assert "$xsrc/_ceph-clsinfo" is_file
 }
+@test 'more_src has _glusterd' {
+    assert "$xsrc/_glusterd" is_file
+}
+@test 'more_src has _gfid2path' {
+    assert "$xsrc/_gfid2path" is_file
+}
+@test 'more_src has _glfsheal' {
+    assert "$xsrc/_glfsheal" is_file
+}
+@test 'more_src has _mfschunkserver' {
+    assert "$xsrc/_mfschunkserver" is_file
+}
+@test 'more_src has _mfsmaster' {
+    assert "$xsrc/_mfsmaster" is_file
+}
+@test 'more_src has _mfsmetalogger' {
+    assert "$xsrc/_mfsmetalogger" is_file
+}
+@test 'more_src has _mfsmount' {
+    assert "$xsrc/_mfsmount" is_file
+}
+@test 'more_src has _mfscgiserv' {
+    assert "$xsrc/_mfscgiserv" is_file
+}
+@test 'more_src has _mfsappendchunks' {
+    assert "$xsrc/_mfsappendchunks" is_file
+}
+@test 'more_src has _mfschunkstat' {
+    assert "$xsrc/_mfschunkstat" is_file
+}
+@test 'more_src has _mfsdirinfo' {
+    assert "$xsrc/_mfsdirinfo" is_file
+}
+@test 'more_src has _mfsfileinfo' {
+    assert "$xsrc/_mfsfileinfo" is_file
+}
+@test 'more_src has _mfsfilerepair' {
+    assert "$xsrc/_mfsfilerepair" is_file
+}
+@test 'more_src has _mfsgetgoal' {
+    assert "$xsrc/_mfsgetgoal" is_file
+}
+@test 'more_src has _mfssetgoal' {
+    assert "$xsrc/_mfssetgoal" is_file
+}
+@test 'more_src has _mfsgettrashtime' {
+    assert "$xsrc/_mfsgettrashtime" is_file
+}
+@test 'more_src has _mfssettrashtime' {
+    assert "$xsrc/_mfssettrashtime" is_file
+}
+@test 'more_src has _mfsseteattr' {
+    assert "$xsrc/_mfsseteattr" is_file
+}
+@test 'more_src has _mfsgeteattr' {
+    assert "$xsrc/_mfsgeteattr" is_file
+}
+@test 'more_src has _mfsdeleattr' {
+    assert "$xsrc/_mfsdeleattr" is_file
+}
+@test 'more_src has _mfsmetadump' {
+    assert "$xsrc/_mfsmetadump" is_file
+}
+@test 'more_src has _mfsmetarestore' {
+    assert "$xsrc/_mfsmetarestore" is_file
+}
+@test 'more_src has _mfsmakesnapshot' {
+    assert "$xsrc/_mfsmakesnapshot" is_file
+}
+@test 'more_src has _mfsrgetgoal' {
+    assert "$xsrc/_mfsrgetgoal" is_file
+}
+@test 'more_src has _mfsrsetgoal' {
+    assert "$xsrc/_mfsrsetgoal" is_file
+}
