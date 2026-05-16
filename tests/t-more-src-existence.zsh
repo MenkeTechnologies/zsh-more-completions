@@ -20058,3 +20058,78 @@
 @test 'more_src has _impacket-ping6' {
     assert "$xsrc/_impacket-ping6" is_file
 }
+@test 'more_src has _impacket-sniffer' {
+    assert "$xsrc/_impacket-sniffer" is_file
+}
+@test 'more_src has _impacket-split' {
+    assert "$xsrc/_impacket-split" is_file
+}
+@test 'more_src has _impacket-ticketconverter' {
+    assert "$xsrc/_impacket-ticketconverter" is_file
+}
+@test 'more_src has _impacket-ticketer' {
+    assert "$xsrc/_impacket-ticketer" is_file
+}
+@test 'more_src has _impacket-tstool' {
+    assert "$xsrc/_impacket-tstool" is_file
+}
+@test 'more_src has _impacket-wmipersist' {
+    assert "$xsrc/_impacket-wmipersist" is_file
+}
+@test 'more_src has _impacket-rdp_check' {
+    assert "$xsrc/_impacket-rdp_check" is_file
+}
+@test 'more_src has _impacket-machine_role' {
+    assert "$xsrc/_impacket-machine_role" is_file
+}
+@test 'more_src has _stunnel5' {
+    assert "$xsrc/_stunnel5" is_file
+}
+@test 'more_src has _oqs-openssl' {
+    assert "$xsrc/_oqs-openssl" is_file
+}
+@test 'more_src has _wolfssh' {
+    assert "$xsrc/_wolfssh" is_file
+}
+@test 'more_src has _wolfsshd' {
+    assert "$xsrc/_wolfsshd" is_file
+}
+@test 'more_src has _openct' {
+    assert "$xsrc/_openct" is_file
+}
+@test 'more_src has _openct-tool' {
+    assert "$xsrc/_openct-tool" is_file
+}
+@test 'more_src has _cardpeek' {
+    assert "$xsrc/_cardpeek" is_file
+}
+@test 'more_src has _pcsc-tools' {
+    assert "$xsrc/_pcsc-tools" is_file
+}
+@test 'more_src has _pcsc-spy' {
+    assert "$xsrc/_pcsc-spy" is_file
+}
+@test 'more_src has _engine-pkcs11' {
+    assert "$xsrc/_engine-pkcs11" is_file
+}
+@test 'more_src has _libcacard-tool' {
+    assert "$xsrc/_libcacard-tool" is_file
+}
+@test 'more_src has _yubikey-personalization-gui' {
+    assert "$xsrc/_yubikey-personalization-gui" is_file
+}
+@test 'more_src has _evil-winrm-py3' {
+    assert "$xsrc/_evil-winrm-py3" is_file
+}
+@test 'more_src has _bloodhound-py' {
+    assert "$xsrc/_bloodhound-py" is_file
+}
+@test 'more_src has _nbtscan-unixwiz' {
+    assert "$xsrc/_nbtscan-unixwiz" is_file
+}
+@test 'more_src has _libfido2' {
+    assert "$xsrc/_libfido2" is_file
+}
+@test 'more_src has _impacket-secretsdump-py' {
+    assert "$xsrc/_impacket-secretsdump-py" is_file
+}
