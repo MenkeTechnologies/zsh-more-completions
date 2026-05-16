@@ -18780,3 +18780,78 @@
 @test 'more_src has _caja-rabbitvcs' {
     assert "$xsrc/_caja-rabbitvcs" is_file
 }
+@test 'more_src has _lxqt-config' {
+    assert "$xsrc/_lxqt-config" is_file
+}
+@test 'more_src has _lxqt-runner' {
+    assert "$xsrc/_lxqt-runner" is_file
+}
+@test 'more_src has _lxqt-leave' {
+    assert "$xsrc/_lxqt-leave" is_file
+}
+@test 'more_src has _lxqt-config-appearance' {
+    assert "$xsrc/_lxqt-config-appearance" is_file
+}
+@test 'more_src has _lxqt-config-globalkeyshortcuts' {
+    assert "$xsrc/_lxqt-config-globalkeyshortcuts" is_file
+}
+@test 'more_src has _lxqt-config-input' {
+    assert "$xsrc/_lxqt-config-input" is_file
+}
+@test 'more_src has _lxqt-config-locale' {
+    assert "$xsrc/_lxqt-config-locale" is_file
+}
+@test 'more_src has _lxqt-config-monitor' {
+    assert "$xsrc/_lxqt-config-monitor" is_file
+}
+@test 'more_src has _lxqt-policykit-agent' {
+    assert "$xsrc/_lxqt-policykit-agent" is_file
+}
+@test 'more_src has _lxqt-powermanagement' {
+    assert "$xsrc/_lxqt-powermanagement" is_file
+}
+@test 'more_src has _lxqt-archiver' {
+    assert "$xsrc/_lxqt-archiver" is_file
+}
+@test 'more_src has _lxqt-about' {
+    assert "$xsrc/_lxqt-about" is_file
+}
+@test 'more_src has _lxqt-config-brightness' {
+    assert "$xsrc/_lxqt-config-brightness" is_file
+}
+@test 'more_src has _lxqt-config-cursor' {
+    assert "$xsrc/_lxqt-config-cursor" is_file
+}
+@test 'more_src has _lxqt-config-file-associations' {
+    assert "$xsrc/_lxqt-config-file-associations" is_file
+}
+@test 'more_src has _lxqt-config-notificationd' {
+    assert "$xsrc/_lxqt-config-notificationd" is_file
+}
+@test 'more_src has _lxqt-config-randr' {
+    assert "$xsrc/_lxqt-config-randr" is_file
+}
+@test 'more_src has _lxqt-confupdate' {
+    assert "$xsrc/_lxqt-confupdate" is_file
+}
+@test 'more_src has _lxqt-lockscreen' {
+    assert "$xsrc/_lxqt-lockscreen" is_file
+}
+@test 'more_src has _lxqt-notificationd' {
+    assert "$xsrc/_lxqt-notificationd" is_file
+}
+@test 'more_src has _lxqt-openssh-askpass' {
+    assert "$xsrc/_lxqt-openssh-askpass" is_file
+}
+@test 'more_src has _lxqt-pcmanfm' {
+    assert "$xsrc/_lxqt-pcmanfm" is_file
+}
+@test 'more_src has _lxqt-sudo' {
+    assert "$xsrc/_lxqt-sudo" is_file
+}
+@test 'more_src has _lxqt-trayman' {
+    assert "$xsrc/_lxqt-trayman" is_file
+}
+@test 'more_src has _lxqt-wallet' {
+    assert "$xsrc/_lxqt-wallet" is_file
+}
