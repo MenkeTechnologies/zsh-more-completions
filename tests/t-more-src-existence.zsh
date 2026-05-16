@@ -17799,3 +17799,78 @@
 @test 'more_src has _rancher-server' {
     assert "$xsrc/_rancher-server" is_file
 }
+@test 'more_src has _cilium-agent' {
+    assert "$xsrc/_cilium-agent" is_file
+}
+@test 'more_src has _cilium-operator' {
+    assert "$xsrc/_cilium-operator" is_file
+}
+@test 'more_src has _cilium-bugtool' {
+    assert "$xsrc/_cilium-bugtool" is_file
+}
+@test 'more_src has _cilium-health' {
+    assert "$xsrc/_cilium-health" is_file
+}
+@test 'more_src has _hubble-relay' {
+    assert "$xsrc/_hubble-relay" is_file
+}
+@test 'more_src has _calico-node' {
+    assert "$xsrc/_calico-node" is_file
+}
+@test 'more_src has _typha' {
+    assert "$xsrc/_typha" is_file
+}
+@test 'more_src has _weave-net' {
+    assert "$xsrc/_weave-net" is_file
+}
+@test 'more_src has _weave-npc' {
+    assert "$xsrc/_weave-npc" is_file
+}
+@test 'more_src has _pilot-agent' {
+    assert "$xsrc/_pilot-agent" is_file
+}
+@test 'more_src has _pilot-discovery' {
+    assert "$xsrc/_pilot-discovery" is_file
+}
+@test 'more_src has _istiod' {
+    assert "$xsrc/_istiod" is_file
+}
+@test 'more_src has _galley' {
+    assert "$xsrc/_galley" is_file
+}
+@test 'more_src has _sidecar-injector' {
+    assert "$xsrc/_sidecar-injector" is_file
+}
+@test 'more_src has _citadel' {
+    assert "$xsrc/_citadel" is_file
+}
+@test 'more_src has _linkerd-proxy' {
+    assert "$xsrc/_linkerd-proxy" is_file
+}
+@test 'more_src has _linkerd-proxy-init' {
+    assert "$xsrc/_linkerd-proxy-init" is_file
+}
+@test 'more_src has _linkerd-destination' {
+    assert "$xsrc/_linkerd-destination" is_file
+}
+@test 'more_src has _linkerd-identity' {
+    assert "$xsrc/_linkerd-identity" is_file
+}
+@test 'more_src has _linkerd-policy' {
+    assert "$xsrc/_linkerd-policy" is_file
+}
+@test 'more_src has _consul-replicate' {
+    assert "$xsrc/_consul-replicate" is_file
+}
+@test 'more_src has _consul-snapshot' {
+    assert "$xsrc/_consul-snapshot" is_file
+}
+@test 'more_src has _vault-agent' {
+    assert "$xsrc/_vault-agent" is_file
+}
+@test 'more_src has _vault-csi-provider' {
+    assert "$xsrc/_vault-csi-provider" is_file
+}
+@test 'more_src has _kn-quickstart' {
+    assert "$xsrc/_kn-quickstart" is_file
+}
