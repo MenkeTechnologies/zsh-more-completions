@@ -16449,3 +16449,78 @@
 @test 'more_src has _condor_vacate_job' {
     assert "$xsrc/_condor_vacate_job" is_file
 }
+@test 'more_src has _oshcc' {
+    assert "$xsrc/_oshcc" is_file
+}
+@test 'more_src has _oshfort' {
+    assert "$xsrc/_oshfort" is_file
+}
+@test 'more_src has _gasnetrun_mpi' {
+    assert "$xsrc/_gasnetrun_mpi" is_file
+}
+@test 'more_src has _gasnetrun_smp' {
+    assert "$xsrc/_gasnetrun_smp" is_file
+}
+@test 'more_src has _gasnetrun_ibv' {
+    assert "$xsrc/_gasnetrun_ibv" is_file
+}
+@test 'more_src has _upcc' {
+    assert "$xsrc/_upcc" is_file
+}
+@test 'more_src has _upcrun' {
+    assert "$xsrc/_upcrun" is_file
+}
+@test 'more_src has _ompi-ps' {
+    assert "$xsrc/_ompi-ps" is_file
+}
+@test 'more_src has _ompi-top' {
+    assert "$xsrc/_ompi-top" is_file
+}
+@test 'more_src has _ompi-checkpoint' {
+    assert "$xsrc/_ompi-checkpoint" is_file
+}
+@test 'more_src has _ompi-restart' {
+    assert "$xsrc/_ompi-restart" is_file
+}
+@test 'more_src has _ompi-iof' {
+    assert "$xsrc/_ompi-iof" is_file
+}
+@test 'more_src has _prte' {
+    assert "$xsrc/_prte" is_file
+}
+@test 'more_src has _pterm' {
+    assert "$xsrc/_pterm" is_file
+}
+@test 'more_src has _hydra_pmi_proxy' {
+    assert "$xsrc/_hydra_pmi_proxy" is_file
+}
+@test 'more_src has _hydra_persist' {
+    assert "$xsrc/_hydra_persist" is_file
+}
+@test 'more_src has _mpdcleanup' {
+    assert "$xsrc/_mpdcleanup" is_file
+}
+@test 'more_src has _mpdtrace' {
+    assert "$xsrc/_mpdtrace" is_file
+}
+@test 'more_src has _mpdringtest' {
+    assert "$xsrc/_mpdringtest" is_file
+}
+@test 'more_src has _mpdlistjobs' {
+    assert "$xsrc/_mpdlistjobs" is_file
+}
+@test 'more_src has _mpdkilljob' {
+    assert "$xsrc/_mpdkilljob" is_file
+}
+@test 'more_src has _mpdsigjob' {
+    assert "$xsrc/_mpdsigjob" is_file
+}
+@test 'more_src has _fi_info' {
+    assert "$xsrc/_fi_info" is_file
+}
+@test 'more_src has _fi_pingpong' {
+    assert "$xsrc/_fi_pingpong" is_file
+}
+@test 'more_src has _fi_strerror' {
+    assert "$xsrc/_fi_strerror" is_file
+}
