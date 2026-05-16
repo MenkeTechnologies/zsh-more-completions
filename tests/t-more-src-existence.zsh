@@ -19380,3 +19380,78 @@
 @test 'more_src has _pulp-admin' {
     assert "$xsrc/_pulp-admin" is_file
 }
+@test 'more_src has _maas' {
+    assert "$xsrc/_maas" is_file
+}
+@test 'more_src has _maas-cli' {
+    assert "$xsrc/_maas-cli" is_file
+}
+@test 'more_src has _maas-rack-controller' {
+    assert "$xsrc/_maas-rack-controller" is_file
+}
+@test 'more_src has _maas-region-controller' {
+    assert "$xsrc/_maas-region-controller" is_file
+}
+@test 'more_src has _maas-syslog' {
+    assert "$xsrc/_maas-syslog" is_file
+}
+@test 'more_src has _maas-test-db' {
+    assert "$xsrc/_maas-test-db" is_file
+}
+@test 'more_src has _cloud-config-init' {
+    assert "$xsrc/_cloud-config-init" is_file
+}
+@test 'more_src has _cloud-init-modules' {
+    assert "$xsrc/_cloud-init-modules" is_file
+}
+@test 'more_src has _cloud-final' {
+    assert "$xsrc/_cloud-final" is_file
+}
+@test 'more_src has _cloud-image-utils' {
+    assert "$xsrc/_cloud-image-utils" is_file
+}
+@test 'more_src has _tang' {
+    assert "$xsrc/_tang" is_file
+}
+@test 'more_src has _clevis-encrypt-http' {
+    assert "$xsrc/_clevis-encrypt-http" is_file
+}
+@test 'more_src has _clevis-luks-regen' {
+    assert "$xsrc/_clevis-luks-regen" is_file
+}
+@test 'more_src has _clevis-luks-unlock' {
+    assert "$xsrc/_clevis-luks-unlock" is_file
+}
+@test 'more_src has _dracut-install' {
+    assert "$xsrc/_dracut-install" is_file
+}
+@test 'more_src has _semodule_deps' {
+    assert "$xsrc/_semodule_deps" is_file
+}
+@test 'more_src has _selinuxexeccon' {
+    assert "$xsrc/_selinuxexeccon" is_file
+}
+@test 'more_src has _ssh-host-config' {
+    assert "$xsrc/_ssh-host-config" is_file
+}
+@test 'more_src has _libvirt-guests' {
+    assert "$xsrc/_libvirt-guests" is_file
+}
+@test 'more_src has _xenpaging' {
+    assert "$xsrc/_xenpaging" is_file
+}
+@test 'more_src has _jailkit' {
+    assert "$xsrc/_jailkit" is_file
+}
+@test 'more_src has _ronin' {
+    assert "$xsrc/_ronin" is_file
+}
+@test 'more_src has _dracut-uki' {
+    assert "$xsrc/_dracut-uki" is_file
+}
+@test 'more_src has _dracut-pre-pivot' {
+    assert "$xsrc/_dracut-pre-pivot" is_file
+}
+@test 'more_src has _dracut-ng' {
+    assert "$xsrc/_dracut-ng" is_file
+}
