@@ -18327,3 +18327,81 @@
 @test 'more_src has _vlselect' {
     assert "$xsrc/_vlselect" is_file
 }
+@test 'more_src has _dagster-daemon' {
+    assert "$xsrc/_dagster-daemon" is_file
+}
+@test 'more_src has _dagster-webserver' {
+    assert "$xsrc/_dagster-webserver" is_file
+}
+@test 'more_src has _dagit' {
+    assert "$xsrc/_dagit" is_file
+}
+@test 'more_src has _argo-server' {
+    assert "$xsrc/_argo-server" is_file
+}
+@test 'more_src has _argo-cd-image-updater' {
+    assert "$xsrc/_argo-cd-image-updater" is_file
+}
+@test 'more_src has _argo-rollouts' {
+    assert "$xsrc/_argo-rollouts" is_file
+}
+@test 'more_src has _tekton-cli' {
+    assert "$xsrc/_tekton-cli" is_file
+}
+@test 'more_src has _tektoncd-cli' {
+    assert "$xsrc/_tektoncd-cli" is_file
+}
+@test 'more_src has _jenkinsfile-runner' {
+    assert "$xsrc/_jenkinsfile-runner" is_file
+}
+@test 'more_src has _kfp-cli' {
+    assert "$xsrc/_kfp-cli" is_file
+}
+@test 'more_src has _karpor' {
+    assert "$xsrc/_karpor" is_file
+}
+@test 'more_src has _karporctl' {
+    assert "$xsrc/_karporctl" is_file
+}
+@test 'more_src has _gpu-feature-discovery' {
+    assert "$xsrc/_gpu-feature-discovery" is_file
+}
+@test 'more_src has _k8s-device-plugin' {
+    assert "$xsrc/_k8s-device-plugin" is_file
+}
+@test 'more_src has _nvidia-device-plugin' {
+    assert "$xsrc/_nvidia-device-plugin" is_file
+}
+@test 'more_src has _amd-device-plugin' {
+    assert "$xsrc/_amd-device-plugin" is_file
+}
+@test 'more_src has _sriov-cni' {
+    assert "$xsrc/_sriov-cni" is_file
+}
+@test 'more_src has _multus-cni' {
+    assert "$xsrc/_multus-cni" is_file
+}
+@test 'more_src has _multus-daemon' {
+    assert "$xsrc/_multus-daemon" is_file
+}
+@test 'more_src has _falco-exporter' {
+    assert "$xsrc/_falco-exporter" is_file
+}
+@test 'more_src has _falco-driver-loader' {
+    assert "$xsrc/_falco-driver-loader" is_file
+}
+@test 'more_src has _snort2' {
+    assert "$xsrc/_snort2" is_file
+}
+@test 'more_src has _snort_inline' {
+    assert "$xsrc/_snort_inline" is_file
+}
+@test 'more_src has _suricatactl' {
+    assert "$xsrc/_suricatactl" is_file
+}
+@test 'more_src has _suricatasc' {
+    assert "$xsrc/_suricatasc" is_file
+}
+@test 'more_src has _weave-scope' {
+    assert "$xsrc/_weave-scope" is_file
+}
