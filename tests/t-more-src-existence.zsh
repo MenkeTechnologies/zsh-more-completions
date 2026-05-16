@@ -19230,3 +19230,78 @@
 @test 'more_src has _linuxsampler' {
     assert "$xsrc/_linuxsampler" is_file
 }
+@test 'more_src has _darktable-cltest' {
+    assert "$xsrc/_darktable-cltest" is_file
+}
+@test 'more_src has _darktable-chart' {
+    assert "$xsrc/_darktable-chart" is_file
+}
+@test 'more_src has _darktable-curve-tool' {
+    assert "$xsrc/_darktable-curve-tool" is_file
+}
+@test 'more_src has _darktable-rs-identify' {
+    assert "$xsrc/_darktable-rs-identify" is_file
+}
+@test 'more_src has _darktable-generate-cache' {
+    assert "$xsrc/_darktable-generate-cache" is_file
+}
+@test 'more_src has _hugin-cli' {
+    assert "$xsrc/_hugin-cli" is_file
+}
+@test 'more_src has _autopano' {
+    assert "$xsrc/_autopano" is_file
+}
+@test 'more_src has _autopano-sift' {
+    assert "$xsrc/_autopano-sift" is_file
+}
+@test 'more_src has _linefind' {
+    assert "$xsrc/_linefind" is_file
+}
+@test 'more_src has _picview' {
+    assert "$xsrc/_picview" is_file
+}
+@test 'more_src has _xnviewmp' {
+    assert "$xsrc/_xnviewmp" is_file
+}
+@test 'more_src has _xnconvert' {
+    assert "$xsrc/_xnconvert" is_file
+}
+@test 'more_src has _vipsedit' {
+    assert "$xsrc/_vipsedit" is_file
+}
+@test 'more_src has _vipsdisp' {
+    assert "$xsrc/_vipsdisp" is_file
+}
+@test 'more_src has _gscan2pdf' {
+    assert "$xsrc/_gscan2pdf" is_file
+}
+@test 'more_src has _snapper-cleanup' {
+    assert "$xsrc/_snapper-cleanup" is_file
+}
+@test 'more_src has _snapper-config' {
+    assert "$xsrc/_snapper-config" is_file
+}
+@test 'more_src has _gimp-test-clipboard' {
+    assert "$xsrc/_gimp-test-clipboard" is_file
+}
+@test 'more_src has _gmic-qt' {
+    assert "$xsrc/_gmic-qt" is_file
+}
+@test 'more_src has _exifgrep' {
+    assert "$xsrc/_exifgrep" is_file
+}
+@test 'more_src has _djpeg-turbo' {
+    assert "$xsrc/_djpeg-turbo" is_file
+}
+@test 'more_src has _cjpeg-turbo' {
+    assert "$xsrc/_cjpeg-turbo" is_file
+}
+@test 'more_src has _rawtherapee-pp' {
+    assert "$xsrc/_rawtherapee-pp" is_file
+}
+@test 'more_src has _kphotoalbum-cli' {
+    assert "$xsrc/_kphotoalbum-cli" is_file
+}
+@test 'more_src has _digikam-cli' {
+    assert "$xsrc/_digikam-cli" is_file
+}
