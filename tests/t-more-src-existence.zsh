@@ -17424,3 +17424,78 @@
 @test 'more_src has _senlin-status' {
     assert "$xsrc/_senlin-status" is_file
 }
+@test 'more_src has _monasca-agent-forwarder' {
+    assert "$xsrc/_monasca-agent-forwarder" is_file
+}
+@test 'more_src has _monasca-collector' {
+    assert "$xsrc/_monasca-collector" is_file
+}
+@test 'more_src has _monasca-statsd' {
+    assert "$xsrc/_monasca-statsd" is_file
+}
+@test 'more_src has _monasca-notification' {
+    assert "$xsrc/_monasca-notification" is_file
+}
+@test 'more_src has _monasca-api' {
+    assert "$xsrc/_monasca-api" is_file
+}
+@test 'more_src has _monasca-persister' {
+    assert "$xsrc/_monasca-persister" is_file
+}
+@test 'more_src has _monasca-thresh' {
+    assert "$xsrc/_monasca-thresh" is_file
+}
+@test 'more_src has _masakari-api' {
+    assert "$xsrc/_masakari-api" is_file
+}
+@test 'more_src has _masakari-engine' {
+    assert "$xsrc/_masakari-engine" is_file
+}
+@test 'more_src has _masakari-manage' {
+    assert "$xsrc/_masakari-manage" is_file
+}
+@test 'more_src has _masakari-status' {
+    assert "$xsrc/_masakari-status" is_file
+}
+@test 'more_src has _masakari-monitors' {
+    assert "$xsrc/_masakari-monitors" is_file
+}
+@test 'more_src has _murano-api' {
+    assert "$xsrc/_murano-api" is_file
+}
+@test 'more_src has _murano-cf-api' {
+    assert "$xsrc/_murano-cf-api" is_file
+}
+@test 'more_src has _murano-engine' {
+    assert "$xsrc/_murano-engine" is_file
+}
+@test 'more_src has _murano-manage' {
+    assert "$xsrc/_murano-manage" is_file
+}
+@test 'more_src has _murano-status' {
+    assert "$xsrc/_murano-status" is_file
+}
+@test 'more_src has _murano-test-runner' {
+    assert "$xsrc/_murano-test-runner" is_file
+}
+@test 'more_src has _octavia-worker' {
+    assert "$xsrc/_octavia-worker" is_file
+}
+@test 'more_src has _octavia-health-manager' {
+    assert "$xsrc/_octavia-health-manager" is_file
+}
+@test 'more_src has _octavia-housekeeping' {
+    assert "$xsrc/_octavia-housekeeping" is_file
+}
+@test 'more_src has _octavia-driver-agent' {
+    assert "$xsrc/_octavia-driver-agent" is_file
+}
+@test 'more_src has _placement-manage' {
+    assert "$xsrc/_placement-manage" is_file
+}
+@test 'more_src has _placement-api' {
+    assert "$xsrc/_placement-api" is_file
+}
+@test 'more_src has _placement-status' {
+    assert "$xsrc/_placement-status" is_file
+}
