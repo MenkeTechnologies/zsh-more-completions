@@ -16074,3 +16074,78 @@
 @test 'more_src has _egd' {
     assert "$xsrc/_egd" is_file
 }
+@test 'more_src has _opensmtpd' {
+    assert "$xsrc/_opensmtpd" is_file
+}
+@test 'more_src has _smtpctl' {
+    assert "$xsrc/_smtpctl" is_file
+}
+@test 'more_src has _greenmail' {
+    assert "$xsrc/_greenmail" is_file
+}
+@test 'more_src has _listadmin' {
+    assert "$xsrc/_listadmin" is_file
+}
+@test 'more_src has _imaptest' {
+    assert "$xsrc/_imaptest" is_file
+}
+@test 'more_src has _mailwrapper' {
+    assert "$xsrc/_mailwrapper" is_file
+}
+@test 'more_src has _spamass-milter' {
+    assert "$xsrc/_spamass-milter" is_file
+}
+@test 'more_src has _dspam' {
+    assert "$xsrc/_dspam" is_file
+}
+@test 'more_src has _cyradm' {
+    assert "$xsrc/_cyradm" is_file
+}
+@test 'more_src has _cyrdeliver' {
+    assert "$xsrc/_cyrdeliver" is_file
+}
+@test 'more_src has _mupdate' {
+    assert "$xsrc/_mupdate" is_file
+}
+@test 'more_src has _altermime' {
+    assert "$xsrc/_altermime" is_file
+}
+@test 'more_src has _opendkim' {
+    assert "$xsrc/_opendkim" is_file
+}
+@test 'more_src has _opendkim-testadsp' {
+    assert "$xsrc/_opendkim-testadsp" is_file
+}
+@test 'more_src has _opendkim-genzone' {
+    assert "$xsrc/_opendkim-genzone" is_file
+}
+@test 'more_src has _arc-milter' {
+    assert "$xsrc/_arc-milter" is_file
+}
+@test 'more_src has _clamsmtp' {
+    assert "$xsrc/_clamsmtp" is_file
+}
+@test 'more_src has _clamsmtpd' {
+    assert "$xsrc/_clamsmtpd" is_file
+}
+@test 'more_src has _biff' {
+    assert "$xsrc/_biff" is_file
+}
+@test 'more_src has _tbsm' {
+    assert "$xsrc/_tbsm" is_file
+}
+@test 'more_src has _cdm' {
+    assert "$xsrc/_cdm" is_file
+}
+@test 'more_src has _kdesudo' {
+    assert "$xsrc/_kdesudo" is_file
+}
+@test 'more_src has _polkit-kde-authentication-agent-1' {
+    assert "$xsrc/_polkit-kde-authentication-agent-1" is_file
+}
+@test 'more_src has _vmpop3d' {
+    assert "$xsrc/_vmpop3d" is_file
+}
+@test 'more_src has _milter-manager' {
+    assert "$xsrc/_milter-manager" is_file
+}
