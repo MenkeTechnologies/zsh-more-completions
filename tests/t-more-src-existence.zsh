@@ -16224,3 +16224,78 @@
 @test 'more_src has _arcget' {
     assert "$xsrc/_arcget" is_file
 }
+@test 'more_src has _pbs_server' {
+    assert "$xsrc/_pbs_server" is_file
+}
+@test 'more_src has _pbs_mom' {
+    assert "$xsrc/_pbs_mom" is_file
+}
+@test 'more_src has _qdel' {
+    assert "$xsrc/_qdel" is_file
+}
+@test 'more_src has _qhold' {
+    assert "$xsrc/_qhold" is_file
+}
+@test 'more_src has _qrls' {
+    assert "$xsrc/_qrls" is_file
+}
+@test 'more_src has _qalter' {
+    assert "$xsrc/_qalter" is_file
+}
+@test 'more_src has _qmove' {
+    assert "$xsrc/_qmove" is_file
+}
+@test 'more_src has _qsig' {
+    assert "$xsrc/_qsig" is_file
+}
+@test 'more_src has _qrerun' {
+    assert "$xsrc/_qrerun" is_file
+}
+@test 'more_src has _qselect' {
+    assert "$xsrc/_qselect" is_file
+}
+@test 'more_src has _qorder' {
+    assert "$xsrc/_qorder" is_file
+}
+@test 'more_src has _qenable' {
+    assert "$xsrc/_qenable" is_file
+}
+@test 'more_src has _qdisable' {
+    assert "$xsrc/_qdisable" is_file
+}
+@test 'more_src has _qterm' {
+    assert "$xsrc/_qterm" is_file
+}
+@test 'more_src has _qmsg' {
+    assert "$xsrc/_qmsg" is_file
+}
+@test 'more_src has _qchkpt' {
+    assert "$xsrc/_qchkpt" is_file
+}
+@test 'more_src has _qrelease' {
+    assert "$xsrc/_qrelease" is_file
+}
+@test 'more_src has _pbsnodes' {
+    assert "$xsrc/_pbsnodes" is_file
+}
+@test 'more_src has _printjob' {
+    assert "$xsrc/_printjob" is_file
+}
+@test 'more_src has _lshosts' {
+    assert "$xsrc/_lshosts" is_file
+}
+@test 'more_src has _lsload' {
+    assert "$xsrc/_lsload" is_file
+}
+@test 'more_src has _lsinfo' {
+    assert "$xsrc/_lsinfo" is_file
+}
+@test 'more_src has _lsplace' {
+    assert "$xsrc/_lsplace" is_file
+}
+@test 'more_src has _lsmake' {
+    assert "$xsrc/_lsmake" is_file
+}
+@test 'more_src has _lspasswd' {
+    assert "$xsrc/_lspasswd" is_file
+}
