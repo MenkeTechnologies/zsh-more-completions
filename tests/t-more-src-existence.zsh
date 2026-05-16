@@ -16974,3 +16974,78 @@
 @test 'more_src has _beegfs-mon-tool' {
     assert "$xsrc/_beegfs-mon-tool" is_file
 }
+@test 'more_src has _swift-init' {
+    assert "$xsrc/_swift-init" is_file
+}
+@test 'more_src has _swift-proxy-server' {
+    assert "$xsrc/_swift-proxy-server" is_file
+}
+@test 'more_src has _swift-account-server' {
+    assert "$xsrc/_swift-account-server" is_file
+}
+@test 'more_src has _swift-container-server' {
+    assert "$xsrc/_swift-container-server" is_file
+}
+@test 'more_src has _swift-object-server' {
+    assert "$xsrc/_swift-object-server" is_file
+}
+@test 'more_src has _swift-ring-builder' {
+    assert "$xsrc/_swift-ring-builder" is_file
+}
+@test 'more_src has _swift-account-info' {
+    assert "$xsrc/_swift-account-info" is_file
+}
+@test 'more_src has _swift-account-auditor' {
+    assert "$xsrc/_swift-account-auditor" is_file
+}
+@test 'more_src has _swift-account-reaper' {
+    assert "$xsrc/_swift-account-reaper" is_file
+}
+@test 'more_src has _swift-account-replicator' {
+    assert "$xsrc/_swift-account-replicator" is_file
+}
+@test 'more_src has _swift-container-auditor' {
+    assert "$xsrc/_swift-container-auditor" is_file
+}
+@test 'more_src has _swift-container-info' {
+    assert "$xsrc/_swift-container-info" is_file
+}
+@test 'more_src has _swift-container-replicator' {
+    assert "$xsrc/_swift-container-replicator" is_file
+}
+@test 'more_src has _swift-container-sync' {
+    assert "$xsrc/_swift-container-sync" is_file
+}
+@test 'more_src has _swift-container-updater' {
+    assert "$xsrc/_swift-container-updater" is_file
+}
+@test 'more_src has _swift-container-sharder' {
+    assert "$xsrc/_swift-container-sharder" is_file
+}
+@test 'more_src has _swift-object-auditor' {
+    assert "$xsrc/_swift-object-auditor" is_file
+}
+@test 'more_src has _swift-object-info' {
+    assert "$xsrc/_swift-object-info" is_file
+}
+@test 'more_src has _swift-object-replicator' {
+    assert "$xsrc/_swift-object-replicator" is_file
+}
+@test 'more_src has _swift-object-updater' {
+    assert "$xsrc/_swift-object-updater" is_file
+}
+@test 'more_src has _swift-object-expirer' {
+    assert "$xsrc/_swift-object-expirer" is_file
+}
+@test 'more_src has _swift-recon' {
+    assert "$xsrc/_swift-recon" is_file
+}
+@test 'more_src has _swift-get-nodes' {
+    assert "$xsrc/_swift-get-nodes" is_file
+}
+@test 'more_src has _swift-drive-audit' {
+    assert "$xsrc/_swift-drive-audit" is_file
+}
+@test 'more_src has _swift-dispersion-report' {
+    assert "$xsrc/_swift-dispersion-report" is_file
+}
