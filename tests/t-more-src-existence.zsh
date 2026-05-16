@@ -17499,3 +17499,78 @@
 @test 'more_src has _placement-status' {
     assert "$xsrc/_placement-status" is_file
 }
+@test 'more_src has _cyborg-api' {
+    assert "$xsrc/_cyborg-api" is_file
+}
+@test 'more_src has _cyborg-conductor' {
+    assert "$xsrc/_cyborg-conductor" is_file
+}
+@test 'more_src has _cyborg-agent' {
+    assert "$xsrc/_cyborg-agent" is_file
+}
+@test 'more_src has _cyborg-status' {
+    assert "$xsrc/_cyborg-status" is_file
+}
+@test 'more_src has _blazar-api' {
+    assert "$xsrc/_blazar-api" is_file
+}
+@test 'more_src has _blazar-manager' {
+    assert "$xsrc/_blazar-manager" is_file
+}
+@test 'more_src has _blazar-db-manage' {
+    assert "$xsrc/_blazar-db-manage" is_file
+}
+@test 'more_src has _blazar-status' {
+    assert "$xsrc/_blazar-status" is_file
+}
+@test 'more_src has _zun-api' {
+    assert "$xsrc/_zun-api" is_file
+}
+@test 'more_src has _zun-compute' {
+    assert "$xsrc/_zun-compute" is_file
+}
+@test 'more_src has _zun-cni-daemon' {
+    assert "$xsrc/_zun-cni-daemon" is_file
+}
+@test 'more_src has _zun-db-manage' {
+    assert "$xsrc/_zun-db-manage" is_file
+}
+@test 'more_src has _zun-wsproxy' {
+    assert "$xsrc/_zun-wsproxy" is_file
+}
+@test 'more_src has _zun-status' {
+    assert "$xsrc/_zun-status" is_file
+}
+@test 'more_src has _kuryr-cni' {
+    assert "$xsrc/_kuryr-cni" is_file
+}
+@test 'more_src has _kuryr-server' {
+    assert "$xsrc/_kuryr-server" is_file
+}
+@test 'more_src has _kuryr-daemon' {
+    assert "$xsrc/_kuryr-daemon" is_file
+}
+@test 'more_src has _kuryr-controller' {
+    assert "$xsrc/_kuryr-controller" is_file
+}
+@test 'more_src has _searchlight-api' {
+    assert "$xsrc/_searchlight-api" is_file
+}
+@test 'more_src has _searchlight-manage' {
+    assert "$xsrc/_searchlight-manage" is_file
+}
+@test 'more_src has _searchlight-listener' {
+    assert "$xsrc/_searchlight-listener" is_file
+}
+@test 'more_src has _solum-api' {
+    assert "$xsrc/_solum-api" is_file
+}
+@test 'more_src has _solum-conductor' {
+    assert "$xsrc/_solum-conductor" is_file
+}
+@test 'more_src has _solum-worker' {
+    assert "$xsrc/_solum-worker" is_file
+}
+@test 'more_src has _solum-deployer' {
+    assert "$xsrc/_solum-deployer" is_file
+}
