@@ -20583,3 +20583,78 @@
 @test 'more_src has _ensembl-vep' {
     assert "$xsrc/_ensembl-vep" is_file
 }
+@test 'more_src has _hmmscan' {
+    assert "$xsrc/_hmmscan" is_file
+}
+@test 'more_src has _hmmsearch' {
+    assert "$xsrc/_hmmsearch" is_file
+}
+@test 'more_src has _hmmalign' {
+    assert "$xsrc/_hmmalign" is_file
+}
+@test 'more_src has _hmmbuild' {
+    assert "$xsrc/_hmmbuild" is_file
+}
+@test 'more_src has _hmmpress' {
+    assert "$xsrc/_hmmpress" is_file
+}
+@test 'more_src has _jackhmmer' {
+    assert "$xsrc/_jackhmmer" is_file
+}
+@test 'more_src has _phmmer' {
+    assert "$xsrc/_phmmer" is_file
+}
+@test 'more_src has _nhmmer' {
+    assert "$xsrc/_nhmmer" is_file
+}
+@test 'more_src has _nhmmscan' {
+    assert "$xsrc/_nhmmscan" is_file
+}
+@test 'more_src has _esl-alimanip' {
+    assert "$xsrc/_esl-alimanip" is_file
+}
+@test 'more_src has _esl-alimask' {
+    assert "$xsrc/_esl-alimask" is_file
+}
+@test 'more_src has _esl-alimerge' {
+    assert "$xsrc/_esl-alimerge" is_file
+}
+@test 'more_src has _esl-alipid' {
+    assert "$xsrc/_esl-alipid" is_file
+}
+@test 'more_src has _esl-alistat' {
+    assert "$xsrc/_esl-alistat" is_file
+}
+@test 'more_src has _esl-compstruct' {
+    assert "$xsrc/_esl-compstruct" is_file
+}
+@test 'more_src has _esl-construct' {
+    assert "$xsrc/_esl-construct" is_file
+}
+@test 'more_src has _esl-mask' {
+    assert "$xsrc/_esl-mask" is_file
+}
+@test 'more_src has _esl-mixdchlet' {
+    assert "$xsrc/_esl-mixdchlet" is_file
+}
+@test 'more_src has _esl-reformat' {
+    assert "$xsrc/_esl-reformat" is_file
+}
+@test 'more_src has _esl-selectn' {
+    assert "$xsrc/_esl-selectn" is_file
+}
+@test 'more_src has _esl-seqstat' {
+    assert "$xsrc/_esl-seqstat" is_file
+}
+@test 'more_src has _esl-seqrange' {
+    assert "$xsrc/_esl-seqrange" is_file
+}
+@test 'more_src has _esl-shuffle' {
+    assert "$xsrc/_esl-shuffle" is_file
+}
+@test 'more_src has _esl-sfetch' {
+    assert "$xsrc/_esl-sfetch" is_file
+}
+@test 'more_src has _esl-translate' {
+    assert "$xsrc/_esl-translate" is_file
+}
