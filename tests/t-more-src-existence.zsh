@@ -17574,3 +17574,78 @@
 @test 'more_src has _solum-deployer' {
     assert "$xsrc/_solum-deployer" is_file
 }
+@test 'more_src has _virt-image' {
+    assert "$xsrc/_virt-image" is_file
+}
+@test 'more_src has _virt-sanlock-cleanup' {
+    assert "$xsrc/_virt-sanlock-cleanup" is_file
+}
+@test 'more_src has _virt-builder-repository' {
+    assert "$xsrc/_virt-builder-repository" is_file
+}
+@test 'more_src has _virt-firmware' {
+    assert "$xsrc/_virt-firmware" is_file
+}
+@test 'more_src has _virt-p2v' {
+    assert "$xsrc/_virt-p2v" is_file
+}
+@test 'more_src has _virt-v2v-in-place' {
+    assert "$xsrc/_virt-v2v-in-place" is_file
+}
+@test 'more_src has _virt-bootstrap' {
+    assert "$xsrc/_virt-bootstrap" is_file
+}
+@test 'more_src has _VBoxNetDHCP' {
+    assert "$xsrc/_VBoxNetDHCP" is_file
+}
+@test 'more_src has _VBoxNetAdpCtl' {
+    assert "$xsrc/_VBoxNetAdpCtl" is_file
+}
+@test 'more_src has _VBoxNetNAT' {
+    assert "$xsrc/_VBoxNetNAT" is_file
+}
+@test 'more_src has _VBoxControl' {
+    assert "$xsrc/_VBoxControl" is_file
+}
+@test 'more_src has _VBoxNetBoot' {
+    assert "$xsrc/_VBoxNetBoot" is_file
+}
+@test 'more_src has _VBoxXPCOMIPCD' {
+    assert "$xsrc/_VBoxXPCOMIPCD" is_file
+}
+@test 'more_src has _vhost-user-blk' {
+    assert "$xsrc/_vhost-user-blk" is_file
+}
+@test 'more_src has _vhost-user-net' {
+    assert "$xsrc/_vhost-user-net" is_file
+}
+@test 'more_src has _vhost-user-scsi' {
+    assert "$xsrc/_vhost-user-scsi" is_file
+}
+@test 'more_src has _vhost-user-fs' {
+    assert "$xsrc/_vhost-user-fs" is_file
+}
+@test 'more_src has _vhost-user-gpu' {
+    assert "$xsrc/_vhost-user-gpu" is_file
+}
+@test 'more_src has _xm' {
+    assert "$xsrc/_xm" is_file
+}
+@test 'more_src has _xenstore' {
+    assert "$xsrc/_xenstore" is_file
+}
+@test 'more_src has _xen-bugtool' {
+    assert "$xsrc/_xen-bugtool" is_file
+}
+@test 'more_src has _xen-detect' {
+    assert "$xsrc/_xen-detect" is_file
+}
+@test 'more_src has _xen-list' {
+    assert "$xsrc/_xen-list" is_file
+}
+@test 'more_src has _oxenstored' {
+    assert "$xsrc/_oxenstored" is_file
+}
+@test 'more_src has _xenballoond' {
+    assert "$xsrc/_xenballoond" is_file
+}
