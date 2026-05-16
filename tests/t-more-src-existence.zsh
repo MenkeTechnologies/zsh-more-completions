@@ -17199,3 +17199,78 @@
 @test 'more_src has _octavia-api' {
     assert "$xsrc/_octavia-api" is_file
 }
+@test 'more_src has _designate-api' {
+    assert "$xsrc/_designate-api" is_file
+}
+@test 'more_src has _designate-central' {
+    assert "$xsrc/_designate-central" is_file
+}
+@test 'more_src has _designate-manage' {
+    assert "$xsrc/_designate-manage" is_file
+}
+@test 'more_src has _designate-mdns' {
+    assert "$xsrc/_designate-mdns" is_file
+}
+@test 'more_src has _designate-producer' {
+    assert "$xsrc/_designate-producer" is_file
+}
+@test 'more_src has _designate-sink' {
+    assert "$xsrc/_designate-sink" is_file
+}
+@test 'more_src has _designate-status' {
+    assert "$xsrc/_designate-status" is_file
+}
+@test 'more_src has _designate-worker' {
+    assert "$xsrc/_designate-worker" is_file
+}
+@test 'more_src has _designate-agent' {
+    assert "$xsrc/_designate-agent" is_file
+}
+@test 'more_src has _magnum-api' {
+    assert "$xsrc/_magnum-api" is_file
+}
+@test 'more_src has _magnum-conductor' {
+    assert "$xsrc/_magnum-conductor" is_file
+}
+@test 'more_src has _magnum-status' {
+    assert "$xsrc/_magnum-status" is_file
+}
+@test 'more_src has _manila-api' {
+    assert "$xsrc/_manila-api" is_file
+}
+@test 'more_src has _manila-data' {
+    assert "$xsrc/_manila-data" is_file
+}
+@test 'more_src has _manila-manage' {
+    assert "$xsrc/_manila-manage" is_file
+}
+@test 'more_src has _manila-rootwrap' {
+    assert "$xsrc/_manila-rootwrap" is_file
+}
+@test 'more_src has _manila-scheduler' {
+    assert "$xsrc/_manila-scheduler" is_file
+}
+@test 'more_src has _manila-share' {
+    assert "$xsrc/_manila-share" is_file
+}
+@test 'more_src has _manila-status' {
+    assert "$xsrc/_manila-status" is_file
+}
+@test 'more_src has _panko-api' {
+    assert "$xsrc/_panko-api" is_file
+}
+@test 'more_src has _panko-expirer' {
+    assert "$xsrc/_panko-expirer" is_file
+}
+@test 'more_src has _aodh-api' {
+    assert "$xsrc/_aodh-api" is_file
+}
+@test 'more_src has _aodh-evaluator' {
+    assert "$xsrc/_aodh-evaluator" is_file
+}
+@test 'more_src has _aodh-listener' {
+    assert "$xsrc/_aodh-listener" is_file
+}
+@test 'more_src has _aodh-notifier' {
+    assert "$xsrc/_aodh-notifier" is_file
+}
