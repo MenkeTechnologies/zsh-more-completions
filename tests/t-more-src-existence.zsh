@@ -19680,3 +19680,78 @@
 @test 'more_src has _megaraid-cli' {
     assert "$xsrc/_megaraid-cli" is_file
 }
+@test 'more_src has _ipmi-time-sync' {
+    assert "$xsrc/_ipmi-time-sync" is_file
+}
+@test 'more_src has _ipmi-watchdog' {
+    assert "$xsrc/_ipmi-watchdog" is_file
+}
+@test 'more_src has _bmc-watchdog' {
+    assert "$xsrc/_bmc-watchdog" is_file
+}
+@test 'more_src has _idracadm' {
+    assert "$xsrc/_idracadm" is_file
+}
+@test 'more_src has _idracadm7' {
+    assert "$xsrc/_idracadm7" is_file
+}
+@test 'more_src has _idrac-cli' {
+    assert "$xsrc/_idrac-cli" is_file
+}
+@test 'more_src has _openhpi-utils' {
+    assert "$xsrc/_openhpi-utils" is_file
+}
+@test 'more_src has _openhpi-clients' {
+    assert "$xsrc/_openhpi-clients" is_file
+}
+@test 'more_src has _ohcli' {
+    assert "$xsrc/_ohcli" is_file
+}
+@test 'more_src has _ohrun' {
+    assert "$xsrc/_ohrun" is_file
+}
+@test 'more_src has _smbiosdump' {
+    assert "$xsrc/_smbiosdump" is_file
+}
+@test 'more_src has _efivar-tools' {
+    assert "$xsrc/_efivar-tools" is_file
+}
+@test 'more_src has _ucsm-cli' {
+    assert "$xsrc/_ucsm-cli" is_file
+}
+@test 'more_src has _wsman' {
+    assert "$xsrc/_wsman" is_file
+}
+@test 'more_src has _cimcli' {
+    assert "$xsrc/_cimcli" is_file
+}
+@test 'more_src has _lshw-gtk' {
+    assert "$xsrc/_lshw-gtk" is_file
+}
+@test 'more_src has _memtest' {
+    assert "$xsrc/_memtest" is_file
+}
+@test 'more_src has _y-cruncher' {
+    assert "$xsrc/_y-cruncher" is_file
+}
+@test 'more_src has _prime95' {
+    assert "$xsrc/_prime95" is_file
+}
+@test 'more_src has _acpi_fakekey' {
+    assert "$xsrc/_acpi_fakekey" is_file
+}
+@test 'more_src has _upowerd' {
+    assert "$xsrc/_upowerd" is_file
+}
+@test 'more_src has _powercap-info' {
+    assert "$xsrc/_powercap-info" is_file
+}
+@test 'more_src has _pm-action' {
+    assert "$xsrc/_pm-action" is_file
+}
+@test 'more_src has _pm-pmu' {
+    assert "$xsrc/_pm-pmu" is_file
+}
+@test 'more_src has _sensors-applet' {
+    assert "$xsrc/_sensors-applet" is_file
+}
