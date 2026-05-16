@@ -17949,3 +17949,78 @@
 @test 'more_src has _nginx-ingress' {
     assert "$xsrc/_nginx-ingress" is_file
 }
+@test 'more_src has _jaeger-operator' {
+    assert "$xsrc/_jaeger-operator" is_file
+}
+@test 'more_src has _zipkin' {
+    assert "$xsrc/_zipkin" is_file
+}
+@test 'more_src has _kiali' {
+    assert "$xsrc/_kiali" is_file
+}
+@test 'more_src has _kiali-operator' {
+    assert "$xsrc/_kiali-operator" is_file
+}
+@test 'more_src has _opentelemetry-collector' {
+    assert "$xsrc/_opentelemetry-collector" is_file
+}
+@test 'more_src has _opentelemetry-collector-contrib' {
+    assert "$xsrc/_opentelemetry-collector-contrib" is_file
+}
+@test 'more_src has _vector-cli' {
+    assert "$xsrc/_vector-cli" is_file
+}
+@test 'more_src has _vector-tap' {
+    assert "$xsrc/_vector-tap" is_file
+}
+@test 'more_src has _fluentbit' {
+    assert "$xsrc/_fluentbit" is_file
+}
+@test 'more_src has _td-agent-bit' {
+    assert "$xsrc/_td-agent-bit" is_file
+}
+@test 'more_src has _nri-prometheus' {
+    assert "$xsrc/_nri-prometheus" is_file
+}
+@test 'more_src has _nri-flex' {
+    assert "$xsrc/_nri-flex" is_file
+}
+@test 'more_src has _nri-discovery' {
+    assert "$xsrc/_nri-discovery" is_file
+}
+@test 'more_src has _nri-docker' {
+    assert "$xsrc/_nri-docker" is_file
+}
+@test 'more_src has _nri-kubernetes' {
+    assert "$xsrc/_nri-kubernetes" is_file
+}
+@test 'more_src has _sumo-collector' {
+    assert "$xsrc/_sumo-collector" is_file
+}
+@test 'more_src has _sumo-otel-distro' {
+    assert "$xsrc/_sumo-otel-distro" is_file
+}
+@test 'more_src has _honeycomb-cli' {
+    assert "$xsrc/_honeycomb-cli" is_file
+}
+@test 'more_src has _sentry-server' {
+    assert "$xsrc/_sentry-server" is_file
+}
+@test 'more_src has _rollbar-agent' {
+    assert "$xsrc/_rollbar-agent" is_file
+}
+@test 'more_src has _cabot' {
+    assert "$xsrc/_cabot" is_file
+}
+@test 'more_src has _dynatrace-agent' {
+    assert "$xsrc/_dynatrace-agent" is_file
+}
+@test 'more_src has _oneagent' {
+    assert "$xsrc/_oneagent" is_file
+}
+@test 'more_src has _oneagentctl' {
+    assert "$xsrc/_oneagentctl" is_file
+}
+@test 'more_src has _newrelic-license-manager' {
+    assert "$xsrc/_newrelic-license-manager" is_file
+}
