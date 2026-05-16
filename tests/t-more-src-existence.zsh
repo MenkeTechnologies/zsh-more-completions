@@ -20808,3 +20808,78 @@
 @test 'more_src has _cutseq' {
     assert "$xsrc/_cutseq" is_file
 }
+@test 'more_src has _dbifasta' {
+    assert "$xsrc/_dbifasta" is_file
+}
+@test 'more_src has _dbiflat' {
+    assert "$xsrc/_dbiflat" is_file
+}
+@test 'more_src has _dbigcg' {
+    assert "$xsrc/_dbigcg" is_file
+}
+@test 'more_src has _dbiloc' {
+    assert "$xsrc/_dbiloc" is_file
+}
+@test 'more_src has _dbitext' {
+    assert "$xsrc/_dbitext" is_file
+}
+@test 'more_src has _dbtell' {
+    assert "$xsrc/_dbtell" is_file
+}
+@test 'more_src has _degapseq' {
+    assert "$xsrc/_degapseq" is_file
+}
+@test 'more_src has _descseq' {
+    assert "$xsrc/_descseq" is_file
+}
+@test 'more_src has _diffseq' {
+    assert "$xsrc/_diffseq" is_file
+}
+@test 'more_src has _distmat' {
+    assert "$xsrc/_distmat" is_file
+}
+@test 'more_src has _dotmatcher' {
+    assert "$xsrc/_dotmatcher" is_file
+}
+@test 'more_src has _dotpath' {
+    assert "$xsrc/_dotpath" is_file
+}
+@test 'more_src has _dottup' {
+    assert "$xsrc/_dottup" is_file
+}
+@test 'more_src has _dreg' {
+    assert "$xsrc/_dreg" is_file
+}
+@test 'more_src has _drfindid' {
+    assert "$xsrc/_drfindid" is_file
+}
+@test 'more_src has _drfindname' {
+    assert "$xsrc/_drfindname" is_file
+}
+@test 'more_src has _drfindresource' {
+    assert "$xsrc/_drfindresource" is_file
+}
+@test 'more_src has _drget' {
+    assert "$xsrc/_drget" is_file
+}
+@test 'more_src has _drtext' {
+    assert "$xsrc/_drtext" is_file
+}
+@test 'more_src has _edialign' {
+    assert "$xsrc/_edialign" is_file
+}
+@test 'more_src has _einverted' {
+    assert "$xsrc/_einverted" is_file
+}
+@test 'more_src has _embossdata' {
+    assert "$xsrc/_embossdata" is_file
+}
+@test 'more_src has _emowse' {
+    assert "$xsrc/_emowse" is_file
+}
+@test 'more_src has _entret' {
+    assert "$xsrc/_entret" is_file
+}
+@test 'more_src has _epestfind' {
+    assert "$xsrc/_epestfind" is_file
+}
