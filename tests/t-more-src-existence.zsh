@@ -18705,3 +18705,78 @@
 @test 'more_src has _kbluetoothd' {
     assert "$xsrc/_kbluetoothd" is_file
 }
+@test 'more_src has _gnome-screensaver' {
+    assert "$xsrc/_gnome-screensaver" is_file
+}
+@test 'more_src has _gnome-boxes' {
+    assert "$xsrc/_gnome-boxes" is_file
+}
+@test 'more_src has _gnome-builder' {
+    assert "$xsrc/_gnome-builder" is_file
+}
+@test 'more_src has _xfce4-settings' {
+    assert "$xsrc/_xfce4-settings" is_file
+}
+@test 'more_src has _xfce4-clipman-settings' {
+    assert "$xsrc/_xfce4-clipman-settings" is_file
+}
+@test 'more_src has _xfce4-mixer' {
+    assert "$xsrc/_xfce4-mixer" is_file
+}
+@test 'more_src has _xfce4-mount-plugin' {
+    assert "$xsrc/_xfce4-mount-plugin" is_file
+}
+@test 'more_src has _xfce4-sensors-plugin' {
+    assert "$xsrc/_xfce4-sensors-plugin" is_file
+}
+@test 'more_src has _xfce4-systemload-plugin' {
+    assert "$xsrc/_xfce4-systemload-plugin" is_file
+}
+@test 'more_src has _xfce4-time-out-plugin' {
+    assert "$xsrc/_xfce4-time-out-plugin" is_file
+}
+@test 'more_src has _xfce4-timer-plugin' {
+    assert "$xsrc/_xfce4-timer-plugin" is_file
+}
+@test 'more_src has _xfce4-weather-plugin' {
+    assert "$xsrc/_xfce4-weather-plugin" is_file
+}
+@test 'more_src has _xfce4-wavelan-plugin' {
+    assert "$xsrc/_xfce4-wavelan-plugin" is_file
+}
+@test 'more_src has _mate-disk-utility' {
+    assert "$xsrc/_mate-disk-utility" is_file
+}
+@test 'more_src has _mate-disk-image-mounter' {
+    assert "$xsrc/_mate-disk-image-mounter" is_file
+}
+@test 'more_src has _mate-notification-properties' {
+    assert "$xsrc/_mate-notification-properties" is_file
+}
+@test 'more_src has _mate-display-properties' {
+    assert "$xsrc/_mate-display-properties" is_file
+}
+@test 'more_src has _caja-bookmarks' {
+    assert "$xsrc/_caja-bookmarks" is_file
+}
+@test 'more_src has _caja-fileproperties' {
+    assert "$xsrc/_caja-fileproperties" is_file
+}
+@test 'more_src has _caja-folder-handler' {
+    assert "$xsrc/_caja-folder-handler" is_file
+}
+@test 'more_src has _caja-image' {
+    assert "$xsrc/_caja-image" is_file
+}
+@test 'more_src has _caja-pluma' {
+    assert "$xsrc/_caja-pluma" is_file
+}
+@test 'more_src has _caja-share' {
+    assert "$xsrc/_caja-share" is_file
+}
+@test 'more_src has _caja-actions' {
+    assert "$xsrc/_caja-actions" is_file
+}
+@test 'more_src has _caja-rabbitvcs' {
+    assert "$xsrc/_caja-rabbitvcs" is_file
+}
