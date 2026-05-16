@@ -19605,3 +19605,78 @@
 @test 'more_src has _cibadmin' {
     assert "$xsrc/_cibadmin" is_file
 }
+@test 'more_src has _lvmlockd' {
+    assert "$xsrc/_lvmlockd" is_file
+}
+@test 'more_src has _lvmlockctl' {
+    assert "$xsrc/_lvmlockctl" is_file
+}
+@test 'more_src has _lvmdbus' {
+    assert "$xsrc/_lvmdbus" is_file
+}
+@test 'more_src has _lvmsadc' {
+    assert "$xsrc/_lvmsadc" is_file
+}
+@test 'more_src has _lvm_dump' {
+    assert "$xsrc/_lvm_dump" is_file
+}
+@test 'more_src has _thin_migrate' {
+    assert "$xsrc/_thin_migrate" is_file
+}
+@test 'more_src has _thin_show_duplicates' {
+    assert "$xsrc/_thin_show_duplicates" is_file
+}
+@test 'more_src has _megacli' {
+    assert "$xsrc/_megacli" is_file
+}
+@test 'more_src has _megaclisas-status' {
+    assert "$xsrc/_megaclisas-status" is_file
+}
+@test 'more_src has _arcconf' {
+    assert "$xsrc/_arcconf" is_file
+}
+@test 'more_src has _storcli' {
+    assert "$xsrc/_storcli" is_file
+}
+@test 'more_src has _storcli64' {
+    assert "$xsrc/_storcli64" is_file
+}
+@test 'more_src has _perccli' {
+    assert "$xsrc/_perccli" is_file
+}
+@test 'more_src has _perccli64' {
+    assert "$xsrc/_perccli64" is_file
+}
+@test 'more_src has _hpacucli' {
+    assert "$xsrc/_hpacucli" is_file
+}
+@test 'more_src has _hpssacli' {
+    assert "$xsrc/_hpssacli" is_file
+}
+@test 'more_src has _ssacli' {
+    assert "$xsrc/_ssacli" is_file
+}
+@test 'more_src has _hpssaducli' {
+    assert "$xsrc/_hpssaducli" is_file
+}
+@test 'more_src has _ssaducli' {
+    assert "$xsrc/_ssaducli" is_file
+}
+@test 'more_src has _raidstart' {
+    assert "$xsrc/_raidstart" is_file
+}
+@test 'more_src has _raidautorun' {
+    assert "$xsrc/_raidautorun" is_file
+}
+@test 'more_src has _raid-check' {
+    assert "$xsrc/_raid-check" is_file
+}
+@test 'more_src has _raid-monitor' {
+    assert "$xsrc/_raid-monitor" is_file
+}
+@test 'more_src has _megamgr' {
+    assert "$xsrc/_megamgr" is_file
+}
+@test 'more_src has _megaraid-cli' {
+    assert "$xsrc/_megaraid-cli" is_file
+}
