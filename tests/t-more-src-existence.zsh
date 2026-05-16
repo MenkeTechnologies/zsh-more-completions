@@ -15999,3 +15999,78 @@
 @test 'more_src has _rmailmm' {
     assert "$xsrc/_rmailmm" is_file
 }
+@test 'more_src has _pari-gp' {
+    assert "$xsrc/_pari-gp" is_file
+}
+@test 'more_src has _xmaxima' {
+    assert "$xsrc/_xmaxima" is_file
+}
+@test 'more_src has _imaxima' {
+    assert "$xsrc/_imaxima" is_file
+}
+@test 'more_src has _maxima-jupyter' {
+    assert "$xsrc/_maxima-jupyter" is_file
+}
+@test 'more_src has _fig2ps2tex' {
+    assert "$xsrc/_fig2ps2tex" is_file
+}
+@test 'more_src has _fig2sxd' {
+    assert "$xsrc/_fig2sxd" is_file
+}
+@test 'more_src has _transfig' {
+    assert "$xsrc/_transfig" is_file
+}
+@test 'more_src has _pic2tikz' {
+    assert "$xsrc/_pic2tikz" is_file
+}
+@test 'more_src has _jupyter-console' {
+    assert "$xsrc/_jupyter-console" is_file
+}
+@test 'more_src has _jupyter-qtconsole' {
+    assert "$xsrc/_jupyter-qtconsole" is_file
+}
+@test 'more_src has _ipdb' {
+    assert "$xsrc/_ipdb" is_file
+}
+@test 'more_src has _ipdbpp' {
+    assert "$xsrc/_ipdbpp" is_file
+}
+@test 'more_src has _nbdiff' {
+    assert "$xsrc/_nbdiff" is_file
+}
+@test 'more_src has _nbmerge' {
+    assert "$xsrc/_nbmerge" is_file
+}
+@test 'more_src has _hatchling' {
+    assert "$xsrc/_hatchling" is_file
+}
+@test 'more_src has _flit-core' {
+    assert "$xsrc/_flit-core" is_file
+}
+@test 'more_src has _gnome-terminal-server' {
+    assert "$xsrc/_gnome-terminal-server" is_file
+}
+@test 'more_src has _tinkerforge' {
+    assert "$xsrc/_tinkerforge" is_file
+}
+@test 'more_src has _brickv' {
+    assert "$xsrc/_brickv" is_file
+}
+@test 'more_src has _brickd' {
+    assert "$xsrc/_brickd" is_file
+}
+@test 'more_src has _cgmadison' {
+    assert "$xsrc/_cgmadison" is_file
+}
+@test 'more_src has _cgrun' {
+    assert "$xsrc/_cgrun" is_file
+}
+@test 'more_src has _entropy-broker' {
+    assert "$xsrc/_entropy-broker" is_file
+}
+@test 'more_src has _entropy-broker-client' {
+    assert "$xsrc/_entropy-broker-client" is_file
+}
+@test 'more_src has _egd' {
+    assert "$xsrc/_egd" is_file
+}
