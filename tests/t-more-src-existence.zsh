@@ -21033,3 +21033,78 @@
 @test 'more_src has _oddcomp' {
     assert "$xsrc/_oddcomp" is_file
 }
+@test 'more_src has _palindrome' {
+    assert "$xsrc/_palindrome" is_file
+}
+@test 'more_src has _pasteseq' {
+    assert "$xsrc/_pasteseq" is_file
+}
+@test 'more_src has _patmatdb' {
+    assert "$xsrc/_patmatdb" is_file
+}
+@test 'more_src has _patmatmotifs' {
+    assert "$xsrc/_patmatmotifs" is_file
+}
+@test 'more_src has _pepcoil' {
+    assert "$xsrc/_pepcoil" is_file
+}
+@test 'more_src has _pepdigest' {
+    assert "$xsrc/_pepdigest" is_file
+}
+@test 'more_src has _pepinfo' {
+    assert "$xsrc/_pepinfo" is_file
+}
+@test 'more_src has _pepnet' {
+    assert "$xsrc/_pepnet" is_file
+}
+@test 'more_src has _pepstats' {
+    assert "$xsrc/_pepstats" is_file
+}
+@test 'more_src has _pepwheel' {
+    assert "$xsrc/_pepwheel" is_file
+}
+@test 'more_src has _pepwindow' {
+    assert "$xsrc/_pepwindow" is_file
+}
+@test 'more_src has _plotcon' {
+    assert "$xsrc/_plotcon" is_file
+}
+@test 'more_src has _plotorf' {
+    assert "$xsrc/_plotorf" is_file
+}
+@test 'more_src has _polydot' {
+    assert "$xsrc/_polydot" is_file
+}
+@test 'more_src has _preg' {
+    assert "$xsrc/_preg" is_file
+}
+@test 'more_src has _prettyplot' {
+    assert "$xsrc/_prettyplot" is_file
+}
+@test 'more_src has _prettyseq' {
+    assert "$xsrc/_prettyseq" is_file
+}
+@test 'more_src has _primersearch' {
+    assert "$xsrc/_primersearch" is_file
+}
+@test 'more_src has _printsextract' {
+    assert "$xsrc/_printsextract" is_file
+}
+@test 'more_src has _profit' {
+    assert "$xsrc/_profit" is_file
+}
+@test 'more_src has _prophecy' {
+    assert "$xsrc/_prophecy" is_file
+}
+@test 'more_src has _prophet' {
+    assert "$xsrc/_prophet" is_file
+}
+@test 'more_src has _prosextract' {
+    assert "$xsrc/_prosextract" is_file
+}
+@test 'more_src has _rebaseextract' {
+    assert "$xsrc/_rebaseextract" is_file
+}
+@test 'more_src has _recoder' {
+    assert "$xsrc/_recoder" is_file
+}
