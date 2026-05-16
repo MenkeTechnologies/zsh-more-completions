@@ -17274,3 +17274,78 @@
 @test 'more_src has _aodh-notifier' {
     assert "$xsrc/_aodh-notifier" is_file
 }
+@test 'more_src has _trove-api' {
+    assert "$xsrc/_trove-api" is_file
+}
+@test 'more_src has _trove-conductor' {
+    assert "$xsrc/_trove-conductor" is_file
+}
+@test 'more_src has _trove-guestagent' {
+    assert "$xsrc/_trove-guestagent" is_file
+}
+@test 'more_src has _trove-manage' {
+    assert "$xsrc/_trove-manage" is_file
+}
+@test 'more_src has _trove-status' {
+    assert "$xsrc/_trove-status" is_file
+}
+@test 'more_src has _trove-taskmanager' {
+    assert "$xsrc/_trove-taskmanager" is_file
+}
+@test 'more_src has _sahara-api' {
+    assert "$xsrc/_sahara-api" is_file
+}
+@test 'more_src has _sahara-engine' {
+    assert "$xsrc/_sahara-engine" is_file
+}
+@test 'more_src has _sahara-manage' {
+    assert "$xsrc/_sahara-manage" is_file
+}
+@test 'more_src has _sahara-status' {
+    assert "$xsrc/_sahara-status" is_file
+}
+@test 'more_src has _watcher-api' {
+    assert "$xsrc/_watcher-api" is_file
+}
+@test 'more_src has _watcher-applier' {
+    assert "$xsrc/_watcher-applier" is_file
+}
+@test 'more_src has _watcher-decision-engine' {
+    assert "$xsrc/_watcher-decision-engine" is_file
+}
+@test 'more_src has _watcher-db-manage' {
+    assert "$xsrc/_watcher-db-manage" is_file
+}
+@test 'more_src has _watcher-status' {
+    assert "$xsrc/_watcher-status" is_file
+}
+@test 'more_src has _ceilometer-agent-central' {
+    assert "$xsrc/_ceilometer-agent-central" is_file
+}
+@test 'more_src has _ceilometer-agent-compute' {
+    assert "$xsrc/_ceilometer-agent-compute" is_file
+}
+@test 'more_src has _ceilometer-agent-notification' {
+    assert "$xsrc/_ceilometer-agent-notification" is_file
+}
+@test 'more_src has _ceilometer-collector' {
+    assert "$xsrc/_ceilometer-collector" is_file
+}
+@test 'more_src has _ceilometer-polling' {
+    assert "$xsrc/_ceilometer-polling" is_file
+}
+@test 'more_src has _ceilometer-upgrade' {
+    assert "$xsrc/_ceilometer-upgrade" is_file
+}
+@test 'more_src has _ceilometer-status' {
+    assert "$xsrc/_ceilometer-status" is_file
+}
+@test 'more_src has _freezer-api' {
+    assert "$xsrc/_freezer-api" is_file
+}
+@test 'more_src has _freezer-manage' {
+    assert "$xsrc/_freezer-manage" is_file
+}
+@test 'more_src has _freezer-status' {
+    assert "$xsrc/_freezer-status" is_file
+}
