@@ -15324,3 +15324,78 @@
 @test 'more_src has _nwg-shell' {
     assert "$xsrc/_nwg-shell" is_file
 }
+@test 'more_src has _lircmd' {
+    assert "$xsrc/_lircmd" is_file
+}
+@test 'more_src has _lircrcd' {
+    assert "$xsrc/_lircrcd" is_file
+}
+@test 'more_src has _mode2' {
+    assert "$xsrc/_mode2" is_file
+}
+@test 'more_src has _irw' {
+    assert "$xsrc/_irw" is_file
+}
+@test 'more_src has _irexec' {
+    assert "$xsrc/_irexec" is_file
+}
+@test 'more_src has _irrecord' {
+    assert "$xsrc/_irrecord" is_file
+}
+@test 'more_src has _irsend' {
+    assert "$xsrc/_irsend" is_file
+}
+@test 'more_src has _ircat' {
+    assert "$xsrc/_ircat" is_file
+}
+@test 'more_src has _eventlircd' {
+    assert "$xsrc/_eventlircd" is_file
+}
+@test 'more_src has _inputlirc' {
+    assert "$xsrc/_inputlirc" is_file
+}
+@test 'more_src has _fcitx5-config-qt' {
+    assert "$xsrc/_fcitx5-config-qt" is_file
+}
+@test 'more_src has _fcitx5-configtool' {
+    assert "$xsrc/_fcitx5-configtool" is_file
+}
+@test 'more_src has _fcitx5-diagnose' {
+    assert "$xsrc/_fcitx5-diagnose" is_file
+}
+@test 'more_src has _fcitx5-skk' {
+    assert "$xsrc/_fcitx5-skk" is_file
+}
+@test 'more_src has _fcitx5-mozc' {
+    assert "$xsrc/_fcitx5-mozc" is_file
+}
+@test 'more_src has _fcitx5-anthy' {
+    assert "$xsrc/_fcitx5-anthy" is_file
+}
+@test 'more_src has _fcitx5-pinyin' {
+    assert "$xsrc/_fcitx5-pinyin" is_file
+}
+@test 'more_src has _fcitx5-rime' {
+    assert "$xsrc/_fcitx5-rime" is_file
+}
+@test 'more_src has _fcitx5-table' {
+    assert "$xsrc/_fcitx5-table" is_file
+}
+@test 'more_src has _fcitx5-unicode' {
+    assert "$xsrc/_fcitx5-unicode" is_file
+}
+@test 'more_src has _fcitx5-quickphrase-editor' {
+    assert "$xsrc/_fcitx5-quickphrase-editor" is_file
+}
+@test 'more_src has _xonotic' {
+    assert "$xsrc/_xonotic" is_file
+}
+@test 'more_src has _openarena' {
+    assert "$xsrc/_openarena" is_file
+}
+@test 'more_src has _nexuiz' {
+    assert "$xsrc/_nexuiz" is_file
+}
+@test 'more_src has _warsow' {
+    assert "$xsrc/_warsow" is_file
+}
