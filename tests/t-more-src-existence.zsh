@@ -21183,3 +21183,78 @@
 @test 'more_src has _supermatcher' {
     assert "$xsrc/_supermatcher" is_file
 }
+@test 'more_src has _syco' {
+    assert "$xsrc/_syco" is_file
+}
+@test 'more_src has _taxget' {
+    assert "$xsrc/_taxget" is_file
+}
+@test 'more_src has _taxgetdown' {
+    assert "$xsrc/_taxgetdown" is_file
+}
+@test 'more_src has _taxgetrank' {
+    assert "$xsrc/_taxgetrank" is_file
+}
+@test 'more_src has _taxgetspecies' {
+    assert "$xsrc/_taxgetspecies" is_file
+}
+@test 'more_src has _taxgetup' {
+    assert "$xsrc/_taxgetup" is_file
+}
+@test 'more_src has _tcode' {
+    assert "$xsrc/_tcode" is_file
+}
+@test 'more_src has _textget' {
+    assert "$xsrc/_textget" is_file
+}
+@test 'more_src has _textsearch' {
+    assert "$xsrc/_textsearch" is_file
+}
+@test 'more_src has _tfextract' {
+    assert "$xsrc/_tfextract" is_file
+}
+@test 'more_src has _tfm' {
+    assert "$xsrc/_tfm" is_file
+}
+@test 'more_src has _tfscan' {
+    assert "$xsrc/_tfscan" is_file
+}
+@test 'more_src has _tmap' {
+    assert "$xsrc/_tmap" is_file
+}
+@test 'more_src has _tranalign' {
+    assert "$xsrc/_tranalign" is_file
+}
+@test 'more_src has _transeq' {
+    assert "$xsrc/_transeq" is_file
+}
+@test 'more_src has _trimest' {
+    assert "$xsrc/_trimest" is_file
+}
+@test 'more_src has _trimseq' {
+    assert "$xsrc/_trimseq" is_file
+}
+@test 'more_src has _trimspace' {
+    assert "$xsrc/_trimspace" is_file
+}
+@test 'more_src has _twofeat' {
+    assert "$xsrc/_twofeat" is_file
+}
+@test 'more_src has _union' {
+    assert "$xsrc/_union" is_file
+}
+@test 'more_src has _urlget' {
+    assert "$xsrc/_urlget" is_file
+}
+@test 'more_src has _variationget' {
+    assert "$xsrc/_variationget" is_file
+}
+@test 'more_src has _vectorstrip' {
+    assert "$xsrc/_vectorstrip" is_file
+}
+@test 'more_src has _water' {
+    assert "$xsrc/_water" is_file
+}
+@test 'more_src has _wobble' {
+    assert "$xsrc/_wobble" is_file
+}
