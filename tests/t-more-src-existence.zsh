@@ -18252,3 +18252,78 @@
 @test 'more_src has _rocksdb_repair' {
     assert "$xsrc/_rocksdb_repair" is_file
 }
+@test 'more_src has _natscli' {
+    assert "$xsrc/_natscli" is_file
+}
+@test 'more_src has _nats-pub' {
+    assert "$xsrc/_nats-pub" is_file
+}
+@test 'more_src has _nats-sub' {
+    assert "$xsrc/_nats-sub" is_file
+}
+@test 'more_src has _artemis-cli' {
+    assert "$xsrc/_artemis-cli" is_file
+}
+@test 'more_src has _artemis-jms-client' {
+    assert "$xsrc/_artemis-jms-client" is_file
+}
+@test 'more_src has _pulsar-daemon' {
+    assert "$xsrc/_pulsar-daemon" is_file
+}
+@test 'more_src has _zenoh-bridge-dds' {
+    assert "$xsrc/_zenoh-bridge-dds" is_file
+}
+@test 'more_src has _zenoh-bridge-mqtt' {
+    assert "$xsrc/_zenoh-bridge-mqtt" is_file
+}
+@test 'more_src has _zenoh-bridge-ros2dds' {
+    assert "$xsrc/_zenoh-bridge-ros2dds" is_file
+}
+@test 'more_src has _zenoh-router' {
+    assert "$xsrc/_zenoh-router" is_file
+}
+@test 'more_src has _zenohd' {
+    assert "$xsrc/_zenohd" is_file
+}
+@test 'more_src has _juju' {
+    assert "$xsrc/_juju" is_file
+}
+@test 'more_src has _juju-run' {
+    assert "$xsrc/_juju-run" is_file
+}
+@test 'more_src has _liftbridge' {
+    assert "$xsrc/_liftbridge" is_file
+}
+@test 'more_src has _liftctl' {
+    assert "$xsrc/_liftctl" is_file
+}
+@test 'more_src has _stan-server' {
+    assert "$xsrc/_stan-server" is_file
+}
+@test 'more_src has _tbot' {
+    assert "$xsrc/_tbot" is_file
+}
+@test 'more_src has _teleport-event-handler' {
+    assert "$xsrc/_teleport-event-handler" is_file
+}
+@test 'more_src has _pyroscope-cli' {
+    assert "$xsrc/_pyroscope-cli" is_file
+}
+@test 'more_src has _pyroscope-server' {
+    assert "$xsrc/_pyroscope-server" is_file
+}
+@test 'more_src has _tempo-cli' {
+    assert "$xsrc/_tempo-cli" is_file
+}
+@test 'more_src has _tempo-vulture' {
+    assert "$xsrc/_tempo-vulture" is_file
+}
+@test 'more_src has _vlogs' {
+    assert "$xsrc/_vlogs" is_file
+}
+@test 'more_src has _vlinsert' {
+    assert "$xsrc/_vlinsert" is_file
+}
+@test 'more_src has _vlselect' {
+    assert "$xsrc/_vlselect" is_file
+}
