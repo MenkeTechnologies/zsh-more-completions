@@ -20283,3 +20283,78 @@
 @test 'more_src has _qucs-cli' {
     assert "$xsrc/_qucs-cli" is_file
 }
+@test 'more_src has _salome' {
+    assert "$xsrc/_salome" is_file
+}
+@test 'more_src has _salome-launcher' {
+    assert "$xsrc/_salome-launcher" is_file
+}
+@test 'more_src has _elmergrid' {
+    assert "$xsrc/_elmergrid" is_file
+}
+@test 'more_src has _elmersolver' {
+    assert "$xsrc/_elmersolver" is_file
+}
+@test 'more_src has _elmerf90' {
+    assert "$xsrc/_elmerf90" is_file
+}
+@test 'more_src has _elmergui' {
+    assert "$xsrc/_elmergui" is_file
+}
+@test 'more_src has _pvbatch' {
+    assert "$xsrc/_pvbatch" is_file
+}
+@test 'more_src has _pvpython' {
+    assert "$xsrc/_pvpython" is_file
+}
+@test 'more_src has _pvserver' {
+    assert "$xsrc/_pvserver" is_file
+}
+@test 'more_src has _pvdataserver' {
+    assert "$xsrc/_pvdataserver" is_file
+}
+@test 'more_src has _pvrenderserver' {
+    assert "$xsrc/_pvrenderserver" is_file
+}
+@test 'more_src has _visit' {
+    assert "$xsrc/_visit" is_file
+}
+@test 'more_src has _ovito' {
+    assert "$xsrc/_ovito" is_file
+}
+@test 'more_src has _netgen' {
+    assert "$xsrc/_netgen" is_file
+}
+@test 'more_src has _fenics' {
+    assert "$xsrc/_fenics" is_file
+}
+@test 'more_src has _simpleFoam' {
+    assert "$xsrc/_simpleFoam" is_file
+}
+@test 'more_src has _icoFoam' {
+    assert "$xsrc/_icoFoam" is_file
+}
+@test 'more_src has _blockMesh' {
+    assert "$xsrc/_blockMesh" is_file
+}
+@test 'more_src has _snappyHexMesh' {
+    assert "$xsrc/_snappyHexMesh" is_file
+}
+@test 'more_src has _decomposePar' {
+    assert "$xsrc/_decomposePar" is_file
+}
+@test 'more_src has _reconstructPar' {
+    assert "$xsrc/_reconstructPar" is_file
+}
+@test 'more_src has _paraFoam' {
+    assert "$xsrc/_paraFoam" is_file
+}
+@test 'more_src has _foamLog' {
+    assert "$xsrc/_foamLog" is_file
+}
+@test 'more_src has _foamJob' {
+    assert "$xsrc/_foamJob" is_file
+}
+@test 'more_src has _wmake' {
+    assert "$xsrc/_wmake" is_file
+}
