@@ -17049,3 +17049,78 @@
 @test 'more_src has _swift-dispersion-report' {
     assert "$xsrc/_swift-dispersion-report" is_file
 }
+@test 'more_src has _nova-api' {
+    assert "$xsrc/_nova-api" is_file
+}
+@test 'more_src has _nova-compute' {
+    assert "$xsrc/_nova-compute" is_file
+}
+@test 'more_src has _nova-conductor' {
+    assert "$xsrc/_nova-conductor" is_file
+}
+@test 'more_src has _nova-scheduler' {
+    assert "$xsrc/_nova-scheduler" is_file
+}
+@test 'more_src has _nova-novncproxy' {
+    assert "$xsrc/_nova-novncproxy" is_file
+}
+@test 'more_src has _nova-spicehtml5proxy' {
+    assert "$xsrc/_nova-spicehtml5proxy" is_file
+}
+@test 'more_src has _nova-serialproxy' {
+    assert "$xsrc/_nova-serialproxy" is_file
+}
+@test 'more_src has _nova-status' {
+    assert "$xsrc/_nova-status" is_file
+}
+@test 'more_src has _nova-manage' {
+    assert "$xsrc/_nova-manage" is_file
+}
+@test 'more_src has _nova-rootwrap' {
+    assert "$xsrc/_nova-rootwrap" is_file
+}
+@test 'more_src has _neutron-server' {
+    assert "$xsrc/_neutron-server" is_file
+}
+@test 'more_src has _neutron-dhcp-agent' {
+    assert "$xsrc/_neutron-dhcp-agent" is_file
+}
+@test 'more_src has _neutron-l3-agent' {
+    assert "$xsrc/_neutron-l3-agent" is_file
+}
+@test 'more_src has _neutron-metadata-agent' {
+    assert "$xsrc/_neutron-metadata-agent" is_file
+}
+@test 'more_src has _neutron-openvswitch-agent' {
+    assert "$xsrc/_neutron-openvswitch-agent" is_file
+}
+@test 'more_src has _neutron-linuxbridge-agent' {
+    assert "$xsrc/_neutron-linuxbridge-agent" is_file
+}
+@test 'more_src has _neutron-sanity-check' {
+    assert "$xsrc/_neutron-sanity-check" is_file
+}
+@test 'more_src has _neutron-db-manage' {
+    assert "$xsrc/_neutron-db-manage" is_file
+}
+@test 'more_src has _glance-api' {
+    assert "$xsrc/_glance-api" is_file
+}
+@test 'more_src has _glance-cache-cleaner' {
+    assert "$xsrc/_glance-cache-cleaner" is_file
+}
+@test 'more_src has _glance-cache-manage' {
+    assert "$xsrc/_glance-cache-manage" is_file
+}
+@test 'more_src has _glance-cache-prefetcher' {
+    assert "$xsrc/_glance-cache-prefetcher" is_file
+}
+@test 'more_src has _glance-cache-pruner' {
+    assert "$xsrc/_glance-cache-pruner" is_file
+}
+@test 'more_src has _glance-control' {
+    assert "$xsrc/_glance-control" is_file
+}
+@test 'more_src has _glance-manage' {
+    assert "$xsrc/_glance-manage" is_file
+}
