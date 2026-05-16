@@ -20208,3 +20208,78 @@
 @test 'more_src has _fricas' {
     assert "$xsrc/_fricas" is_file
 }
+@test 'more_src has _pcb-rnd' {
+    assert "$xsrc/_pcb-rnd" is_file
+}
+@test 'more_src has _pcbnew' {
+    assert "$xsrc/_pcbnew" is_file
+}
+@test 'more_src has _eeschema' {
+    assert "$xsrc/_eeschema" is_file
+}
+@test 'more_src has _xschem' {
+    assert "$xsrc/_xschem" is_file
+}
+@test 'more_src has _magic-vlsi' {
+    assert "$xsrc/_magic-vlsi" is_file
+}
+@test 'more_src has _magic' {
+    assert "$xsrc/_magic" is_file
+}
+@test 'more_src has _electric' {
+    assert "$xsrc/_electric" is_file
+}
+@test 'more_src has _qucs' {
+    assert "$xsrc/_qucs" is_file
+}
+@test 'more_src has _gnucap' {
+    assert "$xsrc/_gnucap" is_file
+}
+@test 'more_src has _yosys-abc' {
+    assert "$xsrc/_yosys-abc" is_file
+}
+@test 'more_src has _yosys-smtbmc' {
+    assert "$xsrc/_yosys-smtbmc" is_file
+}
+@test 'more_src has _yosys-witness' {
+    assert "$xsrc/_yosys-witness" is_file
+}
+@test 'more_src has _yosys-filterlib' {
+    assert "$xsrc/_yosys-filterlib" is_file
+}
+@test 'more_src has _yosys-config' {
+    assert "$xsrc/_yosys-config" is_file
+}
+@test 'more_src has _freecad-daily' {
+    assert "$xsrc/_freecad-daily" is_file
+}
+@test 'more_src has _openvsp' {
+    assert "$xsrc/_openvsp" is_file
+}
+@test 'more_src has _openvsp-connect' {
+    assert "$xsrc/_openvsp-connect" is_file
+}
+@test 'more_src has _openvsp-helper' {
+    assert "$xsrc/_openvsp-helper" is_file
+}
+@test 'more_src has _kicost' {
+    assert "$xsrc/_kicost" is_file
+}
+@test 'more_src has _partsbox' {
+    assert "$xsrc/_partsbox" is_file
+}
+@test 'more_src has _kicad-cli-nightly' {
+    assert "$xsrc/_kicad-cli-nightly" is_file
+}
+@test 'more_src has _freecad-cli' {
+    assert "$xsrc/_freecad-cli" is_file
+}
+@test 'more_src has _freecad-cmd' {
+    assert "$xsrc/_freecad-cmd" is_file
+}
+@test 'more_src has _freecadqt' {
+    assert "$xsrc/_freecadqt" is_file
+}
+@test 'more_src has _qucs-cli' {
+    assert "$xsrc/_qucs-cli" is_file
+}
