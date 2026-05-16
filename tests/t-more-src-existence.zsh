@@ -15849,3 +15849,78 @@
 @test 'more_src has _bedit' {
     assert "$xsrc/_bedit" is_file
 }
+@test 'more_src has _mkbootfs' {
+    assert "$xsrc/_mkbootfs" is_file
+}
+@test 'more_src has _fastbootd' {
+    assert "$xsrc/_fastbootd" is_file
+}
+@test 'more_src has _payload_dumper' {
+    assert "$xsrc/_payload_dumper" is_file
+}
+@test 'more_src has _avbtool' {
+    assert "$xsrc/_avbtool" is_file
+}
+@test 'more_src has _fdtgrep' {
+    assert "$xsrc/_fdtgrep" is_file
+}
+@test 'more_src has _mokvar' {
+    assert "$xsrc/_mokvar" is_file
+}
+@test 'more_src has _tegrarcm' {
+    assert "$xsrc/_tegrarcm" is_file
+}
+@test 'more_src has _nvflash' {
+    assert "$xsrc/_nvflash" is_file
+}
+@test 'more_src has _u-boot-mkimage' {
+    assert "$xsrc/_u-boot-mkimage" is_file
+}
+@test 'more_src has _idme' {
+    assert "$xsrc/_idme" is_file
+}
+@test 'more_src has _memstat' {
+    assert "$xsrc/_memstat" is_file
+}
+@test 'more_src has _smbios-battery-ctl' {
+    assert "$xsrc/_smbios-battery-ctl" is_file
+}
+@test 'more_src has _smbios-keyboard-ctl' {
+    assert "$xsrc/_smbios-keyboard-ctl" is_file
+}
+@test 'more_src has _smbios-passwd' {
+    assert "$xsrc/_smbios-passwd" is_file
+}
+@test 'more_src has _smbios-sys-info' {
+    assert "$xsrc/_smbios-sys-info" is_file
+}
+@test 'more_src has _smbios-thermal-ctl' {
+    assert "$xsrc/_smbios-thermal-ctl" is_file
+}
+@test 'more_src has _smbios-token-ctl' {
+    assert "$xsrc/_smbios-token-ctl" is_file
+}
+@test 'more_src has _smbios-upflag-ctl' {
+    assert "$xsrc/_smbios-upflag-ctl" is_file
+}
+@test 'more_src has _smbios-wakeup-ctl' {
+    assert "$xsrc/_smbios-wakeup-ctl" is_file
+}
+@test 'more_src has _nvbootflash' {
+    assert "$xsrc/_nvbootflash" is_file
+}
+@test 'more_src has _nvautoflash' {
+    assert "$xsrc/_nvautoflash" is_file
+}
+@test 'more_src has _nvgetdtb' {
+    assert "$xsrc/_nvgetdtb" is_file
+}
+@test 'more_src has _nvtboot' {
+    assert "$xsrc/_nvtboot" is_file
+}
+@test 'more_src has _tf-a-tools' {
+    assert "$xsrc/_tf-a-tools" is_file
+}
+@test 'more_src has _heimdall-frontend' {
+    assert "$xsrc/_heimdall-frontend" is_file
+}
