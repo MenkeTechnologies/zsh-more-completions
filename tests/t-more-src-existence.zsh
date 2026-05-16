@@ -21333,3 +21333,78 @@
 @test 'more_src has _cacheentities' {
     assert "$xsrc/_cacheentities" is_file
 }
+@test 'more_src has _edamdef' {
+    assert "$xsrc/_edamdef" is_file
+}
+@test 'more_src has _edamhasinput' {
+    assert "$xsrc/_edamhasinput" is_file
+}
+@test 'more_src has _edamhasoutput' {
+    assert "$xsrc/_edamhasoutput" is_file
+}
+@test 'more_src has _edamisformat' {
+    assert "$xsrc/_edamisformat" is_file
+}
+@test 'more_src has _edamisid' {
+    assert "$xsrc/_edamisid" is_file
+}
+@test 'more_src has _edamname' {
+    assert "$xsrc/_edamname" is_file
+}
+@test 'more_src has _primer3' {
+    assert "$xsrc/_primer3" is_file
+}
+@test 'more_src has _primer3_core' {
+    assert "$xsrc/_primer3_core" is_file
+}
+@test 'more_src has _primer3_masker' {
+    assert "$xsrc/_primer3_masker" is_file
+}
+@test 'more_src has _winemenubuilder' {
+    assert "$xsrc/_winemenubuilder" is_file
+}
+@test 'more_src has _winefile' {
+    assert "$xsrc/_winefile" is_file
+}
+@test 'more_src has _fxconv' {
+    assert "$xsrc/_fxconv" is_file
+}
+@test 'more_src has _fxread' {
+    assert "$xsrc/_fxread" is_file
+}
+@test 'more_src has _fxwrite' {
+    assert "$xsrc/_fxwrite" is_file
+}
+@test 'more_src has _lxshortcut' {
+    assert "$xsrc/_lxshortcut" is_file
+}
+@test 'more_src has _lxsession-edit' {
+    assert "$xsrc/_lxsession-edit" is_file
+}
+@test 'more_src has _lxpolkit' {
+    assert "$xsrc/_lxpolkit" is_file
+}
+@test 'more_src has _lxsudo' {
+    assert "$xsrc/_lxsudo" is_file
+}
+@test 'more_src has _knights' {
+    assert "$xsrc/_knights" is_file
+}
+@test 'more_src has _arasan' {
+    assert "$xsrc/_arasan" is_file
+}
+@test 'more_src has _sloppy' {
+    assert "$xsrc/_sloppy" is_file
+}
+@test 'more_src has _scid_vs_pc' {
+    assert "$xsrc/_scid_vs_pc" is_file
+}
+@test 'more_src has _komodo' {
+    assert "$xsrc/_komodo" is_file
+}
+@test 'more_src has _leela-chess-zero' {
+    assert "$xsrc/_leela-chess-zero" is_file
+}
+@test 'more_src has _lxmenu-data' {
+    assert "$xsrc/_lxmenu-data" is_file
+}
