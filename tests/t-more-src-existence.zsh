@@ -20358,3 +20358,78 @@
 @test 'more_src has _wmake' {
     assert "$xsrc/_wmake" is_file
 }
+@test 'more_src has _vasp' {
+    assert "$xsrc/_vasp" is_file
+}
+@test 'more_src has _lmp' {
+    assert "$xsrc/_lmp" is_file
+}
+@test 'more_src has _gromacs' {
+    assert "$xsrc/_gromacs" is_file
+}
+@test 'more_src has _gmx_d' {
+    assert "$xsrc/_gmx_d" is_file
+}
+@test 'more_src has _namd2' {
+    assert "$xsrc/_namd2" is_file
+}
+@test 'more_src has _namdcuda' {
+    assert "$xsrc/_namdcuda" is_file
+}
+@test 'more_src has _cp.x' {
+    assert "$xsrc/_cp.x" is_file
+}
+@test 'more_src has _dos.x' {
+    assert "$xsrc/_dos.x" is_file
+}
+@test 'more_src has _bands.x' {
+    assert "$xsrc/_bands.x" is_file
+}
+@test 'more_src has _epw.x' {
+    assert "$xsrc/_epw.x" is_file
+}
+@test 'more_src has _ph.x' {
+    assert "$xsrc/_ph.x" is_file
+}
+@test 'more_src has _quantum-espresso' {
+    assert "$xsrc/_quantum-espresso" is_file
+}
+@test 'more_src has _sander' {
+    assert "$xsrc/_sander" is_file
+}
+@test 'more_src has _pmemd' {
+    assert "$xsrc/_pmemd" is_file
+}
+@test 'more_src has _cpptraj' {
+    assert "$xsrc/_cpptraj" is_file
+}
+@test 'more_src has _antechamber' {
+    assert "$xsrc/_antechamber" is_file
+}
+@test 'more_src has _tleap' {
+    assert "$xsrc/_tleap" is_file
+}
+@test 'more_src has _parmed' {
+    assert "$xsrc/_parmed" is_file
+}
+@test 'more_src has _tinker' {
+    assert "$xsrc/_tinker" is_file
+}
+@test 'more_src has _openmm' {
+    assert "$xsrc/_openmm" is_file
+}
+@test 'more_src has _mdtraj' {
+    assert "$xsrc/_mdtraj" is_file
+}
+@test 'more_src has _mopac' {
+    assert "$xsrc/_mopac" is_file
+}
+@test 'more_src has _pyscf' {
+    assert "$xsrc/_pyscf" is_file
+}
+@test 'more_src has _rosetta_scripts' {
+    assert "$xsrc/_rosetta_scripts" is_file
+}
+@test 'more_src has _adf' {
+    assert "$xsrc/_adf" is_file
+}
