@@ -16524,3 +16524,78 @@
 @test 'more_src has _fi_strerror' {
     assert "$xsrc/_fi_strerror" is_file
 }
+@test 'more_src has _ibcheckerrs' {
+    assert "$xsrc/_ibcheckerrs" is_file
+}
+@test 'more_src has _ibcheckerrors' {
+    assert "$xsrc/_ibcheckerrors" is_file
+}
+@test 'more_src has _ibcheckport' {
+    assert "$xsrc/_ibcheckport" is_file
+}
+@test 'more_src has _ibcheckportstate' {
+    assert "$xsrc/_ibcheckportstate" is_file
+}
+@test 'more_src has _ibcheckportwidth' {
+    assert "$xsrc/_ibcheckportwidth" is_file
+}
+@test 'more_src has _ibcheckstate' {
+    assert "$xsrc/_ibcheckstate" is_file
+}
+@test 'more_src has _ibcheckwidth' {
+    assert "$xsrc/_ibcheckwidth" is_file
+}
+@test 'more_src has _ibchecknet' {
+    assert "$xsrc/_ibchecknet" is_file
+}
+@test 'more_src has _ibchecknode' {
+    assert "$xsrc/_ibchecknode" is_file
+}
+@test 'more_src has _ibhca_self_test' {
+    assert "$xsrc/_ibhca_self_test" is_file
+}
+@test 'more_src has _mlxconfig' {
+    assert "$xsrc/_mlxconfig" is_file
+}
+@test 'more_src has _mlxfwmanager' {
+    assert "$xsrc/_mlxfwmanager" is_file
+}
+@test 'more_src has _mlxfwreset' {
+    assert "$xsrc/_mlxfwreset" is_file
+}
+@test 'more_src has _mlxlink' {
+    assert "$xsrc/_mlxlink" is_file
+}
+@test 'more_src has _mlxreg' {
+    assert "$xsrc/_mlxreg" is_file
+}
+@test 'more_src has _mlxprivhost' {
+    assert "$xsrc/_mlxprivhost" is_file
+}
+@test 'more_src has _mlxqos' {
+    assert "$xsrc/_mlxqos" is_file
+}
+@test 'more_src has _mlxuptime' {
+    assert "$xsrc/_mlxuptime" is_file
+}
+@test 'more_src has _mst' {
+    assert "$xsrc/_mst" is_file
+}
+@test 'more_src has _mstconfig' {
+    assert "$xsrc/_mstconfig" is_file
+}
+@test 'more_src has _mstflint' {
+    assert "$xsrc/_mstflint" is_file
+}
+@test 'more_src has _mstfwmanager' {
+    assert "$xsrc/_mstfwmanager" is_file
+}
+@test 'more_src has _mstprivhost' {
+    assert "$xsrc/_mstprivhost" is_file
+}
+@test 'more_src has _mstregdump' {
+    assert "$xsrc/_mstregdump" is_file
+}
+@test 'more_src has _mstvpd' {
+    assert "$xsrc/_mstvpd" is_file
+}
