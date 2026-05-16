@@ -18630,3 +18630,78 @@
 @test 'more_src has _h2o-3' {
     assert "$xsrc/_h2o-3" is_file
 }
+@test 'more_src has _maxima-help' {
+    assert "$xsrc/_maxima-help" is_file
+}
+@test 'more_src has _reduce' {
+    assert "$xsrc/_reduce" is_file
+}
+@test 'more_src has _gnuplotmkpov' {
+    assert "$xsrc/_gnuplotmkpov" is_file
+}
+@test 'more_src has _gp2c-run' {
+    assert "$xsrc/_gp2c-run" is_file
+}
+@test 'more_src has _mupad' {
+    assert "$xsrc/_mupad" is_file
+}
+@test 'more_src has _kdesvn' {
+    assert "$xsrc/_kdesvn" is_file
+}
+@test 'more_src has _keditbookmarks' {
+    assert "$xsrc/_keditbookmarks" is_file
+}
+@test 'more_src has _khelpcenter' {
+    assert "$xsrc/_khelpcenter" is_file
+}
+@test 'more_src has _kdevelop' {
+    assert "$xsrc/_kdevelop" is_file
+}
+@test 'more_src has _kompare' {
+    assert "$xsrc/_kompare" is_file
+}
+@test 'more_src has _krename' {
+    assert "$xsrc/_krename" is_file
+}
+@test 'more_src has _krfb' {
+    assert "$xsrc/_krfb" is_file
+}
+@test 'more_src has _krdc' {
+    assert "$xsrc/_krdc" is_file
+}
+@test 'more_src has _kcalc' {
+    assert "$xsrc/_kcalc" is_file
+}
+@test 'more_src has _kapptemplate' {
+    assert "$xsrc/_kapptemplate" is_file
+}
+@test 'more_src has _kbookmarkmerger' {
+    assert "$xsrc/_kbookmarkmerger" is_file
+}
+@test 'more_src has _kphotoalbum' {
+    assert "$xsrc/_kphotoalbum" is_file
+}
+@test 'more_src has _kmag' {
+    assert "$xsrc/_kmag" is_file
+}
+@test 'more_src has _kmix' {
+    assert "$xsrc/_kmix" is_file
+}
+@test 'more_src has _kuiviewer' {
+    assert "$xsrc/_kuiviewer" is_file
+}
+@test 'more_src has _kwalletmanager' {
+    assert "$xsrc/_kwalletmanager" is_file
+}
+@test 'more_src has _kwalletd6' {
+    assert "$xsrc/_kwalletd6" is_file
+}
+@test 'more_src has _kwave' {
+    assert "$xsrc/_kwave" is_file
+}
+@test 'more_src has _kwriteconfig6' {
+    assert "$xsrc/_kwriteconfig6" is_file
+}
+@test 'more_src has _kbluetoothd' {
+    assert "$xsrc/_kbluetoothd" is_file
+}
