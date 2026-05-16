@@ -1,4 +1,6 @@
 #compdef removeSpaces.sh
+# Documentation: https://man.archlinux.org/search?q=removeSpaces.sh
+# Reference accessed: 2026-05-16
 
 local -a arguments
 

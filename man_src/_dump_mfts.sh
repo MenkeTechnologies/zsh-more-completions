@@ -1,4 +1,6 @@
 #compdef dump_mfts.sh
+# Documentation: https://man.archlinux.org/search?q=dump_mfts.sh
+# Reference accessed: 2026-05-16
 
 local arguments
 

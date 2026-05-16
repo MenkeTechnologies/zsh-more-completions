@@ -1,4 +1,6 @@
 #compdef landing-portal-api.sh
+# Documentation: https://man.archlinux.org/search?q=landing-portal-api.sh
+# Reference accessed: 2026-05-16
 # Source: https://github.com/gbrrestoration/landing-portal-api-bash-wrapper/blob/e97a478c65de09d767998cce593d47a68fade30d/_landing-portal-api.sh
 # Repository: gbrrestoration/landing-portal-api-bash-wrapper (_landing-portal-api.sh)
 

@@ -1,4 +1,6 @@
 #compdef umb
+# Documentation: https://man.archlinux.org/search?q=umb
+# Reference accessed: 2026-05-16
 # Source: https://github.com/ray-kast/zrc/blob/b765d536beb42adda1286582d57e3242f0312c2a/completion/_umb.zsh
 # Repository: ray-kast/zrc (completion/_umb.zsh)
 

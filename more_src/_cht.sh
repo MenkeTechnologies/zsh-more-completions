@@ -1,4 +1,6 @@
 #compdef cht.sh
+# Documentation: https://man.archlinux.org/search?q=cht.sh
+# Reference accessed: 2026-05-16
 
 # Zsh completion for cht.sh - the only cheat sheet you need (cheat.sh client)
 

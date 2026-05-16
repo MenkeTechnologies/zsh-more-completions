@@ -1,4 +1,6 @@
 #compdef vcfutils.pl
+# Documentation: https://man.archlinux.org/search?q=vcfutils.pl
+# Reference accessed: 2026-05-16
 
 # samtools vcfutils.pl: helper utilities for VCF files
 local curcontext="$curcontext" ret=1 state line

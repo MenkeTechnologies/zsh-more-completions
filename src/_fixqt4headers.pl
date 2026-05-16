@@ -1,4 +1,6 @@
 #compdef fixqt4headers.pl
+# Documentation: https://man.archlinux.org/search?q=fixqt4headers.pl
+# Reference accessed: 2026-05-16
 
 local -a arguments
 

@@ -1,4 +1,6 @@
 #compdef acme.sh
+# Documentation: https://man.archlinux.org/search?q=acme.sh
+# Reference accessed: 2026-05-16
 
 # Zsh completion for acme.sh - ACME protocol client
 

@@ -1,4 +1,6 @@
 #compdef tgzLocalInstaller.sh
+# Documentation: https://man.archlinux.org/search?q=tgzLocalInstaller.sh
+# Reference accessed: 2026-05-16
 
 local -a arguments
 

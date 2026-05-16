@@ -1,4 +1,6 @@
 #compdef isc-config.sh
+# Documentation: https://man.archlinux.org/search?q=isc-config.sh
+# Reference accessed: 2026-05-16
 
 local arguments
 

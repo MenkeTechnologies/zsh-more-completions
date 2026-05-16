@@ -1,4 +1,6 @@
 #compdef run-on-binaries-in.sh
+# Documentation: https://man.archlinux.org/search?q=run-on-binaries-in.sh
+# Reference accessed: 2026-05-16
 
 local -a arguments
 

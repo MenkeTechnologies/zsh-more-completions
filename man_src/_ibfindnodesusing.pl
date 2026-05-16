@@ -1,4 +1,6 @@
 #compdef ibfindnodesusing.pl
+# Documentation: https://man.archlinux.org/search?q=ibfindnodesusing.pl
+# Reference accessed: 2026-05-16
 
 local arguments
 

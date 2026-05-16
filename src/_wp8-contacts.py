@@ -1,4 +1,6 @@
 #compdef wp8-contacts.py
+# Documentation: https://man.archlinux.org/search?q=wp8-contacts.py
+# Reference accessed: 2026-05-16
 
 local -a arguments
 

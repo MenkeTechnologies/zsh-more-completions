@@ -1,4 +1,6 @@
 #compdef asip-status.pl
+# Documentation: https://man.archlinux.org/search?q=asip-status.pl
+# Reference accessed: 2026-05-16
 
 local -a arguments
 

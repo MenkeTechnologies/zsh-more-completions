@@ -1,4 +1,6 @@
 #compdef msgfmt.py
+# Documentation: https://man.archlinux.org/search?q=msgfmt.py
+# Reference accessed: 2026-05-16
 
 local arguments
 

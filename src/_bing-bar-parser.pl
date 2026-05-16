@@ -1,4 +1,6 @@
 #compdef bing-bar-parser.pl
+# Documentation: https://man.archlinux.org/search?q=bing-bar-parser.pl
+# Reference accessed: 2026-05-16
 
 local -a arguments
 

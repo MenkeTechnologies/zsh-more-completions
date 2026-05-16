@@ -1,4 +1,6 @@
 #compdef manage.sh
+# Documentation: https://man.archlinux.org/search?q=manage.sh
+# Reference accessed: 2026-05-16
 # Source: https://github.com/8bit-wraith/8q-is/blob/96b1f24d28fc2a5222a918994be3ea71b18fd21f/scripts/manage.sh
 # Repository: 8bit-wraith/8q-is (scripts/manage.sh)
 #!/bin/bash

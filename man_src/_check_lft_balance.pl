@@ -1,4 +1,6 @@
 #compdef check_lft_balance.pl
+# Documentation: https://man.archlinux.org/search?q=check_lft_balance.pl
+# Reference accessed: 2026-05-16
 
 local arguments
 

@@ -1,4 +1,6 @@
 #compdef kd
+# Documentation: https://man.archlinux.org/search?q=kd
+# Reference accessed: 2026-05-16
 # Source: https://github.com/shini4i/kd/blob/90e4ee46c879e174e477bd5dc069c7609e7857c4/completion/_kd.zsh
 # Repository: shini4i/kd (completion/_kd.zsh)
 

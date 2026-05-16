@@ -1,4 +1,6 @@
 #compdef ogit.sh ogit
+# Documentation: https://man.archlinux.org/search?q=ogit.sh
+# Reference accessed: 2026-05-16
 # Source: https://github.com/aIrseneO/aIrseneO/blob/1ec5121a87fbafc23cd5b902752a408dd393e0b3/ogit.sh
 # Repository: aIrseneO/aIrseneO (ogit.sh)
 #!/bin/bash

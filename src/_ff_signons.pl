@@ -1,4 +1,6 @@
 #compdef ff_signons.pl
+# Documentation: https://man.archlinux.org/search?q=ff_signons.pl
+# Reference accessed: 2026-05-16
 
 local -a arguments
 

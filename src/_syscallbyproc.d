@@ -1,4 +1,6 @@
 #compdef syscallbyproc.d
+# Documentation: https://man.archlinux.org/search?q=syscallbyproc.d
+# Reference accessed: 2026-05-16
 
 local -a arguments
 

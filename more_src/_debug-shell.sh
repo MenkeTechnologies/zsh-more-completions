@@ -1,4 +1,6 @@
 #compdef debug-shell.sh
+# Documentation: https://man.archlinux.org/search?q=debug-shell.sh
+# Reference accessed: 2026-05-16
 
 _arguments -s -S \
   '(- *)'{-h,--help}'[show help]' \

@@ -1,4 +1,6 @@
 #compdef copy_from_container.sh
+# Documentation: https://man.archlinux.org/search?q=copy_from_container.sh
+# Reference accessed: 2026-05-16
 # Source: https://github.com/yale-nova/weave/blob/7ac76a09da111177e300568ee0ff25c427989344/azure/common/install_fzf_autocomplete.sh
 # Repository: yale-nova/weave (azure/common/install_fzf_autocomplete.sh)
 #!/bin/bash

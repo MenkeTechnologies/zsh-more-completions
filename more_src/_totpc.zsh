@@ -1,4 +1,6 @@
 #compdef totpc
+# Documentation: https://man.archlinux.org/search?q=totpc
+# Reference accessed: 2026-05-16
 # Source: https://github.com/jost-s/totpc/blob/e21442c6e2e557a765d6c5c4683ede9ac067d062/_totpc.zsh
 # Repository: jost-s/totpc (_totpc.zsh)
 

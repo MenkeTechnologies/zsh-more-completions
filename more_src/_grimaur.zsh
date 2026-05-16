@@ -1,4 +1,6 @@
 #compdef grimaur 
+# Documentation: https://man.archlinux.org/search?q=grimaur
+# Reference accessed: 2026-05-16
 # Source: https://github.com/mackilanu/grimaur/blob/bc37b658fd19753dc0a218d3b3ec9c07a9cec95e/base/_grimaur.zsh
 # Repository: mackilanu/grimaur (base/_grimaur.zsh)
 # file usr/share/zsh/site-functions/_grimaur

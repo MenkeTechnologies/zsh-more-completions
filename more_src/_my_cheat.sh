@@ -1,4 +1,6 @@
 #compdef my_cheat.sh
+# Documentation: https://man.archlinux.org/search?q=my_cheat.sh
+# Reference accessed: 2026-05-16
 # Source: https://github.com/beardnick/dotfiles/blob/65a2aff2b61e55f37a844970900571828149a70d/shell/.zinit/completions/_my_cheat.sh
 # Repository: beardnick/dotfiles (shell/.zinit/completions/_my_cheat.sh)
 # ------------------------------------------------------------------------------

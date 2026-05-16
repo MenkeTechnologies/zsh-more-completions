@@ -1,4 +1,6 @@
 #compdef whois.md
+# Documentation: https://man.archlinux.org/search?q=whois.md
+# Reference accessed: 2026-05-16
 
 local -a arguments
 

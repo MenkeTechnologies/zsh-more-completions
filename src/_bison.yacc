@@ -1,4 +1,6 @@
 #compdef bison.yacc
+# Documentation: https://man.archlinux.org/search?q=bison.yacc
+# Reference accessed: 2026-05-16
 
 local -a arguments
 

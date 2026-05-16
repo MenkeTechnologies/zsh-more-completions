@@ -1,4 +1,6 @@
 #compdef testssl.sh
+# Documentation: https://man.archlinux.org/search?q=testssl.sh
+# Reference accessed: 2026-05-16
 
 _arguments -s \
   '(- *)--help[show help]' \

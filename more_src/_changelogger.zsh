@@ -1,4 +1,6 @@
 #compdef changelogger
+# Documentation: https://man.archlinux.org/search?q=changelogger
+# Reference accessed: 2026-05-16
 # Source: https://github.com/KDesp73/changelogger/blob/5861d8a1b5fb79a1f08a6834200c52ede3757423/docs/_changelogger.zsh
 # Repository: KDesp73/changelogger (docs/_changelogger.zsh)
 

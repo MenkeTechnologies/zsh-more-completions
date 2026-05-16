@@ -1,4 +1,6 @@
 #compdef aa-log
+# Documentation: https://man.archlinux.org/search?q=aa-log
+# Reference accessed: 2026-05-16
 # Source: https://github.com/roddhjav/apparmor.d/blob/f8de8d248ba607d48c8f3e798b19cd35f814d71c/share/zsh/site-functions/_aa-log.zsh
 # Repository: roddhjav/apparmor.d (share/zsh/site-functions/_aa-log.zsh)
 #autoload

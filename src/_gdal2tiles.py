@@ -1,4 +1,6 @@
 #compdef gdal2tiles.py
+# Documentation: https://man.archlinux.org/search?q=gdal2tiles.py
+# Reference accessed: 2026-05-16
 
 local -a arguments
 

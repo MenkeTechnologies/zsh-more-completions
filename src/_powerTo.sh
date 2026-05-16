@@ -1,4 +1,6 @@
 #compdef powerTo.sh
+# Documentation: https://man.archlinux.org/search?q=powerTo.sh
+# Reference accessed: 2026-05-16
 
 _arguments -s -S \
        '(-h)-help[prints an help message]' \

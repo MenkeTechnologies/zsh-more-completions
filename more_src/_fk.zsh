@@ -1,4 +1,6 @@
 #compdef fk
+# Documentation: https://man.archlinux.org/search?q=fk
+# Reference accessed: 2026-05-16
 # Source: https://github.com/fantastic-kit/fantastic-kit/blob/4f05545472ba16aff7a2d88748a4db5f16cadf91/autocompletion/_fk.zsh
 # Repository: fantastic-kit/fantastic-kit (autocompletion/_fk.zsh)
 

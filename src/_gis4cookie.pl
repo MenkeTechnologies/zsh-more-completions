@@ -1,4 +1,6 @@
 #compdef gis4cookie.pl
+# Documentation: https://man.archlinux.org/search?q=gis4cookie.pl
+# Reference accessed: 2026-05-16
 
 local -a arguments
 
