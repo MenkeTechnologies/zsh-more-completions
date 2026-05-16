@@ -19005,3 +19005,78 @@
 @test 'more_src has _flwm' {
     assert "$xsrc/_flwm" is_file
 }
+@test 'more_src has _waydroid-cli' {
+    assert "$xsrc/_waydroid-cli" is_file
+}
+@test 'more_src has _waylandpp' {
+    assert "$xsrc/_waylandpp" is_file
+}
+@test 'more_src has _wlroots-headless' {
+    assert "$xsrc/_wlroots-headless" is_file
+}
+@test 'more_src has _gtklp' {
+    assert "$xsrc/_gtklp" is_file
+}
+@test 'more_src has _gtklpr' {
+    assert "$xsrc/_gtklpr" is_file
+}
+@test 'more_src has _gtklp-cli' {
+    assert "$xsrc/_gtklp-cli" is_file
+}
+@test 'more_src has _mailpile-cli' {
+    assert "$xsrc/_mailpile-cli" is_file
+}
+@test 'more_src has _sound-recorder' {
+    assert "$xsrc/_sound-recorder" is_file
+}
+@test 'more_src has _gnome-screenrecorder' {
+    assert "$xsrc/_gnome-screenrecorder" is_file
+}
+@test 'more_src has _mate-sound-recorder' {
+    assert "$xsrc/_mate-sound-recorder" is_file
+}
+@test 'more_src has _kazam' {
+    assert "$xsrc/_kazam" is_file
+}
+@test 'more_src has _vokoscreen' {
+    assert "$xsrc/_vokoscreen" is_file
+}
+@test 'more_src has _vokoscreen-ng' {
+    assert "$xsrc/_vokoscreen-ng" is_file
+}
+@test 'more_src has _simplescreenrecorder' {
+    assert "$xsrc/_simplescreenrecorder" is_file
+}
+@test 'more_src has _gpu-screen-recorder' {
+    assert "$xsrc/_gpu-screen-recorder" is_file
+}
+@test 'more_src has _lossless-cut' {
+    assert "$xsrc/_lossless-cut" is_file
+}
+@test 'more_src has _cinelerra' {
+    assert "$xsrc/_cinelerra" is_file
+}
+@test 'more_src has _obs-websocket' {
+    assert "$xsrc/_obs-websocket" is_file
+}
+@test 'more_src has _streamlabs-obs' {
+    assert "$xsrc/_streamlabs-obs" is_file
+}
+@test 'more_src has _mailcatcher' {
+    assert "$xsrc/_mailcatcher" is_file
+}
+@test 'more_src has _xrec' {
+    assert "$xsrc/_xrec" is_file
+}
+@test 'more_src has _inox' {
+    assert "$xsrc/_inox" is_file
+}
+@test 'more_src has _mhfix' {
+    assert "$xsrc/_mhfix" is_file
+}
+@test 'more_src has _fmtdump' {
+    assert "$xsrc/_fmtdump" is_file
+}
+@test 'more_src has _gtklp-utils' {
+    assert "$xsrc/_gtklp-utils" is_file
+}
