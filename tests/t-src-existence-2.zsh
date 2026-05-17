@@ -10216,20 +10216,8 @@
     assert "$src/_git-clang-format" is_file
 }
 
-@test 'src has _git-cvsserver' {
-    assert "$src/_git-cvsserver" is_file
-}
-
 @test 'src has _git-latexdiff' {
     assert "$src/_git-latexdiff" is_file
-}
-
-@test 'src has _git-receive-pack' {
-    assert "$src/_git-receive-pack" is_file
-}
-
-@test 'src has _git-upload-pack' {
-    assert "$src/_git-upload-pack" is_file
 }
 
 @test 'src has _gitSdiffColorizer.pl' {

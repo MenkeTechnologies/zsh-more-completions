@@ -145,3 +145,15 @@
     tracked=$(git -C "$pluginDir" ls-files '*.zwc' 2>/dev/null | wc -l | tr -d ' ')
     assert $tracked equals 0
 }
+
+@test 'more_src and src do not ship _git-* files that shadow override_src/_git' {
+    local f verb subdir shadows=0
+    for subdir in more_src src; do
+        for f in "$pluginDir/$subdir"/_git-*(N); do
+            verb=${${f:t}#_}
+            verb=${verb%.sh}
+            grep -qF "(( \$+functions[_git-${verb}] )) ||" "$pluginDir/override_src/_git" 2>/dev/null && (( shadows++ ))
+        done
+    done
+    assert $shadows equals 0
+}
