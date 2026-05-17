@@ -1,6 +1,7 @@
 #compdef s3
-# Documentation: https://man.archlinux.org/search?q=s3
-# Reference accessed: 2026-05-16
+# Documentation: https://github.com/haskell-mafia/mismi
+# Reference accessed: 2026-05-17
+# Verified: upstream docs at the URL above.
 # Source: https://github.com/haskell-mafia/mismi/blob/f6df07a52c6c8b1cf195b58d20ef109e390be014/mismi-cli/_s3.zsh
 # Repository: haskell-mafia/mismi (mismi-cli/_s3.zsh)
 
