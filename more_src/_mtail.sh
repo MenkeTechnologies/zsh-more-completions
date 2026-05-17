@@ -1,6 +1,7 @@
 #compdef mtail.sh
-# Documentation: https://man.archlinux.org/search?q=mtail.sh
-# Reference accessed: 2026-05-16
+# Documentation: https://github.com/lmartinking/monkey-tail
+# Reference accessed: 2026-05-17
+# Verified: upstream docs at the URL above.
 
 _arguments -s -S \
   '(- *)'{-h,--help}'[show help]' \
