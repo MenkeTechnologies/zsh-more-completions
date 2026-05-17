@@ -1,6 +1,9 @@
 #compdef domain.sh
-# Documentation: https://man.archlinux.org/search?q=domain.sh
-# Reference accessed: 2026-05-16
+# Documentation: https://docs.wildfly.org/Admin_Guide.html
+# Reference accessed: 2026-05-17
+# Verified: upstream docs at the URL above.
+
+# domain.sh — WildFly/JBoss EAP Host Controller launcher (managed-domain mode).
 
 _arguments -s \
   '(- *)'{-h,--help}'[show help]' \
