@@ -1,6 +1,7 @@
 #compdef cp.x
-# Documentation: https://man.archlinux.org/search?q=cp.x
-# Reference accessed: 2026-05-16
+# Documentation: https://www.quantum-espresso.org/Doc/INPUT_CP.html
+# Reference accessed: 2026-05-17
+# Verified: upstream docs at the URL above.
 
 # Quantum ESPRESSO cp.x: reads input file via -input/-inp/-i or stdin
 local curcontext="$curcontext" ret=1
