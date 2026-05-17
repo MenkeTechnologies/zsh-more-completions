@@ -1,6 +1,7 @@
 #compdef jboss-cli.sh jboss-cli
-# Documentation: https://man.archlinux.org/search?q=jboss-cli.sh
-# Reference accessed: 2026-05-16
+# Documentation: https://docs.jboss.org/author/display/WFLY/Command+Line+Interface.html
+# Reference accessed: 2026-05-17
+# Verified: upstream docs at the URL above.
 
 _arguments -s \
   '(- *)'{-h,--help}'[show help]' \
