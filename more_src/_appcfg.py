@@ -1,6 +1,7 @@
 #compdef appcfg.py
-# Documentation: https://man.archlinux.org/search?q=appcfg.py
-# Reference accessed: 2026-05-16
+# Documentation: https://cloud.google.com/appengine/docs/standard/python/tools/appcfg-arguments
+# Reference accessed: 2026-05-17
+# Verified: upstream docs at the URL above.
 # Source: https://github.com/littleq0903/gcloud-zsh-completion/blob/94ff005e7fadc817e86b07199515085ed40ded20/src/_appcfg.py
 # Repository: littleq0903/gcloud-zsh-completion (src/_appcfg.py)
 #------------------------------------------------------------
