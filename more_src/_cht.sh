@@ -1,8 +1,9 @@
 #compdef cht.sh
-# Documentation: https://man.archlinux.org/search?q=cht.sh
-# Reference accessed: 2026-05-16
+# Documentation: https://github.com/chubin/cheat.sh
+# Reference accessed: 2026-05-17
+# Verified: upstream docs at the URL above.
 
-# Zsh completion for cht.sh - the only cheat sheet you need (cheat.sh client)
+# cht.sh: command-line client for the cheat.sh service
 
 local curcontext="$curcontext" state line ret=1
 
