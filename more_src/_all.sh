@@ -1,6 +1,7 @@
 #compdef all.sh tests_all
-# Documentation: https://man.archlinux.org/search?q=all.sh
-# Reference accessed: 2026-05-16
+# Documentation: https://github.com/Mbed-TLS/mbedtls/blob/development/tests/scripts/all.sh
+# Reference accessed: 2026-05-17
+# Verified: upstream docs at the URL above.
 # Source: https://github.com/Mbed-TLS/mbedtls-docs/blob/b6f493df13504cf43806bc99de3ea8f6f9b18d46/tools/zsh/_all.sh
 # Repository: Mbed-TLS/mbedtls-docs (tools/zsh/_all.sh)
 ## Completion for tests/scripts/all.sh in Mbed TLS.
