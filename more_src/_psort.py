@@ -1,6 +1,7 @@
 #compdef psort.py psort
-# Documentation: https://man.archlinux.org/search?q=psort.py
-# Reference accessed: 2026-05-16
+# Documentation: https://plaso.readthedocs.io/en/latest/sources/user/Using-psort.html
+# Reference accessed: 2026-05-17
+# Verified: upstream docs at the URL above.
 
 _arguments -s \
   '(-h --help)'{-h,--help}'[show help]' \
