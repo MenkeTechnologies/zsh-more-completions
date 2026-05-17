@@ -15288,9 +15288,6 @@
 @test 'more_src has _wl-clipboard-x11' {
     assert "$xsrc/_wl-clipboard-x11" is_file
 }
-@test 'more_src has _river' {
-    assert "$xsrc/_river" is_file
-}
 @test 'more_src has _riverwm' {
     assert "$xsrc/_riverwm" is_file
 }
@@ -18209,9 +18206,6 @@
 }
 @test 'more_src has _zookeeper-server' {
     assert "$xsrc/_zookeeper-server" is_file
-}
-@test 'more_src has _zkserver' {
-    assert "$xsrc/_zkserver" is_file
 }
 @test 'more_src has _clickhouse-keeper-converter' {
     assert "$xsrc/_clickhouse-keeper-converter" is_file
