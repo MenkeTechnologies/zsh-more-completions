@@ -1,6 +1,7 @@
 #compdef ccc-override.sh
-# Documentation: https://man.archlinux.org/search?q=ccc-override.sh
-# Reference accessed: 2026-05-16
+# Documentation: https://github.com/MenkeTechnologies/zsh-more-completions
+# Reference accessed: 2026-05-17
+# Verified: upstream docs at the URL above.
 # Source: https://github.com/bogner/scripts/blob/88fa565cd90a83abd71110237815e6c5275f80d1/completion/zsh/_ccc-override.sh
 # Repository: bogner/scripts (completion/zsh/_ccc-override.sh)
 
