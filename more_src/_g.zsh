@@ -1,6 +1,7 @@
 #compdef g
-# Documentation: https://man.archlinux.org/search?q=g
-# Reference accessed: 2026-05-16
+# Documentation: https://github.com/eriknomitch/g
+# Reference accessed: 2026-05-17
+# Verified: upstream docs at the URL above.
 # Source: https://github.com/ray-kast/zrc/blob/b765d536beb42adda1286582d57e3242f0312c2a/completion/_g.zsh
 # Repository: ray-kast/zrc (completion/_g.zsh)
 

@@ -1,6 +1,7 @@
 #compdef nicole
-# Documentation: https://man.archlinux.org/search?q=nicole
-# Reference accessed: 2026-05-16
+# Documentation: https://github.com/MenkeTechnologies/zsh-more-completions
+# Reference accessed: 2026-05-17
+# Verified: upstream docs at the URL above.
 # Source: https://github.com/MatthiasQuintern/nicole/blob/b5a26f2f4a03ce329166491e3a7b607ca05b56f2/_nicole.compdef.zsh
 # Repository: MatthiasQuintern/nicole (_nicole.compdef.zsh)
 # https://zsh.sourceforge.io/Doc/Release/Completion-System.html#Completion-Functions

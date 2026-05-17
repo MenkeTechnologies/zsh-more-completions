@@ -1,6 +1,7 @@
 #compdef kc.sh
-# Documentation: https://man.archlinux.org/search?q=kc.sh
-# Reference accessed: 2026-05-16
+# Documentation: https://www.keycloak.org/server/configuration
+# Reference accessed: 2026-05-17
+# Verified: upstream docs at the URL above.
 
 local curcontext="$curcontext" state line ret=1
 local -a subcommands
