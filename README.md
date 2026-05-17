@@ -43,8 +43,11 @@ Tool names for the completion corpus were harvested from:
 - **Fedora** — every binary from Fedora package repos
 - **macOS system binaries** — `/usr/bin`, `/usr/sbin`, `/usr/libexec`, etc.
 - **Kali Linux** — every binary shipped in the Kali package set
+- **Alpine Linux** — `apk` package set
+- **FreeBSD** — ports binaries and man pages
 - **Various other Linux distros**
-- **GitHub Releases**
+- **GitHub Releases** + **GitHub tree / code search** (multiple harvest rounds)
+- **Local zinit plugin checkouts** — completions vendored from installed plugins
 - **crates.io**
 
 Directory layout:
