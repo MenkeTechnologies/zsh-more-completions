@@ -40,6 +40,9 @@ Tool names for the completion corpus were harvested from:
 - **Nix / nixpkgs** — every `pkgs.<attr>` shipping a binary
 - **Homebrew** — every formula in `homebrew/core` (and the `cask` bottles that install CLIs)
 - **Debian / Ubuntu APT** — every `bin/*` from `apt-cache pkgnames`, `/usr/share/man/man1`, `/usr/share/man/man8`, `/usr/share/man/man5`, `/usr/share/man/man6`, etc.
+- **Fedora** — every binary from Fedora package repos
+- **macOS system binaries** — `/usr/bin`, `/usr/sbin`, `/usr/libexec`, etc.
+- **Kali Linux** — every binary shipped in the Kali package set
 - **GitHub Releases**
 - **crates.io**
 
