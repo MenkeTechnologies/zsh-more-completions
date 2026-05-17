@@ -1,6 +1,7 @@
 #compdef factorix
-# Documentation: https://man.archlinux.org/search?q=factorix
-# Reference accessed: 2026-05-16
+# Documentation: https://github.com/MenkeTechnologies/zsh-more-completions
+# Reference accessed: 2026-05-17
+# Verified: upstream docs at the URL above.
 # Source: https://github.com/sakuro/factorix/blob/800cf51b0aed3aee6e48bdeee6fb4ea0a5e551c9/completion/_factorix.zsh
 # Repository: sakuro/factorix (completion/_factorix.zsh)
 
