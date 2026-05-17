@@ -1,6 +1,7 @@
 #compdef akv
-# Documentation: https://man.archlinux.org/search?q=akv
-# Reference accessed: 2026-05-16
+# Documentation: https://github.com/abicky/akv
+# Reference accessed: 2026-05-17
+# Verified: upstream docs at the URL above.
 # Source: https://github.com/shelken/nix-config/blob/b9c2ce4c11775ac07c600396bfabed67f1b62c8f/home/base/core/zsh/functions/_akv.zsh
 # Repository: shelken/nix-config (home/base/core/zsh/functions/_akv.zsh)
 
