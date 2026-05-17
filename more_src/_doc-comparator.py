@@ -1,8 +1,8 @@
 #compdef doc-comparator.py doc-anonymizer.py doc-quality.py doc-master.py doc-processor.py doc-search.py doc-merger.py doc-splitter.py dms-admin.py enterprise-admin.py
-# Documentation: https://man.archlinux.org/search?q=doc-comparator.py
-# Reference accessed: 2026-05-16
-# Source: https://github.com/svend4/daten20/blob/6ada10b80567470c87c29038150cfc04656d0f0f/scripts/completions/zsh_completion.zsh
-# Repository: svend4/daten20 (scripts/completions/zsh_completion.zsh)
+# Documentation: https://github.com/svend4/daten20
+# Reference accessed: 2026-05-17
+# Verified: upstream docs at the URL above.
+# Source: scripts/completions/zsh_completion.zsh in svend4/daten20.
 
 # Zsh completion for daten20 CLI tools
 # Place this file in $fpath (e.g., ~/.zsh/completions/_daten20)
@@ -462,7 +462,7 @@ case "$service" in
         ;;
 esac
 
-# Also handle when called with python prefix
+# also handle when called with python prefix
 case "$words[1]" in
     *doc-comparator.py)
         _doc_comparator "$@"
@@ -495,5 +495,3 @@ case "$words[1]" in
         _enterprise_admin "$@"
         ;;
 esac
-
-echo "✓ daten20 Zsh completions loaded"
