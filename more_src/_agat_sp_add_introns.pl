@@ -1,6 +1,7 @@
 #compdef agat_sp_add_introns.pl
-# Documentation: https://man.archlinux.org/search?q=agat_sp_add_introns.pl
-# Reference accessed: 2026-05-16
+# Documentation: https://agat.readthedocs.io/en/latest/tools/agat_sp_add_introns.html
+# Reference accessed: 2026-05-17
+# Verified: upstream docs at the URL above.
 # Source: https://github.com/yamaton/zsh-completions-bio/blob/d485f76b4d9c03e9fbf70baf2c5ccd85653558a2/completions/_agat_sp_add_introns.pl
 # Repository: yamaton/zsh-completions-bio (completions/_agat_sp_add_introns.pl)
 
