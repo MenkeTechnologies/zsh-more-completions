@@ -1,7 +1,8 @@
 #compdef dotdrop.sh
-# Documentation: https://man.archlinux.org/search?q=dotdrop.sh
-# Reference accessed: 2026-05-16
-# Source: https://github.com/deadc0de6/dotdrop/blob/abbad363f5994b845517db53a01da28b0e40324f/completion/_dotdrop.sh-completion.zsh
+# Documentation: https://github.com/deadc0de6/dotdrop
+# Reference accessed: 2026-05-17
+# Verified: upstream docs at the URL above.
+# Source: https://github.com/deadc0de6/dotdrop/blob/master/completion/_dotdrop.sh-completion.zsh
 # Repository: deadc0de6/dotdrop (completion/_dotdrop.sh-completion.zsh)
 
 _message_next_arg()

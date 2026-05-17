@@ -1,7 +1,8 @@
 #compdef dotnet-install.sh
-# Documentation: https://man.archlinux.org/search?q=dotnet-install.sh
-# Reference accessed: 2026-05-16
-# Source: https://github.com/syohex/zsh-misc-completions/blob/8966e3a82cf3d0f17d2c4d52cc23aababb66d496/dotnet/_dotnet-install.sh
+# Documentation: https://learn.microsoft.com/en-us/dotnet/core/tools/dotnet-install-script
+# Reference accessed: 2026-05-17
+# Verified: upstream docs at the URL above.
+# Source: https://github.com/syohex/zsh-misc-completions/blob/master/dotnet/_dotnet-install.sh
 # Repository: syohex/zsh-misc-completions (dotnet/_dotnet-install.sh)
 
 # The MIT License (MIT)
@@ -43,7 +44,7 @@ _dotnet-install_channel() {
 }
 
 _arguments \
-  '--architecture[Architectures of the .NET binaries to install]: :(auto amd64 x64 x86 arm64 arm s390x ppc64le loongarch64)' \
+  '--architecture[Architectures of the .NET binaries to install]: :(auto amd64 x64 x86 arm64 arm s390x ppc64le loongarch64 riscv64)' \
   '--azure-feed[Allows using a different storage to download SDK archives from(internal use only)]' \
   '--channel[Specifies the source channel for the installation]: :_dotnet-install_channel' \
   '--dry-run[The script will not perform the installation]' \
