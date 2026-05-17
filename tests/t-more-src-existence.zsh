@@ -4512,8 +4512,14 @@
 @test 'more_src has _git-changelog' {
     assert "$xsrc/_git-changelog" is_file
 }
-@test 'more_src has _git-checkout' {
-    assert "$xsrc/_git-checkout" is_file
+@test 'more_src has no _git-* files that shadow override_src/_git functions' {
+    local f verb shadows=0
+    for f in "$xsrc"/_git-*(N); do
+        verb=${${f:t}#_}
+        verb=${verb%.sh}
+        grep -qF "(( \$+functions[_git-${verb}] )) ||" "$pluginDir/override_src/_git" 2>/dev/null && (( shadows++ ))
+    done
+    assert $shadows equals 0
 }
 @test 'more_src has _git-cliff' {
     assert "$xsrc/_git-cliff" is_file
