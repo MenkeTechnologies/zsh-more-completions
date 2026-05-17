@@ -1,252 +1,45 @@
 #compdef clio
-# Documentation: https://man.archlinux.org/search?q=clio
-# Reference accessed: 2026-05-16
-# Source: https://github.com/iowarp/clio-agent/blob/40237387b59336c91d5dbc0a02c8b7244be9c1f2/install/clio
-# Repository: iowarp/clio-agent (install/clio)
-#!/usr/bin/env bash
-# CLIO launcher + server lifecycle manager.
-#
-# `clio` with no arguments boots the clio-agent server (if not already
-# up) and attaches the gact TUI - the original one-command UX. The
-# subcommands mirror `gact agent *`: they let you manage the backing
-# server process without hunting PIDs.
-#
-#   clio                 ensure server is up, then attach the TUI
-#   clio start           start the server (no TUI)
-#   clio stop            stop the server
-#   clio restart         stop then start
-#   clio status | ps     PID / port / health
-#   clio logs [N]        tail the server + gact stderr logs
-#   clio doctor          check prerequisites and install layout
-#   clio report          print a diagnostics bundle for GitHub issues
-#   clio completion SH   print shell completion (bash|zsh)
-#   clio uninstall [...] run the uninstaller
-#   clio help            this text
-#
-# Environment overrides:
-#   CLIO_PREFIX   install root      (default: $HOME/.local/share/clio)
-#   CLIO_PORT     server port       (default: 17800)
-#   CLIO_BIN_DIR  launcher location (default: $HOME/.local/bin)
-#   CLIO_LOG      server log path   (default: $CLIO_PREFIX/clio-server.log)
-set -euo pipefail
+# Documentation: https://github.com/iowarp/clio-agent
+# Reference accessed: 2026-05-17
+# Verified: upstream docs at the URL above.
 
-CLIO_PREFIX="${CLIO_PREFIX:-$HOME/.local/share/clio}"
-CLIO_PORT="${CLIO_PORT:-17800}"
-CLIO_BIN_DIR="${CLIO_BIN_DIR:-$HOME/.local/bin}"
-PIDFILE="$CLIO_PREFIX/clio-server.pid"
-SERVER_LOG="${CLIO_LOG:-$CLIO_PREFIX/clio-server.log}"
-GACT_LOG="$CLIO_PREFIX/gact-stderr.log"
-SERVER_BIN="$CLIO_PREFIX/clio-agent/.venv/bin/clio-agent-gact"
-GACT_BIN="$CLIO_PREFIX/gact"
+# CLIO launcher + server lifecycle manager (iowarp/clio-agent).
 
-GREEN='\033[0;32m'; YELLOW='\033[0;33m'; RED='\033[0;31m'; RESET='\033[0m'
-say()  { printf "${GREEN}==>${RESET} %s\n" "$*"; }
-warn() { printf "${YELLOW}!!${RESET} %s\n" "$*" >&2; }
-err()  { printf "${RED}xx${RESET} %s\n" "$*" >&2; }
+local curcontext="$curcontext" state line ret=1
 
-# health returns 0 when the server answers /v1/health on the port.
-health() {
-  curl -sf -m 1 "http://127.0.0.1:$CLIO_PORT/v1/health" >/dev/null 2>&1
-}
+local -a commands=(
+  'start:start the server (no TUI)'
+  'stop:stop the server'
+  'restart:stop then start'
+  'status:show PID, port, and health'
+  'ps:show PID, port, and health (alias)'
+  'logs:tail the server and gact stderr logs'
+  'doctor:check prerequisites and install layout'
+  'report:print a diagnostics bundle for GitHub issues'
+  'completion:print shell completion script'
+  'uninstall:run the uninstaller'
+  'attach:ensure server is up then attach the TUI'
+  'help:show help text'
+)
 
-# server_pid echoes a live server PID (from the pidfile, validated) or
-# returns 1. Falls back to a port-owner lookup so a server started
-# outside this launcher is still manageable.
-server_pid() {
-  local p=""
-  if [[ -f "$PIDFILE" ]]; then
-    p="$(cat "$PIDFILE" 2>/dev/null || true)"
-    if [[ -n "$p" ]] && kill -0 "$p" 2>/dev/null; then
-      echo "$p"; return 0
-    fi
-  fi
-  if command -v lsof >/dev/null 2>&1; then
-    p="$(lsof -ti "tcp:$CLIO_PORT" -sTCP:LISTEN 2>/dev/null | head -n1 || true)"
-    if [[ -n "$p" ]]; then echo "$p"; return 0; fi
-  fi
-  return 1
-}
+_arguments -C \
+  '1:command:->cmd' \
+  '*::arg:->args' && ret=0
 
-start_server() {
-  if health; then
-    say "CLIO server already running on :$CLIO_PORT"
-    return 0
-  fi
-  # A pidfile with no healthy server is a stale/zombie launch - drop it.
-  rm -f "$PIDFILE"
-  if [[ ! -x "$SERVER_BIN" ]]; then
-    err "server binary not found: $SERVER_BIN"
-    err "is CLIO installed? run the installer or set CLIO_PREFIX."
-    return 1
-  fi
-  say "Starting CLIO server on :$CLIO_PORT (log: $SERVER_LOG)"
-  (
-    cd "$CLIO_PREFIX/clio-agent" &&
-    nohup "$SERVER_BIN" --port "$CLIO_PORT" >"$SERVER_LOG" 2>&1 &
-    echo $! >"$PIDFILE"
-  )
-  local i
-  for i in $(seq 1 30); do
-    if health; then say "  healthy (pid $(cat "$PIDFILE" 2>/dev/null || echo '?'))"; return 0; fi
-    sleep 0.5
-  done
-  err "server did not become healthy in ~15s - check $SERVER_LOG"
-  return 1
-}
+case $state in
+  (cmd)
+    _describe -t commands 'clio command' commands && ret=0
+    ;;
+  (args)
+    case ${words[1]} in
+      (completion)
+        _values 'shell' bash zsh && ret=0
+        ;;
+      (logs)
+        _message -e 'number of lines' && ret=0
+        ;;
+    esac
+    ;;
+esac
 
-stop_server() {
-  local p
-  p="$(server_pid || true)"
-  if [[ -z "$p" ]]; then
-    say "no CLIO server running"
-    rm -f "$PIDFILE"
-    return 0
-  fi
-  say "Stopping CLIO server (pid $p)"
-  kill "$p" 2>/dev/null || true
-  local i
-  for i in $(seq 1 20); do
-    kill -0 "$p" 2>/dev/null || break
-    sleep 0.25
-  done
-  if kill -0 "$p" 2>/dev/null; then
-    warn "  did not exit - force killing"
-    kill -9 "$p" 2>/dev/null || true
-  fi
-  rm -f "$PIDFILE"
-  say "  stopped"
-}
-
-status_server() {
-  local p health_txt
-  p="$(server_pid || true)"
-  if health; then health_txt="healthy"; else health_txt="not responding"; fi
-  echo "prefix:  $CLIO_PREFIX"
-  echo "port:    $CLIO_PORT"
-  if [[ -n "$p" ]]; then echo "pid:     $p"; else echo "pid:     (none)"; fi
-  echo "health:  $health_txt"
-  echo "server:  $SERVER_LOG"
-  echo "gact:    $GACT_LOG"
-}
-
-show_logs() {
-  local n="${1:-40}"
-  local files=()
-  [[ -f "$SERVER_LOG" ]] && files+=("$SERVER_LOG")
-  [[ -f "$GACT_LOG" ]] && files+=("$GACT_LOG")
-  if [[ ${#files[@]} -eq 0 ]]; then
-    warn "no logs yet (server hasn't run, or different CLIO_PREFIX)"
-    return 0
-  fi
-  tail -n "$n" -F "${files[@]}"
-}
-
-doctor() {
-  local ok=0
-  echo "CLIO doctor"
-  echo "  prefix:       $CLIO_PREFIX"
-  printf "  server bin:   "; if [[ -x "$SERVER_BIN" ]]; then echo "ok"; else echo "MISSING"; ok=1; fi
-  printf "  gact bin:     "; if [[ -x "$GACT_BIN" ]]; then echo "ok"; else echo "MISSING"; ok=1; fi
-  printf "  curl:         "; if command -v curl >/dev/null 2>&1; then echo "ok"; else echo "MISSING"; ok=1; fi
-  printf "  port :%s:  " "$CLIO_PORT"; if health; then echo "server healthy"; else echo "free / no server"; fi
-  printf "  launcher:     "; if [[ -e "$CLIO_BIN_DIR/clio" ]]; then echo "$CLIO_BIN_DIR/clio"; else echo "not in $CLIO_BIN_DIR"; fi
-  return $ok
-}
-
-# report prints a diagnostics bundle suitable for pasting into a GitHub
-# issue: versions, environment, health, and the tail of every log.
-report() {
-  echo "==== CLIO bug report ===="
-  echo "date:       $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-  echo "os:         $(uname -srm)"
-  echo "prefix:     $CLIO_PREFIX"
-  echo "port:       $CLIO_PORT"
-  if [[ -x "$GACT_BIN" ]]; then
-    echo "gact:       $("$GACT_BIN" version 2>/dev/null | head -n1)"
-  else
-    echo "gact:       (binary missing)"
-  fi
-  if [[ -f "$CLIO_PREFIX/clio-agent/pyproject.toml" ]]; then
-    echo "clio-agent: $(grep -m1 '^version' "$CLIO_PREFIX/clio-agent/pyproject.toml" 2>/dev/null || true)"
-  fi
-  if health; then echo "health:     healthy"; else echo "health:     not responding"; fi
-  local lf
-  for lf in "$SERVER_LOG" "$GACT_LOG"; do
-    echo ""
-    echo "---- $lf (last 40 lines) ----"
-    if [[ -f "$lf" ]]; then tail -n 40 "$lf"; else echo "(none)"; fi
-  done
-  echo ""
-  echo "==== end report ===="
-}
-
-completion() {
-  local cmds="start stop restart status ps logs doctor report completion uninstall attach help"
-  case "${1:-}" in
-    bash)
-      cat <<EOF
-_clio() {
-  COMPREPLY=( \$(compgen -W "$cmds" -- "\${COMP_WORDS[COMP_CWORD]}") )
-}
-complete -F _clio clio
-EOF
-      ;;
-    zsh)
-      cat <<EOF
-_clio() {
-  local -a cmds
-  cmds=($cmds)
-  _describe 'command' cmds
-}
-_clio "\$@"
-EOF
-      ;;
-    *)
-      err "usage: clio completion bash|zsh"
-      return 2
-      ;;
-  esac
-}
-
-# usage prints the leading comment block as help text - reads until the
-# first non-comment line so it stays correct as the header grows.
-usage() {
-  awk 'NR==1 {next} /^#/ {sub(/^# ?/, ""); print; next} {exit}' "$0"
-}
-
-main() {
-  local cmd="${1:-}"
-  case "$cmd" in
-    ""|attach)
-      shift || true
-      start_server
-      # stdout stays on the terminal so the TUI renders; gact stderr is
-      # captured to a log so Go panics survive for bug reports.
-      exec env GACT_BACKEND="http://127.0.0.1:$CLIO_PORT" "$GACT_BIN" "$@" 2>"$GACT_LOG"
-      ;;
-    start)        start_server ;;
-    stop)         stop_server ;;
-    restart)      stop_server; start_server ;;
-    status|ps)    status_server ;;
-    logs)         shift || true; show_logs "${1:-40}" ;;
-    doctor)       doctor ;;
-    report)       report ;;
-    completion)   shift || true; completion "${1:-}" ;;
-    uninstall)
-      shift || true
-      local un="$CLIO_PREFIX/uninstall.sh"
-      [[ -x "$un" ]] || un="$CLIO_PREFIX/clio-agent/install/uninstall.sh"
-      if [[ -x "$un" ]]; then exec "$un" "$@"; fi
-      err "uninstaller not found (looked in $CLIO_PREFIX and the clio-agent checkout)"
-      return 1
-      ;;
-    help|-h|--help) usage ;;
-    *)
-      err "unknown command: $cmd"
-      usage
-      return 2
-      ;;
-  esac
-}
-
-main "$@"
+return ret
