@@ -1,6 +1,7 @@
 #compdef mon.zsh
-# Documentation: https://man.archlinux.org/search?q=mon.zsh
-# Reference accessed: 2026-05-16
+# Documentation: https://github.com/tj/mon
+# Reference accessed: 2026-05-17
+# Verified: upstream docs at the URL above.
 # Source: https://github.com/dablenparty/.hyprland/blob/289e16f07d4e2621d1501eef2e104c92d1e0efef/scripts/completions/_mon.zsh
 # Repository: dablenparty/.hyprland (scripts/completions/_mon.zsh)
 
