@@ -1,8 +1,8 @@
 #compdef editdt
-# Documentation: https://man.archlinux.org/search?q=editdt
-# Reference accessed: 2026-05-16
-# Source: https://github.com/ausungju/editdt/blob/95f8ba7193b4e37beb634537d00a1794f9d75d09/completion/_cpdt.zsh
-# Repository: ausungju/editdt (completion/_cpdt.zsh)
+# Documentation: https://github.com/ausungju/editdt
+# Reference accessed: 2026-05-17
+# Verified: upstream docs at the URL above.
+# Source: ausungju/editdt completion/_cpdt.zsh
 
 _editdt() {
     local context state line
