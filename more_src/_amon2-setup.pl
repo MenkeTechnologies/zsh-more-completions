@@ -1,6 +1,7 @@
 #compdef amon2-setup.pl
-# Documentation: https://man.archlinux.org/search?q=amon2-setup.pl
-# Reference accessed: 2026-05-16
+# Documentation: https://metacpan.org/dist/Amon2
+# Reference accessed: 2026-05-17
+# Verified: upstream docs at the URL above.
 # Source: https://github.com/syohex/zsh-perl-completions/blob/be325132fc53381b596552487f7e0d6637b82781/_amon2-setup.pl
 # Repository: syohex/zsh-perl-completions (_amon2-setup.pl)
 
