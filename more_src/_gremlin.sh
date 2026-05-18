@@ -1,6 +1,7 @@
 #compdef gremlin.sh gremlin
-# Documentation: https://man.archlinux.org/search?q=gremlin.sh
-# Reference accessed: 2026-05-16
+# Documentation: https://tinkerpop.apache.org/docs/current/reference/#gremlin-console
+# Reference accessed: 2026-05-18
+# Verified: upstream docs at the URL above.
 
 _arguments -s \
   '-l[logging level]:level:(TRACE DEBUG INFO WARN ERROR)' \
