@@ -1,6 +1,7 @@
 #compdef f-f-f-find.sh
-# Documentation: https://man.archlinux.org/search?q=f-f-f-find.sh
-# Reference accessed: 2026-05-16
+# Documentation: https://github.com/juuran/.juuran
+# Reference accessed: 2026-05-17
+# Verified: upstream docs at the URL above.
 # Source: https://github.com/juuran/.juuran/blob/8cb44aef904af94492500ae5ecfa4a65f92ca69f/omat/.config/omat/skriptit/auto_completions/_f-f-f-find.sh
 # Repository: juuran/.juuran (omat/.config/omat/skriptit/auto_completions/_f-f-f-find.sh)
 
