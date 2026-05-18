@@ -1,6 +1,7 @@
 #compdef idf.py
-# Documentation: https://man.archlinux.org/search?q=idf.py
-# Reference accessed: 2026-05-16
+# Documentation: https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-guides/tools/idf-py.html
+# Reference accessed: 2026-05-18
+# Verified: upstream docs at the URL above.
 
 local curcontext="$curcontext" state line ret=1
 local -a subcommands

@@ -1,6 +1,7 @@
 #compdef ignore
-# Documentation: https://man.archlinux.org/search?q=ignore
-# Reference accessed: 2026-05-16
+# Documentation: https://github.com/samirahmed/ignore
+# Reference accessed: 2026-05-18
+# Verified: upstream docs at the URL above.
 # Source: https://github.com/samirahmed/ignore/blob/b44b147d2d5702ad1913872e090864b971109dd2/completion/_ignore.zsh
 # Repository: samirahmed/ignore (completion/_ignore.zsh)
 
