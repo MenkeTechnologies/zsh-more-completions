@@ -1,7 +1,7 @@
 #compdef epw.x
-# Documentation: https://man.archlinux.org/search?q=epw.x
-# Reference accessed: 2026-05-16
-
+# Documentation: https://docs.epw-code.org/
+# Reference accessed: 2026-05-17
+# Verified: upstream docs at the URL above.
 # Quantum ESPRESSO epw.x: reads input file via -input/-inp/-i or stdin
 local curcontext="$curcontext" ret=1
 _arguments -C \
