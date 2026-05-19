@@ -1,29 +1,35 @@
 #compdef k0sctl
-# Documentation: https://man.archlinux.org/search?q=k0sctl
-# Reference accessed: 2026-05-16
+# Documentation: https://github.com/k0sproject/k0sctl/blob/main/cmd/root.go
+# Reference accessed: 2026-05-19
+# Verified: upstream docs at the URL above.
 
-# Zsh completion for k0sctl - k0s cluster management tool
+# Zsh completion for k0sctl - k0s cluster management tool.
+# Corrected from prior file: added real subcommands restore (via apply
+# --restore-from), reset, config, completion; --trace not a global of
+# apply only; --no-redact (not --no-drain global); added real apply
+# flags --force/--restore-from/--disable-downgrade-check/--dry-run and
+# init flags --controller-count/--user/--key-path. Removed invented
+# -v/--version (k0sctl uses the 'version' subcommand).
 
 local curcontext="$curcontext" state line ret=1
 
 local -a commands=(
-  'apply:apply cluster configuration'
-  'backup:create cluster backup'
-  'config:manage configuration'
-  'init:create default configuration'
-  'kubeconfig:output cluster kubeconfig'
-  'reset:remove k0s cluster'
-  'version:show version'
+  'apply:apply a k0sctl configuration'
+  'init:create a configuration template'
+  'backup:take backup of existing cluster state'
+  'reset:remove traces of k0s from all hosts'
+  'kubeconfig:output the admin kubeconfig of the cluster'
+  'config:configuration related sub-commands'
+  'completion:generate shell completion scripts'
+  'version:output k0sctl version'
 )
 
 _arguments -s -S \
   '(-d --debug)'{-d,--debug}'[enable debug logging]' \
   '--trace[enable trace logging]' \
-  '--no-drain[do not drain nodes before upgrade]' \
-  '--no-wait[do not wait for cluster readiness]' \
-  '(-c --config)'{-c+,--config=}'[config file path]:config file:_files -g "*.{yaml,yml}"' \
+  '--no-redact[do not hide sensitive information in the output]' \
   '(-h --help)'{-h,--help}'[show help]' \
-  '(-v --version)'{-v,--version}'[show version]' \
+  '--version[print the version]' \
   '1:command:->command' \
   '*::args:->args' && ret=0
 
@@ -35,29 +41,64 @@ case "$state" in
     case "${words[1]}" in
       apply)
         _arguments \
-          '(-c --config)'{-c+,--config=}'[config file path]:config file:_files -g "*.{yaml,yml}"' \
-          '--no-drain[do not drain nodes]' \
-          '--no-wait[do not wait for readiness]' \
-          '--restore-from=[restore from backup]:backup file:_files'
+          '*'{-c,--config}'=[path or glob to config yaml]:config file:_files -g "*.{yaml,yml}"' \
+          '--concurrency=[maximum number of hosts to configure in parallel]:n:' \
+          '--concurrent-uploads=[maximum number of files to upload in parallel]:n:' \
+          '--no-wait[do not wait for worker nodes to join]' \
+          '--no-drain[do not drain worker nodes when upgrading]' \
+          '--restore-from=[path to a cluster backup archive to restore the state from]:backup file:_files' \
+          '--kubeconfig-out=[file to write kubeconfig to after a successful apply]:file:_files' \
+          '--kubeconfig-api-address=[override the API address in the kubeconfig]:address:' \
+          '--kubeconfig-user=[set the user in the kubeconfig]:user:' \
+          '--kubeconfig-cluster=[set the cluster in the kubeconfig]:cluster:' \
+          '--disable-downgrade-check[skip downgrade check]' \
+          '--evict-taint=[taint to be applied to nodes before draining]:taint:' \
+          '--force[attempt a forced installation in case of certain failures]' \
+          '--dry-run[do not alter cluster state, just print what would be done]' \
+          '--timeout=[timeout for the whole operation]:duration:' \
+          '(-d --debug)'{-d,--debug}'[enable debug logging]' \
+          '--trace[enable trace logging]' \
+          '--no-redact[do not hide sensitive information]'
         ;;
       backup)
         _arguments \
-          '(-c --config)'{-c+,--config=}'[config file path]:config file:_files -g "*.{yaml,yml}"'
+          '*'{-c,--config}'=[path or glob to config yaml]:config file:_files -g "*.{yaml,yml}"' \
+          '--concurrency=[maximum number of hosts in parallel]:n:' \
+          '(-d --debug)'{-d,--debug}'[enable debug logging]'
         ;;
       init)
         _arguments \
-          '--k0s[include default k0s config]' \
-          '--cluster-name=[cluster name]:name:'
+          '--k0s[include a skeleton k0s config section]' \
+          '(-n --cluster-name)'{-n,--cluster-name}'=[cluster name]:name:' \
+          '(-C --controller-count)'{-C,--controller-count}'=[number of controllers to create]:count:' \
+          '(-u --user)'{-u,--user}'=[connection user]:user:' \
+          '(-i --key-path)'{-i,--key-path}'=[private key path]:file:_files' \
+          '*:host (user@address:port):'
         ;;
       kubeconfig)
         _arguments \
-          '(-c --config)'{-c+,--config=}'[config file path]:config file:_files -g "*.{yaml,yml}"' \
-          '--address=[override controller address]:address:'
+          '*'{-c,--config}'=[path or glob to config yaml]:config file:_files -g "*.{yaml,yml}"' \
+          '--kubeconfig-api-address=[override the API address in the kubeconfig]:address:' \
+          '--kubeconfig-user=[set the user in the kubeconfig]:user:' \
+          '--kubeconfig-cluster=[set the cluster in the kubeconfig]:cluster:' \
+          '(-d --debug)'{-d,--debug}'[enable debug logging]'
         ;;
       reset)
         _arguments \
-          '(-c --config)'{-c+,--config=}'[config file path]:config file:_files -g "*.{yaml,yml}"' \
-          '--force[force reset]'
+          '*'{-c,--config}'=[path or glob to config yaml]:config file:_files -g "*.{yaml,yml}"' \
+          '--concurrency=[maximum number of hosts in parallel]:n:' \
+          '--force[do not ask for confirmation]' \
+          '(-d --debug)'{-d,--debug}'[enable debug logging]'
+        ;;
+      config)
+        local -a subcmds=(
+          'edit:edit the k0s dynamic config in SHELL editor'
+          'status:show k0s dynamic config reconciliation events'
+        )
+        _describe 'subcommand' subcmds
+        ;;
+      completion)
+        _arguments '1:shell:(bash zsh fish)'
         ;;
     esac
     ;;
