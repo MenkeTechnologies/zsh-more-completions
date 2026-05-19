@@ -1,9 +1,9 @@
 #compdef kd
-# Documentation: https://github.com/MenkeTechnologies/zsh-more-completions
-# Reference accessed: 2026-05-17
-# Verified: upstream docs at the URL above.
+# Documentation: https://github.com/shini4i/kd/blob/main/completion/_kd.zsh
+# Reference accessed: 2026-05-19
+# Verified: upstream completion file at the URL above (shini4i/kd,
+# Kubernetes secrets Decoder). Completion is the upstream script verbatim.
 # Source: https://github.com/shini4i/kd/blob/90e4ee46c879e174e477bd5dc069c7609e7857c4/completion/_kd.zsh
-# Repository: shini4i/kd (completion/_kd.zsh)
 
 # Zsh completion script for kd (Kubernetes secrets Decoder)
 #
