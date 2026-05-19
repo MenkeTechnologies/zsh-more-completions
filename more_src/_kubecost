@@ -1,67 +1,84 @@
-#compdef kubecost
-# Documentation: https://github.com/kubecost/kubectl-cost
-# Reference accessed: 2026-05-17
+#compdef kubecost kubectl-cost kubectl_cost
+# Documentation: https://github.com/kubecost/kubectl-cost/tree/main/pkg/cmd
+# Reference accessed: 2026-05-19
 # Verified: upstream docs at the URL above.
 
 local curcontext="$curcontext" state line ret=1
 
+local -a conn_flags=(
+  '(-r --release-name)'{-r+,--release-name=}'[name of the Helm release]:name:'
+  '(-N --kubecost-namespace)'{-N+,--kubecost-namespace=}'[namespace Kubecost is deployed in]:namespace:'
+  '--service-port=[port of the service at which the APIs are running]:port:'
+  '--service-name=[name of the Kubecost cost analyzer service]:name:'
+  '--use-proxy[proxy a request to Kubecost through the API server]'
+  '--allocation-path=[URL path for Allocation queries]:path:'
+  '--predict-speccost-path=[URL path for Prediction queries]:path:'
+  '--opencost[configure parameters per the OpenCost default spec]'
+)
+
 _arguments -s -S -C \
   '(- *)'{-h,--help}'[show help]' \
-  '(- *)--version[show version]' \
-  '--kubeconfig=[kubeconfig file]:config file:_files' \
-  '--context=[kubeconfig context]:context:' \
-  '-n+[namespace]:namespace:' \
-  '--namespace=[namespace]:namespace:' \
   '1:command:->commands' \
   '*::arg:->args' && ret=0
 
 case $state in
   commands)
     local -a commands=(
-      'cost:show cost allocation'
-      'namespace:show namespace costs'
-      'deployment:show deployment costs'
-      'controller:show controller costs'
-      'label:show costs by label'
-      'pod:show pod costs'
-      'node:show node costs'
-      'assets:show asset costs'
-      'tui:launch TUI dashboard'
-      'predict:predict future costs'
-      'port-forward:set up port forwarding to Kubecost'
-      'completion:generate shell completion'
-      'version:show version'
+      'namespace:show cost aggregated by namespace'
+      'deployment:show cost aggregated by deployment'
+      'controller:show cost aggregated by controller'
+      'pod:show cost aggregated by pod'
+      'label:show cost aggregated by label'
+      'node:show cost of nodes'
+      'tui:launch the kubecost TUI'
+      'predict:predict the cost of a workload spec'
+      'version:print version'
     )
     _describe -t commands 'kubecost command' commands && ret=0
     ;;
   args)
     case $line[1] in
-      cost|namespace|deployment|controller|pod|node)
+      namespace|deployment|controller|pod|label)
         _arguments -s -S \
           '(- *)'{-h,--help}'[show help]' \
-          '--window=[time window]:window:(1d 2d 7d 30d today yesterday lastweek lastmonth)' \
-          '--aggregate=[aggregate by]:field:(namespace deployment controller label pod node)' \
-          '--accumulate[accumulate results]' \
-          '--idle[show idle costs]' \
-          '--filter=[filter expression]:filter:' \
-          '--show-all-resources[show all resources]' \
-          '--show-cpu[show CPU costs]' \
-          '--show-memory[show memory costs]' \
-          '--show-gpu[show GPU costs]' \
-          '--show-pv[show PV costs]' \
-          '--show-network[show network costs]' \
-          '--show-efficiency[show efficiency]' \
-          '-A[show all namespaces]' && ret=0
+          $conn_flags \
+          '--window=[the window of data to query]:window:' \
+          '--historical[show total cost during the window instead of monthly rate]' \
+          '--idle[include the __idle__ cost row]' \
+          '(-n --namespace)'{-n+,--namespace=}'[limit results to one namespace]:namespace:' \
+          '(-l --label)'{-l+,--label=}'[label to perform aggregation on]:label:' \
+          '--show-cpu[show data for CPU cost]' \
+          '--show-memory[show data for memory cost]' \
+          '--show-gpu[show data for GPU cost]' \
+          '--show-pv[show data for PV cost]' \
+          '--show-network[show data for network cost]' \
+          '--show-shared[show shared cost data]' \
+          '--show-lb[show load balancer cost data]' \
+          '--show-efficiency[show efficiency of cost]' \
+          '(-A --show-all-resources)'{-A,--show-all-resources}'[show all resource cost columns]' && ret=0
         ;;
-      port-forward)
+      node)
         _arguments -s -S \
           '(- *)'{-h,--help}'[show help]' \
-          '-p+[local port]:port:' \
-          '--port=[local port]:port:' && ret=0
+          $conn_flags \
+          '--window=[the window of data to query]:window:' \
+          '--historical[show total cost during the window]' \
+          '--show-cpu[show data for CPU cost]' \
+          '--show-memory[show data for memory cost]' \
+          '--show-asset-type[show type of assets displayed]' \
+          '(-A --show-all-resources)'{-A,--show-all-resources}'[show all node cost columns]' && ret=0
         ;;
-      completion)
+      predict)
         _arguments -s -S \
-          '1:shell:(bash zsh fish powershell)' && ret=0
+          '(- *)'{-h,--help}'[show help]' \
+          $conn_flags \
+          '(-f --filepath)'{-f+,--filepath=}'[file containing the workload definition]:file:_files' \
+          '(-c --cluster-id)'{-c+,--cluster-id=}'[cluster ID of the presumed target cluster]:id:' \
+          '--window-usage=[window of data for historical average usage]:window:' \
+          '--window-cost=[window of data to base resource costs on]:window:' \
+          '--no-usage[ignore historical usage data]' \
+          '--show-total[show the total cost of the new spec(s)]' \
+          '--hide-diff[hide the cost difference of applying the new spec(s)]' && ret=0
         ;;
     esac
     ;;
