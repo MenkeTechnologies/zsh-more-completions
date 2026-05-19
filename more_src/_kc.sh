@@ -1,30 +1,35 @@
 #compdef kc.sh
 # Documentation: https://www.keycloak.org/server/configuration
-# Reference accessed: 2026-05-17
-# Verified: upstream docs at the URL above.
+# Reference accessed: 2026-05-19
+# Verified: upstream keycloak Main.java picocli subcommands list
+# (Build, Start, StartDev, Export, Import, ShowConfig, Tools,
+# BootstrapAdmin, UpdateCompatibility) + Main.java @Option set.
+# Fixed from prior file: removed fake top-level completion/help
+# commands; added bootstrap-admin / update-compatibility; corrected
+# Main options to real -pf/--profile, -cf/--config-file, -v.
 
 local curcontext="$curcontext" state line ret=1
 local -a subcommands
 
 subcommands=(
-  'start:start in production mode'
-  'start-dev:start in development mode'
-  'build:precompute provider/feature image'
-  'export:export realm/users to file or directory'
-  'import:import realm/users from file or directory'
-  'show-config:print current resolved configuration'
-  'tools:utility subcommands'
-  'completion:generate shell completion'
-  'help:show help'
+  'start:start the server in production mode'
+  'start-dev:start the server in development mode'
+  'build:create an optimized server image for the chosen features/providers'
+  'export:export data from realms to a file or directory'
+  'import:import data from a directory or file'
+  'show-config:print the current configuration'
+  'tools:utilities for use and maintenance'
+  'bootstrap-admin:commands for bootstrapping admin access'
+  'update-compatibility:commands for checking rolling-update compatibility'
 )
 
 _arguments -C \
   '(- *)'{-h,--help}'[show help]' \
-  '--help-all[show all options]' \
-  '(-v --verbose)'{-v,--verbose}'[verbose output]' \
-  '--config-file=[config file]:file:_files' \
-  '--profile=[execution profile]:profile:' \
-  '*-D-[set system property]:property:' \
+  '--help-all[show all available options]' \
+  '(-V --version)'{-V,--version}'[show version]' \
+  '(-v --verbose)'{-v,--verbose}'[print out error details when errors occur]' \
+  '(-pf --profile)'{-pf,--profile}'=[set the profile, e.g. dev/prod]:profile:' \
+  '(-cf --config-file)'{-cf,--config-file}'=[set the path to a configuration file]:file:_files' \
   '1: :->subcommand' \
   '*::arg:->args' && ret=0
 
@@ -36,54 +41,58 @@ case $state in
     case $line[1] in
       (start|start-dev)
         _arguments \
-          '--optimized[run optimized after build]' \
-          '--hostname=[hostname]:host:_hosts' \
-          '--hostname-strict=[strict hostname]:flag:(true false)' \
-          '--hostname-strict-https=[strict HTTPS]:flag:(true false)' \
-          '--http-enabled=[enable HTTP]:flag:(true false)' \
-          '--http-port=[HTTP port]:port:' \
-          '--https-port=[HTTPS port]:port:' \
-          '--db=[database vendor]:vendor:(dev-file dev-mem mariadb mssql mysql oracle postgres)' \
-          '--db-url=[database JDBC URL]:url:' \
-          '--db-username=[database username]:user:_users' \
-          '--db-password=[database password]:password:' \
-          '--features=[enable features]:features:' \
-          '--features-disabled=[disabled features]:features:' \
-          '--log=[log handlers]:handlers:' \
-          '--log-level=[log level]:level:' \
-          '--proxy-headers=[proxy headers]:headers:(forwarded xforwarded)' \
-          '--metrics-enabled=[enable metrics]:flag:(true false)' \
-          '--health-enabled=[enable health]:flag:(true false)' && ret=0
+          '--optimized[run the server without rebuilding (use a prior build)]' \
+          '--hostname=[address at which is the server exposed]:host:_hosts' \
+          '--http-enabled=[enables the HTTP listener]:flag:(true false)' \
+          '--http-port=[the used HTTP port]:port:' \
+          '--https-port=[the used HTTPS port]:port:' \
+          '--db=[the database vendor]:vendor:(dev-file dev-mem mariadb mssql mysql oracle postgres)' \
+          '--db-url=[the full database JDBC URL]:url:' \
+          '--db-username=[the username of the database user]:user:_users' \
+          '--db-password=[the password of the database user]:password:' \
+          '--features=[enables a set of one or more features]:features:' \
+          '--features-disabled=[disables a set of one or more features]:features:' \
+          '--log=[enable one or more log handlers in a comma-separated list]:handlers:' \
+          '--log-level=[the log level of the root category or a comma-separated list]:level:' \
+          '--metrics-enabled=[enables the metrics endpoint]:flag:(true false)' \
+          '--health-enabled=[enables the health endpoints]:flag:(true false)' && ret=0
         ;;
       (build)
         _arguments \
-          '--db=[database vendor]:vendor:(dev-file dev-mem mariadb mssql mysql oracle postgres)' \
-          '--features=[enable features]:features:' \
-          '--features-disabled=[disabled features]:features:' \
-          '--health-enabled=[enable health]:flag:(true false)' \
-          '--metrics-enabled=[enable metrics]:flag:(true false)' \
-          '--cache=[cache mode]:mode:(local ispn)' \
-          '--cache-stack=[cache stack]:stack:' \
-          '--transaction-xa-enabled=[enable XA]:flag:(true false)' && ret=0
+          '--db=[the database vendor]:vendor:(dev-file dev-mem mariadb mssql mysql oracle postgres)' \
+          '--features=[enables a set of one or more features]:features:' \
+          '--features-disabled=[disables a set of one or more features]:features:' \
+          '--health-enabled=[enables the health endpoints]:flag:(true false)' \
+          '--metrics-enabled=[enables the metrics endpoint]:flag:(true false)' \
+          '--cache=[defines the cache mechanism for high-availability]:mode:(local ispn)' \
+          '--cache-stack=[define the default stack to use for cluster communication]:stack:' && ret=0
         ;;
       (export)
         _arguments \
-          '--dir=[export directory]:dir:_files -/' \
-          '--file=[export file]:file:_files' \
-          '--users=[user export mode]:mode:(different_files skip realm_file same_file)' \
-          '--users-per-file=[users per file]:n:' \
-          '--realm=[realm to export]:realm:' \
-          '--optimized[skip rebuild]' && ret=0
+          '--dir=[set the path to a directory where files will be created]:dir:_files -/' \
+          '--file=[set the path to a file that will be created]:file:_files' \
+          '--users=[strategy to export users]:mode:(skip realm_file same_file different_files)' \
+          '--users-per-file=[set the number of users per file]:n:' \
+          '--realm=[set the name of the realm to export]:realm:' \
+          '--optimized[run the server without rebuilding]' && ret=0
         ;;
       (import)
         _arguments \
-          '--dir=[import directory]:dir:_files -/' \
-          '--file=[import file]:file:_files' \
-          '--override=[override existing]:flag:(true false)' \
-          '--optimized[skip rebuild]' && ret=0
+          '--dir=[set the path to a directory where files will be read]:dir:_files -/' \
+          '--file=[set the path to a file that will be read]:file:_files' \
+          '--override=[set if existing data should be overwritten]:flag:(true false)' \
+          '--optimized[run the server without rebuilding]' && ret=0
         ;;
       (tools)
-        _values 'tools subcommand' 'completion' && ret=0
+        _values 'tools subcommand' \
+          'completion[generate a shell completion script]' \
+          'windows-service[install or uninstall the Windows service]' \
+          'build-password-denylist[build a password blacklist file]' && ret=0
+        ;;
+      (bootstrap-admin)
+        _values 'bootstrap-admin subcommand' \
+          'user[create a temporary admin user]' \
+          'service[create a temporary admin service account]' && ret=0
         ;;
     esac
     ;;

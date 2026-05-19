@@ -1,6 +1,7 @@
 #compdef kcreg.sh
-# Documentation: https://man.archlinux.org/search?q=kcreg.sh
-# Reference accessed: 2026-05-16
+# Documentation: https://github.com/keycloak/keycloak/blob/main/integration/client-cli/admin-cli/src/main/java/org/keycloak/client/registration/cli/commands/KcRegCmd.java
+# Reference accessed: 2026-05-19
+# Verified: upstream docs at the URL above (picocli command/subcommand defs).
 
 local curcontext="$curcontext" state line ret=1
 local -a subcommands
@@ -13,7 +14,6 @@ subcommands=(
   'delete:delete a client'
   'attrs:list settable client attributes'
   'update-token:refresh registration access token'
-  'completion:generate shell completion'
   'help:show help'
 )
 
