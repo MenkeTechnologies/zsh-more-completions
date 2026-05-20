@@ -1,6 +1,7 @@
 #compdef patronictl
-# Documentation: https://man.archlinux.org/search?q=patronictl
-# Reference accessed: 2026-05-16
+# Documentation: https://patroni.readthedocs.io/en/latest/patronictl.html
+# Reference accessed: 2026-05-20
+# Verified: upstream docs at the URL above.
 
 # Zsh completion for patronictl - Patroni PostgreSQL HA cluster management
 
@@ -20,7 +21,6 @@ local -a commands=(
   'remove:remove a cluster from DCS'
   'restart:restart a cluster member'
   'resume:resume auto failover'
-  'scaffold:create a structure for the cluster in DCS'
   'show-config:show cluster configuration'
   'switchover:planned switchover to a replica'
   'topology:show cluster topology'
@@ -28,8 +28,8 @@ local -a commands=(
 )
 
 _arguments -s -S \
-  '(-c --config-file)'{-c,--config-file}'[configuration file]:file:_files -g "*.{yml,yaml}"' \
-  '(-d --dcs)'{-d,--dcs}'[DCS connect URL]:url' \
+  '(-c --config-file)'{-c,--config-file}'[configuration file]:file:_files -g "*.(yml|yaml)"' \
+  '(-d --dcs-url --dcs)'{-d,--dcs-url,--dcs}'[DCS connect URL]:url:' \
   '(-k --insecure)'{-k,--insecure}'[allow insecure SSL connections]' \
   '1:command:->command' \
   '*:: :->args' && ret=0
@@ -44,79 +44,121 @@ case $state in
         _arguments -s -S \
           '(-e --extended)'{-e,--extended}'[show extended information]' \
           '(-t --timestamp)'{-t,--timestamp}'[show timestamp of status]' \
-          '(-W --watch)'{-W,--watch}'[auto-refresh at interval]:seconds' \
+          '(-W -w --watch)'{-W,-w,--watch}'[auto-refresh at interval]:seconds:' \
           '(-f --format)'{-f,--format}'[output format]:format:(pretty tsv json yaml)' \
-          '1:cluster name' && ret=0
+          '--group=[citus group]:group:' \
+          '1:cluster name:' && ret=0
         ;;
       (switchover|failover)
         _arguments -s -S \
-          '--master=[current master name]:master' \
-          '--leader=[current leader name]:leader' \
-          '--candidate=[candidate name]:candidate' \
-          '--scheduled=[schedule at time]:time' \
+          '--leader=[current leader name]:leader:' \
+          '--primary=[current primary name]:primary:' \
+          '--candidate=[candidate name]:candidate:' \
+          '--scheduled=[schedule at time]:time:' \
           '--force[do not ask for confirmation]' \
-          '1:cluster name' && ret=0
+          '--group=[citus group]:group:' \
+          '1:cluster name:' && ret=0
         ;;
       (restart)
         _arguments -s -S \
-          '--role=[restart only members with given role]:role:(master replica leader)' \
+          '(-r --role)'{-r,--role}'=[restart only members with given role]:role:(master replica leader standby-leader any)' \
           '--any[restart any single member]' \
-          '--scheduled=[schedule restart at time]:time' \
-          '--pg-version=[restart only if PostgreSQL version is less than]:version' \
+          '--scheduled=[schedule restart at time]:time:' \
+          '--pg-version=[restart only if PostgreSQL version is less than]:version:' \
           '--pending[restart only members with pending restart]' \
           '--force[do not ask for confirmation]' \
-          '--timeout=[operation timeout]:seconds' \
-          '1:cluster name' \
-          '2:member name' && ret=0
+          '--timeout=[operation timeout]:seconds:' \
+          '--group=[citus group]:group:' \
+          '1:cluster name:' \
+          '*:member name:' && ret=0
         ;;
       (reinit)
         _arguments -s -S \
           '--force[do not ask for confirmation]' \
           '--wait[wait for reinit to complete]' \
-          '1:cluster name' \
-          '2:member name' && ret=0
+          '--from-leader[reinit from the leader]' \
+          '--group=[citus group]:group:' \
+          '1:cluster name:' \
+          '*:member name:' && ret=0
         ;;
       (reload)
-        _arguments '1:cluster name' '2:member name' && ret=0
+        _arguments -s -S \
+          '(-r --role)'{-r,--role}'=[reload only members with given role]:role:(master replica leader standby-leader any)' \
+          '--force[do not ask for confirmation]' \
+          '--group=[citus group]:group:' \
+          '1:cluster name:' \
+          '*:member name:' && ret=0
         ;;
       (pause|resume)
-        _arguments '1:cluster name' && ret=0
+        _arguments -s -S \
+          '--wait[wait for cluster to apply change]' \
+          '--group=[citus group]:group:' \
+          '1:cluster name:' && ret=0
         ;;
       (remove)
-        _arguments '1:cluster name' && ret=0
-        ;;
-      (edit-config|show-config)
         _arguments -s -S \
-          '(-f --format)'{-f,--format}'[output format]:format:(pretty json yaml)' \
-          '1:cluster name' && ret=0
+          '(-f --format)'{-f,--format}'[output format]:format:(pretty tsv json yaml)' \
+          '--group=[citus group]:group:' \
+          '1:cluster name:' && ret=0
+        ;;
+      (edit-config)
+        _arguments -s -S \
+          '(-q --quiet)'{-q,--quiet}'[do not show changes]' \
+          '(-s --set)'{-s+,--set=}'[set parameter]:key=value:' \
+          '(-p --pg)'{-p+,--pg=}'[set PostgreSQL parameter]:key=value:' \
+          '--apply=[apply config from file]:file:_files' \
+          '--replace=[replace config with file]:file:_files' \
+          '--force[do not ask for confirmation]' \
+          '--group=[citus group]:group:' \
+          '1:cluster name:' && ret=0
+        ;;
+      (show-config)
+        _arguments -s -S \
+          '--group=[citus group]:group:' \
+          '1:cluster name:' && ret=0
         ;;
       (query)
         _arguments -s -S \
-          '--role=[query members with given role]:role:(master replica any leader)' \
-          '--member=[query specific member]:member' \
-          '--delimiter=[set column delimiter]:delimiter' \
-          '--command=[SQL command to execute]:command' \
-          '--file=[SQL file to execute]:file:_files -g "*.sql"' \
-          '--username=[database user]:user' \
+          '(-r --role)'{-r,--role}'=[query members with given role]:role:(master replica any leader standby-leader)' \
+          '(-m --member)'{-m+,--member=}'[query specific member]:member:' \
+          '--delimiter=[set column delimiter]:delimiter:' \
+          '(-c --command)'{-c+,--command=}'[SQL command to execute]:command:' \
+          '(-f --file)'{-f+,--file=}'[SQL file to execute]:file:_files -g "*.sql"' \
+          '(-U --username)'{-U+,--username=}'[database user]:user:' \
           '--password[prompt for password]' \
-          '--dbname=[database name]:database' \
-          '1:cluster name' && ret=0
+          '(-d --dbname)'{-d+,--dbname=}'[database name]:database:' \
+          '--format=[output format]:format:(pretty tsv json yaml)' \
+          '(-W -w --watch)'{-W,-w,--watch}'[auto-refresh at interval]:seconds:' \
+          '--group=[citus group]:group:' \
+          '1:cluster name:' && ret=0
         ;;
       (dsn)
         _arguments -s -S \
-          '--role=[member role]:role:(master replica any leader)' \
-          '--member=[specific member]:member' \
-          '1:cluster name' && ret=0
+          '(-r --role)'{-r,--role}'=[member role]:role:(master replica any leader standby-leader)' \
+          '(-m --member)'{-m+,--member=}'[specific member]:member:' \
+          '--group=[citus group]:group:' \
+          '1:cluster name:' && ret=0
         ;;
       (flush)
         _arguments -s -S \
-          '1:cluster name' \
-          '2:target:(restart switchover)' && ret=0
+          '(-r --role)'{-r,--role}'=[role filter]:role:(master replica any leader standby-leader)' \
+          '--force[do not ask for confirmation]' \
+          '--group=[citus group]:group:' \
+          '1:cluster name:' \
+          '2:member name:' \
+          '3:target:(restart switchover)' && ret=0
         ;;
       (history)
         _arguments -s -S \
           '(-f --format)'{-f,--format}'[output format]:format:(pretty tsv json yaml)' \
-          '1:cluster name' && ret=0
+          '--group=[citus group]:group:' \
+          '1:cluster name:' && ret=0
+        ;;
+      (version)
+        _arguments -s -S \
+          '--group=[citus group]:group:' \
+          '1:cluster name:' \
+          '*:member name:' && ret=0
         ;;
     esac
     ;;
