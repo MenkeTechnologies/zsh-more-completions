@@ -1,8 +1,10 @@
 #compdef orchestrate.sh claude-octopus
-# Documentation: https://man.archlinux.org/search?q=orchestrate.sh
-# Reference accessed: 2026-05-16
+# Documentation: https://github.com/nyldn/claude-octopus
+# Reference accessed: 2026-05-20
+# Verified: upstream docs at the URL above.
 # Source: https://github.com/Moliboy5000/.claude/blob/dd216a4e0d5e55d47369ef2a8dcb90d4724cba99/plugins/cache/nyldn-plugins/octo/9.30.0/scripts/lib/usage-help.sh
 # Repository: Moliboy5000/.claude (plugins/cache/nyldn-plugins/octo/9.30.0/scripts/lib/usage-help.sh)
+# Removed from prior file: bogus man.archlinux.org search URL.
 #!/usr/bin/env bash
 # Usage help functions extracted from orchestrate.sh
 # Part of the lib/ decomposition wave
