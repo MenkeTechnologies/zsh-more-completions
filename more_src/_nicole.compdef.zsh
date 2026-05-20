@@ -25,7 +25,7 @@ _nicole()
         {--recursive,-r}'[go through directories recursively]' \
         '--silent[silent]' \
         {--ignore-history,-i}'[ignore history]' \
-        {--no-history,-n]}'[do not write to history]' \
+        {--no-history,-n}'[do not write to history]' \
         {--overwrite,-o}'[overwrite if the file already has lyrics]' \
         {--dry-run,-t}'[test, only print lyrics, dont write to tags]' \
         '--help[show this]' \

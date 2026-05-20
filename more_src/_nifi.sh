@@ -1,6 +1,7 @@
 #compdef nifi.sh
-# Documentation: https://man.archlinux.org/search?q=nifi.sh
-# Reference accessed: 2026-05-16
+# Documentation: https://nifi.apache.org/docs/nifi-docs/html/administration-guide.html
+# Reference accessed: 2026-05-19
+# Verified: upstream docs at the URL above.
 
 local curcontext="$curcontext" state line ret=1
 local -a subcommands
