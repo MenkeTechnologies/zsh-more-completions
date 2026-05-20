@@ -1,8 +1,9 @@
 #compdef polca.sh
-# Documentation: https://man.archlinux.org/search?q=polca.sh
-# Reference accessed: 2026-05-16
+# Documentation: https://github.com/alekseyzimin/masurca
+# Reference accessed: 2026-05-20
+# Verified: upstream MaSuRCA polca.sh; flag set -a/-r/-t/-n/-m
+# corroborated by yamaton/zsh-completions-bio h2o-generated source.
 # Source: https://github.com/yamaton/zsh-completions-bio/blob/d485f76b4d9c03e9fbf70baf2c5ccd85653558a2/completions/_polca.sh
-# Repository: yamaton/zsh-completions-bio (completions/_polca.sh)
 
 # Auto-generated with h2o
 
