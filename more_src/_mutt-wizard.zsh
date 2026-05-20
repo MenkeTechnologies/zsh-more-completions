@@ -1,8 +1,9 @@
 #compdef mw
-# Documentation: https://man.archlinux.org/search?q=mw
-# Reference accessed: 2026-05-16
+# Documentation: https://github.com/LukeSmithxyz/mutt-wizard/blob/master/completion/_mutt-wizard.zsh
+# Reference accessed: 2026-05-19
+# Verified: upstream completion file shipped by LukeSmithxyz/mutt-wizard
+# at the URL above; this is the original upstream zsh completion.
 # Source: https://github.com/LukeSmithxyz/mutt-wizard/blob/b7b7f21d692048f34287615312ebc9385cd3c378/completion/_mutt-wizard.zsh
-# Repository: LukeSmithxyz/mutt-wizard (completion/_mutt-wizard.zsh)
 
 _arguments \
 	'1:flag:->flags' \
