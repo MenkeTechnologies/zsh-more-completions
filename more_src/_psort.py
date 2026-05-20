@@ -1,6 +1,6 @@
 #compdef psort.py psort
 # Documentation: https://plaso.readthedocs.io/en/latest/sources/user/Using-psort.html
-# Reference accessed: 2026-05-17
+# Reference accessed: 2026-05-20
 # Verified: upstream docs at the URL above.
 
 _arguments -s \
