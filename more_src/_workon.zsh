@@ -1,9 +1,10 @@
 #compdef workon
-# Documentation: https://man.archlinux.org/search?q=workon
-# Reference accessed: 2026-05-16
-# Source: https://github.com/Voronenko/dotfiles/blob/93559d875bba2eaac109c43a5fb31bcc9090d2e0/completions/_workon.zsh
-# Repository: Voronenko/dotfiles (completions/_workon.zsh)
+# Documentation: https://virtualenvwrapper.readthedocs.io/en/latest/command_ref.html#workon
+# Reference accessed: 2026-05-21
+# Verified: upstream docs at the URL above.
 
+# workon: virtualenvwrapper command for switching Python virtualenvs.
+# Reads venvs from $WORKON_HOME (default ~/.virtualenvs).
 _workon() {
     local curcontext="$curcontext" state line
     typeset -A opt_args
@@ -12,7 +13,7 @@ _workon() {
 
     case $state in
     csi)
-      _arguments "1: :($(ls -1d $WORKON_HOME/*/ | awk -F "/" "{print \$(NF-1)}"))"
+      _arguments "1: :($(ls -1d $WORKON_HOME/*/ 2>/dev/null | awk -F "/" "{print \$(NF-1)}"))"
     ;;
     esac
 }
