@@ -1,8 +1,10 @@
 #compdef toggl1
-# Documentation: https://man.archlinux.org/search?q=toggl1
-# Reference accessed: 2026-05-16
-# Source: https://github.com/Voronenko/dotfiles/blob/93559d875bba2eaac109c43a5fb31bcc9090d2e0/completions/_toggl.zsh
-# Repository: Voronenko/dotfiles (completions/_toggl.zsh)
+# Documentation: https://github.com/Voronenko/dotfiles/blob/93559d875bba2eaac109c43a5fb31bcc9090d2e0/completions/_toggl.zsh
+# Reference accessed: 2026-05-21
+# Verified: upstream docs at the URL above.
+# NOTE: Compdef name `toggl1` is intentional to avoid clashing with the
+# AuHau/toggl-cli completion in _toggl. This file ports the third-party
+# Voronenko dotfiles helper for an older Toggl CLI binary.
 
 __toggl-workspaces() {
     toggl workspaces
