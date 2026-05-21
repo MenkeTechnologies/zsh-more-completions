@@ -1,30 +1,34 @@
 #compdef waydroid
-# Documentation: https://man.archlinux.org/search?q=waydroid
-# Reference accessed: 2026-05-16
-
-# Zsh completion for waydroid - Android container on Linux
+# Documentation: https://docs.waydro.id/usage/waydroid-command-line-options
+# Reference accessed: 2026-05-21
+# Verified: upstream tools/helpers/arguments.py at github.com/waydroid/waydroid.
 
 local curcontext="$curcontext" state line ret=1
 
 local -a commands=(
+  'status:quick check for the waydroid'
+  'log:follow the waydroid logfile'
   'init:set up waydroid-specific configs and install images'
-  'status:show quick status of waydroid'
+  'upgrade:upgrade images'
   'session:session controller'
   'container:container controller'
   'app:applications controller'
-  'prop:android system properties controller'
-  'show-full-ui:show Android full UI'
-  'shell:run a remote shell in the container'
-  'logcat:follow Android logcat'
-  'log:follow waydroid log'
-  'upgrade:upgrade Android images'
-  'first-launch:run first-launch setup'
-  'help:show help'
+  'prop:android properties controller'
+  'show-full-ui:show android full screen in window'
+  'first-launch:start waydroid, prompting to initialize first if necessary'
+  'shell:run remote shell command'
+  'logcat:show android logcat'
+  'adb:manage adb connection'
+  'bugreport:create a bugreport archive interactively'
 )
 
 _arguments -s -S \
   '1:command:->command' \
-  '(-h --help)'{-h,--help}'[show help message]' \
+  '(-V --version)'{-V,--version}'[show version]' \
+  '(-l --log)'{-l,--log}'+[path to log file]:file:_files' \
+  '--details-to-stdout[print details to stdout instead of log]' \
+  '(-v --verbose)'{-v,--verbose}'[verbose logging]' \
+  '(-q --quiet)'{-q,--quiet}'[suppress log messages]' \
   '*:: :->args' && ret=0
 
 case $state in
@@ -35,22 +39,32 @@ case $state in
     case $words[1] in
       (init)
         _arguments -s -S \
-          '(-s --images-path)'{-s,--images-path}'[custom path for images]:directory:_files -/' \
+          '(-i --images_path)'{-i,--images_path}'+[custom path for images]:dir:_files -/' \
           '(-f --force)'{-f,--force}'[re-initialize even if already done]' \
-          '(-c --system-channel)'{-c,--system-channel}'[system OTA channel]:channel' \
-          '(-v --vendor-channel)'{-v,--vendor-channel}'[vendor OTA channel]:channel' \
-          '(-r --rom-type)'{-r,--rom-type}'[ROM type]:type:(lineage gapps)' \
-          '(-i --system-type)'{-i,--system-type}'[system type]:type:(VANILLA GAPPS)' && ret=0
+          '(-c --system_channel)'{-c,--system_channel}'+[system OTA channel]:channel' \
+          '(-v --vendor_channel)'{-v,--vendor_channel}'+[vendor OTA channel]:channel' \
+          '(-r --rom_type)'{-r,--rom_type}'+[ROM type]:type:(lineage bliss)' \
+          '(-s --system_type)'{-s,--system_type}'+[system type]:type:(VANILLA FOSS GAPPS)' \
+          '--client[run as user mode connecting to remote initializer]' && ret=0
+        ;;
+      (upgrade)
+        _arguments -s -S \
+          '(-o --offline)'{-o,--offline}'[just update configs]' && ret=0
+        ;;
+      (log)
+        _arguments -s -S \
+          '(-n --lines)'{-n,--lines}'+[count of initial output lines]:lines' \
+          '(-c --clear)'{-c,--clear}'[clear the log]' && ret=0
         ;;
       (session)
         local -a session_commands=(
-          'start:start the waydroid session'
-          'stop:stop the waydroid session'
+          'start:start session'
+          'stop:stop session'
         )
         _arguments -s -S \
-          '1:session command:->session_cmd' && ret=0
+          '1:subaction:->session_cmd' && ret=0
         if [[ $state == session_cmd ]]; then
-          _describe -t commands 'session command' session_commands && ret=0
+          _describe -t commands 'session subaction' session_commands && ret=0
         fi
         ;;
       (container)
@@ -62,9 +76,9 @@ case $state in
           'unfreeze:unfreeze the waydroid container'
         )
         _arguments -s -S \
-          '1:container command:->container_cmd' && ret=0
+          '1:subaction:->container_cmd' && ret=0
         if [[ $state == container_cmd ]]; then
-          _describe -t commands 'container command' container_commands && ret=0
+          _describe -t commands 'container subaction' container_commands && ret=0
         fi
         ;;
       (app)
@@ -73,19 +87,20 @@ case $state in
           'remove:remove an app'
           'launch:launch an app'
           'list:list installed apps'
-          'intent:send an intent'
+          'intent:start single application via intent'
         )
         _arguments -s -S \
-          '1:app command:->app_cmd' \
+          '1:subaction:->app_cmd' \
           '*:: :->app_args' && ret=0
         case $state in
           (app_cmd)
-            _describe -t commands 'app command' app_commands && ret=0
+            _describe -t commands 'app subaction' app_commands && ret=0
             ;;
           (app_args)
             case $words[1] in
               (install) _arguments '1:APK file:_files -g "*.apk"' && ret=0 ;;
               (remove|launch) _arguments '1:package name' && ret=0 ;;
+              (intent) _arguments '1:action' '2:URI' && ret=0 ;;
             esac
             ;;
         esac
@@ -96,10 +111,10 @@ case $state in
           'set:set a property'
         )
         _arguments -s -S \
-          '1:prop command:->prop_cmd' \
+          '1:subaction:->prop_cmd' \
           '*:: :->prop_args' && ret=0
         case $state in
-          (prop_cmd) _describe -t commands 'prop command' prop_commands && ret=0 ;;
+          (prop_cmd) _describe -t commands 'prop subaction' prop_commands && ret=0 ;;
           (prop_args)
             case $words[1] in
               (get) _arguments '1:property name' && ret=0 ;;
@@ -109,12 +124,28 @@ case $state in
         esac
         ;;
       (shell)
-        _arguments '*:command' && ret=0
+        _arguments \
+          '(-u --uid)'{-u,--uid}'+[UID to run as]:uid' \
+          '(-g --gid)'{-g,--gid}'+[GID to run as]:gid' \
+          '(-s --context)'{-s,--context}'+[SELinux/AppArmor context]:context' \
+          '(-L --nolsm)'{-L,--nolsm}'[skip LSM transitions (dangerous)]' \
+          '(-C --allcaps)'{-C,--allcaps}'[do not drop capabilities (dangerous)]' \
+          '(-G --nocgroup)'{-G,--nocgroup}'[skip container cgroup (dangerous)]' \
+          '*:command' && ret=0
         ;;
-      (upgrade)
+      (logcat)
+        _arguments '*:logcat arg' && ret=0
+        ;;
+      (adb)
+        local -a adb_commands=(
+          'connect:connect adb to the Android container'
+          'disconnect:disconnect adb from the Android container'
+        )
         _arguments -s -S \
-          '(-s --images-path)'{-s,--images-path}'[custom path for images]:directory:_files -/' \
-          '(-o --offline)'{-o,--offline}'[use local images]' && ret=0
+          '1:subaction:->adb_cmd' && ret=0
+        if [[ $state == adb_cmd ]]; then
+          _describe -t commands 'adb subaction' adb_commands && ret=0
+        fi
         ;;
     esac
     ;;

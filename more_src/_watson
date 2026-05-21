@@ -1,7 +1,7 @@
 #compdef watson
 # Documentation: https://github.com/TailorDev/Watson
-# Reference accessed: 2026-05-17
-# Verified: upstream docs at the URL above.
+# Reference accessed: 2026-05-21
+# Verified: upstream source watson/cli.py at github.com/TailorDev/Watson.
 
 _watson_projects() {
   local -a projects
@@ -23,23 +23,25 @@ _watson_frames() {
 
 _watson_report_flags() {
   _arguments \
-    '(-c --current)'{-c,--current}'[include current frame]' \
-    '(-C --no-current)'{-C,--no-current}'[exclude current frame]' \
-    '(-f --from)'{-f,--from}'[start date]:date' \
-    '(-t --to)'{-t,--to}'[end date]:date' \
-    '*'{-p,--project}'[filter by project]:project:_watson_projects' \
-    '*'{-T,--tag}'[filter by tag]:tag:_watson_tags' \
-    '(-j --json)'{-j,--json}'[output as JSON]' \
-    '(-s --csv)'{-s,--csv}'[output as CSV]' \
-    '(-g --pager)'{-g,--pager}'[use pager]' \
-    '(-G --no-pager)'{-G,--no-pager}'[do not use pager]' \
-    '--plain[plain text output]' \
-    '(-d --day)'{-d,--day}'[aggregate by day]' \
-    '(-w --week)'{-w,--week}'[aggregate by week]' \
-    '(-m --month)'{-m,--month}'[aggregate by month]' \
-    '(-y --year)'{-y,--year}'[aggregate by year]' \
-    '(-l --luna)'{-l,--luna}'[aggregate by lunar phase]' \
-    '(-a --all)'{-a,--all}'[show all frames]' \
+    '(-c --current -C --no-current)'{-c,--current}'[include current frame]' \
+    '(-c --current -C --no-current)'{-C,--no-current}'[exclude current frame]' \
+    '(-f --from)'{-f,--from}'+[start date]:date' \
+    '(-t --to)'{-t,--to}'+[end date]:date' \
+    '*'{-p,--project}'+[filter by project]:project:_watson_projects' \
+    '*'{-T,--tag}'+[filter by tag]:tag:_watson_tags' \
+    '*--ignore-project=[ignore project]:project:_watson_projects' \
+    '*--ignore-tag=[ignore tag]:tag:_watson_tags' \
+    '(-j --json -s --csv --plain)'{-j,--json}'[output as JSON]' \
+    '(-j --json -s --csv --plain)'{-s,--csv}'[output as CSV]' \
+    '(-j --json -s --csv --plain)--plain[plain text output]' \
+    '(-g --pager -G --no-pager)'{-g,--pager}'[use pager]' \
+    '(-g --pager -G --no-pager)'{-G,--no-pager}'[do not use pager]' \
+    '(-d --day -w --week -m --month -y --year -l --luna -a --all)'{-d,--day}'[current day]' \
+    '(-d --day -w --week -m --month -y --year -l --luna -a --all)'{-w,--week}'[current week]' \
+    '(-d --day -w --week -m --month -y --year -l --luna -a --all)'{-m,--month}'[current month]' \
+    '(-d --day -w --week -m --month -y --year -l --luna -a --all)'{-y,--year}'[current year]' \
+    '(-d --day -w --week -m --month -y --year -l --luna -a --all)'{-l,--luna}'[current moon cycle]' \
+    '(-d --day -w --week -m --month -y --year -l --luna -a --all)'{-a,--all}'[all activities]' \
     '--help[show help]'
 }
 
@@ -47,6 +49,8 @@ _watson() {
   local curcontext="$curcontext" state line ret=1
 
   _arguments -C \
+    '--color[colored output]' \
+    '--no-color[disable colored output]' \
     '--help[show help message]' \
     '--version[show version]' \
     '1:command:->command' \
@@ -61,15 +65,19 @@ _watson() {
         'restart:restart last tracking'
         'status:show current tracking status'
         'report:show time report'
+        'aggregate:show aggregated time report'
         'log:show time log'
         'projects:list all projects'
         'tags:list all tags'
+        'frames:list all frame IDs'
+        'add:add an interval to log'
         'edit:edit a frame'
         'remove:remove a frame'
-        'merge:merge two frames'
+        'merge:merge frames with conflicts'
         'rename:rename a project or tag'
-        'aggregate:show aggregated time report'
-        'frames:list all frame IDs'
+        'config:get/set/edit configuration'
+        'sync:sync with backend'
+        'help:show help'
       )
       _describe -t commands 'watson command' commands && ret=0
       ;;
@@ -78,35 +86,63 @@ _watson() {
         start)
           _arguments \
             '--help[show help]' \
+            '--at=[start frame at given time YYYY-MM-DDTHH:MM(:SS)?]:time' \
+            '(-g --gap -G --no-gap)'{-g,--gap}'[leave gap between previous end and current start]' \
+            '(-g --gap -G --no-gap)'{-G,--no-gap}'[do not leave gap]' \
+            '(-c --confirm-new-project)'{-c,--confirm-new-project}'[confirm new project]' \
+            '(-b --confirm-new-tag)'{-b,--confirm-new-tag}'[confirm new tag]' \
             '1:project:_watson_projects' \
             '*:+tag:_watson_tags' && ret=0
           ;;
-        stop|cancel)
+        stop)
+          _arguments \
+            '--help[show help]' \
+            '--at=[stop frame at given time]:time' && ret=0
+          ;;
+        cancel)
           _arguments '--help[show help]' && ret=0
           ;;
         restart)
           _arguments \
             '--help[show help]' \
-            '--stop[stop current before restarting]' \
-            '--no-stop[do not stop current]' \
-            '--gap[leave gap between last and restarted]' \
-            '--no-gap[do not leave gap]' && ret=0
+            '--at=[start at given time]:time' \
+            '(-s --stop -S --no-stop)'{-s,--stop}'[stop current before restarting]' \
+            '(-s --stop -S --no-stop)'{-S,--no-stop}'[do not stop current]' \
+            '(-g --gap -G --no-gap)'{-g,--gap}'[leave gap between previous end and current start]' \
+            '(-g --gap -G --no-gap)'{-G,--no-gap}'[do not leave gap]' \
+            '1:frame:_watson_frames' && ret=0
           ;;
         status)
-          _arguments '--help[show help]' && ret=0
+          _arguments \
+            '--help[show help]' \
+            '(-p --project)'{-p,--project}'[only output project]' \
+            '(-t --tags)'{-t,--tags}'[only show tags]' \
+            '(-e --elapsed)'{-e,--elapsed}'[only show time elapsed]' && ret=0
           ;;
         report|aggregate)
           _watson_report_flags && ret=0
           ;;
         log)
           _watson_report_flags
-          _arguments '--reverse[reverse output order]' && ret=0
+          _arguments \
+            '(-r --reverse -R --no-reverse)'{-r,--reverse}'[reverse output order]' \
+            '(-r --reverse -R --no-reverse)'{-R,--no-reverse}'[do not reverse]' && ret=0
+          ;;
+        add)
+          _arguments \
+            '--help[show help]' \
+            '(-f --from)'{-f,--from}'+[start time]:time' \
+            '(-t --to)'{-t,--to}'+[end time]:time' \
+            '(-c --confirm-new-project)'{-c,--confirm-new-project}'[confirm new project]' \
+            '(-b --confirm-new-tag)'{-b,--confirm-new-tag}'[confirm new tag]' \
+            '1:project:_watson_projects' \
+            '*:+tag:_watson_tags' && ret=0
           ;;
         edit)
           _arguments \
             '--help[show help]' \
-            '--confirm-new-project[confirm creation of new project]' \
-            '--confirm-new-tag[confirm creation of new tag]' \
+            '(-c --confirm-new-project)'{-c,--confirm-new-project}'[confirm new project]' \
+            '(-b --confirm-new-tag)'{-b,--confirm-new-tag}'[confirm new tag]' \
             '1:frame:_watson_frames' && ret=0
           ;;
         remove)
@@ -122,8 +158,25 @@ _watson() {
             '2:old name' \
             '3:new name' && ret=0
           ;;
-        projects|tags|frames)
+        config)
+          _arguments \
+            '--help[show help]' \
+            '(-e --edit)'{-e,--edit}'[edit config in editor]' \
+            '1:section.key' \
+            '2:value' && ret=0
+          ;;
+        merge)
+          _arguments \
+            '--help[show help]' \
+            '(-f --force)'{-f,--force}'[force merge]' \
+            '1:frames file:_files' && ret=0
+          ;;
+        sync|projects|tags|frames)
           _arguments '--help[show help]' && ret=0
+          ;;
+        help)
+          local -a all_cmds=(start stop cancel restart status report aggregate log projects tags frames add edit remove merge rename config sync help)
+          _describe -t commands 'command' all_cmds && ret=0
           ;;
       esac
       ;;
