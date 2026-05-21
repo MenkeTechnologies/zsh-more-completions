@@ -1,26 +1,109 @@
 #compdef rqbit
-# Documentation: https://man.archlinux.org/search?q=rqbit
-# Reference accessed: 2026-05-16
+# Documentation: https://github.com/ikatson/rqbit/blob/main/crates/rqbit/src/main.rs
+# Reference accessed: 2026-05-21
+# Verified: upstream ikatson/rqbit clap Opts/SubCommand definitions.
 
 local curcontext="$curcontext" state line ret=1
 
+local -a global_args=(
+  '(- *)'{-h,--help}'[show help]'
+  '(- *)'{-V,--version}'[show version]'
+  '(-v --log-level)'{-v+,--log-level=}'[console log level]:level:(trace debug info warn error)'
+  '--log-file=[write logs to file]:file:_files'
+  '--log-file-rust-log=[RUST_LOG value for log file]:value:'
+  '(-i --tracker-refresh-interval)'{-i+,--tracker-refresh-interval=}'[force tracker poll interval]:interval:'
+  '--http-api-listen-addr=[HTTP API listen address]:addr:'
+  '--http-api-allow-create[allow creating torrents via HTTP API]'
+  '(-s --single-thread-runtime)'{-s,--single-thread-runtime}'[use tokio single-threaded runtime]'
+  '--disable-dht[disable DHT]'
+  '--disable-dht-persistence[disable DHT state storage]'
+  '--dht-bootstrap-addrs=[DHT bootstrap addresses (comma separated)]:addrs:'
+  '--peer-connect-timeout=[peer connection timeout]:duration:'
+  '--peer-read-write-timeout=[peer I/O timeout]:duration:'
+  '--peer-limit=[max connected peers per torrent]:n:'
+  '(-t --worker-threads)'{-t+,--worker-threads=}'[executor thread count]:n:'
+  '--disable-tcp-listen[disable incoming TCP connections]'
+  '--disable-tcp-connect[disable outgoing TCP connections]'
+  '--experimental-enable-utp-listen[enable uTP listening]'
+  '--listen-port=[port for incoming connections]:port:'
+  '--announce-port=[port to advertise to trackers/DHT]:port:'
+  '--listen-ip=[IP to listen on]:ip:'
+  '--disable-upnp-port-forward[disable UPnP port forwarding]'
+  '--enable-upnp-server[run UPnP media server]'
+  '--upnp-server-friendly-name=[UPnP server display name]:name:'
+  '--bind-device=[network device to bind to]:dev:'
+  '--ipv4-only[force IPv4 only]'
+  '--max-blocking-threads=[max disk I/O threads]:n:'
+  '--experimental-mmap-storage[use mmap for storage]'
+  '--socks-url=[SOCKS5 proxy URL]:url:'
+  '--concurrent-init-limit=[max concurrent torrent initialization]:n:'
+  '--umask=[process umask (Unix only)]:mask:'
+  '--disable-upload[disable uploading entirely]'
+  '--ratelimit-download=[download speed limit (bytes/sec)]:rate:'
+  '--ratelimit-upload=[upload speed limit (bytes/sec)]:rate:'
+  '--blocklist-url=[P2P blocklist URL]:url:'
+  '--allowlist-url=[P2P allowlist URL]:url:'
+  '--trackers-filename=[file with tracker URLs]:file:_files'
+  '--disable-lsd[disable local peer discovery]'
+  '--disable-trackers[disable trackers]'
+)
+
 _arguments -C \
-  '(-h --help)'{-h,--help}'[Show help]' \
-  '(-V --version)'{-V,--version}'[Show version]' \
+  $global_args \
   '1: :->cmds' \
-  '*:: :->rest' && ret=0
+  '*:: :->args' && ret=0
 
 case $state in
   (cmds)
     local -a cmds=(
-      download:'download torrent'
-      server:'run rqbit HTTP/API server'
-      help:'show help'
+      server:'start rqbit server with HTTP API'
+      download:'download a single torrent, stateless'
+      share:'create a torrent from a path and announce'
+      completions:'shell completions'
     )
     _describe -t commands command cmds && ret=0
     ;;
-  (rest)
-    _default && ret=0
+  (args)
+    case ${line[1]} in
+      (server)
+        _arguments -C \
+          '1: :->subcmd' \
+          '*:: :->subargs' && ret=0
+        case $state in
+          (subcmd)
+            _values 'server subcommand' 'start[start the server]' && ret=0
+            ;;
+          (subargs)
+            _arguments \
+              '--disable-persistence[disable session persistence]' \
+              '--persistence-location=[session data folder or postgres URL]:loc:' \
+              '--fastresume[skip checksumming on restart]' \
+              '--watch-folder=[watch folder for auto-added .torrent files]:dir:_files -/' \
+              '*:output folder:_files -/' && ret=0
+            ;;
+        esac
+        ;;
+      (download)
+        _arguments \
+          '(-o --output-folder)'{-o+,--output-folder=}'[output directory]:dir:_files -/' \
+          '(-s --sub-folder)'{-s+,--sub-folder=}'[subfolder within output folder]:dir:' \
+          '(-r --filename-re)'{-r+,--filename-re=}'[regex to select files to download]:regex:' \
+          '(-l --list)'{-l,--list}'[list torrent contents only]' \
+          '--overwrite[overwrite existing files]' \
+          '(-e --exit-on-finish)'{-e,--exit-on-finish}'[exit when downloads complete]' \
+          '--initial-peers=[comma-separated initial peers]:peers:' \
+          '--disable-http-api[disable HTTP API entirely]' \
+          '*:torrent path or magnet:_files -g "*.torrent"' && ret=0
+        ;;
+      (share)
+        _arguments \
+          '(-n --name)'{-n+,--name=}'[torrent name]:name:' \
+          '*:path:_files' && ret=0
+        ;;
+      (completions)
+        _values 'shell' bash zsh fish elvish powershell && ret=0
+        ;;
+    esac
     ;;
 esac
 
