@@ -1,16 +1,17 @@
 #compdef sing-box
-# Documentation: https://man.archlinux.org/search?q=sing-box
-# Reference accessed: 2026-05-16
-
-# Zsh completion for sing-box - universal proxy platform
+# Documentation: https://github.com/SagerNet/sing-box/tree/main/cmd/sing-box
+# Reference accessed: 2026-05-21
+# Verified: upstream cmd/sing-box/cmd*.go source (cmd.go global flags,
+# cmd_run.go, cmd_check.go, cmd_format.go, cmd_merge.go,
+# cmd_generate.go, cmd_rule_set*.go, cmd_tools*.go).
 
 local -a subcommands
 subcommands=(
   'run:Run the service'
-  'check:Check the configuration'
-  'format:Format the configuration'
+  'check:Check configuration'
+  'format:Format configuration'
   'merge:Merge configurations'
-  'generate:Generate things'
+  'generate:Generate random data / keys'
   'geosite:Manage geosite resources'
   'geoip:Manage geoip resources'
   'rule-set:Manage rule-set resources'
@@ -19,8 +20,18 @@ subcommands=(
   'completion:Generate shell completion script'
 )
 
+# Global persistent flags from cmd.go.
+local -a global_flags
+global_flags=(
+  '(-c --config)'{-c,--config}'=[set configuration file path]:config file:_files'
+  '(-C --config-directory)'{-C,--config-directory}'=[set configuration directory]:directory:_directories'
+  '(-D --directory)'{-D,--directory}'=[set working directory]:directory:_directories'
+  '--disable-color[disable color output]'
+)
+
 _arguments -C \
   '(- *)'{-h,--help}'[show help]' \
+  $global_flags \
   '1:subcommand:->subcmd' \
   '*:: :->args'
 
@@ -30,36 +41,29 @@ case $state in
     ;;
   args)
     case $words[1] in
-      run)
-        _arguments \
-          '(-c --config)'{-c,--config}'[specify configuration file]:config file:_files' \
-          '(-C --config-directory)'{-C,--config-directory}'[specify configuration directory]:config dir:_directories' \
-          '(-D --directory)'{-D,--directory}'[specify working directory]:working dir:_directories' \
-          '--disable-color[disable color output]'
-        ;;
-      check)
-        _arguments \
-          '(-c --config)'{-c,--config}'[specify configuration file]:config file:_files' \
-          '(-C --config-directory)'{-C,--config-directory}'[specify configuration directory]:config dir:_directories'
+      run|check)
+        _arguments $global_flags
         ;;
       format)
         _arguments \
-          '(-c --config)'{-c,--config}'[specify configuration file]:config file:_files' \
-          '(-C --config-directory)'{-C,--config-directory}'[specify configuration directory]:config dir:_directories' \
-          '(-w --write)'{-w,--write}'[write result to config file]'
+          $global_flags \
+          '(-w --write)'{-w,--write}'[write result to source file instead of stdout]'
         ;;
       merge)
         _arguments \
-          '(-c --config)'{-c,--config}'[specify configuration file]:config file:_files' \
-          '(-C --config-directory)'{-C,--config-directory}'[specify configuration directory]:config dir:_directories' \
-          '*:output file:_files'
+          $global_flags \
+          ':output path:_files'
         ;;
       generate)
         local -a gen_cmds
         gen_cmds=(
-          'tls-keypair:Generate TLS key pair'
-          'reality-keypair:Generate reality key pair'
+          'tls-keypair:Generate TLS keypair'
+          'reality-keypair:Generate REALITY keypair'
+          'wg-keypair:Generate WireGuard keypair'
           'rand:Generate random bytes'
+          'uuid:Generate UUID'
+          'vapid-keypair:Generate VAPID keypair'
+          'ech-keypair:Generate ECH keypair'
         )
         _arguments -C \
           '1:generate subcommand:->gen_sub' \
@@ -68,6 +72,21 @@ case $state in
           gen_sub)
             _describe -t gen_cmds 'generate subcommand' gen_cmds
             ;;
+          gen_args)
+            case $words[1] in
+              rand)
+                _arguments \
+                  '--base64[output base64-encoded]' \
+                  '--hex[output hex-encoded]' \
+                  ':length:'
+                ;;
+              tls-keypair)
+                _arguments \
+                  '(-m --months)'{-m,--months}'=[validity in months]:n:' \
+                  ':server name:'
+                ;;
+            esac
+            ;;
         esac
         ;;
       rule-set)
@@ -75,8 +94,11 @@ case $state in
         rs_cmds=(
           'compile:Compile rule-set source to binary'
           'decompile:Decompile rule-set binary to source'
-          'match:Match rule-set against input'
           'format:Format rule-set source file'
+          'match:Match rule-set against input'
+          'convert:Convert rule-set between formats'
+          'merge:Merge rule-set files'
+          'upgrade:Upgrade rule-set format'
         )
         _arguments -C \
           '1:rule-set subcommand:->rs_sub' \
@@ -86,7 +108,22 @@ case $state in
             _describe -t rs_cmds 'rule-set subcommand' rs_cmds
             ;;
           rs_args)
-            _arguments '*:file:_files'
+            case $words[1] in
+              compile)
+                _arguments \
+                  '(-o --output)'{-o,--output}'=[output file]:file:_files' \
+                  ':source path:_files'
+                ;;
+              match)
+                _arguments \
+                  '(-f --format)'{-f,--format}'=[rule-set format]:format:(source binary)' \
+                  ':rule-set path:_files' \
+                  ':IP address or domain:'
+                ;;
+              *)
+                _arguments '*:file:_files'
+                ;;
+            esac
             ;;
         esac
         ;;
@@ -97,6 +134,7 @@ case $state in
           'fetch:Fetch a URL'
         )
         _arguments -C \
+          '(-o --outbound)'{-o,--outbound}'=[use specified outbound tag]:tag:' \
           '1:tools subcommand:->tools_sub' \
           '*:: :->tools_args'
         case $state in
@@ -104,6 +142,25 @@ case $state in
             _describe -t tools_cmds 'tools subcommand' tools_cmds
             ;;
         esac
+        ;;
+      geoip)
+        local -a geoip_cmds
+        geoip_cmds=(
+          'list:List GeoIP codes'
+          'lookup:Look up an IP address'
+          'export:Export GeoIP database'
+        )
+        _describe -t geoip_cmds 'geoip subcommand' geoip_cmds
+        ;;
+      geosite)
+        local -a geosite_cmds
+        geosite_cmds=(
+          'list:List geosite codes'
+          'lookup:Look up a domain'
+          'export:Export geosite database'
+          'matcher:Match domains'
+        )
+        _describe -t geosite_cmds 'geosite subcommand' geosite_cmds
         ;;
       *)
         _arguments '*:arguments'
