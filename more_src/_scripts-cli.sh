@@ -1,6 +1,6 @@
 #compdef scripts/cli.sh
 # Documentation: https://github.com/datastaxdevs/terraform-nvidia-runai-stack/blob/main/scripts/cli.sh
-# Reference accessed: 2026-05-17
+# Reference accessed: 2026-05-21
 # Verified: datastaxdevs/terraform-nvidia-runai-stack scripts/cli.sh
 # subcommand surface (nginx, deploy, ingress, nv-ingest, nims, runai,
 # volcano, monitor, validate, preflight, fix, status, diagnose, env,

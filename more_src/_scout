@@ -1,86 +1,125 @@
 #compdef scout
-# Documentation: https://github.com/nccgroup/ScoutSuite
-# Reference accessed: 2026-05-17
+# Documentation: https://github.com/nccgroup/ScoutSuite/blob/master/ScoutSuite/core/cli_parser.py
+# Reference accessed: 2026-05-21
 # Verified: upstream docs at the URL above.
 
 local curcontext="$curcontext" state line ret=1
-local -a providers
 
-providers=(
-  'aws:audit Amazon Web Services'
-  'azure:audit Azure'
-  'gcp:audit Google Cloud Platform'
-  'aliyun:audit Alibaba Cloud'
-  'oci:audit Oracle Cloud Infrastructure'
-  'kubernetes:audit a Kubernetes cluster'
-  'help:show help'
+local -a common_args=(
+  '(-f --force)'{-f,--force}'[overwrite existing files]'
+  '(-l --local)'{-l,--local}'[use local data previously fetched and re-run analysis]'
+  '--max-rate=[maximum API requests per second]:rate:'
+  '--debug[print stack trace on exceptions]'
+  '--quiet[disable CLI output]'
+  '--logfile=[additional output to specified file]:file:_files'
+  '--update[reload existing data, overwrite only in-scope data]'
+  '--ruleset=[set of rules for analysis]:ruleset:_files'
+  '--no-browser[do not auto-open report in browser]'
+  '--max-workers=[maximum threads used]:n:'
+  '--report-dir=[path for Scout report]:dir:_files -/'
+  '--report-name=[name of Scout report]:name:'
+  '--timestamp=[timestamp added to report name]:ts:'
+  '*--services=[in-scope services]:service:'
+  '--list-services[list available services]'
+  '*--skip=[out-of-scope services]:service:'
+  '--exceptions=[exception file for analysis]:file:_files'
+  '--result-format=[result format]:format:(json sqlite)'
+  '--serve[serve result database on server]'
+  '--host=[server listening address]:address:'
+  '--port=[server listening port]:port:'
+)
+
+local -a providers=(
+  'aws:scan Amazon Web Services'
+  'azure:scan Microsoft Azure'
+  'gcp:scan Google Cloud Platform'
+  'aliyun:scan Alibaba Cloud'
+  'oci:scan Oracle Cloud Infrastructure'
+  'kubernetes:scan a Kubernetes cluster'
+  'digitalocean:scan DigitalOcean Cloud'
 )
 
 _arguments -C \
   '(- *)'{-h,--help}'[show help]' \
-  '(- *)--version[show version]' \
-  '(-l --list-services)'{-l,--list-services}'[list available services and exit]' \
-  '--no-browser[do not open the report in a browser]' \
-  '--report-dir=[output directory]:dir:_files -/' \
-  '--report-name=[report name]:name:' \
-  '--timestamp=[timestamp suffix]:ts:' \
-  '*--services=[services to audit]:service:' \
-  '*--skip=[services to skip]:service:' \
-  '--exceptions=[exceptions JSON file]:file:_files' \
-  '--ruleset=[ruleset name or path]:ruleset:_files' \
-  '--max-rate=[max API requests/sec]:n:' \
-  '--debug[enable debug logging]' \
-  '--quiet[suppress output]' \
-  '1: :->cmd' \
+  '1:provider:->providers' \
   '*::arg:->args' && ret=0
 
 case $state in
-  (cmd) _describe -t cmds 'scout provider' providers && ret=0 ;;
+  (providers)
+    _describe -t providers 'cloud provider' providers && ret=0
+    ;;
   (args)
-    case $line[1] in
+    case ${line[1]} in
       (aws)
         _arguments \
-          '(-p --profile)*'{-p+,--profile=}'[AWS profile]:profile:' \
-          '--access-keys[use static access keys from CLI]' \
-          '--access-key-id=[AWS access key id]:id:' \
-          '--secret-access-key=[AWS secret access key]:key:' \
-          '--session-token=[AWS session token]:token:' \
-          '*--regions=[AWS region]:region:' \
-          '--mfa-serial=[MFA serial number]:serial:' \
-          '--mfa-code=[MFA code]:code:' && ret=0 ;;
+          $common_args \
+          '(-p --profile)'{-p+,--profile=}'[named profile]:profile:' \
+          '--access-keys[run with access keys]' \
+          '--access-key-id=[AWS Access Key ID]:id:' \
+          '--secret-access-key=[AWS Secret Access Key]:key:' \
+          '--session-token=[AWS Session Token]:token:' \
+          '(-r --regions)*'{-r+,--regions=}'[regions to scan]:region:' \
+          '(-xr --exclude-regions)*'{-xr+,--exclude-regions=}'[regions to exclude]:region:' \
+          '--ip-ranges=[config files with known IP ranges]:file:_files' \
+          '--ip-ranges-name-key=[key containing CIDR display name]:key:' && ret=0
+        ;;
       (azure)
         _arguments \
-          '(-c --cli)'{-c,--cli}'[use Azure CLI credentials]' \
-          '(-m --msi)'{-m,--msi}'[use managed identity]' \
-          '(-s --service-principal)'{-s,--service-principal}'[use service principal]' \
-          '(-u --user-account)'{-u,--user-account}'[interactive user login]' \
-          '--client-id=[client id]:id:' \
-          '--client-secret=[client secret]:secret:' \
-          '--tenant-id=[tenant id]:id:' \
-          '--subscription-ids=[subscription ids]:ids:' && ret=0 ;;
+          $common_args \
+          '(-c --cli)'{-c,--cli}'[use configured azure-cli credentials]' \
+          '--user-account[run with user credentials]' \
+          '(-u --username)'{-u+,--username=}'[Azure account username]:user:' \
+          '(-p --password)'{-p+,--password=}'[Azure account password]:password:' \
+          '--user-account-browser[browser-based user authentication (MFA-friendly)]' \
+          '(-s --service-principal)'{-s,--service-principal}'[Azure Service Principal]' \
+          '--client-id=[service principal client ID]:id:' \
+          '--client-secret=[service principal client secret]:secret:' \
+          '--file-auth=[credential file for Service Principal]:file:_files' \
+          '(-m --msi)'{-m,--msi}'[Managed Service Identity]' \
+          '--tenant=[tenant (Directory) ID]:id:' \
+          '--subscriptions=[subscription IDs]:ids:' \
+          '--all-subscriptions[scan all accessible subscriptions]' && ret=0
+        ;;
       (gcp)
         _arguments \
-          '(-u --user-account)'{-u,--user-account}'[user account login]' \
-          '(-s --service-account)'{-s,--service-account}'[service account]' \
-          '--key-file=[GCP key file]:file:_files -g "*.json"' \
-          '--organization-id=[scan an organization]:id:' \
-          '--folder-id=[scan a folder]:id:' \
-          '--project-id=[scan a project]:id:' \
-          '--all-projects[scan all projects]' \
-          '--service-account-impersonation=[impersonate SA]:account:' && ret=0 ;;
-      (kubernetes)
-        _arguments \
-          '--kubeconfig=[kubeconfig file]:file:_files' \
-          '--context=[kubeconfig context]:context:' && ret=0 ;;
+          $common_args \
+          '(-u --user-account)'{-u,--user-account}'[run with Google Account]' \
+          '(-s --service-account)'{-s+,--service-account=}'[Google Service Account credentials file]:file:_files -g "*.json"' \
+          '--project-id=[GCP Project ID to scan]:id:' \
+          '--folder-id=[GCP Folder ID to scan]:id:' \
+          '--organization-id=[GCP Organization ID to scan]:id:' \
+          '--all-projects[scan all accessible projects]' && ret=0
+        ;;
       (aliyun)
         _arguments \
-          '--access-key-id=[access key id]:id:' \
-          '--access-key-secret=[access key secret]:secret:' && ret=0 ;;
+          $common_args \
+          '--access-keys[run with user credentials]' \
+          '(-k --access-key-id)'{-k+,--access-key-id=}'[Aliyun Access Key ID]:id:' \
+          '(-s --access-key-secret)'{-s+,--access-key-secret=}'[Aliyun Access Key Secret]:secret:' && ret=0
+        ;;
       (oci)
         _arguments \
-          '(-p --profile)'{-p+,--profile=}'[OCI profile]:profile:' \
-          '--config-file=[OCI config file]:file:_files' && ret=0 ;;
-    esac ;;
+          $common_args \
+          '(-p --profile)'{-p+,--profile=}'[profile name]:profile:' && ret=0
+        ;;
+      (kubernetes)
+        _arguments \
+          $common_args \
+          '(-c --cluster-provider)'{-c+,--cluster-provider=}'[cluster provider]:provider:(aks eks gke)' \
+          '--config-file=[kube-config file name]:file:_files' \
+          '--context=[cluster context to scan]:context:' \
+          '--do-not-persist-config[do not update config file on changes]' \
+          '--subscription-id=[Azure subscription ID (AKS only)]:id:' && ret=0
+        ;;
+      (digitalocean)
+        _arguments \
+          $common_args \
+          '(-t --token)'{-t+,--token=}'[DigitalOcean token]:token:' \
+          '--access_key=[Spaces Access Key ID]:id:' \
+          '--access_secret=[Spaces Secret Access Key]:secret:' && ret=0
+        ;;
+    esac
+    ;;
 esac
 
 return ret
