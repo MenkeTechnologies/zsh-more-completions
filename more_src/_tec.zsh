@@ -1,8 +1,8 @@
 #compdef tec
-# Documentation: https://man.archlinux.org/search?q=tec
-# Reference accessed: 2026-05-16
-# Source: https://github.com/roachme/tec/blob/79c8781183fff39d269e52ed600598af8edea1a7/completion/_tec.zsh
-# Repository: roachme/tec (completion/_tec.zsh)
+# Documentation: https://github.com/roachme/tec
+# Reference accessed: 2026-05-21
+# Verified: upstream docs at the URL above.
+# Source: https://github.com/roachme/tec/blob/master/completion/_tec.zsh
 
 # TODO:
 # 1. Add support to suggest objects (env, desk, task ID)
