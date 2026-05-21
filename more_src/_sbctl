@@ -1,32 +1,47 @@
 #compdef sbctl
-# Documentation: https://man.archlinux.org/search?q=sbctl
-# Reference accessed: 2026-05-16
+# Documentation: https://github.com/Foxboron/sbctl
+# Reference accessed: 2026-05-21
+# Verified: upstream docs at the URL above (docs/sbctl.8.txt).
 
 # Zsh completion for sbctl - Secure Boot key manager
 
 local curcontext="$curcontext" state line ret=1
 
 local -a commands=(
-  'create-keys:create secure boot signing keys'
-  'enroll-keys:enroll secure boot keys into firmware'
+  'status:show secure boot status'
+  'create-keys:generate secure boot signing keys'
+  'enroll-keys:enroll keys to EFI variables'
   'sign:sign a file with secure boot keys'
   'sign-all:sign all enrolled files'
-  'remove-file:remove a file from the signing database'
-  'verify:verify the signing of a file'
+  'import-keys:import keys into sbctl'
   'list-files:list enrolled files'
-  'list-bundles:list enrolled bundles'
-  'bundle:create a bundle'
-  'generate-bundles:generate all bundles'
-  'remove-bundle:remove a bundle'
-  'rotate-keys:rotate signing keys'
-  'status:show secure boot status'
-  'setup:setup secure boot'
-  'reset:reset secure boot configuration'
+  'ls-files:list enrolled files'
+  'ls:list enrolled files'
+  'remove-file:remove file from database'
+  'rm-file:remove file from database'
+  'rm:remove file from database'
+  'verify:verify signed files in the ESP'
+  'reset:reset secure boot keys'
+  'rotate-keys:rotate secure boot keys'
+  'export-enrolled-keys:export already-enrolled keys'
+  'list-enrolled-keys:list enrolled keys on system'
+  'ls-enrolled-keys:list enrolled keys on system'
+  'bundle:bundle files for an EFI stub image'
+  'generate-bundles:generate all EFI stub bundles'
+  'remove-bundle:remove bundle from database'
+  'rm-bundle:remove bundle from database'
+  'list-bundles:list stored bundles'
+  'ls-bundle:list stored bundles'
+  'setup:setup sbctl'
+  'help:show help'
 )
 
-_arguments -s -S \
+_arguments -s -S -C \
   '(- *)'{-h,--help}'[show help]' \
-  '--json[output in JSON]' \
+  '(-j --json)'{-j,--json}'[output in JSON format]' \
+  '(-c --config)'{-c,--config}'+[configuration file path]:file:_files' \
+  '--disable-landlock[disable landlock sandboxing]' \
+  '--debug[enable verbose debug logging]' \
   '1:command:->command' \
   '*:: :->args' && ret=0
 
@@ -36,36 +51,103 @@ case $state in
     ;;
   args)
     case ${words[1]} in
+      create-keys)
+        _arguments \
+          '(-e --export)'{-e,--export}'+[directory to persist exported keys]:dir:_files -/' \
+          '(-d --database-path)'{-d,--database-path}'+[path to save GUID file]:file:_files' && ret=0
+        ;;
+      enroll-keys)
+        _arguments \
+          '(-m --microsoft)'{-m,--microsoft}'[enroll Microsoft vendor certificates]' \
+          '(-t --tpm-eventlog)'{-t,--tpm-eventlog}'[enroll TPM Eventlog checksums]' \
+          '(-c --custom)'{-c,--custom}'[enroll custom KEK and db certificates]' \
+          '(-f --firmware-builtin)'{-f,--firmware-builtin}'+[enroll OEM certificates]:value:(db KEK PK)' \
+          '--yes-this-might-brick-my-machine[ignore Option ROM errors]' \
+          '--yolo[ignore Option ROM errors]' \
+          '(-i --ignore-immutable)'{-i,--ignore-immutable}'[skip immutable file checks]' \
+          '--export=[export keys]:format:(esl auth)' \
+          '(-p --partial)'{-p,--partial}'+[enroll specific hierarchy]:hierarchy:(db KEK PK)' \
+          '--custom-bytes=[enroll custom bytefile]:file:_files' \
+          '(-a --append)'{-a,--append}'[append instead of replace keys]' \
+          '--keytype=[keytype for all keys]:type:(file tpm)' \
+          '--pk-keytype=[PK keytype]:type:(file tpm)' \
+          '--kek-keytype=[KEK keytype]:type:(file tpm)' \
+          '--db-keytype=[db keytype]:type:(file tpm)' && ret=0
+        ;;
       sign)
         _arguments \
-          '(-o --output)'{-o,--output}'[output filename]:file:_files' \
+          '(-o --output)'{-o,--output}'+[output filename]:file:_files' \
           '(-s --save)'{-s,--save}'[save file to signing database]' \
-          '1:file to sign:_files' && ret=0
+          '*:file to sign:_files' && ret=0
+        ;;
+      sign-all)
+        _arguments \
+          '(-g --generate)'{-g,--generate}'[generate all bundles before signing]' && ret=0
+        ;;
+      import-keys)
+        _arguments \
+          '--db-cert=[database certificate path]:file:_files' \
+          '--db-key=[database key path]:file:_files' \
+          '--kek-cert=[KEK certificate path]:file:_files' \
+          '--kek-key=[KEK key path]:file:_files' \
+          '--pk-cert=[Platform Key certificate path]:file:_files' \
+          '--pk-key=[Platform Key key path]:file:_files' \
+          '--directory=[key directory path]:dir:_files -/' \
+          '--force[overwrite existing keys]' && ret=0
         ;;
       verify)
         _arguments '*:file to verify:_files' && ret=0
         ;;
-      remove-file)
+      remove-file|rm-file|rm)
         _arguments '1:file:_files' && ret=0
         ;;
-      enroll-keys)
+      reset)
         _arguments \
-          '--microsoft[include Microsoft keys]' \
-          '--tpm-eventlog[include TPM eventlog]' \
-          '--yes-this-might-brick-my-machine[skip confirmation]' && ret=0
+          '(-p --partial)'{-p,--partial}'+[reset specific hierarchy]:hierarchy:(db KEK PK)' && ret=0
+        ;;
+      rotate-keys)
+        _arguments \
+          '--backup-dir=[backup directory for old keys]:dir:_files -/' \
+          '(-p --partial)'{-p,--partial}'+[rotate specific hierarchy]:hierarchy:(db KEK PK)' \
+          '(-k --key-file)'{-k,--key-file}'+[key file to append]:file:_files' \
+          '(-c --cert-file)'{-c,--cert-file}'+[certificate file to append]:file:_files' \
+          '--keytype=[keytype for all keys]:type:(file tpm)' \
+          '--pk-keytype=[PK keytype]:type:(file tpm)' \
+          '--kek-keytype=[KEK keytype]:type:(file tpm)' \
+          '--db-keytype=[db keytype]:type:(file tpm)' && ret=0
+        ;;
+      export-enrolled-keys)
+        _arguments \
+          '--dir=[output directory]:dir:_files -/' \
+          '--format=[export format]:format:(der esl auth)' && ret=0
         ;;
       bundle)
         _arguments \
-          '(-a --amducode)'{-a,--amducode}'[AMD microcode]:file:_files' \
-          '(-c --cmdline)'{-c,--cmdline}'[kernel cmdline]:cmdline' \
-          '(-e --esp)'{-e,--esp}'[ESP path]:path:_files -/' \
-          '(-i --initramfs)'{-i,--initramfs}'[initramfs]:file:_files' \
-          '(-I --intelucode)'{-I,--intelucode}'[Intel microcode]:file:_files' \
-          '(-k --kernel-img)'{-k,--kernel-img}'[kernel image]:file:_files' \
-          '(-o --os-release)'{-o,--os-release}'[os-release file]:file:_files' \
+          '(-a --amducode)'{-a,--amducode}'+[AMD microcode location]:file:_files' \
+          '(-c --cmdline)'{-c,--cmdline}'+[cmdline location]:file:_files' \
+          '(-e --efi-stub)'{-e,--efi-stub}'+[EFI stub location]:file:_files' \
+          '(-p --esp)'{-p,--esp}'+[ESP location]:dir:_files -/' \
+          '(-f --initramfs)'{-f,--initramfs}'+[initramfs location]:file:_files' \
+          '(-i --intelucode)'{-i,--intelucode}'+[Intel microcode location]:file:_files' \
+          '(-k --kernel-img)'{-k,--kernel-img}'+[kernel image location]:file:_files' \
+          '(-o --os-release)'{-o,--os-release}'+[OS release file location]:file:_files' \
           '(-s --save)'{-s,--save}'[save bundle to database]' \
-          '(-S --splash)'{-S,--splash}'[splash image]:file:_files' \
-          '1:output file:_files' && ret=0
+          '(-l --splash-img)'{-l,--splash-img}'+[boot splash image location]:file:_files' \
+          '1:bundle name' && ret=0
+        ;;
+      generate-bundles)
+        _arguments \
+          '(-s --sign)'{-s,--sign}'[sign all generated bundles]' && ret=0
+        ;;
+      remove-bundle|rm-bundle)
+        _arguments '1:bundle name' && ret=0
+        ;;
+      setup)
+        _arguments \
+          '--setup[setup sbctl installation from config]' \
+          '--migrate[migrate to new configuration iteration]' \
+          '--print-config[print serialized configuration]' \
+          '--print-state[print installation state (requires --json)]' && ret=0
         ;;
     esac
     ;;
