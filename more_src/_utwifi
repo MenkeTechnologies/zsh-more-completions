@@ -1,195 +1,26 @@
 #compdef utwifi
-# Documentation: https://man.archlinux.org/search?q=utwifi
-# Reference accessed: 2026-05-16
-# Source: https://github.com/conjikidow/utokyo-wifi-connector/blob/0cf4928eba72144b3fa116740c26beabd178372e/utwifi
-# Repository: conjikidow/utokyo-wifi-connector (utwifi)
-#!/bin/bash
+# Documentation: https://github.com/conjikidow/utokyo-wifi-connector
+# Reference accessed: 2026-05-21
+# Verified: upstream docs at the URL above.
 
+local curcontext="$curcontext" state line ret=1
 
-function __utwifi_get_account() {
-    while [[ -z "$UTWIFI_USER_ID" ]]; do
-        read -p "Enter the user ID prior to '@' symbol > " UTWIFI_USER_ID
-        if [[ -z "$UTWIFI_USER_ID" ]]; then
-            echo "User ID cannot be empty. Please enter again."
-        fi
-    done
+local -a commands=(
+  'add:Add UTokyo WiFi and eduroam connections'
+  'update:Update UTokyo WiFi and eduroam connections'
+  'delete:Delete UTokyo WiFi and eduroam connections'
+  'info:Display information about UTokyo WiFi and eduroam connections'
+  'completion:Generate completion script for zsh'
+  'help:Display help message'
+)
 
-    while [[ -z "$UTWIFI_PASSWORD" ]]; do
-        read -p "Enter the password > " UTWIFI_PASSWORD
-        if [[ -z "$UTWIFI_PASSWORD" ]]; then
-            echo "Password cannot be empty. Please enter again."
-        fi
-    done
-}
+_arguments -s -S \
+  '1:command:->command' && ret=0
 
-function __utwifi_add_connection() {
-    __utwifi_get_account
+case $state in
+  command)
+    _describe -t commands 'utwifi command' commands && ret=0
+    ;;
+esac
 
-    WIFI_INTERFACE=$(ls /sys/class/net | grep wl)
-
-    nmcli connection add type wifi ifname ${WIFI_INTERFACE} con-name $1 ssid $1
-    nmcli connection edit id $1 > /dev/null << EOF
-set ipv4.method auto
-set 802-1x.eap peap
-set 802-1x.phase2-auth mschapv2
-set 802-1x.phase2-ca-cert /usr/share/ca-certificates/mozilla/Security_Communication_RootCA2.crt
-set 802-1x.identity ${UTWIFI_USER_ID}@wifi.u-tokyo.ac.jp
-set 802-1x.password ${UTWIFI_PASSWORD}
-set wifi-sec.key-mgmt wpa-eap
-save
-EOF
-}
-
-function __utwifi_delete_connection() {
-    nmcli connection delete id $1
-}
-
-function __utwifi_update_account() {
-    __utwifi_get_account
-
-    nmcli connection edit id $1 > /dev/null << EOF
-set 802-1x.identity ${UTWIFI_USER_ID}@wifi.u-tokyo.ac.jp
-set 802-1x.password ${UTWIFI_PASSWORD}
-save
-EOF
-    echo "Connection '$1' successfully updated."
-}
-
-function __utwifi_get_info() {
-    echo "Connection '$1':"
-    connection_info=$(nmcli connection show $1)
-    echo "$connection_info" | awk '/802-11-wireless.ssid/ { print "  SSID:   " $2 }'
-    echo "$connection_info" | awk '/802-1x.identity/ { print "  UserID: " $2 }'
-}
-
-
-SSID_UTokyoWiFi="0000UTokyo"
-SSID_eduroam="eduroam"
-
-function __utwifi-add() {
-    existing_connections=$(nmcli connection show)
-
-    if echo "$existing_connections" | grep -q "$SSID_UTokyoWiFi"; then
-        echo "Connection '$SSID_UTokyoWiFi' already exists."
-        read -r -p "Do you want to overwrite it? (y/n): " choice_utokyo
-        case "${choice_utokyo,,}" in
-            y | yes)
-                echo "Overwriting existing connection '$SSID_UTokyoWiFi'."
-                __utwifi_delete_connection $SSID_UTokyoWiFi
-                __utwifi_add_connection $SSID_UTokyoWiFi
-                ;;
-            *)
-                echo "Skipping adding connection '$SSID_UTokyoWiFi'."
-                ;;
-        esac
-    else
-        __utwifi_add_connection $SSID_UTokyoWiFi
-    fi
-
-    if echo "$existing_connections" | grep -q "$SSID_eduroam"; then
-        echo "Connection '$SSID_eduroam' already exists."
-        read -r -p "Do you want to overwrite it? (y/n): " choice_eduroam
-        case "${choice_eduroam,,}" in
-            y | yes)
-                echo "Overwriting existing connection '$SSID_eduroam'."
-                __utwifi_delete_connection $SSID_eduroam
-                __utwifi_add_connection $SSID_eduroam
-                ;;
-            *)
-                echo "Skipping adding connection '$SSID_eduroam'."
-                ;;
-        esac
-    else
-        __utwifi_add_connection $SSID_eduroam
-    fi
-}
-
-function __utwifi-update() {
-    existing_connections=$(nmcli connection show)
-    if ! echo "$existing_connections" | grep -q "$SSID_UTokyoWiFi" || ! echo "$existing_connections" | grep -q "$SSID_eduroam"; then
-        echo "Connection '$SSID_UTokyoWiFi' or '$SSID_eduroam' does not exist."
-        echo "Run 'utwifi add' to add the connections first."
-        return 1
-    fi
-
-    __utwifi_update_account $SSID_UTokyoWiFi
-    __utwifi_update_account $SSID_eduroam
-}
-
-function __utwifi-delete() {
-    existing_connections=$(nmcli connection show)
-    if ! echo "$existing_connections" | grep -q "$SSID_UTokyoWiFi"; then
-        echo "Connection '$SSID_UTokyoWiFi' does not exist."
-        echo "Skipping deleting connection '$SSID_UTokyoWiFi'."
-    else
-        __utwifi_delete_connection $SSID_UTokyoWiFi
-    fi
-    if ! echo "$existing_connections" | grep -q "$SSID_eduroam"; then
-        echo "Connection '$SSID_eduroam' does not exist."
-        echo "Skipping deleting connection '$SSID_eduroam'."
-    else
-        __utwifi_delete_connection $SSID_eduroam
-    fi
-}
-
-function __utwifi-info() {
-    existing_connections=$(nmcli connection show)
-    if echo "$existing_connections" | grep -q "$SSID_UTokyoWiFi"; then
-        __utwifi_get_info $SSID_UTokyoWiFi
-    else
-        echo "Connection '$SSID_UTokyoWiFi' does not exist."
-    fi
-    if echo "$existing_connections" | grep -q "$SSID_eduroam"; then
-        __utwifi_get_info $SSID_eduroam
-    else
-        echo "Connection '$SSID_eduroam' does not exist."
-    fi
-}
-
-__utwifi-completion() {
-    cat <<'EOF'
-
-_utwifi() {
-    local -a commands=("add:Add UTokyo WiFi and eduroam connections" "update:Update UTokyo WiFi and eduroam connections" "delete:Delete UTokyo WiFi and eduroam connections" "info:Display information about UTokyo WiFi and eduroam connections" "help:Display this help message")
-    _arguments '1: :->subcommand' && return
-    case $state in
-        (subcommand)
-            _describe -t commands 'utwifi subcommand' commands && return
-            ;;
-    esac
-}
-
-EOF
-}
-
-function __utwifi-help() {
-    echo "Usage: utwifi <subcommand>"
-    echo "Subcommands:"
-    echo "  add           Add UTokyo WiFi and eduroam connections"
-    echo "  update        Update UTokyo WiFi and eduroam connections"
-    echo "  delete        Delete UTokyo WiFi and eduroam connections"
-    echo "  info          Display information about UTokyo WiFi and eduroam connections"
-    echo "  completion    Generate completion script for zsh"
-    echo "  help          Display this help message"
-}
-
-
-function utwifi() {
-    subcommand="__utwifi-$1"
-
-    if [ -z "$1" ]; then
-        echo -e "Subcommand is missing.\n"
-        __utwifi-help
-        return 1
-    elif type "$subcommand" > /dev/null 2>&1; then
-        $subcommand "$@"
-    else
-        echo -e "Invalid subcommand: $1\n"
-        __utwifi-help
-        return 1
-    fi
-    UTWIFI_USER_ID=""
-    UTWIFI_PASSWORD=""
-}
-
-utwifi "$@"
+return ret
