@@ -1,207 +1,40 @@
 #compdef spotlighter
-# Documentation: https://man.archlinux.org/search?q=spotlighter
-# Reference accessed: 2026-05-16
-# Source: https://github.com/mvshmakov/homebrew-spotlighter/blob/e4d5d9a24dbfb88addf88e1e7aff7cad8d928d91/spotlighter
-# Repository: mvshmakov/homebrew-spotlighter (spotlighter)
-#!/usr/bin/env sh
-# This script opts out Spotlight from indexing common development directories
-# such as node_modules, Python virtual environments and .direnv.
-#
-# It is aimed to be 100% POSIX-compliant, but is only MacOS-relevant.
-#
-# Inspired by https://github.com/Strajk/setup and
-# https://mattprice.me/2020/programmatically-modify-spotlight-ignore/.
+# Documentation: https://github.com/mvshmakov/homebrew-spotlighter
+# Reference accessed: 2026-05-21
+# Verified: spotlighter source script (case statements for options/commands).
+# Replaced: prior file contained the raw shell script source rather than a completion.
 
-set -eu
+# Zsh completion for spotlighter - macOS Spotlight exclusion manager
 
-DIR="$PWD"
-PLIST="/System/Volumes/Data/.Spotlight-V100/VolumeConfiguration.plist"
-PLIST_BUDDY_BIN="/usr/libexec/PlistBuddy"
-FORCE=false
-VERBOSE=false
+local curcontext="$curcontext" state line ret=1
 
-usage() {
-  cat <<USAGE
-Usage: $(basename "$0") [options] [command]
-Commands:
-  add     Find development directories and add them to Spotlight exclusions (default)
-  show    Show current Spotlight exclusions
-  find    Print candidate development directories
-  check   Show Spotlight indexing status for the directory
-  completions [SHELL]  Generate shell completion script (bash or zsh)
-Options:
-  -d DIR, --dir DIR     Directory to search (default: current directory)
-  -f, --force           Rebuild exclusions from scratch
-  -v, --verbose         Print additional information
-  -h, --help            Show this help message
-Examples:
-  spotlighter add
-  spotlighter add -d ~/Projects/myapp
-  spotlighter -f add
-  spotlighter check
-USAGE
-}
+local -a commands=(
+  'add:add development directories to Spotlight exclusions (default)'
+  'show:show current Spotlight exclusions'
+  'find:print candidate development directories'
+  'check:show Spotlight indexing status for the directory'
+  'completions:generate shell completion script'
+)
 
-get_exclusions() {
-  sudo "$PLIST_BUDDY_BIN" -c 'Print :Exclusions' "$PLIST" |
-    sed -e 1d -e '$d' -e 's/^[\t ]*//'
-}
-
-find_candidates() {
-  find "$DIR" \
-    \( -type d -name node_modules -o -type d -name venv -o -type d -name .venv -o -type d -name .direnv \) -print -prune 2>/dev/null | sort -u
-}
-
-add_missing() {
-  candidates="$(find_candidates)"
-
-  if [ "$FORCE" = true ]; then
-    sudo "$PLIST_BUDDY_BIN" -c 'Delete :Exclusions' "$PLIST" 2>/dev/null || true
-    sudo "$PLIST_BUDDY_BIN" -c 'Add :Exclusions array' "$PLIST"
-    existing=""
-  else
-    existing="$(get_exclusions)"
-  fi
-
-  if [ "$VERBOSE" = true ]; then
-    printf 'Candidates: %s\n' "$(printf '%s\n' "$candidates" | wc -l)"
-    printf 'Existing: %s\n' "$(printf '%s\n' "$existing" | wc -l)"
-  fi
-
-  printf '%s\n' "$candidates" | while IFS= read -r path; do
-    if ! printf '%s\n' "$existing" | grep -Fxq "$path"; then
-      sudo "$PLIST_BUDDY_BIN" -c "Add :Exclusions: string $path" "$PLIST"
-    fi
-  done
-
-  sudo launchctl stop com.apple.metadata.mds
-  sudo launchctl start com.apple.metadata.mds
-
-  if [ "$VERBOSE" = true ]; then
-    printf 'Current exclusions:\n'
-    get_exclusions
-  fi
-  printf '\n\xF0\x9F\x91\x80 Check and verify at System Settings > Siri & Spotlight > Spotlight Privacy\n'
-}
-
-check_status() {
-  mdutil -sv "$DIR"
-  if [ "$VERBOSE" = true ]; then
-    printf 'Current exclusions:\n'
-    get_exclusions
-  fi
-}
-
-generate_completions() {
-  shell="${1:-bash}"
-  case "$shell" in
-  bash)
-    cat <<'EOF_INNER'
-# bash completion for spotlighter
-_spotlighter() {
-  local cur prev cmds opts
-  COMPREPLY=()
-  cur="${COMP_WORDS[COMP_CWORD]}"
-  prev="${COMP_WORDS[COMP_CWORD-1]}"
-  cmds="add show find check completions"
-  opts="-d --dir -f --force -v --verbose -h --help"
-  case "$prev" in
-    -d|--dir)
-      COMPREPLY=( $(compgen -d -- "$cur") )
-      return 0
-      ;;
-    completions)
-      COMPREPLY=( $(compgen -W "bash zsh" -- "$cur") )
-      return 0
-      ;;
-  esac
-  COMPREPLY=( $(compgen -W "$cmds $opts" -- "$cur") )
-  return 0
-}
-complete -F _spotlighter spotlighter
-EOF_INNER
-    ;;
-  zsh)
-    cat <<'EOF_INNER'
-
-_arguments -s \
-  '1:command:(add show find check completions)' \
-  '-d[Directory to search]:directory:_files -/' \
-  '-f[Rebuild exclusions from scratch]' \
-  '-v[Print additional information]' \
-  '-h[Show help]' \
-  '::shell:->shell'
+_arguments -s -S \
+  '(- *)'{-h,--help}'[show help]' \
+  '(-d --dir)'{-d+,--dir=}'[directory to search]:directory:_directories' \
+  '(-f --force)'{-f,--force}'[rebuild exclusions from scratch]' \
+  '(-v --verbose)'{-v,--verbose}'[print additional information]' \
+  '1:command:->command' \
+  '*::arg:->args' && ret=0
 
 case $state in
-  shell)
-    if [[ $words[2] == completions ]]; then
-      _values 'shell' bash zsh
-    fi
+  (command)
+    _describe -t commands 'spotlighter command' commands && ret=0
+    ;;
+  (args)
+    case ${words[1]} in
+      completions)
+        _arguments '1:shell:(bash zsh)' && ret=0
+        ;;
+    esac
     ;;
 esac
-EOF_INNER
-    ;;
-  *)
-    printf 'Unsupported shell: %s\n' "$shell" >&2
-    exit 1
-    ;;
-  esac
-}
 
-cmd="add"
-comp_shell=""
-while [ $# -gt 0 ]; do
-  case "$1" in
-  add | show | find | check | completions)
-    cmd="$1"
-    shift
-    if [ "$cmd" = "completions" ] && [ $# -gt 0 ]; then
-      comp_shell="$1"
-      shift
-    fi
-    ;;
-  -d | --dir)
-    DIR="$2"
-    shift 2
-    ;;
-  -f | --force)
-    FORCE=true
-    shift
-    ;;
-  -v | --verbose)
-    VERBOSE=true
-    shift
-    ;;
-  -h | --help)
-    usage
-    exit 0
-    ;;
-  *)
-    printf 'Unknown option: %s\n' "$1" >&2
-    usage >&2
-    exit 1
-    ;;
-  esac
-done
-
-case "$cmd" in
-add)
-  add_missing
-  ;;
-show)
-  get_exclusions
-  ;;
-find)
-  find_candidates
-  ;;
-check)
-  check_status
-  ;;
-completions)
-  generate_completions "${comp_shell:-bash}"
-  ;;
-*)
-  usage
-  exit 1
-  ;;
-esac
+return ret
