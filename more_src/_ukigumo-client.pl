@@ -1,6 +1,7 @@
 #compdef ukigumo-client.pl
-# Documentation: https://man.archlinux.org/search?q=ukigumo-client.pl
-# Reference accessed: 2026-05-16
+# Documentation: https://github.com/ukigumo/Ukigumo-Client/blob/master/script/ukigumo-client.pl
+# Reference accessed: 2026-05-21
+# Verified: upstream GetOptions in ukigumo-client.pl script.
 # Source: https://github.com/syohex/zsh-perl-completions/blob/be325132fc53381b596552487f7e0d6637b82781/_ukigumo-client.pl
 # Repository: syohex/zsh-perl-completions (_ukigumo-client.pl)
 
@@ -36,6 +37,7 @@ _arguments -n : \
   '(--ikachan_url)--ikachan_url=[API endpoint URL for ikachan]' \
   '(--ikachan_channel)--ikachan_channel=[channel to post message]' \
   '(--skip_if_unmodified)--skip_if_unmodified[skip testing if repository is unmodified]' \
+  '(--command)--command=[command to run]' \
   '*: :()'
 
 # Local Variables:
