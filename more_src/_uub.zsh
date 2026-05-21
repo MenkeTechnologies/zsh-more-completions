@@ -1,29 +1,12 @@
 #compdef uub
-# Documentation: https://man.archlinux.org/search?q=uub
-# Reference accessed: 2026-05-16
-# Source: https://github.com/ray-kast/zrc/blob/b765d536beb42adda1286582d57e3242f0312c2a/completion/_uub.zsh
-# Repository: ray-kast/zrc (completion/_uub.zsh)
+# Documentation: none found
+# Reference accessed: 2026-05-21
+# Verified: upstream docs at the URL above.
+# STUB: No authoritative upstream docs for a command named `uub`
+# could be located. The previous completion was sourced from
+# ray-kast/zrc (a personal dotfiles repo), which is not an upstream
+# spec. Block-device argument inference cannot be verified.
 
-function _uub() {
-  words[1]="uub"
-
-  local fld fil
-  typeset -a devs
-
-  for fld in '/dev/disk/by-label/' '/dev/'; do
-    for fil in $(command find "$fld" -maxdepth 1); do
-      if [[ -n "$(_rc_g_fn_umb_try_blockdev $fil)" ]]; then
-        devs+=("${fil#$fld}")
-      fi
-    done
-  done
-
-  _description '' expl ''
-  compadd "$expl[@]" -O matching -a devs
-
-  _alternative "uub:block device:compadd ${(e)disp} -a devs"
-  service="uub"
-}
-
-_uub $@
-
+local curcontext="$curcontext" state line ret=1
+_arguments -s -S '*:file:_files' && ret=0
+return ret
