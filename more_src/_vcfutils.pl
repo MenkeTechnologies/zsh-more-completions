@@ -1,8 +1,9 @@
 #compdef vcfutils.pl
-# Documentation: https://man.archlinux.org/search?q=vcfutils.pl
-# Reference accessed: 2026-05-16
+# Documentation: https://github.com/samtools/bcftools/blob/develop/misc/vcfutils.pl
+# Reference accessed: 2026-05-21
+# Verified: upstream bcftools vcfutils.pl source.
 
-# samtools vcfutils.pl: helper utilities for VCF files
+# bcftools vcfutils.pl: helper utilities for VCF files
 local curcontext="$curcontext" ret=1 state line
 typeset -A opt_args
 
