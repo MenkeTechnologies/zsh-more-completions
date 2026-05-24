@@ -62,6 +62,7 @@ Tool names for the completion corpus were harvested from:
 - **FreeBSD** — ports binaries and man pages
 - **Various other Linux distros**
 - **GitHub Releases** + **GitHub tree / code search** (multiple harvest rounds)
+- **npm / npx / web research** — `create-*` scaffolders, scoped `@org/*` CLIs, and other Node tools verified against the npm registry (`npm view` bin/readme), live `npx … --help` output, package dist/tarballs, and upstream readmes (multi-round manual harvest; trivial or interactive-only scaffolders skipped)
 - **Local zinit plugin checkouts** — completions vendored from installed plugins
 - **crates.io**
 
