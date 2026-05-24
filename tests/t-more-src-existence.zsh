@@ -744,6 +744,9 @@
 @test 'more_src has _angrr' {
     assert "$xsrc/_angrr" is_file
 }
+@test 'more_src has _angular-create' {
+    assert "$xsrc/_angular-create" is_file
+}
 @test 'more_src has _anka' {
     assert "$xsrc/_anka" is_file
 }
@@ -903,7 +906,6 @@
 @test 'more_src has _arce' {
     assert "$xsrc/_arce" is_file
 }
-
 @test 'more_src has _arcget' {
     assert "$xsrc/_arcget" is_file
 }
@@ -1554,6 +1556,9 @@
 }
 @test 'more_src has _bedit' {
     assert "$xsrc/_bedit" is_file
+}
+@test 'more_src has _bedrock' {
+    assert "$xsrc/_bedrock" is_file
 }
 @test 'more_src has _bedtools' {
     assert "$xsrc/_bedtools" is_file
@@ -2713,7 +2718,12 @@
 @test 'more_src has _cds' {
     assert "$xsrc/_cds" is_file
 }
-
+@test 'more_src has _cds-ts' {
+    assert "$xsrc/_cds-ts" is_file
+}
+@test 'more_src has _cds-tsx' {
+    assert "$xsrc/_cds-tsx" is_file
+}
 @test 'more_src has _cdtool' {
     assert "$xsrc/_cdtool" is_file
 }
@@ -3011,7 +3021,6 @@
 @test 'more_src has _chromatic-cli' {
     assert "$xsrc/_chromatic-cli" is_file
 }
-
 @test 'more_src has _chrome-bookmark-browser' {
     assert "$xsrc/_chrome-bookmark-browser" is_file
 }
@@ -4062,18 +4071,77 @@
 @test 'more_src has _create' {
     assert "$xsrc/_create" is_file
 }
+@test 'more_src has _create-appwrite' {
+    assert "$xsrc/_create-appwrite" is_file
+}
 
 @test 'more_src has _create-arcane' {
     assert "$xsrc/_create-arcane" is_file
 }
+@test 'more_src has _create-astro-app' {
+    assert "$xsrc/_create-astro-app" is_file
+}
+@test 'more_src has _create-auth-system' {
+    assert "$xsrc/_create-auth-system" is_file
+}
+
 @test 'more_src has _create-browser-app' {
     assert "$xsrc/_create-browser-app" is_file
 }
+@test 'more_src has _create-bun' {
+    assert "$xsrc/_create-bun" is_file
+}
+@test 'more_src has _create-bun-app' {
+    assert "$xsrc/_create-bun-app" is_file
+}
+@test 'more_src has _create-cdk-app' {
+    assert "$xsrc/_create-cdk-app" is_file
+}
+
+@test 'more_src has _create-chrome-ext' {
+    assert "$xsrc/_create-chrome-ext" is_file
+}
+
+@test 'more_src has _create-clerk' {
+    assert "$xsrc/_create-clerk" is_file
+}
+@test 'more_src has _create-cloudflare' {
+    assert "$xsrc/_create-cloudflare" is_file
+}
+@test 'more_src has _create-cloudflare-worker' {
+    assert "$xsrc/_create-cloudflare-worker" is_file
+}
+
 @test 'more_src has _create-config' {
     assert "$xsrc/_create-config" is_file
 }
+@test 'more_src has _create-contentful-app' {
+    assert "$xsrc/_create-contentful-app" is_file
+}
+@test 'more_src has _create-convex' {
+    assert "$xsrc/_create-convex" is_file
+}
+@test 'more_src has _create-cordova-app' {
+    assert "$xsrc/_create-cordova-app" is_file
+}
 @test 'more_src has _create-dmg' {
     assert "$xsrc/_create-dmg" is_file
+}
+@test 'more_src has _create-docusaurus' {
+    assert "$xsrc/_create-docusaurus" is_file
+}
+@test 'more_src has _create-effect-app' {
+    assert "$xsrc/_create-effect-app" is_file
+}
+@test 'more_src has _create-electron-app' {
+    assert "$xsrc/_create-electron-app" is_file
+}
+@test 'more_src has _create-electron-vite' {
+    assert "$xsrc/_create-electron-vite" is_file
+}
+
+@test 'more_src has _create-elysia-app' {
+    assert "$xsrc/_create-elysia-app" is_file
 }
 @test 'more_src has _create-eth-app' {
     assert "$xsrc/_create-eth-app" is_file
@@ -4084,29 +4152,186 @@
 @test 'more_src has _create-expo-app' {
     assert "$xsrc/_create-expo-app" is_file
 }
+@test 'more_src has _create-expo-stack' {
+    assert "$xsrc/_create-expo-stack" is_file
+}
+@test 'more_src has _create-extension' {
+    assert "$xsrc/_create-extension" is_file
+}
+
+@test 'more_src has _create-farm' {
+    assert "$xsrc/_create-farm" is_file
+}
+
 @test 'more_src has _create-foundry' {
     assert "$xsrc/_create-foundry" is_file
+}
+@test 'more_src has _create-fresh' {
+    assert "$xsrc/_create-fresh" is_file
+}
+@test 'more_src has _create-gatsby' {
+    assert "$xsrc/_create-gatsby" is_file
+}
+@test 'more_src has _create-hardhat' {
+    assert "$xsrc/_create-hardhat" is_file
+}
+@test 'more_src has _create-heroku-app' {
+    assert "$xsrc/_create-heroku-app" is_file
+}
+@test 'more_src has _create-jest' {
+    assert "$xsrc/_create-jest" is_file
+}
+@test 'more_src has _create-keystone-app' {
+    assert "$xsrc/_create-keystone-app" is_file
+}
+@test 'more_src has _create-lambda-app' {
+    assert "$xsrc/_create-lambda-app" is_file
+}
+
+@test 'more_src has _create-lerna-app' {
+    assert "$xsrc/_create-lerna-app" is_file
 }
 @test 'more_src has _create-lib-workspace' {
     assert "$xsrc/_create-lib-workspace" is_file
 }
+@test 'more_src has _create-mcp-server' {
+    assert "$xsrc/_create-mcp-server" is_file
+}
+
+@test 'more_src has _create-medusa-app' {
+    assert "$xsrc/_create-medusa-app" is_file
+}
 @test 'more_src has _create-mobrowser-app' {
     assert "$xsrc/_create-mobrowser-app" is_file
+}
+@test 'more_src has _create-monorepo' {
+    assert "$xsrc/_create-monorepo" is_file
+}
+@test 'more_src has _create-next-auth-app' {
+    assert "$xsrc/_create-next-auth-app" is_file
+}
+@test 'more_src has _create-next-shop' {
+    assert "$xsrc/_create-next-shop" is_file
+}
+@test 'more_src has _create-ng' {
+    assert "$xsrc/_create-ng" is_file
+}
+@test 'more_src has _create-ng-app' {
+    assert "$xsrc/_create-ng-app" is_file
+}
+
+@test 'more_src has _create-nuxt' {
+    assert "$xsrc/_create-nuxt" is_file
+}
+@test 'more_src has _create-nuxt-app' {
+    assert "$xsrc/_create-nuxt-app" is_file
+}
+@test 'more_src has _create-nuxt3' {
+    assert "$xsrc/_create-nuxt3" is_file
 }
 @test 'more_src has _create-nx-workspace' {
     assert "$xsrc/_create-nx-workspace" is_file
 }
+@test 'more_src has _create-payload-app' {
+    assert "$xsrc/_create-payload-app" is_file
+}
+@test 'more_src has _create-plasmo' {
+    assert "$xsrc/_create-plasmo" is_file
+}
+
+@test 'more_src has _create-playwright' {
+    assert "$xsrc/_create-playwright" is_file
+}
+@test 'more_src has _create-pocketbase-app' {
+    assert "$xsrc/_create-pocketbase-app" is_file
+}
 @test 'more_src has _create-ponder' {
     assert "$xsrc/_create-ponder" is_file
+}
+@test 'more_src has _create-prisma-app' {
+    assert "$xsrc/_create-prisma-app" is_file
 }
 @test 'more_src has _create-projx' {
     assert "$xsrc/_create-projx" is_file
 }
+@test 'more_src has _create-rax' {
+    assert "$xsrc/_create-rax" is_file
+}
+
+@test 'more_src has _create-react-native-app' {
+    assert "$xsrc/_create-react-native-app" is_file
+}
 @test 'more_src has _create-react-router' {
     assert "$xsrc/_create-react-router" is_file
 }
+@test 'more_src has _create-redwood-app' {
+    assert "$xsrc/_create-redwood-app" is_file
+}
+@test 'more_src has _create-render-app' {
+    assert "$xsrc/_create-render-app" is_file
+}
+@test 'more_src has _create-rn' {
+    assert "$xsrc/_create-rn" is_file
+}
+
+@test 'more_src has _create-rn-app' {
+    assert "$xsrc/_create-rn-app" is_file
+}
+@test 'more_src has _create-rolldown' {
+    assert "$xsrc/_create-rolldown" is_file
+}
+
+@test 'more_src has _create-rsbuild' {
+    assert "$xsrc/_create-rsbuild" is_file
+}
+
+@test 'more_src has _create-rspack' {
+    assert "$xsrc/_create-rspack" is_file
+}
+
+@test 'more_src has _create-sanity' {
+    assert "$xsrc/_create-sanity" is_file
+}
+@test 'more_src has _create-shopify-app' {
+    assert "$xsrc/_create-shopify-app" is_file
+}
+@test 'more_src has _create-solid-app' {
+    assert "$xsrc/_create-solid-app" is_file
+}
+@test 'more_src has _create-strapi-app' {
+    assert "$xsrc/_create-strapi-app" is_file
+}
+@test 'more_src has _create-supabase-app' {
+    assert "$xsrc/_create-supabase-app" is_file
+}
+@test 'more_src has _create-svelte-app' {
+    assert "$xsrc/_create-svelte-app" is_file
+}
+@test 'more_src has _create-svelte-kit' {
+    assert "$xsrc/_create-svelte-kit" is_file
+}
+@test 'more_src has _create-t3-turbo' {
+    assert "$xsrc/_create-t3-turbo" is_file
+}
+@test 'more_src has _create-tamagui-app' {
+    assert "$xsrc/_create-tamagui-app" is_file
+}
+@test 'more_src has _create-taro-app' {
+    assert "$xsrc/_create-taro-app" is_file
+}
+
+@test 'more_src has _create-tauri' {
+    assert "$xsrc/_create-tauri" is_file
+}
 @test 'more_src has _create-tauri-app' {
     assert "$xsrc/_create-tauri-app" is_file
+}
+@test 'more_src has _create-terraform-app' {
+    assert "$xsrc/_create-terraform-app" is_file
+}
+
+@test 'more_src has _create-tskickstart' {
+    assert "$xsrc/_create-tskickstart" is_file
 }
 @test 'more_src has _create-tsrouter-app' {
     assert "$xsrc/_create-tsrouter-app" is_file
@@ -4114,8 +4339,48 @@
 @test 'more_src has _create-turbo' {
     assert "$xsrc/_create-turbo" is_file
 }
+@test 'more_src has _create-turbo-app' {
+    assert "$xsrc/_create-turbo-app" is_file
+}
+@test 'more_src has _create-uikit' {
+    assert "$xsrc/_create-uikit" is_file
+}
+@test 'more_src has _create-umi' {
+    assert "$xsrc/_create-umi" is_file
+}
+
+@test 'more_src has _create-uni-app' {
+    assert "$xsrc/_create-uni-app" is_file
+}
+@test 'more_src has _create-unplugin' {
+    assert "$xsrc/_create-unplugin" is_file
+}
+
+@test 'more_src has _create-vite-app' {
+    assert "$xsrc/_create-vite-app" is_file
+}
+@test 'more_src has _create-vitest' {
+    assert "$xsrc/_create-vitest" is_file
+}
+@test 'more_src has _create-vscode-ext' {
+    assert "$xsrc/_create-vscode-ext" is_file
+}
+
+@test 'more_src has _create-vscode-extension' {
+    assert "$xsrc/_create-vscode-extension" is_file
+}
+
+@test 'more_src has _create-vue' {
+    assert "$xsrc/_create-vue" is_file
+}
+@test 'more_src has _create-vue-app' {
+    assert "$xsrc/_create-vue-app" is_file
+}
 @test 'more_src has _create-wagmi' {
     assert "$xsrc/_create-wagmi" is_file
+}
+@test 'more_src has _create-waku' {
+    assert "$xsrc/_create-waku" is_file
 }
 @test 'more_src has _create-web3' {
     assert "$xsrc/_create-web3" is_file
@@ -4702,7 +4967,6 @@
 @test 'more_src has _datocms' {
     assert "$xsrc/_datocms" is_file
 }
-
 @test 'more_src has _datree' {
     assert "$xsrc/_datree" is_file
 }
@@ -5279,6 +5543,31 @@
 @test 'more_src has _doctl' {
     assert "$xsrc/_doctl" is_file
 }
+@test 'more_src has _docusaurus-build' {
+    assert "$xsrc/_docusaurus-build" is_file
+}
+@test 'more_src has _docusaurus-examples' {
+    assert "$xsrc/_docusaurus-examples" is_file
+}
+@test 'more_src has _docusaurus-init' {
+    assert "$xsrc/_docusaurus-init" is_file
+}
+
+@test 'more_src has _docusaurus-publish' {
+    assert "$xsrc/_docusaurus-publish" is_file
+}
+@test 'more_src has _docusaurus-rename-version' {
+    assert "$xsrc/_docusaurus-rename-version" is_file
+}
+@test 'more_src has _docusaurus-start' {
+    assert "$xsrc/_docusaurus-start" is_file
+}
+@test 'more_src has _docusaurus-version' {
+    assert "$xsrc/_docusaurus-version" is_file
+}
+@test 'more_src has _docusaurus-write-translations' {
+    assert "$xsrc/_docusaurus-write-translations" is_file
+}
 @test 'more_src has _docuum' {
     assert "$xsrc/_docuum" is_file
 }
@@ -5840,11 +6129,9 @@
 @test 'more_src has _electron-forge-vscode-nix' {
     assert "$xsrc/_electron-forge-vscode-nix" is_file
 }
-
 @test 'more_src has _electron-forge-vscode-win' {
     assert "$xsrc/_electron-forge-vscode-win" is_file
 }
-
 @test 'more_src has _elevenlabs' {
     assert "$xsrc/_elevenlabs" is_file
 }
@@ -6307,6 +6594,9 @@
 @test 'more_src has _explainthisrepo' {
     assert "$xsrc/_explainthisrepo" is_file
 }
+@test 'more_src has _expo-internal' {
+    assert "$xsrc/_expo-internal" is_file
+}
 @test 'more_src has _expressvpn' {
     assert "$xsrc/_expressvpn" is_file
 }
@@ -6429,6 +6719,9 @@
 }
 @test 'more_src has _fakedata' {
     assert "$xsrc/_fakedata" is_file
+}
+@test 'more_src has _fal' {
+    assert "$xsrc/_fal" is_file
 }
 @test 'more_src has _falco' {
     assert "$xsrc/_falco" is_file
@@ -8137,7 +8430,6 @@
 @test 'more_src has _gql-gen' {
     assert "$xsrc/_gql-gen" is_file
 }
-
 @test 'more_src has _gr' {
     assert "$xsrc/_gr" is_file
 }
@@ -8171,15 +8463,12 @@
 @test 'more_src has _graphql-code-generator' {
     assert "$xsrc/_graphql-code-generator" is_file
 }
-
 @test 'more_src has _graphql-codegen-cjs' {
     assert "$xsrc/_graphql-codegen-cjs" is_file
 }
-
 @test 'more_src has _graphql-codegen-esm' {
     assert "$xsrc/_graphql-codegen-esm" is_file
 }
-
 @test 'more_src has _graylog-ctl' {
     assert "$xsrc/_graylog-ctl" is_file
 }
@@ -10364,7 +10653,6 @@
 @test 'more_src has _kg' {
     assert "$xsrc/_kg" is_file
 }
-
 @test 'more_src has _kgeography' {
     assert "$xsrc/_kgeography" is_file
 }
@@ -10542,7 +10830,6 @@
 @test 'more_src has _knip-bun' {
     assert "$xsrc/_knip-bun" is_file
 }
-
 @test 'more_src has _knot' {
     assert "$xsrc/_knot" is_file
 }
@@ -11116,7 +11403,6 @@
 @test 'more_src has _lhci' {
     assert "$xsrc/_lhci" is_file
 }
-
 @test 'more_src has _libcacard-tool' {
     assert "$xsrc/_libcacard-tool" is_file
 }
@@ -11954,7 +12240,6 @@
 @test 'more_src has _mcp-server-browserbase' {
     assert "$xsrc/_mcp-server-browserbase" is_file
 }
-
 @test 'more_src has _mcp-server-cloudflare' {
     assert "$xsrc/_mcp-server-cloudflare" is_file
 }
@@ -13248,6 +13533,9 @@
 @test 'more_src has _neroAacTag' {
     assert "$xsrc/_neroAacTag" is_file
 }
+@test 'more_src has _nest-cli' {
+    assert "$xsrc/_nest-cli" is_file
+}
 @test 'more_src has _nestopia' {
     assert "$xsrc/_nestopia" is_file
 }
@@ -13626,18 +13914,15 @@
 @test 'more_src has _np-audit' {
     assert "$xsrc/_np-audit" is_file
 }
-
 @test 'more_src has _npa' {
     assert "$xsrc/_npa" is_file
 }
-
 @test 'more_src has _npingler' {
     assert "$xsrc/_npingler" is_file
 }
 @test 'more_src has _npm-trust' {
     assert "$xsrc/_npm-trust" is_file
 }
-
 @test 'more_src has _npxnetlify' {
     assert "$xsrc/_npxnetlify" is_file
 }
@@ -13751,6 +14036,9 @@
 }
 @test 'more_src has _nuxi-ng' {
     assert "$xsrc/_nuxi-ng" is_file
+}
+@test 'more_src has _nuxt-cli' {
+    assert "$xsrc/_nuxt-cli" is_file
 }
 @test 'more_src has _nv-fabricmanager' {
     assert "$xsrc/_nv-fabricmanager" is_file
@@ -14163,6 +14451,10 @@
 @test 'more_src has _opa' {
     assert "$xsrc/_opa" is_file
 }
+@test 'more_src has _open-next' {
+    assert "$xsrc/_open-next" is_file
+}
+
 @test 'more_src has _openai' {
     assert "$xsrc/_openai" is_file
 }
@@ -15066,7 +15358,6 @@
 @test 'more_src has _percy' {
     assert "$xsrc/_percy" is_file
 }
-
 @test 'more_src has _perl-build' {
     assert "$xsrc/_perl-build" is_file
 }
@@ -15853,7 +16144,6 @@
 @test 'more_src has _projx' {
     assert "$xsrc/_projx" is_file
 }
-
 @test 'more_src has _prom2json' {
     assert "$xsrc/_prom2json" is_file
 }
@@ -16583,7 +16873,6 @@
 @test 'more_src has _react-router' {
     assert "$xsrc/_react-router" is_file
 }
-
 @test 'more_src has _reaction' {
     assert "$xsrc/_reaction" is_file
 }
@@ -16937,6 +17226,9 @@
 }
 @test 'more_src has _rnasubopt' {
     assert "$xsrc/_rnasubopt" is_file
+}
+@test 'more_src has _rnc-cli' {
+    assert "$xsrc/_rnc-cli" is_file
 }
 @test 'more_src has _rnix-fmt' {
     assert "$xsrc/_rnix-fmt" is_file
@@ -17409,7 +17701,6 @@
 @test 'more_src has _scaffoldx' {
     assert "$xsrc/_scaffoldx" is_file
 }
-
 @test 'more_src has _scala3' {
     assert "$xsrc/_scala3" is_file
 }
@@ -18520,6 +18811,9 @@
 @test 'more_src has _stack2nix' {
     assert "$xsrc/_stack2nix" is_file
 }
+@test 'more_src has _stage' {
+    assert "$xsrc/_stage" is_file
+}
 @test 'more_src has _stakk' {
     assert "$xsrc/_stakk" is_file
 }
@@ -18807,6 +19101,9 @@
 }
 @test 'more_src has _svdrpsend' {
     assert "$xsrc/_svdrpsend" is_file
+}
+@test 'more_src has _svelte-create' {
+    assert "$xsrc/_svelte-create" is_file
 }
 @test 'more_src has _svgcleaner' {
     assert "$xsrc/_svgcleaner" is_file
@@ -20005,7 +20302,6 @@
 @test 'more_src has _tsup-node' {
     assert "$xsrc/_tsup-node" is_file
 }
-
 @test 'more_src has _ttf2pt1' {
     assert "$xsrc/_ttf2pt1" is_file
 }
@@ -21212,6 +21508,9 @@
 @test 'more_src has _vtctl' {
     assert "$xsrc/_vtctl" is_file
 }
+@test 'more_src has _vue-list' {
+    assert "$xsrc/_vue-list" is_file
+}
 @test 'more_src has _vultr' {
     assert "$xsrc/_vultr" is_file
 }
@@ -21241,6 +21540,9 @@
 }
 @test 'more_src has _wakelan' {
     assert "$xsrc/_wakelan" is_file
+}
+@test 'more_src has _waku' {
+    assert "$xsrc/_waku" is_file
 }
 @test 'more_src has _walk' {
     assert "$xsrc/_walk" is_file
@@ -21668,7 +21970,6 @@
 @test 'more_src has _workspaces' {
     assert "$xsrc/_workspaces" is_file
 }
-
 @test 'more_src has _worldofpadman' {
     assert "$xsrc/_worldofpadman" is_file
 }
@@ -21714,7 +22015,6 @@
 @test 'more_src has _wrangler1' {
     assert "$xsrc/_wrangler1" is_file
 }
-
 @test 'more_src has _wrk' {
     assert "$xsrc/_wrk" is_file
 }
