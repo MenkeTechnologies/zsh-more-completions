@@ -4848,10 +4848,6 @@
 @test 'more_src has _create-next-strict' {
     assert "$xsrc/_create-next-strict" is_file
 }
-@test 'more_src has _create-nextra-app' {
-    assert "$xsrc/_create-nextra-app" is_file
-}
-
 @test 'more_src has _create-nexus' {
     assert "$xsrc/_create-nexus" is_file
 }
