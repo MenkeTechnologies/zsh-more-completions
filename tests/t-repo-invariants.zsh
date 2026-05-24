@@ -98,12 +98,14 @@
 # ─── README structure ────────────────────────────────────────────────────────
 
 @test 'README.md documents STATS section' {
-    run grep -q '^## // STATS' "$pluginDir/README.md"
+    # Allow the new `## [0xNN] // STATS` hex-prefixed form from the
+    # strykelang doc template, as well as the legacy `## // STATS`.
+    run grep -qE '^## (\[0x[0-9A-Fa-f]+\] )?// STATS' "$pluginDir/README.md"
     assert $state equals 0
 }
 
 @test 'README.md documents TESTING section' {
-    run grep -q '^## // TESTING' "$pluginDir/README.md"
+    run grep -qE '^## (\[0x[0-9A-Fa-f]+\] )?// TESTING' "$pluginDir/README.md"
     assert $state equals 0
 }
 
