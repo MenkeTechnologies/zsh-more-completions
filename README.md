@@ -65,6 +65,7 @@ Tool names for the completion corpus were harvested from:
 - **npm / npx / web research** — `create-*` scaffolders, scoped `@org/*` CLIs, and other Node tools verified against the npm registry (`npm view` bin/readme), live `npx … --help` output, package dist/tarballs, and upstream readmes (multi-round manual harvest; trivial or interactive-only scaffolders skipped)
 - **Local zinit plugin checkouts** — completions vendored from installed plugins
 - **crates.io**
+- **Exotic language ecosystems** — Hackage (Haskell: `hakyll`, `shake`, `taffybar`), OPAM (OCaml: `odig`, `irmin`, `js_of_ocaml`, `learn-ocaml`, `alcotest`), Hex.pm (Elixir: `phx_new`, `ex_doc`, `dialyxir`, `igniter`, `mneme`), CPAN (Perl: `perlimports`, `perlnavigator`), CRAN (R: `radian`, `littler`), and AUR helpers (`aurman`, `pakku`) — verified against each project's cmdliner/argparse/OptionParser/Mix.Task switches, GetOptions definitions, or Cmd modules at the upstream source URL embedded in every completion file
 
 Directory layout:
 
