@@ -1,0 +1,178 @@
+#compdef lakefs
+# Documentation: https://github.com/treeverse/lakeFS
+# Reference accessed: 2026-05-27
+# Verified: upstream cmd/lakefs/cmd/{root,run,setup,migrate,superuser,lua,gc,kv,flare,completion}.go
+#           cobra command definitions (treeverse/lakeFS).
+# Note: this is the lakeFS *server* binary. The client CLI is `lakectl`,
+# which has its own separate completion.
+
+local curcontext="$curcontext" state line ret=1
+local -a _lakefs_subcommands
+
+_lakefs_subcommands=(
+  'run:run the lakeFS server'
+  'setup:setup a new lakeFS instance with initial credentials'
+  'migrate:manage migrations'
+  'superuser:create an additional user with admin credentials'
+  'lua:Lua related commands for dev/test scripting'
+  'gc:manually run prepare GC commits'
+  'kv:inspect lakeFS key-value store'
+  'flare:collect configuration, env vars, and logs for debugging'
+  'completion:generate shell completion script'
+  'help:help about any command'
+)
+
+_arguments -s -S -C \
+  '(-c --config)'{-c+,--config=}'[config file (default $HOME/.lakefs.yaml)]:file:_files' \
+  '--local-settings[use lakeFS local default configuration]' \
+  '--quickstart[use lakeFS quickstart configuration]' \
+  '(- *)'{-h,--help}'[help for lakefs]' \
+  '(- *)'{-v,--version}'[print version and exit]' \
+  '1: :->cmd' \
+  '*:: :->args' && ret=0
+
+case $state in
+  cmd)
+    _describe -t commands 'lakefs subcommand' _lakefs_subcommands && ret=0
+    ;;
+  args)
+    case $line[1] in
+      run)
+        _arguments \
+          '(-m --mismatched-repos)'{-m,--mismatched-repos}'[allow repositories from other object store types]' && ret=0
+        ;;
+      setup|superuser)
+        _arguments \
+          '--user-name=[an identifier for the user]:name:' \
+          '--access-key-id=[explicit access key ID]:key:' \
+          '--secret-access-key=[explicit secret access key]:secret:' \
+          '--no-check[skip the check for existing installation]' && ret=0
+        ;;
+      migrate)
+        local -a _lakefs_migrate_sub
+        _lakefs_migrate_sub=(
+          'version:print current migration version and available version'
+          'up:apply all up migrations'
+          'goto:migrate to a specific version'
+          'task:manage migration tasks'
+        )
+        _arguments -C \
+          '1: :->migsub' \
+          '*:: :->migargs' && ret=0
+        case $state in
+          migsub)
+            _describe -t commands 'migrate subcommand' _lakefs_migrate_sub && ret=0
+            ;;
+          migargs)
+            case $line[1] in
+              up)
+                _arguments '--force[force migrate; otherwise migration fails on warnings]' && ret=0
+                ;;
+              goto)
+                _arguments \
+                  '--version=[version number]:version:' \
+                  '--force[force migrate]' && ret=0
+                ;;
+              task)
+                local -a _lakefs_task_sub
+                _lakefs_task_sub=(
+                  'list:list available migration tasks'
+                  'run:run a specific migration task'
+                )
+                _arguments -C \
+                  '1: :->tasksub' \
+                  '*:: :->taskargs' && ret=0
+                case $state in
+                  tasksub)
+                    _describe -t commands 'task subcommand' _lakefs_task_sub && ret=0
+                    ;;
+                  taskargs)
+                    case $line[1] in
+                      run)
+                        _arguments '--dry-run[show what would be changed without making changes]' && ret=0
+                        ;;
+                    esac
+                    ;;
+                esac
+                ;;
+            esac
+            ;;
+        esac
+        ;;
+      lua)
+        _arguments \
+          '1:lua subcommand:(run)' \
+          '*:lua source file:_files -g "*.lua(-.)"' && ret=0
+        ;;
+      gc)
+        _arguments \
+          '1:gc subcommand:(simulate)' \
+          '--output=[output filename]:file:_files' \
+          '--cpuprofile=[write CPU profile to file]:file:_files' \
+          '--memprofile=[write memory profile to file]:file:_files' \
+          '*:file:_files' && ret=0
+        ;;
+      kv)
+        local -a _lakefs_kv_sub
+        _lakefs_kv_sub=(
+          'get:return the value for the given path under the given partition'
+          'scan:scan through keys and values under the given partition'
+          'dump:dump KV store data to JSON format'
+          'load:load KV store data from JSON dump'
+        )
+        _arguments -C \
+          '1: :->kvsub' \
+          '*:: :->kvargs' && ret=0
+        case $state in
+          kvsub)
+            _describe -t commands 'kv subcommand' _lakefs_kv_sub && ret=0
+            ;;
+          kvargs)
+            case $line[1] in
+              get)
+                _arguments '--pretty[print indented output]' && ret=0
+                ;;
+              scan)
+                _arguments \
+                  '--limit=[maximal number of results to return]:n:' \
+                  '--until=[last prefix to scan]:prefix:' \
+                  '--pretty[print indented output]' && ret=0
+                ;;
+              dump)
+                _arguments \
+                  '--output=[output file (default stdout)]:file:_files' \
+                  '--sections=[comma-separated list of sections to dump]:sections:' \
+                  '--all[dump all known partitions]' \
+                  '--repo=[dump partition for a specific repository]:repo:' \
+                  '--pretty[print indented output]' && ret=0
+                ;;
+              load)
+                _arguments \
+                  '--input=[dump input file produced by kv dump]:file:_files' \
+                  '--sections=[comma-separated list of sections to load]:sections:' \
+                  '--strategy=[skip or overwrite existing keys]:strategy:(skip overwrite)' && ret=0
+                ;;
+            esac
+            ;;
+        esac
+        ;;
+      flare)
+        _arguments \
+          '(-p --package)'{-p,--package}'[package generated artifacts into a .zip file]' \
+          '--include-env-vars[collect environment variables]' \
+          '(-o --output)'{-o+,--output=}'[output path relative to the current path]:path:_files -/' \
+          '--env-var-filename=[file name for env-var output]:file:' \
+          '--zip-filename=[file name of the output zip archive]:file:' \
+          '--stdout[output to stdout]' && ret=0
+        ;;
+      completion)
+        _arguments '1:shell:(bash zsh fish)' && ret=0
+        ;;
+      *)
+        _normal && ret=0
+        ;;
+    esac
+    ;;
+esac
+
+return ret
