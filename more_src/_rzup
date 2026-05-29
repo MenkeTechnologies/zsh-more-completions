@@ -1,0 +1,93 @@
+#compdef rzup
+# Documentation: https://github.com/risc0/risc0 (rzup/src/cli/mod.rs + commands.rs clap derive)
+# Reference accessed: 2026-05-29
+# RISC Zero toolchain installer/version manager.
+
+local curcontext="$curcontext" state line ret=1
+
+local -a _subcmds
+_subcmds=(
+  'install:install and update components'
+  'update:install and update components (alias)'
+  'check:check for new component versions'
+  'default:set a component version as default'
+  'show:show installed components'
+  'uninstall:uninstall a component'
+  'build:build a component'
+  'publish:publish a component on S3 (nested subcommands)'
+  'help:show help for a subcommand'
+)
+
+_arguments -C \
+  '(- *)'{-h,--help}'[show help]' \
+  '(- *)'{-V,--version}'[show version]' \
+  '(-v --verbose)'{-v,--verbose}'[enable detailed output]' \
+  '(-q --quiet)'{-q,--quiet}'[suppress all output]' \
+  '1: :->subcmds' \
+  '*:: :->args' && ret=0
+
+case $state in
+  subcmds)
+    _describe -t commands 'rzup subcommand' _subcmds && ret=0
+    ;;
+  args)
+    local -a _publish
+    _publish=(
+      'upload:upload a component artifact'
+      'set-latest:designate a version as latest'
+      'create-artifact:create a packaged .tar.xz artifact'
+    )
+    case $line[1] in
+      install|update)
+        _arguments \
+          '(-f --force)'{-f,--force}'[force installation, replacing existing version]' \
+          ':component name:(rust risc0-groth16 cargo-risczero r0vm cpp risc0-zkr)' \
+          ':version (e.g. 1.0.0):' && ret=0
+        ;;
+      default|uninstall)
+        _arguments \
+          ':component name:(rust risc0-groth16 cargo-risczero r0vm cpp risc0-zkr)' \
+          ':version:' && ret=0
+        ;;
+      build)
+        _arguments \
+          ':component name:(rust risc0-groth16 cargo-risczero r0vm cpp risc0-zkr)' \
+          '(-t --tag-or-commit)'{-t,--tag-or-commit=}'[tag or commit hash to build]:ref:' \
+          '(-p --path)'{-p,--path=}'[local path to build from]:path:_directories' && ret=0
+        ;;
+      publish)
+        _arguments \
+          '1: :->sub' \
+          '*:: :->pubargs' && ret=0
+        if [[ $state == sub ]]; then
+          _describe -t commands 'publish subcommand' _publish && ret=0
+        elif [[ $state == pubargs ]]; then
+          case $line[1] in
+            upload)
+              _arguments \
+                ':component name:' \
+                ':version:' \
+                ':payload archive:_files -g "*.(tar|tar.xz|tar.gz)"' \
+                '(--target-agnostic --target-triple)--target-agnostic[target-independent component]' \
+                '(--target-agnostic --target-triple)--target-triple=[target architecture]:triple:(x86_64-unknown-linux-gnu x86_64-apple-darwin aarch64-apple-darwin aarch64-unknown-linux-gnu)' \
+                '--force[replace existing target/version combination]' && ret=0
+              ;;
+            set-latest)
+              _arguments \
+                ':component name:' \
+                ':version:' && ret=0
+              ;;
+            create-artifact)
+              _arguments \
+                '--input=[source directory or file]:path:_files' \
+                '--output=[destination .tar.xz file]:file:_files -g "*.tar.xz"' \
+                '--compression-level=[compression intensity 0-9 (default 6)]:level:(0 1 2 3 4 5 6 7 8 9)' && ret=0
+              ;;
+          esac
+        fi
+        ;;
+    esac
+    ;;
+esac
+
+return ret
