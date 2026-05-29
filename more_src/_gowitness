@@ -1,0 +1,154 @@
+#compdef gowitness
+# Documentation: https://github.com/sensepost/gowitness (cmd/{root,scan,scan_*,report,report_*}.go)
+# Reference accessed: 2026-05-29
+# Sensepost gowitness — web screenshot and information-gathering tool.
+
+local curcontext="$curcontext" state line ret=1
+
+local -a _subcmds
+_subcmds=(
+  'scan:perform scans (single URL, file of URLs, CIDR, Nmap XML, or Nessus export)'
+  'report:report management (list/merge/migrate/convert/generate/server)'
+  'version:show version information'
+  'completion:generate shell completion scripts'
+  'help:show help for a subcommand'
+)
+
+local -a _global
+_global=(
+  '(-h --help)'{-h,--help}'[show help]'
+  '(-D --debug-log)'{-D,--debug-log}'[enable verbose debug logging to stderr]'
+  '(-q --quiet)'{-q,--quiet}'[silence non-error output]'
+  '--cpu-profile=[write CPU profile to file]:file:_files'
+  '--mem-profile=[write memory profile to file]:file:_files'
+)
+
+local -a _scan_persistent
+_scan_persistent=(
+  '--driver=[scanning engine]:driver:(gorod chromedp)'
+  '(-t --threads)'{-t,--threads=}'[concurrent goroutines (default 6)]:n:'
+  '(-T --timeout)'{-T,--timeout=}'[per-page timeout in seconds (default 60)]:seconds:'
+  '--delay=[seconds before screenshotting (default 3)]:seconds:'
+  '(-s --screenshot-path)'{-s,--screenshot-path=}'[screenshot storage directory]:dir:_directories'
+  '--screenshot-format=[output type]:format:(jpeg png)'
+  '--screenshot-jpeg-quality=[JPEG quality 1-100]:q:'
+  '--screenshot-fullpage[capture entire page]'
+  '--screenshot-skip-save[do not save to filesystem]'
+  '--write-screenshots[store screenshots via writers]'
+  '--save-content[persist network request data]'
+  '--skip-html[exclude initial HTML response]'
+  '--skip-network-logs[omit per-request logs]'
+  '--javascript=[inline JS function to execute]:js:'
+  '--javascript-file=[external JS file]:file:_files -g "*.js"'
+  '--write-db[write to database (SQLite/MySQL/PostgreSQL)]'
+  '--write-db-uri=[database URI]:uri:'
+  '--write-csv[write CSV output]'
+  '--write-csv-file=[CSV output file]:file:_files'
+  '--write-jsonl[write JSON Lines output]'
+  '--write-jsonl-file=[JSON Lines output file]:file:_files'
+  '--write-stdout[write results to stdout]'
+  '--chrome-path=[custom Chrome binary path]:file:_files'
+  '--chrome-proxy=[HTTP/SOCKS5 proxy URI]:proxy:'
+  '--chrome-user-agent=[custom user-agent string]:ua:'
+  '--chrome-window-x=[viewport width (default 1280)]:px:'
+  '--chrome-window-y=[viewport height (default 720)]:px:'
+  '*--chrome-header=[additional HTTP header (Key: Value)]:header:'
+)
+
+_arguments -C \
+  $_global \
+  '1: :->subcmds' \
+  '*:: :->args' && ret=0
+
+case $state in
+  subcmds)
+    _describe -t commands 'gowitness subcommand' _subcmds && ret=0
+    ;;
+  args)
+    local -a _scan_sub _report_sub
+    _scan_sub=(
+      'single:scan a single URL'
+      'file:read targets from a file or stdin'
+      'cidr:scan a network CIDR range'
+      'nmap:scan from an Nmap XML export'
+      'nessus:scan from a Nessus export'
+    )
+    _report_sub=(
+      'list:list reports stored in the database'
+      'merge:merge multiple report databases'
+      'migrate:migrate a report database to the latest schema'
+      'convert:convert a report to another format'
+      'generate:generate static HTML report'
+      'server:run the gowitness report web server'
+    )
+    case $line[1] in
+      scan)
+        _arguments \
+          $_global $_scan_persistent \
+          '1: :->sub' \
+          '*:: :->scanargs' && ret=0
+        if [[ $state == sub ]]; then
+          _describe -t commands 'scan subcommand' _scan_sub && ret=0
+        elif [[ $state == scanargs ]]; then
+          case $line[1] in
+            single)
+              _arguments $_scan_persistent '(-u --url)'{-u,--url=}'[target URL]:url:_urls' && ret=0
+              ;;
+            file)
+              _arguments $_scan_persistent '(-f --file)'{-f,--file=}'[file of URLs (- for stdin)]:file:_files' && ret=0
+              ;;
+            cidr)
+              _arguments \
+                $_scan_persistent \
+                '(-c --cidr)'{-c,--cidr=}'[CIDR range]:cidr:' \
+                '--ports=[ports to scan (comma-separated)]:ports:' \
+                '--randomize[randomize scan order]' && ret=0
+              ;;
+            nmap)
+              _arguments $_scan_persistent '(-f --file)'{-f,--file=}'[Nmap XML output file]:file:_files -g "*.xml"' && ret=0
+              ;;
+            nessus)
+              _arguments $_scan_persistent '(-f --file)'{-f,--file=}'[Nessus export file]:file:_files' && ret=0
+              ;;
+          esac
+        fi
+        ;;
+      report)
+        _arguments \
+          $_global \
+          '1: :->sub' \
+          '*:: :->reportargs' && ret=0
+        if [[ $state == sub ]]; then
+          _describe -t commands 'report subcommand' _report_sub && ret=0
+        elif [[ $state == reportargs ]]; then
+          case $line[1] in
+            server)
+              _arguments \
+                '(-a --address)'{-a,--address=}'[host:port to listen on]:addr:' \
+                '--db=[database connection URI]:uri:' \
+                '--screenshot-path=[screenshot directory]:dir:_directories' && ret=0
+              ;;
+            generate|convert)
+              _arguments \
+                '(-f --file)'{-f,--file=}'[output file]:file:_files' \
+                '--format=[output format]:format:(html csv jsonl)' && ret=0
+              ;;
+            merge)
+              _arguments \
+                '--db=[target database URI]:uri:' \
+                '*:source databases:_files -g "*.(sqlite|db)"' && ret=0
+              ;;
+            list|migrate)
+              _arguments '--db=[database URI]:uri:' && ret=0
+              ;;
+          esac
+        fi
+        ;;
+      completion)
+        _arguments '1:shell:(bash zsh fish powershell)' && ret=0
+        ;;
+    esac
+    ;;
+esac
+
+return ret
