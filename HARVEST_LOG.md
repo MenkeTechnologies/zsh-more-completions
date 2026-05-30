@@ -19,6 +19,30 @@ Entries are in original README order: older themed-cluster entries (accumulated
 before the per-round numbering convention) appear first, followed by the
 R-numbered rounds with the newest R-round at the top of that section.
 
+- **R183 — SeleniumHQ Selenium Grid 4 top-level state-machine** (1 file / 1 binary) — follow-up to R182's hunt-skip note on "Selenium Grid (java/src/org/openqa/selenium/grid/Main.java) has 8+ subcommands - deserves its own state-machine round".  Adds top-level state-machine dispatch for all 10 CliCommand impls registered in Selenium 4 Grid.  Sister tool to the heavily-covered WebDriver family (chromedriver/geckodriver/safaridriver covered via stock zsh; msedgedriver inherits chromedriver's flag vocabulary per R182 hunt-skip).
+  - `_selenium` (1-stem; SeleniumHQ/selenium):
+    * 10 CliCommand impl discovered via Main.java's `ServiceLoader.load(CliCommand.class, loader)` + per-class `getName()`/`getDescription()` decoded source-direct:
+      - **standalone** (commands/Standalone.java): the selenium server, running everything in-process
+      - **hub** (commands/Hub.java): a grid hub, composed of sessions, distributor, and router
+      - **distributor** (distributor/httpd/DistributorServer.java): adds this server as the distributor in a selenium grid
+      - **router** (router/httpd/RouterServer.java): creates a router to front the selenium grid
+      - **node** (node/httpd/NodeServer.java): adds this server as a Node in the Selenium Grid
+      - **sessions** (sessionmap/httpd/SessionMapServer.java) - critical extraction note: `getName()` returns `"sessions"` NOT `"session-map"` despite the file name being SessionMapServer.java
+      - **sessionqueue** (sessionqueue/httpd/NewSessionQueueServer.java) - critical extraction note: `getName()` returns `"sessionqueue"` NOT `"session-queue"` (no hyphen) despite the file name being NewSessionQueueServer.java
+      - **event-bus** (commands/EventBusCommand.java): standalone instance of the event bus
+      - **info** (commands/InfoCommand.java): prints information for commands and topics
+      - **completion** (commands/CompletionCommand.java): generate shell autocompletions
+  - State-machine dispatch via `_arguments -C` + nested `case $words[1]`:
+    - `completion <shell>` shell-name positional enum (`bash`|`zsh`|`fish`).  zsh+bash supported in 4.x; fish added in 4.18+ - decoded source-direct from CompletionCommand.java's arg-parse logic.
+    - `info <topic>` topic positional enum (`config`|`distributor`|`info`|`kubernetes`|`security`|`sessionmaps`|`tracing`) decoded source-direct from the `java/src/org/openqa/selenium/grid/commands/*.txt` topic files directory listing.
+    - All 8 server-style commands share a 16-flag common surface decoded source-direct from the `@ConfigValue` annotations across the grid/config classes (`--config TOML`, `--host`, `--port`, `--external-url`, `--log-level FINE|FINER|FINEST|FATAL|ERROR|WARNING|INFO|CONFIG`, `--http-logs`, `--allow-cors`, `--username`/`--password` for basic auth, `--bind-bus`/`--publish-events`/`--subscribe-events` for event-bus, `--session-timeout`, `--draining`, `--detect-drivers`).  Boolean defaults-true flags (`--bind-host`, `--detect-drivers`) get explicit `(true false)` autocomplete enum since toggling them off needs `=false`.
+  - Critical extraction note: upstream ships its own `selenium completion zsh` generator that emits a tool-version-specific completion file (in `CompletionCommand.java:120-200`).  The static completion in this corpus provides a baseline subcommand-dispatch that doesn't require running the generator.  Users who want the full per-flag completion at their installed version's exact flag surface should run `selenium completion zsh > ~/.local/share/zsh/site-functions/_selenium` and let that completion override this one (it will, since the generator places its output earlier in fpath).  The static completion serves as the bootstrap and as a fallback when the generator isn't run.
+  - Pragmatic completion strategy: rather than enumerate all `@ConfigValue` declarations across the codebase (which would require parsing the entire grid/config/Config.java + per-section TOML loader logic + per-server impl class), the completion lists only the 16-flag common subset.  Per-subcommand-specific flags (e.g. `--detect-drivers` only applies to node/standalone but is harmless on distributor/router/etc.) are intentionally listed across all server commands since they don't conflict at the parser level.
+  - Hunt-skip notes: `selenium-server` is the legacy Selenium 3.x JAR-invocation wrapper (`java -jar selenium-server-standalone.jar`) - replaced by the `selenium` binary in Selenium 4.  `selenium-grid` is not an actual binary name - it's the Selenium 4 project name referring to the multi-component Grid architecture exposed via the `selenium` binary.  `selenium-cli` is the npm package name for `selenium-webdriver`'s test-runner CLI, not a Selenium-server-side tool.  `webdriver`/`wdio` are WebdriverIO's runner CLIs, already covered.
+  - Dup-checked clean against `/usr/share/zsh` + `/opt/homebrew/share/zsh` + `/usr/local/share/zsh`.
+  - Blacklist additions: 1 entry (s*).
+  - Corpus 28,589 → 28,590 files.
+
 - **R182 — Appium env-validator + git tree-pruner + orphaned-blob recovery** (1 file / 3 binaries) — pivot to Appium environment-validation + git-tree-pruning + orphaned-blob-recovery tooling sister to the heavily-covered git ecosystem (git-revise/git-filter-repo/git-machete/git-absorb/git-autofixup/git-fixup/git-quickfix/git-recent/git-branchless/git-cliff/git-changelog/gitlint/commitlint/commitizen/cz/czg/git-trim/git-when-merged/git-extras/git-flow/git-fame all already in corpus) and mobile-testing family (appium + maestro + detox + saucectl + flutter-driver scheduled).
   - `_appium-doctor` (3-stem):
     * appium-doctor (appium/appium-doctor): validates the Appium test environment (iOS/Android SDKs, Xcode, JDK, Node toolchain, Carthage, etc.).  7 yargs `.boolean()`/`.describe()` declarations decoded source-direct from `bin/appium-doctor.js`:
