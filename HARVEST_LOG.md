@@ -19,6 +19,35 @@ Entries are in original README order: older themed-cluster entries (accumulated
 before the per-round numbering convention) appear first, followed by the
 R-numbered rounds with the newest R-round at the top of that section.
 
+- **R191 — vscode-langservers-extracted + efm-langserver + astro-ls LSP suite** (1 file / 7 binaries) — pivot to LSP-server flag completion sister to the heavily-covered LSP family (pyright, pylsp, pylyzer, ruff-lsp, rust-analyzer, gopls, clangd, ccls, sourcekit-lsp, typescript-language-server, bash-language-server, ltex-ls, texlab, ocamllsp, yaml-language-server, tinymist) already in the corpus.
+  - `_vscode-html-language-server` (7-stem):
+    * **5 vscode-langservers-extracted binaries** (hrsh7th/vscode-langservers-extracted): vscode-html-language-server, vscode-css-language-server, vscode-json-language-server, vscode-eslint-language-server, vscode-markdown-language-server.  Each is a 3-line Node.js stub that requires the corresponding VSCode-bundled JS module:
+      ```
+      bin/vscode-html-language-server   -> lib/html-language-server/node/htmlServerMain.js
+      bin/vscode-css-language-server    -> lib/css-language-server/node/cssServerMain.js
+      bin/vscode-json-language-server   -> lib/json-language-server/node/jsonServerMain.js
+      bin/vscode-eslint-language-server -> lib/eslint-language-server/node/eslintServerMain.js
+      bin/vscode-markdown-language-server -> lib/markdown-language-server/node/main.js
+      ```
+      Binary-name list decoded source-direct from `package.json`'s `"bin": { ... }` entry-point block.  All 5 share the standard microsoft/vscode-languageserver-node transport flag set: `--stdio` / `--node-ipc` / `--socket=PORT` / `--clientProcessId=PID` (LSP transport options, MUTEX since only one transport can be active at startup) + `--encoding=utf-8|ucs-2` + `--version` + `--help`.  These are the canonical LSP servers VSCode bundles internally that other editors (Neovim, Emacs, helix, kakoune) re-use via this extracted package.
+    * **efm-langserver** (mattn/efm-langserver): Go-based general-purpose LSP wrapper that routes diagnostic/formatter tool output through the LSP protocol so any CLI tool can be exposed as an LSP server.  6 Go-stdlib `flag.*` declarations decoded source-direct from `main.go`: `-c FILE` (path to config.yaml), `-logfile FILE`, `-loglevel N` (default 1), `-d` (dump configuration), `-v` (version), `-q` (run quieter).  Critical extraction note: efm-langserver uses Go's stdlib `flag` package which means `-loglevel` (NOT `--loglevel`) is the canonical long-form — `flag` does NOT auto-derive `--`-prefixed forms.  Decoded source-direct from `flag.IntVar(&loglevel, "loglevel", 1, "loglevel")` declaration.
+    * **astro-ls** (withastro/language-tools): Astro language server.  Binary name is `astro-ls` (decoded source-direct from `packages/language-server/package.json`'s `"bin": { "astro-ls": "./bin/nodeServer.js" }` block — NOT `astro-language-server`).  The wrapper script `bin/nodeServer.js` only inspects `--version` then defers to the LSP transport.  3-line stub:
+      ```
+      if (process.argv.includes('--version')) {
+        const pkgJSON = require('../package.json');
+        console.info(`${pkgJSON['version']}`);
+      } else {
+        require('../dist/nodeServer.js');
+      }
+      ```
+      Same standard LSP transport flag set as the vscode-* group.
+  - **3-way mutex group** for LSP transport flags `(--node-ipc --socket --stdio)` decoded source-direct from the microsoft/vscode-languageserver-node convention — only one transport mode can be active at startup, so listing them as a mutex correctly enforces that constraint.  Standard pattern across all stdin/stdout LSP servers in the corpus.
+  - Critical extraction note: the vscode-* binaries are double-dash long-form flag servers (microsoft/vscode-languageserver-node convention), while efm-langserver uses Go-stdlib single-dash long-form flags (Go's `flag` package convention).  Completion correctly differentiates between these two flag-prefix conventions per-stem.
+  - Hunt-skip notes: astro-language-server (the NPM package name) is NOT the actual binary name — `astro-ls` is.  Decoded source-direct from upstream's package.json.  svelte-language-server / angular-language-server / vue-language-server / solidity-lsp / nimlsp / nim-lsp / idris-lsp / idris2-lsp / elixir-lsp / erlang-lsp / pwsh-lsp / powershell-lsp / deno-lsp / markdown-lsp / json-language-server / schema-language-server / ocaml-lsp / coc-lsp deferred — each is a separate upstream with its own argv parsing; each would need its own source-direct extraction round.  vue-language-server actually does have multi=1 in audit (covered).  ocaml-lsp is the package name for `ocamllsp` (already covered with multi=2).  vscode-html/css/json/markdown-language-server were all in multi=1 audit despite NOT having explicit `#compdef` entries — these are GitHub-Actions-installed shims that some plugins generate dynamically; this round provides the proper static completion.  rust-lsp / go-lsp / golangci-lsp / clangd-cli / vale-ls / cquery / iwyu / iwyu-tool / iwyu_tool / include-cleaner / clang-tools-extra / pyflakes-cli / pylinx / rustup-component-history / ra (rust-analyzer alias) / tsserver / tsls are not actual binary names (suffix-confused-with-base / package-name-not-binary / alias).
+  - Dup-checked clean against `/usr/share/zsh` + `/opt/homebrew/share/zsh` + `/usr/local/share/zsh`.
+  - Blacklist additions: 7 entries (1 a*, 1 e*, 5 v*).
+  - Corpus 28,597 → 28,598 files.
+
 - **R190 — variar/klogg + nickbnf/glogg log explorers** (1 file / 2 binaries) — pivot to Qt-based GUI log file viewers sister to the heavily-covered log-analysis family (lnav, multitail, logwatch + wtmpdb + tail + less + dnstop + atop + bottom + btop + logcheck + journalctl already in the corpus).  klogg is the actively-maintained successor to glogg, both fast Qt-based log file viewers / log explorers for large (gigabyte-scale) log files with regex filtering, multi-file split-view, follow-tail mode, search history.
   - `_klogg` (2-stem; variar/klogg + nickbnf/glogg):
     * klogg (variar/klogg): 9 QCommandLineOptions decoded source-direct from `src/app/cli.h` `CliParameters` constructor's QCommandLineParser + QCommandLineOption declarations.  klogg has **two modes (GUI vs console) gated on the `bool console` constructor arg**:
