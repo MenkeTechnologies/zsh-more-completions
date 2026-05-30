@@ -1,0 +1,162 @@
+#compdef tpm2_createpolicy tpm2_policypcr tpm2_policyauthorize tpm2_policysecret tpm2_policycommandcode tpm2_policyor tpm2_policyrestart tpm2_policypassword tpm2_policyauthvalue
+# Documentation: source-direct extraction from upstream
+# tpm2-software/tpm2-tools.  Per-tool `struct option topts[]`
+# table decoded source-direct from each tools/tpm2_<name>.c.
+# Shared $tpm2_common + $tpm2_hashalgs re-extracted source-
+# direct from lib/tpm2_options.c / lib/tpm2_alg_util.c — see
+# R193-R201 HARVEST_LOG entries for the full extraction notes.
+# Reference accessed: 2026-05-30 via gh api.
+# tpm2-software tpm2-tools R202 — follow-up to R201's hunt-skip
+# on "createpolicy (tpm2_createpolicy umbrella) + the ~16
+# policy* tools (all share a common policy_session_setup helper
+# from lib/tpm2_policy.c)".  This round covers the most-used
+# policy-construction primitives: tpm2_createpolicy (the
+# umbrella that combines policypcr+policysession into one),
+# tpm2_policypcr (PCR-binding), tpm2_policyauthorize (signed-
+# policy delegation), tpm2_policysecret (secret-knowledge),
+# tpm2_policycommandcode (per-command policy), tpm2_policyor
+# (OR'd policy branches), tpm2_policyrestart (reset a session
+# without closing it), tpm2_policypassword + tpm2_policyauthvalue
+# (TPM2_PolicyPassword and TPM2_PolicyAuthValue auth-binding).
+# Sister tools to R193-R201's tpm2_* family already in the
+# corpus.  All policy* tools share the
+# -L/--policy + -S/--session output/input flag pattern decoded
+# source-direct from lib/tpm2_policy.c's
+# tpm2_policy_build_session() helper.
+
+local -a tpm2_common=(
+  '(-T --tcti)'{-T+,--tcti=}'[TCTI library + options (e.g. "device:/dev/tpmrm0" or "swtpm:port=2321")]:tcti:'
+  '(-h --help)'{-h-,--help=-}'[print help (optional arg = topic)]::topic:'
+  '(-v --version)'{-v,--version}'[print version and exit]'
+  '(-V --verbose)'{-V,--verbose}'[verbose mode]'
+  '(-Q --quiet)'{-Q,--quiet}'[quiet mode]'
+  '(-Z --enable-errata)'{-Z,--enable-errata}'[enable TPM2 errata workarounds]'
+  '(-z --pwd-session)'{-z,--pwd-session}'[use password-authorized session]'
+)
+local -a tpm2_hashalgs=(sha1 sha256 sha384 sha512 sm3_256)
+
+# 5-flag shared policy-base: every policy* tool takes
+# -L/--policy (output digest) + -S/--session (running session).
+local -a tpm2_policy_base=(
+  '(-L --policy)'{-L+,--policy=}'[output policy-digest file]:file:_files'
+  '(-S --session)'{-S+,--session=}'[policy-session context file]:file:_files'
+  '--cphash=[output command-parameter hash for off-line audit]:file:_files'
+)
+
+case $service in
+
+  tpm2_createpolicy)
+    # The umbrella tool that combines tpm2_policypcr +
+    # tpm2_startauthsession into one.  2-way mutex on which
+    # policy-type to construct (--policy-pcr XOR
+    # --policy-session decoded source-direct from upstream's
+    # session-mode dispatch; --policy-session is a no-op stub
+    # for legacy compat per upstream comment).
+    _arguments -s -S \
+      $tpm2_common \
+      '(-L --policy)'{-L+,--policy=}'[output policy-digest file]:file:_files' \
+      '(-g --policy-algorithm)'{-g+,--policy-algorithm=}'[policy hash algorithm]:alg:($tpm2_hashalgs)' \
+      '(-l --pcr-list)'{-l+,--pcr-list=}'[PCR list (e.g. sha256:0,1,2,3)]:pcr-list:' \
+      '(-f --pcr)'{-f+,--pcr=}'[input PCR values file (skip TPM PCR read)]:file:_files' \
+      '(--policy-pcr --policy-session)--policy-pcr[build a PCR-binding policy]' \
+      '(--policy-pcr --policy-session)--policy-session[legacy compat stub (no-op)]'
+    ;;
+
+  tpm2_policypcr)
+    # TPM2_PolicyPCR: bind the running policy session to a PCR
+    # selection + (optionally) a pre-computed PCR digest.
+    _arguments -s -S \
+      $tpm2_common \
+      $tpm2_policy_base \
+      '(-f --pcr)'{-f+,--pcr=}'[input PCR values file (skip TPM PCR read; off-line policy build)]:file:_files' \
+      '(-l --pcr-list)'{-l+,--pcr-list=}'[PCR list (e.g. sha256:0,1,2,3)]:pcr-list:'
+    ;;
+
+  tpm2_policyauthorize)
+    # TPM2_PolicyAuthorize: signed-policy delegation - bind the
+    # current session to a policy that was signed by an
+    # authorizing key (allows the policy to be updated without
+    # re-distributing it).  -i/--input is the
+    # to-be-authorized policy digest; -n/--name is the
+    # authorizing-key name; -t/--ticket carries the
+    # verifysignature ticket.
+    _arguments -s -S \
+      $tpm2_common \
+      $tpm2_policy_base \
+      '(-i --input)'{-i+,--input=}'[input policy-digest file (to be authorized)]:file:_files' \
+      '(-q --qualification)'{-q+,--qualification=}'[qualifying data (binding nonce)]:nonce:' \
+      '(-n --name)'{-n+,--name=}'[input authorizing-key name file]:file:_files' \
+      '(-t --ticket)'{-t+,--ticket=}'[input verifysignature ticket file]:file:_files'
+    ;;
+
+  tpm2_policysecret)
+    # TPM2_PolicySecret: bind to knowledge of a TPM-object auth
+    # value (e.g. an NV-index password or hierarchy auth).
+    # -c/--object-context is the object whose auth gates the
+    # policy.  -x/--nonce-tpm includes a TPM-supplied nonce
+    # for replay protection.  Long-only --ticket / --timeout
+    # via val=0/1.
+    _arguments -s -S \
+      $tpm2_common \
+      $tpm2_policy_base \
+      '(-c --object-context)'{-c+,--object-context=}'[object whose auth gates the policy]:object:' \
+      '(-t --expiration)'{-t+,--expiration=}'[expiration time in seconds]:sec:' \
+      '(-x --nonce-tpm)'{-x,--nonce-tpm}'[include a TPM-supplied nonce for replay protection]' \
+      '--ticket=[output ticket file (for off-line replay)]:file:_files' \
+      '--timeout=[output timeout file]:file:_files' \
+      '(-q --qualification)'{-q+,--qualification=}'[qualifying data]:nonce:'
+    ;;
+
+  tpm2_policycommandcode)
+    # TPM2_PolicyCommandCode: restrict the policy to a single
+    # TPM2 command code.  Positional accepts a TPM2_CC_*
+    # constant name like "TPM2_CC_NV_Write" or hex/decimal int.
+    _arguments -s -S \
+      $tpm2_common \
+      $tpm2_policy_base \
+      ':TPM2 command code (e.g. TPM2_CC_NV_Write):'
+    ;;
+
+  tpm2_policyor)
+    # TPM2_PolicyOR: OR together multiple policy branches.
+    # -l/--policy-list is the legacy alias (retained per
+    # upstream issue#1894).  Positional accepts a list of
+    # policy-digest files.
+    _arguments -s -S \
+      $tpm2_common \
+      '(-L --policy)'{-L+,--policy=}'[output policy-digest file]:file:_files' \
+      '(-S --session)'{-S+,--session=}'[policy-session context file]:file:_files' \
+      '(-l --policy-list)'{-l+,--policy-list=}'[legacy: comma-separated policy-digest files (retained for compat)]:list:' \
+      '*:policy-digest file:_files'
+    ;;
+
+  tpm2_policyrestart)
+    # TPM2_PolicyRestart: reset the policy-digest of the
+    # running session WITHOUT closing it.  Lightest topts[]
+    # in R202 - 2 flags (no -L since policyrestart resets
+    # rather than appends).
+    _arguments -s -S \
+      $tpm2_common \
+      '(-S --session)'{-S+,--session=}'[policy-session context file]:file:_files' \
+      '--cphash=[output command-parameter hash for off-line audit]:file:_files'
+    ;;
+
+  tpm2_policypassword)
+    # TPM2_PolicyPassword: bind the policy to a TPM2_PolicyPassword
+    # authorization (requires the calling auth-session to
+    # supply the object's password at use time).
+    _arguments -s -S \
+      $tpm2_common \
+      $tpm2_policy_base
+    ;;
+
+  tpm2_policyauthvalue)
+    # TPM2_PolicyAuthValue: bind the policy to a TPM2_PolicyAuthValue
+    # authorization (similar to policypassword but uses the
+    # HMAC-derived auth value rather than the raw password).
+    _arguments -s -S \
+      $tpm2_common \
+      $tpm2_policy_base
+    ;;
+
+esac
