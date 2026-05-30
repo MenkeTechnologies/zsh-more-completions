@@ -1,0 +1,190 @@
+#compdef witness
+# Documentation: https://witness.dev/ + in-toto/witness cobra cmd tree
+# Reference accessed: 2026-05-30
+# witness — in-toto-compatible supply-chain attestation collector by
+# TestifySec. Cobra CLI: run/sign/verify primary + attestors/policy
+# management + completion/version. Supply-chain signing via fulcio/sigstore,
+# storage via Archivista, policy engine with embedded OPA Rego.
+
+local curcontext="$curcontext" state line ret=1
+
+local -a _subcmds
+_subcmds=(
+  'run:execute a command, collect attestations, sign envelope (root operation)'
+  'sign:sign an arbitrary witness policy/data file'
+  'verify:verify a witness-policy-signed artifact'
+  'attestors:list, inspect, and query registered attestors'
+  'policy:manage witness policy documents'
+  'completion:emit shell completion script'
+  'version:print version'
+  'help:show help for a subcommand'
+)
+
+# Persistent root flags (apply to every subcommand).
+local -a _global
+_global=(
+  '(-c --config)'{-c,--config=}'[path to witness config file]:file:_files -g "*.(yml|yaml|json)"'
+  '(-l --log-level)'{-l,--log-level=}'[log level]:level:(debug info warn error)'
+  '--debug-cpu-profile-file=[CPU profile output path]:file:_files'
+  '--debug-mem-profile-file=[memory profile output path]:file:_files'
+  '(-h --help)'{-h,--help}'[show help]'
+)
+
+# Shared signer flags (apply to sign/run, KMS-aware).
+local -a _signer
+_signer=(
+  '--signer-key-path=[private key file]:file:_files'
+  '--signer-cert-path=[signing cert file]:file:_files'
+  '--signer-intermediate-paths=[intermediate cert chain]:files:_files'
+  '--signer-fulcio-url=[Fulcio CA URL]:url:'
+  '--signer-fulcio-token=[OIDC token for Fulcio]:token:'
+  '--signer-fulcio-token-issuer-url=[OIDC issuer URL]:url:'
+  '--signer-fulcio-token-client-id=[OIDC client id]:id:'
+  '--signer-fulcio-token-grant-flow=[OIDC grant flow]:flow:(device-code authcode)'
+  '--signer-kms-ref=[KMS key URI (e.g. awskms\:/arn\:..., gcpkms\:/...)]:uri:'
+  '--signer-kms-region=[KMS region (AWS-style)]:region:'
+  '--signer-kms-hash-type=[KMS hash algorithm]:algo:(SHA256 SHA384 SHA512)'
+  '--signer-tuf-mirror=[TUF mirror URL]:url:'
+  '--signer-tuf-root=[TUF root.json]:file:_files'
+)
+
+# Known attestor names (witness attestors list).
+local -a _attestors
+_attestors=(
+  'aws-iid:Amazon EC2 Instance Identity Document'
+  'commandrun:exec subprocess attestation (auto-added by run)'
+  'environment:environment-variable snapshot'
+  'gcp-iit:GCP Instance Identity Token'
+  'git:git working-tree state'
+  'github:GitHub Actions runtime claims'
+  'gitlab:GitLab CI runtime claims'
+  'jenkins:Jenkins runtime claims'
+  'jwt:JSON Web Token claims'
+  'lockfile:dep lockfile snapshot'
+  'material:input materials hash (auto)'
+  'maven:Apache Maven project metadata'
+  'oci:OCI image artifact metadata'
+  'product:output products hash (auto)'
+  'sarif:SARIF static-analysis report'
+  'sbom:SBOM (CycloneDX/SPDX) metadata'
+  'secretscan:secret-scanning report'
+  'slsa:SLSA Provenance v1'
+  'sigstore:Sigstore artifact metadata'
+  'system-packages:installed-system-packages snapshot'
+  'vex:VEX advisory metadata'
+)
+
+_arguments -C \
+  $_global \
+  '(- *)'{-V,--version}'[print version (root only)]' \
+  '1: :->subcmd' \
+  '*:: :->args' && ret=0
+
+case $state in
+  subcmd)
+    _describe -t commands 'witness subcommand' _subcmds && ret=0
+    ;;
+  args)
+    curcontext="${curcontext%:*:*}:witness-$line[1]:"
+    case $line[1] in
+      run)
+        _arguments -s -S \
+          $_global \
+          $_signer \
+          '(-d --workingdir)'{-d,--workingdir=}'[directory commands will run from]:dir:_files -/' \
+          '*'{-a,--attestations=}'[attestors to record (repeatable; product+material always)]:attestor:->attestors' \
+          '*--dirhash-glob=[collapse material/product hashes on glob match]:glob:' \
+          '*--hashes=[digest algorithms]:hash:(sha256 sha384 sha512 sha1 md5)' \
+          '(-o --outfile)'{-o,--outfile=}'[signed envelope output file]:file:_files' \
+          '(-s --step)'{-s,--step=}'[name of the step being run]:step:' \
+          '(-r --trace)'{-r,--trace}'[enable tracing]' \
+          '*'{-t,--timestamp-servers=}'[RFC 3161 TSA URLs]:url:' \
+          '--env-filter-sensitive-vars[filter (not obfuscate) sensitive env vars]' \
+          '--env-disable-default-sensitive-vars[disable default sensitive-var list]' \
+          '*--env-add-sensitive-key=[add key/glob to sensitive-var list]:key:' \
+          '*--env-allow-sensitive-key=[allow specific keys from sensitive list (no globs)]:key:' \
+          '--enable-archivista[use Archivista for attestation storage]' \
+          '--archivista-server=[Archivista server URL]:url:' \
+          '*--archivista-headers=[headers added to Archivista requests]:header:' \
+          '*::command and args:_command_names -e' \
+          && ret=0
+        if [[ $state == attestors ]]; then
+          _describe -t attestors 'attestor' _attestors && ret=0
+        fi
+        ;;
+      sign)
+        _arguments -s -S \
+          $_global \
+          $_signer \
+          '(-t --datatype)'{-t,--datatype=}'[URI reference for the data type being signed]:uri:' \
+          '(-o --outfile)'{-o,--outfile=}'[signed output file (default stdout)]:file:_files' \
+          '(-f --infile)'{-f,--infile=}'[policy/data file to sign]:file:_files' \
+          '*--timestamp-servers=[RFC 3161 TSA URLs]:url:' \
+          && ret=0
+        ;;
+      verify)
+        _arguments -s -S \
+          $_global \
+          '--policy-ca=[(deprecated) policy CA file]:file:_files' \
+          '*--policy-ca-root=[policy root CA cert]:file:_files' \
+          '*--policy-ca-intermediate=[policy intermediate CA cert]:file:_files' \
+          '(-p --policy)'{-p,--policy=}'[witness policy file]:file:_files' \
+          '(-k --publickey)'{-k,--publickey=}'[public key file for envelope verification]:file:_files' \
+          '*'{-a,--attestations=}'[attestation envelope file(s)]:file:_files' \
+          '(-f --artifactfile)'{-f,--artifactfile=}'[artifact file path]:file:_files' \
+          '(-d --artifactdirectory)'{-d,--artifactdirectory=}'[artifact directory]:dir:_files -/' \
+          '*--subjects=[additional subject digests]:digest:' \
+          '*--policy-timestamp-server=[TSA CA cert(s)]:file:_files' \
+          '--policy-common-name=[cert CN constraint]:cn:' \
+          '*--policy-dns-name=[cert DNS name constraint]:dns:' \
+          '*--policy-email=[cert email constraint]:email:' \
+          '*--policy-organization=[cert organization constraint]:org:' \
+          '*--policy-uri=[cert URI constraint]:uri:' \
+          '*--policy-fulcio-cert-extension=[Fulcio cert extension OID=value]:ext:' \
+          '--enable-archivista[fetch attestations from Archivista]' \
+          '--archivista-server=[Archivista server URL]:url:' \
+          && ret=0
+        ;;
+      attestors)
+        _arguments -C $_global '1: :->c' '*:: :->cargs' && ret=0
+        case $state in
+          c)
+            _describe -t commands 'attestors subcommand' \
+              '(list:"list registered attestors" info:"show attestor metadata" schema:"emit JSON schema for an attestor" subjects:"list subjects an attestor produces" run-type:"show attestor run type")' && ret=0
+            ;;
+          cargs)
+            _arguments $_global '1:attestor:->a' && ret=0
+            [[ $state == a ]] && _describe -t attestors 'attestor' _attestors && ret=0
+            ;;
+        esac
+        ;;
+      policy)
+        _arguments -C $_global '1: :->c' '*:: :->cargs' && ret=0
+        case $state in
+          c)
+            _describe -t commands 'policy subcommand' \
+              '(generate:"generate a new policy template" validate:"validate a policy file" sign:"sign a policy file" verify:"verify a signed policy" check:"check policy syntax")' && ret=0
+            ;;
+          cargs)
+            _arguments $_global \
+              '(-o --outfile)'{-o,--outfile=}'[output file]:file:_files' \
+              '(-f --infile)'{-f,--infile=}'[input file]:file:_files' \
+              && ret=0
+            ;;
+        esac
+        ;;
+      completion)
+        _arguments -C '1: :->c' && ret=0
+        [[ $state == c ]] && _values 'shell' bash fish powershell zsh && ret=0
+        ;;
+      version|help)
+        _arguments $_global && ret=0
+        ;;
+      *)
+        _arguments -s -S $_global '*:argument:' && ret=0
+        ;;
+    esac
+    ;;
+esac
+
+return ret
