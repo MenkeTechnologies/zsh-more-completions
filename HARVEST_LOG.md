@@ -19,6 +19,30 @@ Entries are in original README order: older themed-cluster entries (accumulated
 before the per-round numbering convention) appear first, followed by the
 R-numbered rounds with the newest R-round at the top of that section.
 
+- **R209 — Pengutronix genimage embedded image builder** (1 file / 1 binary) — completely fresh territory; no genimage completion has ever shipped in this repo.  genimage is **Pengutronix's filesystem / disk / flash image builder** — used by Buildroot, Yocto, and various embedded-Linux build systems to assemble SD-card / eMMC / NAND / NOR flash images from a rootpath plus a config-file recipe (`genimage.cfg`).  Drives external `mkfs.*`, `genext2fs`, `mksquashfs`, `mkfs.ubifs`, `mkimage`, `fiptool`, `veritysetup` etc. binaries to produce the actual filesystem blobs, then assembles them into a partitioned image via `dd`.
+  - `_genimage` (1-stem; pengutronix/genimage): **38 flags** decoded source-direct from `config.c` lines 332-550 (the `static struct config opts[]` array) + lines 181-273 (the `set_config_opts()` getopt_long loop).
+  - Critical extraction note: genimage has a **runtime-built option table** — `long_options[]` is `xzalloc`'d at runtime and populated by walking the `optlist` (config.c:227-240).  Every option below is added with `has_arg = 1` (config.c:234), meaning **every long option takes exactly one argument**.  The ONLY hardcoded short options are `-h`/`--help` and `-v`/`--version`.  No positional arguments are accepted.
+  - **Option-source priority order** (config.c:171-175 docstring): each option is set in priority (1) default value, (2) from environment variable (per-option `env` field of `struct config`), (3) from config file's `config { ... }` section, (4) from command line — so the CLI flag wins.  Each completion entry documents the corresponding `GENIMAGE_*` env var.
+  - **Flag groupings decoded source-direct from the opts[] array** (38 total):
+    * **Top-level / control** (4): `-h`/`--help`, `-v`/`--version`, `--loglevel` (env `GENIMAGE_LOGLEVEL`; default 1), `--randomseed` (deterministic random32 seed for reproducible image builds; env `GENIMAGE_RANDOMSEED`).
+    * **Path-config family** (6): `--rootpath`, `--tmppath`, `--inputpath`, `--outputpath`, `--includepath` (search-path for `include` directives; requires libconfuse with `HAVE_SEARCHPATH`), `--config` (input recipe path; default `genimage.cfg`).
+    * **Output dump** (1): `--configdump` (write effective parsed config to file; `-` for stdout).
+    * **External-binary path overrides** (27): the bulk of genimage's flag surface.  Each option overrides the path/name of an external command genimage will `exec` to produce a given image type or filesystem.  Defaults match Linux conventions (e.g. `mkfs.btrfs`, `mksquashfs`).  This is the "binary-locator family":
+      - `--cpio`, `--dd`, `--tar`
+      - `--debugfs`, `--e2fsck`, `--mke2fs`, `--tune2fs` (ext2/3/4 family)
+      - `--genext2fs`, `--genisoimage`
+      - `--mcopy`, `--mmd` (mtools for FAT)
+      - `--mkcramfs`, `--mkdosfs` (cramfs + FAT)
+      - `--mkfserofs`, `--mkfsjffs2`, `--mkfsf2fs`, `--mkfsbtrfs`, `--mkfsubifs`, `--mksquashfs` (modern filesystems)
+      - `--openssl`, `--sloadf2fs`, `--rauc`, `--ubinize`, `--mkimage`, `--fiptool`, `--veritysetup` (firmware + verity + RAUC OTA)
+      - `--qemu-img` (QEMU disk image converter)
+  - Critical extraction note: the **env-var name convention** is `GENIMAGE_<UPPERCASED-OPT-NAME>` (e.g. `--rootpath` → `GENIMAGE_ROOTPATH`) **with two source-direct exceptions documented in the completion**: `--mkfsjffs2` uses `GENIMAGE_MKFJFFS2` (missing 'S'; upstream config.c:447 — appears to be a long-standing typo) and `--qemu-img` uses `GENIMAGE_QEMU` (not `GENIMAGE_QEMU_IMG`; config.c:489).  Both env-var names are reproduced verbatim from upstream — completion does NOT "fix" them since users may have set the typo'd vars in their build environments.
+  - Critical extraction note: upstream's `struct config` at config.c:31-39 includes a `hidden` field; the only currently-hidden option is `--includepath`, hidden if libconfuse was built without `HAVE_SEARCHPATH` (config.c:368-370).  Completion still lists it since runtime hiding depends on the target system's libconfuse build flags; users on Debian/Ubuntu/Arch typically have the searchpath build.
+  - Critical extraction note: the **`mkfsbtrfs` opt-name has a typo** — `CFG_STR("mkfsfbtrfs", ...)` (extra 'f'; config.c:458) — meaning the **config-file key** is `mkfsfbtrfs` but the **CLI flag and env var** are `--mkfsbtrfs` / `GENIMAGE_MKFSBTRFS`.  Completion uses the CLI form (matching what users actually type).
+  - Dup-checked clean against `/usr/share/zsh` + `/opt/homebrew/share/zsh` + `/usr/local/share/zsh`.
+  - Blacklist additions: 1 entry (g*).
+  - Corpus 28,615 → 28,616 files.
+
 - **R208 — BBC bmx mxf2raw MXF essence extractor** (1 file / 1 binary) — follow-up to R207's hunt-skip on "mxf2raw (3450 lines, ~80+ flags) extracts raw essence from MXF; deferred".  This round picks off the middle-sized bmx tool.  mxf2raw is the BBC bmx MXF-to-raw essence extractor: inputs an MXF file (any operational pattern, with optional AS-10/AS-11/UK-DPP/APP metadata), extracts raw essence (video/audio/data) to per-track `.raw` or `.klv` files, plus optional text-based metadata extraction (APP CRC-32, APP event-log, ADM CHNA descriptors, RDD 6 audio metadata, Wave chunks).  Heavily used in BBC broadcast workflows + the **Archive Preservation Project (APP)** at the BBC Archive.  Sister tool to R207's bmxparse + bmxtimecode and R206's dvrescue.
   - `_mxf2raw` (1-stem; bbc/bmx): **53 flags** decoded source-direct from the 3450-line `apps/mxf2raw/mxf2raw.cpp`'s `usage()` function (lines 1693-1810) + the hand-rolled argv-walking loop (lines 1890-2350).  Same `for (cmdln_index = 1; cmdln_index < argc; cmdln_index++)` + `strcmp(argv[cmdln_index], "--flag")` pattern documented in R206 (dvrescue) and R207 (bmxparse/bmxtimecode) — the **bmx/dvrescue family parser convention**.
   - **Flag groupings decoded source-direct from upstream's printf-block sectioning** (lines 1701-1809):
