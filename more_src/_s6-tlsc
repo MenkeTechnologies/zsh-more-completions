@@ -1,0 +1,126 @@
+#compdef s6-tlsc s6-tlsc-io s6-tlsd s6-tlsd-io s6-ucspitlsc s6-ucspitlsd
+# Documentation: source-direct extraction from upstream
+# skarnet/s6-networking src/tls/s6-{tlsc,tlsc-io,tlsd,tlsd-io,
+# ucspitlsc,ucspitlsd}.c USAGE strings + skalibs GOL_main gol_bool
+# + gol_arg tables. The TLS family uses identical flag short-form
+# letters but the .lo long-option strings reveal subtle semantic
+# differences (e.g. -k is "servername" on client variants but
+# "sni-level" on server variants; -Y/-y is no-client-cert / client
+# -cert on client variants but client-cert / mandatory-client-cert
+# on server variants).
+# Reference accessed: 2026-05-30 via gh api.
+# Skarnet s6-networking TLS R128c — 6-stem multi-binary harvest of
+# the s6 TLS wrapper family. s6-tlsclient + s6-tlsserver were
+# already covered in older rounds; deliberately omitted from this
+# #compdef line. Sister tools to the wider Skarnet ecosystem
+# (R117-R127).
+
+# Shared close-notify + keep-env mutex group used by all 6 binaries.
+local -a _s6tls_closenotify_flags
+_s6tls_closenotify_flags=(
+  '(-s --no-close-notify)'{-S,--close-notify}'[send TLS close_notify on shutdown (default)]'
+  '(-S --close-notify)'{-s,--no-close-notify}'[do NOT send TLS close_notify on shutdown]'
+  '(-j --no-enforce-close-notify)'{-J,--enforce-close-notify}'[require peer to send close_notify (default)]'
+  '(-J --enforce-close-notify)'{-j,--no-enforce-close-notify}'[do NOT require peer close_notify on shutdown]'
+  '(-z --no-keep)'{-Z,--keep}'[keep TLS-related env vars (CERTFILE/KEYFILE/...) in chain-load]'
+  '(-Z --keep)'{-z,--no-keep}'[strip TLS-related env vars before chain-load (default)]'
+)
+
+case $service in
+
+  s6-tlsc)
+    # Client-side TLS wrapper: chain-loads prog with TLS-encrypted
+    # fds (fd 6 read, fd 7 write by default). Used as the inner
+    # half of an outgoing TLS connection.
+    _arguments -s -S \
+      "${_s6tls_closenotify_flags[@]}" \
+      '(-y --client-cert)'{-Y,--no-client-cert}'[do NOT present a client certificate (default)]' \
+      '(-Y --no-client-cert)'{-y,--client-cert}'[present a client certificate from $CERTFILE/$KEYFILE]' \
+      '--verify-cert[verify server cert against CA bundle (default)]' \
+      '--no-verify-cert[do NOT verify server cert (INSECURE; debugging only)]' \
+      '(-v --verbosity)'{-v+,--verbosity=}'[verbosity level (default 1)]:level:' \
+      '(-K --handshake-timeout)'{-K+,--handshake-timeout=}'[TLS handshake timeout in ms]:ms:' \
+      '(-k --servername)'{-k+,--servername=}'[TLS SNI server name to send]:servername:_hosts' \
+      '(-6 --read-fd)'{-6+,--read-fd=}'[read fd to wrap (default 6)]:fd:' \
+      '(-7 --write-fd)'{-7+,--write-fd=}'[write fd to wrap (default 7)]:fd:' \
+      '*:program and arguments:_command_names -e'
+    ;;
+
+  s6-tlsc-io)
+    # Low-level client-side TLS I/O processor: takes raw fdr/fdw
+    # for the network side as positionals (not chain-loaded), then
+    # bridges TLS-encrypted bytes between them and stdin/stdout.
+    _arguments -s -S \
+      '(-v --verbosity)'{-v+,--verbosity=}'[verbosity level (default 1)]:level:' \
+      '(-d --notification-fd)'{-d+,--notification-fd=}'[notify readiness on fd]:fd:' \
+      "${_s6tls_closenotify_flags[@]}" \
+      '(-y --client-cert)'{-Y,--no-client-cert}'[do NOT present a client certificate (default)]' \
+      '(-Y --no-client-cert)'{-y,--client-cert}'[present a client certificate from $CERTFILE/$KEYFILE]' \
+      '(-K --handshake-timeout)'{-K+,--handshake-timeout=}'[TLS handshake timeout in ms]:ms:' \
+      '(-k --servername)'{-k+,--servername=}'[TLS SNI server name to send]:servername:_hosts' \
+      '1:network read fd:' \
+      '2:network write fd:'
+    ;;
+
+  s6-tlsd)
+    # Server-side TLS wrapper: chain-loads prog with TLS-decrypted
+    # fds (fd 6 read, fd 7 write by default). Used as the inner
+    # half of an incoming TLS connection.
+    _arguments -s -S \
+      "${_s6tls_closenotify_flags[@]}" \
+      '(-y --mandatory-client-cert)'{-Y,--client-cert}'[ACCEPT a client certificate if presented (mTLS optional)]' \
+      '(-Y --client-cert)'{-y,--mandatory-client-cert}'[REQUIRE a client certificate (mTLS mandatory)]' \
+      '--sni[ACCEPT SNI if presented (optional)]' \
+      '--mandatory-sni[REQUIRE SNI from the client]' \
+      '(-v --verbosity)'{-v+,--verbosity=}'[verbosity level (default 1)]:level:' \
+      '(-K --handshake-timeout)'{-K+,--handshake-timeout=}'[TLS handshake timeout in ms]:ms:' \
+      '(-k --sni-level)'{-k+,--sni-level=}'[SNI enforcement level (0=optional, 1=mandatory)]:level:' \
+      '*:program and arguments:_command_names -e'
+    ;;
+
+  s6-tlsd-io)
+    # Low-level server-side TLS I/O processor: takes raw fdr/fdw
+    # for the network side as positionals (not chain-loaded), then
+    # bridges TLS-decrypted bytes between them and stdin/stdout.
+    _arguments -s -S \
+      '(-v --verbosity)'{-v+,--verbosity=}'[verbosity level (default 1)]:level:' \
+      '(-d --notification-fd)'{-d+,--notification-fd=}'[notify readiness on fd]:fd:' \
+      "${_s6tls_closenotify_flags[@]}" \
+      '(-y --mandatory-client-cert)'{-Y,--client-cert}'[ACCEPT a client certificate if presented]' \
+      '(-Y --client-cert)'{-y,--mandatory-client-cert}'[REQUIRE a client certificate (mTLS mandatory)]' \
+      '(-K --handshake-timeout)'{-K+,--handshake-timeout=}'[TLS handshake timeout in ms]:ms:' \
+      '(-k --sni-level)'{-k+,--sni-level=}'[SNI enforcement level]:level:' \
+      '1:network read fd:' \
+      '2:network write fd:'
+    ;;
+
+  s6-ucspitlsc)
+    # UCSPI-protocol client-side TLS wrapper: like s6-tlsc but
+    # speaks the UCSPI protocol on the inner side. Used when the
+    # chained program needs the s6-net "tlsenv" environment.
+    _arguments -s -S \
+      "${_s6tls_closenotify_flags[@]}" \
+      '(-y --client-cert)'{-Y,--no-client-cert}'[do NOT present a client certificate (default)]' \
+      '(-Y --no-client-cert)'{-y,--client-cert}'[present a client certificate]' \
+      '(-v --verbosity)'{-v+,--verbosity=}'[verbosity level]:level:' \
+      '(-K --handshake-timeout)'{-K+,--handshake-timeout=}'[TLS handshake timeout in ms]:ms:' \
+      '(-k --servername)'{-k+,--servername=}'[TLS SNI server name to send]:servername:_hosts' \
+      '(-6 --read-fd)'{-6+,--read-fd=}'[read fd to wrap (default 6)]:fd:' \
+      '(-7 --write-fd)'{-7+,--write-fd=}'[write fd to wrap (default 7)]:fd:' \
+      '*:program and arguments:_command_names -e'
+    ;;
+
+  s6-ucspitlsd)
+    # UCSPI-protocol server-side TLS wrapper: like s6-tlsd but
+    # speaks the UCSPI protocol on the inner side.
+    _arguments -s -S \
+      "${_s6tls_closenotify_flags[@]}" \
+      '(-y --mandatory-client-cert)'{-Y,--client-cert}'[ACCEPT a client cert if presented]' \
+      '(-Y --client-cert)'{-y,--mandatory-client-cert}'[REQUIRE a client cert]' \
+      '(-v --verbosity)'{-v+,--verbosity=}'[verbosity level]:level:' \
+      '(-K --handshake-timeout)'{-K+,--handshake-timeout=}'[TLS handshake timeout in ms]:ms:' \
+      '(-k --sni-level)'{-k+,--sni-level=}'[SNI enforcement level]:level:' \
+      '*:program and arguments:_command_names -e'
+    ;;
+
+esac

@@ -1,0 +1,72 @@
+#compdef s6-clockadd s6-clockview s6-sntpclock s6-taiclock s6-taiclockd
+# Documentation: source-direct extraction from upstream
+# skarnet/s6-networking src/clock/*.c USAGE strings + subgetopt_r
+# option-string specs (s6-clockview takes no args - int main(void);
+# others use subgetopt_r `fv:r:t:h:T:e:p:` for client variants and
+# `i:p:` for the s6-taiclockd server).
+# Reference accessed: 2026-05-30 via gh api.
+# Skarnet s6-networking clock R128b — 5-stem multi-binary harvest
+# of the s6 TAI-clock synchronization framework. Reads a 12-byte
+# wall-clock offset from a file in /run/clockfile and either
+# applies it (s6-clockadd) or prints the current TAI (s6-clockview).
+# s6-sntpclock + s6-taiclock are client tools that query NTP-style
+# time servers; s6-taiclockd is the matching server side.
+
+# Shared client-side query flag surface (s6-sntpclock + s6-taiclock).
+local -a _s6_clock_query_flags
+_s6_clock_query_flags=(
+  '-f[force the clock update even if errmax would be exceeded]'
+  '-v+[verbosity level]:level:'
+  '-r+[number of roundtrips to average (default 8)]:roundtrips:'
+  '-t+[per-roundtrip timeout in ms]:ms:'
+  '-h+[throttle delay between roundtrips in ms]:ms:'
+  '-T+[total timeout in ms across all roundtrips]:ms:'
+  '-e+[maximum acceptable error in ms (refuse update if exceeded)]:ms:'
+  '-p+[UDP port to query (default 4015 taiclock; 123 sntp)]:port:'
+)
+
+case $service in
+
+  s6-clockadd)
+    # Apply the stored clock offset to the current TAI value (used
+    # at boot from a saved offset file to restore wall time without
+    # an NTP query).
+    _arguments -s -S \
+      '-f[force the update even if errmax would be exceeded]' \
+      '-e+[maximum acceptable error in ms]:ms:'
+    ;;
+
+  s6-clockview)
+    # Print the current TAI (CLOCK_REALTIME + leap second adjusted)
+    # as a binary 12-byte value on stdout. No CLI flags.
+    _arguments -s -S \
+      ': :_default'
+    ;;
+
+  s6-sntpclock)
+    # SNTP (RFC4330) client: query an SNTP/NTP server for the
+    # current time and write the resulting TAI offset to stdout
+    # (typically piped into s6-clockadd to apply).
+    _arguments -s -S \
+      "${_s6_clock_query_flags[@]}" \
+      '1:SNTP server IP address:_hosts'
+    ;;
+
+  s6-taiclock)
+    # s6-taiclock-protocol client: query a remote s6-taiclockd
+    # server and write the resulting TAI offset to stdout.
+    _arguments -s -S \
+      "${_s6_clock_query_flags[@]}" \
+      '1:s6-taiclockd server IP address:_hosts'
+    ;;
+
+  s6-taiclockd)
+    # Long-lived UDP daemon implementing the s6-taiclock protocol.
+    # Responds to queries from s6-taiclock with the server's current
+    # TAI value.
+    _arguments -s -S \
+      '-i+[bind IP address (default :: for all)]:ip:_hosts' \
+      '-p+[UDP port to listen on (default 4015)]:port:'
+    ;;
+
+esac

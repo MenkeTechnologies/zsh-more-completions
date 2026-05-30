@@ -1,0 +1,133 @@
+#compdef proxy-server s6-getservbyname s6-ident-client s6-tcpserver s6-tcpserver-access s6-tcpserver-socketbinder s6-tcpserverd
+# Documentation: source-direct extraction from upstream
+# skarnet/s6-networking src/conn-tools/*.c USAGE strings +
+# subgetopt_r option-string specs + skalibs GOL_main gol_bool +
+# gol_arg tables + case-arm decoding for the mutex flag groups
+# (s6-tcpserver-access: 5 mutex pairs decoded from -W/-w flagfatal,
+# -D/-d flagnodelay, -H/-h flagdnslookup/flaghosts, -R/-r flagident,
+# -P/-p flagparanoid case arms; proxy-server: -1/-2 only-v1 xor
+# only-v2 mutex from GOLB_V1/GOLB_V2 .set/.clear pairings).
+# Reference accessed: 2026-05-30 via gh api.
+# Skarnet s6-networking conn-tools R128a — 7-stem multi-binary
+# harvest of the TCP/IP UCSPI server framework (s6-tcpclient and
+# s6-tlsserver were already covered in older rounds; deliberately
+# omitted from this #compdef). Sister tools to R121's s6-ipcclient/
+# s6-ipcserver family (UNIX-domain UCSPI equivalents) and the
+# wider Skarnet ecosystem (R117-R127).
+
+case $service in
+
+  proxy-server)
+    # PROXY-protocol (v1/v2) header parser+stripper. Sits between a
+    # listening TCP socket and the real service, reads the PROXY
+    # protocol header sent by an upstream load balancer (haproxy,
+    # cloudflare, etc), then chain-loads prog with the original
+    # client IP/port in environment.
+    _arguments -s -S \
+      '(-2 --only-v1 --only-v2)'{-1,--only-v1}'[accept ONLY PROXY protocol v1 (text format)]' \
+      '(-1 --only-v1 --only-v2)'{-2,--only-v2}'[accept ONLY PROXY protocol v2 (binary format)]' \
+      '--before-tlsd[place this filter BEFORE s6-tlsd (read PROXY before TLS handshake)]' \
+      '--after-tlsd[place this filter AFTER s6-tlsd (read PROXY after TLS handshake)]' \
+      '(-v --verbosity)'{-v+,--verbosity=}'[verbosity level (default 1)]:level:' \
+      '(-t --timeout)'{-t+,--timeout=}'[PROXY-header read timeout in ms]:ms:' \
+      '*:program and arguments:_command_names -e'
+    ;;
+
+  s6-getservbyname)
+    # getservbyname(3) wrapper: print the port number for a named
+    # service+protocol pair (looks up /etc/services).
+    _arguments -s -S \
+      '1:service name:(http https ftp ssh smtp imap imaps pop3 pop3s ldap ldaps dns ntp telnet rsync vnc rdp)' \
+      '2:protocol:(tcp udp sctp)'
+    ;;
+
+  s6-ident-client)
+    # RFC1413 ident-protocol client: query an ident server on a
+    # remote machine to look up the owning username of a TCP
+    # connection.
+    _arguments -s -S \
+      '-t+[ident-query timeout in ms]:ms:' \
+      '1:remote address (ra):_hosts' \
+      '2:remote port (rp):' \
+      '3:local address (la):_hosts' \
+      '4:local port (lp):'
+    ;;
+
+  s6-tcpserver)
+    # All-in-one TCP/IP UCSPI server superdaemon: binds, listens,
+    # accepts, and spawns prog per connection. Composes the work of
+    # s6-tcpserver-socketbinder + s6-tcpserverd in a single binary.
+    _arguments -s -S \
+      '(-q -Q -v)-q[quiet; suppress informational messages]' \
+      '(-q -Q -v)-Q[very quiet; suppress error messages too]' \
+      '(-q -Q -v)-v[verbose; print connection info to stderr]' \
+      '(-D)-d[set SO_REUSEADDR on listen socket (default)]' \
+      '(-d)-D[do NOT set SO_REUSEADDR on listen socket]' \
+      '-1[notify readiness by writing newline + closing fd 1]' \
+      '-c+[total max simultaneous connections (default 40)]:maxconn:' \
+      '-C+[max simultaneous connections per peer IP (default 40)]:localmaxconn:' \
+      '-b+[listen() backlog (default 20)]:backlog:' \
+      '-u+[drop uid before serving]:uid:_users' \
+      '-g+[drop gid before serving]:gid:_groups' \
+      '-G+[supplementary group ids (comma-separated)]:gid,gid,...:' \
+      '-U[ucspi env-only mode: zero uid/gid + read socket fds from env]' \
+      '1:bind IP (0 for all, ::1 for IPv6 localhost, etc):_hosts' \
+      '2:bind port:' \
+      '*:program and arguments:_command_names -e'
+    ;;
+
+  s6-tcpserver-access)
+    # TCP access-control filter: invoked under s6-tcpserver, consults
+    # a rules-db (-i RULESDIR / -x RULESFILE), denies or allows the
+    # peer, then chain-loads prog. Pairs 5 mutex flag groups for
+    # fine-grained per-connection policy.
+    _arguments -s -S \
+      '-v+[verbosity level (default 1)]:level:' \
+      '(-w)-W[on-deny: drop the connection WITHOUT a banner (fatal=0)]' \
+      '(-W)-w[on-deny: send banner THEN drop the connection (fatal=1)]' \
+      '(-d)-D[set TCP_NODELAY on the accepted socket]' \
+      '(-D)-d[do NOT set TCP_NODELAY on the accepted socket (default)]' \
+      '-H[do NOT perform reverse-DNS lookup on the peer IP (flagdnslookup=0)]' \
+      '-h[consult /etc/hosts before falling back to DNS (flaghosts=1)]' \
+      '(-r)-R[do NOT perform ident lookup on the peer (flagident=0)]' \
+      '(-R)-r[perform ident lookup on the peer (flagident=1)]' \
+      '(-p)-P[normal hostname checking (flagparanoid=0; default)]' \
+      '(-P)-p[paranoid: require forward+reverse DNS match (flagparanoid=1)]' \
+      '-l+[local name override for PROTO_LOCAL]:localname:_hosts' \
+      '-B+[deny-banner string sent before drop with -w]:banner:' \
+      '-t+[per-check operation timeout in ms]:ms:' \
+      '(-i -x)-i+[access-rules directory tree]:rulesdir:_directories' \
+      '(-i -x)-x+[access-rules CDB file]:rulesfile:_files' \
+      '*:program and arguments:_command_names -e'
+    ;;
+
+  s6-tcpserver-socketbinder)
+    # Socket-binding half of the s6-tcpserver pipeline: binds an
+    # IP:port (TCP or UDP), optionally listens, then chain-loads
+    # prog with the bound socket on fd 0. Designed to pipeline into
+    # s6-tcpserverd.
+    _arguments -s -S \
+      '(-D --no-reuse-address)'{-d,--reuse-address}'[set SO_REUSEADDR on the socket (default)]' \
+      '(-d --reuse-address)'{-D,--no-reuse-address}'[do NOT set SO_REUSEADDR on the socket]' \
+      '(-m --udp)'{-M,--tcp}'[create a TCP (SOCK_STREAM) socket (default)]' \
+      '(-M --tcp)'{-m,--udp}'[create a UDP (SOCK_DGRAM) socket]' \
+      '(-B --block)'{-B,--block}'[block on bind() if the port is in use]' \
+      '(-b --backlog)'{-b+,--backlog=}'[listen() backlog (default SOMAXCONN)]:backlog:' \
+      '1:bind IP (0 for all):_hosts' \
+      '2:bind port:' \
+      '*:program and arguments:_command_names -e'
+    ;;
+
+  s6-tcpserverd)
+    # Accept-loop half of the s6-tcpserver pipeline: expects a bound
+    # listen() socket on fd 0 (typically piped in from
+    # s6-tcpserver-socketbinder) and spawns prog per connection.
+    _arguments -s -S \
+      '-v+[verbosity level]:level:' \
+      '-1[notify readiness by writing newline + closing fd 1]' \
+      '-c+[total max simultaneous connections (default 40)]:maxconn:' \
+      '-C+[max simultaneous connections per peer IP (default 40)]:localmaxconn:' \
+      '*:program and arguments:_command_names -e'
+    ;;
+
+esac
