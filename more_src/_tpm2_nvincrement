@@ -1,0 +1,154 @@
+#compdef tpm2_nvincrement tpm2_nvextend tpm2_nvsetbits tpm2_nvreadlock tpm2_nvwritelock tpm2_nvreadpublic tpm2_nvcertify
+# Documentation: source-direct extraction from upstream
+# tpm2-software/tpm2-tools.  Per-tool `struct option topts[]`
+# table decoded source-direct from each tools/tpm2_<name>.c.
+# Shared $tpm2_common + $tpm2_hashalgs + $tpm2_signschemes
+# re-extracted source-direct from lib/tpm2_options.c /
+# lib/tpm2_alg_util.c — see R193-R197 HARVEST_LOG entries for
+# the full extraction notes.
+# Reference accessed: 2026-05-30 via gh api.
+# tpm2-software tpm2-tools R198 — follow-up to R197's hunt-skip
+# on "next-priority candidates: NV-management group beyond
+# R193/R197's read/write/define/undefine (tpm2_nvincrement,
+# tpm2_nvextend, tpm2_nvsetbits, tpm2_nvreadlock,
+# tpm2_nvwritelock, tpm2_nvreadpublic, tpm2_nvcertify)".  This
+# round completes the NV-management group with the 7 NV-mutation
+# binaries: increment (counter-type NV), extend (PCR-style
+# extend-hash for NV), setbits (bit-field NV index), readlock/
+# writelock (one-time-irreversible read/write locks per TPM2
+# session), readpublic (metadata), certify (signed attestation
+# of NV contents).  Completes the NV-management family in
+# tandem with R193's nvread/nvwrite and R197's nvdefine/
+# nvundefine — 11 NV tools now covered.
+
+local -a tpm2_common=(
+  '(-T --tcti)'{-T+,--tcti=}'[TCTI library + options (e.g. "device:/dev/tpmrm0" or "swtpm:port=2321")]:tcti:'
+  '(-h --help)'{-h-,--help=-}'[print help (optional arg = topic)]::topic:'
+  '(-v --version)'{-v,--version}'[print version and exit]'
+  '(-V --verbose)'{-V,--verbose}'[verbose mode]'
+  '(-Q --quiet)'{-Q,--quiet}'[quiet mode]'
+  '(-Z --enable-errata)'{-Z,--enable-errata}'[enable TPM2 errata workarounds]'
+  '(-z --pwd-session)'{-z,--pwd-session}'[use password-authorized session]'
+)
+local -a tpm2_hashalgs=(sha1 sha256 sha384 sha512 sm3_256)
+local -a tpm2_signschemes=(rsassa rsapss ecdsa ecdaa ecschnorr sm2 hmac null)
+
+# Shared NV-mutator base flags for increment/extend/setbits/
+# readlock/writelock (they all share -C/--hierarchy + -P/--auth
+# + -n/--name + -S/--session + --cphash + --rphash).  This
+# helper array reduces flag duplication across the 5 NV-mutator
+# stems.
+local -a tpm2_nv_mutator=(
+  '(-C --hierarchy)'{-C+,--hierarchy=}'[NV-index hierarchy (owner|platform|nv-index handle)]:hierarchy:(owner platform o p)'
+  '(-P --auth)'{-P+,--auth=}'[hierarchy authorization]:auth:'
+  '(-S --session)'{-S+,--session=}'[authorization session context file]:file:_files'
+  '(-n --name)'{-n+,--name=}'[NV-index expected-name file (for verification)]:file:_files'
+  '--cphash=[output command-parameter hash for off-line audit]:file:_files'
+  '--rphash=[output response-parameter hash for off-line audit]:file:_files'
+)
+
+case $service in
+
+  tpm2_nvincrement)
+    # Increment a counter-type NV index by 1.  NV-index must
+    # have been defined with `-a "nt=counter"` attribute.
+    _arguments -s -S \
+      $tpm2_common \
+      $tpm2_nv_mutator \
+      ':NV index handle (hex e.g. 0x1500001):'
+    ;;
+
+  tpm2_nvextend)
+    # Extend a hash-type NV index with new input data
+    # (analogous to tpm2_pcrextend but for NV banks).
+    # NV-index must have been defined with `-a "nt=extend"`
+    # attribute.
+    _arguments -s -S \
+      $tpm2_common \
+      $tpm2_nv_mutator \
+      '(-i --input)'{-i+,--input=}'[input data to extend (or "-" for stdin)]:file:_files' \
+      ':NV index handle (hex e.g. 0x1500001):'
+    ;;
+
+  tpm2_nvsetbits)
+    # Set a bit-field NV index (each write OR-s the new bits
+    # into the existing value).  NV-index must have been defined
+    # with `-a "nt=bits"` attribute.
+    _arguments -s -S \
+      $tpm2_common \
+      $tpm2_nv_mutator \
+      '(-i --bits)'{-i+,--bits=}'[bits to set (hex bitmask, e.g. 0x000000000000FFFF)]:bits:' \
+      ':NV index handle (hex e.g. 0x1500001):'
+    ;;
+
+  tpm2_nvreadlock)
+    # Apply a one-time read-lock on an NV index (cleared on
+    # next TPM reset).  NV-index must have been defined with
+    # `-a "read_stclear"` attribute.
+    _arguments -s -S \
+      $tpm2_common \
+      $tpm2_nv_mutator \
+      ':NV index handle (hex e.g. 0x1500001):'
+    ;;
+
+  tpm2_nvwritelock)
+    # Apply a write-lock on an NV index.  Default: per-NV-index
+    # lock.  --global flag (long-only, val=0): global NV write-
+    # lock that locks ALL NV indices with the "write_stclear"
+    # attribute until TPM reset.
+    _arguments -s -S \
+      $tpm2_common \
+      '(-C --hierarchy)'{-C+,--hierarchy=}'[NV-index hierarchy (owner|platform|nv-index handle)]:hierarchy:(owner platform o p)' \
+      '(-P --auth)'{-P+,--auth=}'[hierarchy authorization]:auth:' \
+      '(-S --session)'{-S+,--session=}'[authorization session context file]:file:_files' \
+      '(-n --name)'{-n+,--name=}'[NV-index expected-name file (for verification)]:file:_files' \
+      '--global[global NV write-lock (locks ALL "write_stclear" NV indices until reset)]' \
+      '--cphash=[output command-parameter hash for off-line audit]:file:_files' \
+      '--rphash=[output response-parameter hash for off-line audit]:file:_files' \
+      ':NV index handle (hex e.g. 0x1500001 — omit when using --global):'
+    ;;
+
+  tpm2_nvreadpublic)
+    # Read NV-index public metadata (attributes, size, hash-alg,
+    # name).  Lightest topts[] in the NV family — only 4 flags.
+    # If NV-index positional omitted, dumps metadata for ALL
+    # defined NV indices (per upstream's `tpm2_capability_
+    # get()` enumeration loop).
+    _arguments -s -S \
+      $tpm2_common \
+      '--cphash=[output command-parameter hash for off-line audit]:file:_files' \
+      '--rphash=[output response-parameter hash for off-line audit]:file:_files' \
+      '(-S --session)'{-S+,--session=}'[authorization session context file]:file:_files' \
+      '(-n --name)'{-n+,--name=}'[NV-index expected-name file (for verification)]:file:_files' \
+      ':NV index handle (hex e.g. 0x1500001 — omit to list ALL):'
+    ;;
+
+  tpm2_nvcertify)
+    # Produce a TPM-signed attestation of the contents of an NV
+    # index.  Combines tpm2_nvread + tpm2_sign into a single
+    # atomic TPM operation that signs (NV-index contents, name,
+    # session-audit-digest) — useful for remote attestation of
+    # NV-stored data.  17 flags - the heaviest in R198.
+    _arguments -s -S \
+      $tpm2_common \
+      '(-C --signingkey-context)'{-C+,--signingkey-context=}'[signing key context (handle or context file)]:key:' \
+      '(-P --signingkey-auth)'{-P+,--signingkey-auth=}'[signing key authorization]:auth:' \
+      '(-c --nvauthobj-context)'{-c+,--nvauthobj-context=}'[NV authorization-object context]:object:' \
+      '(-p --nvauthobj-auth)'{-p+,--nvauthobj-auth=}'[NV authorization-object auth]:auth:' \
+      '(-g --hash-algorithm)'{-g+,--hash-algorithm=}'[hash algorithm for signing]:alg:($tpm2_hashalgs)' \
+      '(-s --scheme)'{-s+,--scheme=}'[signing scheme]:scheme:($tpm2_signschemes)' \
+      '(-f --format)'{-f+,--format=}'[signature output format]:format:(tss plain)' \
+      '(-o --signature)'{-o+,--signature=}'[output signature file]:file:_files' \
+      '(-q --qualification)'{-q+,--qualification=}'[qualifying data (nonce)]:nonce:' \
+      '--size=[number of bytes to certify (default full NV size)]:bytes:' \
+      '--offset=[offset within NV index to start certifying]:bytes:' \
+      '--attestation=[output attestation-data file]:file:_files' \
+      '--cphash=[output command-parameter hash for off-line audit]:file:_files' \
+      '--rphash=[output response-parameter hash for off-line audit]:file:_files' \
+      '(-S --session)'{-S+,--session=}'[authorization session context file]:file:_files' \
+      '(-n --name)'{-n+,--name=}'[NV-index expected-name file (for verification)]:file:_files' \
+      '--signer-name=[signing-key expected-name file (for verification)]:file:_files' \
+      ':NV index handle (hex e.g. 0x1500001):'
+    ;;
+
+esac
