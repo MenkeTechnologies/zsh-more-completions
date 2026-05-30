@@ -19,6 +19,19 @@ Entries are in original README order: older themed-cluster entries (accumulated
 before the per-round numbering convention) appear first, followed by the
 R-numbered rounds with the newest R-round at the top of that section.
 
+- **R164 — Verilator companion-tool suite** (1 file / 6 binaries) — pivot to the verilator/verilator `bin/` companions shipped alongside the already-covered `verilator` Perl driver, completing the verilator family in tandem with R163's verible siblings.  Six binaries follow-up the upstream open question noted in R163's hunt-skip list (verilator_coverage/verilator_gantt/verilator_includer/verilator_profcfunc each have distinct flag surfaces).
+  - `_verilator_coverage` (6-stem; verilator/verilator):
+    * verilator_coverage: merges per-test coverage databases, ranks them by goodness, and annotates source with hit-counts.  14 `DECL_OPTION(...)` declarations decoded source-direct from `src/VlcMain.cpp` since the `bin/verilator_coverage` Perl wrapper just passes flags through (`pass_through` + `"<>"=>sub{}`) to the underlying `verilator_coverage_bin_dbg` C++ binary.  Critical extraction note: verilator parses BOTH `-flag` AND `--flag` for every switch (the parser is `argv++` based not getopt-based), so each flag entry is registered twice in the completion under both prefixes via paired mutex groups `(--flag)-flag[...]` / `(-flag)--flag[...]` so the user gets per-prefix exclusion + completion of both.
+    * verilator_gantt: 3 argparse flags + positional `profile_exec.dat` input.
+    * verilator_includer: NO flags - each argv is either `-D<name>=<value>` macro or a header path.  Pattern decoded source-direct from `re_arg_d = re.compile(r"^-D([^=]+)=(.*)")` argv-walking loop; if matched, emits `#define name value`, else `#include "arg"`.
+    * verilator_profcfunc: 1 argparse flag (--debug) + positional gprof-output input.
+    * verilator_ccache_report: 1 required `-o OUTFILE` flag + positional log-directory.
+    * verilator_difftree: 2 argparse flags (--debug, --no-lineno) + 2 positional file/dir args; exit status 0/1/2.
+  - Hunt-skip notes: `bin/redirect` is an internal helper script that re-execs verilator (not user-callable). `bin/verilator` itself already covered.  Pure positional binaries with no flag surface (like verilator_includer) still benefit from `*:...:_files -g "*.(h|hpp|hh|hxx)"` completion since they accept many filenames.
+  - Dup-checked clean against `/usr/share/zsh` + `/opt/homebrew/share/zsh` + `/usr/local/share/zsh`.
+  - Blacklist additions: 6 entries (all v*).
+  - Corpus 28,570 → 28,571 files.
+
 - **R163 — Verible Verilog/SystemVerilog sibling-binary suite** (1 file / 5 binaries) — pivot to additional Verible tools sister to the already-covered verible-verilog-format + verible-verilog-syntax binaries, after wide-net dup-check sweeps across FPGA/EDA family (yosys + 4 yosys-* siblings, nextpnr-ice40/-ecp5/-nexus/-gowin/-machxo2/-himbaechel, icestorm utility set icepack/icebram/icetime/iceprog, openocd, sigrok-cli, verilator).
   - `_verible-verilog-lint` (5-stem; chipsalliance/verible): verible-verilog-lint (the Verilog/SystemVerilog linter) + verible-verilog-diff (format-equivalence vs obfuscate-equivalence diff) + verible-verilog-project (project-wide symbol-table + file-deps tool) + verible-verilog-obfuscate (identifier obfuscation/de-obfuscation with translation map) + verible-verilog-ls (LSP server).  All ABSL_FLAG(type, name, default, doc) declarations parsed source-direct via a custom balanced-paren scanner that handles the multi-line ABSL_FLAG syntax and nested template types like `std::vector<std::string>`.
   - verible-verilog-lint: 9 ABSL_FLAGs decoded + 6-entry `--autofix` autocomplete enum (no|patch-interactive|patch|inplace-interactive|inplace|generate-waiver) decoded source-direct from the `EnumNameMap<AutofixMode> kAutofixModeEnumStringMap({...})` table.
