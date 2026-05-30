@@ -1,0 +1,137 @@
+#compdef tmuxinator mux
+# Documentation: https://github.com/tmuxinator/tmuxinator
+# Reference accessed: 2026-05-30
+# tmuxinator — Ruby YAML-driven tmux session manager. The `mux` binary is the
+# upstream-shipped short alias (a Thor app behind both names), so this
+# completion is multi-stem.
+
+local curcontext="$curcontext" state line ret=1
+
+local -a _verbs
+_verbs=(
+  'new:create a new project config (alias: n)'
+  'n:create a new project config'
+  'open:create or open a config in $EDITOR (alias: o)'
+  'o:create or open a config in $EDITOR'
+  'edit:edit an existing config without creating one (alias: e)'
+  'e:edit an existing config without creating one'
+  'start:start tmux with all configured tabs/panes (alias: s)'
+  's:start tmux with all configured tabs/panes'
+  'copy:duplicate an existing project (alias: c, cp)'
+  'c:duplicate an existing project'
+  'cp:duplicate an existing project'
+  'list:display all configured projects (alias: l, ls)'
+  'l:display all configured projects'
+  'ls:display all configured projects'
+  'delete:remove a project config (alias: rm)'
+  'rm:remove a project config'
+  'stop:terminate a running project session'
+  'stop-all:terminate all active project sessions'
+  'implode:remove all tmuxinator configs/aliases/scripts (alias: i)'
+  'i:remove all tmuxinator configs/aliases/scripts'
+  'doctor:diagnose configuration problems'
+  'debug:print the shell commands a project would run'
+  'help:show usage (alias: h)'
+  'h:show usage'
+  'version:print installed version'
+)
+
+# Helper: live-discover project YAML files across all 4 config locations
+# in priority order documented at github.com/tmuxinator/tmuxinator README.
+_tmuxinator_projects() {
+  local -a roots files projects
+  roots=()
+  [[ -n $TMUXINATOR_CONFIG ]] && roots+=("$TMUXINATOR_CONFIG")
+  [[ -n $XDG_CONFIG_HOME ]] && roots+=("$XDG_CONFIG_HOME/tmuxinator")
+  roots+=("$HOME/.config/tmuxinator" "$HOME/.tmuxinator")
+  local root
+  for root in $roots; do
+    [[ -d $root ]] || continue
+    for f in $root/*.yml(N) $root/*.yaml(N); do
+      projects+=( "${f:t:r}" )
+    done
+  done
+  # Local project file (lowest priority but available everywhere).
+  [[ -r ./.tmuxinator.yml ]] && projects+=( "[local: ./.tmuxinator.yml]" )
+  projects=( ${(u)projects} )
+  _describe -t projects 'tmuxinator project' projects
+}
+
+_arguments -C \
+  '(- *)'{-h,--help}'[show help]' \
+  '(- *)--version[show version]' \
+  '1: :->verb' \
+  '*:: :->args' && ret=0
+
+case $state in
+  verb)
+    _describe -t commands 'tmuxinator subcommand' _verbs && ret=0
+    ;;
+  args)
+    curcontext="${curcontext%:*:*}:tmuxinator-$line[1]:"
+    case $line[1] in
+      new|n|open|o)
+        _arguments -s -S \
+          '(- *)'{-h,--help}'[show help]' \
+          '(-l --local)'{-l,--local}'[create .tmuxinator.yml in current directory]' \
+          '1:project name:_tmuxinator_projects' \
+          && ret=0
+        ;;
+      edit|e)
+        _arguments -s -S \
+          '(- *)'{-h,--help}'[show help]' \
+          '1:project name:_tmuxinator_projects' \
+          && ret=0
+        ;;
+      start|s)
+        _arguments -s -S \
+          '(- *)'{-h,--help}'[show help]' \
+          '(-p --project-config)'{-p,--project-config=}'[explicit project YAML]:file:_files -g "*.(yml|yaml)"' \
+          '(-n --name)'{-n,--name=}'[override session name]:name:' \
+          '--suppress-tmux-version-warning[skip tmux version warning]' \
+          '1:project name:_tmuxinator_projects' \
+          '*:override (key:value):' \
+          && ret=0
+        ;;
+      copy|c|cp)
+        _arguments -s -S \
+          '(- *)'{-h,--help}'[show help]' \
+          '1:source project:_tmuxinator_projects' \
+          '2:new project name:' \
+          && ret=0
+        ;;
+      delete|rm)
+        _arguments -s -S \
+          '(- *)'{-h,--help}'[show help]' \
+          '*:project name:_tmuxinator_projects' \
+          && ret=0
+        ;;
+      stop)
+        _arguments -s -S \
+          '(- *)'{-h,--help}'[show help]' \
+          '1:project name:_tmuxinator_projects' \
+          && ret=0
+        ;;
+      debug)
+        _arguments -s -S \
+          '(- *)'{-h,--help}'[show help]' \
+          '(--no-cmd --cmd)--no-cmd[print without exec markers]' \
+          '(--no-cmd --cmd)--cmd[print full exec commands]' \
+          '1:project name:_tmuxinator_projects' \
+          '*:override (key:value):' \
+          && ret=0
+        ;;
+      doctor|implode|i|list|l|ls|stop-all|version)
+        _arguments -s -S '(- *)'{-h,--help}'[show help]' && ret=0
+        ;;
+      help|h)
+        _describe -t commands 'tmuxinator subcommand' _verbs && ret=0
+        ;;
+      *)
+        _arguments '*:argument:' && ret=0
+        ;;
+    esac
+    ;;
+esac
+
+return ret
