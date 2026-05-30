@@ -1,0 +1,124 @@
+#compdef udica oci-image-tool
+# Documentation: source-direct extraction from upstream
+# containers/udica
+#   udica/__main__.py:get_args() — 2-mode argparse dispatch
+#   gated on `if "confined_user" in sys.argv`:
+#     Default mode: 12 flags + positional ContainerName.
+#     confined_user mode: 13 flags + 2 positionals
+#       (confined_user, uname).
+#   Engine enum (4 entries) decoded source-direct from
+#   udica/parse.py: ENGINE_PODMAN/CRI-O/DOCKER/CONTAINERD.
+# opencontainers/image-tools
+#   cmd/oci-image-tool/main.go: cli.NewApp() + 1 global flag
+#   (--debug) + 3 subcommands (create, unpack, validate).
+#   Per-subcommand `cli.Command{...Flags...}` blocks decoded
+#   source-direct.  Type enum decoded source-direct from
+#   image/autodetect.go: TypeImageLayout="imageLayout",
+#   TypeImage="image", TypeImageZip="imageZip",
+#   TypeManifest="manifest", TypeImageIndex="imageIndex".
+# Reference accessed: 2026-05-30 via gh api.
+# R178 — container SELinux-policy + OCI image-tooling pivot.
+# udica generates SELinux policies for running containers
+# (podman/docker/CRI-O/containerd) plus SELinux confined-user
+# policies; oci-image-tool creates/unpacks/validates OCI image
+# bundles per the OCI image spec.  Sister tools to the heavily
+# covered container family (podman/podman-compose/podman-
+# remote/podman-mac-helper, buildah, skopeo, umoci,
+# containerd/ctr/ctr-remote/nerdctl, runc/crun/youki/runsc,
+# docker, lxc-*, machinectl, portablectl, kata-runtime/-
+# monitor/-collect-data) and Fedora SELinux family (semanage/
+# semodule/sepolicy already covered) already in the corpus.
+
+case $service in
+
+  udica)
+    # Two parser modes depending on whether the literal
+    # token "confined_user" appears as the first positional.
+    if (( CURRENT > 1 )) && (( ${words[(I)confined_user]} )); then
+      # confined_user mode
+      _arguments -s -S \
+        '(-h --help)'{-h,--help}'[print help and exit]' \
+        '(-a --admin_commands)'{-a,--admin_commands}'[use administrative commands (vipw, passwd, ...)]' \
+        '(-g --graphical_login)'{-g,--graphical_login}'[use graphical login environment]' \
+        '(-m --mozilla_usage)'{-m,--mozilla_usage}'[use Mozilla Firefox]' \
+        '(-n --networking)'{-n,--networking}'[manage basic networking (ip, ifconfig, traceroute, tcpdump, ...)]' \
+        '(-d --security_advanced)'{-d,--security_advanced}'[manage SELinux settings (semanage, semodule, sepolicy, ...)]' \
+        '(-i --security_basic)'{-i,--security_basic}'[use read-only security-related tools (seinfo, getsebool, sesearch, ...)]' \
+        '(-s --sudo)'{-s,--sudo}'[run commands as root using sudo]' \
+        '(-l --user_login)'{-l,--user_login}'[basic rules common to all users (tty, pty, ...)]' \
+        '(-c --ssh_connect)'{-c,--ssh_connect}'[connect over SSH]' \
+        '(-b --basic_commands)'{-b,--basic_commands}'[use basic commands (date, ls, ps, man, systemctl --user, journalctl --user, passwd, ...)]' \
+        '--level=[MLS/MCS level (default s0)]:level:' \
+        '--range=[MLS/MCS range (default s0-s0:c0.c1023)]:range:' \
+        '1:literal "confined_user":(confined_user)' \
+        '2:Unix username for the confined user:_users'
+    else
+      # Default udica mode: container SELinux policy.
+      _arguments -s -S \
+        '(-h --help)'{-h,--help}'[print help and exit]' \
+        '(-V --version)'{-V,--version}'[print version and exit]' \
+        '(-i --container-id)'{-i+,--container-id=}'[running container ID to inspect]:cid:' \
+        '(-j --json)'{-j+,--json=}'[load inspect JSON from file ("-" for stdin)]:file:_files -g "*.json"' \
+        '--full-network-access[allow container full Network access]' \
+        '--tty-access[allow container to read/write the controlling terminal]' \
+        '--X-access[allow container to communicate with the X server]' \
+        '--virt-access[allow container to communicate with libvirt]' \
+        '(-s --stream-connect)'{-s+,--stream-connect=}'[allow container to stream-connect with given SELinux domain]:domain:' \
+        '(-l --load-modules)'{-l,--load-modules}'[load templates and module created by this tool]' \
+        '(-c --caps)'{-c+,--caps=}'[comma-list of Linux capabilities (e.g. AUDIT_WRITE,CHOWN,DAC_OVERRIDE,...)]:caps:' \
+        '--devices=[comma-list of devices the container should have access to (e.g. /dev/dri/card0)]:devices:' \
+        '(-d --ansible)'{-d,--ansible}'[generate Ansible playbook to deploy SELinux policy for containers]' \
+        '(-a --append-rules)'{-a+,--append-rules=}'[append more SELinux allow rules from file]:file:_files' \
+        '(-e --container-engine)'{-e+,--container-engine=}'[container engine used for the inspected container]:engine:(podman CRI-O docker containerd)' \
+        '1:SELinux policy module name:'
+    fi
+    ;;
+
+  oci-image-tool)
+    # 3-subcommand cli.NewApp() with 1 global --debug flag.
+    local -a subcmds=(
+      'create:create an OCI image runtime bundle'
+      'unpack:unpack an image or image source layout'
+      'validate:validate one or more image files'
+    )
+    _arguments -C \
+      '--debug[enable debug output]' \
+      '(-h --help)'{-h,--help}'[print help and exit]' \
+      '(-v --version)'{-v,--version}'[print version and exit]' \
+      '1: :->cmd' \
+      '*:: :->sub'
+    case $state in
+      cmd)
+        _describe -t commands 'oci-image-tool subcommand' subcmds
+        ;;
+      sub)
+        case $words[1] in
+          create)
+            _arguments -s -S \
+              '--type=[input image type]:type:(image imageLayout imageZip)' \
+              '*--ref=[ref-search criterion (A=B; only name|platform.os|digest)]:ref:' \
+              '--rootfs=[directory name representing the rootfs of the bundle (default rootfs)]:dir:_files -/' \
+              '--platform=[manifest OS:Architecture (only for index reftype)]:os:arch:' \
+              '1:input image:_files' \
+              '2:output bundle dir:_files -/'
+            ;;
+          unpack)
+            _arguments -s -S \
+              '--type=[input image type]:type:(image imageLayout imageZip)' \
+              '*--ref=[ref-search criterion (A=B; only name|platform.os|digest)]:ref:' \
+              '--platform=[manifest OS:Architecture (only for index reftype)]:os:arch:' \
+              '1:input image:_files' \
+              '2:output rootfs dir:_files -/'
+            ;;
+          validate)
+            _arguments -s -S \
+              '--type=[input type to validate]:type:(image imageIndex manifest)' \
+              '*--ref=[ref-search criterion (A=B; only name|platform.os|digest)]:ref:' \
+              '*:file to validate:_files'
+            ;;
+        esac
+        ;;
+    esac
+    ;;
+
+esac
