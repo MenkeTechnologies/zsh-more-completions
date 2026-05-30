@@ -1,0 +1,117 @@
+#compdef mender-update
+# Documentation: source-direct extraction from upstream
+# mendersoftware/mender (the C++20 client rewrite).
+#   src/mender-update/cli/cli.cpp lines 39-158 (the CliApp +
+#     CliCommand definitions)
+#   src/client_shared/conf/conf_cli_help.cpp lines 44-100 (the
+#     common_global_options vector — shared between
+#     mender-update + mender-auth)
+#   src/client_shared/conf/conf.cpp lines 149-230 (the
+#     ProcessCmdlineArgs dispatcher)
+# Reference accessed: 2026-05-30 via gh api.
+#
+# Mender is the Northern.tech (formerly mender.io) atomic A/B-
+# slot OTA update engine.  The legacy Go client was split into
+# `mender-update` (this binary; consumes Mender Artifacts) and
+# `mender-auth` (companion; handles device identity + JWT
+# bootstrap).  Sister tools in the embedded-Linux OTA family
+# spanning R209 genimage, R210 swupdate, R212 rauc — Mender is
+# the major alternative to RAUC/SWUpdate in industrial IoT.
+
+# Global flags decoded source-direct from
+# src/client_shared/conf/conf_cli_help.cpp:44-100 the
+# `vector<CliOption> common_global_options` array.  These work
+# BEFORE the subcommand (handled by ProcessCmdlineArgs at
+# conf.cpp:149).  --data is documented as deprecated alias of
+# --datastore (conf_cli_help.cpp:61).
+local -a global_flags=(
+  '(-c --config)'{-c+,--config=}'[configuration FILE path]:file:_files -g "*.conf"'
+  '(-b --fallback-config)'{-b+,--fallback-config=}'[fallback configuration FILE path]:file:_files -g "*.conf"'
+  '--data=[DEPRECATED alias for --datastore]:dir:_files -/'
+  '(-d --datastore)'{-d+,--datastore=}'[Mender state data DIRECTORY path]:dir:_files -/'
+  '(-L --log-file)'{-L+,--log-file=}'[FILE to log to]:file:_files'
+  '(-l --log-level)'{-l+,--log-level=}'[set logging level]:level:(trace debug info warning error fatal)'
+  '(-E --trusted-certs)'{-E+,--trusted-certs=}'[trusted server certificates FILE path]:file:_files -g "*.(pem|crt)"'
+  '--skipverify[skip certificate verification (DANGEROUS)]'
+  '(-v --version)'{-v,--version}'[print version and exit]'
+  '(-h --help)'{-h,--help}'[show help and exit]'
+)
+
+# Subcommands decoded source-direct from the CliApp
+# `cli_mender_update` at src/mender-update/cli/cli.cpp:137-158.
+# `auth` is gated on MENDER_EMBED_MENDER_AUTH at line 145; listed
+# unconditionally since installed-binary build flags are opaque.
+local -a subcommands=(
+  'auth:(MENDER_EMBED_MENDER_AUTH) access built-in mender-auth commands (experimental)'
+  'check-update:force an update check against the Mender server'
+  'commit:commit current Artifact (exit 2 if no update in progress)'
+  'daemon:start the client as a background service'
+  'install:install a Mender Artifact (local file or URL)'
+  'resume:resume an interrupted installation'
+  'rollback:roll back current Artifact (exit 2 if no update in progress)'
+  'send-inventory:force an inventory update'
+  'show-artifact:print the current artifact name to stdout and exit'
+  'show-provides:print the current provides to stdout and exit'
+)
+
+# --stop-before state-machine enum decoded source-direct from
+# src/mender-update/cli/cli.cpp:50-64 the `opt_stop_before`
+# CliOption description.  Used by commit / install / resume /
+# rollback.  Note: "the client always stops after ArtifactInstall
+# if the update module supports rollback" — so callers can
+# combine ArtifactCommit_Enter / Leave with a manual resume to
+# inspect state between phases.
+local -a stop_before_states=(
+  ArtifactInstall_Enter
+  ArtifactCommit_Enter
+  ArtifactCommit_Leave
+  ArtifactRollback_Enter
+  ArtifactFailure_Enter
+  Cleanup
+)
+
+local curcontext="$curcontext" state line ret=1
+
+_arguments -C \
+  $global_flags \
+  '1:subcommand:->subcmd' \
+  '*::args:->args' && ret=0
+
+case $state in
+  subcmd)
+    _describe -t subcommands 'mender-update subcommand' subcommands && ret=0
+    ;;
+  args)
+    case $words[1] in
+      check-update|daemon|send-inventory|show-artifact|show-provides|auth)
+        # No per-subcommand flags except --help.
+        _arguments \
+          '(-h --help)'{-h,--help}'[show subcommand help and exit]' && ret=0
+        ;;
+      commit|rollback)
+        # opt_stop_before only.
+        _arguments \
+          '(-h --help)'{-h,--help}'[show subcommand help and exit]' \
+          \*'--stop-before=[stop before entering the given state machine phase]:state:(ArtifactInstall_Enter ArtifactCommit_Enter ArtifactCommit_Leave ArtifactRollback_Enter ArtifactFailure_Enter Cleanup)' && ret=0
+        ;;
+      install)
+        # opt_stop_before + --reboot-exit-code + mandatory
+        # <artifact> positional (local file OR URL).
+        _arguments \
+          '(-h --help)'{-h,--help}'[show subcommand help and exit]' \
+          '--reboot-exit-code[return exit code 4 if a manual reboot is required after install]' \
+          \*'--stop-before=[stop before entering the given state machine phase]:state:(ArtifactInstall_Enter ArtifactCommit_Enter ArtifactCommit_Leave ArtifactRollback_Enter ArtifactFailure_Enter Cleanup)' \
+          '1:artifact (Mender .mender file OR http(s):// URL):_files -g "*.mender"' && ret=0
+        ;;
+      resume)
+        # opt_stop_before + --reboot-exit-code (no positional).
+        _arguments \
+          '(-h --help)'{-h,--help}'[show subcommand help and exit]' \
+          '--reboot-exit-code[return exit code 4 if a manual reboot is required after install]' \
+          \*'--stop-before=[stop before entering the given state machine phase]:state:(ArtifactInstall_Enter ArtifactCommit_Enter ArtifactCommit_Leave ArtifactRollback_Enter ArtifactFailure_Enter Cleanup)' && ret=0
+        ;;
+    esac
+    ;;
+esac
+
+return ret
