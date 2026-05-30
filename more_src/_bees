@@ -1,0 +1,66 @@
+#compdef bees
+# Documentation: source-direct extraction from upstream
+# Zygo/bees src/bees.cc lines 801-816 (the `static const struct
+# option long_options[]` array) + lines 818-832 (the runtime-
+# built short-option string from the long_options table) + the
+# verbose+scan-mode bounds-checks at lines 884-887.
+# Scan-mode enum decoded source-direct from src/bees.h lines
+# 619-626 (the `enum ScanMode` block).
+# Usage / flag-help text mirrored from src/bees-usage.txt.
+# Reference accessed: 2026-05-30 via gh api.
+#
+# bees is Zygo's "Best-Effort Extent-Same dedup for btrfs" —
+# a long-lived dedup daemon that scans btrfs extents and
+# rewrites duplicate ranges via the BTRFS_IOC_FILE_EXTENT_SAME
+# ioctl, reclaiming disk space without copying data.  Reads
+# config from the BEESHOME env var (default
+# `.beeshome/` in the filesystem root) and writes status to the
+# BEESSTATUS env var path.  Sister tool to the broader Linux
+# block-storage family (bcachefs/btrfs-progs/compsize) already
+# in the corpus.
+#
+# Critical extraction note: bees has an UNUSUAL option-list
+# build pattern — the short-option getopt string is BUILT AT
+# RUNTIME by iterating long_options[] (bees.cc:818-832).  Each
+# long entry's `.val` field is appended to the getopt_list
+# string, plus `:` if has_arg == required_argument.  Options
+# with `.val >= 256` (currently only --throttle-factor at
+# val = BEES_OPT_THROTTLE_FACTOR = 256, defined at bees.cc:799)
+# are LONG-ONLY (skipped at line 825 since `(op->val & 0xff)
+# != op->val`).  This is a clean trick to add long-only flags
+# without conflicting with any short-letter assignment.
+
+# Scan mode enum decoded source-direct from src/bees.h:619-625.
+# Default is 4 (SCAN_MODE_EXTENT) per bees.cc:794
+# `BeesRoots::ScanMode root_scan_mode = BeesRoots::SCAN_MODE_EXTENT`.
+local -a bees_scan_modes=(
+  '0:LOCKSTEP (legacy; scan all subvols in lockstep)'
+  '1:INDEPENDENT (legacy; scan each subvol independently)'
+  '2:SEQUENTIAL (scan subvols one after another)'
+  '3:RECENT (prioritize recently-modified subvols)'
+  '4:EXTENT (default; modern extent-tree scanner)'
+)
+
+# Log levels 0..8 decoded source-direct from bounds-check at
+# bees.cc:885-887:
+#   THROW_CHECK1(out_of_range, new_log_level, new_log_level <= 8);
+#   THROW_CHECK1(out_of_range, new_log_level, new_log_level >= 0);
+# 0 = silent, 8 = maximally verbose.
+local -a bees_verbose_levels=(0 1 2 3 4 5 6 7 8)
+
+_arguments -s -S \
+  '(-h --help)'{-h,--help}'[show help and exit]' \
+  '--version[print version information and exit]' \
+  '(-c --thread-count)'{-c+,--thread-count=}'[worker thread count (default CPU count * thread-factor)]:count:' \
+  '(-C --thread-factor)'{-C+,--thread-factor=}'[worker thread factor multiplier (default 1.0)]:factor:' \
+  '(-G --thread-min)'{-G+,--thread-min=}'[minimum worker thread count (default 0)]:min:' \
+  '(-g --loadavg-target)'{-g+,--loadavg-target=}'[target system load average for adaptive throttling (default off)]:target:' \
+  '--throttle-factor=[idle time between operations (long-only; default 1.0; higher = slower but lower disk pressure)]:factor:' \
+  '(-m --scan-mode)'{-m+,--scan-mode=}'[btrfs scanning mode (0..4; default 4=EXTENT)]:mode:((0\:LOCKSTEP 1\:INDEPENDENT 2\:SEQUENTIAL 3\:RECENT 4\:EXTENT))' \
+  '(-a --workaround-btrfs-send)'{-a,--workaround-btrfs-send}'[skip read-only snapshots (workaround for btrfs send issues)]' \
+  '(-t --timestamps -T --no-timestamps)'{-t,--timestamps}'[show timestamps in log output (default)]' \
+  '(-t --timestamps -T --no-timestamps)'{-T,--no-timestamps}'[omit timestamps in log output]' \
+  '(-p --absolute-paths -P --strip-paths)'{-p,--absolute-paths}'[show absolute paths in log (default)]' \
+  '(-p --absolute-paths -P --strip-paths)'{-P,--strip-paths}'[strip $CWD prefix from all paths in log]' \
+  '(-v --verbose)'{-v+,--verbose=}'[set log level (0..8; default 8 = maximum)]:level:(0 1 2 3 4 5 6 7 8)' \
+  '1:btrfs filesystem root (MUST be subvol id 5):_files -/'
