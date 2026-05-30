@@ -1,0 +1,296 @@
+#compdef limactl
+# Documentation: https://lima-vm.io/docs/reference/limactl/
+# Source: https://github.com/lima-vm/lima cmd/limactl/*.go (cobra commands)
+# Reference accessed: 2026-05-30
+# limactl — Lima (Linux-on-Mac) CLI. Manages VM instances with subcommand tree
+# discovered from cmd/limactl/main.go newApp(). Plugin commands also dispatched
+# dynamically via addPluginCommands(); not enumerated here.
+
+local curcontext="$curcontext" state line ret=1
+
+local -a _subcmds
+_subcmds=(
+  'create:create a new instance without starting it'
+  'start:create (if needed) and start a Lima instance'
+  'stop:stop a running instance'
+  'restart:restart an instance'
+  'shell:open a shell inside an instance'
+  'copy:copy files between host and instance (scp-like)'
+  'list:list instances (ls alias)'
+  'delete:delete one or more instances (rm alias)'
+  'validate:validate a Lima YAML template'
+  'prune:remove stale data/caches'
+  'hostagent:run the hostagent process (internal)'
+  'guest-install:install guest agent on the running VM'
+  'info:show static configuration info (JSON)'
+  'show-ssh:show ssh config snippet for an instance'
+  'debug:debug-only subcommands'
+  'edit:edit instance config (opens $EDITOR)'
+  'factory-reset:factory-reset an instance'
+  'disk:manage external/persistent disks'
+  'usernet:run the SLIRP usernet driver (internal)'
+  'gen-doc:generate command reference documentation'
+  'gen-schema:generate JSON schema for lima.yaml'
+  'snapshot:create/list/delete/apply instance snapshots'
+  'protect:mark instance as protected from deletion'
+  'unprotect:remove deletion protection'
+  'tunnel:tunnel port from guest to host'
+  'template:manage templates (list/copy/validate)'
+  'sudoers:print sudoers entries for vmnet/usernet'
+  'start-at-login:configure launchd autostart for instance'
+  'network:manage shared networks'
+  'clone:clone an instance'
+  'rename:rename an instance'
+  'watch:watch instances for state changes'
+  'yq-restrictions-help:print yq expression restrictions for --set/--yq/--filter'
+)
+
+# Helper: complete existing instance names via `limactl list --quiet`.
+_limactl_instances() {
+  local -a names
+  names=( ${(f)"$(limactl list --quiet 2>/dev/null)"} )
+  _describe -t instances 'lima instance' names
+}
+
+# Global persistent flags (applied to ALL subcommands).
+local -a _global
+_global=(
+  '--log-level=[logging level]:level:(trace debug info warn error)'
+  '--log-format=[logging format]:format:(text json)'
+  '--debug[enable debug mode]'
+  '--tty[enable TUI interactions (auto-detect from stdout default)]'
+  '(-y --yes)'{-y,--yes}'[alias of --tty=false]'
+)
+
+_arguments -C \
+  '(- *)'{-h,--help}'[show help]' \
+  '(- *)'{-v,--version}'[show version]' \
+  $_global \
+  '1: :->subcmd' \
+  '*:: :->args' && ret=0
+
+case $state in
+  subcmd)
+    _describe -t commands 'limactl subcommand' _subcmds && ret=0
+    ;;
+  args)
+    curcontext="${curcontext%:*:*}:limactl-$line[1]:"
+    case $line[1] in
+      start|create)
+        _arguments -s -S \
+          $_global \
+          '--name=[override instance name]:name:' \
+          '--list-templates[list available templates and exit]' \
+          '--list-drivers[list available drivers and exit]' \
+          '*--set=[apply yq expression to template before start]:yq-expr:' \
+          '--foreground[run hostagent in foreground]' \
+          '--timeout=[wait timeout before running]:duration:' \
+          '--progress[show provisioning progress (cloud-init tail)]' \
+          '*:template or instance name:_files -g "*.yaml"' \
+          && ret=0
+        ;;
+      shell)
+        _arguments -s -S \
+          $_global \
+          '--shell=[shell interpreter path]:shell:_command_names -e' \
+          '--workdir=[guest working directory]:path:' \
+          '--reconnect[reconnect to existing SSH session]' \
+          '--preserve-env[propagate environment variables]' \
+          '--start[start instance if not running]' \
+          '--sync=[copy host dir to guest, back on exit]:host-path:_files -/' \
+          '1:instance:_limactl_instances' \
+          '*:::guest command:_command_names -e' \
+          && ret=0
+        ;;
+      list|ls)
+        _arguments -s -S \
+          $_global \
+          '(-f --format --json)'{-f,--format=}'[output format]:format:(json yaml table go-template)' \
+          '(-f --format --json)--json[equivalent to --format=json (legacy)]' \
+          '--list-fields[show available fields for formatting]' \
+          '--all-fields[show all fields in output]' \
+          '(-q --quiet)'{-q,--quiet}'[only show names (table format only)]' \
+          '*--yq=[apply yq expression to each instance]:yq-expr:' \
+          '*'{-l,--filter=}'[filter via yq select expression (repeatable, AND)]:yq-expr:' \
+          '*:instance:_limactl_instances' \
+          && ret=0
+        ;;
+      delete|rm)
+        _arguments -s -S \
+          $_global \
+          '(-f --force)'{-f,--force}'[force delete even if protected]' \
+          '*:instance:_limactl_instances' \
+          && ret=0
+        ;;
+      stop)
+        _arguments -s -S \
+          $_global \
+          '(-f --force)'{-f,--force}'[force stop without graceful shutdown]' \
+          '1:instance:_limactl_instances' \
+          && ret=0
+        ;;
+      restart)
+        _arguments -s -S \
+          $_global \
+          '*:instance:_limactl_instances' \
+          && ret=0
+        ;;
+      copy|cp)
+        _arguments -s -S \
+          $_global \
+          '(-r --recursive)'{-r,--recursive}'[recursively copy directories]' \
+          '*:scp source/dest (instance\:path or local path):_files' \
+          && ret=0
+        ;;
+      edit)
+        _arguments -s -S \
+          $_global \
+          '*--set=[apply yq expression non-interactively]:yq-expr:' \
+          '1:instance:_limactl_instances' \
+          && ret=0
+        ;;
+      info)
+        _arguments -s -S $_global && ret=0
+        ;;
+      show-ssh)
+        _arguments -s -S \
+          $_global \
+          '(-f --format)'{-f,--format=}'[output format]:format:(cmd args options config)' \
+          '1:instance:_limactl_instances' \
+          && ret=0
+        ;;
+      validate)
+        _arguments -s -S \
+          $_global \
+          '--fill[fill default fields and print resolved YAML]' \
+          '*:template:_files -g "*.yaml"' \
+          && ret=0
+        ;;
+      prune)
+        _arguments -s -S \
+          $_global \
+          '--keep-referred[keep cached files referenced by instances]' \
+          && ret=0
+        ;;
+      snapshot)
+        _arguments -C \
+          $_global \
+          '1: :->snap-cmd' \
+          '*:: :->snap-args' && ret=0
+        case $state in
+          snap-cmd)
+            _describe -t commands 'snapshot subcommand' \
+              '(create:"create a snapshot (--tag NAME)" delete:"delete snapshot" apply:"restore snapshot" list:"list snapshots")' && ret=0
+            ;;
+          snap-args)
+            _arguments -s -S \
+              '--tag=[snapshot tag/name]:tag:' \
+              '1:instance:_limactl_instances' \
+              && ret=0
+            ;;
+        esac
+        ;;
+      protect|unprotect)
+        _arguments -s -S \
+          $_global \
+          '*:instance:_limactl_instances' \
+          && ret=0
+        ;;
+      clone)
+        _arguments -s -S \
+          $_global \
+          '1:source instance:_limactl_instances' \
+          '2:new instance name:' \
+          && ret=0
+        ;;
+      rename)
+        _arguments -s -S \
+          $_global \
+          '1:old instance:_limactl_instances' \
+          '2:new name:' \
+          && ret=0
+        ;;
+      tunnel)
+        _arguments -s -S \
+          $_global \
+          '--ssh-flag=[extra ssh flag]:flag:' \
+          '1:instance:_limactl_instances' \
+          && ret=0
+        ;;
+      factory-reset)
+        _arguments -s -S \
+          $_global \
+          '1:instance:_limactl_instances' \
+          && ret=0
+        ;;
+      template)
+        _arguments -C \
+          $_global \
+          '1: :->tmpl-cmd' \
+          '*:: :->tmpl-args' && ret=0
+        case $state in
+          tmpl-cmd)
+            _describe -t commands 'template subcommand' \
+              '(copy:"copy a template" ls:"list templates" validate:"validate templates")' && ret=0
+            ;;
+          tmpl-args)
+            _arguments '*:file:_files' && ret=0
+            ;;
+        esac
+        ;;
+      disk)
+        _arguments -C \
+          $_global \
+          '1: :->disk-cmd' \
+          '*:: :->disk-args' && ret=0
+        case $state in
+          disk-cmd)
+            _describe -t commands 'disk subcommand' \
+              '(create:"create a new disk" delete:"delete a disk" list:"list disks" resize:"resize a disk" unlock:"unlock a stale-locked disk")' && ret=0
+            ;;
+          disk-args)
+            _arguments \
+              '--size=[disk size]:size:' \
+              '--format=[disk format]:fmt:(qcow2 raw)' \
+              '1:disk name:' \
+              && ret=0
+            ;;
+        esac
+        ;;
+      network)
+        _arguments $_global '1: :(list start stop reload sudoers)' && ret=0
+        ;;
+      sudoers)
+        _arguments -s -S \
+          $_global \
+          '--check=[check existing sudoers file]:file:_files' \
+          && ret=0
+        ;;
+      start-at-login)
+        _arguments -s -S \
+          $_global \
+          '--enabled[enable autostart]' \
+          '*:instance:_limactl_instances' \
+          && ret=0
+        ;;
+      gen-doc)
+        _arguments -s -S \
+          $_global \
+          '--type=[doc format]:type:(man markdown rest yaml)' \
+          '--output=[output directory]:dir:_files -/' \
+          && ret=0
+        ;;
+      gen-schema)
+        _arguments -s -S \
+          $_global \
+          '--output=[output file]:file:_files' \
+          && ret=0
+        ;;
+      *)
+        _arguments $_global '*:argument:' && ret=0
+        ;;
+    esac
+    ;;
+esac
+
+return ret
