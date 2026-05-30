@@ -1,0 +1,72 @@
+#compdef kubedog
+# Documentation: source-direct extraction from upstream
+# werf/kubedog cmd/kubedog/main.go cobra `rootCmd` +
+# `rootCmd.PersistentFlags()` declarations + the nested
+# `followCmd.AddCommand(...)` + `trackCmd.AddCommand(...)` calls
+# under `rolloutCmd.AddCommand(trackCmd)`.
+# Reference accessed: 2026-05-30 via gh api.
+# Werf kubedog R150a — Kubernetes resource-readiness tracker
+# used internally by Werf (and as a standalone CLI). Watches K8s
+# resources and emits log streams + status indicators until
+# rollout/readiness is reached.
+
+local curcontext="$curcontext" state line ret=1
+
+# 7 persistent root flags from upstream rootCmd.PersistentFlags().
+local -a _kubedog_persistent
+_kubedog_persistent=(
+  '(-n --namespace)'{-n+,--namespace=}'[namespace scope of a resource (default "default")]:namespace:'
+  '(-t --timeout)'{-t+,--timeout=}'[operation timeout in seconds (-1=default, 0=wait forever)]:sec:'
+  '--logs-since=[start log records from this past duration (30s/5m/2h, or "all"/"now")]:duration:'
+  '--kube-context=[name of kubeconfig context (env KUBEDOG_KUBE_CONTEXT)]:context:'
+  '--kube-config=[path to kubeconfig file (env KUBEDOG_KUBE_CONFIG / KUBECONFIG)]:file:_files'
+  '--kube-config-base64=[kubeconfig content base64-encoded (env KUBEDOG_KUBE_CONFIG_BASE64)]:b64:'
+  '--output-prefix=[string prefixed to kubedog output]:prefix:'
+)
+
+# 5 resource kinds shared by follow + rollout track subcommands.
+local -a _kubedog_kinds
+_kubedog_kinds=(
+  'job:track-a-Job'
+  'deployment:track-a-Deployment'
+  'statefulset:track-a-StatefulSet'
+  'daemonset:track-a-DaemonSet'
+  'pod:track-a-Pod'
+)
+
+_arguments -C -s -S \
+  "${_kubedog_persistent[@]}" \
+  '1:subcommand:((multitrack\:track-multiple-resources-using-multitrack-tracker follow\:tail-events-from-a-single-resource rollout\:wait-until-resource-rolls-out-fully version\:show-version))' \
+  '*::: :->subcmd' && ret=0
+
+case "$state" in
+  subcmd)
+    case "${line[1]}" in
+      multitrack|version)
+        _arguments -s -S '*:: :_default' && ret=0
+        ;;
+      follow)
+        _arguments -C -s -S \
+          '1:resource-kind:->kind' \
+          '*:: :_default' && ret=0
+        if [[ "$state" == kind ]]; then
+          _describe -t kinds 'follow kinds' _kubedog_kinds && ret=0
+        fi
+        ;;
+      rollout)
+        _arguments -C -s -S \
+          '1:rollout-subcommand:(track)' \
+          '*::: :->rollout-sub' && ret=0
+        if [[ "$state" == rollout-sub ]] && [[ "${line[1]}" == track ]]; then
+          _arguments -C -s -S \
+            '1:resource-kind:->trackkind' && ret=0
+          if [[ "$state" == trackkind ]]; then
+            _describe -t kinds 'track kinds' _kubedog_kinds && ret=0
+          fi
+        fi
+        ;;
+    esac
+    ;;
+esac
+
+return ret
