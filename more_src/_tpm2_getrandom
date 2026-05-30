@@ -1,0 +1,132 @@
+#compdef tpm2_getrandom tpm2_getcap tpm2_pcrread tpm2_hash tpm2_nvread tpm2_nvwrite
+# Documentation: source-direct extraction from upstream
+# tpm2-software/tpm2-tools.  Per-tool `struct option topts[]`
+# table decoded source-direct from each tools/tpm2_<name>.c.
+# Shared common options decoded source-direct from
+# lib/tpm2_options.c's long_options[] table + the
+# `common_short_opts = "T:h::vVQZz"` argstring:
+#   -T/--tcti  required: TCTI library + options
+#   -h/--help  optional: print help (option arg = topic)
+#   -v/--version: print version and exit
+#   -V/--verbose: verbose mode
+#   -Q/--quiet: quiet mode
+#   -Z/--enable-errata: enable TPM2 errata workarounds
+#   -z/--pwd-session: use password-authorized session
+# Each tool's topts[] is concatenated via `tpm2_options_cat()`
+# with the shared long_options[] before getopt_long parsing.
+# Reference accessed: 2026-05-30 via gh api.
+# tpm2-software tpm2-tools R193 — follow-up to R192's hunt-skip
+# note on "tpm2-tools family (~80 binaries, all tpm2_* prefix)
+# all blacklisted in the corpus with multi=0 and no completion
+# files".  Picks off the 6 most-commonly-used tpm2_* binaries
+# (the ones a typical TPM2 user reaches for in interactive
+# work: tpm2_getrandom for hardware RNG, tpm2_getcap for TPM
+# capability discovery, tpm2_pcrread for PCR-bank inspection,
+# tpm2_hash for TPM-attested hashing, tpm2_nvread/tpm2_nvwrite
+# for NV index I/O).  Sister tools to the TPM2-application-
+# layer family (ssh-tpm-agent/ssh-tpm-add/ssh-tpm-keygen/
+# ssh-tpm-hostkeys from R192) and the cryptographic key-mgmt
+# family (pkcs11-tool, pkcs15-tool, p11tool, ykman, yubico-piv-
+# tool, gpg2, gpgsm, gpgconf, gpg-card) already in the corpus.
+
+# Shared common-option array factored out for re-use across all
+# 6 tools.  Each tool's case-arm gets `$tpm2_common` prefixed
+# to its own per-tool flag list.
+local -a tpm2_common=(
+  '(-T --tcti)'{-T+,--tcti=}'[TCTI library + options (e.g. "device:/dev/tpmrm0" or "swtpm:port=2321")]:tcti:'
+  '(-h --help)'{-h-,--help=-}'[print help (optional arg = topic)]::topic:'
+  '(-v --version)'{-v,--version}'[print version and exit]'
+  '(-V --verbose)'{-V,--verbose}'[verbose mode]'
+  '(-Q --quiet)'{-Q,--quiet}'[quiet mode]'
+  '(-Z --enable-errata)'{-Z,--enable-errata}'[enable TPM2 errata workarounds]'
+  '(-z --pwd-session)'{-z,--pwd-session}'[use password-authorized session]'
+)
+
+case $service in
+
+  tpm2_getrandom)
+    # Generate cryptographically-random bytes from the TPM2 HW
+    # RNG.  Positional BYTES = number of random bytes to
+    # request.
+    _arguments -s -S \
+      $tpm2_common \
+      '(-o --output)'{-o+,--output=}'[output file (default stdout)]:file:_files' \
+      '(-f --force)'{-f,--force}'[force output to a terminal]' \
+      '--hex[print as hex string]' \
+      '(-S --session)'{-S+,--session=}'[authorization session context file]:file:_files' \
+      '--cphash=[output command-parameter hash for off-line audit]:file:_files' \
+      '--rphash=[output response-parameter hash for off-line audit]:file:_files' \
+      ':number of random bytes:'
+    ;;
+
+  tpm2_getcap)
+    # Discover TPM2 capability properties.  Positional
+    # CAPABILITY is one of the TPM2_CAP_* constants (algorithms,
+    # commands, ecc-curves, handles-*, pcrs, properties-fixed,
+    # properties-variable, etc).  Decoded source-direct from
+    # tpm2_getcap.c's `static const struct cap_map` registry.
+    _arguments -s -S \
+      $tpm2_common \
+      '(-l --list)'{-l,--list}'[list available TPM2 capabilities and exit]' \
+      '--ignore-moredata[ignore TPM-side moreData flag (avoid follow-up reads)]' \
+      ':capability:(algorithms commands ecc-curves handles-loaded-session handles-nv-index handles-pcr handles-permanent handles-persistent handles-saved-session handles-transient pcrs properties-fixed properties-variable vendor)'
+    ;;
+
+  tpm2_pcrread)
+    # Read PCR (Platform Configuration Register) values.
+    # Positional PCR-SELECTION = sha1:0,1,2+sha256:0,1,2,...
+    _arguments -s -S \
+      $tpm2_common \
+      '(-o --output)'{-o+,--output=}'[output file (default stdout)]:file:_files' \
+      '(-F --pcrs_format)'{-F+,--pcrs_format=}'[output PCR-bank format]:format:(legacy serialized values)' \
+      '--cphash=[output command-parameter hash for off-line audit]:file:_files' \
+      '(-S --session)'{-S+,--session=}'[authorization session context file]:file:_files' \
+      ':PCR selection (alg:idx,idx+alg:idx,idx):'
+    ;;
+
+  tpm2_hash)
+    # Compute a hash via the TPM2 (with optional ticket for
+    # later signing).
+    _arguments -s -S \
+      $tpm2_common \
+      '(-C --hierarchy)'{-C+,--hierarchy=}'[hierarchy (owner|endorsement|platform|null)]:hierarchy:(owner endorsement platform null o e p n)' \
+      '(-g --hash-algorithm)'{-g+,--hash-algorithm=}'[hash algorithm]:alg:(sha1 sha256 sha384 sha512 sm3_256)' \
+      '(-o --output)'{-o+,--output=}'[output digest file]:file:_files' \
+      '(-t --ticket)'{-t+,--ticket=}'[output ticket file (for later restricted-signing)]:file:_files' \
+      '--hex[print digest as hex string]' \
+      ':input file (or "-" for stdin):_files'
+    ;;
+
+  tpm2_nvread)
+    # Read from a TPM2 NV (Non-Volatile) index.
+    _arguments -s -S \
+      $tpm2_common \
+      '(-C --hierarchy)'{-C+,--hierarchy=}'[hierarchy (owner|platform|nv-index handle)]:hierarchy:(owner platform o p)' \
+      '(-o --output)'{-o+,--output=}'[output file (default stdout)]:file:_files' \
+      '(-s --size)'{-s+,--size=}'[number of bytes to read]:bytes:' \
+      '--offset=[offset (bytes) within the NV index to start reading]:bytes:' \
+      '(-n --name)'{-n+,--name=}'[NV index expected-name file (for verification)]:file:_files' \
+      '(-P --auth)'{-P+,--auth=}'[authorization value (string, file, hex, or pcr-bank+selection)]:auth:' \
+      '(-S --session)'{-S+,--session=}'[authorization session context file]:file:_files' \
+      '--cphash=[output command-parameter hash for off-line audit]:file:_files' \
+      '--rphash=[output response-parameter hash for off-line audit]:file:_files' \
+      '--print-yaml[print NV index public attributes as YAML]' \
+      ':NV index handle (hex e.g. 0x1500001):'
+    ;;
+
+  tpm2_nvwrite)
+    # Write to a TPM2 NV index.
+    _arguments -s -S \
+      $tpm2_common \
+      '(-C --hierarchy)'{-C+,--hierarchy=}'[hierarchy (owner|platform|nv-index handle)]:hierarchy:(owner platform o p)' \
+      '(-P --auth)'{-P+,--auth=}'[authorization value (string, file, hex, or pcr-bank+selection)]:auth:' \
+      '(-i --input)'{-i+,--input=}'[input file (default stdin)]:file:_files' \
+      '--offset=[offset (bytes) within the NV index to start writing]:bytes:' \
+      '(-n --name)'{-n+,--name=}'[NV index expected-name file (for verification)]:file:_files' \
+      '(-S --session)'{-S+,--session=}'[authorization session context file]:file:_files' \
+      '--cphash=[output command-parameter hash for off-line audit]:file:_files' \
+      '--rphash=[output response-parameter hash for off-line audit]:file:_files' \
+      ':NV index handle (hex e.g. 0x1500001):'
+    ;;
+
+esac
