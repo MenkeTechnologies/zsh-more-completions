@@ -1,0 +1,135 @@
+#compdef tpm2_rsadecrypt tpm2_rsaencrypt tpm2_hmac tpm2_pcrreset tpm2_nvdefine tpm2_nvundefine
+# Documentation: source-direct extraction from upstream
+# tpm2-software/tpm2-tools.  Per-tool `struct option topts[]`
+# table decoded source-direct from each tools/tpm2_<name>.c.
+# Shared $tpm2_common + $tpm2_hierarchy + $tpm2_hashalgs +
+# $tpm2_rsa_schemes re-extracted source-direct from
+# lib/tpm2_options.c / lib/tpm2_alg_util.c — see R193 + R194 +
+# R195 + R196 HARVEST_LOG entries for the full extraction notes.
+# Reference accessed: 2026-05-30 via gh api.
+# tpm2-software tpm2-tools R197 — follow-up to R196's hunt-skip
+# on "next-priority candidates: tpm2_rsadecrypt, tpm2_rsaencrypt,
+# tpm2_hmac (TPM-attested HMAC), tpm2_pcrreset".  This round
+# covers the RSA crypto + HMAC + PCR-reset family + the first
+# 2 NV-management tools (nvdefine/nvundefine).  Sister tools to
+# R193 (getrandom/getcap/pcrread/hash/nvread/nvwrite), R194
+# (create/createprimary/load/loadexternal/evictcontrol/
+# flushcontext), R195 (sign/quote/unseal/startauthsession/
+# pcrextend/readpublic), and R196 (createak/createek/
+# getekcertificate/changeauth/verifysignature/clear) already in
+# the corpus.
+
+local -a tpm2_common=(
+  '(-T --tcti)'{-T+,--tcti=}'[TCTI library + options (e.g. "device:/dev/tpmrm0" or "swtpm:port=2321")]:tcti:'
+  '(-h --help)'{-h-,--help=-}'[print help (optional arg = topic)]::topic:'
+  '(-v --version)'{-v,--version}'[print version and exit]'
+  '(-V --verbose)'{-V,--verbose}'[verbose mode]'
+  '(-Q --quiet)'{-Q,--quiet}'[quiet mode]'
+  '(-Z --enable-errata)'{-Z,--enable-errata}'[enable TPM2 errata workarounds]'
+  '(-z --pwd-session)'{-z,--pwd-session}'[use password-authorized session]'
+)
+local -a tpm2_hierarchy=(owner endorsement platform null o e p n)
+local -a tpm2_hashalgs=(sha1 sha256 sha384 sha512 sm3_256)
+# RSA encryption-scheme enum decoded source-direct from
+# lib/tpm2_alg_util.c's algo_pairs[] table with
+# `tpm2_alg_util_flags_enc_scheme | tpm2_alg_util_flags_rsa_scheme`
+# bit-flags: rsaes (PKCS#1 v1.5), oaep (PKCS#1 v2.1 OAEP), null.
+# Both rsaes and oaep accept an optional `:hashalg` suffix
+# (e.g. oaep-sha256) per the same compound-string parser
+# documented in R194's -G extraction note.
+local -a tpm2_rsa_schemes=(rsaes oaep null)
+
+case $service in
+
+  tpm2_rsadecrypt)
+    # Decrypt RSA-encrypted data using a TPM-resident RSA key.
+    _arguments -s -S \
+      $tpm2_common \
+      '(-p --auth)'{-p+,--auth=}'[key authorization]:auth:' \
+      '(-o --output)'{-o+,--output=}'[output plaintext file (default stdout)]:file:_files' \
+      '(-c --key-context)'{-c+,--key-context=}'[RSA private-key context (handle or context file)]:key:' \
+      '(-s --scheme)'{-s+,--scheme=}'[RSA encryption scheme (overrides key default)]:scheme:($tpm2_rsa_schemes)' \
+      '(-l --label)'{-l+,--label=}'[OAEP label (for oaep scheme only)]:label:' \
+      '--cphash=[output command-parameter hash for off-line audit]:file:_files' \
+      ':input ciphertext file:_files'
+    ;;
+
+  tpm2_rsaencrypt)
+    # Encrypt plaintext using a TPM-resident RSA public key.
+    # No -p/--auth flag since encryption uses the public key
+    # only (no authorization needed).  Lighter topts[] than
+    # rsadecrypt.
+    _arguments -s -S \
+      $tpm2_common \
+      '(-o --output)'{-o+,--output=}'[output ciphertext file (default stdout)]:file:_files' \
+      '(-c --key-context)'{-c+,--key-context=}'[RSA public-key context (handle or context file)]:key:' \
+      '(-s --scheme)'{-s+,--scheme=}'[RSA encryption scheme]:scheme:($tpm2_rsa_schemes)' \
+      '(-l --label)'{-l+,--label=}'[OAEP label (for oaep scheme only)]:label:' \
+      ':input plaintext file:_files'
+    ;;
+
+  tpm2_hmac)
+    # Compute an HMAC of input data using a TPM-resident HMAC
+    # key.  Optionally produces a ticket for restricted-key
+    # chaining (analogous to tpm2_hash + tpm2_verifysignature
+    # ticket flow).
+    _arguments -s -S \
+      $tpm2_common \
+      '(-c --key-context)'{-c+,--key-context=}'[HMAC key context (handle or context file)]:key:' \
+      '(-p --auth)'{-p+,--auth=}'[key authorization]:auth:' \
+      '(-o --output)'{-o+,--output=}'[output HMAC digest file]:file:_files' \
+      '(-g --hash-algorithm)'{-g+,--hash-algorithm=}'[hash algorithm (default key-spec)]:alg:($tpm2_hashalgs)' \
+      '(-t --ticket)'{-t+,--ticket=}'[output ticket file (for tpm2_policyauthorize chaining)]:file:_files' \
+      '--hex[print HMAC as hex string]' \
+      '--cphash=[output command-parameter hash for off-line audit]:file:_files' \
+      ':input data file (or "-" for stdin):_files'
+    ;;
+
+  tpm2_pcrreset)
+    # Reset one or more resettable PCRs (typically PCR 16 and
+    # PCR 23 — the "debug" and "application" PCRs that the TPM
+    # spec allows software to reset).  The smallest topts[] of
+    # the entire R193-R197 tpm2 set: just --cphash.
+    _arguments -s -S \
+      $tpm2_common \
+      '--cphash=[output command-parameter hash for off-line audit]:file:_files' \
+      '*:resettable PCR index (typically 16 or 23):(16 23)'
+    ;;
+
+  tpm2_nvdefine)
+    # Allocate a TPM NV (Non-Volatile) index.  Defines the size,
+    # auth, and attributes (e.g. NV_AUTHREAD, NV_AUTHWRITE,
+    # NV_PPWRITE, NV_OWNERWRITE, NV_NO_DA, NV_POLICYDELETE).
+    _arguments -s -S \
+      $tpm2_common \
+      '(-C --hierarchy)'{-C+,--hierarchy=}'[NV-index hierarchy (owner|platform)]:hierarchy:(owner platform o p)' \
+      '(-s --size)'{-s+,--size=}'[size of NV index in bytes (1-2048 for TPM2)]:bytes:' \
+      '(-a --attributes)'{-a+,--attributes=}'[NV-index attributes bitmask (e.g. authread|authwrite|ownerread)]:attrs:' \
+      '(-P --hierarchy-auth)'{-P+,--hierarchy-auth=}'[hierarchy authorization]:auth:' \
+      '(-g --hash-algorithm)'{-g+,--hash-algorithm=}'[hash algorithm for NV-index name computation]:alg:($tpm2_hashalgs)' \
+      '(-p --index-auth)'{-p+,--index-auth=}'[NV-index authorization (the new auth value for the index)]:auth:' \
+      '(-L --policy)'{-L+,--policy=}'[NV-index authorization policy digest file]:file:_files' \
+      '--cphash=[output command-parameter hash for off-line audit]:file:_files' \
+      '--rphash=[output response-parameter hash for off-line audit]:file:_files' \
+      '(-S --session)'{-S+,--session=}'[authorization session context file]:file:_files' \
+      ':NV index handle (hex e.g. 0x1500001):'
+    ;;
+
+  tpm2_nvundefine)
+    # Deallocate a TPM NV index.  --with-policydelete is the
+    # special-case for NV indices defined with the TPMA_NV_POLICY_DELETE
+    # attribute (which require TPM2_NV_UndefineSpaceSpecial
+    # instead of TPM2_NV_UndefineSpace).
+    _arguments -s -S \
+      $tpm2_common \
+      '(-C --hierarchy)'{-C+,--hierarchy=}'[NV-index hierarchy (owner|platform)]:hierarchy:(owner platform o p)' \
+      '(-P --auth)'{-P+,--auth=}'[hierarchy authorization]:auth:' \
+      '(-S --session)'{-S+,--session=}'[authorization session context file]:file:_files' \
+      '--cphash=[output command-parameter hash for off-line audit]:file:_files' \
+      '--rphash=[output response-parameter hash for off-line audit]:file:_files' \
+      '--with-policydelete[use TPM2_NV_UndefineSpaceSpecial for NV-indices with TPMA_NV_POLICY_DELETE attr]' \
+      '(-n --name)'{-n+,--name=}'[NV-index expected-name file (for verification)]:file:_files' \
+      ':NV index handle (hex e.g. 0x1500001):'
+    ;;
+
+esac
