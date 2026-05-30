@@ -1,0 +1,277 @@
+#compdef kots kubectl-kots
+# Documentation: https://docs.replicated.com/reference/kots-cli-getting-started
+# Reference accessed: 2026-05-30
+# kots — Replicated kOTS (Kubernetes-Off-The-Shelf) CLI. Installs + manages
+# applications via the KOTS Admin Console. Multi-stem `kots` + `kubectl-kots`
+# because kots is shipped as both a standalone binary and a kubectl plugin.
+
+local curcontext="$curcontext" state line ret=1
+
+local -a _subcmds
+_subcmds=(
+  'install:install the KOTS Admin Console + an app license'
+  'admin-console:manage / access the Admin Console (sub-tree)'
+  'backup:create a full instance snapshot'
+  'docker:manipulate Docker registry credentials in-cluster'
+  'download:download an installed app source bundle from the cluster'
+  'enable-ha:enable HA mode for kotsadm (rqlite cluster)'
+  'get:list resources (sub-tree: apps/backups/config/restores/versions)'
+  'identity-service:manage the KOTS identity service'
+  'pull:pull an app upstream and render kustomize-style overlays'
+  'remove:remove an app from the Admin Console'
+  'reset-password:reset the Admin Console shared password'
+  'reset-tls:reset Admin Console TLS material'
+  'restore:restore from a snapshot'
+  'set:set runtime config (e.g. license, config-values)'
+  'upload:upload a rendered app bundle to Admin Console'
+  'upstream:manage app upstream metadata (sub-tree)'
+  'velero:manage the Velero snapshot integration'
+  'version:show kots version'
+  'completion:emit shell completion script'
+  'help:show help for a subcommand'
+)
+
+# Shared persistent flags. Applied to every subcommand.
+local -a _global
+_global=(
+  '(-h --help)'{-h,--help}'[show help]'
+  '(-n --namespace)'{-n,--namespace=}'[Kubernetes namespace where the Admin Console runs]:namespace:'
+  '--kubeconfig=[path to kubeconfig file]:file:_files'
+  '--context=[kubeconfig context to use]:context:'
+)
+
+# Live-resource helper: list installed app slugs via `kots get apps`.
+_kots_apps() {
+  local -a apps
+  apps=( ${(f)"$(kots get apps 2>/dev/null | tail -n +2 | awk '{print $1}')"} )
+  _describe -t apps 'installed app slug' apps
+}
+
+_arguments -C \
+  $_global \
+  '1: :->subcmd' \
+  '*:: :->args' && ret=0
+
+case $state in
+  subcmd)
+    _describe -t commands 'kots subcommand' _subcmds && ret=0
+    ;;
+  args)
+    curcontext="${curcontext%:*:*}:kots-$line[1]:"
+    case $line[1] in
+      install)
+        _arguments -s -S \
+          $_global \
+          '--additional-annotations[add extra annotations to kotsadm pods]' \
+          '--additional-labels[add extra labels to kotsadm pods]' \
+          '--airgap[enable air-gapped install]' \
+          '--airgap-bundle=[path to the application air-gap bundle]:file:_files -g "*.(tar|tar.gz|tgz)"' \
+          '--app-version-label=[which app version to deploy]:label:' \
+          '--config-values=[config-values manifest path]:file:_files -g "*.(yaml|yml)"' \
+          '--copy-proxy-env[copy proxy vars into Admin Console components]' \
+          '--disable-image-push[prevent images from being pushed to private registry]' \
+          '--ensure-rbac[create RBAC resources during install]' \
+          '--http-proxy=[HTTP_PROXY value]:url:' \
+          '--https-proxy=[HTTPS_PROXY value]:url:' \
+          '--no-proxy=[NO_PROXY value]:hosts:' \
+          '--kotsadm-namespace=[override KOTS image registry namespace]:ns:' \
+          '--kotsadm-registry=[override registry hostname+namespace for Admin Console images]:host/ns:' \
+          '--license-file=[path to license file]:file:_files -g "*.(yaml|yml)"' \
+          '--local-path=[test local rendering behaviour]:dir:_files -/' \
+          '--name=[app name shown in Admin Console]:name:' \
+          '--no-port-forward[do not auto port-forward to Admin Console]' \
+          '--port=[Admin Console port (default 8800)]:port:' \
+          '--private-ca-configmap=[ConfigMap with private CA certs]:configmap:' \
+          '--preflights-wait-duration=[preflight completion timeout]:duration:' \
+          '--registry-username=[registry username]:user:' \
+          '--registry-password=[registry password]:pass:' \
+          '--repo=[Helm chart repository URI]:url:' \
+          '--shared-password=[Admin Console deployment password]:pass:' \
+          '--skip-compatibility-check[skip version-compatibility validation]' \
+          '--skip-preflights[skip preflight checks]' \
+          '--skip-rbac-check[bypass RBAC validation]' \
+          '--skip-registry-check[skip registry connectivity tests]' \
+          '--strict-security-context[strict pod security contexts]' \
+          '--use-minimal-rbac[limit RBAC to install namespace only]' \
+          '--wait-duration=[component-readiness timeout]:duration:' \
+          '--with-minio[deploy local MinIO instance for storage]' \
+          '--storage-class=[storage class for Admin Console]:storage-class:' \
+          '1:upstream URI (e.g. replicated://app-slug):' \
+          && ret=0
+        ;;
+
+      admin-console)
+        _arguments -C $_global '1: :->a' '*:: :->aargs' && ret=0
+        case $state in
+          a) _describe -t commands 'admin-console action' \
+              '(garbage-collect-images:"GC unused images" generate-manifests:"emit raw Admin Console manifests" push-images:"push Admin Console images to a private registry" upgrade:"upgrade Admin Console to a new version")' && ret=0 ;;
+          aargs)
+            case $line[1] in
+              push-images)
+                _arguments $_global \
+                  '--kotsadm-registry=[target registry host+ns]:host/ns:' \
+                  '--registry-username=[registry username]:user:' \
+                  '--registry-password=[registry password]:pass:' \
+                  '1:images bundle:_files -g "*.(tar|tar.gz|tgz)"' \
+                  && ret=0 ;;
+              generate-manifests)
+                _arguments $_global \
+                  '--rootdir=[output directory]:dir:_files -/' \
+                  '--shared-password=[shared password]:pass:' \
+                  '--with-minio[include local MinIO manifests]' \
+                  && ret=0 ;;
+              garbage-collect-images|upgrade)
+                _arguments $_global && ret=0 ;;
+            esac
+            ;;
+        esac
+        ;;
+
+      get)
+        _arguments -C $_global '1: :->a' '*:: :->aargs' && ret=0
+        case $state in
+          a) _describe -t commands 'get target' \
+              '(apps:"list installed apps" backups:"list full instance snapshots" config:"list configValues for an app" restores:"list snapshot restores" versions:"list versions for an app")' && ret=0 ;;
+          aargs)
+            case $line[1] in
+              apps) _arguments $_global '(-o --output)'{-o,--output=}'[output format]:fmt:(json)' && ret=0 ;;
+              config|versions) _arguments $_global '--decrypt[decrypt encrypted values]' '(-o --output)'{-o,--output=}'[output format]:fmt:(json)' '1:app slug:_kots_apps' && ret=0 ;;
+              backups|restores) _arguments $_global '(-o --output)'{-o,--output=}'[output format]:fmt:(json)' && ret=0 ;;
+            esac
+            ;;
+        esac
+        ;;
+
+      set)
+        _arguments -C $_global '1: :->a' '*:: :->aargs' && ret=0
+        case $state in
+          a) _describe -t commands 'set target' \
+              '(config:"set configValues for an app" license:"replace license file")' && ret=0 ;;
+          aargs)
+            case $line[1] in
+              config) _arguments $_global '--config-file=[config-values YAML]:file:_files -g "*.(yaml|yml)"' '--values=[inline key=value (repeatable)]:value:' '1:app slug:_kots_apps' && ret=0 ;;
+              license) _arguments $_global '--license-file=[new license YAML]:file:_files -g "*.(yaml|yml)"' '1:app slug:_kots_apps' && ret=0 ;;
+            esac
+            ;;
+        esac
+        ;;
+
+      remove)
+        _arguments -s -S $_global \
+          '--force[skip confirmation]' \
+          '--undeploy[also remove application resources from cluster]' \
+          '*:app slug:_kots_apps' \
+          && ret=0
+        ;;
+
+      backup)
+        _arguments -s -S $_global \
+          '--wait[wait for backup completion]' \
+          '(-o --output)'{-o,--output=}'[output format]:fmt:(json)' \
+          && ret=0
+        ;;
+
+      restore)
+        _arguments -s -S $_global \
+          '(-i --from-backup)'{-i,--from-backup=}'[source backup name]:backup:' \
+          '--wait-for-apps[wait for app readiness]' \
+          '--exclude-apps[exclude app restore]' \
+          '--exclude-admin-console[exclude Admin Console restore]' \
+          '--velero-namespace=[Velero namespace]:ns:' \
+          && ret=0
+        ;;
+
+      pull)
+        _arguments -s -S $_global \
+          '--license-file=[license YAML]:file:_files -g "*.(yaml|yml)"' \
+          '--config-values=[config-values YAML]:file:_files -g "*.(yaml|yml)"' \
+          '--rootdir=[output directory]:dir:_files -/' \
+          '--airgap-bundle=[airgap bundle]:file:_files -g "*.(tar|tar.gz|tgz)"' \
+          '--exclude-admin-console[exclude Admin Console manifests]' \
+          '--exclude-kots-kinds[exclude KOTS CRDs]' \
+          '--namespace=[target namespace]:ns:' \
+          '1:upstream URI:' \
+          && ret=0
+        ;;
+
+      upload)
+        _arguments -s -S $_global \
+          '--slug=[app slug]:slug:_kots_apps' \
+          '--source=[bundle source directory]:dir:_files -/' \
+          '--name=[app name]:name:' \
+          '--upstream-uri=[upstream URI]:uri:' \
+          '--deploy[deploy after upload]' \
+          && ret=0
+        ;;
+
+      download)
+        _arguments -s -S $_global \
+          '--slug=[app slug]:slug:_kots_apps' \
+          '--decrypt-password-values[decrypt sensitive values]' \
+          '--dest=[destination directory]:dir:_files -/' \
+          '--current[download currently-deployed version only]' \
+          '--sequence=[specific app sequence number]:N:' \
+          && ret=0
+        ;;
+
+      docker)
+        _arguments -C $_global '1: :->a' '*:: :->aargs' && ret=0
+        case $state in
+          a) _describe -t commands 'docker subcmd' '(ensure-secret:"ensure the kotsadm-dockerhub-image-pull-secret exists")' && ret=0 ;;
+          aargs) _arguments $_global '--dockerhub-username=[DockerHub username]:user:' '--dockerhub-password=[DockerHub password]:pass:' && ret=0 ;;
+        esac
+        ;;
+
+      enable-ha)
+        _arguments -s -S $_global '--wait-duration=[component readiness timeout]:duration:' && ret=0
+        ;;
+
+      reset-password)
+        _arguments -s -S $_global '1:new password:' && ret=0
+        ;;
+
+      reset-tls)
+        _arguments -s -S $_global && ret=0
+        ;;
+
+      identity-service)
+        _arguments -C $_global '1: :->a' '*:: :->aargs' && ret=0
+        case $state in
+          a) _describe -t commands 'identity-service action' '(configure:"configure the identity service" enable-shared-password:"enable shared-password auth fallback")' && ret=0 ;;
+          aargs) _arguments $_global '--config-file=[identity service config]:file:_files' && ret=0 ;;
+        esac
+        ;;
+
+      upstream)
+        _arguments -C $_global '1: :->a' '*:: :->aargs' && ret=0
+        case $state in
+          a) _describe -t commands 'upstream action' '(upgrade:"upgrade an app to a new upstream version" download:"download a specific upstream version")' && ret=0 ;;
+          aargs) _arguments $_global '--airgap-bundle=[airgap bundle]:file:_files' '--deploy[deploy after fetch]' '1:app slug:_kots_apps' && ret=0 ;;
+        esac
+        ;;
+
+      velero)
+        _arguments -C $_global '1: :->a' '*:: :->aargs' && ret=0
+        case $state in
+          a) _describe -t commands 'velero action' '(configure-aws-s3:"configure AWS S3 store" configure-other-s3:"configure non-AWS S3 store" configure-azure:"configure Azure store" configure-gcs:"configure GCS store" configure-nfs:"configure NFS store" configure-internal:"configure internal store" ensure-permissions:"ensure namespace permissions" print-fs-instructions:"print FS instructions")' && ret=0 ;;
+          aargs) _arguments $_global '*:argument:' && ret=0 ;;
+        esac
+        ;;
+
+      completion)
+        _arguments -C '1: :->c' && ret=0
+        [[ $state == c ]] && _values 'shell' bash fish powershell zsh && ret=0
+        ;;
+
+      version|help)
+        _arguments $_global && ret=0
+        ;;
+
+      *)
+        _arguments -s -S $_global '*:argument:' && ret=0
+        ;;
+    esac
+    ;;
+esac
+
+return ret
