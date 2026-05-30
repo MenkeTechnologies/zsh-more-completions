@@ -1,0 +1,223 @@
+#compdef kp
+# Documentation: https://github.com/buildpacks-community/kpack-cli docs/kp.md
+# Source: docs/kp_*.md generated from cobra commands
+# Reference accessed: 2026-05-30
+# kp — kpack CLI. K8s-native OCI image builder using Cloud Native Buildpacks.
+# 14 top-level subcommands; most follow CRD-style create/delete/list/patch/
+# save/status. The image subtree adds trigger; build adds logs.
+
+local curcontext="$curcontext" state line ret=1
+
+local -a _subcmds
+_subcmds=(
+  'build:builds for an image resource (list/logs/status)'
+  'builder:Builder resources (create/delete/list/patch/save/status)'
+  'buildpack:Buildpack resources'
+  'clusterbuilder:ClusterBuilder resources (cluster-scoped)'
+  'clusterbuildpack:ClusterBuildpack resources'
+  'clusterlifecycle:ClusterLifecycle resources'
+  'clusterstack:ClusterStack resources'
+  'clusterstore:ClusterStore resources'
+  'completion:generate shell completion script'
+  'config:set/get kp defaults (repository, service-account)'
+  'image:Image resources (create/delete/list/patch/save/status/trigger)'
+  'import:import dependencies for stores/stacks/cluster builders'
+  'secret:registry/git secrets attached to a service account'
+  'version:show kp version'
+  'help:show help for a subcommand'
+)
+
+# Shared persistent flags. kp persists kubeconfig + namespace + registry CA
+# across subcommands.
+local -a _global
+_global=(
+  '(-h --help)'{-h,--help}'[show help]'
+  '--kubeconfig=[path to kubeconfig file]:file:_files'
+  '--context=[kubeconfig context to use]:context:'
+  '(-n --namespace)'{-n,--namespace=}'[Kubernetes namespace]:namespace:'
+  '--registry-ca-cert-path=[CA cert for the OCI registry]:file:_files'
+  '--registry-verify-certs[verify TLS certs to the OCI registry]'
+)
+
+# CRD-style 6-action set used by most resource subtrees.
+local -a _crd_actions
+_crd_actions=(
+  'create:create a new resource'
+  'delete:delete an existing resource'
+  'list:list resources'
+  'patch:patch an existing resource'
+  'save:create-or-patch (idempotent apply)'
+  'status:show resource status'
+)
+
+# Helper to complete K8s resources via kubectl.
+_kp_resources() {
+  local kind=$1
+  local -a names
+  names=( ${(f)"$(kubectl get $kind -o name 2>/dev/null)"} )
+  names=( ${names#*/} )
+  _describe -t resources "$kind" names
+}
+
+_arguments -C \
+  $_global \
+  '1: :->subcmd' \
+  '*:: :->args' && ret=0
+
+case $state in
+  subcmd)
+    _describe -t commands 'kp subcommand' _subcmds && ret=0
+    ;;
+  args)
+    curcontext="${curcontext%:*:*}:kp-$line[1]:"
+    case $line[1] in
+      image)
+        _arguments -C $_global '1: :->a' '*:: :->aargs' && ret=0
+        case $state in
+          a)
+            _describe -t commands 'image action' \
+              '(create:"create an image resource" delete:"delete an image resource" list:"list image resources" patch:"patch an existing image" save:"create-or-patch (idempotent)" status:"show image status" trigger:"trigger a new build")' && ret=0
+            ;;
+          aargs)
+            local kind=images.kpack.io
+            case $line[1] in
+              create|save)
+                _arguments $_global \
+                  '--tag=[OCI image registry tag]:tag:' \
+                  '--git=[git source URL]:url:' \
+                  '--git-revision=[git ref/sha]:rev:' \
+                  '--blob=[blob source URL]:url:' \
+                  '--local-path=[local source path]:dir:_files -/' \
+                  '--registry=[OCI registry override]:registry:' \
+                  '--cluster-builder=[ClusterBuilder name]:builder:' \
+                  '--builder=[Builder name]:builder:' \
+                  '--service-account=[K8s service account]:sa:' \
+                  '--sub-path=[subdirectory in source to build from]:path:' \
+                  '*--env=[build-time env (key=value)]:env:' \
+                  '*--delete-env=[remove env var]:key:' \
+                  '*--cache-size=[image cache PVC size]:size:' \
+                  '--additional-tag=[additional tag for build output]:tag:' \
+                  '--wait[wait for image to be ready]' \
+                  '--dry-run[print resource without sending to API]' \
+                  '--output=[output format (yaml or json)]:fmt:(yaml json)' \
+                  "1:image name:_kp_resources $kind" && ret=0 ;;
+              delete|status|patch|trigger)
+                _arguments $_global "*:image name:_kp_resources $kind" && ret=0 ;;
+              list)
+                _arguments $_global '--all-namespaces[list across all namespaces]' && ret=0 ;;
+            esac
+            ;;
+        esac
+        ;;
+      build)
+        _arguments -C $_global '1: :->a' '*:: :->aargs' && ret=0
+        case $state in
+          a) _describe -t commands 'build action' '(list:"list builds" logs:"tail logs for an image build" status:"show build status")' && ret=0 ;;
+          aargs)
+            case $line[1] in
+              logs)
+                _arguments $_global '--build=[build number]:N:' '(-f --follow)'{-f,--follow}'[stream logs]' '--timestamps[show timestamps]' '1:image name:_kp_resources images.kpack.io' && ret=0 ;;
+              status)
+                _arguments $_global '--build=[build number]:N:' '1:image name:_kp_resources images.kpack.io' && ret=0 ;;
+              list)
+                _arguments $_global '1:image name:_kp_resources images.kpack.io' && ret=0 ;;
+            esac
+            ;;
+        esac
+        ;;
+      builder)
+        _arguments -C $_global '1: :->a' '*:: :->aargs' && ret=0
+        case $state in
+          a) _describe -t commands 'builder action' _crd_actions && ret=0 ;;
+          aargs)
+            local kind=builders.kpack.io
+            case $line[1] in
+              create|save)
+                _arguments $_global \
+                  '--tag=[output tag (registry path)]:tag:' \
+                  '--stack=[ClusterStack name]:stack:' \
+                  '--store=[ClusterStore name]:store:' \
+                  '*--buildpack=[buildpack id[@version] (repeatable)]:buildpack:' \
+                  '--order=[order YAML file]:file:_files' \
+                  '--service-account=[K8s service account]:sa:' \
+                  '--dry-run[print resource only]' \
+                  '--output=[format]:fmt:(yaml json)' \
+                  "1:builder name:_kp_resources $kind" && ret=0 ;;
+              *) _arguments $_global "*:builder name:_kp_resources $kind" && ret=0 ;;
+            esac
+            ;;
+        esac
+        ;;
+      clusterbuilder|clusterbuildpack|clusterlifecycle|clusterstack|clusterstore|buildpack)
+        local kind
+        case $line[1] in
+          clusterbuilder) kind=clusterbuilders.kpack.io ;;
+          clusterbuildpack) kind=clusterbuildpacks.kpack.io ;;
+          clusterlifecycle) kind=clusterlifecycles.kpack.io ;;
+          clusterstack) kind=clusterstacks.kpack.io ;;
+          clusterstore) kind=clusterstores.kpack.io ;;
+          buildpack) kind=buildpacks.kpack.io ;;
+        esac
+        _arguments -C $_global '1: :->a' '*:: :->aargs' && ret=0
+        case $state in
+          a) _describe -t commands 'action' _crd_actions && ret=0 ;;
+          aargs)
+            case $line[1] in
+              list) _arguments $_global '--all-namespaces[list across all namespaces]' && ret=0 ;;
+              *) _arguments $_global "*:resource name:_kp_resources $kind" && ret=0 ;;
+            esac
+            ;;
+        esac
+        ;;
+      secret)
+        _arguments -C $_global '1: :->a' '*:: :->aargs' && ret=0
+        case $state in
+          a) _describe -t commands 'secret action' '(create:"create a secret" delete:"delete a secret" list:"list secrets")' && ret=0 ;;
+          aargs)
+            case $line[1] in
+              create)
+                _arguments $_global \
+                  '--dockerhub=[DockerHub registry creds]:user:' \
+                  '--gcr=[GCR creds file]:file:_files' \
+                  '--registry=[OCI registry URL]:url:' \
+                  '--registry-user=[registry username]:user:' \
+                  '--git-url=[git URL for SSH/HTTPS auth]:url:' \
+                  '--git-ssh-key=[SSH private key file]:file:_files' \
+                  '--git-user=[HTTPS git username]:user:' \
+                  '--service-account=[attach to service account]:sa:' \
+                  '1:secret name:' && ret=0 ;;
+              delete) _arguments $_global '*:secret name:' && ret=0 ;;
+              list) _arguments $_global && ret=0 ;;
+            esac
+            ;;
+        esac
+        ;;
+      config)
+        _arguments -C $_global '1: :->a' '*:: :->aargs' && ret=0
+        case $state in
+          a) _describe -t commands 'config setting' '(default-repository:"OCI repo for images/builders/stacks" default-service-account:"K8s service account")' && ret=0 ;;
+          aargs) _arguments $_global '1:new value (or omit to print current):' && ret=0 ;;
+        esac
+        ;;
+      import)
+        _arguments -s -S $_global \
+          '(-f --filename)'{-f,--filename=}'[import descriptor YAML file]:file:_files' \
+          '--show-changes[only show changes (no-op import)]' \
+          '--force[overwrite existing resources]' \
+          && ret=0
+        ;;
+      completion)
+        _arguments -C '1: :->c' && ret=0
+        [[ $state == c ]] && _values 'shell' bash fish powershell zsh && ret=0
+        ;;
+      version|help)
+        _arguments $_global && ret=0
+        ;;
+      *)
+        _arguments -s -S $_global '*:argument:' && ret=0
+        ;;
+    esac
+    ;;
+esac
+
+return ret
