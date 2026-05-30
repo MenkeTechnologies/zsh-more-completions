@@ -1,0 +1,169 @@
+#compdef cairo-execute cairo-format cairo-run cairo-size-profiler cairo-test generate-syntax sierra-compile starknet-compile starknet-sierra-compile starknet-sierra-extract-code starknet-sierra-upgrade-validate
+# Documentation: source-direct extraction from upstream
+# starkware-libs/cairo crates/bin/<name>/src/main.rs clap-derive
+# `Args` (or `Cli`) struct definitions + `#[arg(...)]` macro
+# attributes via gh api. cairo is the Rust implementation of the
+# Cairo language + Starknet smart-contract compiler stack maintained
+# by StarkWare.
+# Reference accessed: 2026-05-30 via gh api.
+# starkware-libs/cairo R133 — 11-stem multi-binary harvest of the
+# Cairo language + Starknet smart-contract compiler binaries that
+# ship as separate executables in the crates/bin tree (`cairo-compile`
+# was already covered in an earlier round, so it is deliberately
+# omitted from this #compdef line). All binaries use clap-derive
+# with `#[command(version, verbatim_doc_comment)]` and the doc
+# comments on each `#[arg]` field carry through as the completion
+# description.
+
+# Shared 2-flag pair used by 6 of the cairo-* binaries.
+local -a _cairo_common
+_cairo_common=(
+  '(-s --single-file)'{-s,--single-file}'[path argument is a single Cairo file, not a project dir]'
+  '--allow-warnings[allow compilation to succeed even with warnings]'
+)
+
+# Shared 2-flag allowed-libfuncs mutex pair used by 3 of the
+# starknet-* binaries (one selects from a named built-in list, the
+# other supplies a custom file; clap-derive enforces conflicts_with).
+local -a _starknet_libfuncs
+_starknet_libfuncs=(
+  '(--allowed-libfuncs-list-file)--allowed-libfuncs-list-name=[built-in allowed-libfuncs list to use (default: most recent audited)]:name:'
+  '(--allowed-libfuncs-list-name)--allowed-libfuncs-list-file=[custom allowed-libfuncs list file]:file:_files'
+)
+
+case $service in
+
+  cairo-execute)
+    # Compile-and-run a Cairo project or prebuilt executable.
+    _arguments -s -S \
+      '--build-only[only build the executable; do not run (requires --output-path)]' \
+      '--output-path=[where to write the built artifact / PIE]:path:_files' \
+      '(--build-only)--prebuilt[input is a prebuilt executable; do NOT build]' \
+      '(--prebuilt)-r[run profiler and emit profile data]' \
+      '(--prebuilt)--run-profiler=[profiler config (none / cairo / sierra)]:mode:(none cairo sierra)' \
+      '--print-bytecode-size[print bytecode size before/after profiling]' \
+      '(--prebuilt)--single-file[input is a single Cairo file, not a project dir]' \
+      '(--prebuilt)--allow-warnings[allow compile to succeed with warnings]' \
+      '(--prebuilt)--ignore-warnings[allow + silence warnings (implies --allow-warnings)]' \
+      '(--prebuilt)--allow-syscalls[allow syscalls in the program]' \
+      '(--prebuilt)--unsafe-panic[replace panic flow with unprovable opcode (smaller code, harder debug)]' \
+      '(--prebuilt)--executable=[fully qualified path to the executable function]:fqn:' \
+      '(--build-only)--print-outputs[print the program outputs after run]' \
+      '(--build-only)--layout=[memory layout (default all_cairo_stwo)]:layout:(plain small dex recursive starknet starknet_with_keccak recursive_large_output all_cairo all_cairo_stwo all_solidity dynamic)' \
+      '1:input path (project dir or prebuilt or single file):_files'
+    ;;
+
+  cairo-run)
+    # Compile-and-run a Cairo project (older interpreter; cairo-execute
+    # is the newer compile-+-prover-friendly path).
+    _arguments -s -S \
+      "${_cairo_common[@]}" \
+      '--available-gas=[provided gas amount (for gas-aware programs)]:gas:' \
+      '--print-full-memory[print the full Cairo memory after execution]' \
+      '--run-profiler[run profiler after execution]' \
+      '1:Cairo project path:_files'
+    ;;
+
+  cairo-test)
+    # Run the test functions in a Cairo project / file.
+    _arguments -s -S \
+      "${_cairo_common[@]}" \
+      '(-f --filter)'{-f,--filter}'=[run only tests whose name contains the filter string]:filter:' \
+      '--include-ignored[also run tests marked as ignored]' \
+      '(--include-ignored)--ignored[run ONLY the ignored tests]' \
+      '--starknet[load the Starknet plugin (allows Starknet syscalls in tests)]' \
+      '(-r --run-profiler)'{-r,--run-profiler}'=[profiler config]:mode:(none cairo sierra)' \
+      '--gas-disabled[disable gas calculation]' \
+      '--print-resource-usage[print resource usage after each test]' \
+      '1:Cairo project or file path:_files'
+    ;;
+
+  cairo-format)
+    # Format Cairo source files.
+    _arguments -s -S \
+      '(-c --check)'{-c,--check}'[check mode: print the diff instead of writing files]' \
+      '(-r --recursive)'{-r,--recursive}'[recurse into directories]' \
+      '(-v --verbose)'{-v,--verbose}'[verbose output]' \
+      '(-p --print-parsing-errors)'{-p,--print-parsing-errors}'[print parsing errors]' \
+      '(-s --sort-mod-level-items)'{-s,--sort-mod-level-items}'=[sort module-level items (imports/mods)]:bool:(true false)' \
+      '--tuple-line-breaking=[tuple-break style: line-by-line (default) / same-line]:style:(line-by-line same-line)' \
+      '--fixed-array-line-breaking=[fixed-array break style]:style:(single-break-point line-by-line)' \
+      '--macro-call-breaking-behavior=[macro-call break behavior]:bool:(true false)' \
+      '--merge-use-items=[merge `use` items]:bool:(true false)' \
+      '--allow-duplicates=[allow duplicates in `use` items]:bool:(true false)' \
+      '*:file or directory (use - for stdin):_files'
+    ;;
+
+  cairo-size-profiler)
+    # Analyze the bytecode-size cost of a Cairo function or contract.
+    _arguments -s -S \
+      "${_cairo_common[@]}" \
+      '(--executable)--contract=[contract path to analyze (implies --starknet)]:contract-path:' \
+      '(--contract)--executable=[function path to analyze (implies executable plugin)]:function-path:' \
+      '--inline-threshold=[inline threshold for the InlineSmallFunctions strategy]:threshold:' \
+      '1:Cairo project path:_files'
+    ;;
+
+  sierra-compile)
+    # Compile a Sierra IR file to CASM. Minimal binary: just file +
+    # output positionals (no flags).
+    _arguments -s -S \
+      '1:input Sierra (.sierra) file:_files -g "*.sierra"' \
+      '2:output CASM file path:_files'
+    ;;
+
+  starknet-compile)
+    # Compile a Cairo contract crate to Starknet ContractClass JSON.
+    _arguments -s -S \
+      "${_cairo_common[@]}" \
+      '(-c --contract-path)'{-c,--contract-path}'=[fully qualified path to the contract]:contract:' \
+      '(-r --replace-ids)'{-r,--replace-ids}'[replace Sierra IDs with human-readable names]' \
+      "${_starknet_libfuncs[@]}" \
+      '1:contract crate path:_files' \
+      '2:output file (default stdout):_files'
+    ;;
+
+  starknet-sierra-compile)
+    # Compile a Starknet Sierra ContractClass JSON to CASM ContractClass.
+    _arguments -s -S \
+      "${_starknet_libfuncs[@]}" \
+      '--add-pythonic-hints[also emit hint information for the Python runner]' \
+      '--max-bytecode-size=[max bytecode size in felts (default 180000)]:bytes:' \
+      '1:input Sierra ContractClass JSON file:_files -g "*.json"' \
+      '2:output CASM ContractClass file (default stdout):_files'
+    ;;
+
+  starknet-sierra-extract-code)
+    # Extract the Sierra program from a Starknet ContractClass JSON.
+    # Minimal: no flags besides version.
+    _arguments -s -S \
+      '1:input ContractClass JSON file:_files -g "*.json"' \
+      '2:output Sierra file (default stdout):_files'
+    ;;
+
+  starknet-sierra-upgrade-validate)
+    # Validate that a set of Sierra contracts remain compilable after
+    # a Sierra version bump. Either takes input class-info files OR
+    # fetches contracts from a fullnode RPC (mutex).
+    _arguments -s -S \
+      "${_starknet_libfuncs[@]}" \
+      '--override-version=[Sierra version to override to before compilation]:version:' \
+      '--max-bytecode-size=[max bytecode size in felts (default 180000)]:bytes:' \
+      '--fullnode-url=[Starknet fullnode RPC URL to fetch class data from]:url:_urls' \
+      '--start-block=[start block for the contract range to test]:block:' \
+      '--end-block=[end block for the contract range to test]:block:' \
+      '--last-n-blocks=[test the last N blocks (mutex with --start-block/--end-block)]:n:' \
+      '--class-info-output-file=[where to write fetched Sierra class info]:file:_files' \
+      '*:input class-info file(s):_files'
+    ;;
+
+  generate-syntax)
+    # Internal codegen tool that regenerates Cairo's syntax-tree node
+    # definitions. Used by cairo upstream developers; takes no CLI
+    # arguments (writes generated code into the project tree under
+    # the directory returned by `project_root()` at build time).
+    _arguments -s -S \
+      ': :_default'
+    ;;
+
+esac
