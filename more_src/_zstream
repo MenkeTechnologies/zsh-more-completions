@@ -1,0 +1,84 @@
+#compdef zstream
+# Documentation: source-direct extraction from upstream
+# openzfs/zfs cmd/zstream/zstream.c subcommand dispatch via
+# `strcmp(subcommand, "...")` chain in main() decoded source-
+# direct -> 6 subcommands (dump/decompress/drop_record/
+# recompress/token/redup).  Per-subcommand getopt strings:
+#   zstream_dump:        ":vCd"
+#   zstream_decompress:  "v"
+#   zstream_drop_record: "v"
+#   zstream_recompress:  "l:"
+#   zstream_token:       (no getopt; positional only)
+#   zstream_redup:       "v"
+# Compression-type enum decoded source-direct from
+# module/zfs/zio_compress.c zio_compress_table[] entries:
+# inherit/on/lzjb/empty/zle/lz4/zstd + 9 gzip-N levels.  zstd
+# accepts an optional ZIO_ZSTD_LEVEL_DEFAULT level argument.
+# Reference accessed: 2026-05-30 via gh api.
+# openzfs zfs R187 — zstream is the OpenZFS ZFS-send-stream
+# manipulation tool that operates ON the wire-format ZFS send
+# stream (between `zfs send` source and `zfs receive` sink).
+# Useful for: dumping stream headers + record metadata for
+# debugging, decompressing individual records, recompressing
+# with a different algorithm (e.g. for an L2ARC test rig),
+# dropping specific records to test receive-side error
+# handling, generating resume tokens from stream replay state,
+# deduplicating records on the wire.  Sister tool to the
+# heavily-covered ZFS family (zpool/zfs/zdb/zinject already
+# covered) and the broader storage stack (mdadm/lvm/btrfs/xfs
+# families all covered).
+
+local -a zfs_compress=(
+  inherit on off lzjb empty zle lz4 zstd gzip
+  gzip-1 gzip-2 gzip-3 gzip-4 gzip-5 gzip-6 gzip-7 gzip-8 gzip-9
+)
+
+local -a subcmds=(
+  'dump:dump the (binary) stream contents in human-readable form'
+  'decompress:decompress objects within the stream (for re-encoding)'
+  'drop_record:drop records by (object,offset) tuple (testing)'
+  'recompress:recompress the stream with a new ZIO compression type'
+  'token:print the resume token from a partial stream'
+  'redup:de-duplicate records on the wire'
+)
+
+_arguments -C \
+  '1: :->cmd' \
+  '*:: :->sub'
+
+case $state in
+  cmd)
+    _describe -t commands 'zstream subcommand' subcmds
+    ;;
+  sub)
+    case $words[1] in
+      dump)
+        # getopt ":vCd" decoded source-direct from
+        # zstream_dump.c.
+        _arguments -s -S \
+          '-v[verbose: dump record metadata for each record]' \
+          '-C[exclude checksums from the dump]' \
+          '-d[dump the payload of each record]' \
+          '*:input ZFS send stream file (or read from stdin):_files'
+        ;;
+      decompress|drop_record|redup)
+        # All three subs use getopt "v" - single -v flag.
+        _arguments -s -S \
+          '-v[verbose]' \
+          '*:OBJECT,OFFSET[,TYPE] tuple OR input file:'
+        ;;
+      recompress)
+        # getopt "l:" + positional compression-type from
+        # zio_compress_table[] decoded source-direct.
+        _arguments -s -S \
+          '-l+[gzip/zstd compression level (1-9 for gzip, 1-19 for zstd)]:level:' \
+          "1:ZFS compression type:($zfs_compress)"
+        ;;
+      token)
+        # No flags; single positional.
+        _arguments -s -S \
+          '1:resume token (from `zfs send -t TOKEN` failure):'
+        ;;
+    esac
+    ;;
+esac
