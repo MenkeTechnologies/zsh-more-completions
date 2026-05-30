@@ -1,0 +1,115 @@
+#compdef mock-mount-s3 mount-s3 mount-s3-log-analyzer
+# Documentation: source-direct extraction from upstream
+# awslabs/mountpoint-s3 mountpoint-s3/src/cli.rs clap-derive
+# `CliArgs` struct (used by mount-s3 AND mock-mount-s3 — the mock
+# binary literally does `use mountpoint_s3::CliArgs; let cli_args
+# = CliArgs::parse();` so its flag surface is identical to mount-s3
+# but with the in-memory mock S3 backend and an `sthree-` bucket-
+# name safety prefix per upstream source comment) +
+# mountpoint-s3/src/bin/mount-s3-log-analyzer.rs separate `CliArgs`
+# struct.
+# Reference accessed: 2026-05-30 via gh api.
+# AWS mountpoint-s3 R134 — 3-stem multi-binary harvest of the AWS
+# mountpoint-s3 FUSE filesystem CLI family. mountpoint-s3 (binary
+# name `mount-s3`) mounts an S3 bucket as a POSIX filesystem with
+# clap-derive options grouped into 6 help-headers (BUCKET_OPTIONS,
+# AWS_CREDENTIALS_OPTIONS, MOUNT_OPTIONS, CLIENT_OPTIONS,
+# CACHING_OPTIONS, LOGGING_OPTIONS, ADVANCED_OPTIONS).
+
+# 40-flag shared CliArgs surface for mount-s3 and mock-mount-s3
+# (both compile `mountpoint_s3::CliArgs` from src/cli.rs). Extracted
+# source-direct from `#[clap(...)]` macros and grouped by their
+# `help_heading` attribute.
+local -a _ms3_shared_args
+_ms3_shared_args=(
+  '--prefix=[prefix inside the bucket to mount (must end in /)]:prefix:'
+  '--region=[AWS region of the bucket (default auto-detect)]:region:'
+  '--endpoint-url=[S3 endpoint URL (default auto-detect)]:url:_urls'
+  '--force-path-style[force path-style addressing]'
+  '--transfer-acceleration[use S3 Transfer Acceleration (must be enabled on bucket)]'
+  '--dual-stack[use dual-stack (IPv4/IPv6) endpoints]'
+  '--requester-pays[set x-amz-request-payer:requester header on requests]'
+  '--bucket-type=[bucket type override]:type:(general-purpose directory)'
+  '--storage-class=[storage class for newly written objects]:class:(STANDARD STANDARD_IA INTELLIGENT_TIERING ONEZONE_IA GLACIER_IR GLACIER DEEP_ARCHIVE REDUCED_REDUNDANCY)'
+  '--no-sign-request[do NOT sign requests (anonymous S3 access)]'
+  '--profile=[use a specific profile from AWS credentials file]:profile:'
+  '--read-only[mount as read-only (disallow writes/deletes)]'
+  '--allow-delete[allow file deletion]'
+  '--allow-overwrite[allow file overwrites]'
+  '--incremental-upload[upload in increments rather than buffering full file]'
+  '--auto-unmount[automatically unmount on exit]'
+  '(--allow-other)--allow-root[allow root user to access the filesystem]'
+  '(--allow-root)--allow-other[allow other users to access the filesystem]'
+  '--maximum-throughput-gbps=[max target throughput in Gbps]:gbps:'
+  '--max-threads=[max client thread count]:n:'
+  '--max-memory-target=[max memory target in bytes]:bytes:'
+  '(--read-part-size --write-part-size)--part-size=[S3 transfer part size in bytes]:bytes:'
+  '(--part-size)--read-part-size=[separate part size for reads]:bytes:'
+  '(--part-size)--write-part-size=[separate part size for writes]:bytes:'
+  '--uid=[uid that owns the mounted files (default current user)]:uid:_users'
+  '--gid=[gid that owns the mounted files (default current group)]:gid:_groups'
+  '--dir-mode=[octal directory mode for the mount point]:octal:'
+  '--file-mode=[octal file mode for the mount point]:octal:'
+  '(-f --foreground)'{-f,--foreground}'[run as a foreground process]'
+  '--expected-bucket-owner=[AWS account ID to verify bucket ownership against]:account-id:'
+  '--log-directory=[directory to write Mountpoint logs into]:dir:_directories'
+  '--log-metrics[enable summarized performance-metrics logging]'
+  '--otlp-endpoint=[OTLP (OpenTelemetry) endpoint for metrics export]:url:_urls'
+  '--otlp-export-interval=[OTLP export interval (seconds; requires --otlp-endpoint)]:sec:'
+  '(-d --debug)'{-d,--debug}'[enable debug logging for Mountpoint]'
+  '--debug-crt[enable debug logging for AWS Common Runtime]'
+  '(--log-directory --debug --debug-crt --log-metrics)--no-log[disable all logging (mutex with the 4 logging-* flags via clap conflicts_with_all)]'
+  '--cache=[cache directory for file data]:dir:_directories'
+  '--metadata-ttl=[TTL for metadata cache entries]:ttl:'
+  '--negative-metadata-ttl=[TTL for negative metadata cache entries]:ttl:'
+  '--max-cache-size=[max cache size in MiB (requires --cache)]:mib:'
+  '--cache-block-size=[cache block size in bytes (requires --cache)]:bytes:'
+  '--cache-xz=[shared-cache S3 bucket name or URI]:bucket-or-uri:'
+  '--user-agent-prefix=[string to prepend to User-Agent header]:prefix:'
+  '--sse=[server-side-encryption algorithm]:algo:(aws\:kms aws\:kms\:dsse AES256)'
+  '--sse-kms-key-id=[KMS key ARN for SSE-KMS]:arn:'
+  '--upload-checksums=[checksum algorithm for uploads]:algo:(SHA1 SHA256 CRC32 CRC32C)'
+  '--infer-content-type[infer object Content-Type from file extension on upload]'
+  '*--bind=[bind to a specific network interface (repeatable)]:interface:'
+)
+
+case $service in
+
+  mount-s3)
+    # Mount an S3 bucket as a local POSIX filesystem via FUSE.
+    # CliArgs from upstream src/cli.rs - 40 flags + 2 positionals.
+    _arguments -s -S \
+      "${_ms3_shared_args[@]}" \
+      '1:bucket name or S3 URI:' \
+      '2:mount point directory (or /dev/fd/N FUSE fd on Linux):_directories'
+    ;;
+
+  mock-mount-s3)
+    # Identical flag surface to mount-s3 (literally `use
+    # mountpoint_s3::CliArgs`) but writes to an in-memory mock S3
+    # backend. As a safety guard, bucket names MUST begin with the
+    # literal prefix "sthree-" or the binary refuses to start - per
+    # upstream source: "Buckets starting with 'sthree-' are always
+    # invalid against real S3" so this prevents accidentally
+    # confusing the mock with the real mount-s3 in CI workflows.
+    _arguments -s -S \
+      "${_ms3_shared_args[@]}" \
+      '1:bucket name (must begin with sthree-):' \
+      '2:mount point directory:_directories'
+    ;;
+
+  mount-s3-log-analyzer)
+    # Helper for parsing Mountpoint logs into JSON metrics. Extracts
+    # peak RSS from `process.memory_usage` lines and, with both
+    # --mem-limit-mib and --extra-metrics-out, additional labeled
+    # metrics. Used by CI memory-limited jobs to populate GitHub
+    # Actions step summaries.
+    _arguments -s -S \
+      '--mem-limit-mib=[memory limit (MiB) to compare peak RSS against (requires --extra-metrics-out)]:mib:' \
+      '--extra-metrics-out=[output JSON file for mem-related metrics (requires --mem-limit-mib)]:file:_files' \
+      '1:log directory to analyze:_directories' \
+      '2:output JSON file name:_files' \
+      '3:test name to report in JSON:'
+    ;;
+
+esac
