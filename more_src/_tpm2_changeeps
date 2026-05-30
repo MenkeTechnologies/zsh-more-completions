@@ -1,0 +1,168 @@
+#compdef tpm2_changeeps tpm2_changepps tpm2_dictionarylockout tpm2_clearcontrol tpm2_hierarchycontrol tpm2_makecredential tpm2_activatecredential tpm2_encryptdecrypt
+# Documentation: source-direct extraction from upstream
+# tpm2-software/tpm2-tools.  Per-tool `struct option topts[]`
+# table decoded source-direct from each tools/tpm2_<name>.c.
+# Shared $tpm2_common + $tpm2_keyalgs re-extracted source-
+# direct from lib/tpm2_options.c / lib/tpm2_alg_util.c — see
+# R193-R199 HARVEST_LOG entries for the full extraction notes.
+# Reference accessed: 2026-05-30 via gh api.
+# tpm2-software tpm2-tools R200 — follow-up to R199's hunt-skip
+# on "next-priority candidates: TPM-mgmt (tpm2_changeeps/
+# changepps/dictionarylockout/clearcontrol/hierarchycontrol/
+# gettestresult/incrementalselftest), credential-protocol
+# (tpm2_makecredential/activatecredential), encrypt-decrypt
+# (tpm2_encryptdecrypt)".  This round covers the TPM-management
+# + credential-protocol + symmetric-encrypt-decrypt family.
+# Sister tools to R193-R199's tpm2_* family already in the
+# corpus.
+
+local -a tpm2_common=(
+  '(-T --tcti)'{-T+,--tcti=}'[TCTI library + options (e.g. "device:/dev/tpmrm0" or "swtpm:port=2321")]:tcti:'
+  '(-h --help)'{-h-,--help=-}'[print help (optional arg = topic)]::topic:'
+  '(-v --version)'{-v,--version}'[print version and exit]'
+  '(-V --verbose)'{-V,--verbose}'[verbose mode]'
+  '(-Q --quiet)'{-Q,--quiet}'[quiet mode]'
+  '(-Z --enable-errata)'{-Z,--enable-errata}'[enable TPM2 errata workarounds]'
+  '(-z --pwd-session)'{-z,--pwd-session}'[use password-authorized session]'
+)
+local -a tpm2_keyalgs=(rsa rsa1024 rsa2048 rsa3072 rsa4096
+                      ecc ecc_nist_p192 ecc_nist_p224 ecc_nist_p256
+                      ecc_nist_p384 ecc_nist_p521 ecc_sm2_p256
+                      ecc_bn_p256 ecc_bn_p638
+                      aes aes128 aes192 aes256
+                      keyedhash xor null)
+# AES block-cipher mode enum decoded source-direct from
+# lib/tpm2_alg_util.c's algo_pairs[] filtered by mode-flag.
+local -a tpm2_aes_modes=(ctr ofb cbc cfb ecb null)
+
+case $service in
+
+  tpm2_changeeps)
+    # TPM2_ChangeEPS: regenerate the Endorsement Primary Seed.
+    # DANGEROUS - invalidates the EK (and any AKs derived from
+    # it) plus any keys under the endorsement hierarchy.
+    # Sister to R196's tpm2_clear but only affects endorsement.
+    _arguments -s -S \
+      $tpm2_common \
+      '(-p --auth)'{-p+,--auth=}'[platform-hierarchy authorization]:auth:' \
+      '--cphash=[output command-parameter hash for off-line audit]:file:_files' \
+      '--rphash=[output response-parameter hash for off-line audit]:file:_files' \
+      '(-S --session)'{-S+,--session=}'[authorization session context file]:file:_files'
+    ;;
+
+  tpm2_changepps)
+    # TPM2_ChangePPS: regenerate the Platform Primary Seed.
+    # DANGEROUS - invalidates any keys under the platform
+    # hierarchy.  Identical topts[] to tpm2_changeeps (4
+    # flags); decoded source-direct as the parallel platform-
+    # hierarchy counterpart.
+    _arguments -s -S \
+      $tpm2_common \
+      '(-p --auth)'{-p+,--auth=}'[platform-hierarchy authorization]:auth:' \
+      '--cphash=[output command-parameter hash for off-line audit]:file:_files' \
+      '--rphash=[output response-parameter hash for off-line audit]:file:_files' \
+      '(-S --session)'{-S+,--session=}'[authorization session context file]:file:_files'
+    ;;
+
+  tpm2_dictionarylockout)
+    # TPM2_DictionaryAttackParameters + TPM2_DictionaryAttack-
+    # LockReset.  Manage the TPM's dictionary-attack-prevention
+    # state.  -c/--clear-lockout XOR -s/--setup-parameters
+    # dispatches between the two TPM commands.
+    _arguments -s -S \
+      $tpm2_common \
+      '(-n --max-tries)'{-n+,--max-tries=}'[max failed auth tries before lockout (default 32)]:n:' \
+      '(-t --recovery-time)'{-t+,--recovery-time=}'[recovery time in seconds (default 1000)]:sec:' \
+      '(-l --lockout-recovery-time)'{-l+,--lockout-recovery-time=}'[lockout-recovery time in seconds (default 1000)]:sec:' \
+      '(-p --auth)'{-p+,--auth=}'[lockout-hierarchy authorization]:auth:' \
+      '(-c --clear-lockout -s --setup-parameters)'{-c,--clear-lockout}'[clear the current lockout-attack state (TPM2_DictionaryAttackLockReset)]' \
+      '(-c --clear-lockout -s --setup-parameters)'{-s,--setup-parameters}'[set the lockout parameters (TPM2_DictionaryAttackParameters)]' \
+      '--cphash=[output command-parameter hash for off-line audit]:file:_files'
+    ;;
+
+  tpm2_clearcontrol)
+    # TPM2_ClearControl: enable or disable the ability to
+    # execute TPM2_Clear.  Used to "permanently" disable
+    # tpm2_clear from the lockout hierarchy (allowing only
+    # platform-hierarchy clears).
+    _arguments -s -S \
+      $tpm2_common \
+      '(-C --hierarchy)'{-C+,--hierarchy=}'[hierarchy (lockout|platform)]:hierarchy:(lockout platform l p)' \
+      '(-P --auth)'{-P+,--auth=}'[hierarchy authorization]:auth:' \
+      '--cphash=[output command-parameter hash for off-line audit]:file:_files' \
+      '1:clear-control state (set|clear|enable|disable):(set clear enable disable s c 0 1)'
+    ;;
+
+  tpm2_hierarchycontrol)
+    # TPM2_HierarchyControl: enable or disable an entire TPM
+    # hierarchy.  Positional accepts a hierarchy name (e.g.
+    # owner|endorsement|platform|ephemeral) + state token
+    # (set|clear).  Heavily used in BitLocker / measured-boot
+    # provisioning to lock down the TPM after first boot.
+    _arguments -s -S \
+      $tpm2_common \
+      '(-C --hierarchy)'{-C+,--hierarchy=}'[authorizing hierarchy (platform required for endorsement/owner)]:hierarchy:(platform owner p o)' \
+      '(-P --hierarchy-auth)'{-P+,--hierarchy-auth=}'[hierarchy authorization]:auth:' \
+      '--cphash=[output command-parameter hash for off-line audit]:file:_files' \
+      '1:hierarchy to control:(owner endorsement platform ephemeral phEnable phEnableNV shEnable ehEnable)' \
+      '2:state:(set clear enable disable s c 0 1)'
+    ;;
+
+  tpm2_makecredential)
+    # TPM2_MakeCredential: encrypt a credential for the
+    # remote-attestation challenge-response flow.  Typically
+    # run OFFLINE (no TPM required) on the verifier side - the
+    # `-e`/`--encryption-key` is the public half of the
+    # certified key (from tpm2_readpublic), the credential is
+    # the verifier's secret.  The TPM then runs
+    # tpm2_activatecredential to decrypt and prove possession.
+    _arguments -s -S \
+      $tpm2_common \
+      '(-e --encryption-key)'{-e+,--encryption-key=}'[public key for credential encryption (verifier-side)]:file:_files' \
+      '(-u --public)'{-u+,--public=}'[input public-area file of the certified key (TSS format)]:file:_files' \
+      '(-s --secret)'{-s+,--secret=}'[input secret (plaintext credential to encrypt)]:file:_files' \
+      '(-n --name)'{-n+,--name=}'[input name file of the certified key]:file:_files' \
+      '(-o --credential-blob)'{-o+,--credential-blob=}'[output encrypted credential-blob file]:file:_files' \
+      '(-G --key-algorithm)'{-G+,--key-algorithm=}'[encryption-key algorithm]:alg:($tpm2_keyalgs)'
+    ;;
+
+  tpm2_activatecredential)
+    # TPM2_ActivateCredential: TPM-side decryption of the
+    # credential-blob produced by tpm2_makecredential.  Reuses
+    # the C/c P/p uppercase-vs-lowercase convention from R194/
+    # R198/R199 but for credential vs credentialed key:
+    # -C/-P credential-key (uppercase = the key that wraps the
+    # credential), -c/-p credentialed-key (lowercase = the key
+    # being attested-to).
+    _arguments -s -S \
+      $tpm2_common \
+      '(-c --credentialedkey-context)'{-c+,--credentialedkey-context=}'[credentialed-key context (handle or file)]:key:' \
+      '(-C --credentialkey-context)'{-C+,--credentialkey-context=}'[credential-key context (handle or file)]:key:' \
+      '(-p --credentialedkey-auth)'{-p+,--credentialedkey-auth=}'[credentialed-key authorization]:auth:' \
+      '(-P --credentialkey-auth)'{-P+,--credentialkey-auth=}'[credential-key authorization]:auth:' \
+      '(-i --credential-blob)'{-i+,--credential-blob=}'[input credential-blob file (from tpm2_makecredential -o)]:file:_files' \
+      '(-o --certinfo-data)'{-o+,--certinfo-data=}'[output decrypted credential data file]:file:_files' \
+      '--cphash=[output command-parameter hash for off-line audit]:file:_files' \
+      '--rphash=[output response-parameter hash for off-line audit]:file:_files' \
+      '(-S --session)'{-S+,--session=}'[authorization session context file]:file:_files'
+    ;;
+
+  tpm2_encryptdecrypt)
+    # TPM2_EncryptDecrypt: AES-encrypt or AES-decrypt data
+    # using a TPM-resident symmetric key.  -d/--decrypt toggles
+    # between encrypt/decrypt mode (default encrypt).  -G/--mode
+    # selects the AES block-cipher mode.
+    _arguments -s -S \
+      $tpm2_common \
+      '(-p --auth)'{-p+,--auth=}'[key authorization]:auth:' \
+      '(-d --decrypt)'{-d,--decrypt}'[switch to decrypt mode (default = encrypt)]' \
+      '(-t --iv)'{-t+,--iv=}'[IV file (for CBC/CFB/OFB/CTR modes)]:file:_files' \
+      '(-G --mode)'{-G+,--mode=}'[AES block-cipher mode]:mode:($tpm2_aes_modes)' \
+      '(-o --output)'{-o+,--output=}'[output file (default stdout)]:file:_files' \
+      '(-c --key-context)'{-c+,--key-context=}'[symmetric-key context (handle or context file)]:key:' \
+      '(-e --pad)'{-e,--pad}'[PKCS#7-pad input to block boundary]' \
+      '--cphash=[output command-parameter hash for off-line audit]:file:_files' \
+      ':input data file:_files'
+    ;;
+
+esac
