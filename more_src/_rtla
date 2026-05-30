@@ -1,0 +1,138 @@
+#compdef rtla rtla-osnoise rtla-timerlat rtla-hwnoise
+# Documentation: https://docs.kernel.org/tools/rtla/ (Linux kernel tools/rtla)
+# Reference accessed: 2026-05-30
+# rtla — Real-Time Linux Analysis. Meta-tool interface to osnoise/timerlat ftrace tracers.
+# Multi-stem: rtla = top-level dispatcher; rtla-osnoise/rtla-timerlat/rtla-hwnoise = direct binaries.
+
+local curcontext="$curcontext" state line ret=1
+
+local -a _subcmds
+_subcmds=(
+  'osnoise:OS noise tracer interface (per-CPU kernel threads measuring jitter)'
+  'timerlat:timer latency tracer (periodic timers measuring wakeup latency)'
+  'hwnoise:hardware noise variant of osnoise'
+)
+
+local -a _modes
+_modes=(
+  'top:real-time top-style display'
+  'hist:histogram display + auto-analysis'
+)
+
+# Shared flag set — works for all osnoise/timerlat/hwnoise + top/hist subcommands.
+local -a _shared
+_shared=(
+  '(- *)'{-h,--help}'[show help]'
+  '(-a --auto)'{-a,--auto=}'[auto trace mode with common debugging options]:us:'
+  '(-p --period)'{-p,--period=}'[tracer period in microseconds]:us:'
+  '(-r --runtime)'{-r,--runtime=}'[tracer runtime in microseconds (osnoise only)]:us:'
+  '(-s --stop)'{-s,--stop=}'[stop trace if single sample exceeds threshold (osnoise)]:us:'
+  '(-S --stop-total)'{-S,--stop-total=}'[stop trace if total exceeds threshold]:us:'
+  '(-T --threshold)'{-T,--threshold=}'[minimum delta for noise detection (default 5us)]:us:'
+  '(-t --trace)'{-t,--trace=}'[save stopped trace to file]:file:_files'
+  '(-c --cpus)'{-c,--cpus=}'[CPU list for sample threads]:cpu-list:'
+  '(-H --house-keeping)'{-H,--house-keeping=}'[CPU list for control threads]:cpu-list:'
+  '(-d --duration)'{-d,--duration=}'[session duration (s/m/h/d)]:duration:'
+  '(-D --debug)'{-D,--debug}'[print debug information]'
+  '*'{-e,--event=}'[enable trace event (sys\:event; repeatable)]:event:'
+  '*--filter=[filter previous event]:filter:'
+  '*--trigger=[enable trace event trigger]:trigger:'
+  '(-P --priority)'{-P,--priority=}'[scheduling parameters (o\:prio|r\:prio|f\:prio|d\:runtime\:period)]:prio:'
+  '(-C --cgroup)'{-C,--cgroup=}'[assign tracer threads to cgroup]:cgroup:'
+  '--warm-up=[warm-up period in seconds before data collection]:sec:'
+  '--trace-buffer-size=[per-CPU trace buffer size (kB)]:kB:'
+  '--on-threshold=[execute action when threshold triggers]:action:'
+  '--on-end=[execute action at tracing end]:action:'
+  '(-q --quiet)'{-q,--quiet}'[only print end-of-session summary]'
+)
+
+# timerlat-specific flags.
+local -a _timerlat_only
+_timerlat_only=(
+  '(-i --irq)'{-i,--irq=}'[stop trace if IRQ latency exceeds threshold]:us:'
+  '--thread=[stop trace if thread latency exceeds threshold]:us:'
+  '--stack=[save stack trace at IRQ if thread latency exceeds value]:us:'
+  '(-k --kernel-threads -u --user-threads -U --user-load)'{-k,--kernel-threads}'[use kernel-space threads]'
+  '(-k --kernel-threads -u --user-threads -U --user-load)'{-u,--user-threads}'[run user-space workloads (default)]'
+  '(-k --kernel-threads -u --user-threads -U --user-load)'{-U,--user-load}'[no workload, wait for user dispatch]'
+  '--dma-latency=[bound exit-from-idle latencies]:us:'
+  '--deepest-idle-state=[disable idle states above this level]:N:'
+  '--bpf-action=[load + execute BPF program on threshold]:bpf:'
+  '--stack-format=[stack trace format]:fmt:(truncate skip full)'
+  '--no-aa[disable auto-analysis to reduce CPU usage]'
+  '--aa-only=[run auto-analysis only, skip statistics]:us:'
+)
+
+# hist-specific flags.
+local -a _hist_only
+_hist_only=(
+  '(-b --bucket-size)'{-b,--bucket-size=}'[histogram bucket size (default 1)]:N:'
+  '(-E --entries)'{-E,--entries=}'[number of histogram entries (default 256)]:N:'
+  '--no-header[suppress histogram header]'
+  '--no-summary[suppress summary]'
+  '--no-index[suppress index column]'
+  '--with-zeros[include zero-value entries]'
+)
+
+# Multi-stem dispatch on $service.
+case $service in
+  rtla-osnoise|rtla-timerlat|rtla-hwnoise)
+    _arguments -C \
+      '(- *)'{-h,--help}'[show help]' \
+      '1: :->mode' \
+      '*:: :->args' && ret=0
+    case $state in
+      mode)
+        _describe -t commands 'mode' _modes && ret=0
+        ;;
+      args)
+        if [[ $service == rtla-timerlat ]]; then
+          if [[ $line[1] == hist ]]; then
+            _arguments $_shared $_timerlat_only $_hist_only && ret=0
+          else
+            _arguments $_shared $_timerlat_only && ret=0
+          fi
+        else
+          if [[ $line[1] == hist ]]; then
+            _arguments $_shared $_hist_only && ret=0
+          else
+            _arguments $_shared && ret=0
+          fi
+        fi
+        ;;
+    esac
+    ;;
+  rtla)
+    # Top-level: rtla osnoise|timerlat|hwnoise top|hist [...]
+    _arguments -C \
+      '(- *)'{-h,--help}'[show help]' \
+      '1: :->tool' \
+      '2: :->mode' \
+      '*:: :->args' && ret=0
+    case $state in
+      tool)
+        _describe -t commands 'rtla tool' _subcmds && ret=0
+        ;;
+      mode)
+        _describe -t commands 'mode' _modes && ret=0
+        ;;
+      args)
+        if [[ $line[1] == timerlat ]]; then
+          if [[ $line[2] == hist ]]; then
+            _arguments $_shared $_timerlat_only $_hist_only && ret=0
+          else
+            _arguments $_shared $_timerlat_only && ret=0
+          fi
+        else
+          if [[ $line[2] == hist ]]; then
+            _arguments $_shared $_hist_only && ret=0
+          else
+            _arguments $_shared && ret=0
+          fi
+        fi
+        ;;
+    esac
+    ;;
+esac
+
+return ret
