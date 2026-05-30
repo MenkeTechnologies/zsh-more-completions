@@ -1,0 +1,132 @@
+#compdef swupdate-ipc
+# Documentation: source-direct extraction from upstream
+# sbabic/swupdate tools/swupdate-ipc.c.  Reference accessed
+# 2026-05-30 via gh api.
+# Sister tool to R210's swupdate.  swupdate-ipc is the
+# multi-subcommand IPC swiss-army-knife for talking to a
+# running SWUpdate daemon: send AES decryption keys, set
+# version markers, drive HawkBit (Eclipse hawkBit cloud-update
+# server) state, restart the system across a fleet, monitor
+# progress as JSON, and trigger a download URL.
+#
+# Subcommand dispatch decoded source-direct from the
+# `cmd_t commands[]` array at lines 768-777:
+#   {"aes", sendaes, usage_aes},
+#   {"setversion", setversions, usage_setversion},
+#   {"sendtohawkbit", sendtohawkbit, usage_send_to_hawkbit},
+#   {"hawkbitcfg", hawkbitcfg, usage_hawkbitcfg},
+#   {"gethawkbit", gethawkbitstatus, usage_gethawkbitstatus},
+#   {"sysrestart", sysrestart, usage_sysrestart},
+#   {"monitor", monitor, usage_monitor},
+#   {"dwlurl", dwlurl, usage_dwlurl},
+# Subcommand dispatch via strcmp(argv[1], cmd->name) at main()
+# lines 797-810.  Each subcommand has its own getopt_long /
+# getopt loop walked source-direct below.
+
+local curcontext="$curcontext" state line ret=1
+local -a subcommands=(
+  'aes:send AES decryption key + IVT to SWUpdate (positional: <key> <ivt>)'
+  'setversion:set running min/max version markers (positional: <minver> <maxver> <current>)'
+  'sendtohawkbit:report status to a HawkBit server (positional: <action-id> <status> <finished> <execution> <details...>)'
+  'hawkbitcfg:enable/disable HawkBit polling or set polling interval'
+  'gethawkbit:query HawkBit suricatta state (no flags)'
+  'sysrestart:restart system across a fleet after an update'
+  'monitor:print SWUpdate progress events as JSON'
+  'dwlurl:tell SWUpdate to download from a URL'
+)
+
+# <finished> enum from upstream usage_send_to_hawkbit() at
+# tools/swupdate-ipc.c:69.
+local -a hawkbit_finished=(success failure none)
+# <execution> enum from upstream usage_send_to_hawkbit() at
+# tools/swupdate-ipc.c:70.
+local -a hawkbit_execution=(closed proceeding canceled scheduled rejected resumed downloaded download)
+
+_arguments -C \
+  '1:subcommand:->subcmd' \
+  '*::args:->args' && ret=0
+
+case $state in
+  subcmd)
+    _describe -t subcommands 'swupdate-ipc subcommand' subcommands && ret=0
+    ;;
+  args)
+    case $words[1] in
+      aes)
+        # Decoded source-direct from sendaes() / usage_aes:
+        # `swupdate-ipc aes <key-hex> <ivt-hex>`.  No flags.
+        _arguments \
+          '1:key (ASCII hex):' \
+          '2:ivt (ASCII hex):' && ret=0
+        ;;
+      setversion)
+        # Decoded source-direct from setversions() /
+        # usage_setversion: 3 positionals.
+        _arguments \
+          '1:min version:' \
+          '2:max version:' \
+          '3:current version:' && ret=0
+        ;;
+      sendtohawkbit)
+        # Decoded source-direct from sendtohawkbit() /
+        # usage_send_to_hawkbit:
+        #   <action-id> (0 = ask SWUpdate to find it)
+        #   <status>    (see state.h state values)
+        #   <finished>  (success | failure | none)
+        #   <execution> (closed | proceeding | canceled |
+        #                scheduled | rejected | resumed |
+        #                downloaded | download)
+        #   <detail 1> <detail 2> ... (variadic user info)
+        _arguments \
+          '1:action-id (0 = ask SWUpdate; >0 = stored ID):' \
+          '2:status (numeric state from state.h):' \
+          '3:finished:(success failure none)' \
+          '4:execution:(closed proceeding canceled scheduled rejected resumed downloaded download)' \
+          '*:details (user info strings passed to HawkBit):' && ret=0
+        ;;
+      hawkbitcfg)
+        # Decoded source-direct from hawkbitcfg() at
+        # tools/swupdate-ipc.c:161-218.  getopt string "p:edth"
+        # + long_options at lines 152-159.
+        _arguments \
+          '(-h --help)'{-h,--help}'[print help and exit]' \
+          '(-p --polling-time)'{-p+,--polling-time=}'[polling interval to query backend (0 = use server default)]:seconds:' \
+          '(-e --enable -d --disable)'{-e,--enable}'[enable polling of backend server]' \
+          '(-e --enable -d --disable)'{-d,--disable}'[disable polling of backend server]' \
+          '(-t --trigger)'{-t,--trigger}'[enable and check for update immediately]' && ret=0
+        ;;
+      gethawkbit)
+        # No flags; queries CMD_GET_STATUS and prints JSON.
+        _message 'no flags; queries HawkBit suricatta state' && ret=0
+        ;;
+      sysrestart)
+        # Decoded source-direct from sysrestart() at
+        # tools/swupdate-ipc.c:542-675.  getopt string "whs:".
+        _arguments \
+          '(-h --help)'{-h,--help}'[print help and exit]' \
+          '(-w --wait)'{-w,--wait}'[wait for a connection with SWUpdate]' \
+          '(-s --socket)'{-s+,--socket=}'[path to progress IPC socket]:socket:_files' && ret=0
+        ;;
+      monitor)
+        # Decoded source-direct from monitor() at
+        # tools/swupdate-ipc.c:691-763.  getopt string "hs:" +
+        # monitor_options at lines 685-689.  Prints
+        # progress_msg as a single JSON line per update tick.
+        _arguments \
+          '(-h --help)'{-h,--help}'[print help and exit]' \
+          '(-s --socket)'{-s+,--socket=}'[path to progress IPC socket]:socket:_files' && ret=0
+        ;;
+      dwlurl)
+        # Decoded source-direct from dwlurl() at
+        # tools/swupdate-ipc.c:228-291.  getopt string "u:c:"
+        # + dwlurl_options at lines 220-225.
+        _arguments \
+          '(-h --help)'{-h,--help}'[print help and exit]' \
+          '(-u --url)'{-u+,--url=}'[URL to be passed to the downloader (mandatory)]:url:_urls' \
+          '(-c --userpassword)'{-c+,--userpassword=}'[credentials (format: user:pass)]:userpass:' && ret=0
+        ;;
+    esac
+    ;;
+esac
+
+return ret
