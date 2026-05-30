@@ -1,0 +1,172 @@
+#compdef tpm2_certify tpm2_certifycreation tpm2_getcommandauditdigest tpm2_getsessionauditdigest tpm2_getpolicydigest tpm2_gettime
+# Documentation: source-direct extraction from upstream
+# tpm2-software/tpm2-tools.  Per-tool `struct option topts[]`
+# table decoded source-direct from each tools/tpm2_<name>.c.
+# Shared $tpm2_common + $tpm2_hashalgs + $tpm2_signschemes
+# re-extracted source-direct from lib/tpm2_options.c /
+# lib/tpm2_alg_util.c — see R193-R198 HARVEST_LOG entries for
+# the full extraction notes.
+# Reference accessed: 2026-05-30 via gh api.
+# tpm2-software tpm2-tools R199 — follow-up to R198's hunt-skip
+# on "next-priority candidates: certify-family (tpm2_certify,
+# tpm2_certifycreation, tpm2_getcommandauditdigest,
+# tpm2_getsessionauditdigest, tpm2_getpolicydigest,
+# tpm2_gettime)".  This round covers the certify + attestation-
+# digest + TPM-signed-time family.  Sister tools to R193-R198's
+# tpm2_* family already in the corpus.
+
+local -a tpm2_common=(
+  '(-T --tcti)'{-T+,--tcti=}'[TCTI library + options (e.g. "device:/dev/tpmrm0" or "swtpm:port=2321")]:tcti:'
+  '(-h --help)'{-h-,--help=-}'[print help (optional arg = topic)]::topic:'
+  '(-v --version)'{-v,--version}'[print version and exit]'
+  '(-V --verbose)'{-V,--verbose}'[verbose mode]'
+  '(-Q --quiet)'{-Q,--quiet}'[quiet mode]'
+  '(-Z --enable-errata)'{-Z,--enable-errata}'[enable TPM2 errata workarounds]'
+  '(-z --pwd-session)'{-z,--pwd-session}'[use password-authorized session]'
+)
+local -a tpm2_hashalgs=(sha1 sha256 sha384 sha512 sm3_256)
+local -a tpm2_signschemes=(rsassa rsapss ecdsa ecdaa ecschnorr sm2 hmac null)
+
+case $service in
+
+  tpm2_certify)
+    # Certify one TPM object using another TPM object's signing
+    # key (TPM2_Certify) - produces an attestation that the
+    # certified key is loaded into this TPM under the named
+    # parent.  Same -C/-c/-P/-p uppercase-vs-lowercase
+    # convention from R194/R198: -C/-P signing key (uppercase),
+    # -c/-p certified key (lowercase).
+    _arguments -s -S \
+      $tpm2_common \
+      '(-c --certifiedkey-context)'{-c+,--certifiedkey-context=}'[certified-key context (handle or context file)]:key:' \
+      '(-C --signingkey-context)'{-C+,--signingkey-context=}'[signing-key context (handle or context file)]:key:' \
+      '(-P --certifiedkey-auth)'{-P+,--certifiedkey-auth=}'[certified-key authorization]:auth:' \
+      '(-p --signingkey-auth)'{-p+,--signingkey-auth=}'[signing-key authorization]:auth:' \
+      '(-g --hash-algorithm)'{-g+,--hash-algorithm=}'[hash algorithm for the signing scheme]:alg:($tpm2_hashalgs)' \
+      '(-o --attestation)'{-o+,--attestation=}'[output attestation-data file]:file:_files' \
+      '(-s --signature)'{-s+,--signature=}'[output signature file]:file:_files' \
+      '(-f --format)'{-f+,--format=}'[signature output format]:format:(tss plain)' \
+      '(-q --qualifying-data)'{-q+,--qualifying-data=}'[qualifying data (nonce)]:nonce:' \
+      '--cphash=[output command-parameter hash for off-line audit]:file:_files' \
+      '--rphash=[output response-parameter hash for off-line audit]:file:_files' \
+      '--scheme=[signing scheme override]:scheme:($tpm2_signschemes)' \
+      '(-S --session)'{-S+,--session=}'[authorization session context file]:file:_files'
+    ;;
+
+  tpm2_certifycreation)
+    # Certify the creation of an object using its creation-hash
+    # + creation-ticket (TPM2_CertifyCreation).  Used to attest
+    # that a particular TPM object was created with specific
+    # creation parameters (e.g. policy, attributes, parent).
+    # Critical extraction note: tpm2_certifycreation's
+    # -d/--creation-hash is required_argument (input from a
+    # previous tpm2_create's --creation-hash output) - same
+    # naming as R194's tpm2_create -d/--creation-hash.  Plus
+    # -t/--ticket which carries the creation-ticket output of
+    # the same prior tpm2_create call.
+    _arguments -s -S \
+      $tpm2_common \
+      '(-C --signingkey-context)'{-C+,--signingkey-context=}'[signing-key context (handle or context file)]:key:' \
+      '(-P --signingkey-auth)'{-P+,--signingkey-auth=}'[signing-key authorization]:auth:' \
+      '(-c --certifiedkey-context)'{-c+,--certifiedkey-context=}'[certified-key context (handle or context file)]:key:' \
+      '(-d --creation-hash)'{-d+,--creation-hash=}'[input creation-hash file (from tpm2_create -d output)]:file:_files' \
+      '(-t --ticket)'{-t+,--ticket=}'[input creation-ticket file (from tpm2_create -t output)]:file:_files' \
+      '(-g --hash-algorithm)'{-g+,--hash-algorithm=}'[hash algorithm for the signing scheme]:alg:($tpm2_hashalgs)' \
+      '(-s --scheme)'{-s+,--scheme=}'[signing scheme]:scheme:($tpm2_signschemes)' \
+      '(-f --format)'{-f+,--format=}'[signature output format]:format:(tss plain)' \
+      '(-o --signature)'{-o+,--signature=}'[output signature file]:file:_files' \
+      '--attestation=[output attestation-data file]:file:_files' \
+      '(-q --qualification)'{-q+,--qualification=}'[qualifying data (nonce)]:nonce:' \
+      '--cphash=[output command-parameter hash for off-line audit]:file:_files' \
+      '--rphash=[output response-parameter hash for off-line audit]:file:_files' \
+      '(-S --session)'{-S+,--session=}'[authorization session context file]:file:_files'
+    ;;
+
+  tpm2_getcommandauditdigest)
+    # Retrieve the running command-audit digest from the TPM,
+    # signed by a TPM-resident signing key.  The TPM
+    # accumulates an audit digest of all commands matching the
+    # "audit" command-code-attribute set via
+    # tpm2_setcommandcodeauditstatus.  Critical extraction
+    # note: -P/--hierarchy-auth here is the ENDORSEMENT
+    # hierarchy auth (per the TPM2 spec's
+    # TPM2_GetCommandAuditDigest authorization model) NOT the
+    # owner-hierarchy auth.  Decoded source-direct from
+    # upstream's `tpm2_session_setup()` call passing
+    # ESYS_TR_RH_ENDORSEMENT as the authorization handle.
+    _arguments -s -S \
+      $tpm2_common \
+      '(-P --hierarchy-auth)'{-P+,--hierarchy-auth=}'[endorsement-hierarchy authorization]:auth:' \
+      '(-c --key-context)'{-c+,--key-context=}'[signing-key context (handle or context file)]:key:' \
+      '(-p --auth)'{-p+,--auth=}'[signing-key authorization]:auth:' \
+      '(-q --qualification)'{-q+,--qualification=}'[qualifying data (nonce)]:nonce:' \
+      '(-s --signature)'{-s+,--signature=}'[output signature file]:file:_files' \
+      '(-m --message)'{-m+,--message=}'[output audit-message (attestation) file]:file:_files' \
+      '(-f --format)'{-f+,--format=}'[signature output format]:format:(tss plain)' \
+      '(-g --hash-algorithm)'{-g+,--hash-algorithm=}'[hash algorithm for the signing scheme]:alg:($tpm2_hashalgs)' \
+      '--scheme=[signing scheme]:scheme:($tpm2_signschemes)'
+    ;;
+
+  tpm2_getsessionauditdigest)
+    # Retrieve the audit digest of a specific session (TPM2_
+    # GetSessionAuditDigest).  Differs from getcommand-
+    # auditdigest in that the audit digest is per-session
+    # (carried by the audit-session started via tpm2_start-
+    # authsession --audit-session) rather than the global
+    # command-audit digest.  Adds -S/--session to identify
+    # which audit session to query.
+    _arguments -s -S \
+      $tpm2_common \
+      '(-P --hierarchy-auth)'{-P+,--hierarchy-auth=}'[endorsement-hierarchy authorization]:auth:' \
+      '(-c --key-context)'{-c+,--key-context=}'[signing-key context (handle or context file)]:key:' \
+      '(-p --auth)'{-p+,--auth=}'[signing-key authorization]:auth:' \
+      '(-q --qualification)'{-q+,--qualification=}'[qualifying data (nonce)]:nonce:' \
+      '(-s --signature)'{-s+,--signature=}'[output signature file]:file:_files' \
+      '(-m --message)'{-m+,--message=}'[output audit-message (attestation) file]:file:_files' \
+      '(-f --format)'{-f+,--format=}'[signature output format]:format:(tss plain)' \
+      '(-g --hash-algorithm)'{-g+,--hash-algorithm=}'[hash algorithm for the signing scheme]:alg:($tpm2_hashalgs)' \
+      '--scheme=[signing scheme]:scheme:($tpm2_signschemes)' \
+      '(-S --session)'{-S+,--session=}'[audit-session context file (the session being queried)]:file:_files'
+    ;;
+
+  tpm2_getpolicydigest)
+    # Read the current accumulated policy digest of a policy-
+    # session (TPM2_PolicyGetDigest).  Used during policy
+    # construction to capture the current digest for tpm2_
+    # createpolicy verification or off-line policy-tree
+    # building.  Lightest topts[] in R199 - just 4 flags.
+    _arguments -s -S \
+      $tpm2_common \
+      '(-o --output)'{-o+,--output=}'[output policy-digest file]:file:_files' \
+      '--hex[print digest as hex string]' \
+      '(-S --session)'{-S+,--session=}'[policy-session context file (the session being queried)]:file:_files' \
+      '--cphash=[output command-parameter hash for off-line audit]:file:_files'
+    ;;
+
+  tpm2_gettime)
+    # Retrieve the TPM-signed time + clock + reset/restart
+    # counts (TPM2_GetTime).  Useful for remote attestation of
+    # TPM uptime, reboot-since-clear count, and the TPM's
+    # internal clock (which advances even across reboots).
+    # Critical extraction note: tpm2_gettime has TWO auth flags
+    # - -p/--auth for the signing key, -P/--endorse-auth for
+    # the endorsement-hierarchy (since TPM2_GetTime requires
+    # endorsement-hierarchy authorization).  Decoded source-
+    # direct from upstream's `tpm2_session_setup()` calls.
+    # --attestation long-only via val=2 (NOT val=0, which is
+    # for --cphash).
+    _arguments -s -S \
+      $tpm2_common \
+      '(-p --auth)'{-p+,--auth=}'[signing-key authorization]:auth:' \
+      '(-P --endorse-auth)'{-P+,--endorse-auth=}'[endorsement-hierarchy authorization]:auth:' \
+      '(-g --hash-algorithm)'{-g+,--hash-algorithm=}'[hash algorithm for the signing scheme]:alg:($tpm2_hashalgs)' \
+      '(-s --scheme)'{-s+,--scheme=}'[signing scheme]:scheme:($tpm2_signschemes)' \
+      '(-o --signature)'{-o+,--signature=}'[output signature file]:file:_files' \
+      '(-c --key-context)'{-c+,--key-context=}'[signing-key context (handle or context file)]:key:' \
+      '(-f --format)'{-f+,--format=}'[signature output format]:format:(tss plain)' \
+      '(-q --qualification)'{-q+,--qualification=}'[qualifying data (nonce)]:nonce:' \
+      '--attestation=[output attestation-data file]:file:_files' \
+      '--cphash=[output command-parameter hash for off-line audit]:file:_files'
+    ;;
+
+esac
