@@ -1,0 +1,223 @@
+#compdef tpm2_ecdhkeygen tpm2_ecdhzgen tpm2_ecephemeral tpm2_geteccparameters tpm2_import tpm2_duplicate tpm2_pcrallocate tpm2_pcrevent tpm2_commit tpm2_gettestresult tpm2_incrementalselftest
+# Documentation: source-direct extraction from upstream
+# tpm2-software/tpm2-tools.  Per-tool `struct option topts[]`
+# table decoded source-direct from each tools/tpm2_<name>.c.
+# Shared $tpm2_common + $tpm2_hashalgs + $tpm2_keyalgs re-
+# extracted source-direct from lib/tpm2_options.c /
+# lib/tpm2_alg_util.c — see R193-R200 HARVEST_LOG entries for
+# the full extraction notes.
+# Reference accessed: 2026-05-30 via gh api.
+# tpm2-software tpm2-tools R201 — follow-up to R200's hunt-skip
+# on "next-priority candidates: TPM-mgmt remainder (tpm2_get-
+# testresult/incrementalselftest), ECC-mgmt (tpm2_ecdhkeygen/
+# ecdhzgen/ecephemeral/geteccparameters), import/duplicate
+# (tpm2_import/duplicate), PCR-mgmt (tpm2_pcrallocate/
+# pcrevent), commit (tpm2_commit for ECDAA)".  This round
+# covers the ECC + import/duplicate + PCR-mgmt + ECDAA-commit +
+# selftest family.  Sister tools to R193-R200's tpm2_* family
+# already in the corpus.
+
+local -a tpm2_common=(
+  '(-T --tcti)'{-T+,--tcti=}'[TCTI library + options (e.g. "device:/dev/tpmrm0" or "swtpm:port=2321")]:tcti:'
+  '(-h --help)'{-h-,--help=-}'[print help (optional arg = topic)]::topic:'
+  '(-v --version)'{-v,--version}'[print version and exit]'
+  '(-V --verbose)'{-V,--verbose}'[verbose mode]'
+  '(-Q --quiet)'{-Q,--quiet}'[quiet mode]'
+  '(-Z --enable-errata)'{-Z,--enable-errata}'[enable TPM2 errata workarounds]'
+  '(-z --pwd-session)'{-z,--pwd-session}'[use password-authorized session]'
+)
+local -a tpm2_hashalgs=(sha1 sha256 sha384 sha512 sm3_256)
+local -a tpm2_keyalgs=(rsa rsa1024 rsa2048 rsa3072 rsa4096
+                      ecc ecc_nist_p192 ecc_nist_p224 ecc_nist_p256
+                      ecc_nist_p384 ecc_nist_p521 ecc_sm2_p256
+                      ecc_bn_p256 ecc_bn_p638
+                      aes aes128 aes192 aes256
+                      keyedhash xor null)
+# Named ECC curves (the 7 -G/--key-algorithm ecc_* sub-values
+# from R194's $tpm2_keyalgs).
+local -a tpm2_ecc_curves=(ecc_nist_p192 ecc_nist_p224 ecc_nist_p256
+                         ecc_nist_p384 ecc_nist_p521 ecc_sm2_p256
+                         ecc_bn_p256 ecc_bn_p638)
+
+case $service in
+
+  tpm2_ecdhkeygen)
+    # TPM2_ECDH_KeyGen: generate an ephemeral ECDH key on the
+    # TPM and output the public point.  Used as the first half
+    # of an ECDH key-exchange (the other party runs the same
+    # operation on their TPM).
+    _arguments -s -S \
+      $tpm2_common \
+      '(-c --context)'{-c+,--context=}'[ECC key context (handle or context file)]:key:' \
+      '(-u --public)'{-u+,--public=}'[input ECC public-key file]:file:_files' \
+      '(-o --output)'{-o+,--output=}'[output ephemeral public point file]:file:_files' \
+      '--cphash=[output command-parameter hash for off-line audit]:file:_files'
+    ;;
+
+  tpm2_ecdhzgen)
+    # TPM2_ECDH_ZGen: compute the ECDH shared secret Z from a
+    # TPM-resident private key + a peer's public ECDH point.
+    # The companion to tpm2_ecdhkeygen on the receiving side.
+    _arguments -s -S \
+      $tpm2_common \
+      '(-c --key-context)'{-c+,--key-context=}'[ECC private-key context (handle or context file)]:key:' \
+      '(-p --key-auth)'{-p+,--key-auth=}'[ECC key authorization]:auth:' \
+      '(-u --public)'{-u+,--public=}'[input peer ephemeral public point file]:file:_files' \
+      '(-k --public-key)'{-k+,--public-key=}'[input peer static public-key file (for one-pass ECDH)]:file:_files' \
+      '(-o --output)'{-o+,--output=}'[output shared-secret Z file]:file:_files' \
+      '--cphash=[output command-parameter hash for off-line audit]:file:_files'
+    ;;
+
+  tpm2_ecephemeral)
+    # TPM2_EC_Ephemeral: ask the TPM for an ephemeral ECC key
+    # for ECDAA/anonymous-credential signing protocols.  Output
+    # is the public ECC point + a TPM-side counter that the
+    # next tpm2_commit / tpm2_sign call references.
+    _arguments -s -S \
+      $tpm2_common \
+      '(-u --public)'{-u+,--public=}'[output ephemeral public-point file]:file:_files' \
+      '(-t --counter)'{-t+,--counter=}'[output ephemeral counter file]:file:_files' \
+      '--cphash=[output command-parameter hash for off-line audit]:file:_files' \
+      ':ECC curve:($tpm2_ecc_curves)'
+    ;;
+
+  tpm2_geteccparameters)
+    # TPM2_ECC_Parameters: retrieve the curve parameters for a
+    # given ECC curve (prime/a/b/Gx/Gy/n/h).  Useful for off-
+    # line ECC math or for verifying that the TPM supports a
+    # particular curve.  Lightest topts[] in R201 - just 2
+    # flags.
+    _arguments -s -S \
+      $tpm2_common \
+      '(-o --output)'{-o+,--output=}'[output ECC parameters file]:file:_files' \
+      '--cphash=[output command-parameter hash for off-line audit]:file:_files' \
+      ':ECC curve:($tpm2_ecc_curves)'
+    ;;
+
+  tpm2_import)
+    # TPM2_Import: import a key from outside the TPM under a
+    # specified parent.  Critical extraction note:
+    # tpm2_import has TWO `-U`/`-u` flag short-form pairs -
+    # `-U`/`--parent-public` (uppercase = parent's public key)
+    # and `-u`/`--public` (lowercase = imported key's public
+    # key).  This is the 4th variant of the case-sensitive
+    # convention from R194/R198/R199/R200 (this time for parent
+    # vs child object).  The 16-flag topts[] is the heaviest in
+    # R201.
+    _arguments -s -S \
+      $tpm2_common \
+      '(-P --parent-auth)'{-P+,--parent-auth=}'[parent key authorization]:auth:' \
+      '(-p --key-auth)'{-p+,--key-auth=}'[new (imported) key authorization]:auth:' \
+      '(-G --key-algorithm)'{-G+,--key-algorithm=}'[imported-key algorithm]:alg:($tpm2_keyalgs)' \
+      '(-i --input)'{-i+,--input=}'[input file containing key material to import]:file:_files' \
+      '(-C --parent-context)'{-C+,--parent-context=}'[parent key context (handle or context file)]:parent:' \
+      '(-U --parent-public)'{-U+,--parent-public=}'[input parent-public-key file (for off-line wrap)]:file:_files' \
+      '(-r --private)'{-r+,--private=}'[output wrapped private-blob file]:file:_files' \
+      '(-u --public)'{-u+,--public=}'[output public-key file of the imported key]:file:_files' \
+      '(-a --attributes)'{-a+,--attributes=}'[object attributes bitmask]:attrs:' \
+      '(-g --hash-algorithm)'{-g+,--hash-algorithm=}'[hash algorithm]:alg:($tpm2_hashalgs)' \
+      '(-s --seed)'{-s+,--seed=}'[input seed file (for legacy off-line wrap)]:file:_files' \
+      '(-L --policy)'{-L+,--policy=}'[authorization policy digest file]:file:_files' \
+      '(-k --encryption-key)'{-k+,--encryption-key=}'[wrap-encryption-key file (for OSSL-style imports)]:file:_files' \
+      '--passin=[passphrase for input PEM/DER file (pass: env: file: fd:)]:passin:' \
+      '--cphash=[output command-parameter hash for off-line audit]:file:_files' \
+      '(-R --autoflush)'{-R,--autoflush}'[auto-flush imported key after operation]'
+    ;;
+
+  tpm2_duplicate)
+    # TPM2_Duplicate: produce a TPM-wrapped duplicate of an
+    # object that can be re-imported under a different parent.
+    # Critical extraction note: tpm2_duplicate has a peculiar
+    # topts[] entry where TWO different long-names map to the
+    # same short-form `-G`: `--wrapper-algorithm` and
+    # `--key-algorithm`.  Decoded source-direct as a backwards-
+    # compatibility alias (R194 documented `-G`/`--key-algorithm`
+    # as the canonical name; `--wrapper-algorithm` is the
+    # legacy long-form).  Listed both forms in completion.
+    _arguments -s -S \
+      $tpm2_common \
+      '(-p --auth)'{-p+,--auth=}'[object authorization]:auth:' \
+      '(-L --policy)'{-L+,--policy=}'[authorization policy digest file]:file:_files' \
+      '(-G --wrapper-algorithm --key-algorithm)'{-G+,--wrapper-algorithm=,--key-algorithm=}'[wrap-encryption algorithm (--wrapper-algorithm is the legacy alias)]:alg:($tpm2_keyalgs)' \
+      '(-r --private)'{-r+,--private=}'[output wrapped private-blob file]:file:_files' \
+      '(-u --public)'{-u+,--public=}'[input public-key file of the object to duplicate]:file:_files' \
+      '(-k --private-key)'{-k+,--private-key=}'[input private-key file (for OSSL-style export)]:file:_files' \
+      '(-i --encryptionkey-in)'{-i+,--encryptionkey-in=}'[input encryption-key file]:file:_files' \
+      '(-o --encryptionkey-out)'{-o+,--encryptionkey-out=}'[output encryption-key file]:file:_files' \
+      '(-s --encrypted-seed)'{-s+,--encrypted-seed=}'[output encrypted-seed file]:file:_files' \
+      '(-C --parent-context)'{-C+,--parent-context=}'[new-parent key context (handle or context file)]:parent:' \
+      '(-U --parent-public)'{-U+,--parent-public=}'[input new-parent public-key file]:file:_files' \
+      '(-c --key-context)'{-c+,--key-context=}'[object-to-duplicate context (handle or context file)]:key:' \
+      '(-a --attributes)'{-a+,--attributes=}'[object attributes bitmask]:attrs:' \
+      '--cphash=[output command-parameter hash for off-line audit]:file:_files'
+    ;;
+
+  tpm2_pcrallocate)
+    # TPM2_PCR_Allocate: change which PCR banks (sha1/sha256/
+    # sha384/sha512/sm3_256) are enabled on the TPM.  Requires
+    # platform-hierarchy auth.  Typically set ONCE at factory
+    # provisioning - rarely changed during a device's lifetime.
+    _arguments -s -S \
+      $tpm2_common \
+      '(-P --auth)'{-P+,--auth=}'[platform-hierarchy authorization]:auth:' \
+      '--cphash=[output command-parameter hash for off-line audit]:file:_files' \
+      '*:PCR allocation spec (e.g. sha256:all OR sha1:none+sha256:all):'
+    ;;
+
+  tpm2_pcrevent)
+    # TPM2_PCR_Event: extend a PCR with the SHA-1/256/384/...
+    # banks all updated atomically by hashing the input data.
+    # Differs from tpm2_pcrextend in that pcrevent hashes the
+    # data first (multi-bank atomic), whereas pcrextend takes
+    # already-hashed values per bank.
+    _arguments -s -S \
+      $tpm2_common \
+      '(-P --auth)'{-P+,--auth=}'[PCR authorization]:auth:' \
+      '--cphash=[output command-parameter hash for off-line audit]:file:_files' \
+      '(-S --session)'{-S+,--session=}'[authorization session context file]:file:_files' \
+      ':PCR index (0-23):' \
+      ':input data file:_files'
+    ;;
+
+  tpm2_commit)
+    # TPM2_Commit: commit step of the ECDAA join protocol.
+    # Critical extraction note: tpm2_commit has 4 ECC-point
+    # input flags (`--basepoint-y`, `--eccpoint-P`,
+    # `--eccpoint-K`, `--eccpoint-L`) all long-only via val=0/1/
+    # 2/3.  These are the ECDAA protocol's intermediate ECC
+    # points exchanged between the joining party and the
+    # issuer.
+    _arguments -s -S \
+      $tpm2_common \
+      '(-p --auth)'{-p+,--auth=}'[key authorization]:auth:' \
+      '(-c --context)'{-c+,--context=}'[signing-key context (handle or context file)]:key:' \
+      '--basepoint-y=[input y-coordinate of the base point P1]:file:_files' \
+      '--eccpoint-P=[input ECC point P (s2 from ECDAA join)]:file:_files' \
+      '--eccpoint-K=[output ECC point K]:file:_files' \
+      '--eccpoint-L=[output ECC point L]:file:_files' \
+      '(-u --public)'{-u+,--public=}'[output ephemeral public point]:file:_files' \
+      '(-t --counter)'{-t+,--counter=}'[output ephemeral counter file (for subsequent tpm2_sign)]:file:_files' \
+      '--cphash=[output command-parameter hash for off-line audit]:file:_files'
+    ;;
+
+  tpm2_gettestresult)
+    # TPM2_GetTestResult: retrieve the latest self-test result
+    # from the TPM.  No flags beyond the shared common options.
+    # Decoded source-direct from upstream's
+    #   tpm2_options_new(NULL, 0, NULL, NULL, NULL, 0)
+    # passing NULL topts[].
+    _arguments -s -S \
+      $tpm2_common
+    ;;
+
+  tpm2_incrementalselftest)
+    # TPM2_IncrementalSelfTest: run TPM self-test on the given
+    # algorithms (or all if omitted).  Variadic positional
+    # accepts algorithm names from $tpm2_keyalgs.  No flags
+    # beyond the shared common options.
+    _arguments -s -S \
+      $tpm2_common \
+      '*:algorithm to self-test:($tpm2_keyalgs)'
+    ;;
+
+esac
