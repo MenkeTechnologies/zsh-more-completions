@@ -1,0 +1,121 @@
+#compdef s6-svdt s6-svdt-clear s6-svlink s6-svlisten s6-svlisten1 s6-svperms s6-svunlink s6-svwait
+# Documentation: source-direct extraction from upstream skarnet/s6
+# src/supervision/s6-{svdt,svdt-clear,svlink,svlisten,svlisten1,
+# svperms,svunlink,svwait}.c USAGE strings + subgetopt_r option
+# specs + case-arm decoding for the 6-way -U/-u/-d/-D/-r/-R state
+# mutex (svlisten family) and the 5-way -u/-g/-G/-o/-O perms-target
+# mutex (svperms).
+# Reference accessed: 2026-05-30 via gh api.
+# Skarnet s6 supervision-client tail R123 — 8-stem multi-binary
+# harvest of the s6 supervision-tree manipulation CLI tools not
+# already covered. Sister tools to the previously-covered
+# s6-supervise/s6-svc/s6-svstat/s6-svok/s6-svscan/s6-svscanctl
+# supervision-client family.
+
+# 6-way mutex of svlisten/svlisten1/svwait state-to-wait-for flags.
+# Decoded from s6-svlisten.c case arms: (wantup, wantready) =
+#   -u (1,0) up, -U (1,1) up+ready, -d (0,0) down, -D (0,1)
+#   down+finishing, -r (2,0) restart, -R (2,1) restart+ready.
+local -a _s6_sv_state_flags
+_s6_sv_state_flags=(
+  '(-U -u -d -D -r -R)-u[wait for service UP state]'
+  '(-U -u -d -D -r -R)-U[wait for service UP and READY state]'
+  '(-U -u -d -D -r -R)-d[wait for service DOWN state]'
+  '(-U -u -d -D -r -R)-D[wait for service DOWN and FINISHED state]'
+  '(-U -u -d -D -r -R)-r[wait for service RESTART (state-change cycle)]'
+  '(-U -u -d -D -r -R)-R[wait for service RESTART and READY state]'
+)
+
+case $service in
+
+  s6-svdt)
+    # Dump the recent down-time entries (death tally) for a service.
+    _arguments -s -S \
+      '(-S -s)-S[print as a flat numeric summary]' \
+      '(-S -s)-s[print as a single sub-summary line]' \
+      '-n+[max number of recent entries to print (default 50)]:maxentries:' \
+      '1:servicedir:_directories'
+    ;;
+
+  s6-svdt-clear)
+    # Reset the down-time / death-tally history for a service.
+    _arguments -s -S \
+      '1:servicedir:_directories'
+    ;;
+
+  s6-svlink)
+    # Atomically link a servicedir into a scandir under an optional
+    # rename. -d/-D control daemonize-block / -f force / -P protect.
+    _arguments -s -S \
+      '(-D)-d[start service down + block until s6-svscan sees it]' \
+      '(-d)-D[start service down without blocking]' \
+      '-f[force: overwrite an existing link at the same name]' \
+      '-P[protect: do not auto-rebuild scandir links on s6-svscan rescan]' \
+      '-t+[s6-svscan signaling timeout in ms]:ms:' \
+      '1:scandir:_directories' \
+      '2:servicedir:_directories' \
+      '3:service link name:'
+    ;;
+
+  s6-svlisten)
+    # Wait for state changes across MULTIPLE servicedirs in parallel,
+    # then chain-load prog. -a (default) waits for ALL; -o waits for
+    # ANY. servicedir list is terminated by an empty string "".
+    _arguments -s -S \
+      "${_s6_sv_state_flags[@]}" \
+      '(-a -o)-a[wait for ALL servicedirs to reach state (conjunction; default)]' \
+      '(-a -o)-o[wait for ANY one servicedir to reach state (disjunction)]' \
+      '-t+[timeout in milliseconds]:ms:' \
+      '*:servicedir / "" / program and args:_directories'
+    ;;
+
+  s6-svlisten1)
+    # Single-service variant of s6-svlisten; waits on one servicedir
+    # then chain-loads prog.
+    _arguments -s -S \
+      "${_s6_sv_state_flags[@]}" \
+      '-t+[timeout in milliseconds]:ms:' \
+      '1:servicedir:_directories' \
+      '*:program and arguments:_command_names -e'
+    ;;
+
+  s6-svperms)
+    # Get or set the permission triple (owner / group / other) on
+    # one or more servicedirs - controls who may use s6-svc /
+    # s6-svwait on the service. -v reads; the -u/-g/-G/-o/-O group
+    # cycles through which permission slot is targeted; -e/-E set
+    # the event subscription gid (used by s6-svnotify/s6-ftrig).
+    _arguments -s -S \
+      '-v[verbose: print current perms before / after applying changes]' \
+      '(-u -g -G -o -O)-u[target owner-uid permissions for set]' \
+      '(-u -g -G -o -O)-g+[target group permissions; primary group form]:group:_groups' \
+      '(-u -g -G -o -O)-G+[target group permissions; supplementary group form]:group:_groups' \
+      '(-u -g -G -o -O)-o[target other permissions for set]' \
+      '(-u -g -G -o -O)-O+[target other permissions with explicit group filter]:group:_groups' \
+      '(-e -E)-e[clear event-subscription gid (no event filtering)]' \
+      '(-e -E)-E+[set event-subscription gid filter]:group:_groups' \
+      '*:servicedir:_directories'
+    ;;
+
+  s6-svunlink)
+    # Atomically unlink a service from a scandir (inverse of
+    # s6-svlink).
+    _arguments -s -S \
+      '-X[do NOT bring the service down first; unlink immediately]' \
+      '-t+[s6-svscan signaling timeout in ms]:ms:' \
+      '1:scandir:_directories' \
+      '2:service name:'
+    ;;
+
+  s6-svwait)
+    # Like s6-svlisten but does NOT chain-load any prog; just waits
+    # then exits. Used for one-shot state-wait checks in scripts.
+    _arguments -s -S \
+      "${_s6_sv_state_flags[@]}" \
+      '(-a -o)-a[wait for ALL servicedirs to reach state (conjunction; default)]' \
+      '(-a -o)-o[wait for ANY one servicedir to reach state (disjunction)]' \
+      '-t+[timeout in milliseconds]:ms:' \
+      '*:servicedir:_directories'
+    ;;
+
+esac
