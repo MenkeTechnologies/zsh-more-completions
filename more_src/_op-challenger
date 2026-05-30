@@ -1,0 +1,246 @@
+#compdef op-challenger op-conductor op-deployer op-program op-proposer
+# Documentation: upstream */cmd/main.go at
+# github.com/ethereum-optimism/optimism
+# Reference accessed: 2026-05-30 via gh api inspection of every
+# urfave/cli.App + cli.Command + cli.Flag declaration.
+# Ethereum Optimism R82 — 5-stem multi-binary harvest covering
+# the most-used Optimism stack binaries (op-batcher and op-node
+# already covered in earlier rounds). All built with urfave/cli;
+# they share the op-service common flag set (log/metrics/pprof/
+# rpc/signer/txmgr).
+
+local curcontext="$curcontext" state line ret=1
+
+# Shared op-service flag set (common across all op-* binaries)
+local -a _common_flags
+_common_flags=(
+  '--log.level=[log level]:level:(crit error warn info debug trace)'
+  '--log.format=[log format]:format:(text terminal logfmt json json-pretty)'
+  '--log.color[force colored output]'
+  '--log.pid[include process ID in log output]'
+  '--metrics.enabled[enable metrics collection]'
+  '--metrics.addr=[metrics listen address]:host:'
+  '--metrics.port=[metrics listen port]:port:'
+  '--pprof.enabled[enable pprof endpoint]'
+  '--pprof.addr=[pprof listen address]:host:'
+  '--pprof.port=[pprof listen port]:port:'
+  '--pprof.type=[pprof profile type]:type:(cpu heap goroutine threadcreate block mutex allocs)'
+  '--pprof.path=[pprof profile output path]:path:_files'
+  '--rpc.addr=[RPC listen address]:host:'
+  '--rpc.port=[RPC listen port]:port:'
+  '--rpc.enable-admin[enable admin namespace on RPC]'
+)
+
+case $service in
+
+  op-proposer)
+    # L2 Output Submitter (proposes L2 outputs to the L1 contract).
+    local -a _p_subs
+    _p_subs=(
+      'doc:print metric documentation'
+    )
+    _arguments -C \
+      $_common_flags \
+      '--l1-eth-rpc=[HTTP provider URL for L1]:url:' \
+      '--rollup-rpc=[HTTP provider URL(s) for the rollup node (comma-separated for active provider)]:url:' \
+      '--supernode-rpcs=[HTTP provider URL(s) for supernode instances]:url:' \
+      '--poll-interval=[delay between checks (e.g. 6s)]:duration:' \
+      '--allow-non-finalized[allow proposals derived from non-finalized L1 blocks]' \
+      '--game-factory-address=[DisputeGameFactory contract address]:address:' \
+      '--proposal-interval=[interval between L2 output proposals]:duration:' \
+      '--game-type=[dispute game type to create]:type:' \
+      '--active-sequencer-check-duration=[active sequencer endpoint check interval]:duration:' \
+      '--wait-node-sync[wait for rollup node to sync on startup]' \
+      '--signer.endpoint=[external signer service URL]:url:' \
+      '--signer.address=[external signer service signing address]:addr:' \
+      '--mnemonic=[HD seed phrase for sender keys]:mnemonic:' \
+      '--hd-path=[derivation path for HD wallet]:path:' \
+      '--private-key=[hex-encoded private key for sender]:hex:' \
+      '--txmgr.send-timeout=[max tx confirmation wait time]:duration:' \
+      '--txmgr.fee-limit-multiplier=[gas fee limit multiplier]:float:' \
+      '--txmgr.feethreshold=[gas fee threshold (gwei)]:gwei:' \
+      '--txmgr.numconfirmations=[required confirmations]:N:' \
+      '(- *)'{-h,--help}'[show help]' \
+      '(- *)'{-v,--version}'[show version]' \
+      '(-): :->ps' \
+      '(-)*:: :->ps_args' && ret=0
+    case $state in
+      ps) _describe -t commands 'op-proposer subcommand' _p_subs && ret=0 ;;
+    esac
+    ;;
+
+  op-challenger)
+    # Fault dispute game challenger (8 subcommands + main daemon).
+    local -a _c_subs _sort_cols _sort_order
+    _c_subs=(
+      'list-games:list games created by a dispute game factory'
+      'list-claims:list claims in a dispute game'
+      'list-credits:list credits in a dispute game'
+      'create-game:create a new dispute game'
+      'move:make a move in a dispute game'
+      'resolve:resolve a dispute game'
+      'resolve-claim:resolve a specific claim'
+      'run-trace:run a single trace step'
+    )
+    _sort_cols=( index status duration type creator l1-head bond l2-block-number )
+    _sort_order=( asc desc )
+    _arguments -C \
+      $_common_flags \
+      '--l1-eth-rpc=[HTTP provider URL for L1]:url:' \
+      '--game-factory-address=[DisputeGameFactory contract address]:address:' \
+      '--trace-type=[trace types (comma-separated)]:types:' \
+      '--cannon-bin=[path to cannon executable]:file:_files' \
+      '--cannon-server=[path to cannon-server]:file:_files' \
+      '--cannon-prestate=[path to cannon prestate JSON]:file:_files' \
+      '--cannon-l2=[L2 endpoint for cannon]:url:' \
+      '--datadir=[data directory]:dir:_directories' \
+      '--rollup-rpc=[HTTP provider URL(s) for the rollup node]:url:' \
+      '(- *)'{-h,--help}'[show help]' \
+      '(- *)'{-v,--version}'[show version]' \
+      '(-): :->cs' \
+      '(-)*:: :->cs_args' && ret=0
+    case $state in
+      cs) _describe -t commands 'op-challenger subcommand' _c_subs && ret=0 ;;
+      cs_args)
+        case $words[1] in
+          list-games)
+            _arguments \
+              '--sort-by=[sort games by column]:column:($_sort_cols)' \
+              '--sort-order=[sort order]:order:($_sort_order)' \
+              '--game-window=[window of recent games to list]:duration:' && ret=0
+            ;;
+          list-claims|list-credits|resolve|run-trace)
+            _arguments \
+              '--game-address=[fault game contract address]:address:' \
+              '--verbose[verbose output]' && ret=0
+            ;;
+          create-game)
+            _arguments \
+              '--game-type=[game type (numeric)]:N:' \
+              '--output-root=[output root (hex)]:root:' \
+              '--l2-block-num=[L2 block number]:N:' \
+              '--l2-chain-id=[L2 chain ID]:N:' \
+              '--private-key=[sender private key]:hex:' && ret=0
+            ;;
+          move)
+            _arguments \
+              '--game-address=[game contract address]:address:' \
+              '--parent-index=[parent claim index]:N:' \
+              '--attack[attack the parent claim]' \
+              '--defend[defend the parent claim]' \
+              '--claim=[claim value (hex)]:claim:' && ret=0
+            ;;
+          resolve-claim)
+            _arguments \
+              '--game-address=[game contract address]:address:' \
+              '--claim-index=[claim index to resolve]:N:' && ret=0
+            ;;
+        esac
+        ;;
+    esac
+    ;;
+
+  op-conductor)
+    # Sequencer Conductor Service (no subcommands).
+    _arguments -s -S \
+      $_common_flags \
+      '--consensus.addr=[consensus listen address]:host:' \
+      '--consensus.port=[consensus listen port]:port:' \
+      '--raft.bootstrap[bootstrap the raft cluster]' \
+      '--raft.server-id=[raft server ID]:id:' \
+      '--raft.storage-dir=[raft storage directory]:dir:_directories' \
+      '--node.rpc=[op-node RPC endpoint]:url:' \
+      '--execution-rpc=[execution-engine RPC endpoint]:url:' \
+      '--healthcheck.interval=[health check interval]:duration:' \
+      '--healthcheck.unsafe-interval=[unsafe head interval]:duration:' \
+      '--healthcheck.safe-interval=[safe head interval]:duration:' \
+      '--healthcheck.min-peer-count=[min peer count]:N:' \
+      '--paused[start in paused state]' \
+      '(- *)'{-h,--help}'[show help]' \
+      '(- *)'{-v,--version}'[show version]' && ret=0
+    ;;
+
+  op-program)
+    # Fault Proof Program (program that runs through rollup state transition).
+    local -a _pgm_subs
+    _pgm_subs=(
+      'configs:print supported chain configurations'
+    )
+    _arguments -C \
+      $_common_flags \
+      '--l1=[L1 RPC endpoint]:url:' \
+      '--l1.beacon=[L1 beacon RPC endpoint]:url:' \
+      '--l1.trustrpc[trust the L1 RPC]' \
+      '--l1.rpckind=[L1 RPC kind]:kind:(alchemy quicknode infura parity nethermind debug_geth erigon basic any standard)' \
+      '--l2=[L2 RPC endpoint]:url:' \
+      '--l2.head=[L2 head hash (hex)]:hash:' \
+      '--l1.head=[L1 head hash (hex)]:hash:' \
+      '--l2.outputroot=[L2 output root]:hex:' \
+      '--l2.claim=[L2 claim hash]:hex:' \
+      '--l2.blocknumber=[L2 block number]:N:' \
+      '--datadir=[data directory for prestate cache]:dir:_directories' \
+      '--rollup.config=[rollup config JSON file]:file:_files' \
+      '--network=[predefined network]:network:(sepolia mainnet)' \
+      '--server[run as preimage oracle server]' \
+      '--exec=[client program to run]:file:_files' \
+      '(- *)'{-h,--help}'[show help]' \
+      '(- *)'{-v,--version}'[show version]' \
+      '(-): :->pgs' \
+      '(-)*:: :->pgs_args' && ret=0
+    case $state in
+      pgs) _describe -t commands 'op-program subcommand' _pgm_subs && ret=0 ;;
+    esac
+    ;;
+
+  op-deployer)
+    # Deployer tool for OP Stack rollups (9 top-level subs).
+    local -a _d_subs
+    _d_subs=(
+      'init:initialize an intent.toml file for a new chain'
+      'apply:apply an intent file (deploy contracts)'
+      'upgrade:upgrade contracts (nested actions)'
+      'bootstrap:bootstrap superchain/proof-system contracts (nested)'
+      'inspect:inspect deployed contracts (nested)'
+      'clean:clean cached artifacts (nested)'
+      'verify:verify deployed contracts against intent'
+      'manage:manage deployment state (nested)'
+      'validate:validate intent or state files (nested)'
+    )
+    _arguments -C \
+      '--workdir=[working directory (default .)]:dir:_directories' \
+      '--cache-dir=[cache directory]:dir:_directories' \
+      '--log.level=[log level]:level:(crit error warn info debug trace)' \
+      '(- *)'{-h,--help}'[show help]' \
+      '(- *)'{-v,--version}'[show version]' \
+      '(-): :->ds' \
+      '(-)*:: :->ds_args' && ret=0
+    case $state in
+      ds) _describe -t commands 'op-deployer subcommand' _d_subs && ret=0 ;;
+      ds_args)
+        case $words[1] in
+          init)
+            _arguments \
+              '--l1-chain-id=[L1 chain ID]:N:' \
+              '--l2-chain-ids=[L2 chain IDs (comma-separated)]:ids:' \
+              '--intent-config-type=[intent config type]:type:(standard custom)' \
+              '--workdir=[output directory]:dir:_directories' && ret=0
+            ;;
+          apply)
+            _arguments \
+              '--l1-rpc-url=[L1 RPC endpoint]:url:' \
+              '--private-key=[deployer private key]:hex:' \
+              '--deployment-target=[deployment target]:target:(live calldata noop genesis)' \
+              '--workdir=[intent directory]:dir:_directories' \
+              '--deploy-mode=[deploy mode]:mode:' && ret=0
+            ;;
+          upgrade|bootstrap|inspect|clean|manage|validate)
+            _arguments '*::action:' && ret=0
+            ;;
+        esac
+        ;;
+    esac
+    ;;
+
+esac
+
+return ret
