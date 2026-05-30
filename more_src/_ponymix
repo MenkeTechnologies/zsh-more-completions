@@ -1,0 +1,135 @@
+#compdef ponymix
+# Documentation: https://github.com/falconindy/ponymix (bash-completion + ponymix.cc)
+# Reference accessed: 2026-05-30
+# ponymix — Sean Pringle's PulseAudio command-line mixer (libpulse, no pactl).
+# Verb-style CLI: ponymix [flags] <verb> [args].
+
+local curcontext="$curcontext" state line ret=1
+local devtype=sink
+
+local -a _verbs
+_verbs=(
+  'help:show usage'
+  'defaults:print default sink and source'
+  'set-default:set the default sink/source by name (-d / --device)'
+  'list:list devices of selected type'
+  'list-short:list devices, tab-delimited (script-friendly)'
+  'list-cards:list sound cards with available profiles'
+  'list-cards-short:list cards, tab-delimited'
+  'get-volume:print volume of selected device'
+  'set-volume:set volume (percent or +N / -N)'
+  'get-balance:print balance of selected device'
+  'set-balance:set balance (-100..100)'
+  'adj-balance:adjust balance by N'
+  'increase:raise volume by N percent'
+  'decrease:lower volume by N percent'
+  'mute:mute selected device'
+  'unmute:unmute selected device'
+  'toggle:toggle mute state'
+  'is-muted:exit 0 if muted, 1 if not'
+  'move:move a sink-input/source-output to another sink/source'
+  'kill:kill a sink-input or source-output'
+  'list-profiles:list available card profiles'
+  'list-profiles-short:list card profiles, tab-delimited'
+  'get-profile:print active profile of selected card'
+  'set-profile:set the card profile'
+)
+
+# Helper: list cards via `ponymix list-cards-short`.
+_ponymix_cards() {
+  local -a cards
+  cards=( ${(f)"$(ponymix list-cards-short 2>/dev/null | awk -F'\t' '{print $2}')"} )
+  _describe -t cards 'card' cards
+}
+
+# Helper: list devices of a given type via `ponymix --<type> list-short`.
+_ponymix_devices() {
+  local -a names ids
+  local IFS=$'\t' name idx
+  ponymix "--${devtype}" list-short 2>/dev/null | while IFS=$'\t' read -r _ name idx _; do
+    names+=("${name}:${idx}")
+    ids+=("${idx}:${name}")
+  done
+  _alternative \
+    "names:device name:_describe -t names 'device name' names" \
+    "ids:device id:_describe -t ids 'device id' ids"
+}
+
+# Helper: card-profile values.
+_ponymix_profiles() {
+  local -a profiles
+  profiles=( ${(f)"$(ponymix list-profiles-short 2>/dev/null | awk '{print $1}')"} )
+  _describe -t profiles 'profile' profiles
+}
+
+# Pre-scan command line for devtype hint so device completion matches.
+local w
+for w in $words; do
+  case $w in
+    --sink|--output) devtype=sink ;;
+    --source|--input) devtype=source ;;
+    --sink-input) devtype=sink-input ;;
+    --source-output) devtype=source-output ;;
+    -t*|--devtype=*)
+      case ${w#-t} in
+        sink|source|sink-input|source-output) devtype=${w#-t} ;;
+      esac
+      [[ $w == --devtype=* ]] && devtype=${w#--devtype=}
+      ;;
+  esac
+done
+
+_arguments -C \
+  '(- *)'{-h,--help}'[show help]' \
+  '(- *)'{-V,--version}'[show version]' \
+  '(-c --card)'{-c,--card=}'[card name]:card:_ponymix_cards' \
+  '(-d --device)'{-d,--device=}'[device name or numerical id]:device:_ponymix_devices' \
+  '(-t --devtype --source --input --sink --output --sink-input --source-output)'{-t,--devtype=}'[device type]:type:(sink source sink-input source-output)' \
+  '(-t --devtype --source --input --sink --output --sink-input --source-output)--source[shortcut for --devtype=source]' \
+  '(-t --devtype --source --input --sink --output --sink-input --source-output)--input[shortcut for --devtype=source]' \
+  '(-t --devtype --source --input --sink --output --sink-input --source-output)--sink[shortcut for --devtype=sink]' \
+  '(-t --devtype --source --input --sink --output --sink-input --source-output)--output[shortcut for --devtype=sink]' \
+  '(-t --devtype --source --input --sink --output --sink-input --source-output)--sink-input[shortcut for --devtype=sink-input]' \
+  '(-t --devtype --source --input --sink --output --sink-input --source-output)--source-output[shortcut for --devtype=source-output]' \
+  '(-N --notify)'{-N,--notify}'[emit desktop notification on action]' \
+  '1: :->verb' \
+  '*:: :->args' && ret=0
+
+case $state in
+  verb)
+    _describe -t commands 'ponymix verb' _verbs && ret=0
+    ;;
+  args)
+    case $line[1] in
+      set-volume|increase|decrease)
+        _message 'percent value (or +N / -N)' && ret=0
+        ;;
+      set-balance|adj-balance)
+        _message 'balance value (-100..100)' && ret=0
+        ;;
+      set-default)
+        _ponymix_devices && ret=0
+        ;;
+      move)
+        _arguments \
+          '1:source/sink-input or source-output id:_ponymix_devices' \
+          '2:target sink/source id:_ponymix_devices' \
+          && ret=0
+        ;;
+      kill)
+        _ponymix_devices && ret=0
+        ;;
+      set-profile)
+        _ponymix_profiles && ret=0
+        ;;
+      help)
+        _describe -t commands 'ponymix verb' _verbs && ret=0
+        ;;
+      *)
+        _message 'no further arguments' && ret=0
+        ;;
+    esac
+    ;;
+esac
+
+return ret
