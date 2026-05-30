@@ -19,6 +19,34 @@ Entries are in original README order: older themed-cluster entries (accumulated
 before the per-round numbering convention) appear first, followed by the
 R-numbered rounds with the newest R-round at the top of that section.
 
+- **R167 — grigio obs-cmd OBS WebSocket v5 CLI** (1 file / 1 binary) — pivot to streaming/recording remote-control tooling after wide-net dup-check sweeps across OBS family (obs/obs-studio/obs-cli already covered), AV1 family (ab-av1/av1an/svt-av1-enc/rav1e/aomenc/aomdec/dav1d/vpxenc/vpxdec covered), opus tools (opusenc/opusdec/opusinfo covered), and libsndfile family (sndfile-cmp/-convert/-deinterleave/-info/-interleave/-jackplay/-metadata-get/-metadata-set/-play/-resample/-salvage all covered).
+  - `_obs-cmd` (1-stem; grigio/obs-cmd): OBS WebSocket v5 CLI client.  The canonical headless OBS Studio remote-control tool on Wayland Linux (where OBS's native UI scripting is constrained) and the de-facto bridge for REAPER/Keyboard-Maestro/HyperKey integrations.  22 top-level subcommands + 16 nested `#[derive(Subcommand)]` enums decoded source-direct from `src/cli.rs`.
+  - 4-level state-machine completion via `_arguments -C` + nested `case $words[1]` + per-subcommand `_arguments`/`_values`/`_describe` dispatch:
+    * Top level: `--websocket obsws://host:port/password` global flag + 22-entry `_describe` dispatch on first positional.
+    * scene: 18-action `_arguments :scene action:(...)` covering current/switch/list/create/remove/rename + 5 transition-* actions + 4 studio-mode-* actions + 2 preview-* actions.
+    * scene-collection: 4-action _values (current/list/create/switch).
+    * profile: 5-action _values (current/list/create/remove/switch).
+    * video-settings: get/set + 6 `--base-{width,height}`/`--output-{width,height}`/`--fps-{num,den}` flags.
+    * stream-service: get/set + 3 flags (--service-type/--server/--key).
+    * record-directory: 2-action _values (get/set).
+    * replay: 6-action _values (start/stop/toggle/save/status/last-replay).
+    * virtual-camera: 3-action _values (start/stop/toggle).
+    * streaming: 4-action _values (start/stop/status/toggle).
+    * recording: 9-action _values (start/stop/toggle/status/status-active/pause/resume/toggle-pause/create-chapter).
+    * save-screenshot: 3 positional (source, format, file_path) + 3 optional flags (--width, --height, --compression-quality).
+    * audio + filter: bare positional 2- and 3-arg forms.
+    * scene-item: 16-action _values (list/create/remove/duplicate/enable/disable/toggle/lock/unlock + 4 transform get/set pairs).
+    * trigger-hotkey: positional hotkey name.
+    * fullscreen-projector + source-projector: --monitor-index flag.
+    * media-input: 5-action _values (set-cursor/play/pause/stop/restart).
+    * input: 16-action _values (list/list-kinds/create/remove/rename/settings/volume/mute + 5 audio-* + default-settings/specials).
+    * completion: 5-shell autocomplete enum (bash|elvish|fish|powershell|zsh).
+  - Critical extraction note: clap kebab-cases enum variant names by default (CamelCase → kebab-case), so `SceneCollection` → `scene-collection`, `VideoSettings` → `video-settings`, `RecordDirectory` → `record-directory`, `VirtualCamera` → `virtual-camera`, `SceneItem` → `scene-item`, `ListHotkeys` → `list-hotkeys`, `TriggerHotkey` → `trigger-hotkey`, `FullscreenProjector` → `fullscreen-projector`, `SourceProjector` → `source-projector`, `MediaInput` → `media-input`, `SaveScreenshot` → `save-screenshot`, `StreamService` → `stream-service`, `LastReplay` → `last-replay`, `StatusActive` → `status-active`, `TogglePause` → `toggle-pause`, `CreateChapter` → `create-chapter`, `ListKinds` → `list-kinds`, `AudioBalance` → `audio-balance`, `AudioSyncOffset` → `audio-sync-offset`, `AudioMonitorType` → `audio-monitor-type`, `AudioTracks` → `audio-tracks`, `DefaultSettings` → `default-settings`, `GetTransform`/`SetTransform`/`GetIndex`/`SetIndex`/`GetBlendMode`/`SetBlendMode` → `get-transform`/etc. All variant-rename mappings verified source-direct by walking the `pub enum X { ... }` blocks.
+  - Hunt-skip notes: `jamulus` is a Qt-based audio jamming GUI - its CLI surface is documented but tied tightly to Qt UI; deferred.  `ardour-cli`/`renoise-cli`/`reaper-cli`/`sox-cli`/`lame-cli`/`ecasound-cli` are not actual binary names (suffix-confused-with-base pattern - the bases ardour/renoise/reaper/sox/lame/ecasound already covered).  `streamlink-cli`/`yt-dlp` already covered.  `sndfile-mix-create`/`sndfile-regtest`/`vorbis-tools`/`obs-studio` left as alias-confusions: sndfile-mix-create is a libsndfile rare utility (separate hunt), sndfile-regtest is internal test runner not user-facing, vorbis-tools is the package name (binaries oggenc/oggdec/ogginfo already covered), obs-studio is the package name (binary `obs` already covered).  `obs-cli` is a different older Bash-based CLI (already covered) - the new Rust obs-cmd is a distinct project.
+  - Dup-checked clean against `/usr/share/zsh` + `/opt/homebrew/share/zsh` + `/usr/local/share/zsh`.
+  - Blacklist additions: 1 entry (o*).
+  - Corpus 28,573 → 28,574 files.
+
 - **R166 — rordenlab dcm2niix DICOM→NIfTI converter** (1 file / 1 binary) — pivot to medical-imaging tooling after wide-net dup-check sweeps across DCMTK (dcmdump/dcmodify/dcmconv/dcmmkdir/dcmsend/dcmrecv/dcmqridx/dcmqrscp/dcmqrti/dcmpsmk/dcmpschk/dcmprscp/dcmpssnd/movescu/storescu/storescp/findscu/echoscu/getscu/wlmscpfs all heavily covered), BLAST+ family (blastp/blastn/tblastn/psiblast covered), HMMER (hmmsearch/hmmscan/hmmalign/hmmbuild/jackhmmer/phmmer covered), and multiple sequence alignment (mafft/muscle3/clustalw/clustalo covered).
   - `_dcm2niix` (1-stem; rordenlab/dcm2niix): the workhorse DICOM-to-NIfTI converter used throughout neuroimaging pipelines (BIDS conversion, fMRI/MRI preprocessing, AFNI/FSL/FreeSurfer/SPM ingestion).  Adds compressed `.nii.gz` output, BIDS sidecars, NRRD/MGH/JSON export, Philips precise float scaling.  41 flags total decoded source-direct from `console/main_console.cpp:showHelp(...)` body + the surrounding hand-rolled `strcmp(argv[i], "-X")` argv-walking loop in `main()`.
   - Sub-flag dispatching technique: dcm2niix uses argv[i] inner-character inspection (NOT separate short-flag arms) to distinguish related options:
