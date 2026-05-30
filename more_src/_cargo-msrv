@@ -1,64 +1,120 @@
 #compdef cargo-msrv
-# Documentation: https://github.com/foresterre/cargo-msrv
-# Reference accessed: 2026-05-17
-# Verified: upstream docs at the URL above.
+# Documentation: https://github.com/foresterre/cargo-msrv (src/cli/*.rs clap derive)
+# Reference accessed: 2026-05-29
+# cargo-msrv — find/list/set/show/verify the Minimum Supported Rust Version (MSRV) of a crate.
+# Invoked either as `cargo-msrv` or `cargo msrv` (cargo subcommand protocol).
 
-local -a subcommands
-subcommands=(
-  'find:Find the MSRV for the current project'
-  'list:List MSRVs of dependencies'
-  'set:Set the MSRV in Cargo.toml'
-  'show:Show the current MSRV'
-  'verify:Verify the declared MSRV is supported'
-  'help:Show help'
+local curcontext="$curcontext" state line ret=1
+
+local -a _subcmds
+_subcmds=(
+  'find:find the MSRV (binary or linear search)'
+  'list:display the MSRVs of dependencies'
+  'set:set the MSRV of the current crate to a given Rust version'
+  'show:show the MSRV of your crate (from Cargo manifest)'
+  'verify:verify whether the MSRV is satisfiable'
+  'help:show help for a subcommand'
 )
 
-_arguments \
-  '(-h --help)'{-h,--help}'[Show help]' \
-  '(-V --version)'{-V,--version}'[Show version]' \
-  '--log-level=[Log level]:level:(trace debug info warn error)' \
-  '--log-target=[Log target]:target:(file stdout)' \
-  '--no-log[Disable logging]' \
-  '--output-format=[Output format]:format:(human json minimal)' \
-  '--no-user-output[Suppress user-facing output]' \
-  '--path=[Path to Cargo project]:path:_directories' \
-  '--manifest-path=[Path to Cargo.toml]:file:_files' \
-  '1:command:_describe -t commands command subcommands' \
-  '*::arg:->args' && return 0
+# Shared options (SharedOpts + UserOutputOpts + DebugOutputOpts).
+local -a _shared
+_shared=(
+  '--path=[path to project root (use over --manifest-path if not in a Cargo project)]:path:_directories'
+  '--manifest-path=[path to cargo manifest file]:file:_files -g "Cargo.toml"'
+  '--output-format=[user output format]:fmt:(human json minimal none)'
+  '--no-user-output[disable user output]'
+  '--no-log[disable logging]'
+  '--log-target=[where to output logs]:target:(file stdout)'
+  '--log-level=[log severity]:level:(trace debug info warn error)'
+)
+
+# RustReleasesOpts flattened into find/set/verify.
+local -a _rust_releases
+_rust_releases=(
+  '--min=[least recent version/edition to consider]:ver-or-edition:'
+  '--minimum=[alias for --min]:ver-or-edition:'
+  '--max=[most recent version to consider]:ver:'
+  '--maximum=[alias for --max]:ver:'
+  '--include-all-patch-releases[include all patch releases (default: only last)]'
+  '--release-source=[source for Rust releases]:src:(rust-changelog rust-dist)'
+)
+
+# ToolchainOpts flattened into find/verify.
+local -a _toolchain
+_toolchain=(
+  '--target=[check against a custom target (instead of rustup default)]:target:'
+  '*--component=[additional rustup component (repeatable)]:component:(rustc cargo rustfmt clippy rust-src rust-analyzer llvm-tools-preview miri rust-docs)'
+)
+
+# CustomCheckOpts flattened into find/verify.
+local -a _custom_check
+_custom_check=(
+  '*--features=[forward features to cargo (repeatable)]:feature:'
+  '--all-features[forward --all-features to cargo]'
+  '--no-default-features[forward --no-default-features to cargo]'
+)
+
+_arguments -C \
+  '(- *)'{-h,--help}'[show help]' \
+  '(- *)'{-V,--version}'[show version]' \
+  $_shared \
+  '1: :->subcmd' \
+  '*:: :->args' && ret=0
 
 case $state in
+  subcmd)
+    _describe -t commands 'cargo-msrv subcommand' _subcmds && ret=0
+    ;;
   args)
-    case $words[1] in
+    case $line[1] in
       find)
         _arguments \
-          '--min=[Minimum Rust version to consider]:version:' \
-          '--max=[Maximum Rust version to consider]:version:' \
-          '--edition=[Rust edition]:edition:(2015 2018 2021 2024)' \
-          '--bisect[Use binary search]' \
-          '--linear[Use linear search]' \
-          '--include-all-patch-releases[Check all patch releases]' \
-          '--ignore-lockfile[Ignore Cargo.lock]' \
-          '--no-check-feedback[Disable check feedback]' \
-          '--write-msrv[Write found MSRV to Cargo.toml]' \
-          '--component=[Required components]:component:' \
-          '--target=[Target triple]:target:' \
-          '--release-source=[Release source]:source:(rust-changelog rust-dist)' \
-          '*:custom check command:'
-        ;;
-      verify)
-        _arguments \
-          '--rust-version=[Rust version to verify]:version:' \
-          '--ignore-lockfile[Ignore Cargo.lock]' \
-          '--target=[Target triple]:target:' \
-          '*:custom check command:'
+          $_shared \
+          $_rust_releases \
+          $_toolchain \
+          $_custom_check \
+          '(--bisect --linear)--bisect[use binary search (default)]' \
+          '(--bisect --linear)--linear[use linear search]' \
+          '(--write-toolchain-file --toolchain-file)--write-toolchain-file[pin MSRV by writing rust-toolchain]' \
+          '(--write-toolchain-file --toolchain-file)--toolchain-file[alias for --write-toolchain-file]' \
+          '--ignore-lockfile[temporarily remove the lockfile]' \
+          '--skip-unavailable-toolchains[treat unavailable toolchains as incompatible]' \
+          '--no-check-feedback[do not print compatibility check results]' \
+          '(--write-msrv --set)--write-msrv[write the MSRV to Cargo manifest]' \
+          '(--write-msrv --set)--set[alias for --write-msrv]' \
+          '*::custom check command (after --):' && ret=0
         ;;
       list)
         _arguments \
-          '--variant=[Listing variant]:variant:(direct-deps direct-deps-extended ordered-by-msrv)'
+          $_shared \
+          '--variant=[which MSRV variant to display]:variant:(direct-deps direct-deps-extended ordered-by-msrv)' && ret=0
         ;;
       set)
-        _arguments '1:version:'
+        _arguments \
+          $_shared \
+          $_rust_releases \
+          '1:msrv (two- or three-component Rust version, e.g. 1.56 or 1.56.1):' && ret=0
+        ;;
+      show)
+        _arguments $_shared && ret=0
+        ;;
+      verify)
+        _arguments \
+          $_shared \
+          $_rust_releases \
+          $_toolchain \
+          $_custom_check \
+          '--ignore-lockfile[ignore the lockfile for the MSRV search]' \
+          '--no-check-feedback[do not print compatibility check results]' \
+          '--rust-version=[Rust version to check against for toolchain compatibility]:rust-version:' \
+          '*::custom check command (after --):' && ret=0
+        ;;
+      help)
+        _arguments '1: :->sub' && ret=0
+        [[ $state == sub ]] && _describe -t commands 'cargo-msrv help' _subcmds && ret=0
         ;;
     esac
     ;;
 esac
+
+return ret
