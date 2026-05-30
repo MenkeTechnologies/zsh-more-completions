@@ -1,0 +1,152 @@
+#compdef rwflowpack rwflowappend rwpollexec rwsender rwreceiver
+# Documentation: https://tools.netsa.cert.org/silk/rw{flowpack,flowappend,pollexec,sender,receiver}.html
+# Reference accessed: 2026-05-30
+# SiLK Round 5 — the daemon family. Companion to rounds 135-138. Long-
+# running services that move SiLK Flow files across the packing /
+# appending / sending / receiving pipeline. All share the same logging
+# + daemon control sub-systems, which we collapse into shared arrays.
+
+local curcontext="$curcontext" state line ret=1
+
+# Shared 3-flag logging destination mutex + log config flags.
+local -a _log
+_log=(
+  '(--log-destination --log-pathname --log-directory)--log-destination=[log target]:dest:(none stdout stderr syslog both)'
+  '(--log-destination --log-pathname --log-directory)--log-pathname=[non-rotating log file]:file:_files'
+  '(--log-destination --log-pathname --log-directory)--log-directory=[rotating log directory]:dir:_files -/'
+  '--log-basename=[rotating log filename prefix]:name:'
+  '--log-level=[message severity]:level:(emerg alert crit err warning notice info debug)'
+  '--log-sysfacility=[syslog facility number]:num:'
+  '--log-post-rotate=[post-rotation command]:command:_command_names -e'
+)
+
+# Shared daemon-control flags.
+local -a _daemon
+_daemon=(
+  '--pidfile=[PID file location]:file:_files'
+  '--no-chdir[do not chdir to /]'
+  '--no-daemon[run in foreground]'
+  '(- *)--help[show help]'
+  '(- *)--version[show version + build info]'
+)
+
+# Shared TLS configuration (rwsender / rwreceiver).
+local -a _tls
+_tls=(
+  '--tls-ca=[trusted CA PEM]:file:_files'
+  '--tls-cert=[certificate chain PEM]:file:_files'
+  '--tls-key=[private key PEM]:file:_files'
+  '--tls-pkcs12=[combined cert+key PKCS#12]:file:_files'
+  '--tls-priority=[cipher priority string]:priority:'
+  '--tls-security=[DH security level]:level:(low medium high ultra)'
+  '--tls-crl=[CRL PEM file]:file:_files'
+  '--tls-debug-level=[GnuTLS debug 0-99]:level:'
+)
+
+case $service in
+
+  rwflowpack)
+    _arguments -s -S \
+      $_log $_daemon \
+      '--input-mode=[data gathering method]:mode:(stream fcfiles pdufile respool)' \
+      '--output-mode=[output method]:mode:(local-storage incremental-files sending)' \
+      '--sensor-configuration=[probe/sensor config file]:file:_files' \
+      '--packing-logic=[packing logic plugin]:plugin:_files' \
+      '--sensor-name=[restrict to specific sensor]:sensor:' \
+      '--polling-interval=[directory scan interval (sec)]:N:' \
+      '--incoming-directory=[directory to scan]:dir:_files -/' \
+      '--netflow-file=[NetFlow v5 PDU file (pdufile mode)]:file:_files' \
+      '--root-directory=[data repository root]:dir:_files -/' \
+      '--incremental-directory=[working dir for incremental files]:dir:_files -/' \
+      '--sender-directory=[completed-file output dir]:dir:_files -/' \
+      '--no-file-locking[disable advisory write locks]' \
+      '--flush-timeout=[flush interval (sec, default 120)]:N:' \
+      '--file-cache-size=[max open files (default 128)]:N:' \
+      '--pack-interfaces[include SNMP iface/VLAN/next-hop data]' \
+      '--byte-order=[file byte order]:order:(native big little)' \
+      '--compression-method=[output compression]:method:(none zlib lzo1x snappy best)' \
+      '--site-config-file=[SiLK site config]:file:_files' \
+      '--error-directory=[unprocessable file dir]:dir:_files -/' \
+      '--archive-directory=[successful file archive dir]:dir:_files -/' \
+      '--flat-archive[archive at top level only]' \
+      '--post-archive-command=[post-archive command]:command:_command_names -e' \
+      '--verify-sensor-config=-[validate sensor config (VERBOSE)]:verbose:' \
+      && ret=0
+    ;;
+
+  rwflowappend)
+    _arguments -s -S \
+      $_log $_daemon \
+      '--incoming-directory=[incremental file source dir]:dir:_files -/' \
+      '--root-directory=[hourly file repository root]:dir:_files -/' \
+      '--error-directory=[failed-append file dir]:dir:_files -/' \
+      '--archive-directory=[successful file archive dir]:dir:_files -/' \
+      '--flat-archive[archive at top level only]' \
+      '--post-command=[post-archive command]:command:_command_names -e' \
+      '--hour-file-command=[hourly file creation command]:command:_command_names -e' \
+      '--threads=[worker threads (default 1)]:N:' \
+      '--reject-hours-past=[reject records older than N hours]:N:' \
+      '--reject-hours-future=[reject records newer than N hours]:N:' \
+      '--no-file-locking[disable advisory write locks]' \
+      '--polling-interval=[scan interval (sec, default 15)]:N:' \
+      '--byte-order=[output byte order]:order:(as-is native big little)' \
+      '--compression-method=[output compression]:method:(none zlib lzo1x snappy best)' \
+      '--site-config-file=[SiLK site config]:file:_files' \
+      && ret=0
+    ;;
+
+  rwpollexec)
+    _arguments -s -S \
+      $_log $_daemon \
+      '--incoming-directory=[directory to scan]:dir:_files -/' \
+      '--command=[command to run per file (%s = path)]:command:' \
+      '--error-directory=[failed/signal file dir]:dir:_files -/' \
+      '--archive-directory=[successful file archive dir]:dir:_files -/' \
+      '--flat-archive[archive at top level only]' \
+      '--simultaneous=[max concurrent commands (1-50, default 1)]:N:' \
+      '*--timeout=[send SIGNAL after SECS (SIGNAL,SECS)]:spec:' \
+      '--polling-interval=[scan interval (sec, default 15)]:N:' \
+      && ret=0
+    ;;
+
+  rwsender)
+    _arguments -s -S \
+      $_log $_daemon $_tls \
+      '--identifier=[name used for rwreceiver handshake]:ident:' \
+      '--mode=[server or client mode]:mode:(server client)' \
+      '--incoming-directory=[directory to scan]:dir:_files -/' \
+      '--processing-directory=[transfer cache dir]:dir:_files -/' \
+      '--error-directory=[rejected-file dir]:dir:_files -/' \
+      '--server-port=[server: listen [HOST:]PORT]:spec:' \
+      '*--client-ident=[allowed rwreceiver client ident]:ident:' \
+      '*--server-address=[client: IDENT:HOST:PORT]:spec:' \
+      '*--local-directory=[duplicate copy dir [IDENT:]DIR]:spec:' \
+      '--unique-local-copies[force copy not hard-link]' \
+      '*--filter=[match IDENT:REGEXP for routing]:spec:' \
+      '*--priority=[NUM:REGEXP priority (0-100, default 50)]:spec:' \
+      '--polling-interval=[scan interval (sec, default 15)]:N:' \
+      '--send-attempts=[per-file send attempts (0=unlimited)]:N:' \
+      '--block-size=[byte chunk size (256-65535, default 8192)]:N:' \
+      && ret=0
+    ;;
+
+  rwreceiver)
+    _arguments -s -S \
+      $_log $_daemon $_tls \
+      '--identifier=[name used for rwsender handshake]:ident:' \
+      '--mode=[server or client mode]:mode:(server client)' \
+      '--destination-directory=[transferred file destination]:dir:_files -/' \
+      '--server-port=[server: listen [HOST:]PORT]:spec:' \
+      '*--client-ident=[allowed rwsender client ident]:ident:' \
+      '*--server-address=[client: IDENT:HOST:PORT]:spec:' \
+      '--post-command=[post-transfer command (%s/%I/%%)]:command:' \
+      '*--duplicate-destination=[duplicate file directory]:dir:_files -/' \
+      '--unique-duplicates[force copy not hard-link]' \
+      '--freespace-minimum=[min free space (K|M|G|T suffix)]:size:' \
+      '--space-maximum-percent=[max FS usage % (default 100)]:percent:' \
+      && ret=0
+    ;;
+
+esac
+
+return ret
