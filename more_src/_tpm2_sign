@@ -1,0 +1,139 @@
+#compdef tpm2_sign tpm2_quote tpm2_unseal tpm2_startauthsession tpm2_pcrextend tpm2_readpublic
+# Documentation: source-direct extraction from upstream
+# tpm2-software/tpm2-tools.  Per-tool `struct option topts[]`
+# table decoded source-direct from each tools/tpm2_<name>.c.
+# Shared common options ($tpm2_common helper array) and
+# hierarchy/hashalg/keyalg enums re-extracted source-direct
+# from lib/tpm2_options.c / lib/tpm2_alg_util.c — see R193 +
+# R194 HARVEST_LOG entries for the full extraction notes.
+# Reference accessed: 2026-05-30 via gh api.
+# tpm2-software tpm2-tools R195 — follow-up to R194's hunt-skip
+# on "next-priority candidates: tpm2_sign (signing), tpm2_quote
+# (TPM-attested PCR quote), tpm2_unseal (sealed-data
+# unsealing), tpm2_startauthsession (HMAC/policy session
+# setup), tpm2_pcrextend (PCR extension), tpm2_readpublic (key
+# metadata)".  This round covers the signing + attestation +
+# sealing-payload family.  Sister tools to R193's getrandom/
+# getcap/pcrread/hash/nvread/nvwrite and R194's create/
+# createprimary/load/loadexternal/evictcontrol/flushcontext
+# already in the corpus.
+
+local -a tpm2_common=(
+  '(-T --tcti)'{-T+,--tcti=}'[TCTI library + options (e.g. "device:/dev/tpmrm0" or "swtpm:port=2321")]:tcti:'
+  '(-h --help)'{-h-,--help=-}'[print help (optional arg = topic)]::topic:'
+  '(-v --version)'{-v,--version}'[print version and exit]'
+  '(-V --verbose)'{-V,--verbose}'[verbose mode]'
+  '(-Q --quiet)'{-Q,--quiet}'[quiet mode]'
+  '(-Z --enable-errata)'{-Z,--enable-errata}'[enable TPM2 errata workarounds]'
+  '(-z --pwd-session)'{-z,--pwd-session}'[use password-authorized session]'
+)
+
+local -a tpm2_hashalgs=(sha1 sha256 sha384 sha512 sm3_256)
+local -a tpm2_keyalgs=(rsa rsa1024 rsa2048 rsa3072 rsa4096
+                      ecc ecc_nist_p192 ecc_nist_p224 ecc_nist_p256
+                      ecc_nist_p384 ecc_nist_p521 ecc_sm2_p256
+                      ecc_bn_p256 ecc_bn_p638
+                      aes aes128 aes192 aes256
+                      keyedhash xor null)
+# Sign-scheme enum decoded source-direct from
+# lib/tpm2_alg_util.c.  RSA signing: rsassa/rsapss.  ECC
+# signing: ecdsa/ecdaa/ecschnorr/sm2.  HMAC: hmac.  All accept
+# an optional `:hashalg` suffix (e.g. rsassa-sha256).
+local -a tpm2_signschemes=(rsassa rsapss ecdsa ecdaa ecschnorr sm2 hmac null)
+local -a tpm2_pcrsformat=(legacy serialized values)
+
+case $service in
+
+  tpm2_sign)
+    # Sign a digest or message with a TPM-resident key.
+    _arguments -s -S \
+      $tpm2_common \
+      '(-p --auth)'{-p+,--auth=}'[key authorization]:auth:' \
+      '(-g --hash-algorithm)'{-g+,--hash-algorithm=}'[hash algorithm (used if no -d)]:alg:($tpm2_hashalgs)' \
+      '(-s --scheme)'{-s+,--scheme=}'[signing scheme]:scheme:($tpm2_signschemes)' \
+      '(-d --digest)'{-d,--digest}'[input is already a digest, not a message]' \
+      '(-o --signature)'{-o+,--signature=}'[output signature file]:file:_files' \
+      '(-t --ticket)'{-t+,--ticket=}'[input ticket from tpm2_hash (for restricted-signing)]:file:_files' \
+      '(-c --key-context)'{-c+,--key-context=}'[signing key context (handle or context file)]:key:' \
+      '(-f --format)'{-f+,--format=}'[signature output format]:format:(tss plain)' \
+      '--cphash=[output command-parameter hash for off-line audit]:file:_files' \
+      '--commit-index=[(ecdaa scheme only) commit-counter index]:n:' \
+      ':input file (message or digest):_files'
+    ;;
+
+  tpm2_quote)
+    # Generate a TPM-attested quote of one or more PCR banks
+    # signed by an attestation key (AK).
+    _arguments -s -S \
+      $tpm2_common \
+      '(-c --key-context)'{-c+,--key-context=}'[attestation key context (handle or context file)]:ak:' \
+      '(-p --auth)'{-p+,--auth=}'[AK authorization]:auth:' \
+      '(-l --pcr-list)'{-l+,--pcr-list=}'[PCR list to quote (e.g. sha256:0,1,2,3)]:pcr-list:' \
+      '(-q --qualification)'{-q+,--qualification=}'[qualifying data (nonce for replay protection)]:nonce:' \
+      '(-s --signature)'{-s+,--signature=}'[output signature file]:file:_files' \
+      '(-m --message)'{-m+,--message=}'[output quote-message file]:file:_files' \
+      '(-o --pcr)'{-o+,--pcr=}'[output PCR values file]:file:_files' \
+      '(-F --pcrs_format)'{-F+,--pcrs_format=}'[PCR values output format]:format:($tpm2_pcrsformat)' \
+      '(-f --format)'{-f+,--format=}'[signature output format]:format:(tss plain)' \
+      '(-g --hash-algorithm)'{-g+,--hash-algorithm=}'[hash algorithm for the signing scheme]:alg:($tpm2_hashalgs)' \
+      '--cphash=[output command-parameter hash for off-line audit]:file:_files' \
+      '--scheme=[signing scheme override]:scheme:($tpm2_signschemes)'
+    ;;
+
+  tpm2_unseal)
+    # Unseal data from a sealed object loaded into the TPM.
+    _arguments -s -S \
+      $tpm2_common \
+      '(-p --auth)'{-p+,--auth=}'[object authorization]:auth:' \
+      '(-o --output)'{-o+,--output=}'[output unsealed-data file (default stdout)]:file:_files' \
+      '(-c --object-context)'{-c+,--object-context=}'[sealed object context (handle or context file)]:object:' \
+      '--cphash=[output command-parameter hash for off-line audit]:file:_files' \
+      '--rphash=[output response-parameter hash for off-line audit]:file:_files' \
+      '(-S --session)'{-S+,--session=}'[authorization session context file]:file:_files'
+    ;;
+
+  tpm2_startauthsession)
+    # Begin an HMAC, policy, or audit session — the prerequisite
+    # for nearly every "authorized" TPM operation.
+    # 3-way mutex on session-mode flags (--policy-session XOR
+    # --audit-session XOR --hmac-session) decoded source-direct
+    # from upstream's mutually-exclusive session-type modes.
+    _arguments -s -S \
+      $tpm2_common \
+      '(--policy-session --audit-session --hmac-session)--policy-session[start a policy-authorization session]' \
+      '(--policy-session --audit-session --hmac-session)--audit-session[start a session-audit session]' \
+      '(--policy-session --audit-session --hmac-session)--hmac-session[start an HMAC-authorization session]' \
+      '--bind-context=[bind session to this object context (handle or file)]:object:' \
+      '--bind-auth=[authorization value for the bind object]:auth:' \
+      '--tpmkey-context=[salt-key context (for salted sessions)]:key:' \
+      '(-g --hash-algorithm)'{-g+,--hash-algorithm=}'[session hash algorithm]:alg:($tpm2_hashalgs)' \
+      '(-G --key-algorithm)'{-G+,--key-algorithm=}'[symmetric encryption algorithm for session]:alg:($tpm2_keyalgs)' \
+      '(-S --session)'{-S+,--session=}'[output session context file]:file:_files' \
+      '(-c --key-context)'{-c+,--key-context=}'[salt-key context (legacy alias for --tpmkey-context)]:key:' \
+      '(-n --name)'{-n+,--name=}'[input salt-key name file]:file:_files'
+    ;;
+
+  tpm2_pcrextend)
+    # Extend a PCR bank with a new measurement.  Positional
+    # accepts PCR=alg:value pairs (e.g. 8=sha256:000000...).
+    _arguments -s -S \
+      $tpm2_common \
+      '(-P --auth)'{-P+,--auth=}'[PCR authorization]:auth:' \
+      '(-S --session)'{-S+,--session=}'[authorization session context file]:file:_files' \
+      '*:PCR=alg:value pair (e.g. 8=sha256:000000...):'
+    ;;
+
+  tpm2_readpublic)
+    # Read the public metadata (name, qualified-name, public-
+    # key, attributes) of a TPM-resident key.
+    _arguments -s -S \
+      $tpm2_common \
+      '(-o --output)'{-o+,--output=}'[output public-key file]:file:_files' \
+      '(-c --object-context)'{-c+,--object-context=}'[object context (handle or context file)]:object:' \
+      '(-f --format)'{-f+,--format=}'[output format]:format:(tss pem der)' \
+      '(-n --name)'{-n+,--name=}'[output name file]:file:_files' \
+      '(-t --serialized-handle)'{-t+,--serialized-handle=}'[output serialized-handle file (for persistent handles)]:file:_files' \
+      '(-q --qualified-name)'{-q+,--qualified-name=}'[output qualified-name file]:file:_files'
+    ;;
+
+esac
