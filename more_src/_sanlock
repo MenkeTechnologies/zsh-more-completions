@@ -1,0 +1,204 @@
+#compdef sanlock
+# Documentation: source-direct extraction from upstream
+# nirs/sanlock (mirror of upstream pagure.io/sanlock) —
+#   src/main.c lines 2094-2190 (the print_usage() block with
+#     all subcommands + per-action argument signatures)
+#   src/main.c lines 2192-2548 (the read_command_line()
+#     hand-rolled argv walker with case-dispatch by option
+#     character; NO getopt_long)
+#   src/main.c lines 2197-2249 (the top-level subcommand
+#     dispatch: daemon / client / direct / help / version)
+# Reference accessed: 2026-05-30 via gh api.
+#
+# sanlock is Red Hat's SAN-based shared-storage mutex daemon —
+# implements the Paxos lease + delta lease algorithms on top of
+# raw block storage (FC/iSCSI/NFS LUNs) so that multiple cluster
+# nodes can safely share access to the same disks WITHOUT a
+# fabric-level fencing infrastructure.  Watchdog-armed (talks
+# to R216's wdmd) so a node that loses its lease will be
+# hardware-reset before another node can take over the lease.
+# THE canonical mutual-exclusion daemon for shared-storage
+# VMs in oVirt / RHEV / libvirt sanlock_lockspace driver.
+#
+# Critical extraction note: sanlock does NOT use getopt(3).
+# Instead it implements a hand-rolled argv walker at main.c:
+# 2192-2548 with the dispatch table at lines 2395-2541.  Every
+# option except `-D` (debug, line 2382-2386) requires an
+# argument.  The walker stops at `-c` (begin_command at line
+# 2519-2521) to allow `sanlock client command -r RESOURCE -c
+# /path/to/cmd -X -Y -Z` to forward remaining args to the
+# child process via execv.
+#
+# Critical extraction note: SEVERAL options are CONTEXT-
+# DEPENDENT — the same letter means different things based on
+# the active action.  Documented in completion descriptions:
+#   -h: --high_priority OR --get_hosts (depends on ACT_GETS or
+#       ACT_CLIENT_READ at line 2429-2434)
+#   -o: --sort_arg (p|s) for status OR --io_timeout for daemon
+#       (line 2438-2446)
+#   -g: --kill_grace_seconds for daemon OR --host_generation
+#       elsewhere (line 2473-2483)
+#   -e: rindex entry OR host_name OR he_event depending on op
+#       context (line 2462-2469)
+
+local curcontext="$curcontext" state line ret=1
+
+# Subcommands decoded source-direct from the if-else cascade at
+# main.c:2201-2249.
+local -a subcommands=(
+  'daemon:start the sanlock daemon (the primary mode)'
+  'client:send request to a running sanlock daemon (default type)'
+  'direct:access storage directly without coordinating with the daemon (DANGEROUS)'
+  'help:print full usage and exit'
+  '--help:print full usage and exit'
+  'version:print version'
+)
+
+# Client actions decoded source-direct from print_usage() at
+# main.c:2128-2154.  26 actions total.
+local -a client_actions=(
+  'status:list all clients + lockspaces; -o p|s sorts by pid or lockspace'
+  'gets:list current lockspace memberships; -h 0|1 controls host enumeration'
+  'host_status:show per-host status in a lockspace (requires -s LOCKSPACE)'
+  'renewal:show lease renewal history for a lockspace (requires -s)'
+  'set_event:fire an event in a lockspace (-s -i HOST_ID [-g GEN] -e EVENT -d DATA)'
+  'set_config:set lockspace runtime config (-s [-u 0|1] [-O 0|1])'
+  'log_dump:print recent daemon log buffer'
+  'shutdown:tell daemon to exit ([-f 0|1 force] [-w 0|1 wait])'
+  'init:initialize on-disk LOCKSPACE or RESOURCE leases'
+  'read:read on-disk LOCKSPACE or RESOURCE leader record'
+  'add_lockspace:join a lockspace (start acquiring delta lease)'
+  'inq_lockspace:query lockspace membership state (joined/joining/leaving)'
+  'rem_lockspace:leave a lockspace (release delta lease)'
+  'command:acquire RESOURCE, exec a child command, release on exit'
+  'acquire:acquire a RESOURCE Paxos lease (-r RESOURCE -p PID)'
+  'convert:convert a held RESOURCE lease (-r RESOURCE -p PID)'
+  'release:release a RESOURCE Paxos lease (-r RESOURCE -p PID)'
+  'inquire:list resources currently held by PID (-p PID)'
+  'request:request another holder to release a RESOURCE'
+  'examine:examine on-disk state for RESOURCE or LOCKSPACE'
+  'format:format an RINDEX-backed resource index'
+  'create:create a named resource in an RINDEX (-x -e NAME)'
+  'delete:delete a named resource from an RINDEX (-x -e NAME[:OFFSET])'
+  'lookup:look up a named resource in an RINDEX'
+  'update:update a named resource in an RINDEX'
+  'rebuild:rebuild an RINDEX from scratch by scanning'
+)
+
+# Direct actions decoded source-direct from print_usage() at
+# main.c:2156-2163.  7 actions total.  Common direct-mode flags
+# `-a 0|1 -o 0|1` are aio + io_timeout overrides.
+local -a direct_actions=(
+  'init:initialize on-disk LOCKSPACE or RESOURCE leases (BYPASSES daemon)'
+  'read_leader:read on-disk leader record for LOCKSPACE or RESOURCE'
+  'dump:hex-dump on-disk lease region at <path>[:<offset>[:<size>]]'
+  'format:format an RINDEX (BYPASSES daemon)'
+  'lookup:look up a named resource in an RINDEX (BYPASSES daemon)'
+  'update:update a named resource in an RINDEX (BYPASSES daemon)'
+  'rebuild:rebuild an RINDEX from scratch (BYPASSES daemon)'
+)
+
+# Daemon-mode flags decoded source-direct from print_usage() at
+# main.c:2106-2126.  16 options total.
+local -a daemon_flags=(
+  '-D[debug: no fork, print all logging to stderr]'
+  '-Q+[quiet error messages for common lock contention]:0|1:(0 1)'
+  '-R+[renewal debugging: log debug info about renewals]:0|1:(0 1)'
+  '-H+[renewal history size]:num:'
+  '-L+[logfile log priority (4=LOG_WARNING; -1=none)]:pri:'
+  '-S+[syslog log priority (3=LOG_ERR; -1=none)]:pri:'
+  '-U+[run as user]:uid/uname:_users'
+  '-G+[run as group]:gid/gname:_groups'
+  '-t+[max worker threads]:num:'
+  '-g+[seconds for graceful recovery]:sec:'
+  '-o+[io timeout (sec)]:sec:'
+  '-w+[use watchdog through wdmd]:0|1:(0 1)'
+  '-h+[use high-priority (RR) scheduling]:0|1:(0 1)'
+  '-l+[mlockall (0=none 1=current 2=current+future)]:level:(0 1 2)'
+  '-b+[seconds a host id bit will remain set in delta lease bitmap]:sec:'
+  '-e+[local host name used in delta leases (default: generate UUID)]:name:'
+)
+
+# Common client-action flags.  The sector/align combo enum is
+# decoded source-direct from main.c:2552-2560:
+#   valid: 512/1M, 4K/1M, 4K/2M, 4K/4M, 4K/8M
+local -a client_common_flags=(
+  '-s+[LOCKSPACE in format name:host_id:path:offset]:lockspace:'
+  '-r+[RESOURCE in format name:resource:path:offset[:lver]]:resource:'
+  '-x+[RINDEX in format lockspace:path:offset]:rindex:'
+  '-Z+[sector size]:sector:(512 4096)'
+  '-A+[align size]:align:(1M 2M 4M 8M)'
+  '-p+[PID]:pid:_pids'
+  '-i+[host ID in lockspace]:host_id:'
+  '-e+[resource name (or event ID for set_event)]:name:'
+  '-d+[event data (set_event) OR offset]:value:'
+  '-g+[host generation (or grace sec for daemon)]:gen:'
+  '-f+[force mode]:mode:'
+  '-z+[clear the entry]:0|1:(0 1)'
+  '-o+[output sort (p|s for status; io_timeout sec otherwise)]:opt:'
+  '-h+[high-priority OR get_hosts (depends on action)]:0|1:(0 1)'
+  '-D[verbose / debug output]'
+  '-u+[used flag for set_config]:0|1:(0 1)'
+  '-O+[orphan flag for set_config]:0|1:(0 1)'
+  '-w+[wait flag for shutdown]:0|1:(0 1)'
+  '-n+[num hosts]:num:'
+  '-m+[max hosts]:num:'
+  '-c+[exec child command after acquire (rest of argv is forwarded)]:cmd:_command_names -e'
+)
+
+# Direct-mode shared flags decoded source-direct from print_
+# usage() at main.c:2156.
+local -a direct_common_flags=(
+  '-a+[use AIO (0=no 1=yes)]:0|1:(0 1)'
+  '-o+[io_timeout sec]:sec:'
+  '-s+[LOCKSPACE in format name:host_id:path:offset]:lockspace:'
+  '-r+[RESOURCE in format name:resource:path:offset[:lver]]:resource:'
+  '-x+[RINDEX in format lockspace:path:offset]:rindex:'
+  '-Z+[sector size]:sector:(512 4096)'
+  '-A+[align size]:align:(1M 2M 4M 8M)'
+  '-e+[resource name[:offset] for RINDEX ops]:name:'
+  '-z+[clear the entry]:0|1:(0 1)'
+)
+
+_arguments -C \
+  '1:subcommand:->subcmd' \
+  '*::args:->args' && ret=0
+
+case $state in
+  subcmd)
+    _describe -t subcommands 'sanlock subcommand' subcommands && ret=0
+    ;;
+  args)
+    case $words[1] in
+      daemon)
+        _arguments $daemon_flags && ret=0
+        ;;
+      client)
+        if (( CURRENT == 2 )); then
+          _describe -t client-actions 'sanlock client action' client_actions && ret=0
+        else
+          _arguments $client_common_flags && ret=0
+        fi
+        ;;
+      direct)
+        if (( CURRENT == 2 )); then
+          _describe -t direct-actions 'sanlock direct action' direct_actions && ret=0
+        else
+          case $words[2] in
+            dump)
+              # `sanlock direct dump <path>[:<offset>[:<size>]]`
+              _arguments \
+                $direct_common_flags \
+                '1:path[:offset[:size]]:_files' && ret=0
+              ;;
+            *)
+              _arguments $direct_common_flags && ret=0
+              ;;
+          esac
+        fi
+        ;;
+    esac
+    ;;
+esac
+
+return ret
