@@ -19,6 +19,31 @@ Entries are in original README order: older themed-cluster entries (accumulated
 before the per-round numbering convention) appear first, followed by the
 R-numbered rounds with the newest R-round at the top of that section.
 
+- **R166 — rordenlab dcm2niix DICOM→NIfTI converter** (1 file / 1 binary) — pivot to medical-imaging tooling after wide-net dup-check sweeps across DCMTK (dcmdump/dcmodify/dcmconv/dcmmkdir/dcmsend/dcmrecv/dcmqridx/dcmqrscp/dcmqrti/dcmpsmk/dcmpschk/dcmprscp/dcmpssnd/movescu/storescu/storescp/findscu/echoscu/getscu/wlmscpfs all heavily covered), BLAST+ family (blastp/blastn/tblastn/psiblast covered), HMMER (hmmsearch/hmmscan/hmmalign/hmmbuild/jackhmmer/phmmer covered), and multiple sequence alignment (mafft/muscle3/clustalw/clustalo covered).
+  - `_dcm2niix` (1-stem; rordenlab/dcm2niix): the workhorse DICOM-to-NIfTI converter used throughout neuroimaging pipelines (BIDS conversion, fMRI/MRI preprocessing, AFNI/FSL/FreeSurfer/SPM ingestion).  Adds compressed `.nii.gz` output, BIDS sidecars, NRRD/MGH/JSON export, Philips precise float scaling.  41 flags total decoded source-direct from `console/main_console.cpp:showHelp(...)` body + the surrounding hand-rolled `strcmp(argv[i], "-X")` argv-walking loop in `main()`.
+  - Sub-flag dispatching technique: dcm2niix uses argv[i] inner-character inspection (NOT separate short-flag arms) to distinguish related options:
+    * `-b`, `-ba`, `-bi`, `-bv` decoded source-direct from inner `else if (argv[i][2] == 'a')` / `(argv[i][2] == 'i')` / `(argv[i][2] == 'v')` chain (so `-b y` is BIDS-sidecar y/n/o, `-ba y` is anonymize-BIDS, `-bi M2022` is BIDS subject ID, `-bv 1222` is BIDS subject visit).
+    * `-1..-9` decoded from a numeric-range arm `(argv[i][1] >= '1') && (argv[i][1] <= '9')` that sets gz compression level.  Mapped to 9 separate completion entries `-1`/`-2`/.../`-9` instead of a parametric `-N` since each is a distinct token in compsys.
+  - Enum autocompletes decoded source-direct from per-flag default-letter chain `(argv[i][0] == 'y') || (argv[i][0] == 'Y') ... (argv[i][0] == '0')` patterns:
+    * `-b` BIDS sidecar (y|n|o).
+    * `-e` export format (y|n|o|j|b) - NRRD, NIfTI, MGH, JSON/JNIfTI, BJNIfTI.
+    * `-g` defaults file (y|n|o|i).
+    * `-i` ignore derived/localizer/2D (y|n|o).
+    * `-l` lossless 16-bit scaling (y|n|o).
+    * `-m` merge 2D slices (n|y|0|1|2).
+    * `-p` Philips precise float scaling (y|n|o).
+    * `-q` directory-only search (y|n|l).
+    * `-v` verbose level (n|y|0|1|2).
+    * `-w` write-conflict behavior (0|1|2).
+    * `-x` crop 3D acquisitions (y|n|i).
+    * `-z` compress NIfTI output (y|o|s|i|n|3) - pigz, optimal pigz, zstd, internal zlib/miniz, no, no/3D.
+    * `--big-endian` (y|n|o) and `--progress` (y|n).
+  - `-n` flagged repeatable via `*-n` prefix decoded from the help-text note "can be used up to MAX_NUM_SERIES times".
+  - Hunt-skip notes: `nifti1_tool`/`nifti_tool` (NIFTI-Imaging/nifti_clib) has ~80 flags and would deserve its own dedicated round - left for a future hunt.  `diamond` (bbuchfink/diamond) ships 40+ subcommands - too large for one round, deferred.  AFNI 3d* family (3dcalc/3dvolreg/3dANOVA/3dttest++/3dDeconvolve/3dDespike) and FSL fsl* family (fslmaths/fslstats/fslmerge/fslsplit/fslroi/fslorient/fslreorient2std) each have rich flag surfaces and live in distinct upstream projects - deferred.  FreeSurfer recon-all/mri_convert/mri_synthstrip/mri_synthseg also deferred (mostly Perl wrappers around C binaries with overlapping flag surfaces). `freeview`/`itksnap-cli`/`osirix-cli`/`mango-cli` are GUI apps without significant CLI surfaces.
+  - Dup-checked clean against `/usr/share/zsh` + `/opt/homebrew/share/zsh` + `/usr/local/share/zsh`.
+  - Blacklist additions: 1 entry (d*).
+  - Corpus 28,572 → 28,573 files.
+
 - **R165 — llama.cpp companion examples + pocs** (1 file / 6 binaries) — pivot to the remaining ggml-org/llama.cpp companion binaries not yet covered, completing the llama-* family sister to the heavily-covered llama-cli / llama-server / llama-bench / llama-quantize / llama-perplexity / llama-batched / llama-batched-bench / llama-tokenize / llama-gguf / llama-gguf-split / llama-cvector-generator / llama-imatrix / llama-export-lora / llama-finetune / llama-eval-callback / llama-embedding / llama-lookahead / llama-lookup / llama-parallel / llama-passkey / llama-retrieval / llama-save-load-state / llama-speculative / llama-tts already in the corpus.  Vector DB sweep (chromadb/qdrant/weaviate/milvus/pinecone/vespa) and mlx sweep (mlx/mlx_lm/mlx-llm/mlx-server) all came back already-covered or not-real-binary.
   - `_llama-simple` (6-stem; ggml-org/llama.cpp):
     * llama-simple: minimal generation example with hand-rolled `strcmp(argv[i], "-X")` loop - `-m model.gguf [-n n_predict] [-ngl n_gpu_layers] [prompt]`.
