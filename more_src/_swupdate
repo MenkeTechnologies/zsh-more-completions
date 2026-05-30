@@ -1,0 +1,100 @@
+#compdef swupdate
+# Documentation: source-direct extraction from upstream
+# sbabic/swupdate core/swupdate.c lines 79-140 (the
+# `static struct option long_options[]` array) + lines 583-632
+# (the runtime-built `main_options[256]` short-option string).
+# Reference accessed: 2026-05-30 via gh api.
+# swupdate is Stefano Babic's industrial embedded software
+# updater — integrates with U-Boot, GRUB, EFI Boot Guard (EBG),
+# CBoot, ATF FIP/FIT and serves as the OTA-update engine for
+# RAUC, HawkBit, suricatta, etc. on industrial IoT devices.
+# Used in production by many embedded-Linux vendors.  Sister
+# tool to R209's genimage (which lists "rauc" as an external
+# binary it can drive); swupdate is the actual runtime update
+# engine that consumes the .swu artifacts genimage/RAUC build.
+#
+# Critical extraction note: swupdate uses Kconfig build-time
+# feature gates — long_options[] entries are wrapped in
+# `#ifdef CONFIG_FOO ... #endif` blocks for:
+#   CONFIG_UBIATTACH        (--blacklist)
+#   CONFIG_DOWNLOAD         (--download)
+#   CONFIG_HW_COMPATIBILITY (--hwrevision)
+#   CONFIG_SIGNED_IMAGES    (--key, --ca-path, --cert-purpose,
+#                            --forced-signer-name (CMS only),
+#                            --gpg-home-dir/protocol (GPG only),
+#                            --digest-provider)
+#   CONFIG_ENCRYPTED_IMAGES (--key-aes, --decryption-key,
+#                            --decrypt-provider)
+#   CONFIG_HASH_VERIFY      (--hash-provider)
+#   CONFIG_SURICATTA        (--suricatta)
+#   CONFIG_WEBSERVER        (--webserver)
+# The completion intentionally lists ALL conditional flags
+# since the installed binary's build config is opaque at
+# completion time — users may have any combination enabled.
+#
+# Bootloader interfaces decoded source-direct from upstream's
+# include/bootloader.h #defines: BOOTLOADER_EBG/NONE/GRUB/UBOOT/
+# CBOOT plus each bootloader/<name>.c's register_bootloader()
+# call (bootloader/{cboot,ebg,grub,none,uboot}.c).
+#
+# Loglevel values decoded source-direct from include/util.h's
+# `typedef enum { ERRORLEVEL, WARNLEVEL, INFOLEVEL, TRACELEVEL,
+# DEBUGLEVEL, LASTLOGLEVEL=DEBUGLEVEL } LOGLEVEL;` — 5 levels
+# (0..4).
+#
+# --select / --accepted-select / --suricatta / --download /
+# --webserver flags take comma-separated or sub-parameter
+# strings parsed by separate handler modules (suricatta_print_
+# help / download_print_help / mongoose_print_help) at runtime.
+# Completion does NOT enumerate those sub-arguments since
+# they're passthrough into independent option parsers.
+
+local -a bootloader_ifaces=(cboot ebg grub none uboot)
+local -a swupdate_loglevels=(
+  '0:ERRORLEVEL (errors only)'
+  '1:WARNLEVEL (errors + warnings)'
+  '2:INFOLEVEL (default verbose)'
+  '3:TRACELEVEL'
+  '4:DEBUGLEVEL (max)'
+)
+
+_arguments -s -S \
+  '(-h --help)'{-h,--help}'[print help and exit]' \
+  '(-v --verbose)'{-v,--verbose}'[be verbose, set maximum loglevel (overrides --loglevel)]' \
+  '--version[print SWUpdate version + compile date and exit]' \
+  '(-f --file)'{-f+,--file=}'[libconfig configuration file (swupdate.cfg)]:file:_files -g "*.cfg"' \
+  '(-c --check)'{-c,--check}'[check image and exit (requires -i)]' \
+  '(-n --dry-run)'{-n,--dry-run}'[run SWUpdate without installing the software]' \
+  '(-i --image)'{-i+,--image=}'[software (.swu) image to install]:swu:_files -g "*.swu"' \
+  '(-l --loglevel)'{-l+,--loglevel=}'[logging level (0=error..4=debug; default INFOLEVEL)]:level:((0\:ERRORLEVEL 1\:WARNLEVEL 2\:INFOLEVEL 3\:TRACELEVEL 4\:DEBUGLEVEL))' \
+  '(-L --syslog)'{-L,--syslog}'[enable syslog logger]' \
+  '(-B --bootloader)'{-B+,--bootloader=}'[bootloader interface (default = compiled-in BOOTLOADER_DEFAULT)]:interface:(cboot ebg grub none uboot)' \
+  '(-e --select)'{-e+,--select=}'[select software-images set and source (format: <set>,<mode> e.g. stable,main)]:select:' \
+  '(-q --accepted-select)'\*{-q+,--accepted-select=}'[accepted software-images set + source over IPC (repeatable; format: <set>,<mode>)]:select:' \
+  '(-g --get-root)'{-g,--get-root}'[detect and print the root device, then exit]' \
+  '(-E --get-emmc-boot)'{-E+,--get-emmc-boot=}'[read the boot partition (eMMC CSD register) for a /dev/mmcblkX device]:device:_files -g "/dev/mmcblk*"' \
+  '(-o --output)'{-o+,--output=}'[save the incoming stream to file]:file:_files' \
+  '(-s --gen-swversions)'{-s+,--gen-swversions=}'[generate sw-versions file after successful install]:file:_files' \
+  '(-p --postupdate)'{-p+,--postupdate=}'[execute post-update command (path or script)]:command:_files' \
+  '(-P --preupdate)'{-P+,--preupdate=}'[execute pre-update command (path or script)]:command:_files' \
+  '(-N --no-downgrading)'{-N+,--no-downgrading=}'[reject any release older than VERSION]:version:' \
+  '(-R --no-reinstalling)'{-R+,--no-reinstalling=}'[reject any release equal to VERSION]:version:' \
+  '--max-version=[reject any release newer than VERSION]:version:' \
+  '(-M --no-transaction-marker)'{-M,--no-transaction-marker}'[disable setting bootloader transaction marker]' \
+  '(-m --no-state-marker)'{-m,--no-state-marker}'[disable setting update state in bootloader]' \
+  '(-b --blacklist)'{-b+,--blacklist=}'[(CONFIG_UBIATTACH) MTDs that must not be scanned for UBI (space-separated list)]:mtd-list:' \
+  '(-H --hwrevision)'{-H+,--hwrevision=}'[(CONFIG_HW_COMPATIBILITY) set hardware revision (format: <board>:<rev>)]:hw:' \
+  '(-d --download)'{-d+,--download=}'[(CONFIG_DOWNLOAD) parameters passed to the downloader module (sub-options)]:downloader-opts:' \
+  '(-u --suricatta)'{-u+,--suricatta=}'[(CONFIG_SURICATTA) parameters passed to suricatta HawkBit/General-Purpose backend]:suricatta-opts:' \
+  '(-w --webserver)'{-w+,--webserver=}'[(CONFIG_WEBSERVER) parameters passed to mongoose embedded webserver]:webserver-opts:' \
+  '(-k --key --ca-path)'{-k+,--key=}'[(CONFIG_SIGNED_IMAGES) file with public key to verify images]:key-file:_files' \
+  '(-k --key --ca-path)--ca-path=[(CONFIG_SIGNED_IMAGES) path to Certificate Authority (PEM)]:ca-path:_files' \
+  '--cert-purpose=[(CONFIG_SIGNED_IMAGES) expected certificate purpose (default emailProtection)]:purpose:(emailProtection codeSigning)' \
+  '--forced-signer-name=[(CONFIG_SIGNED_IMAGES + SIGALG_CMS) expected common name of signer certificate]:cn:' \
+  '--gpg-home-dir=[(CONFIG_SIGNED_IMAGES + SIGALG_GPG) path where GPG ring + keys are stored]:dir:_files -/' \
+  '--gpg-protocol=[(CONFIG_SIGNED_IMAGES + SIGALG_GPG) supported GnuPG protocol]:proto:(openpgp cms)' \
+  '--digest-provider=[(CONFIG_SIGNED_IMAGES) provider used to verify the update digest]:provider:' \
+  '(-K --key-aes --decryption-key)'{-K+,--key-aes=}'[(CONFIG_ENCRYPTED_IMAGES) file with AES decryption key]:key-file:_files' \
+  '(-K --key-aes --decryption-key)--decryption-key=[(CONFIG_ENCRYPTED_IMAGES) decryption key file]:key-file:_files' \
+  '--decrypt-provider=[(CONFIG_ENCRYPTED_IMAGES) provider used for decryption]:provider:' \
+  '--hash-provider=[(CONFIG_HASH_VERIFY) provider used to perform hashes]:provider:'
