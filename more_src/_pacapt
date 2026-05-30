@@ -1,0 +1,178 @@
+#compdef pacapt
+# Documentation: https://github.com/icy/pacapt
+# Reference accessed: 2026-05-30
+# pacapt — universal package-manager wrapper. Translates pacman-style
+# operations (-S/-R/-Q/-U) to apt/dnf/yum/zypper/brew/portage/pkg/etc.
+# Models the multi-letter operation flag tree as alternatives, plus the
+# long-form aliases (install/remove/search/upgrade/update/autoremove/clean).
+
+local curcontext="$curcontext" state line ret=1
+
+# Primary operation flags (pacman-compatible). Each "op" is a fused flag
+# spelling like -Syu that's recognized as a single token by pacapt.
+local -a _ops
+_ops=(
+  '-S:install one or more packages'
+  '-Sy:refresh package database'
+  '-Su:upgrade installed packages'
+  '-Suy:refresh database + upgrade'
+  '-Syu:refresh database + upgrade (alt spelling)'
+  '-Ss:search remote repositories'
+  '-Si:show package information'
+  '-Sii:show detailed package information'
+  '-Sg:show package groups'
+  '-Sl:list packages in a repository'
+  '-Sc:remove orphan packages and clean cache'
+  '-Scc:clean entire cache'
+  '-Sccc:deep clean cache + orphaned files'
+  '-Sw:download package without installing'
+  '-R:remove one or more packages'
+  '-Rs:remove + unneeded dependencies'
+  '-Rn:remove + config files'
+  '-Rns:remove + dependencies + config files'
+  '-Rdd:force removal (skip dependency check)'
+  '-Q:query installed packages'
+  '-Qs:search installed packages by pattern'
+  '-Qi:show installed package details'
+  '-Qii:show detailed installed package info'
+  '-Ql:list files in installed package'
+  '-Qo:find package that owns a file'
+  '-Qm:list manually installed (foreign) packages'
+  '-Qu:list packages with available upgrades'
+  '-Qd:list dependencies of an installed package'
+  '-Qe:list explicitly installed packages'
+  '-Qc:show changelog'
+  '-Qk:verify package integrity'
+  '-U:install package from local file'
+  '-P:list supported operations on current system'
+)
+
+# Long-form aliases (subcommands).
+local -a _aliases
+_aliases=(
+  'install:install one or more packages (alias of -S)'
+  'remove:remove one or more packages (alias of -R)'
+  'search:search remote repositories (alias of -Ss)'
+  'upgrade:upgrade installed packages (alias of -Su)'
+  'update:refresh package database (alias of -Sy)'
+  'autoremove:remove orphan dependencies (alias of -Sc)'
+  'clean:clean cache (alias of -Scc)'
+)
+
+# Global modifier flags (combine with any operation).
+local -a _global
+_global=(
+  '(- *)'{-h,--help}'[show help]'
+  '(- *)'{-V,--version}'[show version]'
+  '--noconfirm[skip interactive prompts]'
+  '(-q --quiet)'{-q,--quiet}'[minimal output]'
+  '-y[automatic yes (alias for --noconfirm)]'
+  '-w[download only (alias for -Sw)]'
+)
+
+# Helper: complete installed packages via pacapt -Qq.
+_pacapt_installed() {
+  local -a pkgs
+  pkgs=( ${(f)"$(pacapt -Qq 2>/dev/null)"} )
+  _describe -t packages 'installed package' pkgs
+}
+
+# Helper: complete remote packages via apt-cache / brew search / dnf list.
+_pacapt_remote() {
+  _message 'package (no remote lookup — pacapt operation already decoded)'
+}
+
+_arguments -C \
+  $_global \
+  '1: :->op' \
+  '*:: :->args' && ret=0
+
+case $state in
+  op)
+    _alternative \
+      'ops:operation flag:_describe -t commands "operation" _ops' \
+      'aliases:alias:_describe -t commands "alias" _aliases' \
+      && ret=0
+    ;;
+  args)
+    curcontext="${curcontext%:*:*}:pacapt-$line[1]:"
+    case $line[1] in
+      # ----- Install / install-like -----
+      -S|-Sy|-Su|-Suy|-Syu|-Sw|install|upgrade)
+        _arguments -s -S \
+          $_global \
+          '*:package:_pacapt_remote' \
+          && ret=0
+        ;;
+      # ----- Search -----
+      -Ss|search)
+        _arguments -s -S \
+          $_global \
+          '*:search pattern:' \
+          && ret=0
+        ;;
+      # ----- Info / list / metadata -----
+      -Si|-Sii|-Sg|-Sl)
+        _arguments -s -S \
+          $_global \
+          '*:package or group:_pacapt_remote' \
+          && ret=0
+        ;;
+      # ----- Cache cleanup -----
+      -Sc|-Scc|-Sccc|autoremove|clean)
+        _arguments -s -S $_global && ret=0
+        ;;
+      # ----- Remove -----
+      -R|-Rs|-Rn|-Rns|-Rdd|remove)
+        _arguments -s -S \
+          $_global \
+          '*:installed package:_pacapt_installed' \
+          && ret=0
+        ;;
+      # ----- Query installed -----
+      -Q|-Qm|-Qe|-Qu)
+        _arguments -s -S \
+          $_global \
+          '*:installed package:_pacapt_installed' \
+          && ret=0
+        ;;
+      -Qs)
+        _arguments -s -S \
+          $_global \
+          '*:search pattern:' \
+          && ret=0
+        ;;
+      -Qi|-Qii|-Ql|-Qd|-Qc|-Qk)
+        _arguments -s -S \
+          $_global \
+          '*:installed package:_pacapt_installed' \
+          && ret=0
+        ;;
+      -Qo)
+        _arguments -s -S \
+          $_global \
+          '*:file path:_files' \
+          && ret=0
+        ;;
+      # ----- Upgrade from file -----
+      -U)
+        _arguments -s -S \
+          $_global \
+          '*:package file:_files -g "*.(deb|rpm|pkg.tar.{zst,xz,gz}|apk|tgz)"' \
+          && ret=0
+        ;;
+      # ----- update alias maps to -Sy (refresh only) -----
+      update)
+        _arguments -s -S $_global && ret=0
+        ;;
+      -P)
+        _arguments -s -S $_global && ret=0
+        ;;
+      *)
+        _arguments -s -S $_global '*:package:_pacapt_remote' && ret=0
+        ;;
+    esac
+    ;;
+esac
+
+return ret
