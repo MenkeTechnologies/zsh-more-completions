@@ -19,6 +19,29 @@ Entries are in original README order: older themed-cluster entries (accumulated
 before the per-round numbering convention) appear first, followed by the
 R-numbered rounds with the newest R-round at the top of that section.
 
+- **R192 — Foxboron ssh-tpm-agent SSH-via-TPM2 suite** (1 file / 4 binaries) — pivot to SSH-via-TPM2 tooling sister to the heavily-covered SSH family (openssh-server, sshd, ssh-keygen, ssh-add, ssh-agent, ssh-keyscan, scp, rsync-ssh, sshpass) and the TPM2 family (tpm2-tools, p11tool, pkcs11-tool, ykman, yubico-piv-tool) already in the corpus.
+  - `_ssh-tpm-agent` (4-stem; Foxboron/ssh-tpm-agent): the modern SSH-via-TPM2 family that uses TPM2-sealed keys as SSH client/server identities.  The "via-TPM2" approach gives hardware-bound (TPM2-bound) SSH keys without requiring a separate USB security key (YubiKey, etc.) — leveraging the TPM2 chip built into virtually every modern laptop/desktop.
+    * **ssh-tpm-agent** (cmd/ssh-tpm-agent/main.go): SSH agent that holds TPM2-sealed SSH keys instead of plaintext keys.  Listens on a UNIX socket like ssh-agent.  15 Go-stdlib `flag.*` declarations decoded source-direct including the `-A` repeatable fallback-socket flag (custom `flag.Var(&sockets, "A", ...)` Var type for multi-value collection — mapped to `*-A` repeatable spec).
+    * **ssh-tpm-add** (cmd/ssh-tpm-add/main.go): adds a TPM-sealed key to the running ssh-tpm-agent.  4 flags decoded source-direct + variadic positional key file list.
+    * **ssh-tpm-keygen** (cmd/ssh-tpm-keygen/main.go): creates a TPM-sealed SSH key (TPM-backed analog of ssh-keygen).  19 flags decoded source-direct including 3-entry `-t`/`--type` key-type enum (ecdsa|rsa|ed25519), 3-entry `-b`/`--bits` RSA-bit-size enum (2048|3072|4096), 4-entry `-parent-handle`/`-hierarchy` TPM2-hierarchy enum (owner|endorsement|platform|null).  Two flag aliasing patterns decoded source-direct:
+      ```go
+      flag.BoolVar(&askOwnerPassword, "o", false, "ask for the owner password")
+      flag.BoolVar(&askOwnerPassword, "owner-password", false, "ask for the owner password")
+      ```
+      AND
+      ```go
+      flag.StringVar(&importKey, "I", "", "import key")
+      flag.StringVar(&importKey, "import", "", "import key")
+      ```
+      Both `-o`/`-owner-password` and `-I`/`-import` form alias pairs that bind to the same variable — listed as mutex groups `(-o -owner-password)` / `(-I -import)` in completion so compsys lists them but enforces XOR.
+    * **ssh-tpm-hostkeys** (cmd/ssh-tpm-hostkeys/main.go): installs systemd units + sshd config to make sshd use TPM-sealed host keys.  2 flags decoded source-direct.  Smallest completion in this round.
+  - Critical extraction note: Go's stdlib `flag` package uses **single-dash long-form** (`-flag` NOT `--flag`) — all flag names in this completion follow that convention.  Decoded source-direct from each `flag.StringVar(&var, "name", ...)` declaration (the first string arg is the flag NAME without any dash prefix; Go's parser accepts both `-name` and `--name` at the command line but the help text is single-dash).
+  - Critical extraction note: TPM2 hierarchy enum (owner|endorsement|platform|null) decoded source-direct from the TPM2 specification (4 hierarchies plus "null" for ephemeral keys) — used in both `-hierarchy` and `-parent-handle` flags across multiple binaries.  Listed as 4-entry enum in completion since upstream's help text says "hierarchy for the created key" without enumerating values (but TPM2 only has these 4 hierarchies per the TCG Trusted Platform Module Library Specification).
+  - Hunt-skip notes: tpm2-tools family (~80 binaries, all `tpm2_*` prefix) all blacklisted in the corpus with multi=0 and no completion files — each tool has its own `topts[]` array via the shared `tpm2_options_new()` library function.  Generating a comprehensive multi-stem completion for all 80 tpm2_* binaries would require parsing each tool's topts[] declaration individually; deferred for a future dedicated round.  yubikey-piv-tool/ykpiv-cli/yubikey-personalization-cli/ykpamcfg/p11-kit-tool/tpm2-tools (the umbrella package name)/tpm2_tools deferred or not actual binary names.  kleopatra/keepass/keepassxc-cli/kp/keepassxc-rs/pass-cli/pass-clip-cli either already covered or not actual binary names (suffix-confused-with-base).  pkcs11-tool/pkcs15-tool/pkcs15-crypt/p11tool/p11-kit/gpgsm/gpgconf/gpg-card already covered in the corpus.
+  - Dup-checked clean against `/usr/share/zsh` + `/opt/homebrew/share/zsh` + `/usr/local/share/zsh`.
+  - Blacklist additions: 4 entries (all s*).
+  - Corpus 28,598 → 28,599 files.
+
 - **R191 — vscode-langservers-extracted + efm-langserver + astro-ls LSP suite** (1 file / 7 binaries) — pivot to LSP-server flag completion sister to the heavily-covered LSP family (pyright, pylsp, pylyzer, ruff-lsp, rust-analyzer, gopls, clangd, ccls, sourcekit-lsp, typescript-language-server, bash-language-server, ltex-ls, texlab, ocamllsp, yaml-language-server, tinymist) already in the corpus.
   - `_vscode-html-language-server` (7-stem):
     * **5 vscode-langservers-extracted binaries** (hrsh7th/vscode-langservers-extracted): vscode-html-language-server, vscode-css-language-server, vscode-json-language-server, vscode-eslint-language-server, vscode-markdown-language-server.  Each is a 3-line Node.js stub that requires the corresponding VSCode-bundled JS module:
