@@ -1,0 +1,83 @@
+#compdef mptcpize
+# Documentation: source-direct extraction from upstream
+# multipath-tcp/mptcpd src/mptcpize.c —
+#   lines 44-59 (the args_doc + doc strings: subcommand
+#     summary as printed by argp_help)
+#   lines 297-325 (main() with the strcmp-dispatch loop for
+#     "run" / "enable" / "disable" / "help")
+#   lines 82-92 (run() with the `if (strcmp(av[0], "-d") == 0)`
+#     debug-flag handling)
+#   lines 287-294 (enable() / disable() wrappers around
+#     unit_update())
+# Reference accessed: 2026-05-30 via gh api.
+#
+# mptcpize is the companion to R217's mptcpd — a tool to
+# enable MPTCP usage on UNMODIFIED legacy services.  Works by
+# injecting `LD_PRELOAD=libmptcpwrap.so.0.0.<rev>` and the
+# `GODEBUG=multipathtcp=1` env var into the target process,
+# which makes plain `socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)`
+# calls transparently become MPTCP (`IPPROTO_MPTCP`) sockets.
+#
+# Critical extraction note: mptcpize uses **argp-light** —
+# argp_parse() is called at main.c:303 with an EMPTY options
+# table (`static struct argp const argp = { 0, 0, args_doc,
+# doc, 0, 0, 0 }`).  The 0 in slot 1 (options) means NO flags
+# are recognized at the argp level.  All subcommand dispatch
+# is done by an explicit strcmp-loop at main.c:308-322.  The
+# only flag that exists is `-d` for the `run` subcommand,
+# parsed by hand at run() main.c:88-92:
+#   if (argc > 0 && strcmp(av[0], "-d") == 0) { ... }
+# This must appear IMMEDIATELY after `run`, before the target
+# program — `mptcpize run prog -d` does NOT work because -d
+# would be parsed as a target program flag.
+
+local curcontext="$curcontext" state line ret=1
+
+local -a subcommands=(
+  'run:run target program with MPTCP forcing (LD_PRELOAD + GODEBUG); optionally -d for stderr debug)'
+  'enable:update a systemd unit to inject the MPTCP launcher (modifies unit FragmentPath)'
+  'disable:update a systemd unit to remove the MPTCP launcher'
+  'help:print mptcpize usage and exit'
+)
+
+_arguments -C \
+  '1:subcommand:->subcmd' \
+  '*::args:->args' && ret=0
+
+case $state in
+  subcmd)
+    _describe -t subcommands 'mptcpize subcommand' subcommands && ret=0
+    ;;
+  args)
+    case $words[1] in
+      run)
+        # `mptcpize run [-d] prog [<args>]` — -d MUST come
+        # before prog (mptcpize.c:88).  Once prog is reached,
+        # all remaining args are forwarded to it verbatim via
+        # execve.
+        _arguments \
+          '-d[dump messages on stderr when a TCP socket is forced to MPTCP]' \
+          '1:target program:_command_names -e' \
+          '*::target args:_default' && ret=0
+        ;;
+      enable|disable)
+        # `mptcpize enable <unit>` / `mptcpize disable <unit>`
+        # — single mandatory positional, a systemd unit name.
+        # Use systemctl list-unit-files for completion source.
+        _arguments \
+          '1:systemd unit:->unitname' && ret=0
+        case $state in
+          unitname)
+            local -a units
+            units=( ${(f)"$(systemctl list-unit-files --type=service --no-legend --no-pager 2>/dev/null | awk '{print $1}')"} )
+            _describe -t units 'systemd service unit' units && ret=0
+            ;;
+        esac
+        ;;
+      help)
+        ;;
+    esac
+    ;;
+esac
+
+return ret
