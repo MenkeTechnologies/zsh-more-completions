@@ -19,6 +19,35 @@ Entries are in original README order: older themed-cluster entries (accumulated
 before the per-round numbering convention) appear first, followed by the
 R-numbered rounds with the newest R-round at the top of that section.
 
+- **R216 — sanlock + wdmd cluster-storage locking pair** (2 files / 2 binaries) — fresh territory; this is Red Hat's shared-storage mutual-exclusion daemon family used by libvirt / oVirt / RHEV for safe shared-LUN VM coordination.  Neither binary had ever been covered in this repo.  The pair implements the canonical SAN-fenced cluster-storage protocol: **sanlock** runs Paxos + delta leases on raw disk sectors; **wdmd** multiplexes a hardware watchdog so a node whose lease expired will be HARDWARE-reset before another node takes the lease.
+  - `_sanlock` (1-stem; nirs/sanlock mirror of pagure.io/sanlock): **3-tier subcommand dispatch + 16 daemon flags + 26 client actions + 7 direct actions** decoded source-direct from `src/main.c`:
+    * **subcommand dispatch** at lines 2201-2249 (the `if (!strcmp(arg1, "daemon")) … else if (!strcmp(arg1, "client")) …` cascade)
+    * **print_usage()** at lines 2094-2190 (the full action-by-action argument signature reference)
+    * **hand-rolled argv walker** at lines 2192-2548 (NOT `getopt(3)` — explicit `optchar = p[1]` extraction + dispatch table at lines 2395-2541)
+    * **valid sector/align combinations** decoded source-direct from lines 2552-2560 — the constrained matrix is `512/1M`, `4K/1M`, `4K/2M`, `4K/4M`, `4K/8M` (NOT a Cartesian product)
+  - `_wdmd` (1-stem; nirs/sanlock wdmd subdirectory): **12 flags** decoded source-direct from `wdmd/main.c`:
+    * **print_usage_and_exit()** at lines 1759-1779
+    * `static struct option long_options[]` array at lines 1804-1811 + getopt_long short-option string `"hpdVDH:G:S:s:k:w:t:F"` at line 1814
+  - Critical extraction note: **sanlock does NOT use getopt(3) or getopt_long(3)** — instead a hand-rolled argv walker at main.c:2192-2548 with explicit per-character dispatch.  This allows a unique feature: the `-c` flag (begin_command at line 2519-2521) **stops the walker** so that `sanlock client command -r RESOURCE -c /path/to/cmd -X -Y -Z` can forward all remaining args verbatim to the child process via `execv()`.  Documented in the comment block at main.c:2564-2577.  Completion encodes `-c` as `_command_names -e` so users get command-name completion at the moment the executor takes over.
+  - Critical extraction note: **SEVERAL options are CONTEXT-DEPENDENT** — the same letter means different things based on the active action:
+    * `-h`: `--high-priority` (daemon mode) OR `--get_hosts` (for ACT_GETS or ACT_CLIENT_READ at lines 2429-2434)
+    * `-o`: `--sort_arg p|s` (for ACT_STATUS) OR `--io_timeout` sec (for daemon, lines 2438-2446)
+    * `-g`: `--kill_grace_seconds` (for daemon, lines 2473-2483) OR `--host_generation` (elsewhere)
+    * `-e`: rindex entry parse (if `com.rindex_op`) OR `our_host_name` strcpy OR `he_event` uint64 (lines 2462-2469)
+    * `-a`: `--all` + `--aio_arg` (line 2414-2418; sets BOTH to atoi(optionarg), clamping aio_arg to 0 or 1)
+  - Critical extraction note: **wdmd has a SPLIT flag-style** — 6 flags are long+short (in long_options[] at main.c:1804-1811: `--help/-h`, `--probe/-p`, `--dump/-d`, `--trytimeout/-t`, `--forcefire/-F`, `--version/-V`) and **6 are SHORT-ONLY** (only in the getopt_long short-option string: `-D`, `-H`, `-G`, `-S`, `-s`, `-k`, `-w`).  The short-only flags are admin / daemon-control options (debug mode, high-priority RR, socket group ownership, scripts dir + script-allow toggle + script-kill timeout, override watchdog device path).  Completion tags each short-only flag with `(short-only)` in the description so users see why there's no long alias.
+  - Critical extraction note: sanlock's **LOCKSPACE / RESOURCE / RINDEX type-aliases** are colon-delimited strings with strict positional semantics decoded source-direct from print_usage() at main.c:2165-2181:
+    * `LOCKSPACE = <name>:<host_id>:<path>:<offset>` (4-field)
+    * `RESOURCE = <name>:<resource_name>:<path>:<offset>[:<lver>]` (4-field + optional 5th lver or `SH` for shared lease)
+    * `RINDEX = <name>:<path>:<offset>` (3-field)
+    Completion encodes the colon-delimited format in each `-s` / `-r` / `-x` flag description so users know the expected structure.
+  - Critical extraction note: sanlock's **maximum-host-id-per-sector/align-size matrix** decoded source-direct from main.c:2184-2185 — 2000 hosts at 512/1M, 250 at 4K/1M, 500 at 4K/2M, 1000 at 4K/4M, 2000 at 4K/8M.  Not encoded in completion since it's runtime-validated, but documented as a quick-reference in the comment block.
+  - Critical extraction note: wdmd's **`-t` short variant ALSO sets `do_probe = 1`** at main.c:1826-1829 — meaning `wdmd -t 60` both sets the watchdog timeout AND probes for the device (prints the path).  Completion documents this as "set timeout value … and probe" rather than just "set timeout".
+  - Hunt-skip notes: `fence_sanlock` (the cluster-fencing helper in the `fence_sanlock/` subdirectory; integrates with corosync/pacemaker) deferred — it's a Python wrapper that calls into sanlock's IPC; would warrant its own round.  `sanlock_helper` (the privileged helper binary in the `reset/` subdirectory; used for the `reset` watchdog reset action) deferred — small flag surface.  The `python/` bindings dir provides the Python API but not a separate CLI.
+  - Dup-checked clean against `/usr/share/zsh` + `/opt/homebrew/share/zsh` + `/usr/local/share/zsh`.
+  - Blacklist additions: 2 entries (s* + w*).
+  - Corpus 28,628 → 28,630 files.
+
 - **R215 — Qt qmlimportscanner (the last uncovered qml-tools binary)** (1 file / 1 binary) — fills the **one remaining gap** in the corpus's Qt qml-tools coverage: _qmlformat, _qmllint, _qmlls, _qmlprofiler, _qmltestrunner, _qmltc, _qmlcachegen, _qmltyperegistrar, _qmlplugindump, and _qmlscene all already exist; qmlimportscanner did not.  Walks a QML source tree (or list of QML / JS / QRC files) and emits the transitive import graph as JSON (default) or CMake content (`-cmake-output`).  Used by the Qt CMake build system to auto-detect QML plugin dependencies during `qt_add_qml_module`.
   - `_qmlimportscanner` (1-stem; qt/qtdeclarative tools/qmlimportscanner): **9 flags + 1 positional + @response-file syntax** decoded source-direct from `main.cpp` lines 906-972 (the explicit argv-walking loop) + lines 852-879 (the `argumentsFromCommandLineAndFile()` @-file expansion).
   - Critical extraction note: **qmlimportscanner does NOT use QCommandLineParser despite being a Qt tool** — main.cpp:856 comment explains the reason directly:
