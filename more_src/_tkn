@@ -1,0 +1,357 @@
+#compdef tkn
+# Documentation: https://tekton.dev/docs/cli/
+# Source: https://github.com/tektoncd/cli docs/cmd/tkn*.md (cobra subcommand tree)
+# Reference accessed: 2026-05-30
+# tkn — Tekton Pipelines CLI. CRD-style subcommand tree for managing
+# pipelines/tasks/runs/triggers/eventlisteners + bundle + hub.
+
+local curcontext="$curcontext" state line ret=1
+
+local -a _subcmds
+_subcmds=(
+  'bundle:manage Tekton Bundles'
+  'clustertriggerbinding:manage ClusterTriggerBindings'
+  'ctb:manage ClusterTriggerBindings (alias)'
+  'completion:print shell completion scripts'
+  'customrun:manage CustomRuns'
+  'cr:manage CustomRuns (alias)'
+  'eventlistener:manage EventListeners'
+  'el:manage EventListeners (alias)'
+  'hub:interact with Artifact Hub'
+  'pipeline:manage Pipelines'
+  'p:manage Pipelines (alias)'
+  'pipelinerun:manage PipelineRuns'
+  'pr:manage PipelineRuns (alias)'
+  'task:manage Tasks'
+  't:manage Tasks (alias)'
+  'taskrun:manage TaskRuns'
+  'tr:manage TaskRuns (alias)'
+  'triggerbinding:manage TriggerBindings'
+  'tb:manage TriggerBindings (alias)'
+  'triggertemplate:manage TriggerTemplates'
+  'tt:manage TriggerTemplates (alias)'
+  'version:print version information'
+  'help:show help for a command'
+)
+
+# Persistent global flags (apply to every subcommand).
+local -a _global
+_global=(
+  '(-c --context)'{-c,--context=}'[kubeconfig context]:context:'
+  '(-k --kubeconfig)'{-k,--kubeconfig=}'[kubectl config file]:file:_files'
+  '(-n --namespace)'{-n,--namespace=}'[target namespace]:namespace:'
+  '(-C --no-color)'{-C,--no-color}'[disable colored output]'
+  '(-h --help)'{-h,--help}'[show help]'
+)
+
+# Sub-sub command groups.
+local -a _sub_pipeline _sub_pipelinerun _sub_task _sub_taskrun \
+         _sub_bundle _sub_hub _sub_eventlistener _sub_trigger_simple \
+         _sub_completion
+
+_sub_pipeline=(
+  'delete:remove Pipelines from a namespace'
+  'describe:display details about a Pipeline'
+  'export:export a Pipeline'
+  'list:display Pipelines in a namespace'
+  'logs:display Pipeline logs'
+  'sign:sign a Tekton Pipeline'
+  'start:initiate a Pipeline run'
+  'verify:verify a Tekton Pipeline signature'
+)
+
+_sub_pipelinerun=(
+  'cancel:cancel a PipelineRun in a namespace'
+  'delete:delete PipelineRuns in a namespace'
+  'describe:describe a PipelineRun in a namespace'
+  'export:export a PipelineRun'
+  'list:list PipelineRuns in a namespace'
+  'logs:show the logs of a PipelineRun'
+)
+
+_sub_task=(
+  'delete:delete Tasks in a namespace'
+  'describe:describe a Task in a namespace'
+  'list:list Tasks in a namespace'
+  'logs:show Task logs'
+  'sign:sign a Tekton Task'
+  'start:start a Task run'
+  'verify:verify Tekton Task signature'
+)
+
+_sub_taskrun=(
+  'cancel:cancel a TaskRun in a namespace'
+  'delete:delete TaskRuns in a namespace'
+  'describe:describe a TaskRun in a namespace'
+  'export:export a TaskRun'
+  'list:list TaskRuns in a namespace'
+  'logs:show TaskRun logs'
+)
+
+_sub_bundle=(
+  'list:list and print a Tekton bundle contents'
+  'push:create or replace a Tekton bundle'
+)
+
+_sub_hub=(
+  'install:install a resource from a catalog by kind/name/version'
+  'check-upgrade:check for resource upgrades (deprecated)'
+  'downgrade:downgrade an installed resource (deprecated)'
+  'get:get a resource manifest from the hub (deprecated)'
+  'info:show resource info (deprecated)'
+  'reinstall:reinstall a resource (deprecated)'
+  'search:search the hub catalog (deprecated)'
+  'upgrade:upgrade an installed resource (deprecated)'
+)
+
+_sub_eventlistener=(
+  'delete:delete EventListeners in a namespace'
+  'describe:describe an EventListener in a namespace'
+  'list:list EventListeners in a namespace'
+  'logs:show EventListener logs'
+)
+
+# Shared by ClusterTriggerBinding / TriggerBinding / TriggerTemplate / CustomRun.
+_sub_trigger_simple=(
+  'delete:delete the resource'
+  'describe:describe a single resource'
+  'list:list resources in the namespace (or cluster)'
+)
+
+_sub_completion=(
+  'bash:emit bash completion script'
+  'fish:emit fish completion script'
+  'powershell:emit PowerShell completion script'
+  'zsh:emit zsh completion script'
+)
+
+# Helper: complete Kubernetes resources of a given Tekton kind via kubectl.
+_tkn_k_resources() {
+  local kind=$1 ns_arg=()
+  [[ -n "${line[(r)-n]}" || -n "${line[(r)--namespace]}" ]] && ns_arg=()
+  local -a names
+  names=( ${(f)"$(kubectl get $kind -o name 2>/dev/null)"} )
+  names=( ${names#*/} )
+  _describe -t resources "$kind" names
+}
+
+_arguments -C \
+  $_global \
+  '1: :->subcmd' \
+  '*:: :->args' && ret=0
+
+case $state in
+  subcmd)
+    _describe -t commands 'tkn subcommand' _subcmds && ret=0
+    ;;
+  args)
+    curcontext="${curcontext%:*:*}:tkn-$line[1]:"
+    case $line[1] in
+      pipeline|p)
+        _arguments -C $_global '1: :->c' '*:: :->a' && ret=0
+        case $state in
+          c) _describe -t commands 'pipeline subcommand' _sub_pipeline && ret=0 ;;
+          a)
+            local kind=pipelines.tekton.dev
+            case $line[1] in
+              list) _arguments $_global '(-o --output)'{-o,--output=}'[output format]:fmt:(json yaml name go-template jsonpath)' '--all-namespaces[list across all namespaces]' && ret=0 ;;
+              describe|export|logs) _arguments $_global "1:pipeline:_tkn_k_resources $kind" && ret=0 ;;
+              delete) _arguments $_global '(-f --force)'{-f,--force}'[delete without confirmation]' '--prs[also delete associated PipelineRuns]' "*:pipeline:_tkn_k_resources $kind" && ret=0 ;;
+              start) _arguments $_global \
+                  '*'{-p,--param=}'[set param (key=value)]:param:' \
+                  '*'{-w,--workspace=}'[set workspace (name=,...)]:workspace:' \
+                  '*'{-s,--serviceaccount=}'[service account]:sa:' \
+                  '*-l[label key=value]:label:' \
+                  '*--task-serviceaccount=[per-task service account]:task=sa:' \
+                  '--showlog[stream logs after start]' \
+                  '--use-param-defaults[fill missing params with defaults]' \
+                  '--filename=[start from local file/url]:file:_files' \
+                  '--last[start with same args as last run]' \
+                  '*--use-pipelinerun=[reuse params/workspaces from given PipelineRun]:pr:' \
+                  "1:pipeline:_tkn_k_resources $kind" && ret=0 ;;
+              sign|verify) _arguments $_global '*:file:_files' && ret=0 ;;
+            esac
+          ;;
+        esac
+        ;;
+      pipelinerun|pr|pipelineruns)
+        _arguments -C $_global '1: :->c' '*:: :->a' && ret=0
+        case $state in
+          c) _describe -t commands 'pipelinerun subcommand' _sub_pipelinerun && ret=0 ;;
+          a)
+            local kind=pipelineruns.tekton.dev
+            case $line[1] in
+              list) _arguments $_global '(-o --output)'{-o,--output=}'[output format]:fmt:(json yaml name go-template jsonpath)' '--all-namespaces[list across all namespaces]' '--limit=[max items]:N:' '--reverse[reverse order]' && ret=0 ;;
+              describe|export|logs) _arguments $_global \
+                  '(-f --follow)'{-f,--follow}'[stream live logs]' \
+                  '-a[show all step logs]' \
+                  "1:pipelinerun:_tkn_k_resources $kind" && ret=0 ;;
+              cancel) _arguments $_global "1:pipelinerun:_tkn_k_resources $kind" && ret=0 ;;
+              delete) _arguments $_global '(-f --force)'{-f,--force}'[delete without confirmation]' '--keep=[keep last N runs]:N:' "*:pipelinerun:_tkn_k_resources $kind" && ret=0 ;;
+            esac
+          ;;
+        esac
+        ;;
+      task|t|tasks)
+        _arguments -C $_global '1: :->c' '*:: :->a' && ret=0
+        case $state in
+          c) _describe -t commands 'task subcommand' _sub_task && ret=0 ;;
+          a)
+            local kind=tasks.tekton.dev
+            case $line[1] in
+              list) _arguments $_global '(-o --output)'{-o,--output=}'[output format]:fmt:(json yaml name go-template jsonpath)' '--all-namespaces[list across all namespaces]' && ret=0 ;;
+              describe|logs) _arguments $_global "1:task:_tkn_k_resources $kind" && ret=0 ;;
+              delete) _arguments $_global '(-f --force)'{-f,--force}'[delete without confirmation]' '--trs[also delete associated TaskRuns]' "*:task:_tkn_k_resources $kind" && ret=0 ;;
+              start) _arguments $_global \
+                  '*'{-p,--param=}'[set param (key=value)]:param:' \
+                  '*'{-w,--workspace=}'[set workspace]:workspace:' \
+                  '*'{-s,--serviceaccount=}'[service account]:sa:' \
+                  '--showlog[stream logs after start]' \
+                  '--use-param-defaults[fill missing params with defaults]' \
+                  '--filename=[start from local file/url]:file:_files' \
+                  '--last[reuse args from last run]' \
+                  '*--use-taskrun=[reuse params from a TaskRun]:tr:' \
+                  "1:task:_tkn_k_resources $kind" && ret=0 ;;
+              sign|verify) _arguments $_global '*:file:_files' && ret=0 ;;
+            esac
+          ;;
+        esac
+        ;;
+      taskrun|tr|taskruns)
+        _arguments -C $_global '1: :->c' '*:: :->a' && ret=0
+        case $state in
+          c) _describe -t commands 'taskrun subcommand' _sub_taskrun && ret=0 ;;
+          a)
+            local kind=taskruns.tekton.dev
+            case $line[1] in
+              list) _arguments $_global '(-o --output)'{-o,--output=}'[output format]:fmt:(json yaml name go-template jsonpath)' '--all-namespaces[list across all namespaces]' '--limit=[max items]:N:' '--reverse[reverse order]' && ret=0 ;;
+              describe|export|logs) _arguments $_global \
+                  '(-f --follow)'{-f,--follow}'[stream live logs]' \
+                  "1:taskrun:_tkn_k_resources $kind" && ret=0 ;;
+              cancel) _arguments $_global "1:taskrun:_tkn_k_resources $kind" && ret=0 ;;
+              delete) _arguments $_global '(-f --force)'{-f,--force}'[delete without confirmation]' '--keep=[keep last N runs]:N:' "*:taskrun:_tkn_k_resources $kind" && ret=0 ;;
+            esac
+          ;;
+        esac
+        ;;
+      bundle)
+        _arguments -C $_global '1: :->c' '*:: :->a' && ret=0
+        case $state in
+          c) _describe -t commands 'bundle subcommand' _sub_bundle && ret=0 ;;
+          a)
+            case $line[1] in
+              list) _arguments $_global '(-o --output)'{-o,--output=}'[output format]:fmt:(json yaml name)' '1:bundle-image:' && ret=0 ;;
+              push) _arguments $_global \
+                  '*'{-f,--filename=}'[YAML file to push]:file:_files' \
+                  '--ctx=[OCI auth context]:ctx:' \
+                  '--remote-bearer=[bearer token]:token:' \
+                  '--remote-username=[registry username]:user:' \
+                  '--remote-password=[registry password]:pass:' \
+                  '--remote-skip-tls[skip TLS verification]' \
+                  '1:bundle-image:' && ret=0 ;;
+            esac
+          ;;
+        esac
+        ;;
+      hub)
+        _arguments -C $_global '1: :->c' '*:: :->a' && ret=0
+        case $state in
+          c) _describe -t commands 'hub subcommand' _sub_hub && ret=0 ;;
+          a)
+            case $line[1] in
+              install) _arguments $_global '--from=[catalog name]:catalog:' '--version=[resource version]:ver:' '1:kind:(task pipeline)' '2:name:' && ret=0 ;;
+              get|info) _arguments $_global '--from=[catalog]:catalog:' '--version=[version]:ver:' '1:kind:(task pipeline)' '2:name:' && ret=0 ;;
+              search) _arguments $_global '--kinds=[filter by kinds]:kinds:' '--tags=[filter by tags]:tags:' '--categories=[filter by categories]:cats:' '--platforms=[filter by platforms]:platforms:' '1:query:' && ret=0 ;;
+              upgrade|downgrade|reinstall|check-upgrade) _arguments $_global '--to=[target version]:ver:' '1:kind:(task pipeline)' '2:name:' && ret=0 ;;
+            esac
+          ;;
+        esac
+        ;;
+      eventlistener|el|eventlisteners)
+        _arguments -C $_global '1: :->c' '*:: :->a' && ret=0
+        case $state in
+          c) _describe -t commands 'eventlistener subcommand' _sub_eventlistener && ret=0 ;;
+          a)
+            local kind=eventlisteners.triggers.tekton.dev
+            case $line[1] in
+              list) _arguments $_global '(-o --output)'{-o,--output=}'[output format]:fmt:(json yaml name)' '--all-namespaces[list across all namespaces]' && ret=0 ;;
+              describe|logs) _arguments $_global "1:eventlistener:_tkn_k_resources $kind" && ret=0 ;;
+              delete) _arguments $_global '(-f --force)'{-f,--force}'[delete without confirmation]' "*:eventlistener:_tkn_k_resources $kind" && ret=0 ;;
+            esac
+          ;;
+        esac
+        ;;
+      clustertriggerbinding|ctb|clustertriggerbindings)
+        _arguments -C $_global '1: :->c' '*:: :->a' && ret=0
+        case $state in
+          c) _describe -t commands 'ctb subcommand' _sub_trigger_simple && ret=0 ;;
+          a)
+            local kind=clustertriggerbindings.triggers.tekton.dev
+            case $line[1] in
+              list) _arguments $_global '(-o --output)'{-o,--output=}'[output format]:fmt:(json yaml name)' && ret=0 ;;
+              describe) _arguments $_global "1:ctb:_tkn_k_resources $kind" && ret=0 ;;
+              delete) _arguments $_global '(-f --force)'{-f,--force}'[delete without confirmation]' "*:ctb:_tkn_k_resources $kind" && ret=0 ;;
+            esac
+          ;;
+        esac
+        ;;
+      triggerbinding|tb|triggerbindings)
+        _arguments -C $_global '1: :->c' '*:: :->a' && ret=0
+        case $state in
+          c) _describe -t commands 'tb subcommand' _sub_trigger_simple && ret=0 ;;
+          a)
+            local kind=triggerbindings.triggers.tekton.dev
+            case $line[1] in
+              list) _arguments $_global '(-o --output)'{-o,--output=}'[output format]:fmt:(json yaml name)' '--all-namespaces[list across all namespaces]' && ret=0 ;;
+              describe) _arguments $_global "1:tb:_tkn_k_resources $kind" && ret=0 ;;
+              delete) _arguments $_global '(-f --force)'{-f,--force}'[delete without confirmation]' "*:tb:_tkn_k_resources $kind" && ret=0 ;;
+            esac
+          ;;
+        esac
+        ;;
+      triggertemplate|tt|triggertemplates)
+        _arguments -C $_global '1: :->c' '*:: :->a' && ret=0
+        case $state in
+          c) _describe -t commands 'tt subcommand' _sub_trigger_simple && ret=0 ;;
+          a)
+            local kind=triggertemplates.triggers.tekton.dev
+            case $line[1] in
+              list) _arguments $_global '(-o --output)'{-o,--output=}'[output format]:fmt:(json yaml name)' '--all-namespaces[list across all namespaces]' && ret=0 ;;
+              describe) _arguments $_global "1:tt:_tkn_k_resources $kind" && ret=0 ;;
+              delete) _arguments $_global '(-f --force)'{-f,--force}'[delete without confirmation]' "*:tt:_tkn_k_resources $kind" && ret=0 ;;
+            esac
+          ;;
+        esac
+        ;;
+      customrun|cr|customruns)
+        _arguments -C $_global '1: :->c' '*:: :->a' && ret=0
+        case $state in
+          c) _describe -t commands 'customrun subcommand' _sub_trigger_simple && ret=0 ;;
+          a)
+            local kind=customruns.tekton.dev
+            case $line[1] in
+              list) _arguments $_global '(-o --output)'{-o,--output=}'[output format]:fmt:(json yaml name)' '--all-namespaces[list across all namespaces]' && ret=0 ;;
+              describe) _arguments $_global "1:customrun:_tkn_k_resources $kind" && ret=0 ;;
+              delete) _arguments $_global '(-f --force)'{-f,--force}'[delete without confirmation]' "*:customrun:_tkn_k_resources $kind" && ret=0 ;;
+            esac
+          ;;
+        esac
+        ;;
+      completion)
+        _arguments -C '1: :->c' && ret=0
+        [[ $state == c ]] && _describe -t commands 'shell' _sub_completion && ret=0
+        ;;
+      version)
+        _arguments -s -S '--component=[show only one component]:component:(client tektoncd dashboard triggers operator pipeline)' && ret=0
+        ;;
+      help)
+        _describe -t commands 'tkn subcommand' _subcmds && ret=0
+        ;;
+      *)
+        _arguments $_global '*:argument:' && ret=0
+        ;;
+    esac
+    ;;
+esac
+
+return ret
