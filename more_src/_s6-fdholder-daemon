@@ -1,0 +1,88 @@
+#compdef s6-fdholder-daemon s6-fdholder-delete s6-fdholder-getdump s6-fdholder-setdump s6-fdholder-transferdump s6-fdholderd
+# Documentation: source-direct extraction from upstream skarnet/s6
+# src/fdholder/s6-fdholder-{daemon,delete,getdump,setdump,
+# transferdump}.c + s6-fdholderd.c USAGE strings + subgetopt_r
+# specs.
+# Reference accessed: 2026-05-30 via gh api.
+# Skarnet s6 fdholder server R120 — 6-stem multi-binary harvest of
+# the s6 file-descriptor holder server-side and dump-management
+# binaries. Sister tools to R117's `_s6-fdholder-list` (client-side:
+# s6-fdholder-list/store/retrieve) and the wider s6 utility families
+# in R118/R119.
+
+# Shared helper for the canonical s6-fdholderd server flag set.
+local -a _s6_fdh_server_flags
+_s6_fdh_server_flags=(
+  '-v+[verbosity level (default 1)]:level:'
+  '-1[notify readiness by writing newline + closing fd 1]'
+  '-c+[max simultaneous client connections (default 16)]:maxconn:'
+  '-n+[max file descriptors held in storage (default 1000)]:maxfds:'
+  '(-i -x)-i+[access-rules directory tree (s6-accessrules-cdb-from-fs)]:rulesdir:_directories'
+  '(-i -x)-x+[access-rules CDB file]:rulesfile:_files'
+  '-t+[per-client operation timeout in ms (default 0=infinite)]:ms:'
+  '-T+[lameduck shutdown timeout in ms (default 0=infinite)]:ms:'
+)
+
+case $service in
+
+  s6-fdholder-daemon)
+    # Long-lived listener variant: opens its own listening socket on
+    # `path`, then runs the s6-fdholderd protocol engine.
+    _arguments -s -S \
+      "${_s6_fdh_server_flags[@]}" \
+      '(-D)-d[daemonize: detach from controlling terminal (default)]' \
+      '(-d)-D[do NOT daemonize: stay in foreground]' \
+      '-b+[socket listen backlog (default 20)]:backlog:' \
+      '-u+[drop privileges to uid before serving]:uid:_users' \
+      '-g+[drop privileges to gid before serving]:gid:_groups' \
+      '-G+[supplementary group ids (comma-separated)]:gid,gid,...:' \
+      '-U[ucspi mode: read protocol via stdin/stdout (no listen())]' \
+      '1:socket path:_files'
+    ;;
+
+  s6-fdholderd)
+    # UCSPI-mode kernel of the fdholder server: expects a connected
+    # client on fd 6/7 (or 0/1 depending on s6-ipcserver wrapping).
+    # Designed to be invoked under s6-ipcserver / s6-ipcserverd.
+    _arguments -s -S \
+      "${_s6_fdh_server_flags[@]}"
+    ;;
+
+  s6-fdholder-delete)
+    # Delete a held file descriptor from the fdholder server by id.
+    _arguments -s -S \
+      '-t+[operation timeout in ms]:ms:' \
+      '1:fdholder socket path:_files' \
+      '2:descriptor identifier:'
+    ;;
+
+  s6-fdholder-getdump)
+    # Atomically retrieve ALL held fds + ids from a running fdholder
+    # server, then chain-load prog with those fds/ids in the
+    # environment (used by s6-rc to snapshot live socket state for
+    # restart-as-same-server).
+    _arguments -s -S \
+      '-t+[operation timeout in ms]:ms:' \
+      '1:fdholder socket path:_files' \
+      '*:program and arguments:_command_names -e'
+    ;;
+
+  s6-fdholder-setdump)
+    # Atomically load a dump (set of fds + ids, passed in via stdin
+    # from a prior s6-fdholder-getdump) into a fresh fdholder server.
+    _arguments -s -S \
+      '-t+[operation timeout in ms]:ms:' \
+      '1:fdholder socket path:_files'
+    ;;
+
+  s6-fdholder-transferdump)
+    # Atomically migrate all held fds from one running fdholder
+    # server (socketfrom) to another (socketto). Combines getdump
+    # and setdump in a single hot-handoff.
+    _arguments -s -S \
+      '-t+[timeout pair in ms: timeoutfrom:timeoutto]:ms:from:to:' \
+      '1:source fdholder socket path:_files' \
+      '2:destination fdholder socket path:_files'
+    ;;
+
+esac
