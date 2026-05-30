@@ -1,0 +1,97 @@
+#compdef pyrra
+# Documentation: https://github.com/pyrra-dev/pyrra (main.go kong commands)
+# Reference accessed: 2026-05-29
+# pyrra — SLO management CLI: define Service Level Objectives as YAML, generates Prometheus rules + UI.
+
+local curcontext="$curcontext" state line ret=1
+
+local -a _subcmds
+_subcmds=(
+  'api:run the Pyrra API + UI server (queries Prometheus)'
+  'filesystem:watch a folder of SLO config files and emit Prometheus rules'
+  'kubernetes:run as a Kubernetes operator reconciling SLO CRDs'
+  'generate:one-shot generation of Prometheus rules from SLO YAML files'
+)
+
+# Shared Prometheus + URL flags across api / filesystem / kubernetes / generate.
+local -a _shared_prometheus
+_shared_prometheus=(
+  '--prometheus-url=[Prometheus URL to query (default http://localhost:9090)]:url:'
+  '--external-url=[URL for Pyrra to include in alert annotations]:url:'
+  '--enable-prometheus3-migration[enable Prometheus 3 migration mode (default true)]'
+)
+
+# Shared filesystem-mode flags.
+local -a _shared_fs
+_shared_fs=(
+  '--config-files=[folder containing SLO config files (default /etc/pyrra/*.yaml)]:glob:_files'
+  '--prometheus-folder=[output folder for generated rules (default /etc/prometheus/pyrra/)]:dir:_directories'
+  '--generic-rules[generate generic recording rules (for Grafana etc.)]'
+)
+
+_arguments -C \
+  '(- *)'{-h,--help}'[show help]' \
+  '(- *)--version[show version]' \
+  '1: :->subcmd' \
+  '*:: :->args' && ret=0
+
+case $state in
+  subcmd)
+    _describe -t commands 'pyrra subcommand' _subcmds && ret=0
+    ;;
+  args)
+    case $line[1] in
+      api)
+        _arguments \
+          $_shared_prometheus \
+          '--prometheus-external-url=[UI redirect URL for opening Prometheus]:url:' \
+          '--grafana-external-url=[UI redirect URL for Grafana Explore]:url:' \
+          '--grafana-external-org-id=[Grafana Explore organization id (default 1)]:N:' \
+          '--grafana-external-datasource-id=[Grafana Explore Prometheus datasource id]:id:' \
+          '--api-url=[URL to API service (e.g. K8s operator; default http\://localhost\:9444)]:url:' \
+          '--route-prefix=[route prefix Pyrra uses (for reverse-proxy setups)]:prefix:' \
+          '--ui-route-prefix=[route prefix Pyrra UI uses]:prefix:' \
+          '--prometheus-bearer-token-path=[bearer token file path]:file:_files' \
+          '--prometheus-basic-auth-username=[HTTP basic auth username]:user:' \
+          '--prometheus-basic-auth-password=[HTTP basic auth password]:pass:' \
+          '--tls-cert-file=[default x509 cert for HTTPS]:file:_files' \
+          '--tls-private-key-file=[x509 private key matching --tls-cert-file]:file:_files' \
+          '--tls-client-ca-file=[CA cert for the client]:file:_files' \
+          '--mimir-org-id=[Mimir tenant ID for multi-tenancy queries]:id:' && ret=0
+        ;;
+      filesystem)
+        _arguments \
+          $_shared_prometheus \
+          $_shared_fs && ret=0
+        ;;
+      kubernetes)
+        _arguments \
+          $_shared_prometheus \
+          '--metrics-addr=[metric endpoint bind address (default :8080)]:addr:' \
+          '--config-map-mode[save generated rules to ConfigMaps instead of CRDs]' \
+          '--generic-rules[generate generic recording rules]' \
+          '--disable-webhooks[disable webhooks (skip cert read; default true)]' \
+          '--tls-cert-file=[default x509 cert for HTTPS]:file:_files' \
+          '--tls-private-key-file=[x509 private key]:file:_files' \
+          '--mimir-url=[Mimir API URL (provisions rules via Mimir)]:url:' \
+          '--mimir-prometheus-prefix=[Prometheus API prefix in Mimir (default prometheus)]:prefix:' \
+          '--mimir-basic-auth-username=[Mimir HTTP basic auth username]:user:' \
+          '--mimir-basic-auth-password=[Mimir HTTP basic auth password]:pass:' \
+          '--mimir-org-id=[Mimir tenant ID]:id:' \
+          '--mimir-write-alerting-rules[also provision alerting rules to Mimir Ruler]' \
+          '--mimir-deployment-mode=[Mimir deployment mode (default standalone)]:mode:(standalone distributed)' \
+          '--enable-leader-election[enable controller-manager leader election]' \
+          '--leader-election-namespace=[namespace for leader election]:ns:' && ret=0
+        ;;
+      generate)
+        _arguments \
+          $_shared_fs \
+          '--enable-prometheus3-migration[Prometheus 3 migration mode (default true)]' \
+          '--operator-rule[generate prometheus-operator PrometheusRule files]' \
+          '--external-url=[URL for alert annotations]:url:' && ret=0
+        ;;
+    esac
+    ;;
+esac
+
+return ret
