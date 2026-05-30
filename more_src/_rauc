@@ -1,0 +1,260 @@
+#compdef rauc
+# Documentation: source-direct extraction from upstream
+# rauc/rauc src/main.c.  Reference accessed: 2026-05-30 via
+# gh api.
+# RAUC is Pengutronix's Robust Auto-Update Controller: the
+# atomic A/B-slot OTA update engine for embedded Linux.
+# Third leg of the embedded OTA trinity:
+#   R209 genimage   -> builds rootfs / SD-card / eMMC images
+#   R212 rauc       -> bundles them as signed/encrypted .raucb
+#   R210 swupdate   -> alternative runtime engine (or RAUC's
+#                       own service mode + bootloader markers)
+# RAUC is heavily integrated with Yocto via meta-rauc and with
+# HawkBit via rauc-hawkbit-updater.  Uses GLib GOptionEntry +
+# GOptionGroup throughout — completion encodes both the global
+# entries[] array and the per-subcommand entries_<cmd>[] arrays.
+
+# Subcommands decoded source-direct from `RaucCommand
+# rcommands[]` at src/main.c:2809-2861.  Gated subcommands:
+#   ENABLE_CREATE: bundle, resign, convert, encrypt,
+#                  replace-signature, extract-signature
+#   ENABLE_SERVICE: service
+# Completion lists ALL conditional subcommands since the
+# installed binary's build flags are opaque at completion time
+# — users on Pengutronix's default builds typically have both
+# ENABLE_CREATE=1 and ENABLE_SERVICE=1.
+
+local curcontext="$curcontext" state line ret=1
+local -a subcommands=(
+  'help:print help for a subcommand'
+  'install:install a bundle from <BUNDLE> path or URL'
+  'bundle:create a bundle from <INPUTDIR> + manifest.raucm (writes <BUNDLENAME>)'
+  'resign:re-sign an already-signed bundle <INBUNDLE> -> <OUTBUNDLE>'
+  'convert:convert to a casync-index bundle + casync store'
+  'encrypt:encrypt a crypt bundle <INBUNDLE> -> <OUTBUNDLE>'
+  'replace-signature:replace signature of an already-signed bundle (<INBUNDLE> <INPUTSIG> <OUTBUNDLE>)'
+  'extract-signature:extract bundle signature (<BUNDLENAME> <OUTPUTSIG>)'
+  'extract:extract bundle content (<BUNDLENAME> <OUTPUTDIR>)'
+  'info:print bundle info (manifest + signature + images)'
+  'status:show system slot status (and mark-good/mark-bad/mark-active sub-commands)'
+  'write-slot:DEVELOPMENT-ONLY manual image write to <SLOTNAME> (bypasses all update logic!)'
+  'service:start RAUC D-Bus service'
+  'mount:DEVELOPMENT-ONLY mount a bundle for inspection'
+)
+
+# Status sub-subcommands decoded source-direct from
+# src/main.c:2843-2846 status command description block:
+#   mark-good   [booted | other | <SLOT_NAME>]
+#   mark-bad    [booted | other | <SLOT_NAME>]
+#   mark-active [booted | other | <SLOT_NAME>]
+local -a status_subcommands=(
+  'mark-good:mark slot as good (clear bad-marker, increment good-count)'
+  'mark-bad:mark slot as bad (will not be booted next)'
+  'mark-active:mark slot as active (will be booted next)'
+)
+
+# --output-format enum varies per command:
+#  info:   readable, shell, json, json-pretty, json-2
+#          (src/main.c:2645)
+#  status: readable, shell, json, json-pretty
+#          (src/main.c:2653)
+local -a info_output_formats=(readable shell json json-pretty json-2)
+local -a status_output_formats=(readable shell json json-pretty)
+
+# Global flags (entries[] in cmdline_handler at src/main.c:2790-
+# 2804).  These work BEFORE the subcommand name:
+#   rauc -c /etc/rauc/system.conf install bundle.raucb
+local -a global_flags=(
+  '(-c --conf)'{-c+,--conf=}'[system.conf config file path]:file:_files -g "*.conf"'
+  \*{-C+,--confopt=}'[override SECTION:KEY=VALUE (repeatable)]:override (SECTION\:KEY=VALUE):'
+  '--mount=[mount prefix]:dir:_files -/'
+  '(-d --debug)'{-d,--debug}'[enable debug output]'
+  '--version[display version and exit]'
+  '(-h --help)'{-h,--help}'[display help and exit]'
+)
+
+_arguments -C \
+  $global_flags \
+  '1:subcommand:->subcmd' \
+  '*::args:->args' && ret=0
+
+case $state in
+  subcmd)
+    _describe -t subcommands 'rauc subcommand' subcommands && ret=0
+    ;;
+  args)
+    case $words[1] in
+      help)
+        _describe -t subcommands 'subcommand to get help for' subcommands && ret=0
+        ;;
+      install)
+        # entries_install at src/main.c:2580-2593 +
+        # entries_bundle_access (gated on ENABLE_STREAMING) at
+        # src/main.c:2680-2687
+        _arguments \
+          '--ignore-compatible[disable compatible check]' \
+          '--ignore-version-limit[disable version check]' \
+          '--transaction-id=[custom transaction id]:UUID:' \
+          '--require-manifest-hash=[require a specific manifest hash]:HASH:' \
+          '--progress[show progress bar]' \
+          '--handler-args=[extra arguments for the full-custom handler]:args:' \
+          '--keyring=[override keyring file]:pemfile:_files -g "*.(pem|crt)"' \
+          '--override-boot-slot=[override auto-detection of booted slot]:bootname:' \
+          '--tls-cert=[(ENABLE_STREAMING) TLS client cert file or PKCS#11 URL]:cert:_files' \
+          '--tls-key=[(ENABLE_STREAMING) TLS client key file or PKCS#11 URL]:key:_files' \
+          '--tls-ca=[(ENABLE_STREAMING) TLS CA file]:ca:_files' \
+          '--tls-no-verify[(ENABLE_STREAMING) do not verify TLS server certificate]' \
+          \*{-H+,--http-header=}'[(ENABLE_STREAMING) HTTP request header (repeatable)]:header (HEADER\: VALUE):' \
+          '1:bundle (.raucb file or http(s):// URL):_files -g "*.raucb"' && ret=0
+        ;;
+      bundle)
+        # entries_bundle + entries_signing at src/main.c:2595-
+        # 2598 / 2672-2678
+        _arguments \
+          '--mksquashfs-args=[mksquashfs extra args (passed verbatim to mksquashfs)]:args:' \
+          '--cert=[signing cert file or PKCS#11 URL]:cert:_files' \
+          '--key=[signing key file or PKCS#11 URL]:key:_files' \
+          \*'--intermediate=[intermediate CA file or PKCS#11 URL (repeatable)]:ca:_files' \
+          '--signing-keyring=[post-signing verification keyring file]:pemfile:_files' \
+          '1:input directory (must contain manifest.raucm):_files -/' \
+          '2:output bundle path:_files' && ret=0
+        ;;
+      resign)
+        # entries_resign + entries_signing at src/main.c:2600-
+        # 2606 / 2672-2678
+        _arguments \
+          '--append[append instead of replace signature]' \
+          '--keyring=[keyring file for verification]:pemfile:_files' \
+          '--no-verify[disable bundle verification]' \
+          "--no-check-time[don't check validity period of certificates against current time]" \
+          '--cert=[new signing cert file or PKCS#11 URL]:cert:_files' \
+          '--key=[new signing key file or PKCS#11 URL]:key:_files' \
+          \*'--intermediate=[intermediate CA file or PKCS#11 URL (repeatable)]:ca:_files' \
+          '--signing-keyring=[post-signing verification keyring file]:pemfile:_files' \
+          '1:input bundle (.raucb):_files -g "*.raucb"' \
+          '2:output bundle (.raucb):_files' && ret=0
+        ;;
+      convert)
+        # entries_convert + entries_signing at src/main.c:2616-
+        # 2624 / 2672-2678
+        _arguments \
+          '--trust-environment[trust environment and skip bundle access checks]' \
+          '--keyring=[keyring file]:pemfile:_files' \
+          '--no-verify[disable bundle verification]' \
+          '--mksquashfs-args=[mksquashfs extra args]:args:' \
+          '--casync-args=[casync extra args]:args:' \
+          \*'--ignore-image=[ignore image during conversion (repeatable)]:slot-class:' \
+          '--cert=[signing cert file or PKCS#11 URL]:cert:_files' \
+          '--key=[signing key file or PKCS#11 URL]:key:_files' \
+          \*'--intermediate=[intermediate CA file or PKCS#11 URL (repeatable)]:ca:_files' \
+          '--signing-keyring=[post-signing verification keyring file]:pemfile:_files' \
+          '1:input bundle (.raucb):_files -g "*.raucb"' \
+          '2:output bundle (casync index .raucb):_files' && ret=0
+        ;;
+      encrypt)
+        # entries_encryption at src/main.c:2689-2692
+        _arguments \
+          \*'--to=[recipient cert (repeatable for multi-recipient encryption)]:pemfile:_files -g "*.(pem|crt)"' \
+          '--keyring=[keyring file]:pemfile:_files' \
+          '1:input bundle (.raucb):_files -g "*.raucb"' \
+          '2:output bundle (encrypted .raucb):_files' && ret=0
+        ;;
+      replace-signature)
+        # entries_replace at src/main.c:2608-2614
+        _arguments \
+          '--trust-environment[trust environment and skip bundle access checks]' \
+          '--keyring=[keyring file]:pemfile:_files' \
+          '--no-verify[disable bundle verification]' \
+          '--signing-keyring=[post-signing verification keyring file]:pemfile:_files' \
+          '1:input bundle (.raucb):_files -g "*.raucb"' \
+          '2:input signature file:_files' \
+          '3:output bundle (.raucb):_files' && ret=0
+        ;;
+      extract-signature)
+        # entries_extract_signature at src/main.c:2626-2631
+        _arguments \
+          '--key=[decryption key file or PKCS#11 URL]:key:_files' \
+          '--keyring=[keyring file]:pemfile:_files' \
+          '--trust-environment[trust environment and skip bundle access checks]' \
+          '1:input bundle (.raucb):_files -g "*.raucb"' \
+          '2:output signature file:_files' && ret=0
+        ;;
+      extract)
+        # entries_extract at src/main.c:2633-2638
+        _arguments \
+          '--key=[decryption key file or PKCS#11 URL]:key:_files' \
+          '--keyring=[keyring file]:pemfile:_files' \
+          '--trust-environment[trust environment and skip bundle access checks]' \
+          '1:input bundle (.raucb):_files -g "*.raucb"' \
+          '2:output directory:_files -/' && ret=0
+        ;;
+      info)
+        # entries_info at src/main.c:2640-2649 + entries_bundle_
+        # access if ENABLE_STREAMING
+        _arguments \
+          '--keyring=[keyring file]:pemfile:_files' \
+          '--no-verify[disable bundle verification]' \
+          "--no-check-time[don't check validity period of certificates against current time]" \
+          '--key=[decryption key file or PKCS#11 URL]:key:_files' \
+          '--output-format=[output format]:format:(readable shell json json-pretty json-2)' \
+          '--dump-cert[dump certificate]' \
+          '--dump-recipients[dump recipients]' \
+          '--tls-cert=[(ENABLE_STREAMING) TLS client cert]:cert:_files' \
+          '--tls-key=[(ENABLE_STREAMING) TLS client key]:key:_files' \
+          '--tls-ca=[(ENABLE_STREAMING) TLS CA file]:ca:_files' \
+          '--tls-no-verify[(ENABLE_STREAMING) do not verify TLS server cert]' \
+          \*{-H+,--http-header=}'[(ENABLE_STREAMING) HTTP request header (repeatable)]:header (HEADER\: VALUE):' \
+          '1:bundle (.raucb file or http(s):// URL):_files -g "*.raucb"' && ret=0
+        ;;
+      status)
+        # entries_status at src/main.c:2651-2658 + sub-
+        # subcommand dispatch for mark-good/mark-bad/mark-active
+        if (( CURRENT == 2 )); then
+          _alternative \
+            'subcommands:status subcommand:_describe -t status-subcommands "status subcommand" status_subcommands' \
+            'flags:flags:_arguments \
+              "--detailed[show more status details]" \
+              "--output-format=[output format]:format:(readable shell json json-pretty)" \
+              "--override-boot-slot=[override auto-detection of booted slot]:bootname:"' && ret=0
+        else
+          case $words[2] in
+            mark-good|mark-bad|mark-active)
+              _arguments \
+                '1:slot:(booted other)' && ret=0
+              ;;
+            *)
+              _arguments \
+                '--detailed[show more status details]' \
+                '--output-format=[output format]:format:(readable shell json json-pretty)' \
+                '--override-boot-slot=[override auto-detection of booted slot]:bootname:' && ret=0
+              ;;
+          esac
+        fi
+        ;;
+      write-slot)
+        # entries_write_slot at src/main.c:2660-2663.
+        # NOTE: this is the ONE per-subcommand flag with a
+        # short alias — `-l`/`--image-type`.  Every other RAUC
+        # subcommand entry uses '\0' (no short).
+        _arguments \
+          '(-l --image-type)'{-l+,--image-type=}'[explicit image type to use]:type:' \
+          '1:slot name:' \
+          '2:image file:_files' && ret=0
+        ;;
+      service)
+        # entries_service at src/main.c:2665-2670 (gated on
+        # ENABLE_SERVICE).  Starts the D-Bus daemon.
+        _arguments \
+          '--handler-args=[extra arguments for full custom handler]:args:' \
+          '--keyring=[keyring file]:pemfile:_files' \
+          '--override-boot-slot=[override auto-detection of booted slot]:bootname:' && ret=0
+        ;;
+      mount)
+        _arguments \
+          '1:bundle to mount (.raucb):_files -g "*.raucb"' && ret=0
+        ;;
+    esac
+    ;;
+esac
+
+return ret
