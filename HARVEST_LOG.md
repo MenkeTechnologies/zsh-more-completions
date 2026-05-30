@@ -19,6 +19,35 @@ Entries are in original README order: older themed-cluster entries (accumulated
 before the per-round numbering convention) appear first, followed by the
 R-numbered rounds with the newest R-round at the top of that section.
 
+- **R189 — Dave Coffin dcraw canonical RAW image decoder** (1 file / 1 binary) — pivot to RAW camera image decoding sister to the heavily-covered RAW + photo processing family (rawtherapee/rawtherapee-cli, darktable/darktable-cli, digikam/digikam-cli, enfuse, enblend, exiftool, exiftran, exif, exiv2 already in the corpus).  dcraw is the canonical RAW-camera-image decoder by Dave Coffin (dcoffin@cybercom.net) that underlies libraw, RawTherapee, darktable, dcraw.js, and countless other RAW processing pipelines.  Supports 600+ camera models.  Filling in a previously-blacklisted-but-no-completion gap.
+  - `_dcraw` (1-stem; ncruces/dcraw mirror of Dave Coffin's dcraw.c): the canonical dcraw.  37 short flags decoded source-direct from main()'s case-arm `switch(opt)` block + the `puts(_("-X ..."))` documented-usage block in the help-print branch.
+  - **5 enum autocompletes** decoded source-direct from the documented [0-N] ranges in each `puts` line:
+    * **`-H` highlight mode (10 entries)**: 0=clip, 1=unclip, 2=blend, 3-9=rebuild-N (incrementally aggressive highlight reconstruction)
+    * **`-t` flip image (4 entries)**: 0=none, 3=180°, 5=90°CCW, 6=90°CW
+    * **`-o` output colorspace (7 entries)**: 0=raw, 1=sRGB, 2=Adobe, 3=Wide, 4=ProPhoto, 5=XYZ, 6=ACES (or pass file path for output ICC profile)
+    * **`-q` interpolation quality (4 entries)**: 0=bilinear, 1=VNG, 2=PPG, 3=AHD (the AHD demosaicing algorithm is the default in most modern RAW pipelines)
+  - **`+M`/`-M` sign-prefix XOR pair** decoded source-direct from `case 'M': use_camera_matrix = 3 * (opm == '+');` — the `+M` form enables embedded camera color matrix use; `-M` disables it.  Listed as `(+M)-M` / `(-M)+M` mutex group so compsys enforces the XOR.  This is a rare convention shared with `mt rewind` / `mt eod` from R148 and with shells' `+/-flag` conventions for set/unset.
+  - **Document mode stacking decoded source-direct from**:
+    ```c
+    case 'E':  document_mode++;
+    case 'D':  document_mode++;
+    case 'd':  document_mode++;
+    ```
+    (the C switch *intentionally* falls through — `-E` increments by 3, `-D` by 2, `-d` by 1).  These are listed as 3 independent toggles in completion since users typically pick exactly one rather than stacking them.
+  - **Multi-value flag specs** decoded source-direct from the numeric-arg consumption table `sp = "nbrkStqmHACg"` + arg-count string `"114111111422"` (each character is a single-digit count of numeric args the flag consumes — `n=1`, `b=1`, `r=4`, `k=1`, `S=1`, `t=1`, `q=1`, `m=1`, `H=1`, `A=4`, `C=2`, `g=2`):
+    * `-r r g b g` (4 floats — custom white balance)
+    * `-A x y w h` (4 ints — grey-box for WB averaging)
+    * `-C r b` (2 floats — chromatic-aberration correction red/blue scale)
+    * `-g p ts` (2 floats — custom gamma curve power + toe-slope)
+  - Mapped to multi-colon completion specs (`:r:g:b:g:`, `:x:y:w:h:`, etc.).
+  - **22-extension RAW file glob** `*.(arw|ARW|cr2|CR2|cr3|CR3|crw|CRW|dng|DNG|nef|NEF|raf|RAF|raw|RAW|rw2|RW2|orf|ORF|pef|PEF|srw|SRW|x3f|X3F|mrw|MRW|3fr|3FR|fff|FFF|iiq|IIQ|kdc|KDC|nrw|NRW)` for positional arg completion — covers all major camera manufacturers' RAW formats: Sony ARW, Canon CR2/CR3/CRW, Adobe DNG, Nikon NEF/NRW, Fuji RAF, Panasonic RW2, Olympus ORF, Pentax PEF, Samsung SRW, Sigma X3F, Minolta MRW, Hasselblad 3FR/FFF, PhaseOne IIQ, Kodak KDC.
+  - Critical extraction note: dcraw uses a **hand-rolled arg-parser** (NOT getopt) decoded source-direct from the `for (arg=1; (((opm = argv[arg][0]) - 2) | 2) == '+'; ) { opt = argv[arg++][1]; ... switch(opt) { ... } }` loop.  The `((c - 2) | 2) == '+'` test accepts both `+` (0x2B) and `-` (0x2D) as flag prefix bytes - decoded source-direct.  This explains why `+M`/`-M` both work as flags (other case-arms ignore the sign, but `case 'M':` reads `opm` to determine direction).
+  - Critical extraction note: dcraw also accepts **stdin RAW input** via `-I` flag (`case 'I': read_from_stdin = 1; break;`) — useful for piping `cat raw.cr2 | dcraw -I -c > out.ppm` or similar.  Decoded source-direct from case-arm but NOT documented in the help-print block (so it's an undocumented-but-real flag).  Added to completion regardless since the parser accepts it.
+  - Hunt-skip notes: dcraw_emu (the libraw companion that mimics dcraw's CLI exactly) — covered transitively via dcraw flag vocabulary, deferred since libraw users typically use libraw's higher-level APIs.  `libraw`/`libraw-cli` are not actual binary names.  `luminance-hdr`/`luminance` (Luminance HDR) ships a GUI primarily; CLI surface is minimal (deferred).  `darktable-rs`/`xnview`/`qimgv` are not commonly-packaged tools.  `snaphu`/`isce`/`isce2`/`pyrate`/`mintpy`/`gmtsar`/`gmtinsar`/`dem3`/`dem-tool` are scientific InSAR/satellite processing tools — `gmt` already covered; others deferred for a dedicated round.  `rawtherapee-cli`/`darktable-cli`/`digikam-cli`/`luminance-cli`/`exiv2-cli`/`mirage-cli`/`mintpy-cli` are package-name variants of already-covered tools (suffix-confused-with-base).
+  - Dup-checked clean against `/usr/share/zsh` + `/opt/homebrew/share/zsh` + `/usr/local/share/zsh`.
+  - Blacklist additions: 0 entries (dcraw was already blacklisted from before with no completion file — this fills the gap).
+  - Corpus 28,595 → 28,596 files.
+
 - **R188 — Draisberghof usb_modeswitch cellular-modem USB-mode-switcher** (1 file / 1 binary) — pivot to USB-device-mode-switching tooling sister to the heavily-covered USB family (usbview, lsusb, usbhid-dump, usb-creator, libusb-cli) and the embedded-serial family (dfu-util/dfu-prefix/dfu-suffix/dfu-tool/dfu-programmer, flashrom, pyocd, esptool, picotool, stm32flash, st-info/st-flash/st-util/st-trace, sigrok-cli, urjtag, gtkterm, kermit, picocom, microcom) already in the corpus.
   - `_usb_modeswitch` (1-stem; Danw33/usb-modeswitch mirror of http://www.draisberghof.de/usb_modeswitch/): the canonical USB-device-mode-switching tool for Linux.  Used to switch USB devices from CD-ROM emulation mode (also called "Zero CD" / "ZeroCD" for the auto-install Windows-driver trick used by cellular modem vendors) into their normal modem/MBIM/NCM/serial mode so they can be used by the host OS.
   - 43 long_options[] entries decoded source-direct from `usb_modeswitch.c`'s `static struct option long_options[] = { ... };` table + getopt_long argstring `"hejWQDndKHJSOBEGTNALZFRItv:p:V:P:C:m:M:2:3:w:r:c:i:u:a:s:f:b:g:"`.
