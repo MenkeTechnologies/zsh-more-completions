@@ -1,0 +1,248 @@
+#compdef subxt
+# Documentation: source-direct extraction from upstream
+# paritytech/subxt cli/src/ (clap v4 derive):
+#   main.rs lines 13-22 (Command Parser enum: 7 top-level
+#     subcommands)
+#   utils.rs lines 21-42 (FileOrUrl shared Args struct
+#     flattened into 4 commands)
+#   commands/metadata.rs lines 14-41 (Opts struct: FileOrUrl
+#     flatten + 5 fields)
+#   commands/codegen.rs lines 21-81 (Opts struct: FileOrUrl
+#     flatten + 12 fields including 3 custom value_parser
+#     validators for derive/attribute/substitute typing)
+#   commands/compatibility.rs lines 17-44 (Opts struct: 4
+#     direct fields; --nodes accepts Vec<Url>)
+#   commands/diff.rs lines 25-35 (Opts struct: TWO POSITIONAL
+#     FileOrUrl args + --allow-insecure)
+#   commands/version.rs lines (Opts: no fields)
+#   commands/explore/mod.rs lines 107-138 (3-deep subcommand
+#     tree: explore <pallet|api> <name> <calls|constants|
+#     storage|events>)
+#   commands/explore/pallets/mod.rs lines 26-30 (PalletSubcommand:
+#     Calls/Constants/Storage/Events)
+#   commands/chain_spec/mod.rs lines 14-38 (Opts struct with
+#     `#[cfg(feature = "chain-spec-pruning")]` on a SINGLE
+#     FLAG `--state-root-hash`)
+# Reference accessed: 2026-05-30 via gh api.
+#
+# subxt is the **Substrate/Polkadot client codegen CLI** —
+# generates type-safe Rust client code for any Substrate-based
+# chain (Polkadot, Kusama, Astar, etc.) from on-chain
+# runtime metadata.  Sister tools in corpus: polkadot (in
+# corpus), pop (in corpus).  Major **Substrate ecosystem
+# tooling** — every Substrate dapp builder uses subxt
+# codegen to emit Rust bindings for their target chain.
+#
+# Critical extraction note: subxt uses **`FileOrUrl`
+# flattened struct** at utils.rs:21-42 — a shared Args
+# struct with `--url <URL>`, `--file <PATH>`, `--version`,
+# `--at-block <HASH>` flags.  Flattened into 4 of 7
+# commands (metadata, codegen, diff, explore) via
+# `#[command(flatten)] file_or_url: FileOrUrl`.  Documents
+# the **shared-args-struct pattern** for DRY across
+# subcommands — each command gets identical flag names,
+# help text, and validation rules without duplication.
+# Distinct from R251 torii's option-group flattening
+# (which uses `next_help_heading` groups) — FileOrUrl is
+# a single 4-flag mini-struct shared across commands, not
+# a help-section organizer.  Corpus's **first documented
+# small-shared-Args-struct flatten** pattern.
+#
+# Critical extraction note: subxt's `diff` command takes
+# **TWO POSITIONAL `FileOrUrl` args** at diff.rs:29-31:
+#   metadata_or_url_1: FileOrUrl,
+#   metadata_or_url_2: FileOrUrl,
+# Plus `FileOrUrl` has an `impl FromStr` at utils.rs:44-65
+# that parses a string as either a path-or-stdin OR a URL.
+# When `FileOrUrl` is a POSITIONAL (not flattened), clap
+# uses FromStr instead of the inner field structure — so
+# `subxt diff foo.scale wss://rpc.polkadot.io` works with
+# 2 bare positionals.  Documents the **dual-mode Args
+# struct** — flattens as multi-flag when nested, parses
+# as single-positional when bare.  This is the **corpus's
+# first documented dual-mode Args struct via impl FromStr**.
+#
+# Critical extraction note: subxt's `explore` command has
+# a **3-deep subcommand tree**: `subxt explore [pallet|api]
+# <name> [calls|constants|storage|events]`.  The structure
+# uses `Option<PalletOrRuntimeApi>` (so `subxt explore`
+# alone lists pallets), then `Option<PalletSubcommand>`
+# inside PalletOpts (so `subxt explore pallet System`
+# describes the System pallet without requiring a verb).
+# Documents the **Option<Subcommand>-as-progressive-
+# discovery pattern** — `Option<X>` for a subcommand makes
+# it OPTIONAL; clap surfaces the next-level help when
+# omitted instead of erroring.  Corpus's **first documented
+# 3-deep clap subcommand tree with Option<> progressive
+# disclosure**.  Used as a CLI-as-interactive-discovery
+# tool.
+#
+# Critical extraction note: subxt's `chain-spec` command
+# uses **`#[cfg(feature = "chain-spec-pruning")]` on a
+# SINGLE FLAG** at chain_spec/mod.rs:28-30 — only the
+# `--state-root-hash` flag is feature-gated, while the
+# rest of Opts is unconditionally compiled.  Distinct from
+# R201/R250 feature-gated subcommand VARIANTS and R251
+# torii feature-gated option GROUPS — this is **field-
+# level cfg gating** within a struct.  When the feature
+# is disabled, the entire field is absent (the struct has
+# 3 fields instead of 4).  Documents the **field-level
+# feature-gating pattern** — the most granular cfg unit
+# in clap derive.  Completes the corpus's **feature-gating
+# granularity taxonomy**: (a) crate-level (Cargo features),
+# (b) variant-level (R201/R250), (c) struct/group-level
+# (R251 torii), (d) field-level (R254 subxt), (e) parser-
+# level via requires= (R248), (f) runtime body-bail (R225).
+#
+# Critical extraction note: subxt uses **`validate_url_security`
+# runtime validator** at every command's `run()` fn —
+# called AFTER clap parsing, BEFORE business logic, to
+# reject ws:// or http:// URLs unless `--allow-insecure`/
+# `-a` is set.  This is cross-cutting validation (every
+# command that takes a URL repeats the check).  Documents
+# the **runtime-cross-cutting-validation pattern** —
+# distinct from clap's `value_parser` (which validates at
+# parse time per-arg).  The runtime check is shared via
+# a free function in utils.rs that every command's run
+# fn calls.
+
+local curcontext="$curcontext" state line ret=1
+
+# 7 top-level subcommands decoded source-direct from
+# Command enum at main.rs lines 14-22.
+local -a subcommands=(
+  'metadata:download metadata from a substrate node for use with `subxt codegen`'
+  'codegen:generate runtime API client code from metadata (Rust output)'
+  'compatibility:verify metadata compatibility between substrate nodes'
+  'diff:explore the differences between two metadata sources (files or node URLs)'
+  'version:print version'
+  'explore:interactively explore a node'\''s pallets / runtime APIs (3-deep subcommand tree)'
+  'chain-spec:download chainSpec from a substrate node'
+)
+
+# FileOrUrl shared flags (flattened into metadata / codegen
+# / explore commands; positional in diff).
+local -a file_or_url_flags=(
+  '--url=[URL of the substrate node to query for metadata (e.g. wss://rpc.polkadot.io)]:url:'
+  '--file=[path to the encoded metadata file (or `-` for stdin)]:file:_files'
+  '--version=[metadata version: `latest` | `unstable` | a number]:version:(latest unstable)'
+  '--at-block=[block hash (hex) to fetch metadata from (default: latest finalized block)]:hash:'
+)
+
+# explore pallet sub-sub-subcommands.
+local -a pallet_subs=(
+  'calls:list and describe the pallet'\''s calls'
+  'constants:list and describe the pallet'\''s constants'
+  'storage:list and describe the pallet'\''s storage entries'
+  'events:list and describe the pallet'\''s events'
+)
+
+local -a explore_subs=(
+  'pallet:explore pallets (calls / constants / storage / events)'
+  'api:explore runtime APIs'
+)
+
+_arguments -C \
+  '(-h --help)'{-h,--help}'[show help]' \
+  '(-V --version)'{-V,--version}'[show version]' \
+  '1:subcommand:->subcmd' \
+  '*::args:->args' && ret=0
+
+case $state in
+  subcmd)
+    _describe -t subcommands 'subxt subcommand' subcommands && ret=0
+    ;;
+  args)
+    case $words[1] in
+      metadata)
+        # metadata.rs Opts: FileOrUrl flatten + 5 fields.
+        _arguments \
+          $file_or_url_flags \
+          '(-f --format)'{-f+,--format=}'[output format (default: bytes)]:format:(json hex bytes)' \
+          '--pallets=[comma-separated subset of pallets to retain in stripped metadata]:pallets:' \
+          '--runtime-apis=[comma-separated subset of runtime APIs to retain in stripped metadata]:apis:' \
+          '(-o --output-file)'{-o+,--output-file=}'[write output to file path]:file:_files' \
+          '(-a --allow-insecure)'{-a,--allow-insecure}'[allow insecure URLs (ws:// / http://)]' && ret=0
+        ;;
+      codegen)
+        # codegen.rs Opts: FileOrUrl flatten + 12 fields.
+        _arguments \
+          $file_or_url_flags \
+          '*--derive=[additional derive (e.g. `Clone`); repeatable]:derive:' \
+          '*--attribute=[additional attribute (e.g. `#[doc("...")]`); repeatable]:attribute:' \
+          '--legacy-types=[path to legacy type definitions (required for pre-V14 metadata)]:file:_files' \
+          '--legacy-spec-version=[spec version of legacy metadata]:n:' \
+          '*--derive-for-type=[derives for a type (format: my_type=Derive[,recursive])]:spec:' \
+          '*--attributes-for-type=[attributes for a type (format: my_type=#[attr][,recursive])]:spec:' \
+          '*--substitute-type=[substitute a type for another (format: from=to)]:spec:' \
+          '--crate=[subxt crate access path in generated code (default: ::subxt::ext::subxt_core)]:path:' \
+          '--no-docs[do not generate documentation for the runtime API code]' \
+          '--runtime-types-only[limit codegen to only runtime types]' \
+          '--no-default-derives[do not provide default trait derivations]' \
+          '--no-default-substitutions[do not provide default substitutions]' \
+          '(-a --allow-insecure)'{-a,--allow-insecure}'[allow insecure URLs (ws:// / http://)]' && ret=0
+        ;;
+      compatibility)
+        # compatibility.rs Opts: 4 direct fields.
+        _arguments \
+          '--nodes=[comma-separated list of substrate node URLs to verify compatibility (Vec<Url>)]:urls:' \
+          '--pallet=[check compatibility of a particular pallet only]:pallet:' \
+          '--version=[metadata version (default: latest; or `unstable`, or a number)]:version:(latest unstable)' \
+          '(-a --allow-insecure)'{-a,--allow-insecure}'[allow insecure URLs (ws:// / http://)]' && ret=0
+        ;;
+      diff)
+        # diff.rs Opts: 2 POSITIONAL FileOrUrl args via
+        # FileOrUrl::FromStr at utils.rs:44-65.  Each arg
+        # can be either a metadata file or a node URL.
+        _arguments \
+          '(-a --allow-insecure)'{-a,--allow-insecure}'[allow insecure URLs (ws:// / http://)]' \
+          '1:metadata source 1 (file path OR ws:// / wss:// URL):_files -g "*.scale"' \
+          '2:metadata source 2 (file path OR ws:// / wss:// URL):_files -g "*.scale"' && ret=0
+        ;;
+      version)
+        # version.rs Opts: no fields.
+        ret=0
+        ;;
+      explore)
+        # explore/mod.rs Opts: FileOrUrl flatten +
+        # Option<PalletOrRuntimeApi> 3-deep subcommand tree.
+        if (( CURRENT == 2 )); then
+          _alternative \
+            'subcommands:explore verb:_describe -t explore-subs "verb" explore_subs' \
+            'flags:flag:(--url --file --version --at-block --allow-insecure -a)' && ret=0
+        else
+          case $words[2] in
+            pallet)
+              if (( CURRENT == 3 )); then
+                _arguments '1:pallet name (e.g. System / Balances / ...):' && ret=0
+              else
+                _describe -t pallet-subs 'pallet verb (omit to describe the pallet)' pallet_subs && ret=0
+              fi
+              ;;
+            api)
+              if (( CURRENT == 3 )); then
+                _arguments '1:runtime API name (e.g. core / metadata / ...):' && ret=0
+              else
+                _arguments \
+                  '(-e --execute)'{-e,--execute}'[execute the runtime API call]' \
+                  '*:method or trailing args:' && ret=0
+              fi
+              ;;
+          esac
+        fi
+        ;;
+      chain-spec)
+        # chain_spec/mod.rs Opts: --url + --output-file +
+        # field-level cfg-gated --state-root-hash + --remove-
+        # substitutes.
+        _arguments \
+          '--url=[URL of the substrate node]:url:' \
+          '(-o --output-file)'{-o+,--output-file=}'[write output to file]:file:_files' \
+          '--state-root-hash[(FEATURE-GATED: chain-spec-pruning) replace genesis.raw with a stateRootHash to shrink the spec]' \
+          '--remove-substitutes[remove codeSubstitutes from the chain spec]' && ret=0
+        ;;
+    esac
+    ;;
+esac
+
+return ret
