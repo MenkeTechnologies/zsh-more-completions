@@ -1,0 +1,262 @@
+#compdef etylizer
+# ============================================================================
+#  _etylizer — etylizer: Static type checker for Erlang (research project)
+#
+#  Source-direct extraction from
+#    https://github.com/etylizer/etylizer/blob/main/src/etylizer_main.erl
+#    https://www.erlang.org/doc/man/argparse.html (OTP stdlib argparse
+#    module documentation)
+#    https://github.com/erlang/otp/blob/master/lib/stdlib/src/argparse.erl
+#
+#  Maintained by etylizer organization (academic project; Universität
+#  Stuttgart Programming Languages & Compilers group).  62 GH stars.
+#  etylizer is a STATIC TYPE CHECKER for Erlang that uses SET-THEORETIC
+#  types (including intersection types and negation types) — an
+#  alternative approach to Erlang typing distinct from the popular
+#  Dialyzer (success typing) and Gradualizer (gradual typing).
+#  Espresso-based research prototype.  Sister tools: dialyzer (OTP's
+#  built-in success-typing analyzer, IN CORPUS via _dialyzer — ALSO
+#  uses OTP argparse since OTP 26), gradualizer (Joseph Harrison's
+#  gradual typing for Erlang), eqwalizer (WhatsApp/Meta's Erlang
+#  typechecker, fastest commercial-quality TC for Erlang).
+#
+#  CLI library taxonomy update: 3rd Erlang CLI library — Erlang/OTP
+#  stdlib **argparse** module (introduced in OTP 26, June 2023).
+#  Erlang ecosystem now has 3 documented CLI libraries.
+#
+#  OTP stdlib `argparse` module ships with EVERY Erlang/OTP installation
+#  since OTP 26 as part of the `stdlib` application — Maxim Fedorov's
+#  modern Erlang CLI library that supersedes the third-party `getopt`
+#  package (jcomellas/getopt) and the various per-application
+#  ad-hoc parsers.  Used by `dialyzer` (migrated to argparse since OTP
+#  26), `etylizer`, `clouseau` (IBM Cloudant's Lucene-for-CouchDB
+#  integration node), `kafcod` (Erlang Kafka client examples), and
+#  modern Erlang CLI tools targeting OTP 26+.
+#
+#  OTP argparse API:
+#    -spec cmd_spec() -> argparse:command().
+#    cmd_spec() ->
+#        #{
+#            arguments => [
+#                #{name => host, short => $h, long => "-host",
+#                  default => "localhost",
+#                  help => "Host to connect to"},
+#                #{name => port, short => $p, long => "-port",
+#                  type => {integer, [{min, 1}, {max, 65535}]},
+#                  default => 8080,
+#                  help => "Port to connect to"},
+#                #{name => verbose, short => $v, long => "-verbose",
+#                  type => boolean, default => false,
+#                  help => "Enable verbose output"},
+#                #{name => include, long => "-include", action => append,
+#                  default => [],
+#                  help => "Add include path (repeatable)"},
+#                #{name => format, long => "-format",
+#                  type => {custom, fun("json") -> json;
+#                                       ("csv") -> csv;
+#                                       (_) -> error(badarg)
+#                           end},
+#                  default => json,
+#                  help => "Output format"},
+#                #{name => files, nargs => list, required => false,
+#                  default => [],
+#                  help => "Files to process"}
+#            ],
+#            commands => #{
+#                "subcommand" => #{
+#                    arguments => [ ... ]
+#                }
+#            }
+#        }.
+#
+#    main(Args) ->
+#        Command = cmd_spec(),
+#        ParseOpts = #{progname => "mytool"},
+#        case argparse:parse(Args, Command, ParseOpts) of
+#            {ok, ArgMap, Path, CmdSpec} ->
+#                Host = maps:get(host, ArgMap),
+#                Port = maps:get(port, ArgMap),
+#                ... ;
+#            {error, Reason} ->
+#                io:format("~ts~n",
+#                          [argparse:format_error(Reason)]),
+#                halt(1)
+#        end.
+#
+#  OTP argparse distinctive features:
+#    - SHIPS WITH stdlib APPLICATION — zero external dependencies in
+#      OTP 26+; pre-OTP-26 users still need the third-party `getopt`
+#      package
+#    - MAP-OF-MAPS SPECIFICATION — Erlang map literals `#{name =>
+#      atom_name, short => $c, long => "-long-name", type => ..., ...}`
+#      for each argument
+#    - `cmd_spec() -> argparse:command()` returns a `command()` map
+#      containing `arguments`, `commands`, `help`, `handler` keys
+#    - `arguments => [ArgMap, ArgMap, ...]` — LIST of argument
+#      specifications
+#    - `commands => #{"name" => SubCmdMap}` — MAP of nested subcommands
+#      (recursive structure)
+#    - SHORT NAME via `short => $c` — Erlang `$c` is char-literal
+#      syntax for character code (0..127)
+#    - LONG NAME via `long => "-name"` — note SINGLE LEADING DASH in
+#      spec (Erlang's `-name foo` convention historically); argparse
+#      generates BOTH `-name` (Erlang style) AND `--name` (POSIX
+#      style) at invocation time
+#    - TYPE COERCION via `type => boolean | integer | float | string |
+#      atom | binary | {integer, [{min, N}, {max, M}]} | {string,
+#      RegexPat} | {custom, FunRef/1}` — built-in type validation +
+#      coercion + custom validators via lambda
+#    - ACTION via `action => store | store_true | store_false |
+#      append | count` — Python-argparse-like semantics
+#    - DEFAULT via `default => VALUE` — fallback value
+#    - REQUIRED via `required => true | false`
+#    - NARGS via `nargs => N | list | maybe | nonempty_list` —
+#      Python-argparse-like multi-value specification
+#    - HELP via `help => "..."` — per-argument help text
+#    - HANDLER via `handler => FunRef/1 | optional` — callback function
+#      for subcommand dispatch (`{Cmd, ArgMap, Path, Spec} -> ...`)
+#    - `argparse:parse(Args, Command, ParseOpts) -> {ok, ArgMap, Path,
+#      Spec} | {error, Reason}` — RESULT TUPLE with parsed ArgMap +
+#      subcommand path traversed + full command spec at terminal
+#    - PARSE OPTIONS via `#{progname => "name"}` — for error formatting
+#      and help generation
+#    - `argparse:format_error(Reason)` — pretty-prints parse errors
+#      for stderr output
+#    - `argparse:help(Cmd) -> binary()` — generates help text
+#    - PROCESS EXIT model — caller decides when to halt; argparse
+#      itself returns tuples and NEVER calls halt()
+#    - Result is an `argparse:arg_map() :: #{atom() => term()}` map
+#      keyed by argument's `name` atom
+#  Distinct from R288 Erlang jcomellas/getopt (third-party getopt-style
+#  with `getopt:parse(OptSpecList, Args)` returning property lists,
+#  pre-OTP-26 standard), R297 Erlang lasse/clique (rebar3's CLI
+#  framework with `clique:register_cli` callbacks), R272 C POSIX
+#  getopt (C language, similar getopt semantics but C syntax), R270
+#  Haskell optparse-applicative (different language with functional
+#  applicative combinators), R270 Python argparse (closest design
+#  inspiration — OTP argparse explicitly modeled on Python argparse
+#  but uses Erlang map-of-maps syntax instead of Python class
+#  inheritance).  OTP argparse's approach: ERLANG MAP-OF-MAPS
+#  SPECIFICATION + LONG SPEC WITH SINGLE-DASH (Erlang `-name` style)
+#  + RICH TYPE COERCION with `{custom, Fun}` lambdas + ACTION/NARGS
+#  Python-argparse-style semantics + SHIPS WITH stdlib SINCE OTP 26
+#  + NEVER HALTS (returns tuples) — corpus's **first documented
+#  Erlang-map-of-maps-stdlib-argparse CLI library**.  Brings
+#  cross-language CLI library taxonomy variant count to 114; Erlang
+#  ecosystem now has 3 documented CLI libraries.
+#
+#  Surface (verbatim from etylizer_main.erl `cmd_spec/0`):
+#
+#  Options (all flag forms shown as `--name` for POSIX style):
+#    -E, --espresso-root DIR        Path to root of espresso binary
+#                                   (default: escript folder)
+#    -P, --project-root DIR         Path to project root (Etylizer
+#                                   stores persistent info in
+#                                   $PROJECT_DIR/_etylizer)
+#    -S, --src-path DIR             Source directory (repeatable, action
+#                                   append; .erl files within are type
+#                                   checked, NOT recursive)
+#    -I, --include DIR              Where to search for include files
+#                                   .hrl (repeatable, action append)
+#    -D, --define MACRO[=VALUE]     Define macro (e.g. `-D NAME` or
+#                                   `-D NAME=VALUE`) (repeatable)
+#    -a, --pa DIR                   Add path to front of Erlang code path
+#                                   (repeatable)
+#    -z, --pz DIR                   Add path to end of Erlang code path
+#                                   (repeatable)
+#    -f, --force                    Force type-checking (boolean)
+#    -h, --help                     Output help message
+#        --version                  Display version and exit
+#    -c, --check-ast FILE           Check files match AST type defined
+#                                   in FILE
+#        --dump-raw                 Dump raw AST after parsing
+#    -d, --dump                     Dump internal AST
+#        --dump-transformed-ast     Dump after clause-to-case xform
+#        --sanity                   Perform sanity checks
+#        --no-type-checking         Disable type checking
+#        --report-mode MODE         Error reporting mode:
+#                                   early-exit (default) | report
+#        --report-timeout MS        Function timeout in ms (default
+#                                   5000; min 1 via type validator)
+#        --exhaustiveness-mode MODE Exhaustiveness mode: enabled
+#                                   (default) | disabled
+#        --gradual-mode MODE        Gradual typing: dynamic (default)
+#                                   | infer
+#    -o, --only NAME                Only check these functions
+#                                   (mod:name/arity or name/arity)
+#                                   (repeatable)
+#    -i, --ignore NAME              Don't check these functions
+#                                   (repeatable)
+#        --no-deps                  Only check files on cmdline
+#    -l, --level LEVEL              Log level: trace2 | trace | debug
+#                                   | info | note | warn
+#        --log-file FILE            Path to log file (default:
+#                                   etylizer.log)
+#        --type-overlay FILE        Overlays for fun and type specs
+#        --check-exports            Check exported functions have spec
+#        --no-exhaustiveness NAME   Disable exhaustiveness for
+#                                   function (repeatable)
+#        --no-redundancy NAME       Disable redundancy for function
+#                                   (repeatable)
+#    -v, --verbose                  Verbose output (e.g. preprocessor
+#                                   warnings)
+#        --metrics-file FILE        Write metrics to JSON file
+#
+#  Positional:
+#    FILES...                       Files to type check (0-or-more
+#                                   via `nargs => list`)
+#
+#  Dup-skipped neighbors during hunt (in corpus, also OTP argparse-
+#  based since OTP 26 migration, or other Erlang CLI libs already
+#  documented):
+#    - dialyzer (IN CORPUS via _dialyzer — MIGRATED to OTP argparse
+#      since OTP 26; already documented under different attribution)
+#    - rebar3 (IN CORPUS, still uses jcomellas/getopt — R288)
+#    - escript (IN CORPUS, OTP wrapper for Erlang scripts)
+#    - erlc (IN CORPUS, OTP compiler driver)
+#    - elixir / iex / mix (IN CORPUS — Elixir tools, different language)
+#    - clouseau (IBM Cloudant — 67 stars, uses OTP argparse but Scala
+#      hybrid project, less pure Erlang showcase)
+#    - kafcod (smaller user base, examples-only)
+# ============================================================================
+
+_etylizer() {
+  local context state state_descr line
+  typeset -A opt_args
+
+  _arguments -s -S \
+    '(-E --espresso-root)'{-E,--espresso-root}'=[path to root of espresso binary]:dir:_directories' \
+    '(-P --project-root)'{-P,--project-root}'=[path to project root]:dir:_directories' \
+    '*'{-S,--src-path}'=[source directory (repeatable)]:dir:_directories' \
+    '*'{-I,--include}'=[include file search path (repeatable)]:dir:_directories' \
+    '*'{-D,--define}'=[define macro NAME or NAME=VALUE]:macro' \
+    '*'{-a,--pa}'=[add to front of Erlang code path]:dir:_directories' \
+    '*'{-z,--pz}'=[add to end of Erlang code path]:dir:_directories' \
+    '(-f --force)'{-f,--force}'[force type-checking]' \
+    '(-h --help)'{-h,--help}'[output help message]' \
+    '--version[display version and exit]' \
+    '(-c --check-ast)'{-c,--check-ast}'=[check files match AST type defined in file]:file:_files -g "*.erl"' \
+    '--dump-raw[dump raw AST after parsing]' \
+    '(-d --dump)'{-d,--dump}'[dump internal AST]' \
+    '--dump-transformed-ast[dump after clause-to-case transformation]' \
+    '--sanity[perform sanity checks]' \
+    '--no-type-checking[disable type checking]' \
+    '--report-mode=[error reporting mode]:mode:(early-exit report)' \
+    '--report-timeout=[function timeout in ms (default 5000)]:ms' \
+    '--exhaustiveness-mode=[exhaustiveness check mode]:mode:(enabled disabled)' \
+    '--gradual-mode=[gradual typing mode]:mode:(dynamic infer)' \
+    '*'{-o,--only}'=[only check these functions (mod:name/arity)]:function' \
+    '*'{-i,--ignore}'=[do not check these functions]:function' \
+    '--no-deps[only check files on commandline]' \
+    '(-l --level)'{-l,--level}'=[log level]:level:(trace2 trace debug info note warn)' \
+    '--log-file=[path to log file]:file:_files' \
+    '--type-overlay=[overlays for fun and type specs]:file:_files' \
+    '--check-exports[check exported functions have type spec]' \
+    '*--no-exhaustiveness=[disable exhaustiveness for function]:function' \
+    '*--no-redundancy=[disable redundancy for function]:function' \
+    '(-v --verbose)'{-v,--verbose}'[verbose output]' \
+    '--metrics-file=[write metrics to JSON file]:file:_files -g "*.json"' \
+    '*:erlang file:_files -g "*.erl"'
+}
+
+_etylizer "$@"
