@@ -19,6 +19,39 @@ Entries are in original README order: older themed-cluster entries (accumulated
 before the per-round numbering convention) appear first, followed by the
 R-numbered rounds with the newest R-round at the top of that section.
 
+- **R218 — Newer systemd duo: systemd-bless-boot + systemd-bsod** (2 files / 2 binaries) — fresh territory covering two recently-added systemd tools that ship with modern distributions (systemd v254-v257+).  Both binaries use systemd's NEWER `OptionParser` + `FOREACH_OPTION_OR_RETURN` macro idiom — the first round in this corpus to document the modern systemd CLI option-parsing convention.
+  - `_systemd-bless-boot` (1-stem; systemd/systemd src/bless-boot/bless-boot.c): **4 verbs (status default + good/bad/indeterminate) + 1 flag (--path) + 2 systemd-standards** decoded source-direct from:
+    * lines 36-72 (help() block with OPTIONS + COMMANDS table layout)
+    * lines 76-101 (parse_argv() with the OptionParser FOREACH_OPTION_OR_RETURN dispatch + OPTION_LONG entries)
+    * lines 342-355 (VERB_DEFAULT_NOARG declaration for status — the default verb when no arg supplied)
+    * lines 450-455 (VERB_FULL declarations for good/bad/indeterminate — all dispatch to verb_set() with different Status data params: STATUS_GOOD / STATUS_BAD / STATUS_INDETERMINATE)
+  - `_systemd-bsod` (1-stem; systemd/systemd src/journal/bsod.c): **2 flags + 2 systemd-standards** decoded source-direct from:
+    * lines 26-29 (the `arg_continuous` + `arg_tty` static option-state vars)
+    * lines 31-60 (help() block)
+    * lines 246-278 (parse_argv() with OptionParser FOREACH_OPTION_OR_RETURN + the OPTION + OPTION_LONG dispatches)
+    * lines 62-108 (acquire_first_emergency_log_message() with the hardcoded journal-filter chain)
+  - Critical extraction note: **systemd-bless-boot manages the systemd-boot LoaderBootCount A/B-fallback marker** — each successful boot decrements `tries_left` in the boot-loader-entry filename; when `tries_left` reaches 0 the entry is considered bad.  The tool transitions a boot-loader-entry filename between its "trying" form (with `+TRIES_LEFT-TRIES_DONE` suffix) and its "good" form (no counter) or "bad" form (`+0-TRIES_DONE`).  Driven by the `systemd-bless-boot.service` unit that runs late in the boot to mark the boot good if userspace came up cleanly.  This makes it an alternative/complement to the R209-R214 embedded-Linux OTA family (genimage→rauc→swupdate→mender) but using systemd-boot's native counter idiom instead of a custom OTA-engine.
+  - Critical extraction note: **systemd-bsod is a Linux "Blue Screen Of Death" display tool** — newer addition (systemd v254+).  Filters the journal for the FIRST emergency-priority (`LOG_EMERG = priority 0`) message of the current boot and displays it in a full-TTY-takeover prompt with the message text PLUS a QR code (so the user can scan the error with a phone for forwarding to support).  Runs as `systemd-bsod.service` configured to start on `emergency.target`.  The journal-filter chain is HARDCODED: (a) current boot, (b) `_UID=0` (root-emitted entries only), AND (c) `PRIORITY=0` (LOG_EMERG); the `--continuous` flag ONLY controls whether the tool blocks waiting for new emergency messages or returns immediately if none found.  Documented in the `-c` description in the completion.
+  - Critical extraction note: **both binaries use systemd's NEWER `OptionParser` + `FOREACH_OPTION_OR_RETURN` macro idiom** (introduced in systemd v257+) — NOT the historical getopt_long + static struct option pattern that older systemd binaries use.  This idiom provides:
+    * `OPTION_COMMON_HELP` / `OPTION_COMMON_VERSION` macros that auto-add `--help`/`-h` and `--version` with consistent behavior across all systemd tools
+    * `OPTION_LONG(name, value-placeholder, description)` macro for long-only flags
+    * `OPTION(short_char, name, value-placeholder, description)` macro for short+long flag pairs
+    * Auto-generated help-table via `option_parser_get_help_table()` + `table_print_or_warn()` — no manual format-string maintenance
+    This is the first round in the corpus to document this modern systemd CLI convention.  Future systemd binaries (especially newly-added ones in v254+) will use this same pattern.
+  - Critical extraction note: bless-boot's verb table uses `VERB_FULL` / `VERB_DEFAULT_NOARG` declarations — a verb-dispatch macro family that auto-builds a verb table with default-verb resolution.  `VERB_DEFAULT_NOARG(verb_status, "status", "Show status...")` at line 342 marks `status` as the verb selected when no arg is supplied; `VERB_FULL(verb_set, "good", NULL, VERB_ANY, 1, 0, STATUS_GOOD, "Mark this boot as good")` at line 450 dispatches `good` to `verb_set()` with the `STATUS_GOOD` constant passed via the `uintptr_t data` parameter (allowing 3 verbs to share one handler with different state).
+  - Critical extraction note: bsod takes **NO positional arguments** — the check at lines 273-276 of parse_argv() rejects any leftover argv with the explicit error `"%s takes no argument."`.  The completion encodes this by not having any rest-positional spec.
+  - Critical extraction note: bless-boot's `--path=PATH` flag is REPEATABLE (`strv_extend(&arg_path, opts.arg)` at line 93) — typically used to specify BOTH the ESP and XBOOTLDR partitions when they're on different disks.  The acquire_path() function at lines 103-156 also auto-detects them via `find_esp_and_warn_full()` and `find_xbootldr_and_warn_full()` if `--path=` is not supplied.  Completion encodes `--path=` as `*--path=` for repeatability.
+  - Critical extraction note: bless-boot's `status` verb has 5 possible outputs decoded source-direct from `verb_status()` at lines 343-424:
+    * `clean` — no boot count in place (the system isn't using LoaderBootCount; returned at line 351 when `acquire_boot_count_path()` returns `-EUNATCH`)
+    * `dirty` — the current entry is still in its trying form AND `left == 0` (i.e. already marked bad from a previous boot; line 399)
+    * `indeterminate` — the current entry is still in its trying form but `left > 0` (no good/bad decision yet; line 399)
+    * `good` — the current entry has been renamed to its good form (line 406)
+    * `bad` — the current entry has been renamed to its bad form (line 414)
+  - Hunt-skip notes: `systemd-soft-reboot` was probed but is implemented INSIDE PID1, not a separate CLI binary — the `systemd-soft-reboot.service` unit triggers a soft-reboot via the systemd manager's internal machinery; no completion is appropriate.  `updatectl` (the D-Bus client for sysupdated, in src/sysupdate/updatectl.c) deferred to a future systemd-sysupdate round.  `systemd-keyutil` (TPM/PKCS11 key utility, recently added) deferred.  `systemd-storagetm` (NVMe-oF target manager) deferred.
+  - Dup-checked clean against `/usr/share/zsh` + `/opt/homebrew/share/zsh` + `/usr/local/share/zsh`.
+  - Blacklist additions: 2 entries (systemd-* cluster).
+  - Corpus 28,632 → 28,634 files.
+
 - **R217 — Multipath TCP daemon + legacy-app wrapper pair: mptcpd + mptcpize** (2 files / 2 binaries) — fresh territory; the Intel-origin Multipath TCP (MPTCP) userspace family that's the canonical way to make MPTCP-aware applications transparently establish multi-link subflows over LTE + WiFi + Ethernet on multi-homed hosts.  Neither binary had ever been covered in this repo.
   - `_mptcpd` (1-stem; multipath-tcp/mptcpd; **7 long flags + 3 argp standards**) — decoded source-direct from `src/configuration.c`:
     * `static struct argp_option const options[]` at lines 374-415 (the 7-entry options table)
