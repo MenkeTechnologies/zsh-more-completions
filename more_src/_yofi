@@ -1,0 +1,105 @@
+#compdef yofi
+# Documentation: source-direct extraction from upstream
+# l4l/yofi src/main.rs —
+#   `struct Args` at lines 55-81 (the top-level `argh::
+#     FromArgs` derive struct with 7 fields + subcommand)
+#   `enum ModeArg` at lines 83-89 (the 3-variant subcommand
+#     dispatch: Apps / Binapps / Dialog)
+#   `struct AppsMode` at lines 92-101 (the `apps` subcommand
+#     with 2 extra flags)
+#   `struct BinappsMode` at lines 104-106 (the `binapps`
+#     subcommand — no extra flags)
+#   `struct DialogMode` at lines 109-111 (the `dialog`
+#     subcommand — no extra flags)
+#   `ModeArg::try_default()` at lines 113-125 (the
+#     default-subcommand resolution: implicitly `apps` with
+#     XDG-blacklist auto-discovered)
+#   verbose/quiet conflict at line 133: `panic!("either
+#     verbose or quiet could be specified, not both")`
+# Reference accessed: 2026-05-30 via gh api.
+#
+# yofi is a **Rust Wayland-native fuzzy menu launcher** —
+# minimal alternative to wofi / fuzzel / tofi / bemenu /
+# rofi-wayland (all already in the corpus).  Built on
+# softbuffer + smithay-client-toolkit + freetype for
+# direct-rendered layer-shell menus.  Designed to be the
+# smallest possible viable launcher (~1500 LOC in main.rs +
+# config.rs).  Three operating modes covering the 3 launcher
+# usage patterns: desktop-app picker, binary-from-PATH picker,
+# and stdin-driven dialog.
+#
+# Critical extraction note: yofi uses **argh** (Google's
+# lighter alternative to clap) — `use argh::FromArgs` at
+# line 52.  argh's API is similar to clap's derive macro but
+# uses `#[argh(switch, short = 'v')]` rather than clap's
+# `#[arg(short, long)]` syntax.  argh provides --help
+# automatically (no manual help registration).  Important
+# behavioral differences vs clap:
+#   1. argh subcommands are mandatory unless wrapped in
+#      `Option<>` (yofi's `mode: Option<ModeArg>` makes it
+#      optional with implicit default — `Apps` mode)
+#   2. argh does NOT auto-add --version (yofi has no
+#      --version flag)
+#   3. argh's "switch" attr = boolean no-arg flag; "option"
+#      attr = key=value flag (REQUIRED unless Option<>'d)
+#
+# Critical extraction note: yofi has a **CONFLICT panic** at
+# line 133 for `--verbose` + `--quiet` combination —
+# `panic!("either verbose or quiet could be specified, not
+# both")`.  The completion expresses this as a mutex group
+# `(-v --verbose -q --quiet)` so users can't accidentally
+# select both via tab-completion (though argh itself doesn't
+# enforce mutex; it relies on the runtime panic).
+#
+# Critical extraction note: yofi's **default mode** is `apps`
+# with an XDG-discovered blacklist file at
+# `$XDG_CONFIG_HOME/yofi/blacklist` (line 117 `xdg::
+# BaseDirectories::with_prefix(prog_name!()).place_config_
+# file("blacklist")`).  When invoked with NO subcommand, yofi
+# resolves to `apps --blacklist $XDG_CONFIG_HOME/yofi/blacklist`
+# automatically.
+
+local curcontext="$curcontext" state line ret=1
+
+local -a subcommands=(
+  'apps:desktop apps mode (DEFAULT; reads .desktop files from XDG_DATA_DIRS/applications/)'
+  'binapps:binaries mode (lists all executables on PATH)'
+  'dialog:dialog mode (reads items from stdin; like dmenu)'
+)
+
+local -a yofi_global_flags=(
+  '(-v --verbose -q --quiet)'{-v,--verbose}'[increase log verbosity (mutex with --quiet; panics at runtime if both passed)]'
+  '(-v --verbose -q --quiet)'{-q,--quiet}'[reduce log verbosity (mutex with --verbose)]'
+  '(-p --prompt)'{-p+,--prompt}'[prompt to be displayed as a hint]:prompt:'
+  '--password[password mode (all characters displayed as "*")]'
+  '--log-file=[path to log file]:file:_files'
+  '(-d --disable-syslog-logger)'{-d,--disable-syslog-logger}'[disable syslog logger]'
+  '--config-file=[path to config file (default: $XDG_CONFIG_HOME/yofi/yofi.config)]:file:_files'
+  '--help[show help and exit (argp auto-injected)]'
+)
+
+_arguments -C \
+  "${yofi_global_flags[@]}" \
+  '1:mode (default: apps):->subcmd' \
+  '*::mode-args:->args' && ret=0
+
+case $state in
+  subcmd)
+    _describe -t subcommands 'yofi mode' subcommands && ret=0
+    ;;
+  args)
+    case $words[1] in
+      apps)
+        # AppsMode flags: --blacklist (option) + -l/--list (switch)
+        _arguments \
+          '--blacklist=[path to file listing desktop-entry names to skip]:file:_files' \
+          '(-l --list)'{-l,--list}'[list desktop files for entry names (debug mode)]' && ret=0
+        ;;
+      binapps|dialog)
+        # No mode-specific flags.
+        ;;
+    esac
+    ;;
+esac
+
+return ret
