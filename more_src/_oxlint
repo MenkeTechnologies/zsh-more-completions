@@ -1,50 +1,181 @@
 #compdef oxlint
-# Documentation: https://oxc.rs/docs/guide/usage/linter/cli
-# Reference accessed: 2026-05-20
-# Verified: upstream docs at the URL above.
+# Documentation: source-direct extraction from upstream
+# oxc-project/oxc apps/oxlint/src/command/ —
+#   command/mod.rs lines 18-49 (MiscOptions + validate_paths
+#     guard fn used by positional PATHs)
+#   command/lint.rs lines 14-74 (LintCommand struct: the
+#     top-level Bpaf-derived CLI with 14 external sub-parsers
+#     + positional PATHs)
+#   command/lint.rs lines 141-169 (BasicOptions: --config,
+#     --tsconfig, --init)
+#   command/lint.rs lines 174-217 (LintFilter enum: -A/-W/-D
+#     for Allow/Warn/Deny rule categories)
+#   command/lint.rs lines 220-257 (FixOptions: --fix,
+#     --fix-suggestions, --fix-dangerously)
+#   command/lint.rs lines 259-274 (WarningOptions: --quiet,
+#     --deny-warnings, --max-warnings)
+#   command/lint.rs lines 276-292 (OutputOptions: --format,
+#     --debug with comma-separated DebugOptions)
+#   command/lint.rs lines 294-368 (DebugOption + DebugOptions
+#     enum: `files`/`timings` with mutual-exclusion guard for
+#     `files`)
+#   command/lint.rs lines 370-381 (default_output_format
+#     function: cfg!(debug_assertions) > agent_detection >
+#     GITHUB_ACTIONS env > Default fallback chain)
+#   command/lint.rs lines 383-454 (EnablePlugins: 14 plugins
+#     with OverrideToggle 3-state)
+#   command/lint.rs lines 461-470 (OverrideToggle Enable /
+#     Disable / NotSet tri-state enum)
+#   command/lint.rs lines 530-553 (ReportUnusedDirectives enum
+#     with WithoutSeverity + WithSeverity variants;
+#     MUTUALLY EXCLUSIVE — "Only one of these two options
+#     can be used at a time")
+#   command/lint.rs lines 555-560 (InlineConfigOptions: 1
+#     external)
+#   command/lint.rs lines 76-85 (SuppressionOptions:
+#     --suppress-all, --prune-suppressions; both `hide`)
+#   command/ignore.rs lines 13-29 (IgnoreOptions:
+#     --ignore-path, --ignore-pattern, --no-ignore)
+# Reference accessed: 2026-05-30 via gh api.
+#
+# oxlint is the **Rust-native JavaScript/TypeScript linter**
+# from the oxc-project — drop-in replacement for ESLint with
+# 50-100x performance.  Sister to R245 oxfmt (the formatter).
+# Both use bpaf and share the same security-motivated
+# `validate_paths` guard rejecting `..` in positional args.
+#
+# Critical extraction note: oxlint shares the **bpaf
+# documentation** established in R245.  The R246 rewrite
+# focuses on documenting features SPECIFIC to oxlint:
+#   1. **14-plugin OverrideToggle tri-state** (default plugins
+#      enabled-by-default get `--disable-X-plugin` flags;
+#      optional plugins get plain `--X-plugin` flags)
+#   2. **8 rule-filter categories** documented for
+#      tab-completion: correctness, suspicious, pedantic,
+#      perf, style, restriction, nursery, all
+#   3. **10 output formats** (vs the legacy completion's 7):
+#      checkstyle, default, agent, github, gitlab, json,
+#      junit, sarif, stylish, unix
+#   4. **comma-separated DebugOptions** with `files` / `timings`
+#      mutual-exclusion (files cannot be combined)
+#   5. **fallback chain for --format default**:
+#      cfg!(debug_assertions) > is_agent() > GITHUB_ACTIONS
+#      env var > Default
+#
+# Critical extraction note: the **OverrideToggle tri-state
+# enum** at lines 461-470 is the corpus's first documented
+# Enable/Disable/NotSet pattern.  Each of the 14 plugin flags
+# uses `bpaf::flag(OverrideToggle::Enable_or_Disable,
+# OverrideToggle::NotSet)` to make the flag YIELD different
+# enum values based on presence vs absence — preserving the
+# distinction between "user EXPLICITLY enabled" vs "user
+# didn't say" so config-file defaults are respected.  This
+# is bpaf's equivalent of clap's `default_value` + `Option<>`
+# trick but with an explicit tri-state enum.
+#
+# Critical extraction note: **`--format` has a 4-step
+# fallback chain** decoded source-direct from
+# default_output_format() at lines 370-381:
+#   1. cfg!(debug_assertions) — debug builds → Default
+#   2. is_agent() check (NOT in test mode) → Agent
+#   3. GITHUB_ACTIONS env var == "true" → Github
+#   4. else → Default
+# This documents how oxlint AUTO-DETECTS the right format
+# for the environment (e.g. when running under GitHub
+# Actions, automatically uses the github format that emits
+# `::warning::` annotations).  Corpus's first documented
+# "environment auto-detection fallback chain" for a CLI
+# default value.
+#
+# Critical extraction note: **`--debug` accepts comma-
+# separated DebugOptions** with the `files` / `timings`
+# enum values.  The custom FromStr at lines 350-368 REJECTS
+# combining `files` with any other option with the error
+# "debug option 'files' cannot be combined with other debug
+# options".  Documents bpaf's custom-FromStr validation for
+# comma-list args.
+
+local -a output_formats=(
+  'checkstyle:CheckStyle XML format'
+  'default:default human-readable output (DEFAULT)'
+  'agent:agentic-AI-friendly compact format'
+  'github:GitHub Actions ::warning::/::error:: format'
+  'gitlab:GitLab CI Code Quality JSON format'
+  'json:JSON output'
+  'junit:JUnit XML format'
+  'sarif:SARIF v2.1.0 (used by GitHub Code Scanning)'
+  'stylish:ESLint stylish format'
+  'unix:Unix-style one-line-per-issue'
+)
+
+local -a rule_categories=(
+  'correctness:code that is outright wrong or useless (DEFAULT category)'
+  'suspicious:code that is most likely wrong or useless'
+  'pedantic:lints that are rather strict or have occasional false positives'
+  'perf:code that could be written in a more performant way'
+  'style:code that should be written in a more idiomatic way'
+  'restriction:lints that prevent the use of language and library features'
+  'nursery:new lints still under development'
+  'all:all categories except nursery (does NOT enable plugins)'
+)
+
+local -a debug_options=(
+  'files:print the list of files that will be linted (cannot be combined with others)'
+  'timings:enable per-rule timing information'
+)
 
 _arguments -s -S \
-  '(- *)'{-h,--help}'[show help]' \
-  '(- *)'{-V,--version}'[show version]' \
-  '--quiet[suppress warnings, report only errors]' \
-  '*'{-A,--allow=}'[allow a rule or category]:rule' \
-  '*'{-W,--warn=}'[warn on a rule or category]:rule' \
-  '*'{-D,--deny=}'[deny a rule or category (treat as error)]:rule' \
-  '--fix[automatically fix problems where possible]' \
-  '--fix-suggestions[apply suggested fixes]' \
-  '(-c --config)'{-c,--config=}'[config file]:file:_files' \
-  '--tsconfig=[TypeScript config file]:file:_files' \
-  '--ignore-path=[ignore file path]:file:_files' \
-  '*--ignore-pattern=[ignore glob pattern]:glob' \
-  '--no-ignore[do not respect ignore files]' \
-  '--init[initialize default oxlint configuration]' \
-  '--lsp[run as language server]' \
-  '--rules[print all registered rules]' \
-  '--debug[output timing and diagnostic data]' \
-  '--type-aware[enable type-aware lint rules]' \
-  '--disable-react-plugin[disable react plugin]' \
-  '--disable-unicorn-plugin[disable unicorn plugin]' \
-  '--disable-oxc-plugin[disable oxc plugin]' \
-  '--disable-typescript-plugin[disable typescript plugin]' \
-  '--disable-import-plugin[disable import plugin]' \
-  '--disable-jsdoc-plugin[disable jsdoc plugin]' \
-  '--disable-jest-plugin[disable jest plugin]' \
-  '--disable-jsx-a11y-plugin[disable jsx-a11y plugin]' \
-  '--disable-nextjs-plugin[disable nextjs plugin]' \
-  '--disable-promise-plugin[disable promise plugin]' \
-  '--disable-node-plugin[disable node plugin]' \
-  '--disable-security-plugin[disable security plugin]' \
-  '--react-perf-plugin[enable react-perf plugin]' \
-  '--import-plugin[enable import plugin]' \
-  '--jsdoc-plugin[enable jsdoc plugin]' \
-  '--jest-plugin[enable jest plugin]' \
-  '--jsx-a11y-plugin[enable jsx-a11y plugin]' \
-  '--nextjs-plugin[enable nextjs plugin]' \
-  '--promise-plugin[enable promise plugin]' \
-  '--node-plugin[enable node plugin]' \
-  '--security-plugin[enable security plugin]' \
-  '(-f --format)'{-f,--format=}'[output format]:format:(default json unix checkstyle github stylish sarif)' \
-  '--threads=[number of threads]:threads' \
-  '--max-warnings=[maximum number of warnings]:count' \
-  '--symlinks[follow symlinks]' \
-  '*:file:_files'
+  '(-h --help)'{-h,--help}'[show help and exit]' \
+  '(-V --version)'{-V,--version}'[show version and exit]' \
+  '(-c --config)'{-c+,--config=}'[oxlint config file (default: .oxlintrc.json / .oxlintrc.jsonc / oxlint.config.ts in CWD)]:file:_files -g "*.(json|jsonc|js|mjs|cjs|ts|mts|cts)"' \
+  '--tsconfig=[override the TypeScript config used for import resolution (AVOID; can cause divergence)]:file:_files -g "tsconfig.json"' \
+  '--init[initialize oxlint configuration with default values]' \
+  \*{-A+,--allow=}'[allow a rule or category (suppress the lint; repeatable, accumulated left-to-right)]:rule:->category' \
+  \*{-W+,--warn=}'[warn on a rule or category (repeatable)]:rule:->category' \
+  \*{-D+,--deny=}'[deny a rule or category (treat as error; repeatable)]:rule:->category' \
+  '--fix[fix as many issues as possible (unfixed issues are reported)]' \
+  '--fix-suggestions[apply auto-fixable suggestions (MAY change program behavior)]' \
+  '--fix-dangerously[apply DANGEROUS fixes and suggestions]' \
+  '--ignore-path=[file to use as .eslintignore (default: .eslintignore)]:file:_files' \
+  \*'--ignore-pattern=[patterns to ignore (gitignore-style; quote to prevent shell glob)]:pattern:' \
+  '--no-ignore[disable .eslintignore, --ignore-path, and --ignore-pattern]' \
+  '--quiet[disable warning reports; only errors are reported]' \
+  '--deny-warnings[exit with non-zero if any warnings emitted]' \
+  '--max-warnings=[warning threshold; force error exit if exceeded]:n:' \
+  '(-f --format)'{-f+,--format=}'[output format (default auto-detected: debug-build > agent > GITHUB_ACTIONS > default)]:format:(checkstyle default agent github gitlab json junit sarif stylish unix)' \
+  '--debug=[debug options (comma-separated; "files" cannot combine with others)]:opts:(files timings files,timings)' \
+  '--rules[list all currently-registered rules]' \
+  '--lsp[start the language server]' \
+  '--silent[do not display any diagnostics]' \
+  '--no-error-on-unmatched-pattern[do not exit with error when no files selected for linting]' \
+  '--threads=[number of threads (default: CPU count; set 1 for single-threaded)]:n:' \
+  '--print-config[output the configuration to be used; no linting performed]' \
+  '--disable-nested-config[disable automatic loading of nested config files]' \
+  '--type-aware[enable rules that require type information]' \
+  '--type-check[enable experimental type checking (TypeScript compiler diagnostics)]' \
+  '--type-check-only[(HIDDEN) only run TypeScript type checking; skip regular lint diagnostics]' \
+  '--disable-unicorn-plugin[disable unicorn plugin (ENABLED by default)]' \
+  '--disable-oxc-plugin[disable oxc unique rules plugin (ENABLED by default)]' \
+  '--disable-typescript-plugin[disable TypeScript plugin (ENABLED by default)]' \
+  '--import-plugin[enable import plugin (ESM problem detection)]' \
+  '--react-plugin[enable react plugin]' \
+  '--jsdoc-plugin[enable jsdoc plugin (JSDoc problem detection)]' \
+  '--jest-plugin[enable Jest plugin (Jest test detection)]' \
+  '--vitest-plugin[enable Vitest plugin (Vitest test detection)]' \
+  '--jsx-a11y-plugin[enable JSX-a11y plugin (accessibility detection)]' \
+  '--nextjs-plugin[enable Next.js plugin (Next.js problem detection)]' \
+  '--react-perf-plugin[enable React performance plugin]' \
+  '--promise-plugin[enable promise plugin (Promise usage detection)]' \
+  '--node-plugin[enable node plugin (Node.js usage detection)]' \
+  '--vue-plugin[enable vue plugin (Vue.js usage detection)]' \
+  '(--report-unused-disable-directives --report-unused-disable-directives-severity)--report-unused-disable-directives[report unused `// oxlint-disable-line` comments (mutex with -severity)]' \
+  '(--report-unused-disable-directives --report-unused-disable-directives-severity)--report-unused-disable-directives-severity=[same with custom severity (mutex with the basic form)]:severity:(allow warn deny)' \
+  '--suppress-all[(HIDDEN) generate suppressions for all current violations]' \
+  '--prune-suppressions[(HIDDEN) remove entries for violations that no longer exist]' \
+  '*:path or glob (default: CWD; ".." rejected for security):_files'
+
+case $state in
+  category)
+    _describe -t categories 'rule or category' rule_categories
+    ;;
+esac
