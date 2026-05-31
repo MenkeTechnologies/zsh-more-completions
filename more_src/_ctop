@@ -1,0 +1,145 @@
+#compdef ctop
+# Documentation: source-direct extraction from upstream
+# bcicen/ctop main.go (Go-based CLI using **Go stdlib
+# `flag` package** — NOT cobra, NOT pflag, NOT flaggy):
+#   main.go lines 35-49 (main fn opens with 8
+#     `flag.Bool/String` declarations + `flag.Parse()`)
+#   main.go lines 127-132 (validSort fn: validates against
+#     container.Sorters map)
+#   main.go lines 150-155 (printHelp fn: uses
+#     `flag.PrintDefaults()` for auto-help generation,
+#     appends "available connectors: ..." from
+#     `connector.Enabled()`)
+#   container/sort.go lines 25-... (Sorters map: id /
+#     name / cpu / mem / io / net / pids / state / uptime
+#     — 9 valid sort fields)
+#   connector/docker.go (`init()` registers "docker" —
+#     always available)
+#   connector/runc.go (`init()` registers "runc" — gated
+#     by `//go:build linux` build tag)
+# Reference accessed: 2026-05-30 via gh api.
+#
+# ctop is the **top-like container monitor** —
+# interactive process viewer for containers (Docker by
+# default, optional runc on Linux).  Pivots from
+# git-TUI (R263 lazygit) into the **container-tooling
+# TUI cluster**.  Sister to lazydocker (in corpus),
+# k9s (in corpus), dive (in corpus), lazygit (R263).
+#
+# Critical extraction note: ctop uses the **Go stdlib
+# `flag` package** at `import "flag"` — corpus's **first
+# documented stdlib-flag-package CLI**.  Documents the
+# **4-way Go CLI library taxonomy**: (a) cobra (most
+# popular; subcommand-first), (b) pflag (POSIX-like
+# replacement for stdlib flag), (c) flaggy (simpler than
+# cobra; R263 lazygit), (d) **stdlib `flag` package**
+# (most primitive; Go's built-in flag-parsing library).
+# Key characteristics of stdlib flag:
+#   - `flag.String("name", "default", "help")` returns
+#     `*string` (pointer)
+#   - `flag.Bool("name", false, "help")` returns `*bool`
+#   - `flag.Parse()` parses `os.Args`
+#   - **NO short/long distinction** — `flag.String("v",
+#     ...)` produces BOTH `-v` and `--v` (Go's
+#     idiosyncratic convention)
+#   - **NO subcommand support** built-in (each subcommand
+#     must call its own `flag.NewFlagSet(...)` manually)
+#   - `flag.PrintDefaults()` for auto-help generation
+#   - **NO restricted-value validators** — validation
+#     done manually in switch (ctop's `validSort` at
+#     main.go:127-132)
+# Documents the **stdlib-flag-package patterns** for
+# corpus comprehensiveness — primitive but ubiquitous in
+# Go single-binary tools.
+#
+# Critical extraction note: ctop uses **the stdlib flag
+# package's `--flag` AND `-flag` symmetry** at the CLI —
+# every flag declared as `flag.String("v", ...)` accepts
+# both `ctop -v` and `ctop --v`.  Go's flag package
+# treats short and long names identically (the leading
+# `-` and `--` are both stripped).  Distinct from
+# clap/cobra/pflag/flaggy where short and long are
+# explicitly separate.  Documents the **Go flag-package
+# convention** — short and long are aliases of the SAME
+# flag declaration, not separate declarations.
+#
+# Critical extraction note: ctop uses **`validSort` fn
+# with map-lookup validation** at main.go:127-132 — when
+# `-s X` is given, ctop checks if `X` is a key in
+# `container.Sorters` (a map[string]sortMethod from
+# container/sort.go).  If not, prints `"invalid sort
+# field: %s"` and exits with code 1.  Documents the
+# **map-lookup-as-restricted-value pattern** — Go stdlib
+# `flag` has no built-in restricted-value validator like
+# clap's ValueEnum or flaggy's switch.  ctop's approach
+# is to keep the valid set in a map (which is also used
+# for dispatch) and check membership at flag-validation
+# time.  Distinct from R263 lazygit's switch-based
+# validation.  Documents **2 stdlib-flag restricted-value
+# patterns**: (a) switch (R263 lazygit), (b) map lookup
+# (R264 ctop).
+#
+# Critical extraction note: ctop uses **runtime
+# `connector.Enabled()` for help text** at main.go:154
+# — the printHelp fn appends "available connectors: "
+# followed by the runtime-listed enabled connectors
+# (joined by comma).  Connectors are registered via
+# `func init() { enabled["<name>"] = NewXxx }` in each
+# connector source file.  `docker.go` registers
+# unconditionally; `runc.go` is gated by
+# `//go:build linux` so the `runc` connector only exists
+# when compiled on Linux.  Documents the
+# **build-tag-gated CLI feature** pattern in Go — like
+# Rust's `#[cfg(target_os = "linux")]` but applied to
+# a whole FILE (init fn won't compile on non-Linux).
+# Plus the help text DYNAMICALLY reflects which
+# connectors are enabled at compile time (so macOS users
+# see only `docker` while Linux users see `docker,
+# runc`).
+#
+# Critical extraction note: ctop uses **pointer-deref
+# pattern** at main.go:51, 56, 71, 75, 79, 84, 89 —
+# every flag value access is via `*flagPtr` since
+# stdlib flag returns pointers.  E.g. `if *versionFlag
+# { ... }`.  Distinct from clap derive (which destructures
+# directly into typed fields) and flaggy (which writes
+# to user-provided `&var` directly).  Documents the
+# **pointer-to-T flag access pattern** specific to Go
+# stdlib flag.
+
+local curcontext="$curcontext" state line
+
+# 9 valid sort fields decoded source-direct from
+# container/sort.go `Sorters` map.
+local -a sort_fields=(
+  'id:sort by container ID'
+  'name:sort by container name'
+  'cpu:sort by CPU utilization (secondary: name)'
+  'mem:sort by memory utilization'
+  'io:sort by IO usage'
+  'net:sort by network usage'
+  'pids:sort by process count'
+  'state:sort by container state (running/paused/exited/created)'
+  'uptime:sort by uptime'
+)
+
+# Available connectors from connector/*.go init() fns.
+# docker is unconditional; runc is build-tag-gated to
+# linux; mock is for testing.
+local -a connectors=(
+  'docker:Docker connector (always available)'
+  'runc:runc OCI connector (BUILD-TAG-GATED: linux)'
+)
+
+# Go stdlib flag treats `-X` and `--X` as the same flag.
+# Both forms are accepted at the CLI.
+_arguments -s -S \
+  '(-h -help --h --help)'{-h,-help,--h,--help}'[display help dialog]' \
+  '(-v -version --v --version)'{-v,-version,--v,--version}'[output version information and exit]' \
+  '(-f -filter --f --filter)'{-f+,-filter+,--f+,--filter=}'[filter containers (substring match)]:pattern:' \
+  '(-a -active --a --active)'{-a,-active,--a,--active}'[show active (running) containers only]' \
+  '(-s -sort --s --sort)'{-s+,-sort+,--s+,--sort=}'[container sort field]:field:(($sort_fields))' \
+  '(-r -reverse --r --reverse)'{-r,-reverse,--r,--reverse}'[reverse container sort order]' \
+  '(-i -invert --i --invert)'{-i,-invert,--i,--invert}'[invert default colors]' \
+  '-connector+[container connector to use (default: docker)]:connector:(($connectors))' \
+  '--connector=[container connector to use (default: docker)]:connector:(($connectors))'
