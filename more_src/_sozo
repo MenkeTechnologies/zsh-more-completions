@@ -1,0 +1,216 @@
+#compdef sozo
+# Documentation: source-direct extraction from upstream
+# dojoengine/dojo bin/sozo/src/ — Dojo Engine's Cairo
+# game-world CLI (clap v4 derive; uses `clap_verbosity_flag`
+# + `Box<XxxArgs>` per-variant to keep enum compact):
+#   args.rs lines 15-40 (SozoArgs Parser struct with 5
+#     global flags + ProfileSpec flatten + Verbosity flatten
+#     + subcommand)
+#   args.rs lines 83-98 (ProfileSpec Parser struct with
+#     `#[group(multiple = false)]` + 3 profile-selectors:
+#     `-P/--profile` / `--release` / `--dev`)
+#   commands/mod.rs lines 54-100 (Commands enum: 21 variants
+#     including 1 feature-gated by `#[cfg(feature = "walnut")]`
+#     and 1 with `alias = "sn"` (starknet))
+#   commands/starknet/mod.rs lines 22-72 (StarknetCommand
+#     enum: 15 sub-subcommands; transaction has alias "tx")
+#   commands/hash.rs (HashCommand sub: compute / find)
+#   commands/model.rs (ModelCommand sub: class-hash /
+#     contract-address / layout / get / ... etc.)
+#   commands/auth.rs (AuthCommand sub: grant / revoke;
+#     each with nested AuthKind sub-sub-sub)
+# Reference accessed: 2026-05-30 via gh api.
+#
+# sozo is the **Dojo Engine CLI** — Dojo is the framework
+# for building provable Cairo games + on-chain worlds on
+# Starknet.  sozo manages the Dojo "world" (the on-chain
+# game state contract): build, declare, deploy, migrate,
+# invoke entrypoints, inspect models (Dojo's ECS storage).
+# Extends the Cairo/Starknet cluster (R247 sncast, R248
+# cairo-coverage, R249 cairo-profiler) into Dojo-specific
+# game-world tooling.  Sister tools in dojoengine/dojo:
+# `katana` (the Dojo devnet; already in corpus).
+#
+# Critical extraction note: sozo uses **`Box<XxxArgs>`
+# wrapping every Subcommand variant** at commands/mod.rs:55-100
+# (e.g. `Auth(Box<AuthArgs>)`, `Bindgen(Box<BindgenArgs>)`,
+# ..., `Starknet(Box<StarknetArgs>)`).  This is **clippy's
+# `large_enum_variant` lint mitigation** — the Commands
+# enum has 21 variants and the largest (e.g. MigrateArgs
+# with nested option flattens) is significantly bigger
+# than the smallest (VersionArgs).  Without Box, the enum
+# allocates space for the largest variant in every value;
+# with Box, each variant is just a pointer (8 bytes).
+# This is the **corpus's first documented `Box<...>`
+# per-variant enum-size-equalization pattern**.  Documents
+# Rust's idiomatic way to keep large-variant enums
+# memory-efficient.
+#
+# Critical extraction note: sozo uses
+# **`#[command(alias = "sn")]`** on `Starknet(...)` at
+# commands/mod.rs:98 AND **`#[command(alias = "tx")]`** on
+# `Transaction(...)` at starknet/mod.rs:39.  These are
+# subcommand aliases at TWO different nesting depths
+# (top-level + sub-sub-command).  Documents the corpus's
+# clap subcommand-alias pattern at depth — distinct from
+# the `#[arg(alias = "...")]` ARG alias pattern (R240 etc.)
+# which aliases flag names.  This is the **subcommand
+# name** alias which lets the user type `sozo sn balance`
+# (= `sozo starknet balance`) or `sozo sn tx 0xabc`
+# (= `sozo starknet transaction 0xabc`).
+#
+# Critical extraction note: sozo uses **`clap_verbosity_flag::
+# Verbosity`** at args.rs:30 (flattened into SozoArgs).
+# This is a popular external clap crate that adds:
+#   `-v` / `--verbose`   (count: more = more verbose)
+#   `-q` / `--quiet`     (count: more = quieter)
+# with the count mapping to log levels (Error/Warn/Info/
+# Debug/Trace).  sozo's `ui_verbosity()` impl at args.rs:43-55
+# maps:
+#   Off → Quiet, Error → Normal, Warn → Verbose,
+#   Info → Debug, Debug | Trace → Trace
+# Documents **clap-flag external-crate flatten** —
+# integrating a community-maintained subcommon flag set
+# rather than reinventing -v/-q.  3rd-party clap crate
+# documented in corpus (after R210 clap_complete and
+# others).
+#
+# Critical extraction note: sozo uses
+# **`#[group(multiple = false)]`** on ProfileSpec at
+# args.rs:85 — the `-P/--profile`, `--release`, `--dev`
+# flags are mutually exclusive (declarative mutex without
+# `conflicts_with = ...` per-flag).  All 3 flags are tagged
+# `group = "profiles"`; the `multiple = false` constraint
+# means at most one may be specified.  R204 documented this
+# pattern; sozo uses it for profile selection.  Combined
+# with `determine()` impl at args.rs:101-108 (priority
+# order: release > dev > profile > Profile::default()).
+#
+# Critical extraction note: sozo uses **`global = true`**
+# at args.rs:19, 34, 87, 91, 95 — the flag is inherited by
+# every subcommand, so `sozo --manifest-path X build` works
+# the same as `sozo build --manifest-path X`.  Combined
+# with `env = "DOJO_MANIFEST_PATH"` (args.rs:20) and
+# `env = "SOZO_OFFLINE"` (args.rs:33), the flag value is
+# also read from the environment if not provided.  R215
+# documented `global = true`; sozo uses it on every global
+# flag.
+#
+# Critical extraction note: sozo uses **runtime
+# `version=generate_version()`** at args.rs:16 instead of
+# a literal version string.  `generate_version()` is in
+# `utils.rs` and computes a version string at runtime
+# (typically combining CARGO_PKG_VERSION + git rev + build
+# date).  Documents **dynamic version pattern** —
+# clap's version attribute accepts a function call (clap
+# evaluates it at parser-build time, not at parse time).
+#
+# Critical extraction note: sozo uses
+# **`#[cfg(feature = "walnut")]`** on the `Walnut` variant
+# at commands/mod.rs:93-95 — the entire subcommand is
+# COMPILED AWAY when the walnut feature is disabled.  R201
+# documented variant-level cfg gating; sozo uses it for an
+# optional integration (Walnut is a 3rd-party Starknet
+# transaction debugger).  Documents **feature-gated
+# subcommand variant** — distinct from R248 cairo-coverage's
+# `requires = "..."` (which is parser-level, not compile-
+# time) and from R225 turbo body-bail (which is runtime).
+
+local curcontext="$curcontext" state line ret=1
+
+# 21 top-level subcommands decoded source-direct from
+# Commands enum at commands/mod.rs lines 54-100.  Note:
+# `walnut` is feature-gated and may or may not appear in a
+# given binary; included here for completeness since most
+# distributed binaries do enable it.
+local -a subcommands=(
+  'auth:grant or revoke a contract permission to write to a resource'
+  'bindgen:generate bindings for the specified target from existing build artifacts'
+  'build:build the world, generating the necessary artifacts for deployment'
+  'call:call a contract'
+  'events:inspect events emitted by the world'
+  'execute:execute one or several systems with the given calldata'
+  'function-call:call a contract function without requiring a Dojo project context'
+  'invoke:invoke a contract entrypoint on Starknet'
+  'clean:clean the build directory'
+  'hash:compute hash with different hash functions (sub: compute / find)'
+  'declare:declare Dojo contracts and Sozo-managed classes on Starknet'
+  'deploy:deploy Dojo world or Sozo-managed contracts'
+  'init:initialize a new dojo project'
+  'inspect:inspect the world'
+  'migrate:run a migration, declaring and deploying contracts to update the world'
+  'model:inspect a model (sub: class-hash / contract-address / layout / get / ...)'
+  'test:run cairo tests'
+  'version:print version'
+  'mcp:start a MCP (Model Context Protocol) server'
+  'starknet:Starknet utility commands (alias: sn)'
+  'sn:alias for `starknet` — Starknet utility commands'
+  'walnut:interact with walnut.dev — transaction debugger and simulator (FEATURE-GATED)'
+)
+
+# 15 starknet sub-subcommands decoded source-direct from
+# StarknetCommand at commands/starknet/mod.rs lines 22-72.
+local -a starknet_subs=(
+  'block-number:get the latest block number'
+  'block-hash:get the latest block hash'
+  'block:get block information'
+  'block-time:get block timestamp'
+  'transaction:get transaction by hash (alias: tx)'
+  'tx:alias for `transaction` — get transaction by hash'
+  'receipt:get transaction receipt'
+  'status:get transaction status'
+  'balance:get ETH or STRK balance of an address'
+  'nonce:get the nonce of an address'
+  'storage:get storage value at a key for a contract'
+  'class-hash-at:get the class hash at a contract address'
+  'class-at:get the class at a contract address'
+  'class-by-hash:get class by its hash'
+  'chain-id:get the chain ID'
+  'syncing:get the sync status of the node'
+)
+
+# Hash sub-subcommands at commands/hash.rs.
+local -a hash_subs=(
+  'compute:compute the hash of the provided input (felt or comma-separated list)'
+  'find:search the hash among namespaces and resource names/tags hashes'
+)
+
+# Auth sub-subcommands at commands/auth.rs.
+local -a auth_subs=(
+  'grant:grant an auth role'
+  'revoke:revoke an auth role'
+)
+
+_arguments -C \
+  '(-h --help)'{-h,--help}'[show help]' \
+  '(-V --version)'{-V,--version}'[show version (runtime-computed via generate_version())]' \
+  '--manifest-path=[path to a directory containing a Scarb.toml file (env: DOJO_MANIFEST_PATH; global)]:dir:_files -/' \
+  '--offline[run without accessing the network (env: SOZO_OFFLINE; global)]' \
+  '(-P --profile --release --dev)'{-P+,--profile=}'[specify profile to use by name (mutex with --release/--dev)]:profile:' \
+  '(-P --profile --release --dev)--release[use release profile (mutex with -P/--dev)]' \
+  '(-P --profile --release --dev)--dev[use dev profile (mutex with -P/--release)]' \
+  '*'{-v,--verbose}'[verbosity (repeat for more: -v info, -vv debug, -vvv trace; from clap_verbosity_flag)]' \
+  '*'{-q,--quiet}'[quietness (repeat for less output: -q warn, -qq error, -qqq off; from clap_verbosity_flag)]' \
+  '1:subcommand:->subcmd' \
+  '*::args:->args' && ret=0
+
+case $state in
+  subcmd)
+    _describe -t subcommands 'sozo subcommand' subcommands && ret=0
+    ;;
+  args)
+    case $words[1] in
+      starknet|sn)
+        _describe -t starknet-subs 'starknet verb' starknet_subs && ret=0
+        ;;
+      hash)
+        _describe -t hash-subs 'hash verb' hash_subs && ret=0
+        ;;
+      auth)
+        _describe -t auth-subs 'auth verb' auth_subs && ret=0
+        ;;
+    esac
+    ;;
+esac
+
+return ret
