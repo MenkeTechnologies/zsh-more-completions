@@ -1,0 +1,167 @@
+#compdef aho
+# ============================================================================
+#  _aho — aho: A git implementation in awk
+#
+#  Source-direct extraction from
+#    https://github.com/djanderson/aho/blob/master/aho.awk
+#    https://github.com/djanderson/aho/blob/master/getopt.awk (vendored
+#    copy of gawk's stdlib /usr/share/awk/getopt.awk by Arnold Robbins)
+#
+#  Authored by djanderson.  822 GH stars.  aho is a GIT REIMPLEMENTATION
+#  IN AWK — a complete subset of git's plumbing+porcelain implemented in
+#  GNU AWK including SHA-1 hashing, zlib compression, object database,
+#  index, refs, branches, working tree, commit objects, etc.  Sister
+#  tools: git (in corpus, canonical implementation in C), gut (Rust
+#  reimpl), libgit2-based tools.  Notably aho is the world's most
+#  popular AWK GIT IMPLEMENTATION (proving AWK Turing-completeness is
+#  often understated).
+#
+#  CLI library taxonomy update: 1st AWK CLI library — gawk's stdlib
+#  `getopt.awk`.  AWK ecosystem now has 1 documented CLI library (R367
+#  gawk stdlib getopt.awk).  AWK is a FIRST-TIME addition to the
+#  cross-language CLI library taxonomy.
+#
+#  gawk stdlib `getopt.awk` is bundled with EVERY gawk installation at
+#  `/usr/share/awk/getopt.awk` — a getopt(3)-style reimplementation in
+#  AWK by Arnold Robbins (gawk maintainer).  EVERY substantial AWK CLI
+#  tool that does argument parsing uses this exact file or a
+#  copy of it (since AWK has no native arg parsing — `ARGV` is just
+#  the raw array).
+#
+#  getopt.awk API:
+#    @include "getopt.awk"
+#
+#    function main(    shortopts, longopts, c) {
+#      getopt::Optind = 1                # start at first option
+#      getopt::Opterr = 1                # print parse errors to stderr
+#
+#      shortopts = "h"                   # short options string
+#                                        # (single chars, colon = takes arg)
+#      longopts = "version,help"         # comma-separated long opts
+#                                        # (= sign = takes arg)
+#
+#      while ((c = getopt::getopt(ARGC, ARGV, shortopts, longopts)) != -1) {
+#        if (c == "?") {                 # unknown option
+#          print_usage()
+#          return 129
+#        }
+#        if (getopt::Optopt == "h" || getopt::Optopt == "help") {
+#          print_help()
+#          return 0
+#        }
+#        if (getopt::Optopt == "version") {
+#          print_version()
+#          return 0
+#        }
+#        # ... handle other options
+#      }
+#
+#      # Consume remaining args
+#      while (getopt::Optind < ARGC) {
+#        arg = ARGV[getopt::Optind++]
+#        # ...
+#      }
+#    }
+#
+#  getopt.awk distinctive features:
+#    - POSIX getopt(3) SEMANTICS — short options string with `:` suffix
+#      for value-taking, long options comma-separated with `=` suffix
+#      for value-taking
+#    - `getopt::Optind` GLOBAL VARIABLE — current arg index (mutable
+#      cursor through ARGV)
+#    - `getopt::Optarg` GLOBAL VARIABLE — value of the most recently
+#      parsed option (for value-taking flags)
+#    - `getopt::Optopt` GLOBAL VARIABLE — name of the most recently
+#      parsed option
+#    - `getopt::Opterr` GLOBAL VARIABLE — controls error printing
+#      (1 = print to stderr, 0 = silent)
+#    - `getopt::getopt(ARGC, ARGV, shortopts, longopts)` RETURNS the
+#      next option as a single character (short) or string (long), or
+#      `-1` when no more options
+#    - `@namespace` AWK feature for namespacing (gawk 4.0+) — `getopt::`
+#      prefix avoids name collisions
+#    - NO BUILT-IN SUBCOMMAND DISPATCH — caller writes manual `if`/
+#      `else if` chain on `ARGV[getopt::Optind]` after the options loop
+#    - NO AUTO-GENERATED HELP — caller writes help text manually
+#  Distinct from R272 C POSIX getopt (C library — same semantics but
+#  C language), R287 Nim parseopt (similar low-level iteration in Nim),
+#  R349 Lua mpeterv/argparse (DECLARATIVE method-chain), R275 Rust
+#  clap-derive (struct + macro), R341 yargs (JS fluent builder), R322
+#  JCommander (Java field annotations).  getopt.awk's approach: POSIX
+#  getopt(3) SEMANTICS in AWK + GLOBAL CURSOR VARIABLES + AWK `@namespace`
+#  for namespacing — corpus's **first documented AWK CLI library**.
+#  Brings cross-language CLI library taxonomy variant count to 106;
+#  AWK ecosystem now has 1 documented CLI library.
+#
+#  Surface (verbatim from aho.awk + per-subcommand modules):
+#
+#  Top-level flags:
+#    -h, --help                Show help and exit
+#        --version             Show version and exit
+#
+#  Subcommands (each in its own .awk module with own getopt parsing):
+#    init                      Create an empty aho repository
+#    add                       Add file contents to the index
+#    rm                        Remove files from working tree and index
+#    config                    Read or modify .aho/config
+#    status                    Show working tree status
+#    commit                    Record changes to the repository
+#    cat-file                  Provide content/type/size info for objects
+#
+#  Repository layout (similar to git's .git/):
+#    .aho/                     Repository data directory
+#    .aho/config               Repository config file
+#    .aho/HEAD                 Symbolic ref to current branch
+#    .aho/index                Staging area
+#    .aho/objects/             Object database (compressed objects)
+#    .aho/refs/                Branch + tag references
+#
+#  Dup-skipped neighbors during hunt (smaller surface or in corpus):
+#    - piawka (novikovalab/piawka 31 stars — VCF population stats, narrow)
+#    - BotWikiAwk (greencardamom/BotWikiAwk 27 stars — Wikipedia bot
+#      framework, narrow)
+#    - WaybackMedic (greencardamom — narrow Wikipedia citation tool)
+# ============================================================================
+
+_aho() {
+  local context state state_descr line curcontext=$curcontext
+  typeset -A opt_args
+
+  _arguments -C \
+    '(-h --help)'{-h,--help}'[show aho help]' \
+    '--version[show aho version]' \
+    '1: :->cmd' \
+    '*:: :->subargs'
+
+  case $state in
+    cmd)
+      local -a verbs
+      verbs=(
+        'init:create an empty aho repository'
+        'add:add file contents to the index'
+        'rm:remove files from working tree and index'
+        'config:read or modify .aho/config'
+        'status:show working tree status'
+        'commit:record changes to the repository'
+        'cat-file:provide content/type/size info for objects'
+      )
+      _describe -t commands 'aho subcommand' verbs
+      ;;
+    subargs)
+      case $line[1] in
+        add|rm|commit|cat-file)
+          _files
+          ;;
+        config)
+          _arguments \
+            '--list[list all config values]' \
+            '--get[get config value]:key' \
+            '--set[set config value]:key' \
+            '1:config key'
+          ;;
+      esac
+      ;;
+  esac
+}
+
+_aho "$@"
