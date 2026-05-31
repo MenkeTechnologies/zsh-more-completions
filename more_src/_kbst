@@ -1,0 +1,148 @@
+#compdef kbst
+# Documentation: source-direct extraction from upstream
+# kbst/kbst cmd/ —
+#   root.go lines 33-69 (rootCmd cobra.Command + persistent
+#     -p/--path flag)
+#   add.go lines 75-477 (3-level add subcommand tree: add ->
+#     {cluster, node-pool, service} -> {aks, eks, gke})
+#   repository.go lines 33-158 (init subcommand tree: init ->
+#     {aks, eks, gke} for repository scaffolding)
+#   import.go lines 29-30 (import JSON)
+#   list.go lines 35-108 (list + --all/-a)
+#   remove.go lines 28-29 (remove <name>)
+#   update.go lines 32-33 (update)
+# Reference accessed: 2026-05-30 via gh api.
+#
+# kbst is the **Kubestack Framework CLI** — multi-cloud
+# Kubernetes infrastructure-as-code tool that scaffolds and
+# manages Terraform modules for AKS (Azure) + EKS (AWS) + GKE
+# (Google Cloud) clusters using a single declarative repo
+# layout.  Targets DevOps teams managing fleets of K8s
+# clusters across multiple cloud providers.
+#
+# Critical extraction note: kbst is **spf13/cobra-based** with
+# the standard 3-level subcommand tree (root -> verb ->
+# category -> provider).  Provider-specific subcommands all
+# have parallel flag sets:
+#   - aks/eks/gke each take a `<name>` + `<region>` positional
+#   - aks additionally takes `<resource-group>` (Azure)
+#   - gke additionally takes `<project-id>` (Google Cloud)
+#   - eks does NOT take an extra positional (AWS uses
+#     region + account binding)
+# This documents the 3-cloud-provider symmetry-with-differences
+# pattern common in multi-cloud CLIs.
+
+local curcontext="$curcontext" state line ret=1
+
+local -a top_subcommands=(
+  'add:add clusters, node pools, or services to an existing kbst repo'
+  'import:create a new repository imported from a JSON string'
+  'init:scaffold a new Kubestack repository (provider: aks|eks|gke)'
+  'list:list clusters, node pools, and services in the current repo'
+  'remove:remove a cluster, node pool, or service from the current repo'
+  'update:update cluster, node pool, or service module versions'
+)
+
+local -a add_subcategories=(
+  'cluster:add an AKS, EKS, or GKE cluster module'
+  'node-pool:add a node-pool module to an existing cluster'
+  'service:add a service module by name'
+)
+
+local -a providers=(
+  'aks:Azure Kubernetes Service (positional: name-prefix region resource-group)'
+  'eks:Amazon Elastic Kubernetes Service (positional: name-prefix region)'
+  'gke:Google Kubernetes Engine (positional: name-prefix region project-id)'
+)
+
+_arguments -C \
+  '(-h --help)'{-h,--help}'[show help and exit]' \
+  '(-p --path)'{-p+,--path=}'[path to the working directory (default: ".")]:dir:_files -/' \
+  '1:subcommand:->subcmd' \
+  '*::args:->args' && ret=0
+
+case $state in
+  subcmd)
+    _describe -t top-subcommands 'kbst subcommand' top_subcommands && ret=0
+    ;;
+  args)
+    case $words[1] in
+      add)
+        if (( CURRENT == 2 )); then
+          _describe -t add-subcategories 'add category' add_subcategories && ret=0
+        else
+          case $words[2] in
+            cluster|node-pool)
+              if (( CURRENT == 3 )); then
+                _describe -t providers 'cloud provider' providers && ret=0
+              else
+                case $words[3] in
+                  aks)
+                    _arguments \
+                      '(-n --name-prefix)'{-n+,--name-prefix=}'[cluster name prefix]:name:' \
+                      '(-r --region)'{-r+,--region=}'[Azure region (e.g. eastus, westeurope)]:region:' \
+                      '--aks-vm-size=[VM size (default: Standard_D2_v4)]:size:(Standard_D2_v4 Standard_D4_v4 Standard_D8_v4 Standard_D16_v4)' \
+                      '--aks-min=[min nodes (default 3)]:n:' \
+                      '--aks-max=[max nodes (default 9)]:n:' \
+                      '--aks-availability-zones=[availability zones (comma-list; default inherit)]:zones:' \
+                      '*:positional (cluster: name-prefix region resource-group; node-pool: cluster-name pool-name):' && ret=0
+                    ;;
+                  eks)
+                    _arguments \
+                      '(-n --name-prefix)'{-n+,--name-prefix=}'[cluster name prefix]:name:' \
+                      '(-r --region)'{-r+,--region=}'[AWS region (e.g. us-east-1, eu-west-1)]:region:' \
+                      '--eks-instance-type=[EC2 instance type (default: t3a.xlarge)]:type:(t3a.xlarge t3a.2xlarge m5.large m5.xlarge m5.2xlarge)' \
+                      '--eks-min=[min nodes (default 3)]:n:' \
+                      '--eks-max=[max nodes (default 9)]:n:' \
+                      '--eks-availability-zones=[availability zones (comma-list; default inherit)]:zones:' \
+                      '*:positional (cluster: name-prefix region; node-pool: cluster-name pool-name):' && ret=0
+                    ;;
+                  gke)
+                    _arguments \
+                      '(-n --name-prefix)'{-n+,--name-prefix=}'[cluster name prefix]:name:' \
+                      '(-r --region)'{-r+,--region=}'[GCP region (e.g. us-central1, europe-west1)]:region:' \
+                      '--gke-machine-type=[machine type (default: e2-standard-8)]:type:(e2-standard-2 e2-standard-4 e2-standard-8 e2-standard-16)' \
+                      '--gke-min=[min nodes per zone (default 1)]:n:' \
+                      '--gke-max=[max nodes per zone (default 3)]:n:' \
+                      '--gke-node-locations=[node locations (comma-list; default inherit)]:zones:' \
+                      '*:positional (cluster: name-prefix region project-id; node-pool: cluster-name pool-name):' && ret=0
+                    ;;
+                esac
+              fi
+              ;;
+            service)
+              _arguments '1:service name:' && ret=0
+              ;;
+          esac
+        fi
+        ;;
+      init)
+        if (( CURRENT == 2 )); then
+          _describe -t providers 'cloud provider' providers && ret=0
+        else
+          # Shared flags for all 3 init subcommands
+          _arguments \
+            '--environment-names=[environment names (comma-list; mission critical first; default "apps,ops")]:envs:' \
+            '--release=[desired Kubestack release version (default "latest")]:version:' \
+            '--gitref=[git ref to download a dev artifact (overrides --release)]:ref:' \
+            '*:positional (base-domain name-prefix region [resource-group|project-id]):' && ret=0
+        fi
+        ;;
+      import)
+        _arguments '1:JSON string (or path to a JSON file):' && ret=0
+        ;;
+      list)
+        _arguments \
+          '(-a --all)'{-a,--all}'[list all modules (including not-yet-instantiated)]' && ret=0
+        ;;
+      remove)
+        _arguments '1:name (cluster/node-pool/service to remove):' && ret=0
+        ;;
+      update)
+        # No flags
+        ;;
+    esac
+    ;;
+esac
+
+return ret
