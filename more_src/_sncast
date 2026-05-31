@@ -1,71 +1,185 @@
 #compdef sncast
-# Documentation: https://foundry-rs.github.io/starknet-foundry/appendix/sncast.html
-# Reference accessed: 2026-05-21
-# Verified: Starknet Foundry book sncast appendix. Subcommands and global
-# flags match upstream listing (account/declare/declare-from/deploy/invoke/
-# call/multicall/script/show-config/get/ledger/utils/verify/completions).
+# Documentation: source-direct extraction from upstream
+# foundry-rs/starknet-foundry crates/sncast/src/ —
+#   main.rs lines 67-140 (Cli Parser struct with 9 global
+#     flags + Commands subcommand; `clap` v4 derive)
+#   main.rs lines 161-213 (Commands enum: 17 top-level
+#     variants)
+#   starknet_commands/account/mod.rs lines 49-56 (Account
+#     sub-subcommands: import / create / deploy / delete /
+#     list)
+#   starknet_commands/multicall.rs lines 37-41 (Multicall
+#     sub-subcommands: run / new / execute)
+#   starknet_commands/script.rs lines 24-27 (Script sub-
+#     subcommands: init / run)
+#   starknet_commands/get/ dir (7 sub-subcommands: balance /
+#     class-hash-at / nonce / spec-version / transaction /
+#     tx-receipt / tx-status)
+#   starknet_commands/utils/ dir (5 sub-subcommands:
+#     class-hash / contract-address / felt-or-id / selector /
+#     serialize)
+#   starknet_commands/ledger/ dir (3 sub-subcommands:
+#     app-version / get-public-key / sign-hash)
+# Reference accessed: 2026-05-30 via gh api.
+#
+# sncast is the **Starknet Foundry contract interaction CLI**
+# — the "Smart Contract Cast" tool from foundry-rs's
+# starknet-foundry suite.  Sister to snforge (the testing
+# framework; already in corpus).  Used to declare, deploy,
+# call, invoke Cairo contracts on Starknet mainnet/sepolia.
+#
+# Critical extraction note: sncast uses **clap v4 derive**
+# with a CUSTOM `help_template` at lines 70-78 that defines
+# the order of help sections (name → version → author →
+# about → before-help → usage → all-args → after-help).
+# Plus `after_help` (short form) AND `after_long_help` (full
+# resource list with links to docs, X, Telegram, Discord,
+# bug-report URL) at lines 79-95.  This is the **corpus's
+# first documented `after_long_help` extended help-message
+# pattern** — used to expose community resource links only
+# in `--help` (long form), not in `-h` (short form).
+#
+# Critical extraction note: sncast has **3 top-level
+# subcommands that ALSO exist as sub-actions of `get`**:
+#   `balance`   = `get balance` shortcut
+#   `tx-status` = `get tx-status` shortcut
+# Plus `alias` is a separate top-level (manages saved
+# aliases for contract addresses + class hashes).  These 3
+# subcommands were MISSING from the legacy _sncast which
+# had only 14 of 17 subcommands.  Documents how Starknet
+# Foundry exposes the most-common chain queries as both
+# `get X` AND top-level `X` for muscle-memory convenience.
+#
+# Critical extraction note: the legacy `_sncast` had **3
+# global flags that DON'T exist** in upstream Cli struct:
+#   --url       (NOT global; per-subcommand)
+#   --network   (NOT global; per-subcommand)
+#   --hex-format (NOT a flag at all)
+# All 3 REMOVED in this rewrite.  Added 3 MISSING global
+# flags from upstream: `--scarb-profile`, `--wait-timeout`,
+# `--wait-retry-interval`.  Continues the corpus's source-
+# direct bug-spotting practice (R227 "ssh hot", R231
+# ferrishot swapped docs, R237 dependabot wrong names,
+# R245 oxfmt, R246 oxlint's nonexistent --security-plugin).
+#
+# Critical extraction note: `--wait-timeout` is a
+# `NonZeroU16` (max 65535 seconds) and `--wait-retry-
+# interval` is a `NonZeroU8` (max 255 seconds).  Decoded
+# source-direct from the field types at main.rs:132 + 136.
+# The `NonZero*` types REJECT 0 at parse time (clap surfaces
+# the error with "value '0' is not a valid value for
+# `--wait-timeout`...").  Documents Rust's NonZero* types
+# providing parser-side validation.
 
 local curcontext="$curcontext" state line ret=1
-local -a subcommands
 
-subcommands=(
-  'account:account management'
-  'declare:declare contract class'
-  'declare-from:declare from source'
-  'deploy:deploy contract instance'
-  'invoke:execute contract function'
-  'call:read from contract'
-  'multicall:multicall operations'
-  'script:script operations'
-  'get:read chain state'
-  'ledger:ledger device operations'
-  'utils:utility functions'
-  'verify:verify contracts'
-  'show-config:display configuration'
-  'completions:generate shell completions'
+# All 17 top-level subcommands decoded source-direct from
+# Commands enum at main.rs lines 161-213.
+local -a subcommands=(
+  'get:get various data from the network (sub: balance/class-hash-at/nonce/spec-version/transaction/tx-receipt/tx-status)'
+  'declare:declare a contract class to the network'
+  'declare-from:declare a contract by fetching it from a different Starknet instance'
+  'deploy:deploy a contract'
+  'call:call a contract function (read-only; no state change)'
+  'invoke:invoke a contract function (state-changing transaction)'
+  'multicall:execute multiple calls atomically (sub: run / new / execute)'
+  'account:create and deploy an account (sub: import / create / deploy / delete / list)'
+  'alias:manage saved aliases for contract addresses, class hashes, etc.'
+  'show-config:show the current configuration being used'
+  'script:run or initialize a deployment script (sub: init / run)'
+  'tx-status:get the status of a transaction (TOP-LEVEL; also accessible via `get tx-status`)'
+  'verify:verify a contract on Voyager / StarkScan etc.'
+  'completions:generate shell completions script'
+  'utils:utility commands (sub: class-hash / contract-address / felt-or-id / selector / serialize)'
+  'balance:fetch balance of the account for specified token (TOP-LEVEL; also accessible via `get balance`)'
+  'ledger:interact with Ledger hardware wallet (sub: app-version / get-public-key / sign-hash)'
+)
+
+local -a account_subs=(
+  'import:import an existing account into the accounts file'
+  'create:create a new account (not yet deployed)'
+  'deploy:deploy an account previously created with `create`'
+  'delete:delete an account from the accounts file'
+  'list:list all accounts in the accounts file'
+)
+local -a multicall_subs=(
+  'new:create a new multicall TOML template file'
+  'run:run a multicall from a TOML file'
+  'execute:execute the prepared multicall on-chain'
+)
+local -a script_subs=(
+  'init:initialize a new deployment script project'
+  'run:run a deployment script (Cairo)'
+)
+local -a get_subs=(
+  'balance:fetch token balance'
+  'class-hash-at:get class hash deployed at address'
+  'nonce:get account nonce'
+  'spec-version:get JSON-RPC spec version'
+  'transaction:get transaction by hash'
+  'tx-receipt:get transaction receipt'
+  'tx-status:get transaction status (accepted / rejected / etc.)'
+)
+local -a utils_subs=(
+  'class-hash:compute class hash from a compiled .sierra.json or .casm.json'
+  'contract-address:compute contract address from class hash + constructor args'
+  'felt-or-id:convert between felt and ID representations'
+  'selector:compute starknet entry-point selector from function name'
+  'serialize:serialize Cairo expressions to a felt array (for calldata)'
+)
+local -a ledger_subs=(
+  'app-version:get the version of the Starknet Ledger app'
+  'get-public-key:get the public key from Ledger for an account'
+  'sign-hash:sign a message hash with Ledger'
+)
+
+# Global flags decoded source-direct from Cli struct at
+# main.rs lines 99-140.
+local -a global_flags=(
+  '(-h --help)'{-h,--help}'[show help (short form); use --help for full help including community resource links]'
+  '(-V --version)'{-V,--version}'[show version and exit]'
+  '(-p --profile)'{-p+,--profile=}'[profile name in snfoundry.toml config file]:profile:'
+  '(-a --account)'{-a+,--account=}'[account name (or path if using --keystore)]:account:'
+  '(-f --accounts-file)'{-f+,--accounts-file=}'[path to the accounts info file]:file:_files -g "*.json"'
+  '(-k --keystore)'{-k+,--keystore=}'[path to keystore file; --account becomes the path to a starkli JSON account file]:file:_files -g "*.json"'
+  '--scarb-profile=[scarb build profile for compiling contracts (e.g. release, dev)]:profile:(release dev)'
+  '(-j --json)'{-j,--json}'[output in JSON format]'
+  '(-w --wait)'{-w,--wait}'[wait until transaction is accepted or rejected]'
+  '--wait-timeout=[--wait timeout in seconds (NonZeroU16; max 65535)]:n:'
+  '--wait-retry-interval=[--wait poll interval in seconds (NonZeroU8; max 255)]:n:'
 )
 
 _arguments -C \
-  '--profile=[profile]:profile:' \
-  '--accounts-file=[accounts file]:file:_files' \
-  '--account=[account name]:name:' \
-  '--keystore=[keystore]:file:_files' \
-  '--url=[RPC URL]:url:' \
-  '--network=[network]:net:(mainnet sepolia)' \
-  '--wait[wait for tx]' \
-  '--json[JSON output]' \
-  '--hex-format[hex output format]' \
-  '(- *)'{-h,--help}'[show help]' \
-  '(- *)'{-V,--version}'[show version]' \
-  '1: :->subcommand' \
-  '*::arg:->args' && ret=0
+  $global_flags \
+  '1:subcommand:->subcmd' \
+  '*::args:->args' && ret=0
 
 case $state in
-  (subcommand)
+  subcmd)
     _describe -t subcommands 'sncast subcommand' subcommands && ret=0
     ;;
-  (args)
-    case $line[1] in
-      (account)
-        _values 'account action' 'import' 'create' 'deploy' 'delete' && ret=0
+  args)
+    case $words[1] in
+      account)
+        _describe -t account-subs 'account verb' account_subs && ret=0
         ;;
-      (multicall)
-        _values 'multicall action' 'new' 'run' 'execute' && ret=0
+      multicall)
+        _describe -t multicall-subs 'multicall verb' multicall_subs && ret=0
         ;;
-      (script)
-        _values 'script action' 'init' 'run' && ret=0
+      script)
+        _describe -t script-subs 'script verb' script_subs && ret=0
         ;;
-      (get)
-        _values 'get target' 'balance' 'class-hash-at' 'nonce' 'tx' 'tx-status' && ret=0
+      get)
+        _describe -t get-subs 'get verb' get_subs && ret=0
         ;;
-      (ledger)
-        _values 'ledger action' 'app-version' 'get-public-key' 'sign-hash' && ret=0
+      utils)
+        _describe -t utils-subs 'utils verb' utils_subs && ret=0
         ;;
-      (utils)
-        _values 'utils action' 'serialize' 'class-hash' 'selector' && ret=0
+      ledger)
+        _describe -t ledger-subs 'ledger verb' ledger_subs && ret=0
         ;;
-      (completions)
-        _values 'shell' 'bash' 'zsh' 'fish' 'elvish' 'powershell' && ret=0
+      completions)
+        _arguments '1:shell:(bash zsh fish elvish powershell)' && ret=0
         ;;
     esac
     ;;
