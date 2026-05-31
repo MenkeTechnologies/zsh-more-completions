@@ -19,6 +19,31 @@ Entries are in original README order: older themed-cluster entries (accumulated
 before the per-round numbering convention) appear first, followed by the
 R-numbered rounds with the newest R-round at the top of that section.
 
+- **R232 — hf (Hugging Face Hub CLI; the new v0.34.0+ binary)** (1 file / 1 binary) — adds the modern Typer-based Hugging Face Hub CLI introduced in `huggingface_hub` v0.34.0 (September 2024) that replaces the legacy `huggingface-cli` (still in the corpus as the deprecated binary).  Used by ML researchers and production teams managing Hugging Face Hub content (models / datasets / spaces / endpoints / collections / papers / discussions / jobs / skills / buckets / webhooks).
+  - `_hf` (1-stem; huggingface/huggingface_hub `src/huggingface_hub/cli/`): **18 top-level commands + 16 command-group subcommands + ~50 sub-subcommands** decoded source-direct from:
+    * `cli/hf.py` lines 50-105 (Typer app + 9 `app.command()` for top-level commands + 16 `app.add_typer()` registrations)
+    * `cli/auth.py` lines 52-163 (auth subcommands: login/logout/switch/list|ls/token/whoami)
+    * `cli/models.py` lines 69-192 (3 model subcommands: list|ls/info/card)
+    * `cli/datasets.py` lines 70-259 (6 dataset subcommands: list|ls/leaderboard/info/parquet/sql/card)
+    * `cli/repos.py` lines 132-576 (repos + nested branch + tag command tree)
+    * `cli/cache.py` (4 verbs: list|ls/scan/delete/prune)
+    * `cli/spaces.py` (12 verbs)
+  - Critical extraction note: **hf uses Typer** (FastAPI author's CLI library built on Click) — **FIRST round in the corpus to document Typer-based CLIs**.  Important differences from argparse/click/clap-derive that affect completion:
+    1. **`app.add_typer(name="repos | repo")`** registers a single sub-app under TWO names (repos AND repo are both valid aliases).  Similarly `extensions | ext`.  Completion lists both.
+    2. **`app.command("list | ls")`** does the same for single subcommands: both `list` and `ls` work.  Used HEAVILY in hf for auth/models/datasets/repos/cache/spaces, plus the nested repos-branch / repos-tag subcommands.
+    3. **`hidden=True`** marks commands as undocumented in `--help`.  hf hides `repo-files` group + `lfs-enable-largefiles` + `lfs-multipart-upload` top-level commands.  Completion still lists them for forward compatibility.
+    4. **`examples=[...]`** decorator argument is purely cosmetic for `--help`; doesn't affect completion.
+    5. **`is_eager=True`** on the `--version` callback means it runs BEFORE subcommand parsing (so `hf --version foo` prints version and exits without parsing `foo`).
+    6. Typer auto-injects `--install-completion` and `--show-completion` flags on every Typer app — included in completion for forward compat.
+  - Critical extraction note: **hf has a FALLBACK DISPATCH for unknown top-level commands** at hf.py:54-57 — when the user types `hf <unknown>`, the `fallback_typer_group_factory` routes it to `dispatch_unknown_top_level_extension()` which tries to find an INSTALLED EXTENSION matching the name.  This makes hf plugin-extensible — third parties can ship `hf-foo` packages that register top-level commands.  Documented in the comment block; the completion does NOT enumerate installed extensions since they're install-dependent, but hints at the pattern with a `_message` line at completion-time.
+  - Critical extraction note: **hf is the modern replacement for `huggingface-cli`** (already in corpus as the deprecated binary).  The v0.34.0 changelog (Sept 2024) deprecated huggingface-cli in favor of hf with the explicit shorter command name + Typer rewrite + plugin extensibility.  Both binaries are typically installed in parallel during the transition period; the corpus now covers both.
+  - Critical extraction note: **alias-naming in Typer is via space-pipe-space** (`"list | ls"`, `"repos | repo"`, `"extensions | ext"`) — the convention is to write the canonical name first, then ` | `, then the alias.  Documented in the completion comment block so future hunters recognize the pattern when reading Typer source code.
+  - Critical extraction note: **`auth login --add-to-git-credential`** flag invokes the git credential helper to store the HF token where `git push https://huggingface.co/...` will find it automatically.  This is the recommended path for users who use git to push to HF repos directly (vs the hf CLI).  Documented in the flag description.
+  - Hunt-skip notes: `hf-cli` (some packaging variants name) — same binary.  `huggingface-cli` (the legacy binary; already in corpus).  `hf-jobs` / `hf-inference` (sometimes shipped as standalone wrappers; thin shells around `hf jobs ...` and `hf endpoints ...`) deferred — same flag surface as the subcommand.  `hf transformers` (a vestige of an old Transformers CLI; now removed from hf 0.34+) deferred — not in current upstream.
+  - Dup-checked clean against `/usr/share/zsh` + `/opt/homebrew/share/zsh` + `/usr/local/share/zsh`.
+  - Blacklist additions: 1 entry (h).
+  - Corpus 28,659 → 28,660 files.
+
 - **R231 — ferrishot (Rust Wayland-native screenshot app)** (1 file / 1 binary) — branches off the VCS/TUI cluster (R230 jjui) into Wayland screenshot tooling.  ferrishot competes with the existing _grim + _slurp + _flameshot + _spectacle in the corpus but uses native Wayland-protocol rendering (iced + softbuffer) and a powerful CLI for headless capture-and-action workflows.  Uses KDL config at `$XDG_CONFIG_HOME/ferrishot.kdl` (same KDL format Vanilla OS's abroot config uses).
   - `_ferrishot` (1-stem; nik-rev/ferrishot peashot/src/config/cli.rs): **15 flags grouped into 4 help_headings + 1 hidden positional + 3-value `--accept-on-select` enum** decoded source-direct from:
     * `struct Cli` at lines 22-201 (clap-derive struct with help_heading groups)
