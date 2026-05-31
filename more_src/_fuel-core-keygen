@@ -1,0 +1,123 @@
+#compdef fuel-core-keygen
+# Documentation: source-direct extraction from upstream
+# FuelLabs/fuel-core bin/keygen/src/main.rs +
+# crates/keygen/src/lib.rs (clap v4 derive):
+#   bin/keygen/src/main.rs lines 19-34 (ParseSecret Args
+#     struct: positional `secret` + --pretty/-p + --key-type/-k)
+#   bin/keygen/src/main.rs lines 37-50 (NewKey Args struct:
+#     --pretty/-p + --key-type/-k)
+#   bin/keygen/src/main.rs lines 53-58 (Command enum used
+#     as TOP-LEVEL Parser; 2 variants: New / Parse)
+#   crates/keygen/src/lib.rs lines 27-33 (KeyType ValueEnum
+#     with 2 variants: BlockProduction (default) / Peering)
+#   crates/keygen/src/lib.rs lines 35-42 (From<KeyType> for
+#     &'static str: BlockProduction → "block-production",
+#     Peering → "p2p" — JSON OUTPUT name differs from CLI
+#     value)
+# Reference accessed: 2026-05-30 via gh api.
+#
+# fuel-core-keygen is the **Fuel Network keygen utility** —
+# generates secret/public keypairs for configuring fuel-core
+# (block production keys + libp2p peering keys).  Sister to
+# fuel-core (R255 node) and fuelup (R253 installer).
+# Continues the **Fuel Network cluster**: fuelup +
+# fuel-core + fuel-core-keygen + forc.
+#
+# Critical extraction note: fuel-core-keygen uses
+# **`#[derive(Parser)]` directly on an enum at the TOP
+# level** at main.rs:53-58 — `pub(crate) enum Command {
+# New(NewKey), Parse(ParseSecret) }`.  No outer `struct
+# Cli { #[clap(subcommand)] command: Command }` wrapper.
+# Documents the **enum-as-Parser shortcut** — when the
+# entire CLI is just "pick a subcommand", you can derive
+# Parser on the enum directly and skip the wrapper struct.
+# clap derive figures out that an enum-Parser means "this
+# is the subcommand set".  Corpus's **first documented
+# enum-as-direct-Parser pattern** — distinct from the
+# usual `struct Cli { #[clap(subcommand)] command: Enum }`
+# pattern.  Useful when there are NO global args (since
+# global args require a wrapping struct).
+#
+# Critical extraction note: fuel-core-keygen's `KeyType`
+# ValueEnum has a **DISCREPANCY between CLI value name
+# and JSON output name** for the `Peering` variant:
+#   - CLI: `--key-type peering`  (clap_derive auto-emits
+#          kebab-case of the variant ident)
+#   - JSON: `"p2p"`               (via the
+#          From<KeyType> for &'static str impl at
+#          lib.rs:35-42)
+# So `fuel-core-keygen new --key-type peering` outputs
+# JSON with `"key_type": "p2p"`.  Documents the
+# **CLI-vs-output name discrepancy** in ValueEnum-driven
+# flags.  Subtle gotcha: users may grep for `"peering"`
+# in output expecting to find their flag's effect and
+# come up empty.  Distinct from the usual ValueEnum
+# pattern where the auto-derived CLI name and the
+# Display/Serialize name align.  Possibly intentional
+# (peering is the conceptual term, p2p is the
+# implementation acronym) but worth surfacing.
+#
+# Critical extraction note: fuel-core-keygen uses
+# **`default_value = <KeyType as Into<&'static str>>::into
+# (KeyType::BlockProduction)`** at main.rs:31 + main.rs:47
+# — runtime evaluation of the default using an explicit
+# trait method call.  Verbose but type-safe (compile-time
+# checks the trait impl exists).  Documents the **runtime
+# default via trait fully-qualified syntax** — distinct
+# from R249 cairo-profiler's `version = generate_version()`
+# (function call) and from typical `default_value =
+# "block-production"` (string literal).  When the default
+# string needs to derive from the type's serialization
+# logic, this pattern guarantees the default and the
+# ValueEnum stay in sync if the type's serialization
+# changes.
+
+local curcontext="$curcontext" state line ret=1
+
+# 2 subcommands decoded source-direct from Command enum
+# at main.rs lines 53-58.
+local -a subcommands=(
+  'new:generate a random new secret + public keypair'
+  'parse:parse a secret key (hex) to view the associated public key'
+)
+
+# KeyType ValueEnum decoded source-direct from
+# crates/keygen/src/lib.rs lines 27-33.  Auto-derived
+# kebab-case CLI values from variant idents.
+local -a key_types=(
+  'block-production:default; for signing produced blocks'
+  'peering:libp2p network identity key (JSON output shows as `p2p` — discrepancy)'
+)
+
+# Shared flags for both subcommands.
+local -a shared_flags=(
+  '(-h --help)'{-h,--help}'[show help]'
+  '(-p --pretty)'{-p,--pretty}'[print the JSON in pretty format]'
+  '(-k --key-type)'{-k+,--key-type=}'[key type to generate]:type:(($key_types))'
+)
+
+_arguments -C \
+  '(-h --help)'{-h,--help}'[show help]' \
+  '(-V --version)'{-V,--version}'[show version]' \
+  '1:subcommand:->subcmd' \
+  '*::args:->args' && ret=0
+
+case $state in
+  subcmd)
+    _describe -t subcommands 'fuel-core-keygen subcommand' subcommands && ret=0
+    ;;
+  args)
+    case $words[1] in
+      new)
+        _arguments $shared_flags && ret=0
+        ;;
+      parse)
+        _arguments \
+          $shared_flags \
+          '1:hex secret key:' && ret=0
+        ;;
+    esac
+    ;;
+esac
+
+return ret
