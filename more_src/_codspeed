@@ -1,0 +1,157 @@
+#compdef codspeed
+# Documentation: source-direct extraction from upstream
+# CodSpeedHQ/runner src/cli/mod.rs —
+#   Cli struct at lines 41-77 (6 global flags + Commands
+#     subcommand)
+#   Commands enum at lines 79-105 (9 user-facing subcommands
+#     + 1 #[command(flatten)] Internal subcommand enum)
+#   InternalCommands enum at lines 108-113 (Samply variant
+#     with `disable_help_flag = true` AND
+#     `disable_help_subcommand = true` BOTH set)
+# Reference accessed: 2026-05-30 via gh api.
+#
+# codspeed is the **Codspeed Runner CLI** — the host-side
+# tool that orchestrates Codspeed benchmark execution +
+# upload to codspeed.io.  Sister to R243 cargo-codspeed
+# (which builds + runs Rust-specific benchmarks); this
+# codspeed runner handles the broader workflow: auth, profile
+# management, multi-language benchmark execution via
+# instrumentation, and result upload.  Used by Codspeed's
+# GitHub Actions CI workflows + manual benchmark runs.
+#
+# Critical extraction note: codspeed uses **6 global clap
+# flags** via `#[arg(..., global = true)]` at lines 45-73 —
+# vastly more than R243 cargo-codspeed's 1 global flag.
+# THREE of the 6 are ALSO `hide = true`:
+#   --api-url      (env CODSPEED_API_URL; HIDDEN; internal)
+#   --oauth-token  (env CODSPEED_OAUTH_TOKEN; HIDDEN; secret)
+#   --config-name  (env CODSPEED_CONFIG_NAME; HIDDEN +
+#                   DEPRECATED via #[deprecated] attribute)
+# The 3 visible globals:
+#   --profile      (env CODSPEED_PROFILE; CodSpeed profile)
+#   --config       (PathBuf; project config yaml)
+#   --setup-cache-dir
+#                  (env CODSPEED_SETUP_CACHE_DIR; Ubuntu/Debian
+#                   only)
+# Documents the **"deprecated CLI flag" via Rust's standard
+# #[deprecated] attribute** at line 55 (`#[deprecated(note =
+# "use `--profile` / `CODSPEED_PROFILE` instead")]`) — the
+# corpus's first documented use of Rust's stdlib #[deprecated]
+# on a clap-derive field.  Differs from clap's own approach
+# of just listing deprecated in the doc-comment.
+#
+# Critical extraction note: codspeed uses **2 visible single-
+# letter aliases** via `#[command(alias = "X")]`:
+#   Run  → `r` (line 82)
+#   Exec → `x` (line 86)
+# Continues R240/R243's clap alias attribute documentation
+# but uses the SINGLE alias (not the array form `aliases =
+# ["..."]`).  These ARE visible in --help (unlike R238 cargo-
+# maelstrom's `alias = "loop"` which is invisible).  The
+# corpus's clap-derive alias attribute matrix now has 4
+# documented variants (visible vs invisible × single vs array).
+#
+# Critical extraction note: codspeed has **InternalCommands
+# flattened into the user-facing Commands enum** via
+# `#[command(flatten)] Internal(InternalCommands)` at line
+# 103-104.  The InternalCommands enum at lines 108-113
+# contains the `Samply` variant marked with BOTH
+# `disable_help_flag = true` AND `disable_help_subcommand =
+# true` (line 111).  R240 maelstrom-admin documented
+# `disable_help_subcommand = true` alone; codspeed adds the
+# **disable_help_flag = true companion** for hiding `-h` /
+# `--help` from a subcommand entirely.  Together they make
+# the Samply subcommand 100% transparent — it forwards ALL
+# args to the bundled samply profiler binary.
+#
+# Critical extraction note: the **`Box<RunArgs>` and
+# `Box<ExecArgs>` wrappers** at lines 83 + 87 are clippy-
+# directed: the RunArgs and ExecArgs structs are large
+# enough that putting them inline in the Commands enum
+# would bloat the enum size to the max variant's size.
+# Documents Rust's "Box large enum variants" optimization
+# pattern.
+
+local curcontext="$curcontext" state line ret=1
+
+local -a subcommands=(
+  'run:run a pre-instrumented benchmark and upload results (alias: r)'
+  'r:alias for run'
+  'exec:run a command with instrumentation injected and upload results (alias: x)'
+  'x:alias for exec'
+  'auth:manage CLI authentication state (sub: login | status)'
+  'profile:manage CodSpeed profiles (sub: list | use | etc.)'
+  'setup:pre-install the codspeed executors (Ubuntu/Debian)'
+  'status:show overall codspeed status (auth + tools + system)'
+  'use:set codspeed mode for the rest of the shell session'
+  'show:show the codspeed mode previously set via `codspeed use`'
+  'update:update the codspeed CLI to the latest version'
+  'samply:(INTERNAL; do not use directly) re-exec into bundled samply profiler'
+)
+
+local -a auth_subcommands=(
+  'login:authenticate to CodSpeed (interactive OAuth flow OR --with-token from stdin)'
+  'status:show the authentication status'
+)
+
+# Global flags decoded source-direct from Cli struct at
+# mod.rs:43-77.  6 flags total, 3 with hide = true.
+local -a global_flags=(
+  '--api-url=[(HIDDEN; internal) CodSpeed GraphQL API URL (env CODSPEED_API_URL)]:url:'
+  '--oauth-token=[(HIDDEN; secret) OAuth token (env CODSPEED_OAUTH_TOKEN)]:token:'
+  '--config-name=[(HIDDEN; DEPRECATED — use --profile) config name (env CODSPEED_CONFIG_NAME)]:name:'
+  '--profile=[CodSpeed profile (env CODSPEED_PROFILE)]:profile:'
+  '--config=[project config file path (default: codspeed.yaml search up to git root)]:file:_files -g "*.(yml|yaml)"'
+  '--setup-cache-dir=[directory for caching installed tools (env CODSPEED_SETUP_CACHE_DIR; Ubuntu/Debian only)]:dir:_files -/'
+)
+
+_arguments -C \
+  '(-h --help)'{-h,--help}'[show help and exit]' \
+  '(-V --version)'{-V,--version}'[show version and exit]' \
+  $global_flags \
+  '1:subcommand:->subcmd' \
+  '*::args:->args' && ret=0
+
+case $state in
+  subcmd)
+    _describe -t subcommands 'codspeed subcommand' subcommands && ret=0
+    ;;
+  args)
+    case $words[1] in
+      auth)
+        if (( CURRENT == 2 )); then
+          _describe -t auth-subs 'auth verb' auth_subcommands && ret=0
+        else
+          case $words[2] in
+            login)
+              _arguments \
+                '--with-token[read token from standard input instead of OAuth flow]' && ret=0 ;;
+          esac
+        fi
+        ;;
+      run|r)
+        # RunArgs at src/cli/run/mod.rs lines 18-39
+        _arguments \
+          \*'--instruments=[comma-separated list of instruments to enable (e.g. mongodb)]:instruments:(mongodb)' \
+          '--mongo-uri-env-name=[env var name containing MongoDB URI to patch (only with --instruments=mongodb)]:env-name:' \
+          '--message-format=[(HIDDEN) output format]:format:(json)' \
+          '*:bench command and args:_command_names -e' && ret=0
+        ;;
+      exec|x)
+        _arguments \
+          '*:command and args (run after adding instrumentation):_command_names -e' && ret=0
+        ;;
+      use)
+        # UseArgs — set mode for shell session (likely takes a mode positional)
+        _arguments \
+          '1:mode (e.g. simulation|walltime|instrumentation):(simulation walltime instrumentation memory)' && ret=0
+        ;;
+      samply)
+        # InternalCommands::Samply — all args forwarded to samply
+        _message 'all args forwarded to bundled samply profiler' && ret=0
+        ;;
+    esac
+    ;;
+esac
+
+return ret
