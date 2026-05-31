@@ -19,6 +19,50 @@ Entries are in original README order: older themed-cluster entries (accumulated
 before the per-round numbering convention) appear first, followed by the
 R-numbered rounds with the newest R-round at the top of that section.
 
+- **R243 — cargo-codspeed (Rust benchmark runner for the Codspeed CI platform)** (1 file / 1 binary) — branches off the Oxide R241/R242 pair into Rust performance-tooling.  cargo-codspeed integrates Rust benchmarks with the Codspeed performance CI platform (codspeed.io) and supports three measurement modes: **instrumented simulation** (valgrind/cachegrind-based; accurate but slow), **walltime** (real wall-clock; for macro-runners on dedicated hardware), and **memory** (heap profiling).  Used by tonic, sqlx, salvo, htmx-cli, and other Rust projects with rigorous performance tracking.
+  - `_cargo-codspeed` (1-stem; CodSpeedHQ/codspeed-rust crates/cargo-codspeed/src/; **2 subcommands + 17 flags including 1 global + 5 help_heading groups + ValueEnum with alias + combined comma-delimiter+append**) decoded source-direct from:
+    * `main.rs` lines 11-22 (the "rewrite-and-shift" cargo subcommand intercept pattern)
+    * `app.rs` lines 12-21 (Cli Parser struct with `-q`/`--quiet` global flag + Commands subcommand)
+    * `app.rs` lines 120-145 (5 help_heading const strings + 2 flattened Args sub-structs: PackageFilters + BenchTargetFilters)
+    * `app.rs` lines 147-221 (Commands enum: Build + Run with `#[command(flatten)]` composition)
+    * `measurement_mode.rs` lines 25-33 (MeasurementMode ValueEnum with `#[value(alias = "instrumentation")]` + `#[serde(rename_all = "lowercase")]`)
+  - Critical extraction note: **cargo-codspeed uses a NEW cargo-subcommand intercept pattern** at main.rs:11-18 — the **"rewrite-and-shift"** approach:
+    ```rust
+    if args_vec.len() >= 2 && args_vec[1] == "codspeed" {
+        args_vec[1] = "cargo codspeed".into();
+        args_vec = args_vec.into_iter().skip(1).collect_vec();
+    };
+    ```
+    This is the **THIRD cargo-subcommand pattern documented in the corpus** alongside R238 cargo-maelstrom's argv-massage (`args.remove(1)`) and R241 cargo-typify's enum-wrapper (`enum CargoCli { Typify(Args) }`).  Each has tradeoffs documented in the completion comment block:
+    | Pattern | Mechanism | Tradeoff |
+    |---|---|---|
+    | R238 argv-massage | `args.remove(1)` | simple but bypasses clap parsing |
+    | R241/R242 enum-wrapper | `enum CargoCli { X(Args) }` + `#[command(bin_name = "cargo")]` | cleanest but adds an enum variant |
+    | R243 rewrite-and-shift | replace argv[1] with "cargo X" string + skip(1) | preserves "cargo X" program name (good for `--help` output formatting) |
+  - Critical extraction note: **`#[arg(global = true)]` on `--quiet`** at app.rs:16 — the corpus's **FIRST documented `global = true` clap-derive attribute**.  Makes the flag available on ALL subcommands transparently (the flag can appear anywhere in argv: `cargo codspeed -q build` AND `cargo codspeed build -q` both work).  Equivalent to cobra's `PersistentFlags()` documented in R236 evcc, R225 abroot, R229 kbst, R237 dependabot persistent image flags.
+  - Critical extraction note: **5 help_heading constants** at app.rs:120-145 that match `cargo build --help` section headers VERBATIM:
+    * "Package Selection" (PACKAGE_HELP)
+    * "Feature Selection" (FEATURE_HELP)
+    * "Compilation Options" (COMPILATION_HELP)
+    * "Target Selection" (TARGET_HELP)
+    * "Manifest Options" (MANIFEST_HELP)
+    Documents the **cargo-subcommand authoring best practice** — match `cargo build --help` section names so users see familiar groupings.  Continues R231 ferrishot's `help_heading` group documentation by extending it to 5 sections matching cargo's idiomatic structure.
+  - Critical extraction note: **`#[value(alias = "instrumentation")]` on the MeasurementMode::Simulation variant** at measurement_mode.rs:29 — the **corpus's FIRST documented clap-derive ValueEnum variant-level alias attribute**.  Distinct from R240 maelstrom-admin's `aliases = [...]` attribute (which is on clap-derive SUBCOMMANDS, not ValueEnum variants).  The `#[value(alias = "instrumentation")]` makes `--measurement-mode instrumentation` parse as `Simulation` (the "real" name) — useful for migrating users from a legacy name.  Adds to the corpus's documentation of clap alias attributes:
+    | Attribute | Level | Visibility | Used in |
+    |---|---|---|---|
+    | `alias = "X"` | Subcommand-level | Invisible (hidden in --help) | R238 cargo-maelstrom (`--loop` for `--repeat`) |
+    | `aliases = ["A", "B"]` | Subcommand-level | Invisible | R240 maelstrom-admin (`stats`/`stat` for `status`) |
+    | `#[value(alias = "X")]` | ValueEnum variant-level | Invisible | R243 cargo-codspeed (`instrumentation` for `simulation`) |
+    | `visible_alias = "X"` | Subcommand-level | Visible in --help | not yet documented |
+    | `visible_aliases = ["A"]` | Subcommand-level | Visible | not yet documented |
+  - Critical extraction note: **Build's `--measurement-mode` uses `value_delimiter = ','` + `action = ArgAction::Append`** (app.rs:194-195) — accepts BOTH comma-list AND repeatable flag syntax: `--measurement-mode simulation,memory` AND `-m simulation -m memory` BOTH work and accumulate into the same `Vec<MeasurementMode>`.  This is the **corpus's first documented combined "comma-delimiter + append" clap pattern**.  Used to make Codspeed CI scripts that pass `-m simulation -m walltime` and developer-facing commands that use `--measurement-mode simulation,walltime` both natural.
+  - Critical extraction note: **`env = "CODSPEED_RUNNER_MODE"` on BOTH Build's and Run's `--measurement-mode`** (app.rs:197 and 214) — clap-derive's env-var fallback.  Documents the **precedence**: explicit CLI flag > env var > default.  Used by Codspeed's CI workflows to inject the measurement mode from the environment.  Continues R235 edge-tts's env-var documentation but applied at the clap-derive level rather than via separate environment.
+  - Critical extraction note: **`#[serde(rename_all = "lowercase")]`** at measurement_mode.rs:26 — the MeasurementMode enum provides JSON serialization in ADDITION to clap CLI parsing.  ValueEnum auto-emits lowercase variant names by default; the `rename_all` serde attribute keeps the JSON output consistent.  Documents how Rust enums can be DUAL-PURPOSE: both a clap ValueEnum AND a serde-serialized JSON type — used by Codspeed's report files that embed the measurement mode as a JSON field.
+  - Hunt-skip notes: `codspeed-criterion-compat` (the criterion benchmark compat shim) deferred — library code, not a CLI.  `codspeed-divan-compat` (divan compat shim) deferred — same.  `codspeed-runner` (the host-side runner) deferred — small CLI surface.  Note: cargo-codspeed's "codspeed" subcommand name (as in `cargo codspeed build`) conflicts with `codspeed-runner` — they're different tools with different namespaces.
+  - Dup-checked clean against `/usr/share/zsh` + `/opt/homebrew/share/zsh` + `/usr/local/share/zsh`.
+  - Blacklist additions: 1 entry (cargo-codspeed).
+  - Corpus 28,673 → 28,674 files.
+
 - **R242 — cargo-progenitor (Oxide OpenAPI → Rust HTTP client generator)** (1 file / 1 binary) — direct follow-up to R241's hunt-skip on `cargo-progenitor` (was deferred for flag-set flux but is now stable).  cargo-progenitor is the **canonical OpenAPI → Rust HTTP client generator** at Oxide Computer — takes an OpenAPI 3.x document and emits a complete stand-alone Rust crate (Cargo.toml + src/lib.rs + types + per-endpoint methods) that wraps a REST API.  Used heavily within the Oxide control plane stack: Oxide's `oxide.rs` CLI is generated via cargo-progenitor.  Closes the Oxide R241/R242 pair (typify generates the types; progenitor generates the API client methods using those types).
   - `_cargo-progenitor` (1-stem; oxidecomputer/progenitor; **8 flags including 4 REQUIRED + 2 ValueEnum + 1 runtime-computed default**) decoded source-direct from:
     * `cargo-progenitor/src/main.rs` lines 19-87 (CargoCli enum wrapper + Args struct + 2 ValueEnum + From impls)
