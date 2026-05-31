@@ -19,6 +19,30 @@ Entries are in original README order: older themed-cluster entries (accumulated
 before the per-round numbering convention) appear first, followed by the
 R-numbered rounds with the newest R-round at the top of that section.
 
+- **R229 — kbst Kubestack Framework CLI** (1 file / 1 binary) — branches off the security tooling run (R227 ssh-tpm-* + R228 age plugins) into multi-cloud Kubernetes infrastructure-as-code.  kbst is the Kubestack Framework CLI for multi-cloud K8s cluster management — scaffolds and manages Terraform modules for AKS (Azure) + EKS (AWS) + GKE (Google Cloud) clusters using a single declarative repo layout.
+  - `_kbst` (1-stem; kbst/kbst cmd/): **6 top-level subcommands + 3-level subcommand tree + ~30 flags total** decoded source-direct from:
+    * `cmd/root.go` lines 33-69 (rootCmd cobra.Command + persistent `-p`/`--path` flag)
+    * `cmd/add.go` lines 75-477 (3-level add subcommand tree: `add` -> `{cluster, node-pool, service}` -> `{aks, eks, gke}`)
+    * `cmd/repository.go` lines 33-158 (init subcommand tree for repo scaffolding)
+    * `cmd/import.go` lines 29-30 (import JSON)
+    * `cmd/list.go` lines 35-108 (list + `--all`/`-a`)
+    * `cmd/remove.go` lines 28-29 (remove `<name>`)
+    * `cmd/update.go` lines 32-33 (update)
+  - Critical extraction note: **kbst documents the canonical multi-cloud-CLI 3-provider symmetry-with-differences pattern**.  All 3 cloud providers (aks/eks/gke) have parallel flag sets with provider-specific naming + values:
+    | Provider | Min/Max nodes flag | Instance-type flag | Default value | Extra positional |
+    |---|---|---|---|---|
+    | aks | `--aks-min`/`--aks-max` (default 3/9) | `--aks-vm-size` | Standard_D2_v4 | `<resource-group>` (Azure-specific) |
+    | eks | `--eks-min`/`--eks-max` (default 3/9) | `--eks-instance-type` | t3a.xlarge | — (AWS uses region + account binding) |
+    | gke | `--gke-min`/`--gke-max` (default 1/3 PER-ZONE) | `--gke-machine-type` | e2-standard-8 | `<project-id>` (GCP-specific) |
+    Documented as a table in the completion comment block for future hunters comparing multi-cloud CLIs.
+  - Critical extraction note: **kbst is spf13/cobra-based with a 3-level subcommand tree** — `root -> verb -> category -> provider`.  Continuation of the cobra documentation effort from R224/R225 (Vanilla OS) but adds the 3-level depth pattern (most cobra tools stop at 2 levels).  Demonstrates how to layer state-based dispatchers in zsh `_arguments -C` with multiple `case $words[N]` blocks for each tree level.
+  - Critical extraction note: **GKE `--gke-min`/`--gke-max` defaults are PER-ZONE** (decoded source-direct from cmd/add.go:445-446 `"min number of nodes per zone"`) — unlike AKS/EKS which are CLUSTER-WIDE.  This means a GKE cluster with `--gke-min=1 --gke-max=3` and 3 zones will have 3-9 actual nodes, NOT 1-3.  Documented in the completion description so users understand the per-zone semantics.
+  - Critical extraction note: **`init --release "latest"` and `--gitref` are mutex** at upstream (decoded source-direct from repository.go:148-149 docstrings) — `--gitref` overrides `--release` when both are passed.  Used to install development versions of the Kubestack Terraform modules.
+  - Hunt-skip notes: `kbst-cli` (alternate package name in some distros; same binary).  `terragrunt` (similar layered-Terraform tool; already in corpus).  `terramate` (newer competitor; already in corpus).  `tofu` (OpenTofu; already covered).
+  - Dup-checked clean against `/usr/share/zsh` + `/opt/homebrew/share/zsh` + `/usr/local/share/zsh`.
+  - Blacklist additions: 1 entry (k*).
+  - Corpus 28,656 → 28,657 files.
+
 - **R228 — age plugin pair: age-plugin-fido2-hmac + age-plugin-sntrup761x25519** (2 files / 2 binaries) — extends the corpus's age plugin coverage (existing _age-plugin-yubikey + _age-plugin-tpm + _age-plugin-se).  Both new plugins implement the standard age-plugin protocol but expose vastly different CLI surfaces — illustrating the corpus's first **explicit contrast pair** documenting the design-space spectrum of a single protocol.
   - `_age-plugin-fido2-hmac` (1-stem; olastor/age-plugin-fido2-hmac; **10 flags + 3 invocation patterns**) — FIDO2 hmac-secret extension plugin.  Uses hardware FIDO2 tokens (YubiKey 5, SoloKey 2, NitroKey 3, etc.) with non-discoverable credentials and the token's hmac-secret extension to encrypt/decrypt age payloads.  Token must be PHYSICALLY PRESENT for every encrypt+decrypt operation.  Decoded source-direct from:
     * USAGE const at cmd/age-plugin-fido2-hmac/main.go lines 86-119 (the 3 invocation patterns + flag table + ENV var documentation)
