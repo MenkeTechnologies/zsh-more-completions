@@ -19,6 +19,39 @@ Entries are in original README order: older themed-cluster entries (accumulated
 before the per-round numbering convention) appear first, followed by the
 R-numbered rounds with the newest R-round at the top of that section.
 
+- **R244 — codspeed (Codspeed Runner CLI; host-side benchmark orchestrator)** (1 file / 1 binary) — direct follow-up to R243's hunt-skip on `codspeed-runner`.  Sister to R243 cargo-codspeed: while cargo-codspeed builds + runs Rust-specific benchmarks, codspeed handles the BROADER workflow — auth, profile management, multi-language benchmark execution via instrumentation injection, and result upload.  Used by Codspeed's GitHub Actions CI workflows + manual benchmark runs.  Closes the Codspeed R243/R244 pair.
+  - `_codspeed` (1-stem; CodSpeedHQ/runner src/cli/mod.rs; **10 subcommands + 6 global flags + 2 visible single-letter aliases + #[deprecated] field + dual-disable-help internal subcommand**) decoded source-direct from:
+    * `Cli` struct at mod.rs lines 41-77 (6 global flags + Commands subcommand)
+    * `Commands` enum at mod.rs lines 79-105 (9 user-facing subcommands + 1 `#[command(flatten)]` Internal subcommand enum)
+    * `InternalCommands` enum at mod.rs lines 108-113 (Samply variant with `disable_help_flag = true` AND `disable_help_subcommand = true` BOTH set)
+    * `AuthArgs` at src/cli/auth.rs lines 20-36 (Login + Status sub-subcommands; Login has `--with-token`)
+    * `RunArgs` at src/cli/run/mod.rs lines 18-39 (`--instruments`, `--mongo-uri-env-name`, `--message-format` hidden, command positional)
+  - Critical extraction note: **codspeed uses 6 global clap flags via `#[arg(..., global = true)]`** at mod.rs:45-73 — vastly more than R243 cargo-codspeed's 1 global flag.  3 of 6 are ALSO `hide = true` (`--api-url`, `--oauth-token`, `--config-name`) for credentials/internal flags.  Documents the **scale spectrum** of clap `global = true` usage:
+    | Round | Tool | Global flag count | Hidden globals |
+    |---|---|---|---|
+    | R243 | cargo-codspeed | 1 (`--quiet`) | 0 |
+    | R244 | codspeed | 6 | 3 |
+    | R236 | evcc (cobra equiv) | 6 persistent | 0 |
+  - Critical extraction note: **`#[deprecated(note = "use `--profile` / `CODSPEED_PROFILE` instead")]`** at mod.rs:55 — the corpus's **FIRST documented use of Rust's stdlib `#[deprecated]` attribute on a clap-derive field**.  Triggers a compile-time warning when the field is accessed at runtime, and the `note = "..."` text is included in the warning.  Differs from clap's own approach of just listing "[deprecated]" in the doc-comment (which only documents — doesn't trigger compiler warnings).  Documents the **Rust-language-level vs library-level deprecation patterns**: Rust's `#[deprecated]` is enforced by `rustc`; doc-only deprecation is a soft signal.
+  - Critical extraction note: **codspeed uses 2 visible single-letter aliases** via `#[command(alias = "X")]`:
+    * `Run` → `r` (mod.rs:82)
+    * `Exec` → `x` (mod.rs:86)
+    Continues R240/R243's clap alias attribute documentation but uses the **SINGLE alias (not the array form `aliases = ["..."]`)**.  These ARE visible in `--help` (unlike R238 cargo-maelstrom's invisible `alias = "loop"`).  The corpus's clap-derive alias attribute matrix now has **5 documented variants**:
+    | Attribute | Level | Visibility | Plurality | Documented in |
+    |---|---|---|---|---|
+    | `alias = "X"` | Subcommand | INVISIBLE | single | R238 cargo-maelstrom |
+    | `aliases = ["A", "B"]` | Subcommand | INVISIBLE | multi | R240 maelstrom-admin |
+    | `#[value(alias = "X")]` | ValueEnum variant | INVISIBLE | single | R243 cargo-codspeed |
+    | `#[command(alias = "X")]` | Subcommand | VISIBLE (in `--help`) | single | R244 codspeed (NEW) |
+    | `visible_aliases = ["A", "B"]` | Subcommand | VISIBLE | multi | not yet documented |
+  - Critical extraction note: **codspeed has `InternalCommands` flattened into the user-facing `Commands` enum** via `#[command(flatten)] Internal(InternalCommands)` at mod.rs:103-104.  The InternalCommands enum at mod.rs:108-113 contains the `Samply` variant marked with BOTH `disable_help_flag = true` AND `disable_help_subcommand = true` (line 111).  R240 maelstrom-admin documented `disable_help_subcommand = true` alone; codspeed adds the **`disable_help_flag = true` companion** for hiding `-h` / `--help` from a subcommand entirely.  Together they make the Samply subcommand 100% transparent — it forwards ALL args to the bundled samply profiler binary (the Cli intercepts `samply` and re-execs `current_exe samply ...`).  This is the **corpus's first documented "transparent passthrough subcommand" pattern** — useful for embedding third-party CLIs while presenting them as native subcommands.
+  - Critical extraction note: **`Box<RunArgs>` and `Box<ExecArgs>` wrappers** at mod.rs:83 + 87 — these are clippy-directed: the RunArgs and ExecArgs structs are large enough that putting them inline in the Commands enum would bloat the enum size to the max variant's size.  Documents **Rust's "Box large enum variants" optimization pattern** — clippy's `large_enum_variant` lint flags this; the fix is to Box the large variant.  No completion impact but documented for future hunters.
+  - Critical extraction note: codspeed has **9 user-facing subcommands + 1 internal** — the most subcommands of any single binary in the Maelstrom/Oxide/Codspeed cluster (R238-R244).  Subcommand list: `run`/`r`, `exec`/`x`, `auth` (with login + status sub-subs), `profile`, `setup`, `status`, `use`, `show`, `update`, plus internal `samply`.
+  - Hunt-skip notes: `codspeed-criterion-compat` (the criterion benchmark compat shim) deferred — library code, not a CLI.  `codspeed-divan-compat` (divan compat shim) deferred — same.  `codspeed-pytest` (the Python pytest variant) deferred — would warrant its own round for the Python-specific flags.
+  - Dup-checked clean against `/usr/share/zsh` + `/opt/homebrew/share/zsh` + `/usr/local/share/zsh`.
+  - Blacklist additions: 1 entry (codspeed).
+  - Corpus 28,674 → 28,675 files.
+
 - **R243 — cargo-codspeed (Rust benchmark runner for the Codspeed CI platform)** (1 file / 1 binary) — branches off the Oxide R241/R242 pair into Rust performance-tooling.  cargo-codspeed integrates Rust benchmarks with the Codspeed performance CI platform (codspeed.io) and supports three measurement modes: **instrumented simulation** (valgrind/cachegrind-based; accurate but slow), **walltime** (real wall-clock; for macro-runners on dedicated hardware), and **memory** (heap profiling).  Used by tonic, sqlx, salvo, htmx-cli, and other Rust projects with rigorous performance tracking.
   - `_cargo-codspeed` (1-stem; CodSpeedHQ/codspeed-rust crates/cargo-codspeed/src/; **2 subcommands + 17 flags including 1 global + 5 help_heading groups + ValueEnum with alias + combined comma-delimiter+append**) decoded source-direct from:
     * `main.rs` lines 11-22 (the "rewrite-and-shift" cargo subcommand intercept pattern)
