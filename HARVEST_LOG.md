@@ -19,6 +19,51 @@ Entries are in original README order: older themed-cluster entries (accumulated
 before the per-round numbering convention) appear first, followed by the
 R-numbered rounds with the newest R-round at the top of that section.
 
+- **R227 — ssh-tpm-* family trio: ssh-tpm-add + ssh-tpm-keygen + ssh-tpm-hostkeys** (3 files / 3 binaries) — completes coverage of Foxboron's TPM-backed SSH key family.  The existing `_ssh-tpm-agent` already covered the daemon side; this round adds the 3 companion CLIs that drive it (load sealed keys / generate sealed keys / list host keys via the agent).  Foxboron's ssh-tpm-* family is the de-facto TPM 2.0-backed SSH key solution — sealed keys can NEVER be extracted from the host hardware, providing the strongest possible protection against key exfiltration.
+  - `_ssh-tpm-add` (1-stem; Foxboron/ssh-tpm-agent cmd/ssh-tpm-add): **4 flags + positional TPM key files** decoded source-direct from:
+    * usage at lines 24-35 (the const usage block)
+    * parse_argv at lines 45-49 (4 flag.StringVar/BoolVar calls)
+    * positional handling at lines 59-70 (default-path fallback to id_ecdsa.tpm + id_rsa.tpm)
+  - `_ssh-tpm-keygen` (1-stem; Foxboron/ssh-tpm-agent cmd/ssh-tpm-keygen): **19 flags + 7 documented invocation patterns** decoded source-direct from:
+    * usage at lines 33-88
+    * parse_argv at lines 506-524 (19 flag.StringVar/BoolVar/IntVar calls)
+    * hierarchy + parent-handle enum strings at usage lines 56-66
+    * key-type defaults at usage lines 47-50 (rsa: 2048; ecdsa: 256/384/521)
+  - `_ssh-tpm-hostkeys` (1-stem; Foxboron/ssh-tpm-agent cmd/ssh-tpm-hostkeys): **2 flags** decoded source-direct from:
+    * usage at lines 16-25
+    * parse_argv at lines 37-39 (2 flag.BoolVar calls)
+    * actions at lines 41-54 (install-system-units + install-sshd-config + default list-hostkeys flow)
+  - Critical extraction note: **all 3 binaries use Go's standard `flag` package** — NOT cobra/argh/cmdr/clap/spf13.  This is the corpus's most-comprehensive run of Go-stdlib-flag CLI documentation.  Go's standard flag package has 2 idioms relevant to completion:
+    1. **Single-dash long-form is canonical** (`-ca URL`, `-host HOST`, `-install-system-units`), but `--` style is also accepted (`--ca=URL`).  The completions use single-dash since that's what upstream's usage blocks show.
+    2. **No automatic `--help`** — `-h` and `-help` print usage via `flag.Usage()`.  Completion does not list `-help` since the flag library prints it implicitly.
+  - Critical extraction note: **ssh-tpm-keygen has the LARGEST flag surface of the family — 19 flag declarations** at main.go:506-524.  Notably, 2 flags have BOTH short and long forms (registered via TWO flag calls each):
+    * `-o` / `--owner-password` at lines 506-507 (ask for TPM owner password)
+    * `-I` / `--import` at lines 513-514 (import existing SSH private key)
+    The remaining 15 are single-form only.  Completion lists both forms with mutex grouping for the dual-form pair.
+  - Critical extraction note: **`--hierarchy` and `--parent-handle` accept 4-value enums with single-char aliases** decoded source-direct from usage lines 56-66:
+    | Full name | Short alias | Meaning |
+    |---|---|---|
+    | owner | o | user-controllable hierarchy (DEFAULT for parent-handle) |
+    | endorsement | e | TPM-vendor-signed hierarchy (requires owner password) |
+    | null | n | volatile hierarchy (clears on TPM reset) |
+    | platform | p | UEFI-firmware-controlled hierarchy |
+    Each parameter accepts EITHER the full name OR the single-char alias.  Completion offers all 8 strings.  This documents the TCG TPM 2.0 architecture's 4-hierarchy model in the user-facing completion.
+  - Critical extraction note: **ssh-tpm-keygen has 7 documented invocation patterns** at the usage block — each corresponds to a different workflow:
+    1. `ssh-tpm-keygen` — interactive create (default)
+    2. `ssh-tpm-keygen --wrap --wrap-with` — wrap-for-remote (export sealed key for transport)
+    3. `ssh-tpm-keygen --import keyfile` — import existing SSH key
+    4. `ssh-tpm-keygen --print-pubkey` — extract public key from sealed file
+    5. `ssh-tpm-keygen --supported` — list TPM capabilities
+    6. `ssh-tpm-keygen -p -f -N -P` — change passphrase
+    7. `ssh-tpm-keygen -A -f --hierarchy` — generate host keys
+  - Critical extraction note: **ssh-tpm-add's default path fallback** at main.go:61-67 — when invoked with NO positional FILE and NO `--ca`, tries BOTH `$SSH_DIR/id_ecdsa.tpm` AND `$SSH_DIR/id_rsa.tpm`.  Mirrors the default behavior of `ssh-add` (which tries id_ed25519, id_ecdsa, id_rsa).  Documented in completion description.
+  - Critical extraction note: **source-direct bug observed** — ssh-tpm-add's `-host` flag help text reads "ssh hot" (typo for "host") at main.go:46.  Completion uses the correct "ssh host" — this is the kind of source-direct verification that prevents the corpus from propagating upstream typos.
+  - Critical extraction note: **ssh-tpm-hostkeys's two install flags trigger early-exit** at main.go:47 and main.go:53 — they do NOT combine with the list-keys flow.  Order of precedence: `--install-system-units` (line 41) wins if BOTH install flags are passed (the second `if` block contains unreachable code after `os.Exit(0)`).  Completion does not enforce mutex but documents this in the comment block.
+  - Hunt-skip notes: `ssh-tpm-cron` (a separate Foxboron tool for scheduled-job key rotation) deferred — separate repo.  `ssh-tpm-pivkey` (PIV-token wrapper) deferred.  `tpm2-tools` (the Intel/IBM TPM2 tool family — tpm2_create, tpm2_load, tpm2_unseal, etc.) deferred to a future round; would warrant its own coverage given the 100+ tpm2_* binaries.
+  - Dup-checked clean against `/usr/share/zsh` + `/opt/homebrew/share/zsh` + `/usr/local/share/zsh`.
+  - Blacklist additions: 3 entries (ssh-tpm-* cluster).
+  - Corpus 28,651 → 28,654 files.
+
 - **R226 — Universal Blue atomic-distro pair: ujust + ublue-update** (2 files / 2 binaries) — branches off the Vanilla OS run (R224-R225) into the sister Universal Blue atomic-distro family (Bazzite / Bluefin / Aurora / Aurora-DX / Bluefin-DX / Bazzite-DX).  Both projects solve the immutable-OS problem with similar OCI-image deployments but ship different user-facing CLIs.
   - `_ujust` (1-stem; ublue-os/packages packages/ublue-os-just/src/ujust): **3-line shell wrapper around `just`** — decoded source-direct from the literal script:
     ```
