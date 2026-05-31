@@ -1,0 +1,163 @@
+#compdef cargo-codspeed
+# Documentation: source-direct extraction from upstream
+# CodSpeedHQ/codspeed-rust crates/cargo-codspeed/src/ —
+#   main.rs lines 11-22 (the "rewrite-and-shift" cargo
+#     subcommand intercept pattern)
+#   app.rs lines 12-21 (Cli Parser struct with `-q`/`--quiet`
+#     global flag + Commands subcommand)
+#   app.rs lines 120-145 (5 help_heading const strings + 2
+#     flattened Args sub-structs: PackageFilters +
+#     BenchTargetFilters)
+#   app.rs lines 147-221 (Commands enum: Build + Run with
+#     #[command(flatten)] composition)
+#   measurement_mode.rs lines 25-33 (MeasurementMode ValueEnum
+#     with `#[value(alias = "instrumentation")]` on
+#     Simulation variant + `#[serde(rename_all = "lowercase"
+#     )]`)
+# Reference accessed: 2026-05-30 via gh api.
+#
+# cargo-codspeed is the **Codspeed Rust benchmark runner** —
+# integrates Rust benchmarks with the Codspeed performance
+# CI platform (codspeed.io).  Supports three measurement
+# modes: instrumented simulation (valgrind/cachegrind-based;
+# accurate but slow), walltime (real wall-clock; for macro
+# runners on dedicated hardware), and memory (heap profiling).
+# Used by tonic, sqlx, salvo, htmx-cli, and other Rust
+# projects with rigorous performance tracking.
+#
+# Critical extraction note: cargo-codspeed uses a **NEW
+# cargo-subcommand intercept pattern** at main.rs:11-18:
+#   if args_vec.len() >= 2 && args_vec[1] == "codspeed" {
+#       args_vec[1] = "cargo codspeed".into();
+#       args_vec = args_vec.into_iter().skip(1).collect_vec();
+#   };
+# This **"rewrite-and-shift"** approach: (a) detects argv[1]
+# == "codspeed" (meaning invoked via `cargo codspeed`),
+# (b) replaces argv[1] with the literal "cargo codspeed"
+# string (so clap's program-name detection works correctly),
+# (c) skips argv[0] (the original "cargo" or "cargo-codspeed"
+# binary path).  THIRD cargo-subcommand pattern documented
+# in the corpus alongside R238 cargo-maelstrom's argv-massage
+# (`args.remove(1)`) and R241 cargo-typify's enum-wrapper
+# (`enum CargoCli { Typify(Args) }`).  Each has tradeoffs:
+#   R238 argv-massage     simple but bypasses clap parsing
+#   R241 enum-wrapper     cleanest but adds an enum variant
+#   R243 rewrite-and-shift preserves "cargo X" program name
+#                          (good for `--help` output)
+#
+# Critical extraction note: cargo-codspeed uses
+# **`#[arg(global = true)]`** on `--quiet` at app.rs:16 —
+# the corpus's first documented `global = true` clap-derive
+# attribute.  Makes the flag available on ALL subcommands
+# transparently (the flag can appear anywhere in argv).
+# Equivalent to cobra's `PersistentFlags()` (R236 evcc,
+# R225 abroot, R229 kbst, R237 dependabot persistent image
+# flags).
+#
+# Critical extraction note: cargo-codspeed uses **5
+# help_heading constants** at app.rs:120-145 that match
+# `cargo build --help` section headers verbatim:
+#   "Package Selection" (PACKAGE_HELP)
+#   "Feature Selection" (FEATURE_HELP)
+#   "Compilation Options" (COMPILATION_HELP)
+#   "Target Selection" (TARGET_HELP)
+#   "Manifest Options" (MANIFEST_HELP)
+# Documents cargo-subcommand authoring best practice —
+# match `cargo build --help` section names so users see
+# familiar groupings.  Continues R231 ferrishot's
+# help_heading group documentation.
+#
+# Critical extraction note: **MeasurementMode ValueEnum** at
+# measurement_mode.rs:25-33 has a `#[value(alias =
+# "instrumentation")]` attribute on the Simulation variant —
+# **the corpus's first documented clap-derive ValueEnum
+# variant-level alias attribute**.  Distinct from R240
+# maelstrom-admin's `aliases = [...]` attribute (which is on
+# clap-derive SUBCOMMANDS, not ValueEnum variants).  The
+# `#[value(alias = "instrumentation")]` makes `--measurement-
+# mode instrumentation` parse as `Simulation` (the "real"
+# name) — useful for migrating users from a legacy name.
+#
+# Critical extraction note: **`#[serde(rename_all =
+# "lowercase")]`** at measurement_mode.rs:26 on the
+# MeasurementMode enum — provides JSON serialization in
+# addition to the clap CLI parsing.  ValueEnum auto-emits
+# lowercase variant names by default; the `rename_all`
+# serde attribute keeps the JSON output consistent.
+#
+# Critical extraction note: **Build's --measurement-mode is
+# `value_delimiter = ',' + action = ArgAction::Append`**
+# (app.rs:194-195) — accepts BOTH comma-list AND repeatable
+# flag syntax: `--measurement-mode simulation,memory` AND
+# `-m simulation -m memory` BOTH work and accumulate into
+# the same Vec.  This is the corpus's first documented
+# combined "comma-delimiter + append" clap pattern.
+#
+# Critical extraction note: **`env = "CODSPEED_RUNNER_MODE"`**
+# on BOTH Build's and Run's --measurement-mode (app.rs:197
+# and 214) — clap-derive's env-var fallback.  Documents the
+# precedence: explicit CLI flag > env var > default.  Used
+# by Codspeed's CI workflows to inject the measurement mode
+# from the environment.
+
+local -a measurement_modes=(
+  'simulation:instrumented simulation via valgrind/cachegrind (DEFAULT; alias: instrumentation)'
+  'walltime:real wall-clock timing (for macro-runners on dedicated hardware)'
+  'memory:heap memory profiling'
+  'instrumentation:alias for simulation'
+)
+
+local curcontext="$curcontext" state line ret=1
+
+local -a subcommands=(
+  'build:build the benchmarks'
+  'run:run the previously built benchmarks'
+)
+
+# Shared package + bench-target filter flags (flattened in
+# both Build and Run via #[command(flatten)]).
+local -a shared_filters=(
+  '--workspace[(Package Selection) select all packages in the workspace]'
+  \*'--exclude=[(Package Selection) package to exclude (repeatable)]:spec:'
+  \*{-p+,--package=}'[(Package Selection) package to select (repeatable)]:spec:'
+  \*'--bench=[(Target Selection) select only the specified benchmark target (default: all)]:bench:'
+)
+
+_arguments -C \
+  '(-h --help)'{-h,--help}'[show help and exit]' \
+  '(-V --version)'{-V,--version}'[show version and exit]' \
+  '(-q --quiet)'{-q,--quiet}'[do not print cargo log messages (global; works on all subcommands)]' \
+  '1:subcommand:->subcmd' \
+  '*::args:->args' && ret=0
+
+case $state in
+  subcmd)
+    _describe -t subcommands 'cargo-codspeed subcommand' subcommands && ret=0
+    ;;
+  args)
+    case $words[1] in
+      build)
+        _arguments \
+          $shared_filters \
+          '(-F --features)'{-F+,--features=}'[(Feature Selection) space or comma-separated list of features to activate]:features:' \
+          '--all-features[(Feature Selection) activate all available features]' \
+          '--no-default-features[(Feature Selection) do not activate the default feature]' \
+          '(-j --jobs)'{-j+,--jobs=}'[(Compilation Options) number of parallel jobs (default: #CPUs)]:n:' \
+          '--profile=[(Compilation Options) build profile (default: bench)]:profile:(bench dev release test)' \
+          '--locked[(Manifest Options) assert Cargo.lock will remain unchanged]' \
+          '--offline[(Manifest Options) run without accessing the network]' \
+          '--frozen[(Manifest Options) equivalent to --locked + --offline]' \
+          \*{-m+,--measurement-mode=}'[(Compilation Options) measurement tool(s); repeatable OR comma-list; env=CODSPEED_RUNNER_MODE]:mode:(simulation walltime memory instrumentation)' && ret=0
+        ;;
+      run)
+        _arguments \
+          $shared_filters \
+          '(-m --measurement-mode)'{-m+,--measurement-mode=}'[measurement tool (single; env=CODSPEED_RUNNER_MODE; default walltime on macro-runners)]:mode:(simulation walltime memory instrumentation)' \
+          '1:bench name filter (substring match; default: all):' \
+          '*::bench args (forwarded after "--" to the benchmark binary):' && ret=0
+        ;;
+    esac
+    ;;
+esac
+
+return ret
