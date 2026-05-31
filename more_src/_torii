@@ -1,0 +1,290 @@
+#compdef torii
+# Documentation: source-direct extraction from upstream
+# dojoengine/torii (Dojo World Indexer; clap v4 derive):
+#   bin/torii/src/cli.rs lines 9-14 (Cli wraps ToriiArgs via
+#     `#[command(flatten)]`)
+#   crates/cli/src/args.rs lines 16-106 (ToriiArgs Parser
+#     struct with 5 direct fields + 13 flattened option
+#     groups; 6 are #[cfg(feature = "server")])
+#   crates/cli/src/options.rs lines 68-1386 (13 option
+#     structs each with #[command(next_help_heading = "...")]
+#     and per-field `long = "<group>.<field>"` dotted-prefix
+#     CLI flag names)
+#   crates/cli/src/args.rs lines 140-153 (with_config_file
+#     impl: CLI takes precedence over TOML config file)
+# Reference accessed: 2026-05-30 via gh api.
+#
+# torii is the **Dojo World Indexer** — Dojo's blockchain
+# indexer that watches Starknet for world contract events
+# and indexes them into SQLite for GraphQL/gRPC querying.
+# Sister to sozo (R250) and katana (already in corpus).
+# Together: sozo manages the world, katana is the devnet,
+# torii indexes the world.  Extends the Dojo Engine cluster
+# (R250 sozo).
+#
+# Critical extraction note: torii uses the **dotted-prefix
+# CLI flag naming convention** via explicit
+# `long = "<group>.<field>"` at every flag (e.g.
+# `--indexing.transactions`, `--sql.page_size`,
+# `--http.cors_origins`, `--grpc.max_message_size`).  This
+# is **NOT** clap's default behavior — clap derive normally
+# emits `--<field>` from the field name.  torii manually
+# names every flag with a group prefix to organize 100+
+# flags into 13 namespaces.  The CLI namespace doesn't
+# always match the struct field name — e.g. ServerOptions
+# struct uses `http.<field>` prefix (NOT `server.<field>`).
+# Documents the **dotted-prefix flag namespacing pattern**
+# — the corpus's first documented production CLI with
+# >100 flags using namespace-prefixed naming.
+#
+# Critical extraction note: torii uses the **MergeOptions
+# derive macro** at every option struct (e.g. `#[derive(...,
+# MergeOptions)]`).  This is a custom proc-macro from
+# dojoengine that generates a `merge(&mut self, other:
+# Option<&Self>)` method to combine the CLI-parsed args
+# with TOML-config-file values.  Combined with `with_config_file`
+# at args.rs:140-153, the precedence is:
+#   1. CLI flag value (if explicitly set)
+#   2. TOML config-file value
+#   3. struct's Default impl
+# This is the **corpus's first documented `MergeOptions`
+# CLI-takes-precedence-over-config-file pattern** — a
+# production approach to "config file with CLI overrides"
+# that's reusable across Rust CLIs.  Distinct from clap's
+# built-in `default_value_t` (struct-defaults only) and
+# from `config::Config` crate (which merges sources but
+# doesn't integrate with clap).
+#
+# Critical extraction note: torii uses
+# **`#[command(next_help_heading = "...")]`** on EVERY
+# option struct (e.g. "Relay options", "Indexing options",
+# "HTTP server options", "Metrics options", etc.).  This
+# clap attribute groups the struct's args under a custom
+# heading in `--help` output, organizing 100+ flags by
+# semantic role.  R209/R248 documented `help_heading` on
+# individual args; torii documents the **struct-level
+# next_help_heading** which applies to ALL args defined
+# in the struct.  Documents the **declarative help-section
+# organization** for large CLIs.
+#
+# Critical extraction note: torii has **6 of 13 option
+# groups feature-gated by `#[cfg(feature = "server")]`**
+# at args.rs:77-105 (MetricsOptions, ServerOptions,
+# RelayOptions, GrpcOptions, MessagingOptions,
+# SearchOptions).  When the server feature is disabled,
+# torii becomes a pure indexer with no HTTP/gRPC/relay
+# exposure.  Distinct from sozo (R250)'s feature-gated
+# Walnut VARIANT — torii feature-gates entire option
+# STRUCTS (which means tens of flags appear/disappear
+# atomically).  Documents the **feature-gated option-
+# group pattern** — distinct from feature-gated
+# subcommand variants (R201, R250).
+#
+# Critical extraction note: torii uses **backward-compat
+# flag aliases** at indexing/options.rs:155-156:
+# `#[arg(long = "indexing.preconfirmed", alias =
+# "indexing.pending")]` AND `#[serde(alias = "pending")]`.
+# The field was renamed from "pending" to "preconfirmed"
+# (Starknet 0.14.1 terminology change), but both the CLI
+# flag AND the TOML key accept the old name.  Documents
+# the **dual CLI+TOML migration-alias pattern** for
+# renaming user-facing names without breaking existing
+# configs.  Distinct from R244 lefthook deprecation
+# warning (which prints a runtime warning); torii's
+# approach is silent.
+#
+# Critical extraction note: torii's `Default` impl at
+# args.rs:108-138 includes ALL 13 option groups
+# (`#[cfg(feature = "server")]` for the 6 server-gated
+# groups), used by `#[serde(default)]` for partial-TOML
+# parsing.  When the TOML file omits an option group
+# entirely, serde uses the Default::default() for that
+# group rather than failing.  Documents the **partial-
+# config-file with serde defaults pattern** — combine
+# `#[serde(default)]` on the struct + `impl Default` to
+# allow TOML files to specify only the keys that differ
+# from defaults.
+
+local curcontext="$curcontext" state line ret=1
+
+# Top-level direct flags decoded source-direct from ToriiArgs
+# at args.rs lines 16-106.
+local -a torii_top_flags=(
+  '(-h --help)'{-h,--help}'[show help]'
+  '(-V --version)'{-V,--version}'[show version (env! TORII_VERSION_SPEC)]'
+  '(-w --world)'{-w+,--world=}'[world address to index (env: DOJO_WORLD_ADDRESS)]:felt address:'
+  '--rpc=[sequencer rpc endpoint to index (default: http://0.0.0.0:5050)]:url:'
+  '--db-dir=[database filepath; in-memory if omitted]:dir:_files -/'
+  '--config=[TOML configuration file (CLI flags override config-file values)]:file:_files -g "*.toml"'
+  '--dump-config=[optional path to dump effective config to]:file:_files'
+)
+
+# Indexing options decoded source-direct from IndexingOptions
+# at options.rs lines 144-275.  CLI prefix: `indexing.<field>`.
+local -a torii_indexing_flags=(
+  '--indexing.events_chunk_size=[chunk size of events page to fetch from sequencer]:n:'
+  '--indexing.blocks_chunk_size=[number of blocks to process before commiting to DB]:n:'
+  '--indexing.preconfirmed[index pending/preconfirmed blocks (alias: --indexing.pending)]'
+  '--indexing.pending[ALIAS for --indexing.preconfirmed (Starknet pre-0.14.1 name)]'
+  '--indexing.polling_interval=[polling interval in ms to check for new events]:n:'
+  '--indexing.max_concurrent_tasks=[max concurrent tasks for parallelizable events]:n:'
+  '--indexing.transactions[index world transactions and keep them in the database]'
+  '--indexing.transaction_receipts[fetch and store transaction receipts]'
+  '--indexing.contracts=[ERC contract addresses to index (comma-separated; format: type:address[:starting_block])]:contracts:'
+  '--indexing.namespaces=[namespaces to index (comma-separated)]:namespaces:'
+  '--indexing.models=[models to index (comma-separated)]:models:'
+  '--indexing.world_block=[the block from which to start indexing the world]:block:'
+  '--indexing.controllers[index controller information]'
+  '--indexing.strict_model_reader[strict mode for model reader]'
+  '--indexing.batch_chunk_size=[batch chunk size for indexing]:n:'
+  '--indexing.external_contracts[index external (non-world) contracts]'
+  '--indexing.external_contract_whitelist=[whitelist of external contracts to index]:list:'
+)
+
+# Events options decoded from EventsOptions at options.rs:304-312.
+local -a torii_events_flags=(
+  '--events.raw[index raw events]'
+)
+
+# HTTP server options decoded from ServerOptions at options.rs:317-364.
+# CLI prefix: `http.<field>` (NOT `server.<field>`).
+local -a torii_http_flags=(
+  '--http.addr=[HTTP server listening interface]:ip address:'
+  '--http.port=[HTTP server listening port]:port:'
+  '--http.cors_origins=[CORS-accepted domains (comma-separated)]:origins:'
+  '--http.sql[enable SQL playground and query endpoint at /sql (default: true)]'
+  '--http.tls_cert_path=[SSL certificate file (.pem); enables HTTPS]:file:_files -g "*.pem"'
+  '--http.tls_key_path=[SSL private key file (.pem); required with tls_cert_path]:file:_files -g "*.pem"'
+  '--http.mkcert[use mkcert to generate local-dev HTTPS certificates for localhost + 127.0.0.1]'
+)
+
+# Metrics options decoded from MetricsOptions at options.rs:383-409.
+local -a torii_metrics_flags=(
+  '--metrics[enable metrics server]'
+  '--metrics.addr=[metrics server address (requires --metrics)]:ip address:'
+  '--metrics.port=[metrics server port (requires --metrics)]:port:'
+)
+
+# ERC options decoded from ErcOptions at options.rs:417-493.
+local -a torii_erc_flags=(
+  '--erc.max_metadata_tasks=[max concurrent tasks for ERC metadata fetching]:n:'
+  '--erc.artifacts_path=[path to ERC artifacts dir]:dir:_files -/'
+  '--erc.token_attributes[include token attributes in metadata]'
+  '--erc.trait_counts[compute trait-occurrence counts]'
+  '--erc.metadata_updates[poll for ERC metadata updates]'
+  '--erc.metadata_update_whitelist=[whitelist of contracts to poll for updates]:list:'
+  '--erc.metadata_update_blacklist=[blacklist of contracts to skip update polling]:list:'
+  '--erc.metadata_updates_only_at_head[only update metadata when at chain head]'
+  '--erc.async_metadata_updates[update ERC metadata asynchronously (don'\''t block indexing)]'
+)
+
+# Messaging options decoded from MessagingOptions at options.rs:550-573.
+local -a torii_messaging_flags=(
+  '--messaging.max_age=[max age (seconds) of an offchain message before rejection]:n:'
+  '--messaging.future_tolerance=[tolerance (seconds) for messages with future timestamps]:n:'
+  '--messaging.require_timestamp[reject messages without a timestamp]'
+)
+
+# SQL options decoded from SqlOptions at options.rs:604-801.
+local -a torii_sql_flags=(
+  '--sql.all_model_indices[create indices on all model fields]'
+  '--sql.model_indices=[per-model field indices (format: tag:f1,f2;tag:f1)]:indices:'
+  '--sql.historical=[models for which to retain historical state (comma-separated tags)]:tags:'
+  '--sql.page_size=[SQLite page_size pragma]:n:'
+  '--sql.cache_size=[SQLite cache_size pragma]:n:'
+  '--sql.hooks=[SQL hooks to install (comma-separated)]:hooks:'
+  '--sql.migrations=[directory of additional SQL migrations]:dir:_files -/'
+  '--sql.aggregators=[aggregator configs (comma-separated)]:list:'
+  '--sql.wal_autocheckpoint=[SQLite wal_autocheckpoint pragma]:n:'
+  '--sql.wal_truncate_size_threshold=[WAL truncate size threshold (bytes)]:bytes:'
+  '--sql.optimize_interval=[SQLite PRAGMA optimize interval (seconds)]:n:'
+  '--sql.busy_timeout=[SQLite busy_timeout (ms)]:ms:'
+  '--sql.acquire_timeout=[connection-pool acquire timeout (ms)]:ms:'
+  '--sql.idle_timeout=[connection-pool idle timeout (ms)]:ms:'
+  '--sql.max_connections=[connection-pool max connections]:n:'
+  '--sql.soft_memory_limit=[SQLite soft_heap_limit pragma]:bytes:'
+  '--sql.hard_memory_limit=[SQLite hard_heap_limit pragma]:bytes:'
+  '--sql.shared_cache[SQLite shared_cache mode]'
+  '--sql.temp_store=[SQLite temp_store pragma (memory/file/default)]:mode:(memory file default)'
+  '--sql.mmap_size=[SQLite mmap_size pragma (bytes)]:bytes:'
+  '--sql.journal_size_limit=[SQLite journal_size_limit pragma]:bytes:'
+)
+
+# Activity options decoded from ActivityOptions at options.rs:835-875.
+local -a torii_activity_flags=(
+  '--activity.enabled[enable activity tracking (requires --indexing.transactions)]'
+  '--activity.session_timeout=[seconds of inactivity before new session (default: 3600)]:seconds:'
+  '--activity.excluded_entrypoints=[entrypoints to exclude from activity tracking (comma-separated)]:list:'
+)
+
+# Achievement options decoded from AchievementOptions at options.rs:892-909.
+local -a torii_achievement_flags=(
+  '--achievement.registration_model_name=[model tag for achievement registration events]:tag:'
+  '--achievement.progression_model_name=[model tag for achievement progression events]:tag:'
+)
+
+# Search options decoded from SearchOptions at options.rs:924-972.
+local -a torii_search_flags=(
+  '--search.enabled[enable full-text search API]'
+  '--search.max_results=[max search results per table]:n:'
+  '--search.min_query_length=[min search query length]:n:'
+  '--search.return_snippets[include match snippets in results]'
+  '--search.snippet_length=[snippet length in chars]:n:'
+  '--search.prefix_matching[enable prefix matching for autocomplete]'
+)
+
+# Snapshot options decoded from SnapshotOptions at options.rs:991-1001.
+local -a torii_snapshot_flags=(
+  '--snapshot.url=[bootstrap snapshot URL (initial-state seed)]:url:'
+  '--snapshot.version=[snapshot version to load]:version:'
+)
+
+# Runner options decoded from RunnerOptions at options.rs:1007-1052.
+local -a torii_runner_flags=(
+  '--runner.explorer[enable Cartridge Explorer UI]'
+  '--runner.check_contracts[verify configured contracts exist before starting]'
+  '--runner.query_threads=[thread-pool size for query handlers]:n:'
+  '--runner.indexer_threads=[thread-pool size for indexer workers]:n:'
+  '--runner.allocation_strategy=[memory allocator strategy]:strategy:'
+)
+
+# gRPC options decoded from GrpcOptions at options.rs:1070-1129.
+local -a torii_grpc_flags=(
+  '--grpc.addr=[gRPC server address]:ip:'
+  '--grpc.port=[gRPC server port]:port:'
+  '--grpc.subscription_buffer_size=[gRPC subscription buffer size]:n:'
+  '--grpc.optimistic[send optimistic responses before chain confirms]'
+  '--grpc.tcp_keepalive_interval=[TCP keepalive interval (seconds)]:n:'
+  '--grpc.http2_keepalive_interval=[HTTP/2 keepalive ping interval]:n:'
+  '--grpc.http2_keepalive_timeout=[HTTP/2 keepalive timeout]:n:'
+  '--grpc.max_message_size=[max gRPC message size (bytes)]:bytes:'
+)
+
+# Relay options decoded from RelayOptions at options.rs:71-125.
+local -a torii_relay_flags=(
+  '--relay.port=[Libp2p TCP/UDP-Quic transport port]:port:'
+  '--relay.webrtc_port=[Libp2p WebRTC transport port]:port:'
+  '--relay.websocket_port=[Libp2p WebSocket transport port]:port:'
+  '--relay.local_key_path=[local identity key file path (auto-generated if omitted)]:file:_files'
+  '--relay.cert_path=[local certificate file path for WebRTC (auto-generated if omitted)]:file:_files'
+  '--relay.peers=[other torii relays to connect to (comma-separated multiaddrs)]:peers:'
+)
+
+_arguments -C \
+  $torii_top_flags \
+  $torii_indexing_flags \
+  $torii_events_flags \
+  $torii_http_flags \
+  $torii_metrics_flags \
+  $torii_erc_flags \
+  $torii_messaging_flags \
+  $torii_sql_flags \
+  $torii_activity_flags \
+  $torii_achievement_flags \
+  $torii_search_flags \
+  $torii_snapshot_flags \
+  $torii_runner_flags \
+  $torii_grpc_flags \
+  $torii_relay_flags && ret=0
+
+return ret
