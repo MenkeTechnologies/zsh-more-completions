@@ -19,6 +19,35 @@ Entries are in original README order: older themed-cluster entries (accumulated
 before the per-round numbering convention) appear first, followed by the
 R-numbered rounds with the newest R-round at the top of that section.
 
+- **R228 — age plugin pair: age-plugin-fido2-hmac + age-plugin-sntrup761x25519** (2 files / 2 binaries) — extends the corpus's age plugin coverage (existing _age-plugin-yubikey + _age-plugin-tpm + _age-plugin-se).  Both new plugins implement the standard age-plugin protocol but expose vastly different CLI surfaces — illustrating the corpus's first **explicit contrast pair** documenting the design-space spectrum of a single protocol.
+  - `_age-plugin-fido2-hmac` (1-stem; olastor/age-plugin-fido2-hmac; **10 flags + 3 invocation patterns**) — FIDO2 hmac-secret extension plugin.  Uses hardware FIDO2 tokens (YubiKey 5, SoloKey 2, NitroKey 3, etc.) with non-discoverable credentials and the token's hmac-secret extension to encrypt/decrypt age payloads.  Token must be PHYSICALLY PRESENT for every encrypt+decrypt operation.  Decoded source-direct from:
+    * USAGE const at cmd/age-plugin-fido2-hmac/main.go lines 86-119 (the 3 invocation patterns + flag table + ENV var documentation)
+    * main() at lines 121-165 (the flag declarations + parse + dispatch)
+    * identityToRecipient flow at lines 11-84 (the -y verb's implementation)
+  - `_age-plugin-sntrup761x25519` (1-stem; keisentraut/age-plugin-sntrup761x25519; **1 flag — the minimal age-plugin CLI surface**) — post-quantum-safe plugin using sntrup761 KEM + X25519 hybrid encryption (the same KEM that OpenSSH uses for `sntrup761x25519-sha512` key exchange).  Decoded source-direct from:
+    * `struct PluginOptions` at src/main.rs lines 303-314 (the StructOpt derive struct with 1 flag)
+    * main() at lines 316-344 (the dispatch: `--age-plugin` runs the state machine; no-arg invocation generates a new identity + recipient pair)
+  - Critical extraction note: **the standard age-plugin protocol entry point is `--age-plugin STATE_MACHINE`** — REQUIRED across all age plugins (established by str4d/age).  The main `age` binary invokes plugins via this flag when a user specifies `age --plugin <NAME>`.  Users should NOT invoke this directly.  Both R228 completions document this in their description but mark it as plugin-protocol-internal.
+  - Critical extraction note: **R228 is the corpus's first EXPLICIT CONTRAST PAIR** documenting the design-space spectrum of a single CLI protocol.  Both plugins implement the same age-plugin entry-point convention but expose vastly different surfaces:
+    | Plugin | Flags | Invocation patterns | Reason for difference |
+    |---|---|---|---|
+    | fido2-hmac | 10 | 3 (generate, identity-to-recipient, magic-identity) | FIDO2 token interaction has many knobs (algorithm choice, symmetric vs asymmetric, PQ mode, etc.) |
+    | sntrup761  | 1  | 1 (no-arg: print new identity+recipient pair) | PQ KEM has NO user-facing parameters — algorithm choice is encoded in the binary name |
+    This documents that age-plugin authors have FULL LATITUDE in CLI design — only the `--age-plugin STATE_MACHINE` protocol entry point is required.  The completion comments explicitly link to each other so future hunters see the contrast.
+  - Critical extraction note: **fido2-hmac uses Go's stdlib `flag` package** (same as R227's ssh-tpm-* family) — all 9 unique options are registered via TWO flag calls each (short + long form).  Continues the corpus's documentation of Go-stdlib-flag CLI patterns.
+  - Critical extraction note: **sntrup761x25519 uses structopt** (the historical clap-derive predecessor; replaced by clap v3's `#[derive(Parser)]` in 2022).  This is the corpus's FIRST documented structopt-based binary — both structopt and clap-derive are behaviorally equivalent for completion purposes (same auto-generated `--help` and `--version`).  Documented for future hunters who may see structopt in older Rust codebases.
+  - Critical extraction note: **fido2-hmac has 2 vestigial flags worth documenting**:
+    1. **`-n` short-only alias for `--generate`** at main.go:143 (`flag.BoolVar(&generateFlag, "n", false, "")`) — UNDOCUMENTED; likely a vestige of a previous version's "new identity" naming.  Completion lists it for forward compatibility.
+    2. **`-m`/`--magic-identity`** marked as `deprecatedMagicFlag` at main.go:145 — kept for backward compatibility but should not be used in new scripts.  Completion description includes "DEPRECATED" prefix.
+  - Critical extraction note: **fido2-hmac documents 2 environment variables** in the USAGE block at main.go:111-119:
+    1. **`FIDO2_TOKEN`** — force a specific device path (e.g. `/dev/hidraw0`); NOT RECOMMENDED since `/dev/hid*` paths are ephemeral and fido2 tokens (mostly) have no identifier
+    2. **`FIDO2_HMAC_PQ`** — force post-quantum mode (`1`/`true`/`yes`) or disable (`0`/`false`/`no`); interactive prompt if not set
+    Documented in completion comment block (not as completable options since env vars aren't completion targets in zsh `_arguments`).
+  - Hunt-skip notes: `age-plugin-p256` (bugficks/age-plugin-p256) deferred — turned out to be a 3-line shell wrapper around `uvx --from git+https://...`, similar to R226's ujust pattern but without distinct flags worth completing.  `age-plugin-se` is already in the corpus.  `age-plugin-tpm` is already covered.  `yubage` is OBSOLETE per its README.  `yk-piv-age-keygen` is a Python script wrapping age-keygen; small flag surface, deferred.
+  - Dup-checked clean against `/usr/share/zsh` + `/opt/homebrew/share/zsh` + `/usr/local/share/zsh`.
+  - Blacklist additions: 2 entries (age-plugin-* cluster).
+  - Corpus 28,654 → 28,656 files.
+
 - **R227 — ssh-tpm-* family trio: ssh-tpm-add + ssh-tpm-keygen + ssh-tpm-hostkeys** (3 files / 3 binaries) — completes coverage of Foxboron's TPM-backed SSH key family.  The existing `_ssh-tpm-agent` already covered the daemon side; this round adds the 3 companion CLIs that drive it (load sealed keys / generate sealed keys / list host keys via the agent).  Foxboron's ssh-tpm-* family is the de-facto TPM 2.0-backed SSH key solution — sealed keys can NEVER be extracted from the host hardware, providing the strongest possible protection against key exfiltration.
   - `_ssh-tpm-add` (1-stem; Foxboron/ssh-tpm-agent cmd/ssh-tpm-add): **4 flags + positional TPM key files** decoded source-direct from:
     * usage at lines 24-35 (the const usage block)
