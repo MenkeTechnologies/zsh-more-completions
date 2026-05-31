@@ -1,0 +1,144 @@
+#compdef ueberzugpp
+# Documentation: source-direct extraction from upstream
+# jstkdng/ueberzugpp src/main.cpp —
+#   `CLI::App program` + `add_subcommand()` registrations at
+#     lines 82-115 (4 subcommands: layer, cmd, tmux, query_
+#     windows)
+#   `layer_command` flag set at lines 85-98 (8 flags + 2
+#     UNUSED-but-kept-for-compat options + the output enum)
+#   `cmd_comand` flag set at lines 100-108 (8 flags for IPC
+#     to a running ueberzugpp daemon)
+#   action enum decoded source-direct from
+#     src/util/util.cpp lines 187-208 (`flags.cmd_action ==
+#     "exit"` and `== "remove"` branches; other actions like
+#     `add` are passed through verbatim to the daemon JSON)
+#   `CLI::IsMember` validator at line 95 (6-value output
+#     method enum: x11|wayland|sixel|kitty|iterm2|chafa)
+# Reference accessed: 2026-05-30 via gh api.
+#
+# ueberzugpp is the **C++ port of the original Python
+# `ueberzug`** (already in corpus) — displays images in a
+# terminal as if they were native widgets, used heavily by
+# TUI file managers (ranger, lf, yazi, vifm, joshuto) to
+# preview images alongside file listings.  Supports more
+# backend output methods than the original ueberzug: x11 +
+# wayland + sixel + kitty graphics + iTerm2 inline + chafa
+# ASCII art.  Sister tool in the terminal-image-display
+# cluster.
+#
+# Critical extraction note: ueberzugpp uses **CLI11** —
+# the canonical modern C++ CLI library (header-only,
+# clap-derive-style API).  This is the FIRST round in the
+# corpus to document CLI11-based binaries.  CLI11 idioms
+# relevant to completion:
+#   1. `add_flag("-V,--version", var, "help")` — comma-
+#      separated short+long form in a SINGLE string.  No
+#      dual-call pattern like Go's stdlib flag.
+#   2. `add_subcommand(name, help)` — returns a CLI::App* for
+#      method chaining further options into the subcommand
+#   3. `->check(CLI::IsMember({...}))` — value validation
+#      against a fixed enum (the x11/wayland/sixel/... choice)
+#   4. `->needs("--other-flag")` — dependency edge declaring
+#      that this flag requires another to be present.
+#      Documented in ueberzugpp at line 91 (`--no-stdin` needs
+#      `--pid-file`)
+#   5. `->allow_extras()` — opt-in to accepting positional
+#      args without explicit registration (used by tmux +
+#      query_windows subcommands at lines 111, 115)
+#   6. `CLI11_PARSE` macro at line 117 — the parse+exit+
+#      error-handling boilerplate
+#
+# Critical extraction note: the `cmd action` enum is
+# OPEN-ENDED — main.cpp registers `-a/--action` as a free-form
+# string at line 103; the daemon-side dispatch at
+# src/util/util.cpp lines 189-208 only special-cases `exit`
+# and `remove`.  All other action strings are passed through
+# verbatim to the daemon in JSON.  The CANONICAL actions used
+# by file managers are `add` / `remove` / `exit` (and `query`
+# for older ueberzug compat).  Completion offers these 4 as
+# the recommended set but does NOT enforce mutex since
+# extensions may add more.
+#
+# Critical extraction note: `-p`/`--parser` and `-l`/`--loader`
+# flags on `layer` are explicitly marked `**UNUSED**, only
+# present for backwards compatibility` at lines 97-98.
+# Kept so existing TUI file managers that invoke ueberzugpp
+# with these flags don't error out.  Completion lists them
+# with the DEPRECATED prefix so users don't accidentally use
+# them in new scripts.
+
+local curcontext="$curcontext" state line ret=1
+
+local -a subcommands=(
+  'layer:display images on the terminal (the primary use case; long-running daemon mode)'
+  'cmd:send a JSON command to a running ueberzugpp daemon over its UNIX socket'
+  'tmux:handle tmux hooks (used INTERNALLY by tmux integration; do not invoke directly)'
+  'query_windows:DEPRECATED no-op; kept for ueberzug backwards-compat'
+)
+
+local -a output_methods=(
+  'x11:Xorg X11 window overlay (the original ueberzug method)'
+  'wayland:Wayland layer-shell overlay'
+  'sixel:Sixel graphics escape codes (works in most modern terminals)'
+  'kitty:Kitty graphics protocol (native to Kitty terminal)'
+  'iterm2:iTerm2 inline image protocol'
+  'chafa:Chafa ASCII / Unicode-block art fallback'
+)
+
+local -a cmd_actions=(
+  'add:add a new image preview (canonical action; provide -i -f -x -y --max-width --max-height)'
+  'remove:remove an existing preview by identifier (provide -i)'
+  'exit:tell the daemon to exit (no other args required)'
+  'query:query daemon state (legacy ueberzug compat)'
+)
+
+_arguments -C \
+  '(-h --help)'{-h,--help}'[show help and exit (CLI11 auto-injected)]' \
+  '(-V --version)'{-V,--version}'[print version information and exit]' \
+  '1:subcommand:->subcmd' \
+  '*::args:->args' && ret=0
+
+case $state in
+  subcmd)
+    _describe -t subcommands 'ueberzugpp subcommand' subcommands && ret=0
+    ;;
+  args)
+    case $words[1] in
+      layer)
+        _arguments \
+          '(-s --silent)'{-s,--silent}'[print stderr to /dev/null]' \
+          '--use-escape-codes[use escape codes to query terminal capabilities]' \
+          '--pid-file=[file to write the daemon PID into]:file:_files' \
+          '--no-stdin[do not listen on stdin for commands (REQUIRES --pid-file)]' \
+          '--no-cache[disable caching of resized images]' \
+          '--no-opencv[use libvips instead of OpenCV for image decoding]' \
+          '(-o --output)'{-o+,--output=}'[image output method]:method:(x11 wayland sixel kitty iterm2 chafa)' \
+          '--origin-center[set origin to image center (default: top-left)]' \
+          '(-p --parser)'{-p+,--parser=}'[DEPRECATED no-op; kept for compat]:parser:' \
+          '(-l --loader)'{-l+,--loader=}'[DEPRECATED no-op; kept for compat]:loader:' && ret=0
+        ;;
+      cmd)
+        _arguments \
+          '(-s --socket)'{-s+,--socket=}'[UNIX socket of the running daemon]:file:_files -g "*.sock"' \
+          '(-i --identifier)'{-i+,--identifier=}'[preview identifier (caller-assigned)]:id:' \
+          '(-a --action)'{-a+,--action=}'[action to send (add|remove|exit|query; pass-through to daemon)]:action:(add remove exit query)' \
+          '(-f --file)'{-f+,--file=}'[path of image file (for add)]:file:_files -g "*.(png|jpg|jpeg|gif|webp|bmp|tiff|svg|avif)"' \
+          '(-x --xpos)'{-x+,--xpos=}'[X position of preview (terminal cell column)]:column:' \
+          '(-y --ypos)'{-y+,--ypos=}'[Y position of preview (terminal cell row)]:row:' \
+          '--max-width=[max width of preview in terminal cells]:cells:' \
+          '--max-height=[max height of preview in terminal cells]:cells:' && ret=0
+        ;;
+      tmux)
+        # tmux uses allow_extras() — takes positional hook name + numeric id
+        _arguments \
+          '1:tmux hook name (passed to tmux::handle_hook):' \
+          '2:numeric id (passed via std::stoi):' && ret=0
+        ;;
+      query_windows)
+        _message 'DEPRECATED no-op; takes no meaningful args' && ret=0
+        ;;
+    esac
+    ;;
+esac
+
+return ret
