@@ -1,0 +1,151 @@
+#compdef cairo-profiler
+# Documentation: source-direct extraction from upstream
+# software-mansion/cairo-profiler crates/cairo-profiler/src/
+# (version 0.16.0; clap v4 derive):
+#   main.rs lines 19-27 (entry point with default-subcommand
+#     fallback: `None => run_build_profile(&cli.build_profile_args)`)
+#   cli/mod.rs lines 8-25 (Cli Parser struct with
+#     `args_conflicts_with_subcommands = true` + flattened
+#     Option<BuildProfile> + Option<Commands> subcommand)
+#   cli/build_profile.rs lines 16-77 (BuildProfile Args
+#     struct with 11 fields)
+#   cli/view.rs lines 8-29 (ViewProfile Args struct with
+#     5 fields; --sample/--limit/--hide all conflict with
+#     --list-samples)
+# Reference accessed: 2026-05-30 via gh api.
+#
+# cairo-profiler is the **Starknet Cairo profiler** from
+# software-mansion — sister to cairo-coverage (R248), sncast
+# (R247), snforge.  Consumes .json trace files (typically
+# from snforge) and produces pprof-compatible `.pb.gz`
+# profile files for visualization with `go tool pprof`.
+#
+# Critical extraction note: cairo-profiler uses the
+# **default-subcommand-via-flatten pattern** at cli/mod.rs:11-17
+# combined with main.rs:22-26 — the top-level Cli struct
+# `#[clap(flatten)] pub build_profile_args: Option<BuildProfile>`
+# means the BuildProfile args are flattened INTO the parent
+# (so `cairo-profiler trace.json` works as a shortcut for
+# `cairo-profiler build-profile trace.json`).  The main
+# dispatch matches `None => run_build_profile(&cli.build_profile_args
+# .expect("Failed to parse arguments"))` — when no subcommand
+# is given, the parser populates the flattened args and the
+# main fn unwraps and routes to build-profile.  This is the
+# **corpus's first documented `default-subcommand-via-flatten`
+# pattern** — distinct from clap's `default_value_subcommand`
+# (which does not exist) and distinct from the wrapper-shim
+# pattern (R232 etc.) which intercepts argv and re-dispatches.
+# Documents how clap derive achieves "implicit default subcommand"
+# without runtime argv munging.
+#
+# Critical extraction note: cairo-profiler uses
+# **`args_conflicts_with_subcommands = true`** at cli/mod.rs:9 —
+# 2nd documented use in corpus (R248 cairo-coverage was 1st).
+# Pairs with the flattened BuildProfile so the parser EITHER
+# accepts the BuildProfile args (top-level) OR a subcommand
+# (View / BuildProfile), never both.
+#
+# Critical extraction note: BuildProfile uses **3 `requires = "view"`
+# gates** at build_profile.rs:59, 65, 71 — `--sample`, `--limit`,
+# `--hide` REQUIRE `--view` to be set.  These same 3 flags exist
+# on the `view` subcommand WITHOUT the `requires = "view"`
+# attribute, because the subcommand itself implies viewing.
+# Documents the **shared-flag-set with parser-gated subset**
+# pattern: same flag names with different validation rules
+# depending on whether you're using build-profile-with-view or
+# the standalone view subcommand.
+#
+# Critical extraction note: ViewProfile uses
+# **`conflicts_with = "list_samples"`** at view.rs:15, 23, 27
+# — `--sample`, `--limit`, `--hide` are mutually-exclusive with
+# `--list-samples`/`-l`.  When listing samples, the other 3
+# display options have no meaning.  Documents the **3-way
+# conflicts_with mutex group** without using `ArgGroup`.
+#
+# Critical extraction note: cairo-profiler uses
+# **`NonZeroUsize`** for `--limit` at build_profile.rs:66 +
+# view.rs:24.  Distinct from R247 sncast's `NonZeroU16` /
+# `NonZeroU8` — `NonZeroUsize` is platform-dependent (typically
+# 64-bit on modern systems).  Both reject 0 at parse time.
+# 3rd documented NonZero* type after R247 sncast.
+#
+# Critical extraction note: cairo-profiler uses
+# **`#[clap(name = "cairo-profiler")]`** at cli/mod.rs:10 to
+# override the default binary name.  Useful when the crate
+# name and binary name differ.  This is the **corpus's first
+# documented `#[clap(name = "...")]` parent attribute** — clap
+# derive normally uses `env!("CARGO_BIN_NAME")` but here the
+# crate name `cairo-profiler` matches anyway, so the attribute
+# is defensive/explicit.
+
+local curcontext="$curcontext" state line ret=1
+
+# 2 subcommands decoded source-direct from Commands enum at
+# cli/mod.rs lines 19-25.
+local -a subcommands=(
+  'build-profile:build the profile from provided trace data (default action if no subcommand given)'
+  'view:view an already-built profile (.pb.gz file)'
+)
+
+# Shared flag set: build-profile's --view + 3 viewer flags AND
+# the `view` subcommand share 3 flags (--sample / --limit /
+# --hide) but with different validation rules.
+
+# Common build-profile flags (used both top-level AND as
+# build-profile subcommand args; both call into BuildProfile
+# Args struct via #[clap(flatten)]).
+local -a build_profile_flags=(
+  '(-h --help)'{-h,--help}'[show help]'
+  '(-o --output-path)'{-o+,--output-path=}'[path to the output profile.pb.gz file (default: profile.pb.gz)]:file:_files -g "*.pb.gz"'
+  '--show-details[show contract addresses and function selectors in the trace tree]'
+  '--max-function-stack-trace-depth=[maximum depth of function tree in function-level profiling (default: 100; applied per entrypoint)]:depth:'
+  '--split-generics[split non-inlined generic functions based on monomorphisation type (e.g. function<felt252> vs function<u8>)]'
+  '--show-inlined-functions[show inlined functions in the trace tree (requires Scarb >= 2.7.0-rc.0 + unstable-add-statements-functions-debug-info=true)]'
+  '--versioned-constants-path=[path to file with cost map for syscalls (default: Starknet 0.14.1 costs)]:file:_files'
+  '--view[also view the resulting profile after building (enables --sample/--limit/--hide)]'
+  '--sample=[sample to show in the top view (requires --view; default: calls)]:sample:'
+  '--limit=[limit nodes shown in the top view (requires --view; NonZeroUsize; default: 10)]:n:'
+  '--hide=[skip nodes matching regex (requires --view)]:regex:'
+  '--show-libfuncs[show libfuncs in the trace tree]'
+)
+
+_arguments -C \
+  '(-V --version)'{-V,--version}'[show version (0.16.0)]' \
+  $build_profile_flags \
+  '1: :->maybe_sub' \
+  '*::args:->args' && ret=0
+
+case $state in
+  maybe_sub)
+    # cairo-profiler's first positional may be EITHER a
+    # subcommand name OR the trace .json path (default-subcommand-
+    # via-flatten pattern).  Offer subcommand names + .json files
+    # as completions.
+    _alternative \
+      'subcommands:cairo-profiler subcommand:_describe -t subcommands "subcommand" subcommands' \
+      'trace-files:trace .json file:_files -g "*.json"' && ret=0
+    ;;
+  args)
+    case $words[1] in
+      build-profile)
+        # BuildProfile Args struct (same as top-level flatten).
+        _arguments \
+          $build_profile_flags \
+          '*:trace JSON file:_files -g "*.json"' && ret=0
+        ;;
+      view)
+        # ViewProfile Args at cli/view.rs:8-29.  --sample/
+        # --limit/--hide all conflicts_with list_samples.
+        _arguments \
+          '(-h --help)'{-h,--help}'[show help for `view`]' \
+          '(-l --list-samples --sample --limit --hide)'{-l,--list-samples}'[list all samples included in the profile (mutex with --sample/--limit/--hide)]' \
+          '(-l --list-samples)--sample=[sample to show in the top view (default: calls; mutex with --list-samples)]:sample:' \
+          '(-l --list-samples)--limit=[limit nodes shown in the top view (NonZeroUsize; default: 10; mutex with --list-samples)]:n:' \
+          '(-l --list-samples)--hide=[skip nodes matching regex (mutex with --list-samples)]:regex:' \
+          '*:profile .pb.gz file:_files -g "*.pb.gz"' && ret=0
+        ;;
+    esac
+    ;;
+esac
+
+return ret
