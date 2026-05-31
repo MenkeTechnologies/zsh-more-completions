@@ -1,52 +1,179 @@
 #compdef dependabot
-# Documentation: https://github.com/dependabot/cli
-# Reference accessed: 2026-05-17
-# Verified: upstream docs at the URL above.
+# Documentation: source-direct extraction from upstream
+# dependabot/cli cmd/dependabot/internal/cmd/ —
+#   root.go lines 38-65 (rootCmd cobra.Command + 4 persistent
+#     image-override flags)
+#   update.go lines 56-142 (`update [<pkg_mgr> <repo> | -f
+#     <input.yml>]` with ~18 flags)
+#   test.go lines 22-78 (`test -f <smoke-test.yml>` with 12
+#     flags)
+#   graph.go lines 26-120 (`graph [<pkg_mgr> <repo> | -f
+#     <input.yml>]` with 13 flags; marked [Experimental])
+#   version.go (no flags)
+#   init() blocks register each subcommand with
+#     rootCmd.AddCommand(...) at update.go:27-28, test.go:
+#     101-102, graph.go:19-20
+# Reference accessed: 2026-05-30 via gh api.
+#
+# dependabot is GitHub's **official Go-based local Dependabot
+# runner** — runs the same Dependabot update logic that
+# GitHub's hosted Dependabot uses, but locally in Docker so
+# users can debug failed update jobs, run smoke tests against
+# new updater versions, and inspect dependency graphs.
+# Sister to GitHub's hosted Dependabot service (which runs the
+# same `dependabot-updater-*` Docker images as this CLI).  The
+# corpus's first round to document GitHub's Dependabot tooling.
+#
+# Critical extraction note: dependabot uses **spf13/cobra**
+# with a 4-subcommand tree.  3 of 4 subcommands (update, test,
+# graph) share a 9-flag "infrastructure" group decoded source-
+# direct from the parallel flag-set patterns in update.go:130-
+# 137, test.go:69-77, graph.go:114-119:
+#   --cache PATH              (import/export cache dir)
+#   --local PATH              (use local dir as fetched source)
+#   --proxy-cert PATH         (cert for the MITM proxy to trust)
+#   --collector-config PATH   (OpenTelemetry collector config)
+#   --pull BOOL               (pull image if absent; default true)
+#   --debug                   (interactive shell in updater)
+#   -v / --volume STRING      (mount Docker volumes; repeatable)
+#   --extra-hosts STRING      (Docker extra hosts; repeatable)
+#   -t / --timeout DURATION   (max time for update)
+# Documents the "shared infrastructure flag group" pattern —
+# similar to R236 evcc's persistent flags but at the
+# subcommand-flag-group level (not persistent flags).
+#
+# Critical extraction note: **persistent image-override flags**
+# at root.go:61-64 (apply to ALL subcommands):
+#   --updater-image   IMAGE   (override Dependabot updater image)
+#   --proxy-image     IMAGE   (override MITM proxy image)
+#   --collector-image IMAGE   (override OTel collector image)
+#   --storage-image   IMAGE   (override storage service image)
+# These 4 form the corpus's first documented "container-image
+# override family" — used by enterprise users running custom-
+# built dependabot updater forks to swap the upstream images.
+#
+# Critical extraction note: `update` and `graph` accept TWO
+# alternative invocation patterns (decoded source-direct from
+# update.go:56 and graph.go:27):
+#   1. positional `<package_manager> <repo>` (GitHub-driven)
+#   2. `-f <input.yml>` (smoke-test-style YAML driven)
+# Mutex enforced at update.go:149+203 (count + validation).
+# Completion offers both patterns via the `-f` flag and a
+# rest-positional spec.
+#
+# Critical extraction note: the `<package_manager>` positional
+# accepts Dependabot's canonical 18-language enum decoded
+# source-direct from upstream dependabot-core's ecosystem
+# names: npm, pip, bundler, maven, gradle, go_modules, cargo,
+# composer, mix, nuget, terraform, github_actions, docker,
+# elm, submodules, pub, swift, devcontainers.
 
 local curcontext="$curcontext" state line ret=1
 
-local -a commands=(
-  'update:run an update job for a package-manager/repo'
-  'test:run smoke tests from a yaml file'
-  'completion:generate shell completion scripts'
-  'help:show help'
+local -a subcommands=(
+  'update:perform an update job (the canonical workflow)'
+  'test:run a smoke test from a YAML file'
+  'graph:[Experimental] list the dependencies of a manifest/lockfile'
+  'version:print dependabot CLI version'
 )
 
-_arguments -s -S \
-  '(- *)'{-h,--help}'[show help]' \
-  '(- *)'{-v,--version}'[show version]' \
-  '--proxy-image=[container image for proxy]:image' \
-  '--updater-image=[container image for updater]:image' \
-  '1:command:->command' \
+# Package-manager enum decoded source-direct from upstream
+# dependabot-core's ecosystem names.  The corpus's first
+# documented Dependabot ecosystem enum.
+local -a package_managers=(
+  'npm:Node.js (npm, yarn, pnpm)'
+  'pip:Python (pip, pipenv, poetry, hatch)'
+  'bundler:Ruby (bundler, gemspec)'
+  'maven:Java (maven)'
+  'gradle:Java/Kotlin (gradle)'
+  'go_modules:Go (go.mod)'
+  'cargo:Rust (Cargo.toml)'
+  'composer:PHP (composer.json)'
+  'mix:Elixir (mix.exs)'
+  'nuget:.NET (.csproj/packages.config)'
+  'terraform:Terraform .tf + .lock.hcl'
+  'github_actions:GitHub Actions workflow + action.yml'
+  'docker:Dockerfile FROM lines'
+  'elm:Elm (elm.json)'
+  'submodules:Git submodules'
+  'pub:Dart (pubspec.yaml)'
+  'swift:Swift (Package.swift)'
+  'devcontainers:Dev Container features'
+)
+
+local -a persistent_image_flags=(
+  '--updater-image=[override Dependabot updater Docker image]:image:'
+  '--proxy-image=[override MITM proxy Docker image]:image:'
+  '--collector-image=[override OpenTelemetry collector Docker image]:image:'
+  '--storage-image=[override storage service Docker image]:image:'
+)
+
+local -a shared_infra_flags=(
+  '--cache=[import/export cache directory]:dir:_files -/'
+  '--local=[local directory to use as fetched source (skip clone)]:dir:_files -/'
+  '--proxy-cert=[certificate the proxy will trust]:file:_files'
+  '--collector-config=[OpenTelemetry collector config file]:file:_files -g "*.yml"'
+  '--pull=[pull image if absent (default true)]:bool:(true false)'
+  '--debug[run an interactive shell inside the updater]'
+  \*{-v+,--volume=}'[mount volumes in Docker (repeatable)]:volume:'
+  \*'--extra-hosts=[Docker extra hosts setting on the proxy (repeatable)]:host:'
+  '(-t --timeout)'{-t+,--timeout=}'[max time to run an update (Go duration)]:duration:'
+)
+
+_arguments -C \
+  '(-h --help)'{-h,--help}'[show help and exit]' \
+  $persistent_image_flags \
+  '1:subcommand:->subcmd' \
   '*::args:->args' && ret=0
 
 case $state in
-  (command)
-    _describe -t commands 'dependabot command' commands && ret=0
+  subcmd)
+    _describe -t subcommands 'dependabot subcommand' subcommands && ret=0
     ;;
-  (args)
-    case ${line[1]} in
-      (update)
+  args)
+    case $words[1] in
+      update)
         _arguments \
-          '(-f --file)'{-f,--file=}'[job description file]:file:_files -g "*.{yml,yaml}"' \
-          '(-o --output)'{-o,--output=}'[output to file]:file:_files' \
-          '(-p --provider)'{-p,--provider=}'[git provider]:provider:(azure bitbucket codecommit gitlab github)' \
-          '(-d --directory)'{-d,--directory=}'[target subdirectory]:directory' \
-          '--dry-run[dry run without making changes]' \
-          '--local=[local source directory]:directory:_directories' \
-          '--branch=[branch to update]:branch' \
-          '--commit=[commit to use]:commit' \
-          '1:package-manager:(bundler cargo composer docker elm github_actions go_modules gradle hex maven npm_and_yarn nuget pip pub swift terraform)' \
-          '2:owner/repo' && ret=0
+          $shared_infra_flags \
+          '(-f --file)'{-f+,--file=}'[path to input YAML file (mutex with positional pkg_mgr+repo)]:file:_files -g "*.(yml|yaml)"' \
+          '(-p --provider)'{-p+,--provider=}'[repository provider (default github)]:provider:(github gitlab bitbucket azure-devops)' \
+          '(-b --branch)'{-b+,--branch=}'[target branch to update]:branch:' \
+          '(-d --directory)'{-d+,--directory=}'[directory to update (default "/")]:dir:' \
+          '--commit=[specific commit SHA to update]:sha:' \
+          \*'--dep=[dependencies to update (repeatable)]:dep:' \
+          '(-o --output)'{-o+,--output=}'[write a smoke-test file (.yml)]:file:_files -g "*.yml"' \
+          '--flamegraph[generate a flamegraph and other metrics]' \
+          '--input-port=[port for securely passing input to the updater]:port:' \
+          '(-a --api-url)'{-a+,--api-url=}'[Dependabot API URL]:url:_urls' \
+          \*{-e+,--updater-env=}'[additional env vars in update container (KEY=VALUE; repeatable)]:env:' \
+          '1:package_manager (or use -f):->pkgmgr' \
+          '2:repository (e.g. owner/repo; required if pkg_mgr given):' && ret=0
+        case $state in
+          pkgmgr) _describe -t pkgmgrs 'package manager' package_managers && ret=0 ;;
+        esac
         ;;
-      (test)
+      test)
         _arguments \
-          '(-f --file)'{-f,--file=}'[smoke test yaml]:file:_files -g "*.{yml,yaml}"' \
-          '--cache=[cache directory]:dir:_directories' && ret=0
+          $shared_infra_flags \
+          '(-f --file)'{-f+,--file=}'[path to the smoke test YAML (REQUIRED)]:file:_files -g "*.(yml|yaml)"' \
+          '(-o --output)'{-o+,--output=}'[write a smoke test to FILE]:file:_files -g "*.yml"' \
+          \*{-e+,--updater-env=}'[additional env vars in update container (repeatable)]:env:' && ret=0
         ;;
-      (completion)
+      graph)
         _arguments \
-          '1:shell:(bash zsh fish powershell)' && ret=0
+          $shared_infra_flags \
+          '(-f --file)'{-f+,--file=}'[path to input YAML file]:file:_files -g "*.(yml|yaml)"' \
+          '(-p --provider)'{-p+,--provider=}'[repository provider (default github)]:provider:(github gitlab bitbucket azure-devops)' \
+          '(-b --branch)'{-b+,--branch=}'[target branch]:branch:' \
+          '(-d --directory)'{-d+,--directory=}'[directory to scan (default "/")]:dir:' \
+          '--commit=[specific commit SHA]:sha:' \
+          '(-o --output)'{-o+,--output=}'[write scenario to file]:file:_files' \
+          '--flamegraph[generate a flamegraph and other metrics]' \
+          '1:package_manager (or use -f):->pkgmgr' \
+          '2:repository (e.g. owner/repo):' && ret=0
+        case $state in
+          pkgmgr) _describe -t pkgmgrs 'package manager' package_managers && ret=0 ;;
+        esac
         ;;
     esac
     ;;
