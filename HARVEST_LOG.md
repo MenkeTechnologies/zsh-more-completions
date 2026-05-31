@@ -19,6 +19,40 @@ Entries are in original README order: older themed-cluster entries (accumulated
 before the per-round numbering convention) appear first, followed by the
 R-numbered rounds with the newest R-round at the top of that section.
 
+- **R226 — Universal Blue atomic-distro pair: ujust + ublue-update** (2 files / 2 binaries) — branches off the Vanilla OS run (R224-R225) into the sister Universal Blue atomic-distro family (Bazzite / Bluefin / Aurora / Aurora-DX / Bluefin-DX / Bazzite-DX).  Both projects solve the immutable-OS problem with similar OCI-image deployments but ship different user-facing CLIs.
+  - `_ujust` (1-stem; ublue-os/packages packages/ublue-os-just/src/ujust): **3-line shell wrapper around `just`** — decoded source-direct from the literal script:
+    ```
+    #!/usr/bin/bash
+    /usr/bin/just --justfile /usr/share/ublue-os/justfile "${@}"
+    ```
+    Forwards ALL of just's flag set + a recipe-name positional from the SYSTEM justfile.  Completion dynamically queries the system justfile at completion time via `ujust --list --unsorted` + parses recipe names from the output.
+  - `_ublue-update` (1-stem; ublue-os/ublue-update src/ublue_update/cli.py): **6 flags** decoded source-direct from `main()` at lines 183-213 (the argparse.ArgumentParser + 6 add_argument calls).  The python update daemon CLI that drives system + system-extension + flatpak + distrobox-container updates on Universal Blue distros.
+  - Critical extraction note: **ujust is a 3-line shell wrapper, NOT a Go/Rust binary** — making it the SIMPLEST upstream source the corpus has documented so far.  The actual recipe content varies per distro because the system justfile is installed by each distro's Containerfile build (e.g. `ublue-os/bazzite`'s Containerfile pulls `/usr/share/ublue-os/justfile` from `ublue-os/main`):
+    * Bazzite (gaming): `install-steam`, `install-proton-ge`, `enable-handheld-tweaks`, ...
+    * Bluefin (cloud-native): `toolbox-distrobox`, `devcontainer-up`, `install-bluefin-cli`, ...
+    * Aurora (KDE): `kde-settings`, `install-kde-discover`, ...
+    The completion does NOT hard-code recipe names — it queries the live system justfile at completion-time.  This is the FIRST completion in the corpus to use **runtime recipe discovery via the live system** (vs the standard source-direct flag enumeration).
+  - Critical extraction note: **ublue-update is a Python argparse-based CLI** — NOT clap/cobra/argh/cmdr.  The corpus has only a few argparse completions (most are Go/Rust); Python tooling is documented here at the argparse layer.  Simple 6-flag set:
+    1. `-f`/`--force` — force manual update, skip update checks
+    2. `-c`/`--check` — run update checks and exit (no actual update)
+    3. `-u`/`--updatecheck` — check for updates and exit (no actual update; differs from `--check` in that it queries the update server)
+    4. `-w`/`--wait` — wait for in-progress transactions, then exit (used by atomic-update tooling to coordinate with other update flows)
+    5. `--config FILE` — use specified config file (default: `/etc/ublue-update/ublue-update.toml`)
+    6. `--system` — only run system updates (requires root; skips per-user flatpak/distrobox)
+  - Critical extraction note: **ublue-update's `--wait` has SPECIAL early-exit behavior** at cli.py:218-220 — `if cli_args.wait: transaction_wait(); os._exit(0)`.  This means `--wait` skips the entire update pipeline below it (force/check/updatecheck/system) regardless of what other flags are passed.  Documented in the completion description so users understand why `--wait --force` doesn't combine as expected.
+  - Critical extraction note: **Universal Blue vs Vanilla OS architectural comparison**:
+    | Concern | Vanilla OS (R224-R225) | Universal Blue (R226) |
+    |---|---|---|
+    | Pkg manager | `apx` (custom; container-isolated) | `ujust install-*` recipes + `rpm-ostree`/`bootc` |
+    | A/B atomic update | `abroot` (custom; A/B partition) | `bootc switch`/`rpm-ostree` (delegated) |
+    | Image builder | `vib` (custom YAML recipes) | OCI Containerfile (direct podman/docker build) |
+    | User CLI | `vso` (24-trigger task scheduler) | `ublue-update` (6-flag update daemon) |
+    Vanilla OS opts for a fully-custom CLI suite; Universal Blue layers thin wrappers over existing tools.  The completion comment block documents this for future hunters.
+  - Hunt-skip notes: `ujust-picker` (bazzite-ujust-picker; a TUI for recipe selection; bubblegum/lipgloss-based) deferred — its CLI surface is just `ujust-picker` with no flags (it's a TUI app).  `ublue-flatpak-manager` (the flatpak-managing companion service) deferred — small flag surface.  `ublue-rebase-helper` (the OCI image rebase helper) deferred.  `bootc` (R225 mentioned, already in corpus) confirmed covered.
+  - Dup-checked clean against `/usr/share/zsh` + `/opt/homebrew/share/zsh` + `/usr/local/share/zsh`.
+  - Blacklist additions: 2 entries (u* cluster).
+  - Corpus 28,649 → 28,651 files.
+
 - **R225 — Vanilla OS atomic-distro trio: abroot + vib + vso** (3 files / 3 binaries) — direct follow-up to R224 (apx v3 rewrite).  Completes coverage of the four-tool Vanilla OS CLI family: package management (apx) + atomic root updates (abroot) + image building (vib) + system tasks/maintenance (vso).
   - `_abroot` (1-stem; Vanilla-OS/abroot; **10 commands + 1 persistent flag**) — decoded source-direct from:
     * `cmd/root.go` lines 28-48 (cmdr.App init + persistent `--verbose`/`-V` flag)
