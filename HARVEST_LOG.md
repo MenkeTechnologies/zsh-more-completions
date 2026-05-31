@@ -19,6 +19,31 @@ Entries are in original README order: older themed-cluster entries (accumulated
 before the per-round numbering convention) appear first, followed by the
 R-numbered rounds with the newest R-round at the top of that section.
 
+- **R235 — edge-tts (Microsoft Edge TTS reverse-engineered CLI)** (1 file / 2-stem binary) — branches off the terminal-image cluster (R234 ueberzugpp) into text-to-speech tooling.  edge-tts provides programmatic access to the same 400+ neural voice TTS service that the Edge browser uses for "Read Aloud", **without requiring a Microsoft account or Azure subscription**.  Widely used in screen-reader / accessibility / video-narration / audiobook-generation workflows.
+  - `_edge-tts` (2-stem covering `edge-tts` + `edge-playback`; rany2/edge-tts src/edge_tts/util.py): **10 flags + DEFAULT_VOICE constant + 3-form mutex group + 12-voice common-list completion** decoded source-direct from:
+    * `amain()` at lines 88-141 (the argparse.ArgumentParser + 10 `add_argument` calls)
+    * mutex group at lines 93-107 (`add_mutually_exclusive_group(required=True)` with 3 alternatives: -t/--text, -f/--file, -l/--list-voices)
+    * DEFAULT_VOICE constant at src/edge_tts/constants.py (value: `"en-US-EmmaMultilingualNeural"`)
+  - Critical extraction note: **edge-tts uses Python's argparse with a `add_mutually_exclusive_group(required=True)`** — the FIRST round in the corpus to document this specific argparse pattern (continues R226's argparse documentation effort with ublue-update).  The group at util.py:93 contains 3 alternatives that are mutually exclusive AND collectively required:
+    * `-t`/`--text TEXT` (inline text input)
+    * `-f`/`--file FILE` (text from file; `-` or `/dev/stdin` for stdin)
+    * `-l`/`--list-voices` (list available voices and exit)
+    Completion expresses this via the mutex syntax `(-t --text -f --file -l --list-voices)` on each of the 3 flags.
+  - Critical extraction note: **the DEFAULT_VOICE is `en-US-EmmaMultilingualNeural`** (constants.py).  edge-tts ships with **400+ voices** spanning languages and accents — the completion provides a 12-voice common-list hint for the most-used voices (en-US, en-GB, en-AU, es-MX, ja-JP, zh-CN, fr-FR, de-DE) and directs users to `edge-tts --list-voices` for the full list.  The voice naming convention is `<lang-locale>-<NAME>Neural` (e.g. `en-US-AvaNeural`, `ja-JP-NanamiNeural`).
+  - Critical extraction note: **`--rate`/`--volume`/`--pitch` follow SSML prosody conventions** — the same syntax used by Azure Cognitive Services Speech SDK, Google Cloud TTS, and Amazon Polly's `<prosody>` SSML tags:
+    | Flag | Format | Default | Example values |
+    |---|---|---|---|
+    | `--rate` | `+N%` or `-N%` | `+0%` | `+25%` (faster), `-25%` (slower), `+100%` (2x speed) |
+    | `--volume` | `+N%` or `-N%` | `+0%` | `+50%` (louder), `-25%` (quieter) |
+    | `--pitch` | `+NHz` or `-NHz` | `+0Hz` | `+20Hz` (higher), `-10Hz` (lower) |
+    Documented as a table in the comment block and as discrete completion values for the most common offsets.
+  - Critical extraction note: **`--write-media` + `--write-subtitles` form the canonical "save audio + subtitles" workflow** — `--write-media FILE` sends the audio to a file (instead of stdout), and `--write-subtitles FILE` sends SRT-formatted subtitles to a file (instead of stderr).  Together they form the canonical video-narration workflow: `edge-tts -t "..." --voice en-US-AvaNeural --write-media out.mp3 --write-subtitles out.srt`.
+  - Critical extraction note: **the completion covers BOTH `edge-tts` AND `edge-playback`** — they share the same flag set (the latter just auto-plays the audio via mpv/aplay instead of writing to stdout).  `#compdef edge-tts edge-playback` registers the same completion for both binaries.
+  - Hunt-skip notes: `edge-tts-rs` (a Rust port; nascent project) deferred — small CLI surface.  `edge-tts-python-bindings` (the Python library itself) is library code, not a CLI.  `mstts` / `microsoft-tts` (older reverse-engineered variants) deferred — superseded by edge-tts.  Other TTS CLIs that ARE in the corpus: piper (Rhasspy's Piper TTS), the existing entries for festival, espeak, espeak-ng, etc.
+  - Dup-checked clean against `/usr/share/zsh` + `/opt/homebrew/share/zsh` + `/usr/local/share/zsh`.
+  - Blacklist additions: 2 entries (edge-tts + edge-playback).
+  - Corpus 28,662 → 28,663 files.
+
 - **R234 — ueberzugpp (C++ port of ueberzug; terminal image display)** (1 file / 1 binary) — branches off the policy-evaluation cluster into terminal-image-display tooling.  ueberzugpp is the C++ port of the original Python ueberzug (already in corpus) — displays images in a terminal as if they were native widgets, used heavily by TUI file managers (ranger / lf / yazi / vifm / joshuto) to preview images alongside file listings.  Supports more backend output methods than the original ueberzug: x11 + wayland + sixel + kitty graphics + iTerm2 inline + chafa ASCII art.
   - `_ueberzugpp` (1-stem; jstkdng/ueberzugpp src/main.cpp): **4 subcommands + ~20 flags + 4-action JSON enum + 6-value output-method enum** decoded source-direct from:
     * `CLI::App program` + `add_subcommand()` registrations at lines 82-115
