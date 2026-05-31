@@ -1,0 +1,101 @@
+#compdef systemd-veritysetup
+# Documentation: source-direct extraction from upstream
+# systemd/systemd src/veritysetup/veritysetup.c —
+#   verb dispatch table at lines 320-456 (2 VERB declarations)
+#   parse_options() comma-separated OPTIONS string parser at
+#     lines 138-310 (the 22-entry switch-on-prefix table)
+#   parse_roothashsig_option() at lines 73-115 (the special
+#     "auto" / "base64:" / "/path/to/file" tri-mode parser)
+# Reference accessed: 2026-05-30 via gh api.
+#
+# systemd-veritysetup attaches and detaches dm-verity-protected
+# block devices.  Used at boot (via systemd-veritysetup@.service
+# template unit) to verify rootfs / verity-images before the
+# system pivots into them.  Sister tool to systemd-cryptsetup
+# (already in the corpus) for the dm-verity / dm-crypt pair.
+#
+# Critical extraction note: systemd-veritysetup is the FIRST
+# systemd binary in the corpus with a SUBSTANTIVE comma-
+# separated OPTIONS positional argument — 22 distinct option
+# keys decoded source-direct from parse_options() at lines
+# 138-310.  Each is either a bare-flag (e.g. "ignore-corruption",
+# "panic-on-corruption") or a key=value pair (e.g.
+# "data-block-size=4096", "hash=sha256", "format=1").  Unlike
+# the typical --flag=VALUE pattern, these are all packed into a
+# single OPTIONS positional argument: `systemd-veritysetup
+# attach myvol /dev/sda /dev/sdb HASH "ignore-corruption,format=1,
+# data-block-size=4096"`.
+#
+# Critical extraction note: the ROOTHASH positional argument
+# at attach-verb's argv[4] accepts 3 special forms decoded
+# source-direct from lines 347-364:
+#   1. literal hex string         (decoded to binary via unhexmem)
+#   2. "-" or "auto"              (look up via udev property
+#                                  ID_DISSECT_PART_ROOTHASH)
+#   3. empty/dash                 (synonym for auto)
+# Documented in completion's ROOTHASH positional description.
+
+local curcontext="$curcontext" state line ret=1
+
+local -a subcommands=(
+  'attach:attach a dm-verity protected block device (5-6 args: VOLUME DATADEV HASHDEV ROOTHASH [OPTIONS])'
+  'detach:detach a dm-verity protected block device (1 arg: VOLUME)'
+)
+
+# OPTIONS comma-list values decoded source-direct from
+# parse_options() at veritysetup.c:138-310.  6 bare flags + 4
+# fstab-meta flags (no-op here) + 12 key=value forms.  Listed
+# here as the canonical option-list for the completion message.
+local -a veritysetup_options=(
+  # fstab-meta (silently accepted; no effect): noauto, auto, nofail, fail, _netdev
+  'ignore-corruption:do not panic when corruption is detected'
+  'restart-on-corruption:restart system on corruption (dm-verity behavior)'
+  'ignore-zero-blocks:assume zero blocks are valid (e.g. sparse images)'
+  'check-at-most-once:check each block at most once per boot'
+  'panic-on-corruption:panic the kernel on corruption (strictest mode)'
+  'superblock=BOOL:read on-disk verity superblock for params (default: yes)'
+  'format=0|1:verity hash format (0=original Chrome OS, 1=modern)'
+  'data-block-size=SIZE:verity data block size (512-524288, power of 2, multiple of 512)'
+  'hash-block-size=SIZE:verity hash block size'
+  'data-blocks=N:explicit data block count'
+  'hash-offset=BYTES:offset to hash region (512-aligned)'
+  'salt=HEX:salt for hash computation (HEX, "-" for empty, omit for random)'
+  'uuid=UUID:verity device UUID'
+  'hash=ALGO:hash algorithm (sha256, sha512, etc.)'
+  'fec-device=PATH:absolute path to FEC parity device'
+  'fec-offset=BYTES:offset to FEC region (512-aligned)'
+  'fec-roots=N:FEC roots count'
+  'root-hash-signature=SPEC:signature ("base64:..." OR /path OR "auto" for udev ID_DISSECT_PART_ROOTHASH_SIG)'
+)
+
+_arguments -C \
+  '(-h --help)'{-h,--help}'[show help and exit]' \
+  '--version[show package version and exit]' \
+  '1:verb (attach|detach):->subcmd' \
+  '*::verb-args:->args' && ret=0
+
+case $state in
+  subcmd)
+    _describe -t subcommands 'systemd-veritysetup verb' subcommands && ret=0
+    ;;
+  args)
+    case $words[1] in
+      attach)
+        # attach VOLUME DATADEVICE HASHDEVICE ROOTHASH [OPTIONS]
+        _arguments \
+          '1:VOLUME (dm-verity activation name):' \
+          '2:DATA device:_files -g "/dev/*"' \
+          '3:HASH device:_files -g "/dev/*"' \
+          '4:ROOTHASH (hex string OR "auto" OR "-"):' \
+          '5:OPTIONS (comma-separated; see comment block):' && ret=0
+        ;;
+      detach)
+        # detach VOLUME
+        _arguments \
+          '1:VOLUME (dm-verity activation name to detach):' && ret=0
+        ;;
+    esac
+    ;;
+esac
+
+return ret

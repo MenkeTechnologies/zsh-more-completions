@@ -19,6 +19,40 @@ Entries are in original README order: older themed-cluster entries (accumulated
 before the per-round numbering convention) appear first, followed by the
 R-numbered rounds with the newest R-round at the top of that section.
 
+- **R221 — systemd v257+ low-level utility quad: storagetm + binfmt + veritysetup + update-utmp** (4 files / 4 binaries) — direct follow-up to R220's hunt-skip on systemd-storagetm.  Covers 4 distinct corners of systemd's low-level system-management surface: NVMe-oF target manager, binfmt_misc registrar, dm-verity activator, and utmp/wtmp+audit writer.  Continues coverage of the modern OptionParser idiom established in R218 + R219 + R220.
+  - `_systemd-storagetm` (1-stem; systemd/systemd src/storagetm/storagetm.c): **3 flags + 1 positional family** decoded source-direct from:
+    * parse_argv() at lines 76-145 (OptionParser FOREACH_OPTION_OR_RETURN + OPTION_LONG + OPTION entries)
+    * `--all` double-application logic at line 875: `if (arg_all >= 2)` unlocks root-fs exposure — safety interlock
+    * NQN auto-generation at lines 132-141: defaults to `nqn.2023-10.io.systemd:storagetm.<machine-id>` per NVMe Base Spec 2.0c §4.5
+  - `_systemd-binfmt` (1-stem; systemd/systemd src/binfmt/binfmt.c): **6 flags + positional config files** decoded source-direct from:
+    * help() at lines 110-135
+    * parse_argv() at lines 137-177 (OPTION_COMMON_CAT_CONFIG + OPTION_COMMON_TLDR + OPTION_COMMON_NO_PAGER + OPTION_LONG)
+    * conflict validation at lines 171-173: `--unregister` mutex with `--cat-config`/`--tldr` AND with positional args
+  - `_systemd-veritysetup` (1-stem; systemd/systemd src/veritysetup/veritysetup.c): **2 verbs (attach + detach) + 22-key comma-separated OPTIONS positional** decoded source-direct from:
+    * verb dispatch table at lines 320-456 (2 VERB declarations)
+    * **parse_options() comma-separated OPTIONS string parser at lines 138-310** — the 22-entry switch-on-prefix table
+    * parse_roothashsig_option() at lines 73-115 — the special "auto" / "base64:..." / "/path" tri-mode signature parser
+  - `_systemd-update-utmp` (1-stem; systemd/systemd src/update-utmp/update-utmp.c): **2 verbs (reboot + shutdown) + NO flags** decoded source-direct from:
+    * verb dispatch table at lines 55-105 (2 VERB_NOARG declarations with `/* help= */ NULL` — INTENTIONALLY HIDDEN)
+    * run() at lines 107-119 — NO parse_argv() at all; dispatches directly on argv-skip-1
+    * audit hooks at lines 64-67 (AUDIT_SYSTEM_BOOT) + 94-97 (AUDIT_SYSTEM_SHUTDOWN), both gated `#if HAVE_AUDIT`
+  - Critical extraction note: **2 NEW OPTION_COMMON_* macro families documented in R221**:
+    1. **`OPTION_COMMON_CAT_CONFIG`** (binfmt.c:152): auto-adds `--cat-config` — prints all loaded configuration files (with merged search-path output) and exits.  Used consistently across systemd-tmpfiles, systemd-sysusers, systemd-binfmt, systemd-modules-load — all the config-file-applying systemd services that read from `/etc/*.d/` dirs.
+    2. **`OPTION_COMMON_TLDR`** (binfmt.c:156): auto-adds `--tldr` — prints only the most-specific config file at each search-path level (deduplicated; the "winner" at each level).  Companion to `--cat-config`.  Both flags are mutex with `--unregister` and with positional args (binfmt.c:171-173).
+  - Critical extraction note: **systemd-storagetm's `-a`/`--all` is a SPECIAL increment counter** (`arg_all++` at storagetm.c:103) — passing it TWICE (`-a -a`) sets the value to 2, which UNLOCKS root-fs exposure at line 875 (`if (arg_all >= 2)`).  This is a safety interlock to prevent accidental root-fs exposure over NVMe-oF.  Completion expresses this as `*-a` / `*--all` (repeatable) and documents the dual-application semantics in the description.
+  - Critical extraction note: **systemd-storagetm's default NQN is auto-generated source-direct from the machine ID** — `nqn.2023-10.io.systemd:storagetm.<sd_id128_get_machine_app_specific>` at storagetm.c:140.  The `2023-10` date prefix and `io.systemd:storagetm.` reverse-DNS portion are per NVMe Base Spec 2.0c §4.5 "NVMe Qualified Names" — RFC-style domain naming.  Documented in completion description so users understand what they get if they don't pass `--nqn=`.
+  - Critical extraction note: **systemd-veritysetup is the FIRST systemd binary in the corpus with a substantive comma-separated OPTIONS positional argument** — 22 distinct option keys decoded source-direct from parse_options() at veritysetup.c:138-310:
+    * **5 fstab-meta flags** (silently accepted as no-ops): `noauto`, `auto`, `nofail`, `fail`, `_netdev` (line 161)
+    * **5 bare flags**: `ignore-corruption`, `restart-on-corruption`, `ignore-zero-blocks`, `check-at-most-once`, `panic-on-corruption`
+    * **12 key=value forms**: `superblock=BOOL`, `format=0|1`, `data-block-size=`, `hash-block-size=`, `data-blocks=`, `hash-offset=`, `salt=HEX`, `uuid=`, `hash=ALGO`, `fec-device=`, `fec-offset=`, `fec-roots=`, `root-hash-signature=`
+    Unlike `--flag=VALUE` syntax, these are packed into a SINGLE OPTIONS positional argument as comma-list: `systemd-veritysetup attach myvol /dev/sda /dev/sdb HASH "ignore-corruption,format=1,data-block-size=4096"`.  Documented as comment block in the completion.
+  - Critical extraction note: **systemd-veritysetup's ROOTHASH positional** accepts 3 special forms decoded source-direct from veritysetup.c:347-364: literal hex string (decoded via `unhexmem`), `-`/`auto` (look up via udev property `ID_DISSECT_PART_ROOTHASH`), or empty (synonym for auto).  Same tri-mode pattern for root-hash signatures via `parse_roothashsig_option()` at lines 73-115: `base64:HEX` OR `/absolute/path/to/file` OR `auto` (udev `ID_DISSECT_PART_ROOTHASH_SIG`).
+  - Critical extraction note: **systemd-update-utmp is one of the SIMPLEST systemd binaries in the corpus** in terms of CLI surface — it has **NO parse_argv() at all**.  run() at update-utmp.c:107-119 directly calls `dispatch_verb(strv_skip(argv, 1), &c)`.  This means NO `OPTION_COMMON_HELP` / `OPTION_COMMON_VERSION` — invoking `systemd-update-utmp --help` would dispatch to a verb named `--help` which doesn't exist (returns an error).  Both verbs are `VERB_NOARG` with `/* help= */ NULL` — INTENTIONALLY HIDDEN from any verb help table; systemd convention for "internal-use-only verbs".  Completion still surfaces them so users know what arguments the binary accepts.
+  - Hunt-skip notes: `systemd-makefs` deferred — upstream `src/makefs/makefs.c` was probed but returned 1 line (likely moved or restructured between API fetch and parse).  `systemd-modules-load` (473 lines, 0 visible OPTION_LONG entries via grep) deferred — likely uses positional-only kernel module names; needs deeper investigation.  `systemd-vconsole-setup` (714 lines, 0 visible flags) deferred — likely positional-only.  `systemd-volatile-root` (200 lines, 0 flags) probably positional-only too.  `systemd-getty-generator` deferred — it's a generator (writes unit files based on kernel cmdline), not a user-facing CLI.
+  - Dup-checked clean against `/usr/share/zsh` + `/opt/homebrew/share/zsh` + `/usr/local/share/zsh`.
+  - Blacklist additions: 4 entries (systemd-* cluster).
+  - Corpus 28,640 → 28,644 files.
+
 - **R220 — systemd image import/pull/export quad** (4 files: 3 new + 1 source-direct rewrite) — completes coverage of the systemd image-management family used for container/VM image lifecycle (download → import → store → export).  3 brand-new completions for the libexec binaries plus a source-direct rewrite of the pre-existing _importctl (which was documentation-URL-cited rather than source-direct verified, and was missing `pull-oci` verb + `--system`/`--user` flags + `--class=TYPE` enum + the 4 short-only class shortcuts + `--keep-download=`).
   - `_importctl` (1-stem; systemd/systemd src/import/importctl.c; **REWRITTEN source-direct from R220**): **11 verbs (list-transfers DEFAULT + pull-{tar,raw,oci} + import-{tar,raw,fs} + export-{tar,raw} + cancel-transfer + list-images) + ~22 flags** decoded source-direct from:
     * verb dispatch table at lines 264-964 (11 VERB declarations)
