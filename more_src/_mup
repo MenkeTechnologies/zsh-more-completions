@@ -1,0 +1,190 @@
+#compdef mup
+# ============================================================================
+#  _mup — Meteor-up: Production Quality Meteor Deployment to Anywhere
+#
+#  Source-direct extraction from
+#    https://github.com/zodern/meteor-up/blob/master/src/index.js
+#    https://github.com/zodern/meteor-up/tree/master/src/plugins
+#    https://github.com/yargs/yargs (the yargs library itself)
+#
+#  Authored by zodern (Zachary Anker).  1269 GH stars.  Deploys Meteor.js
+#  applications to remote servers via SSH + Docker.  Installs Docker,
+#  MongoDB, reverse-proxy with Let's Encrypt, then builds the Meteor
+#  bundle locally and ships it to the target server(s).
+#
+#  CLI library taxonomy update: 2nd documented TypeScript/Node CLI library
+#  (joining R340 hackmd-cli's `@oclif/core` framework).  mup uses
+#  bcoe/yargs — `import yargs from 'yargs'` — the IMPERATIVE FLUENT-BUILDER
+#  alternative to oclif's CLASS-INHERITANCE-WITH-STATIC-FIELDS approach.
+#  yargs is the OLDEST and most-widely-used Node CLI library: 11K+ GH
+#  stars, dependency of webpack-cli + mocha + many others.
+#
+#  yargs API differs from oclif fundamentally:
+#    .command(name, desc, builder, handler) — register subcommand
+#    .option(name, {description, alias, string, boolean, number, ...})
+#    .usage(s) / .scriptName(s) / .version(s) / .alias(s, s)
+#    .global(name, bool) / .strict(true) / .help() / .demandCommand()
+#    .epilogue(s) — help footer text
+#    .argv — terminal accessor that triggers parsing
+#  Plugins REGISTER COMMANDS into the shared yargs instance at startup —
+#  mup's `loadPlugins()` walks `src/plugins/<plugin>/commands.js` and
+#  inserts each export into yargs as a subcommand under the plugin name.
+#  Brings cross-language CLI library taxonomy variant count to 80; Node
+#  ecosystem now has 2 documented CLI libraries (oclif + yargs).
+#
+#  Surface (verbatim from src/index.js + src/plugins/*/commands.js):
+#
+#  Global flags:
+#    --settings PATH         Path to Meteor settings file
+#    --config PATH           Path to mup.js config file
+#    --servers LIST          Comma-separated list of servers to use
+#    --verbose               Print build/server script output
+#    --show-hook-names       Print hook names as commands run
+#    -v, --version           Show mup version
+#    -h, --help              Show help
+#
+#  Top-level commands (default plugin — flat namespace):
+#    init                    Setup files for new mup project
+#    setup                   Install Docker + MongoDB + dependencies
+#    deploy [--cached-build] Deploy app to server
+#    logs [-t N] [-f]        Show app logs (docker logs options)
+#    reconfig                Update server env + start scripts
+#    restart                 Restart app
+#    start                   Start app
+#    stop                    Stop app
+#    ssh                     SSH to server
+#
+#  Plugin command groups (each with sub-verbs):
+#    meteor    setup / deploy [--cached-build] / destroy [--force] /
+#              logs [-t -f] / start / stop / restart /
+#              status [--overview] / debug [server]
+#    docker    setup / restart / ps / status / update / destroy-cluster
+#    mongo     setup / logs / start / stop / shell / status [--overview]
+#    proxy     setup / reconfig-shared / logs / le-logs / envconfig /
+#              start / stop / nginx-config / status
+#
+#  Dup-skipped neighbors during hunt (already in corpus):
+#    - terminalizer (faressoft/terminalizer 16129 stars — IN CORPUS)
+#    - devtunnel (microsoft/dev-tunnels — IN CORPUS)
+# ============================================================================
+
+_mup() {
+  local context state state_descr line curcontext=$curcontext
+  typeset -A opt_args
+
+  _arguments -C \
+    '--settings=[path to Meteor settings file]:file:_files -g "*.json"' \
+    '--config=[path to mup config file]:file:_files -g "mup.{js,json}"' \
+    '--servers=[comma-separated server list]:servers' \
+    '--verbose[print build/server script output]' \
+    '--show-hook-names[print hook names as commands run]' \
+    '(-v --version)'{-v,--version}'[show mup version]' \
+    '(-h --help)'{-h,--help}'[show help]' \
+    '1: :->top' \
+    '*:: :->subargs'
+
+  case $state in
+    top)
+      local -a verbs
+      verbs=(
+        'init:setup files for new mup project'
+        'setup:install Docker + MongoDB + dependencies'
+        'deploy:deploy app to server'
+        'logs:show app logs'
+        'reconfig:update server env + start scripts'
+        'restart:restart app'
+        'start:start app'
+        'stop:stop app'
+        'ssh:SSH to server'
+        'meteor:Meteor-specific commands'
+        'docker:Docker plugin commands'
+        'mongo:MongoDB plugin commands'
+        'proxy:reverse proxy + Let'\''s Encrypt commands'
+      )
+      _describe -t commands 'mup command' verbs
+      ;;
+    subargs)
+      case $line[1] in
+        deploy)
+          _arguments -s -S '--cached-build[use build from previous deploy]'
+          ;;
+        logs)
+          _arguments -s -S \
+            '(-t --tail)'{-t,--tail}'=[number of lines from end of logs]:lines' \
+            '(-f --follow)'{-f,--follow}'[follow log output]'
+          ;;
+        meteor)
+          if [[ $CURRENT == 2 ]]; then
+            local -a sub=(
+              'setup:prepare server to deploy meteor apps'
+              'deploy:deploy meteor apps'
+              'destroy:stop and completely remove app from server'
+              'logs:view meteor app logs'
+              'start:start meteor app'
+              'stop:stop meteor app'
+              'restart:restart meteor app'
+              'status:view app status'
+              'debug:debug the meteor app'
+            )
+            _describe -t subcommands 'meteor subcommand' sub
+          else
+            case $line[2] in
+              deploy) _arguments -s -S '--cached-build[use build from previous deploy]';;
+              destroy) _arguments -s -S '--force[force app removal]';;
+              logs) _arguments -s -S \
+                '(-t --tail)'{-t,--tail}'=[lines from end]:lines' \
+                '(-f --follow)'{-f,--follow}'[follow log output]';;
+              status) _arguments -s -S '--overview[simplified status report]';;
+            esac
+          fi
+          ;;
+        docker)
+          if [[ $CURRENT == 2 ]]; then
+            local -a sub=(
+              'setup:install and start docker'
+              'restart:restart docker daemon'
+              'ps:view running containers (docker ps options)'
+              'status:view docker swarm status'
+              'update:update docker'
+              'destroy-cluster:destroy swarm cluster'
+            )
+            _describe -t subcommands 'docker subcommand' sub
+          fi
+          ;;
+        mongo)
+          if [[ $CURRENT == 2 ]]; then
+            local -a sub=(
+              'setup:install and start MongoDB'
+              'logs:view MongoDB logs'
+              'start:start MongoDB'
+              'stop:stop MongoDB'
+              'shell:open MongoDB shell on server'
+              'status:view MongoDB status'
+            )
+            _describe -t subcommands 'mongo subcommand' sub
+          elif [[ $line[2] == status ]]; then
+            _arguments -s -S '--overview[simplified mongo status]'
+          fi
+          ;;
+        proxy)
+          if [[ $CURRENT == 2 ]]; then
+            local -a sub=(
+              'setup:setup and start proxy'
+              'reconfig-shared:reconfigure shared properties'
+              'logs:view logs for proxy'
+              'le-logs:view logs for Let'\''s Encrypt'
+              'envconfig:configure environment variables for proxy'
+              'start:start proxy + Let'\''s Encrypt containers'
+              'stop:stop proxy'
+              'nginx-config:view generated nginx config'
+              'status:view proxy status'
+            )
+            _describe -t subcommands 'proxy subcommand' sub
+          fi
+          ;;
+      esac
+      ;;
+  esac
+}
+
+_mup "$@"
