@@ -19,6 +19,41 @@ Entries are in original README order: older themed-cluster entries (accumulated
 before the per-round numbering convention) appear first, followed by the
 R-numbered rounds with the newest R-round at the top of that section.
 
+- **R219 — systemd v257+ sysupdate trio: systemd-sysupdate + updatectl + systemd-keyutil** (3 files / 3 binaries) — direct follow-up to R218's hunt-skip on `updatectl` + `systemd-keyutil`.  Continues coverage of the modern systemd CLI option-parsing convention (OptionParser + FOREACH_OPTION_OR_RETURN) established in R218, this time adding **3 new OPTION_COMMON_* macro families** to the documented set.  Closes the embedded-Linux OTA family by adding the systemd-native answer alongside R209 genimage, R210 swupdate, R212 rauc, R213 mender.
+  - `_systemd-sysupdate` (1-stem; systemd/systemd src/sysupdate/sysupdate.c): **6 verbs (list default + features/update/acquire/pending/reboot) + 14 flags** decoded source-direct from:
+    * verb dispatch table at lines 1287-1654 (VERB declarations)
+    * parse_argv() at lines 1882-2023 (OptionParser FOREACH_OPTION_OR_RETURN + OPTION_GROUP/OPTION/OPTION_LONG dispatches)
+    * **conflict validation matrix at lines 2012-2019**: `--root=` and `--image=` are MUTEX (line 2013); `--reboot` is MUTEX with both `--root=` AND `--image=` (line 2015); `--definitions=` and `--component=` are MUTEX (line 2018)
+  - `_updatectl` (1-stem; systemd/systemd src/sysupdate/updatectl.c): **7 verbs (list default + check/update/vacuum/features/enable/disable) + 10 flags** decoded source-direct from:
+    * verb dispatch table at lines 648-1557 (VERB declarations with VERB_DEFAULT + VERB_ONLINE_ONLY combination — `list` is the default AND requires sysupdated to be running)
+    * parse_argv() at lines 1691-1740
+  - `_systemd-keyutil` (1-stem; systemd/systemd src/keyutil/keyutil.c): **5 verbs (validate/extract-public + alias public/extract-certificate/pkcs7) + 8 flags (4 verb-specific + 4 from OPTION_COMMON_* OpenSSL key/cert family)** decoded source-direct from:
+    * verb dispatch table at lines 163-323 (VERB_NOARG + VERB declarations)
+    * parse_argv() at lines 88-161 (the OPTION_COMMON_PRIVATE_KEY / OPTION_COMMON_PRIVATE_KEY_SOURCE / OPTION_COMMON_CERTIFICATE / OPTION_COMMON_CERTIFICATE_SOURCE macros)
+    * backward-compat alias at line 222: `VERB_NOARG(verb_extract_public, "public", /* help= */ NULL)` — same handler as `extract-public`, kept for backward compatibility
+  - Critical extraction note: **the embedded-Linux OTA family is now complete** in the corpus:
+    * R209 genimage (Pengutronix): builds rootfs / SD-card images
+    * R210 swupdate (Stefano Babic): consumes .swu artifacts; bootloader env markers (U-Boot/GRUB/EBG/CBoot)
+    * R211 swupdate tools (swupdate-client + swupdate-ipc + swupdate-progress): IPC companion binaries
+    * R212 rauc (Pengutronix): bundles signed/encrypted .raucb; A/B slot management
+    * R213 mender (Northern.tech C++20 client): mender-update + mender-auth + rauc-hawkbit-updater
+    * R214 mender-flash + bees + beesd: raw-block flasher + btrfs dedup
+    * **R219 systemd-sysupdate + updatectl** (THIS round): systemd-native A/B partition update for immutable distros (Fedora Silverblue / openSUSE MicroOS / Endless OS / Photon OS)
+    The corpus now covers ALL major embedded-Linux atomic-update engines.
+  - Critical extraction note: **3 NEW OPTION_COMMON_* macro families documented in R219** (continuing R218's modern-systemd-CLI documentation effort):
+    1. **`OPTION_COMMON_HOST`** (updatectl line 1712): auto-adds `-H`/`--host=REMOTE` for remote D-Bus execution.  Used consistently across `systemctl -H`, `loginctl -H`, `machinectl -H`, `homectl -H`, `oomctl -H`, etc.
+    2. **`OPTION_COMMON_NO_PAGER`** / **`OPTION_COMMON_NO_LEGEND`** / **`OPTION_COMMON_NO_ASK_PASSWORD`** (updatectl lines 1717-1729): auto-add `--no-pager` / `--no-legend` / `--no-ask-password` — the standard systemd-CLI output control trio for D-Bus clients.
+    3. **`OPTION_COMMON_PRIVATE_KEY`** / **`OPTION_COMMON_PRIVATE_KEY_SOURCE`** / **`OPTION_COMMON_CERTIFICATE`** / **`OPTION_COMMON_CERTIFICATE_SOURCE`** (keyutil lines 102-130): auto-add the systemd OpenSSL key/cert source family.  Sources: `auto`, `file`, `provider:NAME`, `engine:NAME` for keys; `auto`, `file`, `provider:NAME` for certs.  Used by keyutil, cryptenroll, ukify, and other crypto-aware systemd tools.
+    4. **`OPTION_COMMON_JSON`** (sysupdate.c:2004): auto-adds `--json=FORMAT` with enum (off, pretty, short).  Same enum as `journalctl --output=json*`, `systemctl --output=json*`, etc.
+    5. **`OPTION_GROUP("Verbs")`** (updatectl line 1725): purely-decorative help-text grouping marker — produces a section header in the `--help` table without actually adding a flag.  No completion impact but documented for future readers.
+  - Critical extraction note: **systemd-sysupdate operates on `.transfer` definition files** (typically `/usr/lib/sysupdate.d/*.transfer`) — these are systemd-style INI files that describe a download source + verify policy + apply target.  The `--component=` flag selects ONE component to update; `--definitions=` overrides the default search directory.  These two flags are MUTEX since `--definitions=` already constrains to a specific directory.  Documented in the completion.
+  - Critical extraction note: updatectl uses both `VERB_DEFAULT` AND `VERB_ONLINE_ONLY` for `list` (sysupdate.c verbs line 648) — first round to document VERB_ONLINE_ONLY, which means the verb is REJECTED if sysupdated D-Bus service is unavailable (returning an error rather than silently no-oping).  All 7 updatectl verbs are VERB_ONLINE_ONLY since they ALL require the daemon.
+  - Critical extraction note: keyutil's `pkcs7` verb is the rich-arg gem of R219 — combines 4 inputs (`--signature`, `--content`, `--hash-algorithm`, `--output`) to construct a PKCS#7 ContentInfo wrapping a PKCS#1 signature + raw content + cert reference.  Used to wrap raw OpenSSL signatures (which are PKCS#1 by default) in PKCS#7 envelopes for systemd-sysupdate's verify-paths checks AND for Secure Boot kernel signature validation.
+  - Hunt-skip notes: `systemd-storagetm` (NVMe-oF target manager, src/storagetm/storagetm.c, 1248 lines, 3 flags + per-block-device positional) deferred to next round.  `sysupdated` (the D-Bus service daemon for updatectl) is invoked by systemd, not directly by users; no completion needed.
+  - Dup-checked clean against `/usr/share/zsh` + `/opt/homebrew/share/zsh` + `/usr/local/share/zsh`.
+  - Blacklist additions: 3 entries (systemd-* + updatectl).
+  - Corpus 28,634 → 28,637 files.
+
 - **R218 — Newer systemd duo: systemd-bless-boot + systemd-bsod** (2 files / 2 binaries) — fresh territory covering two recently-added systemd tools that ship with modern distributions (systemd v254-v257+).  Both binaries use systemd's NEWER `OptionParser` + `FOREACH_OPTION_OR_RETURN` macro idiom — the first round in this corpus to document the modern systemd CLI option-parsing convention.
   - `_systemd-bless-boot` (1-stem; systemd/systemd src/bless-boot/bless-boot.c): **4 verbs (status default + good/bad/indeterminate) + 1 flag (--path) + 2 systemd-standards** decoded source-direct from:
     * lines 36-72 (help() block with OPTIONS + COMMANDS table layout)
