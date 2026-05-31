@@ -1,0 +1,150 @@
+#compdef metaxy
+# ============================================================================
+#  _metaxy — Pluggable sample-level metadata versioning for incremental
+#            multimodal pipelines
+#
+#  Source-direct extraction from
+#    https://github.com/anam-org/metaxy/blob/main/src/metaxy/cli/app.py
+#    https://github.com/anam-org/metaxy/blob/main/src/metaxy/cli/*.py
+#    https://github.com/BrianPugh/cyclopts (the cyclopts library)
+#
+#  Maintained by Anam (anam-org).  106 GH stars.  Metaxy is a metadata-
+#  versioning system for incremental MULTIMODAL ML pipelines — tracks
+#  per-sample feature versions, dependencies, and projects.  Used in
+#  data engineering and ML feature engineering for ensuring reproducible
+#  pipelines.
+#
+#  CLI library taxonomy update: 4th Python CLI library — BrianPugh's
+#  cyclopts.  Python ecosystem now has 4 documented CLI libraries
+#  (argparse + click + fire + cyclopts).  cyclopts is a MODERN Python
+#  3.10+ CLI framework competing with Typer — distinct in that it
+#  fully supports Union types, Literal types, Pydantic models, and
+#  uses DOCSTRINGS (not function signatures) for help text generation.
+#  cyclopts is what Typer's design SHOULD have been — Typer is the
+#  type-hint pioneer, cyclopts is the type-hint perfectionist.
+#
+#  cyclopts API differs from typer/click/argparse:
+#    app = cyclopts.App(name="X", version=v, config=cyclopts.config.Env("PREFIX_"))
+#    @app.command                              # register command
+#    @app.command(name="features")             # explicit name (kebab-case)
+#    @app.command(name="feature", show=False)  # hidden alias
+#    def features(*, verbose: Annotated[bool, cyclopts.Parameter(name=["-v", "--verbose"], help="...")] = False, ...) -> None:
+#        """Docstring becomes help text."""
+#        ...
+#    @app.meta.default                          # global launcher with cross-cutting flags
+#    def launcher(*tokens, config_file=..., ...): ...
+#    app.command("module.path:app", name="X")   # LAZY-LOADED subcommand from import string
+#    app.interactive_shell()                    # built-in REPL
+#  Brings cross-language CLI library taxonomy variant count to 84;
+#  Python ecosystem now has 4 documented CLI libraries.
+#
+#  Surface (verbatim from src/metaxy/cli/app.py + sub-modules):
+#
+#  Global flags (via app.meta.default `launcher`):
+#    --config-file PATH    Path to metaxy.toml/pyproject.toml (auto-discovery)
+#    --project NAME        Specific Metaxy project to work with
+#    --all-projects        Operate on all available Metaxy projects
+#    --sync                Load external feature definitions before execution
+#    --locked              With --sync, error if external versions don't match
+#    --version             Show metaxy version (auto-added by cyclopts)
+#
+#  Subcommands (each registered via `app.command("metaxy.cli.X:app", name="X")`):
+#    shell                 Start interactive metaxy shell (built-in REPL)
+#    config                Configuration inspection
+#    describe              Describe features and graph
+#    describe graph        Describe the feature dependency graph
+#    describe features|feature   Describe individual features
+#    graph                 Feature dependency graph operations
+#    graph render          Render dependency graph (dot/svg/png)
+#    graph-diff            Diff between two graph snapshots
+#    history               Show feature version history
+#    list                  List Metaxy entities
+#    list features|feature [-v/--verbose] [-f/--format plain|json]
+#    metadata              Metadata store operations
+#    mcp serve             Run as MCP (Model Context Protocol) server
+#    push                  Push features to metadata store
+#    lock                  Lock external feature versions for reproducibility
+#
+#  Env vars (via `cyclopts.config.Env("METAXY_")` prefix):
+#    METAXY_LOG_LEVEL      Logging verbosity (default INFO)
+#    METAXY_<any-flag>     Any CLI flag can be set via env var with this prefix
+#
+#  Dup-skipped neighbors during hunt (already in corpus or smaller):
+#    - mx (DUP — `mx` is blacklisted already; metaxy installs both `metaxy` and
+#      `mx` binaries; only document under canonical `metaxy` name)
+#    - fastmcp (PrefectHQ/fastmcp 25413 stars — IN CORPUS; also cyclopts user)
+#    - mopidy-spotify (976 stars — Mopidy extension, not standalone)
+#    - candies (astrogewgaw/candies 5 stars — astronomy, narrow)
+# ============================================================================
+
+_metaxy() {
+  local context state state_descr line curcontext=$curcontext
+  typeset -A opt_args
+
+  _arguments -C \
+    '--config-file=[path to metaxy config file]:config:_files -g "*.{toml,yml,yaml}"' \
+    '--project=[Metaxy project to work with]:project name' \
+    '--all-projects[operate on all available Metaxy projects]' \
+    '--sync[load external feature definitions before execution]' \
+    '--locked[with --sync, error if external versions diverge]' \
+    '--version[show metaxy version]' \
+    '1: :->cmd' \
+    '*:: :->subargs'
+
+  case $state in
+    cmd)
+      local -a verbs
+      verbs=(
+        'shell:start interactive Metaxy shell'
+        'config:inspect Metaxy configuration'
+        'describe:describe features and graph'
+        'graph:feature dependency graph operations'
+        'graph-diff:diff between two graph snapshots'
+        'history:show feature version history'
+        'list:list Metaxy entities'
+        'metadata:metadata store operations'
+        'mcp:run as MCP (Model Context Protocol) server'
+        'push:push features to metadata store'
+        'lock:lock external feature versions for reproducibility'
+      )
+      _describe -t commands 'metaxy subcommand' verbs
+      ;;
+    subargs)
+      case $line[1] in
+        list)
+          if [[ $CURRENT == 2 ]]; then
+            _describe -t subcommands 'list subcommand' \
+              'features:list Metaxy features in current project'
+          elif [[ $line[2] == features || $line[2] == feature ]]; then
+            _arguments -s -S \
+              '(-v --verbose)'{-v,--verbose}'[show detailed information]' \
+              '(-f --format)'{-f,--format}'=[output format]:format:(plain json)'
+          fi
+          ;;
+        describe)
+          if [[ $CURRENT == 2 ]]; then
+            local -a sub=(
+              'graph:describe feature dependency graph'
+              'features:describe one or more features'
+            )
+            _describe -t subcommands 'describe subcommand' sub
+          fi
+          ;;
+        graph)
+          if [[ $CURRENT == 2 ]]; then
+            _describe -t subcommands 'graph subcommand' \
+              'render:render dependency graph'
+          fi
+          ;;
+        mcp)
+          if [[ $CURRENT == 2 ]]; then
+            _describe -t subcommands 'mcp subcommand' \
+              'serve:start MCP server'
+          fi
+          ;;
+      esac
+      ;;
+  esac
+}
+
+_metaxy "$@"
