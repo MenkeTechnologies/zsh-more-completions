@@ -1,0 +1,255 @@
+#compdef fuel-core
+# Documentation: source-direct extraction from upstream
+# FuelLabs/fuel-core bin/fuel-core/src/ (clap v4 derive):
+#   cli.rs lines 44-68 (Opt Parser struct + Fuel Subcommand
+#     enum with 5 variants; 3 cfg-gated by `rocksdb`
+#     feature; one is `#[clap(subcommand)]` for nested
+#     archive tree)
+#   cli/run.rs lines 130-343 (run::Command Parser struct
+#     with 30+ direct flags + 10+ flatten groups; many
+#     `#[cfg_attr(feature = "X", clap(flatten))]`
+#     feature-gated flattens)
+#   cli/snapshot.rs lines 32-65 (snapshot::Command + 4-deep
+#     subcommand tree: snapshot → everything/contract →
+#     encoding → json/parquet)
+#   cli/snapshot.rs lines 70-86 (Encoding enum with
+#     `#[cfg(feature = "parquet")]` on the Parquet variant)
+#   cli/snapshot.rs lines 98-105 (EncodingCommand wrapper
+#     enum — needed because clap derive requires a struct/
+#     enum wrapping a leaf enum at each nesting level)
+#   cli/snapshot.rs lines 128 (`#[command(arg_required_else_help
+#     = true)]` on Contract variant)
+#   cli/rollback.rs lines 21-50 (rollback::Command with
+#     --db-path + --rocksdb-max-fds + --target-block-height
+#     + --target-da-block-height)
+#   cli/fee_contract.rs lines 10-20 (fee_contract::Command:
+#     positional Address + --output/-o + --force/-f)
+#   cli/archive.rs lines 7-47 (archive::Command Subcommand:
+#     Backup(BackupArgs)/Restore(RestoreArgs); each with
+#     --from + --to + Backup also has --file-name)
+# Reference accessed: 2026-05-30 via gh api.
+#
+# fuel-core is the **Fuel Network node implementation** —
+# the Rust client that participates in Fuel's parallel-
+# execution UTXO blockchain network.  Sister to forc (Fuel
+# contract compiler; in corpus) and fuelup (Fuel toolchain
+# manager; R253).  Completes the **Fuel Network cluster**:
+# fuelup (R253 installer), fuel-core (R255 node), forc
+# (existing compiler).
+#
+# Critical extraction note: fuel-core uses
+# **`#[cfg_attr(feature = "X", clap(flatten))]` paired
+# with `#[cfg(feature = "X")]`** at run.rs:291-314 on
+# multiple fields (relayer_args, p2p_args, sync_args,
+# shared_sequencer_args, pre_confirmation_signature_service_args).
+# This is a **2-layer cfg gating** where:
+#   1. `#[cfg(feature = "X")]` makes the FIELD itself
+#      absent when feature is off
+#   2. `#[cfg_attr(feature = "X", clap(flatten))]`
+#      conditionally applies the `clap(flatten)` attribute
+#      ONLY when feature is on (otherwise no attribute at
+#      all, but the field is absent anyway by rule 1)
+# Why both?  Pedantic clarity — `cfg_attr` would suffice
+# alone IF the field is conditionally present.  The pair
+# documents intent: "this attribute applies only when this
+# field exists".  Documents the **paired-cfg gating
+# pattern** for clap derive — distinct from R251 torii's
+# struct-level `#[cfg(feature = "server")]` and R254
+# subxt's single-field gating.  This is **field-level cfg
+# gating + cfg_attr-clap-attribute pairing** at production
+# scale.
+#
+# Critical extraction note: fuel-core uses
+# **`#[allow(clippy::large_enum_variant)]`** on the Fuel
+# enum at cli.rs:56 — same lint-suppression as R252 saya
+# (instead of R250 sozo's Box<XxxArgs> approach).  fuel-
+# core's Fuel enum has 5 variants, all relatively small
+# Args structs, so allow-lint is appropriate.  Documents
+# the corpus's enum-size-handling taxonomy in another
+# production CLI.
+#
+# Critical extraction note: fuel-core uses
+# **`rename_all = "kebab-case"`** at cli.rs:49 on the
+# top-level `#[clap(...)]` attribute.  This is clap's
+# **global flag-name renaming policy** — converts every
+# field's snake_case identifier to kebab-case in the CLI
+# (e.g. `service_name` → `--service-name`).  Distinct from
+# per-flag explicit `long = "..."` which fuel-core ALSO
+# uses extensively (redundant in many places — `long =
+# "service-name"` is the same as the auto-derived name).
+# Documents **clap's rename_all policy** — useful for
+# avoiding manual `long = "..."` on every flag while
+# keeping CLI naming consistent.  4 valid rename_all
+# values: `"camelCase"`, `"kebab-case"`, `"PascalCase"`,
+# `"SCREAMING_SNAKE_CASE"`, `"snake_case"`.
+#
+# Critical extraction note: fuel-core's `snapshot`
+# subcommand has a **4-deep subcommand tree**:
+#   1. `fuel-core snapshot [--db-path X] [--output-directory Y]`
+#   2.   `everything` | `contract`
+#   3.   `everything` has `Option<EncodingCommand>` =
+#        `encoding`
+#   4.     `encoding` has `Encoding` =
+#          `json` | `parquet [--group-size N] [--compression-level N]`
+# Documents the **wrapper-enum-for-nested-subcommand**
+# pattern: `EncodingCommand` exists ONLY to wrap
+# `Encoding` so clap derive can nest it as a subcommand
+# inside `everything`.  Without the wrapper, clap derive
+# can't nest a bare enum.  Corpus's first documented
+# clap derive wrapper-enum nesting pattern.  Plus
+# `#[command(arg_required_else_help = true)]` on Contract
+# at snapshot.rs:128 — when no args provided, show help
+# instead of erroring on missing required arg.  Corpus's
+# first documented `arg_required_else_help` attribute.
+#
+# Critical extraction note: fuel-core uses
+# **`conflicts_with = "consensus_key"`** at run.rs:252 on
+# `--consensus-aws-kms` — declarative mutex (the AWS KMS
+# alternative to providing a raw consensus key).  Plus
+# `env = "CONSENSUS_KEY_SECRET"` (explicit rename to a
+# more-descriptive env var name, similar to R250 sozo's
+# explicit env names).  Documents the **single-pair
+# conflicts_with mutex** in clap derive — distinct from
+# R249 cairo-profiler's 3-way conflicts_with mutex via
+# repeated attribute.
+
+local curcontext="$curcontext" state line ret=1
+
+# 5 top-level subcommands decoded source-direct from Fuel
+# enum at cli.rs lines 58-68. Several are feature-gated by
+# `rocksdb` but typically distributed binaries have it on.
+local -a subcommands=(
+  'run:run the Fuel client node locally (30+ flags + 10+ flatten groups)'
+  'snapshot:print a snapshot of blockchain state to stdout (FEATURE-GATED: rocksdb; 4-deep subcommand tree)'
+  'rollback:rollback the state of the blockchain to a specific block height (FEATURE-GATED: rocksdb)'
+  'generate-fee-contract:generate a fee-collection contract for a withdrawal address'
+  'archive:backup or restore the database tar archive (FEATURE-GATED: rocksdb)'
+)
+
+local -a snapshot_subs=(
+  'everything:create a snapshot of the entire database + produce a chain config'
+  'contract:create a snapshot config for a specific contract'
+)
+
+local -a encoding_subs=(
+  'json:JSON encoding for chain state files'
+  'parquet:Parquet encoding for chain state files (FEATURE-GATED: parquet; --group-size + --compression-level)'
+)
+
+local -a archive_subs=(
+  'backup:backup the database into a tar archive'
+  'restore:restore the database from a tar archive'
+)
+
+_arguments -C \
+  '(-h --help)'{-h,--help}'[show help]' \
+  '(-V --version)'{-V,--version}'[show version]' \
+  '1:subcommand:->subcmd' \
+  '*::args:->args' && ret=0
+
+case $state in
+  subcmd)
+    _describe -t subcommands 'fuel-core subcommand' subcommands && ret=0
+    ;;
+  args)
+    case $words[1] in
+      run)
+        # 30+ direct flags decoded source-direct from
+        # run::Command at run.rs lines 130-343.  Skipping
+        # flatten group flags (gas-price, tx-pool, tx-
+        # status-manager, graphql, relayer, p2p, sync, rpc,
+        # pre-confirmation, shared-sequencer, profiling)
+        # — those each live in their own modules.
+        _arguments \
+          '(-h --help)'{-h,--help}'[show help for `run`]' \
+          '--service-name=[vanity name for node (used in telemetry; default: fuel-core; env: SERVICE_NAME)]:name:' \
+          '--max-database-cache-size=[max database cache size in bytes (default: 1 GiB; env: MAX_DATABASE_CACHE_SIZE)]:bytes:' \
+          '--db-path=[path to the database (env: DB_PATH)]:dir:_files -/' \
+          '--db-type=[database backend type (env: DB_TYPE)]:type:(rocks-db in-memory)' \
+          '--rocksdb-max-fds=[max file descriptors RocksDB can use; -1 = no limit; default: OS limit / 2 (env: ROCKSDB_MAX_FDS)]:n:' \
+          '--state-rewind-duration=[state rewind duration (default: 7d; env: STATE_REWIND_DURATION)]:duration:' \
+          '--snapshot=[snapshot from which to do (re)genesis (env: SNAPSHOT)]:dir:_files -/' \
+          '--db-prune=[prune the db; default: false (env: DB_PRUNE)]:bool:(true false)' \
+          '--continue-services-on-error[continue services on internal error (env: CONTINUE_SERVICES_ON_ERROR)]' \
+          '--debug[DEBUG mode (local dev only) — allows arbitrary block advancement + debugger endpoints + utxo_validation=false + allow_syscall=true (env: DEBUG)]' \
+          '--historical-execution[allow execution based on past blocks (e.g. dry run in the past) (env: HISTORICAL_EXECUTION)]' \
+          '--expensive-subscriptions[allow expensive GraphQL subscriptions (env: EXPENSIVE_SUBSCRIPTIONS)]' \
+          '--vm-backtrace[enable logging of backtraces from VM errors (env: VM_BACKTRACE)]' \
+          '--allow-syscall[enable syscall support for bytecode (REQUIRES --debug; env: ALLOW_SYSCALL)]' \
+          '--utxo-validation[enable full UTXO stateful validation (env: UTXO_VALIDATION)]' \
+          '--native-executor-version=[override native executor version (env: NATIVE_EXECUTOR_VERSION)]:n:' \
+          '--executor-number-of-cores=[cores for parallel executor (default: 1; env: EXECUTOR_NUMBER_OF_CORES)]:n:' \
+          '(--consensus-aws-kms)--consensus-key=[block-signing private key (prefer CONSENSUS_KEY_SECRET env var)]:key:' \
+          '(--consensus-key)--consensus-aws-kms=[use AWS KMS for block signing; takes a key ARN (env: CONSENSUS_AWS_KMS; mutex with --consensus-key)]:key-arn:' \
+          '--da-compression=[produce + store da-compressed blocks with the given retention time (env: DA_COMPRESSION)]:duration:' \
+          '--da-compression-starting-height=[starting height of the compression service (env: DA_COMPRESSION_STARTING_HEIGHT)]:n:' \
+          '--predefined-blocks-path=[path to directory containing JSON encoded predefined blocks (env: PREDEFINED_BLOCKS_PATH)]:dir:_files -/' \
+          '--coinbase-recipient=[fee recipient public key (defaults to --consensus-key address; env: COINBASE_RECIPIENT)]:pubkey:' \
+          '--disable-metrics=[comma-separated metrics to disable (env: DISABLE_METRICS)]:modules:' \
+          '--verify-max-da-lag=[max DA lag in blocks before bailing (default: 10; env: VERIFY_MAX_DA_LAG)]:n:' \
+          '--verify-max-relayer-wait=[max time to wait for relayer sync (default: 30s; env: VERIFY_MAX_RELAYER_WAIT)]:duration:' \
+          '--min-connected-reserved-peers=[reserved peers to connect before syncing (default: 0; env: MIN_CONNECTED_RESERVED_PEERS)]:n:' \
+          '--time-until-synced=[time after latest block to consider Synced (default: 0s; env: TIME_UNTIL_SYNCED)]:duration:' \
+          '--production-timeout=[block production timeout (default: 20s; env: PRODUCTION_TIMEOUT)]:duration:' \
+          '--memory-pool-size=[memory pool size in MemoryInstance count (default: 32; env: MEMORY_POOL_SIZE)]:n:' && ret=0
+        ;;
+      snapshot)
+        if (( CURRENT == 2 )); then
+          _alternative \
+            'subcommands:snapshot verb:_describe -t snapshot-subs "verb" snapshot_subs' \
+            'flags:flag:(--db-path --output-directory --rocksdb-max-fds --max-database-cache-size)' && ret=0
+        else
+          case $words[2] in
+            everything)
+              if (( CURRENT == 3 )); then
+                _alternative \
+                  'flags:flag:(--chain encoding)' \
+                  'encoding-token:next:(encoding)' && ret=0
+              elif [[ $words[3] == "encoding" ]]; then
+                _describe -t encoding-subs 'encoding verb' encoding_subs && ret=0
+              fi
+              ;;
+            contract)
+              _arguments \
+                '--id=[contract ID to snapshot (REQUIRED; arg_required_else_help)]:contract-id:' && ret=0
+              ;;
+          esac
+        fi
+        ;;
+      rollback)
+        _arguments \
+          '--db-path=[path to database]:dir:_files -/' \
+          '--rocksdb-max-fds=[max RocksDB file descriptors]:n:' \
+          '--target-block-height=[target block height for rollback]:n:' \
+          '--target-da-block-height=[target DA block height for rollback]:n:' && ret=0
+        ;;
+      generate-fee-contract)
+        _arguments \
+          '(-o --output)'{-o+,--output=}'[output file (defaults to printing hex to stdout)]:file:_files' \
+          '(-f --force)'{-f,--force}'[overwrite output file if it exists]' \
+          '1:withdrawal Address:' && ret=0
+        ;;
+      archive)
+        if (( CURRENT == 2 )); then
+          _describe -t archive-subs 'archive verb' archive_subs && ret=0
+        else
+          case $words[2] in
+            backup)
+              _arguments \
+                '--from=[source directory of database to backup (REQUIRED)]:dir:_files -/' \
+                '--to=[destination directory for backup tar files (REQUIRED)]:dir:_files -/' \
+                '--file-name=[name of final tar file (default: db.tar)]:filename:' && ret=0
+              ;;
+            restore)
+              _arguments \
+                '--from=[source tar file to restore from (REQUIRED)]:file:_files -g "*.tar"' \
+                '--to=[target directory to restore the database into (REQUIRED)]:dir:_files -/' && ret=0
+              ;;
+          esac
+        fi
+        ;;
+    esac
+    ;;
+esac
+
+return ret
