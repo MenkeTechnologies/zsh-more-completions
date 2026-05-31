@@ -1,0 +1,132 @@
+#compdef moq
+# Documentation: source-direct extraction from upstream
+# matryer/moq main.go (Go-based CLI using **Go stdlib
+# `flag` package** — same library family as R264 ctop,
+# but uses the **`flag.StringVar` / `flag.BoolVar`
+# write-to-pointer variants** instead of ctop's
+# pointer-returning forms):
+#   main.go lines 18-27 (userFlags struct with 7 fields
+#     + args slice)
+#   main.go lines 29-63 (main fn: 8 flag declarations,
+#     custom flag.Usage, positional handling via
+#     flag.Args())
+#   main.go lines 31-41 (flag.StringVar + flag.BoolVar
+#     7 declarations + 1 pointer-returning flag.Bool —
+#     MIXED patterns in same CLI)
+#   main.go lines 43-48 (custom flag.Usage override:
+#     usage line + flag.PrintDefaults() + custom
+#     interface-alias example lines)
+#   main.go line 51 (positional args extracted via
+#     `flag.Args()` after flag.Parse())
+#   main.go lines 66-67 (positional minimum: at least 2
+#     args required — source-dir + interface)
+# Reference accessed: 2026-05-30 via gh api.
+#
+# moq is the **Go interface mock generator** from
+# matryer — generates Go mock implementations from
+# interface definitions for use in testing.  Pivots from
+# container TUI (R264 ctop) into the **Go testing
+# tooling cluster**.  Sister to mockgen (in corpus),
+# testify (in corpus).  Continues the Go-stdlib-flag
+# documentation series (R264 ctop established the
+# library taxonomy; R265 moq documents a different
+# variant within the same library).
+#
+# Critical extraction note: moq uses **`flag.StringVar`
+# / `flag.BoolVar` write-to-pointer variants** at
+# main.go:31, 32, 33, 34, 37, 39, 40 — distinct from
+# R264 ctop's pointer-RETURNING `flag.String("name",
+# "default", "help") *string`.  StringVar signature:
+# `flag.StringVar(p *string, name, defaultValue, help
+# string)`.  Writes to user-provided `&var` directly so
+# the calling code accesses `flags.outFile` instead of
+# `*outFileFlag`.  Documents the **2 stdlib-flag access
+# patterns**: (a) pointer-returning form (R264 ctop),
+# (b) write-to-pointer form via StringVar/BoolVar (R265
+# moq).  The Var-form is more idiomatic when collecting
+# flags into a struct (like moq's `userFlags`); the
+# pointer-returning form is more idiomatic when flags
+# are local variables.  Documents the **stdlib-flag
+# struct-collection pattern** for grouped flag handling.
+#
+# Critical extraction note: moq uses **MIXED PATTERNS
+# in the same CLI** at main.go:36 — `printVersion :=
+# flag.Bool("version", false, "show the version for
+# moq")` is the pointer-returning form, while the OTHER
+# 7 flags use the StringVar/BoolVar write-to-pointer
+# form.  Documents the **mixed-stdlib-flag-patterns
+# reality** — moq's authors used the pointer-returning
+# form for `--version` (a local-only flag that doesn't
+# need to flow into the `userFlags` struct) but the
+# struct-write form for everything that needs to flow
+# into the run-fn.  Practical hybrid usage.
+#
+# Critical extraction note: moq uses **custom
+# `flag.Usage` function** at main.go:43-48 — overrides
+# the default help format with: (a) usage line printed
+# first, (b) `flag.PrintDefaults()` for the flag list,
+# (c) extra lines explaining the `interface:alias`
+# syntax with an example.  Documents the **custom
+# flag.Usage override pattern** — Go's stdlib flag
+# package allows replacing the default help generator
+# by assigning to `flag.Usage`.  Distinct from R264
+# ctop's separate `printHelp` fn (called manually from
+# `*helpFlag` branch).  moq's approach is more idiomatic:
+# `flag.Usage` is automatically called when parsing
+# fails or `-h` is passed.  Corpus's **first documented
+# `flag.Usage` override**.
+#
+# Critical extraction note: moq uses **positional args
+# via `flag.Args()`** at main.go:51 — after
+# `flag.Parse()`, `flag.Args()` returns the remaining
+# (non-flag) arguments as `[]string`.  moq expects at
+# least 2 positionals: `source-dir` + at least 1
+# interface name (with optional `:alias` suffix).  The
+# minimum check at line 66 (`if len(flags.args) < 2 {
+# return errors.New("not enough arguments") }`) is
+# manual.  Documents the **stdlib-flag positional
+# handling** — distinct from R263 lazygit's flaggy
+# `AddPositionalValue` with required-flag and R249
+# cairo-profiler's clap derive positional with
+# `num_args = 1..`.  Stdlib flag has NO positional
+# declaration syntax; positionals are just "everything
+# after the parsed flags".
+#
+# Critical extraction note: moq supports
+# **`interface:alias` syntax for naming the generated
+# mock** — e.g. `moq -pkg different . MyInterface:MyMock`
+# generates a mock for `MyInterface` named `MyMock`
+# instead of the default `MyInterfaceMock`.  The
+# alias-syntax parsing is in pkg/moq (not main.go).
+# Documents the **colon-separated positional alias
+# pattern** in CLI design — a single positional with
+# embedded structure (`name:alias`) parsed by the
+# downstream library.  Distinct from R248 cairo-
+# coverage's `value_parser = fn` (which validates a
+# whole positional) — moq's colon-form is a STRUCTURAL
+# parse (split + assign roles).
+
+local curcontext="$curcontext" state line
+
+# Formatter values from --fmt help text at main.go:33:
+# `gofmt, goimports or noop`.
+local -a formatters=(
+  'gofmt:standard go fmt (default)'
+  'goimports:goimports (organize imports + format)'
+  'noop:no formatting (raw output)'
+)
+
+# Go stdlib flag treats `-X` and `--X` as the same flag
+# (every flag accepts both forms).
+_arguments -s -S \
+  '(-h -help --h --help)'{-h,-help,--h,--help}'[show help (calls custom flag.Usage)]' \
+  '(-version --version)'{-version,--version}'[show the version for moq]' \
+  '(-out --out)'{-out+,--out=}'[output file (default: stdout)]:file:_files -g "*.go"' \
+  '(-pkg --pkg)'{-pkg+,--pkg=}'[package name (default: infer from source-dir)]:package:' \
+  '(-fmt --fmt)'{-fmt+,--fmt=}'[Go pretty-printer]:formatter:(($formatters))' \
+  '(-stub --stub)'{-stub,--stub}'[return zero values when no mock impl provided (do not panic)]' \
+  '(-skip-ensure --skip-ensure)'{-skip-ensure,--skip-ensure}'[suppress mock impl check (avoids import cycles when mocks generated outside tested package)]' \
+  '(-rm --rm)'{-rm,--rm}'[remove output file first if it exists]' \
+  '(-with-resets --with-resets)'{-with-resets,--with-resets}'[generate functions to facilitate resetting mock call records]' \
+  '1:source-dir:_files -/' \
+  '*:interface[:alias] (e.g. MyInterface or MyInterface:MyMock):'
