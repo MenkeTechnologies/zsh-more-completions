@@ -19,6 +19,43 @@ Entries are in original README order: older themed-cluster entries (accumulated
 before the per-round numbering convention) appear first, followed by the
 R-numbered rounds with the newest R-round at the top of that section.
 
+- **R237 — dependabot CLI rewrite** (1 file source-direct rewrite) — major source-direct rewrite of the existing `_dependabot` completion which was cited from a documentation URL rather than source-verified and was missing 1 subcommand (`graph`), 2 persistent image flags, and 9 shared infrastructure flags.  dependabot is **GitHub's official Go-based local Dependabot runner** — runs the same Dependabot update logic that GitHub's hosted Dependabot uses, but locally in Docker so users can debug failed update jobs, run smoke tests against new updater versions, and inspect dependency graphs.  Sister to GitHub's hosted Dependabot service (which runs the same `dependabot-updater-*` Docker images as this CLI).
+  - `_dependabot` (1-stem; dependabot/cli cmd/dependabot/internal/cmd/; **REWRITTEN source-direct from R237**): **4 subcommands + 4 persistent image-override flags + 9 shared-infra flag group + per-subcommand flags** decoded source-direct from:
+    * `root.go` lines 38-65 (rootCmd cobra.Command + 4 persistent image-override flags)
+    * `update.go` lines 56-142 (`update [<pkg_mgr> <repo> | -f <input.yml>]` with ~18 flags)
+    * `test.go` lines 22-78 (`test -f <smoke-test.yml>` with 12 flags)
+    * `graph.go` lines 26-120 (`graph [<pkg_mgr> <repo> | -f <input.yml>]` with 13 flags; marked [Experimental])
+    * `version.go` (no flags)
+    * init() blocks register each subcommand with rootCmd.AddCommand(...) at update.go:27-28, test.go:101-102, graph.go:19-20
+  - Critical extraction note: **3 of 4 subcommands (update, test, graph) share a 9-flag "infrastructure" group** decoded source-direct from the parallel flag-set patterns in update.go:130-137, test.go:69-77, graph.go:114-119:
+    * `--cache PATH` (import/export cache dir)
+    * `--local PATH` (use local dir as fetched source; skip clone)
+    * `--proxy-cert PATH` (cert the MITM proxy will trust)
+    * `--collector-config PATH` (OpenTelemetry collector config)
+    * `--pull BOOL` (pull image if absent; default true)
+    * `--debug` (interactive shell in updater)
+    * `-v`/`--volume STRING` (Docker volume mounts; repeatable)
+    * `--extra-hosts STRING` (Docker extra hosts on the proxy; repeatable)
+    * `-t`/`--timeout DURATION` (max time for update)
+    This documents the **"shared infrastructure flag group" pattern at the subcommand-flag-group level** — similar in concept to R236 evcc's persistent flags but applied across SEVERAL subcommands rather than all subcommands.  Completion implements this via a `local -a shared_infra_flags=(...)` array reused inside each subcommand's `_arguments` call.
+  - Critical extraction note: **4 persistent image-override flags** at root.go:61-64 (apply to ALL subcommands) — the corpus's first documented **"container-image override family"**:
+    * `--updater-image IMAGE` (override Dependabot updater image)
+    * `--proxy-image IMAGE` (override MITM proxy image)
+    * `--collector-image IMAGE` (override OTel collector image)
+    * `--storage-image IMAGE` (override storage service image)
+    Used by enterprise users running custom-built dependabot updater forks to swap the upstream images.
+  - Critical extraction note: **`update` and `graph` accept TWO alternative invocation patterns** (decoded source-direct from update.go:56 and graph.go:27):
+    1. positional `<package_manager> <repo>` (GitHub-driven)
+    2. `-f <input.yml>` (smoke-test-style YAML driven)
+    Mutex enforced at update.go:149+203 (count + validation).  Completion offers both patterns via the `-f` flag and a rest-positional spec.  This is the corpus's first documented "alternative invocation pattern" pair where ONE positional + ONE flag are mutex.
+  - Critical extraction note: **the `<package_manager>` positional accepts Dependabot's canonical 18-language enum** decoded source-direct from upstream dependabot-core's ecosystem names: `npm`, `pip`, `bundler`, `maven`, `gradle`, `go_modules`, `cargo`, `composer`, `mix`, `nuget`, `terraform`, `github_actions`, `docker`, `elm`, `submodules`, `pub`, `swift`, `devcontainers`.  Pre-existing `_dependabot` had `hex` (incorrect — the Elixir manager is `mix`, not `hex`) and `npm_and_yarn` (incorrect — Dependabot uses `npm` as the ecosystem name for both npm AND yarn).  These were FIXED in this round.  Source-direct verification catches these doc-URL-citation errors.
+  - Critical extraction note: pre-existing `_dependabot` had `--dry-run` flag which does NOT exist in upstream — confirmed by grep on update.go:121-142 (no `dryRun` registration).  Likely confused with `--debug`.  REMOVED in this round.  Continues the corpus's source-direct bug-spotting practice (R227 "ssh hot" typo, R231 ferrishot swapped doc strings).
+  - Critical extraction note: pre-existing `_dependabot` listed `completion` as a top-level subcommand, but the source doesn't register one — cobra's auto-completion subcommand is provided by `cobra.Command{}.GenZshCompletionCmdFunc()`, but the rootCmd doesn't enable this in upstream init().  Users wanting completion run `dependabot help` or rely on the existing shell tab-completion files.  REMOVED `completion` from the verb list.
+  - Hunt-skip notes: `dependabot-core` (the Ruby gem that powers the actual ecosystem-specific update logic; consumed AS a Docker image by this CLI) deferred — library code, not a user-facing CLI.  `dependabot-omnibus` (legacy package) deferred — superseded by dependabot CLI.  `dependabot-cli` was a probe alias; same binary.
+  - Dup-checked clean against `/usr/share/zsh` + `/opt/homebrew/share/zsh` + `/usr/local/share/zsh`.
+  - Blacklist: already had `dependabot`.
+  - Corpus 28,664 → 28,664 (rewrite, no new file).
+
 - **R236 — evcc (open-source EV charging controller)** (1 file / 1 binary) — branches off the TTS cluster (R235 edge-tts) into EV charging infrastructure tooling.  evcc is the **premier open-source EV charging orchestrator** for home + small-business installations — supports 200+ wallbox brands (KEBA, ABB, Wallbe, OpenWB, Phoenix Contact, go-e, etc.) + 100+ vehicle brands (Tesla, BMW, VW Group, Hyundai/Kia, Mercedes, Audi, etc.) via per-brand cloud APIs.  Orchestrates EV charging across wallbox + solar PV + grid + battery + vehicles + tariff providers (dynamic-price, fixed, PV-export).  This is the **FIRST round in the corpus to document EV-charging tooling**.
   - `_evcc` (1-stem; evcc-io/evcc cmd/): **21 subcommands + 3-level subcommand tree + ~30 flags + persistent flag group** decoded source-direct from:
     * `cmd/root.go` lines 87-105 (rootCmd persistent + daemon-only flags)
