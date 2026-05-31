@@ -1,0 +1,147 @@
+#compdef cairo-coverage
+# Documentation: source-direct extraction from upstream
+# software-mansion/cairo-coverage crates/cairo-coverage/src/
+# (version 0.6.1; clap v4 derive):
+#   main.rs lines 11-24 (entry point; CairoCoverageArgs::parse())
+#   args/mod.rs lines 8-24 (CairoCoverageArgs Parser struct
+#     with `args_conflicts_with_subcommands = true` +
+#     Command enum: Clean / Run)
+#   args/run.rs lines 6-31 (RunArgs Parser struct with 6
+#     fields; positional trace_files + 5 flags)
+#   args/run.rs lines 34-38 (IncludedComponent ValueEnum
+#     with 1 variant: Macros)
+#   args/run.rs lines 40-50 (parse_trace_file validator:
+#     exists / is_file / .json extension)
+#   args/run.rs lines 53-60 (parse_project_path validator:
+#     exists / is_dir)
+#   args/clean.rs lines 5-15 (CleanArgs Parser struct with
+#     2 fields: --root-dir / --files-to-delete)
+# Reference accessed: 2026-05-30 via gh api.
+#
+# cairo-coverage is the **Starknet Cairo coverage tool**
+# from software-mansion (same org as scarb, snforge, sncast,
+# starknet-foundry).  Produces lcov-format coverage reports
+# from snforge test traces.  Sister to sncast (R247) and
+# snforge (already in corpus).  Continues the Starknet/Cairo
+# tooling cluster started in R247.
+#
+# Critical extraction note: cairo-coverage uses **clap v4
+# `args_conflicts_with_subcommands = true`** at args/mod.rs:9
+# — this attribute marks the parent's args as mutually-
+# exclusive with subcommands.  Useful when the parent accepts
+# args ONLY when no subcommand is given (currently no parent
+# args, but the attribute is set so the marker is reserved
+# for future expansion).  This is the **corpus's first
+# documented `args_conflicts_with_subcommands` clap derive
+# attribute** — distinct from `subcommand_required`
+# (R213/R214) which forces a subcommand, and distinct from
+# `subcommand_negates_reqs` which makes subcommand presence
+# clear required-arg constraints.  Documents the **3-way
+# clap derive attribute family** for parent/child relations.
+#
+# Critical extraction note: cairo-coverage uses
+# **`requires = "unstable"`** at args/run.rs:17 + 21 to gate
+# `--include` and `--no-truncation` behind `--unstable`.
+# clap surfaces the error "the following required arguments
+# were not provided: --unstable" when either gated flag is
+# used without --unstable.  This is **opt-in feature gating
+# at the parser level** — distinct from the corpus's R225
+# turbo body-bail (which checks at runtime via `if !ctx.unstable_features { return Err(...) }`), the R201
+# variant-level gating (which uses `#[cfg(feature = "...")]`
+# to compile variants away), and the R237 dependabot pkg-
+# ecosystem name approach.  Documents the **4th feature-
+# gating pattern** in the corpus: clap's `requires = "X"`
+# attribute marking a runtime gate at the parser level.
+#
+# Critical extraction note: cairo-coverage uses
+# **`#[derive(ValueEnum)]` with a single variant** at
+# args/run.rs:35-38 (`enum IncludedComponent { Macros }`).
+# This is the corpus's first documented **single-value
+# ValueEnum** — an extension point for future variants
+# without changing the CLI surface.  Distinct from clap's
+# `value_parser = [...]` slice (which is a compile-time
+# fixed array; R209) — the ValueEnum approach allows method
+# implementations on the enum, doc-comments per variant,
+# and `--help` rendering of variant descriptions.  Currently
+# the only value is `macros` (covers inline macros, attribute
+# macros, derive macros).
+#
+# Critical extraction note: cairo-coverage uses **custom
+# `parse_trace_file` + `parse_project_path` validators** via
+# `value_parser = fn` at args/run.rs:9 + 29.  The trace_file
+# validator checks: (a) file exists, (b) is a regular file
+# (not a dir/symlink), (c) has `.json` extension via
+# `matches!(trace_file.extension(), Some("json"))`.  The
+# project_path validator checks: (a) exists, (b) is a
+# directory.  Both use `anyhow::ensure!` for fail-fast
+# semantics with the specific error message surfaced
+# directly to the user.  Documents **clap's `value_parser`
+# attribute pointing to a function returning Result<T,E>**
+# — the parser invokes the function once per arg, surfacing
+# the error from `anyhow::ensure!` as a clap parse error.
+# Distinct from the corpus's R231 ferrishot `guard()`
+# (bpaf closure-based) and R247 sncast NonZero* types
+# (type-system-based).  This is the **3rd documented
+# parser-level validation pattern**.
+#
+# Critical extraction note: cairo-coverage's
+# **`num_args = 1..` on the positional `trace_files`** at
+# args/run.rs:9 means "1 or more values" — clap accepts
+# `cairo-coverage run a.json b.json c.json` as 3 values
+# bundled into the Vec<Utf8PathBuf>.  Combined with
+# `required = true`, this means at least 1 trace file is
+# mandatory.  Distinct from `num_args = 0..` (any count) and
+# `num_args = N..=M` (range).  This is **clap's variadic
+# positional pattern**.
+
+local curcontext="$curcontext" state line ret=1
+
+# 2 subcommands decoded source-direct from Command enum at
+# args/mod.rs lines 17-24.
+local -a subcommands=(
+  'clean:clean up coverage files (default: coverage.lcov files under cwd)'
+  'run:run cairo-coverage tool (produce coverage.lcov from .json trace files)'
+)
+
+# IncludedComponent ValueEnum variants at args/run.rs:35-38
+# (currently 1 variant; extension point for more).
+local -a include_components=('macros:run coverage on macros and generated code (inline + attribute + derive macros)')
+
+_arguments -C \
+  '(-h --help)'{-h,--help}'[show help]' \
+  '(-V --version)'{-V,--version}'[show version (0.6.1)]' \
+  '1:subcommand:->subcmd' \
+  '*::args:->args' && ret=0
+
+case $state in
+  subcmd)
+    _describe -t subcommands 'cairo-coverage subcommand' subcommands && ret=0
+    ;;
+  args)
+    case $words[1] in
+      run)
+        # RunArgs decoded source-direct from args/run.rs:6-31.
+        # 5 flags + 1 positional (trace_files; 1.. .json).
+        # --include and --no-truncation REQUIRE --unstable.
+        _arguments \
+          '(-h --help)'{-h,--help}'[show help for `run`]' \
+          '(-o --output-path)'{-o+,--output-path=}'[path to the output lcov file]:file:_files -g "*.lcov"' \
+          '(-i --include)'{-i+,--include=}'[include additional components in coverage report (REQUIRES --unstable; default: macros)]:component:(macros)' \
+          '--no-truncation[do NOT truncate hit counts to 1 (REQUIRES --unstable; default: counts are truncated to 1)]' \
+          '--unstable[enable unstable features (--include and --no-truncation gate)]' \
+          '--project-path=[path to the project directory (default: inferred via `scarb metadata`; must exist + be a directory)]:dir:_files -/' \
+          '*:trace JSON file:_files -g "*.json"' && ret=0
+        ;;
+      clean)
+        # CleanArgs decoded source-direct from args/clean.rs:5-15.
+        # 2 flags; no positionals.
+        _arguments \
+          '(-h --help)'{-h,--help}'[show help for `clean`]' \
+          '(-r --root-dir)'{-r+,--root-dir=}'[root directory to search for files to clean (default: .)]:dir:_files -/' \
+          '(-f --files-to-delete)'{-f+,--files-to-delete=}'[file name to delete (include extension; default: coverage.lcov)]:filename:' && ret=0
+        ;;
+    esac
+    ;;
+esac
+
+return ret
