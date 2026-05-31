@@ -1,83 +1,265 @@
 #compdef apx
-# Documentation: https://github.com/Vanilla-OS/apx
-# Reference accessed: 2026-05-17
-# Verified: upstream docs at the URL above.
-
-# Zsh completion for apx - Vanilla OS package manager
+# Documentation: source-direct extraction from upstream
+# Vanilla-OS/apx (apx v3 — the rewrite that the existing
+# completion did NOT cover) —
+#   cmd/main.go lines 31-104 (CLI bootstrap + dynamic
+#     subsystem registration loop)
+#   internal/cli/structs.go lines 19-315 (the full Kong-style
+#     struct dispatch tree: RootCmd + StacksCmd +
+#     SubsystemsCmd + PkgManagersCmd + the SubsystemCmd
+#     dispatcher with 16 per-subsystem verbs)
+# Reference accessed: 2026-05-30 via gh api.
+#
+# apx is the **Vanilla OS atomic-distro package manager** —
+# wraps distrobox/podman to install packages and run commands
+# inside named "subsystems" (per-package-manager / per-distro
+# managed containers).  v3 rewrote the entire architecture
+# from v1's flat subcommand list (install/remove/upgrade as
+# top-level verbs) to a nested model with THREE management
+# groups and a dynamic per-subsystem dispatch.  Sister tool
+# family alongside R213's mender (mender-update / mender-auth
+# rewrite to C++20) and R220's importctl (split from the
+# legacy single binary).
+#
+# Critical extraction note: apx v3 uses the **vanilla-os/sdk
+# Kong-style struct-driven CLI parser** (`cli.Base` embedded
+# in every command struct + `cmd:""`/`flag:""`/`arg:""`
+# struct tags).  This is the FIRST round in the corpus to
+# document this CLI library convention.  Differences from
+# clap-derive / argh / spf13/cobra:
+#   - struct tags use a custom mini-DSL: `cmd:"name"` =
+#     subcommand registration; `flag:"short:n, long:name,
+#     name:i18n_key"` = flag with i18n-keyed help; `arg:""
+#     optional:"" name:"X"` = positional arg
+#   - i18n is built in: every help string is a translation
+#     key like `pr:apx.cmd.subsystem.install.options.noExport`
+#     resolved at runtime via the embedded `locales/` FS
+#   - `cmd:"*"` (line 27 RootCmd.DynamicSubsystems) is the
+#     special wildcard verb that catches ANY subcommand name
+#     and dispatches it to a runtime-discovered handler —
+#     this is how `apx <subsystem-name> install foo` works
+#     without subsystem names being hardcoded
+#
+# Critical extraction note: the **dynamic subsystem dispatch**
+# at main.go:60-85 enumerates the user's currently-installed
+# subsystems via `core.ListSubSystems(false, false)` AT
+# STARTUP and registers each one as a top-level subcommand
+# with the FULL 16-verb subsystem command set.  This means
+# `apx --help` output is INSTALL-DEPENDENT — the listed
+# subcommands depend on what subsystems are configured.
+# Completion can't predict subsystem names; it offers the
+# generic verb set in the `<subsystem-name>` context.
 
 local curcontext="$curcontext" state line ret=1
 
-local -a subcommands=(
-  'autoremove:Remove packages that are no longer needed'
-  'clean:Clean the apx package manager cache'
-  'enter:Enter the managed container shell'
-  'export:Export an application or binary from the container'
-  'help:Help about any command'
-  'init:Initialize the managed container'
-  'install:Install packages inside the container'
-  'list:List installed packages'
-  'log:Show logs'
-  'purge:Purge packages from the container'
-  'remove:Remove packages from the container'
-  'run:Run a command inside the container'
-  'search:Search for packages'
-  'show:Show details about a package'
-  'unexport:Unexport an application or binary'
-  'update:Update the list of available packages'
-  'upgrade:Upgrade installed packages'
-  'version:Show version information'
+# Top-level subcommands decoded source-direct from RootCmd at
+# structs.go:19-28.  3 management groups + the `*` wildcard
+# subsystem dispatcher.
+local -a top_subcommands=(
+  'stacks:manage apx stacks (templated subsystem definitions; list/show/new/update/rm/export/import)'
+  'subsystems:manage apx subsystems (the installed managed containers; list/new/rm/reset)'
+  'pkgmanagers:manage apx pkgmanagers (the per-distro CLI front-end definitions; list/show/new/rm/export/import/update)'
 )
 
-_arguments -s -S \
-  '(-h --help)'{-h,--help}'[show help]' \
-  '(-v --version)'{-v,--version}'[show version]' \
-  '--verbose[show more output]' \
-  '(-n --name)'{-n,--name}'[container name]:name' \
-  '1:command:->command' \
-  '*::arg:->args' && ret=0
+# stacks subcommands at structs.go:149-158
+local -a stacks_subcommands=(
+  'list:list all stacks'
+  'show:show details for a stack'
+  'new:create a new stack (interactive unless -y/--no-prompt)'
+  'update:update a stack (interactive unless -y)'
+  'rm:remove a stack'
+  'export:export a stack to a JSON file'
+  'import:import a stack from a JSON file'
+)
+
+# subsystems subcommands at structs.go:231-237
+local -a subsystems_subcommands=(
+  'list:list all subsystems'
+  'new:create a new subsystem'
+  'rm:remove a subsystem'
+  'reset:reset a subsystem to its initial state'
+)
+
+# pkgmanagers subcommands at structs.go:266-275
+local -a pkgmanagers_subcommands=(
+  'list:list all pkgmanagers'
+  'show:show details for a pkgmanager'
+  'new:create a new pkgmanager (interactive unless -y)'
+  'rm:remove a pkgmanager'
+  'export:export a pkgmanager to a JSON file'
+  'import:import a pkgmanager from a JSON file'
+  'update:update a pkgmanager definition (interactive unless -y)'
+)
+
+# Per-subsystem verbs at structs.go:30-50 — 16 verbs that any
+# named subsystem accepts as its 2nd-level argument.
+local -a subsystem_verbs=(
+  'enter:enter the subsystem shell'
+  'run:run a command inside the subsystem'
+  'install:install packages in the subsystem'
+  'remove:remove packages from the subsystem'
+  'update:update package list for the subsystem'
+  'upgrade:upgrade installed packages in the subsystem'
+  'list:list installed packages in the subsystem'
+  'search:search for a package in the subsystem'
+  'show:show details for a package in the subsystem'
+  'export:export an app/binary from the subsystem'
+  'unexport:unexport an app/binary'
+  'start:start the subsystem container'
+  'stop:stop the subsystem container'
+  'autoremove:remove no-longer-needed packages'
+  'clean:clean the subsystem package cache'
+  'purge:purge packages from the subsystem'
+)
+
+_arguments -C \
+  '(-h --help)'{-h,--help}'[show help and exit]' \
+  '(-v --version)'{-v,--version}'[show version and exit]' \
+  '1:command (or <subsystem-name>):->topcmd' \
+  '*::args:->args' && ret=0
 
 case $state in
-  command)
-    _describe -t subcommands 'apx command' subcommands && ret=0
+  topcmd)
+    _describe -t top-subcommands 'apx management group' top_subcommands && ret=0
+    # Also offer the generic hint that a subsystem-name would be valid.
+    _message 'OR a subsystem name (e.g. `apx ubuntu install foo` if a subsystem named "ubuntu" exists)'
+    ret=0
     ;;
   args)
-    case $line[1] in
-      install)
-        _arguments \
-          '(-h --help)'{-h,--help}'[show help]' \
-          '(-y --assume-yes)'{-y,--assume-yes}'[proceed without confirmation]' \
-          '(-f --fix-broken)'{-f,--fix-broken}'[fix broken dependencies]' \
-          '--no-export[do not export application entry]' \
-          '--sideload=[install a local package]:file:_files' \
-          '*:package:' && ret=0
+    case $words[1] in
+      stacks)
+        if (( CURRENT == 2 )); then
+          _describe -t stacks-subcommands 'apx stacks verb' stacks_subcommands && ret=0
+        else
+          case $words[2] in
+            list)
+              _arguments '(-j --json)'{-j,--json}'[output JSON]' && ret=0 ;;
+            show)
+              _arguments '1:stack name:' && ret=0 ;;
+            new)
+              _arguments \
+                '(-y --no-prompt)'{-y,--no-prompt}'[skip interactive prompts]' \
+                '(-n --name)'{-n+,--name=}'[stack name]:name:' \
+                '(-b --base)'{-b+,--base=}'[base container image]:image:' \
+                '(-p --packages)'{-p+,--packages=}'[packages to install (space-separated)]:packages:' \
+                '(-k --pkg-manager)'{-k+,--pkg-manager=}'[pkgmanager name]:pkgmgr:' && ret=0 ;;
+            update)
+              _arguments \
+                '(-y --no-prompt)'{-y,--no-prompt}'[skip interactive prompts]' \
+                '(-n --name)'{-n+,--name=}'[stack name]:name:' \
+                '(-b --base)'{-b+,--base=}'[base container image]:image:' \
+                '(-p --packages)'{-p+,--packages=}'[packages to install]:packages:' \
+                '(-k --pkg-manager)'{-k+,--pkg-manager=}'[pkgmanager name]:pkgmgr:' \
+                '1:stack:' && ret=0 ;;
+            rm)
+              _arguments \
+                '(-n --name)'{-n+,--name=}'[stack name]:name:' \
+                '(-f --force)'{-f,--force}'[force removal]' && ret=0 ;;
+            export)
+              _arguments \
+                '(-n --name)'{-n+,--name=}'[stack name]:name:' \
+                '(-o --output)'{-o+,--output=}'[output JSON file]:file:_files' && ret=0 ;;
+            import)
+              _arguments '(-i --input)'{-i+,--input=}'[input JSON file]:file:_files' && ret=0 ;;
+          esac
+        fi
         ;;
-      remove|purge)
-        _arguments \
-          '(-h --help)'{-h,--help}'[show help]' \
-          '(-y --assume-yes)'{-y,--assume-yes}'[proceed without confirmation]' \
-          '*:package:' && ret=0
+      subsystems)
+        if (( CURRENT == 2 )); then
+          _describe -t subsystems-subcommands 'apx subsystems verb' subsystems_subcommands && ret=0
+        else
+          case $words[2] in
+            list)
+              _arguments '(-j --json)'{-j,--json}'[output JSON]' && ret=0 ;;
+            new)
+              _arguments \
+                '(-s --stack)'{-s+,--stack=}'[stack name to instantiate from]:stack:' \
+                '(-n --name)'{-n+,--name=}'[subsystem name]:name:' \
+                '(-H --home)'{-H+,--home=}'[custom home directory]:dir:_files -/' \
+                '(-i --init)'{-i,--init}'[init the subsystem with systemd inside]' && ret=0 ;;
+            rm|reset)
+              _arguments \
+                '(-n --name)'{-n+,--name=}'[subsystem name]:name:' \
+                '(-f --force)'{-f,--force}'[force operation]' && ret=0 ;;
+          esac
+        fi
         ;;
-      export)
-        _arguments \
-          '(-h --help)'{-h,--help}'[show help]' \
-          '--app-name=[application name to export]:name' \
-          '--bin=[binary name to export]:name' && ret=0
+      pkgmanagers)
+        if (( CURRENT == 2 )); then
+          _describe -t pkgmanagers-subcommands 'apx pkgmanagers verb' pkgmanagers_subcommands && ret=0
+        else
+          case $words[2] in
+            list)
+              _arguments '(-j --json)'{-j,--json}'[output JSON]' && ret=0 ;;
+            show)
+              _arguments '1:pkgmanager name:' && ret=0 ;;
+            new|update)
+              # PkgManagersNewCmd + PkgManagersUpdateCmd at
+              # structs.go:282-297 + 194-210.  12 flags
+              # (mostly per-action template strings) +
+              # update-only takes a positional pkgmanager name.
+              _arguments \
+                '(-y --no-prompt)'{-y,--no-prompt}'[skip interactive prompts]' \
+                '(-n --name)'{-n+,--name=}'[pkgmanager name]:name:' \
+                '(-S --need-sudo)'{-S,--need-sudo}'[pkgmanager needs sudo to run]' \
+                '(-a --autoremove)'{-a+,--autoremove=}'[autoremove command template]:tpl:' \
+                '(-c --clean)'{-c+,--clean=}'[clean command template]:tpl:' \
+                '(-i --install)'{-i+,--install=}'[install command template]:tpl:' \
+                '(-l --list)'{-l+,--list=}'[list command template]:tpl:' \
+                '(-p --purge)'{-p+,--purge=}'[purge command template]:tpl:' \
+                '(-r --remove)'{-r+,--remove=}'[remove command template]:tpl:' \
+                '(-s --search)'{-s+,--search=}'[search command template]:tpl:' \
+                '(-w --show)'{-w+,--show=}'[show command template]:tpl:' \
+                '(-u --update)'{-u+,--update=}'[update command template]:tpl:' \
+                '(-U --upgrade)'{-U+,--upgrade=}'[upgrade command template]:tpl:' \
+                "${words[2]:#new}:pkgmanager name (positional; only for update):" && ret=0 ;;
+            rm)
+              _arguments \
+                '(-n --name)'{-n+,--name=}'[pkgmanager name]:name:' \
+                '(-f --force)'{-f,--force}'[force removal]' && ret=0 ;;
+            export)
+              _arguments \
+                '(-n --name)'{-n+,--name=}'[pkgmanager name]:name:' \
+                '(-o --output)'{-o+,--output=}'[output JSON file]:file:_files' && ret=0 ;;
+            import)
+              _arguments '(-i --input)'{-i+,--input=}'[input JSON file]:file:_files' && ret=0 ;;
+          esac
+        fi
         ;;
-      unexport)
-        _arguments \
-          '(-h --help)'{-h,--help}'[show help]' \
-          '--app-name=[application name to unexport]:name' \
-          '--bin=[binary name to unexport]:name' && ret=0
-        ;;
-      run)
-        _arguments \
-          '(-h --help)'{-h,--help}'[show help]' \
-          '*:command:' && ret=0
-        ;;
-      search|show)
-        _arguments \
-          '(-h --help)'{-h,--help}'[show help]' \
-          '1:package:' && ret=0
+      *)
+        # Dynamic per-subsystem dispatch: any 1st arg that's
+        # not one of the 3 management groups is treated as a
+        # subsystem name and gets the 16-verb subsystem
+        # command set.  Decoded source-direct from RootCmd's
+        # `cmd:"*"` wildcard at structs.go:27.
+        if (( CURRENT == 2 )); then
+          _describe -t subsystem-verbs "subsystem \`$words[1]\` verb" subsystem_verbs && ret=0
+        else
+          case $words[2] in
+            install)
+              # SubsystemInstallCmd at structs.go:63-68
+              _arguments \
+                '(-n --no-export)'{-n,--no-export}'[do not export app entries to host]' \
+                '*:packages:' && ret=0 ;;
+            remove|purge)
+              _arguments '*:packages:' && ret=0 ;;
+            search)
+              _arguments '*:query:' && ret=0 ;;
+            show)
+              _arguments '*:package:' && ret=0 ;;
+            export|unexport)
+              # SubsystemExportCmd/UnexportCmd at
+              # structs.go:103-119
+              _arguments \
+                '(-a --app)'{-a+,--app=}'[application name to export]:app:' \
+                '(-b --bin)'{-b+,--bin=}'[binary name to export]:bin:' \
+                '(-o --bin-output)'{-o+,--bin-output=}'[binary output path]:path:_files' \
+                '*:applications:' && ret=0 ;;
+            run)
+              # SubsystemRunCmd at structs.go:57-61
+              _arguments '*:command and args:_command_names -e' && ret=0 ;;
+          esac
+        fi
         ;;
     esac
     ;;
