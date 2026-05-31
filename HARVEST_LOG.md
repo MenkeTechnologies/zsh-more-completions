@@ -19,6 +19,31 @@ Entries are in original README order: older themed-cluster entries (accumulated
 before the per-round numbering convention) appear first, followed by the
 R-numbered rounds with the newest R-round at the top of that section.
 
+- **R223 — Wayland: yofi (minimal Rust fuzzy menu launcher; argh-based)** (1 file / 1 binary) — continues the Wayland-launcher cluster started in R222 (xwayland-satellite).  yofi is a minimalist alternative to wofi / fuzzel / tofi / bemenu / rofi-wayland (all already in the corpus) — direct-rendered layer-shell menu in ~1500 LOC using softbuffer + smithay-client-toolkit + freetype.  Designed to be the smallest possible viable launcher with 3 operating modes (apps default / binapps / dialog) covering the canonical launcher usage patterns.
+  - `_yofi` (1-stem; l4l/yofi src/main.rs): **3 subcommands + 7 global flags + 2 per-subcommand flags** decoded source-direct from:
+    * `struct Args` at lines 55-81 (the top-level `argh::FromArgs` derive struct)
+    * `enum ModeArg` at lines 83-89 (the 3-variant subcommand dispatch)
+    * `struct AppsMode` at lines 92-101 (the `apps` subcommand with 2 extra flags)
+    * `struct BinappsMode` at lines 104-106 (no extra flags)
+    * `struct DialogMode` at lines 109-111 (no extra flags)
+    * `ModeArg::try_default()` at lines 113-125 (default-subcommand resolution: implicitly `apps` with XDG-blacklist auto-discovered)
+    * verbose/quiet conflict at line 133 (`panic!("either verbose or quiet could be specified, not both")`)
+  - Critical extraction note: **yofi uses `argh`** (Google's lighter alternative to clap) — `use argh::FromArgs` at line 52.  This is the FIRST round in the corpus to document the argh CLI library convention.  argh's API is similar to clap's derive macro but uses `#[argh(switch, short = 'v')]` rather than clap's `#[arg(short, long)]` syntax.  argh provides `--help` automatically (no manual help registration).  Important behavioral differences vs clap that affect completion semantics:
+    1. **argh subcommands are MANDATORY by default** — unless wrapped in `Option<>`.  yofi's `mode: Option<ModeArg>` makes it optional with an implicit default (resolved to `Apps` mode in `try_default()` at line 153)
+    2. **argh does NOT auto-add `--version`** — yofi has no `--version` flag.  Compare to clap which auto-adds `-V`/`--version` unless explicitly opted out
+    3. **argh `switch` attr = boolean no-arg flag**; argh `option` attr = key=value flag (REQUIRED unless wrapped in `Option<>`)
+    4. argh enforces flag ordering: subcommand-specific flags MUST come AFTER the subcommand name (e.g. `yofi apps --list`, NOT `yofi --list apps`)
+  - Critical extraction note: **yofi has a RUNTIME PANIC for `--verbose` + `--quiet`** at line 133 — `panic!("either verbose or quiet could be specified, not both")`.  argh itself does NOT enforce mutex (unlike clap which has `#[arg(conflicts_with = "quiet")]`); the conflict is detected at the application level after parsing.  Completion still expresses this as a mutex group `(-v --verbose -q --quiet)` so users can't accidentally select both via tab-completion, preventing the runtime panic from being triggered.
+  - Critical extraction note: **yofi's default mode is `apps`** with an XDG-discovered blacklist file at `$XDG_CONFIG_HOME/yofi/blacklist`.  Resolved via `xdg::BaseDirectories::with_prefix(prog_name!()).place_config_file("blacklist")` at lines 115-118.  When invoked with NO subcommand, yofi auto-resolves to `apps --blacklist $XDG_CONFIG_HOME/yofi/blacklist`.  The `place_config_file` (vs `get_config_file`) variant CREATES the file if absent rather than failing — yofi gracefully starts with an empty blacklist on first run.  Documented in the completion comment block.
+  - Critical extraction note: yofi's 3 modes map cleanly to the 3 canonical launcher use cases:
+    * `apps` → reads `.desktop` files from `$XDG_DATA_DIRS/applications/` (desktop-app picker; equivalent to `tofi-drun` / `rofi -show drun`)
+    * `binapps` → enumerates executables on `$PATH` (binary picker; equivalent to `tofi-run` / `rofi -show run`)
+    * `dialog` → reads items from stdin (like `dmenu` / `bemenu`; for shell-script-driven prompts)
+  - Hunt-skip notes: `yofi-config` (no separate binary; yofi's `--config-file=` flag points at the same config that `yofi.config` would point to) skipped — no separate CLI surface.  `yofi-menu` (sometimes referenced as a synonym in distro packaging) skipped — same binary.
+  - Dup-checked clean against `/usr/share/zsh` + `/opt/homebrew/share/zsh` + `/usr/local/share/zsh`.
+  - Blacklist additions: 1 entry (y*).
+  - Corpus 28,645 → 28,646 files.
+
 - **R222 — Wayland: xwayland-satellite (XWayland bridge for niri / minimal compositors)** (1 file / 1 binary) — branches off the systemd v257+ family run (R218-R221) into the Wayland compositor ecosystem.  xwayland-satellite is the canonical X11-on-Wayland bridge for `niri` (existing completion in the corpus) and other minimalist Wayland compositors that don't have built-in XWayland support.  Runs an unmodified Xwayland server as a satellite process and reconciles its X11 surfaces with the parent Wayland compositor via the standard wl_surface protocol.
   - `_xwayland-satellite` (1-stem; Supreeeme/xwayland-satellite src/main.rs): **15 flags + 1 positional DISPLAY** decoded source-direct from:
     * parse_args() at lines 94-247 (the hand-rolled argv match dispatcher; NO clap)
