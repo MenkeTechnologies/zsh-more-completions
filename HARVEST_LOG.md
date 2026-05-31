@@ -19,6 +19,34 @@ Entries are in original README order: older themed-cluster entries (accumulated
 before the per-round numbering convention) appear first, followed by the
 R-numbered rounds with the newest R-round at the top of that section.
 
+- **R231 — ferrishot (Rust Wayland-native screenshot app)** (1 file / 1 binary) — branches off the VCS/TUI cluster (R230 jjui) into Wayland screenshot tooling.  ferrishot competes with the existing _grim + _slurp + _flameshot + _spectacle in the corpus but uses native Wayland-protocol rendering (iced + softbuffer) and a powerful CLI for headless capture-and-action workflows.  Uses KDL config at `$XDG_CONFIG_HOME/ferrishot.kdl` (same KDL format Vanilla OS's abroot config uses).
+  - `_ferrishot` (1-stem; nik-rev/ferrishot peashot/src/config/cli.rs): **15 flags grouped into 4 help_headings + 1 hidden positional + 3-value `--accept-on-select` enum** decoded source-direct from:
+    * `struct Cli` at lines 22-201 (clap-derive struct with help_heading groups)
+    * `DEFAULT_CONFIG_FILE_PATH` + `DEFAULT_LOG_FILE_PATH` at lines 204-219 (etcetera::choose_base_strategy + XDG fallback)
+    * `Command` enum at peashot/src/image/action.rs lines 17-28 (3 ValueEnum variants for --accept-on-select)
+  - Critical extraction note: **ferrishot uses clap-derive with `help_heading` groups** to organize the help output into 4 sections: implicit "Options" (region/save), "Config" (config-file ops), "Output" (silent/json), "Debug" (gated on `feature = "debug"`).  This is the FIRST round in the corpus to document the clap-derive `help_heading` pattern.  Debug-group flags use `hide = !cfg!(feature = "debug")` so they only appear in `--help` when ferrishot is built with the debug feature.  Completion lists them unconditionally since the installed binary's build features are opaque.
+  - Critical extraction note: **`--region`/`-r` value is a custom WxH+X+Y rectangle DSL** with rich syntax decoded source-direct from cli.rs:41-59 — the corpus's first documented "geometry DSL" for a CLI tool:
+    1. Each value can be ABSOLUTE pixels (e.g. 550)
+    2. Each can be RELATIVE 0.0..1.0 (e.g. 0.2 = 20% of dimension)
+    3. Format can END with 1 or 2 PERCENTAGE shifts: `+30%-10%` shifts x-offset by +30% and y-offset by -10% of region size
+    4. Special alias: `full` = `1.0x1.0+0+0` (full screen)
+    Examples documented in the completion comment block:
+    * `100x1.0+0.5+0-50%` — 100px wide, full height, horizontally centered
+    * `1.0x1.0+0+0` or `full` — entire screen
+    * `550x100+0+0` — 550×100 from top-left
+  - Critical extraction note: **`--accept-on-select` accepts a 3-variant ValueEnum** from `Command` at action.rs:17-28.  clap converts PascalCase variants to kebab-case for CLI: `upload-screenshot`, `copy-to-clipboard`, `save-screenshot`.  **SOURCE-DIRECT BUG OBSERVED**: action.rs doc comments are SWAPPED upstream:
+    | Variant | Upstream doc comment | Semantic meaning (from variant name) |
+    |---|---|---|
+    | UploadScreenshot | "Copy image to the clipboard" | upload to internet |
+    | CopyToClipboard | "Save image to a file" | copy to clipboard |
+    | SaveScreenshot | "Upload image to the internet" | save to file |
+    Completion uses the SEMANTIC MEANING (variant names), not the upstream doc comments.  This continues the corpus's source-direct bug-spotting practice from R227 (ssh-tpm-add's "ssh hot" typo).  Documented in the completion's enum-value description so users get the correct meaning even when reading the completion alongside upstream `--help`.
+  - Critical extraction note: **DEFAULT_CONFIG_FILE_PATH uses `etcetera::choose_base_strategy()`** — Rust's `etcetera` crate provides a unified BaseDirectories abstraction that respects XDG on Linux + `~/Library/Application Support/` on macOS + `%APPDATA%` on Windows.  Cleaner alternative to the standard `directories` crate.  Documented in the completion description for future hunters.
+  - Hunt-skip notes: `peashot` (the workspace package name in upstream's Cargo.toml; ferrishot is shipped as `peashot/` in the workspace but installed as `ferrishot`) — same binary.  `peashot-config` / `peashot-macros` are library crates, not CLIs.  `ferrishot-helper` (some packaging includes a separate wrapper for systemd service mode) deferred — small flag surface.
+  - Dup-checked clean against `/usr/share/zsh` + `/opt/homebrew/share/zsh` + `/usr/local/share/zsh`.
+  - Blacklist additions: 1 entry (f*).
+  - Corpus 28,658 → 28,659 files.
+
 - **R230 — jjui (TUI for the Jujutsu VCS)** (1 file / 1 binary) — companion to the existing `_jujutsu` binary completion in the corpus.  jjui is the canonical TUI frontend for jj (Jujutsu version control system) — provides interactive log / rebase / squash / split / diff operations in a curses-style UI using bubbletea + lipgloss.  Sister to lazygit (existing in the corpus) but for jj instead of git.
   - `_jjui` (1-stem; idursun/jjui cmd/jjui/main.go): **7 unique flags + 1 optional positional** decoded source-direct from:
     * `var` block at lines 43-51 (7 flag-state variables)

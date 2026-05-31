@@ -1,0 +1,82 @@
+#compdef ferrishot
+# Documentation: source-direct extraction from upstream
+# nik-rev/ferrishot peashot/src/config/cli.rs —
+#   `struct Cli` at lines 22-201 (clap-derive struct with 4
+#     help_heading groups: implicit "Options", "Config",
+#     "Output", "Debug")
+#   DEFAULT_CONFIG_FILE_PATH + DEFAULT_LOG_FILE_PATH at lines
+#     204-219 (etcetera::choose_base_strategy + XDG fallback)
+#   `Command` enum at peashot/src/image/action.rs lines 17-28
+#     (3 ValueEnum variants for --accept-on-select)
+# Reference accessed: 2026-05-30 via gh api.
+#
+# ferrishot is the **Rust Wayland-native screenshot app** —
+# competes with grim (existing in corpus) + slurp + flameshot
+# + spectacle but with native Wayland-protocol rendering
+# (iced + softbuffer) and a powerful CLI for headless
+# capture-and-action workflows.  Uses KDL config (the same
+# format jjui, helix, lavalauncher etc. use) at
+# `$XDG_CONFIG_HOME/ferrishot.kdl`.
+#
+# Critical extraction note: ferrishot uses **clap-derive**
+# (the standard Rust CLI library) with `help_heading` groups
+# to organize the help output.  4 groups: implicit "Options"
+# (region/save), "Config" (config file ops), "Output" (silent/
+# json), "Debug" (gated on `feature = "debug"`).  Debug-group
+# flags use `hide = !cfg!(feature = "debug")` so they only
+# appear in --help when ferrishot is built with the debug
+# feature.  Completion lists them unconditionally since the
+# installed binary's build features are opaque.
+#
+# Critical extraction note: the `--region`/`-r` value is a
+# **custom WxH+X+Y rectangle DSL** with rich syntax decoded
+# source-direct from cli.rs:41-59:
+#   - Each value can be ABSOLUTE pixels (e.g. 550)
+#   - Each can be RELATIVE 0.0..1.0 (e.g. 0.2 = 20% of dim)
+#   - Format can END with 1 or 2 PERCENTAGE shifts:
+#       +30%-10% means shift +30% x-offset, -10% y-offset
+#   - Special alias: `full` = `1.0x1.0+0+0` (full screen)
+#   Examples (from upstream docs):
+#     `100x1.0+0.5+0-50%` — 100px wide, full height,
+#                          horizontally centered
+#     `1.0x1.0+0+0` or `full` — entire screen
+#     `550x100+0+0` — 550x100 from top-left
+#
+# Critical extraction note: the `--accept-on-select` value
+# accepts a 3-variant ValueEnum from action.rs:17-28.  clap
+# converts PascalCase enum variants to kebab-case for CLI:
+#   `upload-screenshot`  -> upload the captured image
+#   `copy-to-clipboard`  -> copy to clipboard
+#   `save-screenshot`    -> save to file
+# Note: action.rs doc comments are SWAPPED upstream — the
+# doc on UploadScreenshot says "Copy image to the clipboard",
+# CopyToClipboard says "Save image to a file", SaveScreenshot
+# says "Upload image to the internet".  This is a source-
+# direct bug — completion uses the SEMANTIC meaning (variant
+# names), not the upstream doc comments.
+
+local -a accept_actions=(
+  'upload-screenshot:upload captured image to the internet (variant: UploadScreenshot)'
+  'copy-to-clipboard:copy captured image to the clipboard (variant: CopyToClipboard)'
+  'save-screenshot:save captured image to a file (variant: SaveScreenshot)'
+)
+
+local -a log_levels=(off error warn info debug trace)
+
+_arguments -s -S \
+  '(-h --help)'{-h,--help}'[show help and exit (clap auto-injected)]' \
+  '(-V --version)'{-V,--version}'[show version and exit (clap auto-injected)]' \
+  '(-r --region -l --last-region)'{-r+,--region=}'[open with region pre-selected (DSL: WxH+X+Y; alias `full` = 1.0x1.0+0+0)]:WxH+X+Y:' \
+  '(-r --region -l --last-region)'{-l,--last-region}'[reuse the last-used region (mutex with --region)]' \
+  '(-a --accept-on-select)'{-a+,--accept-on-select=}'[immediately perform action on first selection]:action:(upload-screenshot copy-to-clipboard save-screenshot)' \
+  '(-d --delay)'{-d+,--delay=}'[wait this many milliseconds before launch]:ms:' \
+  '(-s --save-path)'{-s+,--save-path=}'[save image to PATH instead of opening file picker]:path:_files' \
+  '(-D --dump-default-config)'{-D,--dump-default-config}'[write the default config to $XDG_CONFIG_HOME/ferrishot.kdl]' \
+  '(-C --config-file)'{-C+,--config-file=}'[use the provided config file (default: $XDG_CONFIG_HOME/ferrishot.kdl)]:file:_files -g "*.kdl"' \
+  '(-S --silent -j --json)'{-S,--silent}'[run in silent mode (no output)]' \
+  '(-S --silent -j --json)'{-j,--json}'[print results in JSON format (mutex with --silent)]' \
+  '--log-level=[(debug build only) min log level (default: error)]:level:(off error warn info debug trace)' \
+  '--log-stderr[(debug build only) log to stderr instead of file (mutex with --silent)]' \
+  '--log-file=[(debug build only) path to log file]:file:_files' \
+  '--log-filter=[(debug build only) filter logs to a specific module or crate]:filter:' \
+  '--debug[(debug build only) launch in debug mode (also accessible via F12)]'
