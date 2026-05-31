@@ -19,6 +19,49 @@ Entries are in original README order: older themed-cluster entries (accumulated
 before the per-round numbering convention) appear first, followed by the
 R-numbered rounds with the newest R-round at the top of that section.
 
+- **R241 — cargo-typify (Oxide JSON Schema → Rust types generator)** (1 file / 1 binary) — branches off the Maelstrom family run (R238-R240) into Oxide Computer's Rust-API-design tooling.  cargo-typify is the **canonical JSON Schema → Rust type generator** that consumes OpenAPI / JSON Schema files (e.g. from the Oxide control plane) and emits idiomatic Rust structs + enums + builder-style constructors with serde annotations.  Sister tools at Oxide: progenitor (HTTP client generator that USES typify), dropshot (REST server framework; already in corpus), schemars (schema generator).
+  - `_cargo-typify` (1-stem; oxidecomputer/typify; **8 flags + 1 positional + ArgGroup mutex + 3-value enum**) decoded source-direct from:
+    * `cargo-typify/src/main.rs` lines 8-13 (CargoCli wrapper that intercepts `cargo typify <ARGS>` and unwraps to CliArgs)
+    * `cargo-typify/src/lib.rs` lines 15-64 (CliArgs struct with 8 flags + 1 positional + ArgGroup mutex)
+    * `ArgGroup::new("build").args(["builder", "no_builder"])` at lib.rs:17-18 (mutex group for --builder / --no-builder)
+    * `value_parser = ["generate", "allow", "deny"]` at lib.rs:60-62 (3-value enum for --unknown-crates)
+    * `output_path()` at lib.rs:67-83 (auto-rename input extension to .rs; `-` means stdout)
+  - Critical extraction note: **cargo-typify uses the canonical clap-derive cargo-subcommand intercept pattern** at main.rs:8-13:
+    ```rust
+    #[derive(Parser)]
+    #[command(name = "cargo")]
+    #[command(bin_name = "cargo")]
+    enum CargoCli {
+        Typify(CliArgs),
+    }
+    ```
+    When invoked as `cargo typify foo.json`, clap parses argv[0]="cargo", argv[1]="typify" as the `CargoCli::Typify` variant, then unwraps the inner `CliArgs`.  This is the corpus's **FIRST explicit documentation of the enum-wrapper-with-bin_name="cargo" idiom** — DIFFERENT from R238 cargo-maelstrom's argv-massage approach.  The two patterns:
+    | Pattern | Where used | Mechanism |
+    |---|---|---|
+    | Enum-wrapper + `bin_name="cargo"` | cargo-typify, cargo-deny, most modern cargo subcmds | clap parses argv[0]="cargo" as outer enum; user-defined inner struct holds actual flags |
+    | Argv-massage at main() top | cargo-maelstrom, older cargo subcmds | Hand-written `if args[0].ends_with("cargo-X") { args.remove(1); }` before clap::parse |
+    Documents that BOTH approaches are valid and widely used; new tools tend to prefer the enum-wrapper since it requires no manual argv manipulation.
+  - Critical extraction note: **ArgGroup mutex** at lib.rs:16-19:
+    ```rust
+    #[command(group(
+        ArgGroup::new("build")
+            .args(["builder", "no_builder"]),
+    ))]
+    ```
+    This is the **corpus's first documented `ArgGroup::new(...).args([...])` mutex group** (vs R239 maelstrom-run's `#[group(multiple = false)]` attribute on the OneOrTty Args struct).  Both approaches enforce mutex but at different levels:
+    | Approach | Level | Example |
+    |---|---|---|
+    | `ArgGroup::new(...).args([...])` | Field-level (each flag tagged with `group = "..."`) | cargo-typify R241 |
+    | `#[group(multiple = false)]` | Struct-level (entire Args sub-struct) | maelstrom-run R239 |
+    `ArgGroup` is preferred when 2-3 mutex flags live alongside non-mutex flags in the same struct; `#[group(multiple = false)]` is preferred when the mutex flags form a coherent sub-struct.  Documented in completion comment block.
+  - Critical extraction note: **`value_parser = ["generate", "allow", "deny"]`** at lib.rs:60-62 — clap-derive's **static-string-slice value-parser shortcut** for fixed-value enum flags.  Equivalent to clap's `PossibleValuesParser` or `#[derive(clap::ValueEnum)]` but inline and lighter-weight.  This is the **corpus's first documented "inline string-slice value-parser" pattern** — distinct from R237 dependabot's `provider:(github gitlab bitbucket azure-devops)` static completion array (which is completion-side) and R211's enum-via-named-variants pattern.
+  - Critical extraction note: **`-o`/`--output` accepts `-` for stdout** (output_path() at lib.rs:71-74).  When `-` is given, no file is written; otherwise the input file's extension is auto-renamed to `.rs` if no output is specified (lib.rs:78-80).  This is the same `-` convention as `tar -f -`, `gpg -o -`, and most Unix utilities.  Continues the corpus's "Unix `-` stdin/stdout convention" documentation (R227 ssh-tpm-add's `-` for stdin, R235 edge-tts's `-` for stdin).
+  - Critical extraction note: **`-d`/`--additional-derive` and `-a`/`--additional-attr` are REPEATABLE** (Vec<String> field type at lib.rs:35 + 39).  Used to inject derives like `Eq`/`Hash`/`PartialOrd` and attributes like `#[non_exhaustive]` or `#[serde(rename_all = "camelCase")]` onto ALL generated types.  Completion encodes repeatability with `*-d+`/`*-a+`.
+  - Hunt-skip notes: `progenitor` (Oxide's HTTP client generator; uses typify internally; complementary tool) deferred — flag set still in flux; would warrant its own round.  `cargo-progenitor` deferred for the same reason.  `dropshot` already in the corpus.  `schemars-cli` (the schema-from-Rust generator) — separate small CLI, deferred.  `cargo-component` (already in corpus).
+  - Dup-checked clean against `/usr/share/zsh` + `/opt/homebrew/share/zsh` + `/usr/local/share/zsh`.
+  - Blacklist additions: 1 entry (cargo-typify).
+  - Corpus 28,671 → 28,672 files.
+
 - **R240 — Maelstrom infrastructure trio: maelstrom-admin + maelstrom-broker + maelstrom-worker** (3 files / 3 binaries) — direct follow-up to R239's hunt-skip on `maelstrom-admin`, `maelstrom-broker`, and `maelstrom-worker`.  **Closes the 7-binary Maelstrom family**: R238 cargo-maelstrom (Rust runner) + R239 trio (pytest/go-test/run) + R240 infrastructure (admin/broker/worker daemons).
   - `_maelstrom-admin` (1-stem; crates/maelstrom-admin/): **2 subcommands (each with 2 invisible aliases) + 5 flags (3 hidden) + `disable_help_subcommand`** decoded source-direct from:
     * `config.rs` lines 6-47 (Config struct: 5 flags, 3 with `hide` attribute)
