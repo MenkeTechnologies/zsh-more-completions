@@ -19,6 +19,45 @@ Entries are in original README order: older themed-cluster entries (accumulated
 before the per-round numbering convention) appear first, followed by the
 R-numbered rounds with the newest R-round at the top of that section.
 
+- **R239 — Maelstrom sister-binary trio: maelstrom-pytest + maelstrom-go-test + maelstrom-run** (3 files / 3 binaries) — direct follow-up to R238's hunt-skip on `maelstrom-pytest`, `maelstrom-go-test`, and `maelstrom-run`.  Completes the Maelstrom 4-binary family (R238 cargo-maelstrom + R239 trio).  pytest + go-test inherit the same 22-flag TestRunnerConfig + ClientConfig as cargo-maelstrom and add 4 framework-specific flags each.  maelstrom-run is the standalone job-spec runner (NOT a test runner) for arbitrary distributed computation.
+  - `_maelstrom-pytest` (1-stem; maelstrom-software/maelstrom crates/maelstrom-pytest/src/config.rs): **22 inherited TestRunnerConfig+ClientConfig flags + 4 pytest-specific extras** decoded source-direct from:
+    * `Config` at lines 4-11 (flattens TestRunnerConfig + PytestConfig)
+    * `PytestConfig` at lines 13-42 (`--collect-from-module`, `--extra-pytest-args` list, `--extra-pytest-collect-args` list, `--extra-pytest-test-args` var_arg)
+  - `_maelstrom-go-test` (1-stem; maelstrom-software/maelstrom crates/maelstrom-go-test/src/config.rs): **22 inherited flags + 4 Go-test-specific extras** decoded source-direct from:
+    * `Config` at lines 4-11 (flattens TestRunnerConfig + GoTestConfig)
+    * `GoTestConfig` at lines 13-36 (`--vet VET-OPTIONS`, `--short` flag, `--fullpath` flag, `--extra-test-binary-args` var_arg)
+  - `_maelstrom-run` (1-stem; maelstrom-software/maelstrom crates/maelstrom-run/src/main.rs): **3 own flags + 9 inherited ClientConfig flags + ExtraCommandLineOptions + OneOrTty mutex group** decoded source-direct from:
+    * `Config` at lines 43-68 (3 own: log-level, cache-root, escape-char + flattens ClientConfig)
+    * `ExtraCommandLineOptions` at lines 70-94 (`-f`/`--file` + flattened `OneOrTty` + variadic args)
+    * `OneOrTty` at lines 96-118 (`#[group(multiple = false)]` mutex: `-1`/`--one` or `-t`/`--tty`)
+  - Critical extraction note: **`#[config(flatten)]` composition pattern** documented across the trio — Config flattens TWO sub-Configs: a `parent: TestRunnerConfig` (the 22-flag base from R238) + a framework-specific extras Config (PytestConfig / GoTestConfig).  This is the **corpus's first documented `#[config(flatten)]` usage** — the equivalent of clap-derive's `#[command(flatten)]` but for the custom #[derive(Config)] macro documented in R238.  Demonstrates how composable CLI design via flattening lets the maelstrom family share 22 flags across 4 binaries with each adding 4 framework-specific extras without code duplication.
+  - Critical extraction note: **3 distinct config attribute patterns documented in pytest's PytestConfig**:
+    1. **`option`** — `Optional<T>` field type for nullable values (`--collect-from-module MODULE`)
+    2. **`list`** — `Vec<String>` with comma-separated parsing for argument lists (`--extra-pytest-args`, `--extra-pytest-collect-args`)
+    3. **`var_arg`** — `Vec<String>` as a TRAILING positional variadic that collects ALL remaining argv after the flag (`--extra-pytest-test-args`).  **Corpus's first documented `var_arg` config attribute** — used to pass arbitrary args to the underlying test framework's binary at execution time.
+  - Critical extraction note: **`#[group(multiple = false)]` mutex group** documented in maelstrom-run's OneOrTty at lines 96-118 — **corpus's first documented clap `#[group(multiple = false)]` mutex pattern**.  Has 2 flags that are MUTUALLY EXCLUSIVE AND collectively OPTIONAL (unlike R235's argparse `add_mutually_exclusive_group(required=True)` which is collectively required):
+    * `-1`/`--one` — execute only one job
+    * `-t`/`--tty` — execute one job with TTY assignment
+    The trailing positional args at lines 85-93 use `requires = "OneOrTty"` — they can ONLY appear if `--one` OR `--tty` is given.  Demonstrates clap's `requires = "<group>"` dependency-edge pattern, similar to R234 ueberzugpp's CLI11 `->needs("...")` but at the clap level.
+  - Critical extraction note: **maelstrom-run's `--escape-char` accepts THREE input syntaxes** decoded source-direct from the doc comment at config.rs:61-62:
+    1. Single character: `~`
+    2. Caret notation: `^C`
+    3. Hexadecimal escape: `\x1a`
+    Used to override the TTY-mode escape character (default `~`).  Same convention as ssh's `~` escape.  **Corpus's first documented multi-syntax CLI argument** — value_parser handles three distinct input formats from a single flag.
+  - Critical extraction note: **maelstrom-go-test adds 2 `#[config(flag)]` boolean toggles** (`short`, `fullpath`) on top of R238's `--accept-invalid-remote-container-tls-certs`, bringing the corpus's `#[config(flag)]` count to 3 documented examples.
+  - Critical extraction note: **The 4-binary maelstrom family architecture is complete in the corpus**:
+    | Binary | Test framework | Specific flags |
+    |---|---|---|
+    | cargo-maelstrom (R238) | Rust cargo test | — (no framework extras) |
+    | maelstrom-pytest (R239) | Python pytest | --collect-from-module, --extra-pytest-args, --extra-pytest-collect-args, --extra-pytest-test-args |
+    | maelstrom-go-test (R239) | Go go test | --vet, --short, --fullpath, --extra-test-binary-args |
+    | maelstrom-run (R239) | (NOT a test runner; standalone job spec) | --file, --one/--tty mutex, variadic args |
+    Documents the **"composable CLI family via #[config(flatten)] inheritance"** pattern.
+  - Hunt-skip notes: `maelstrom-broker` + `maelstrom-worker` (the broker + worker daemons) deferred — they're long-lived services with minimal CLI surface (mostly take a config file path).  `maelstrom-admin` (broker admin CLI) deferred — would warrant its own round.  `maelstrom-simex` (the symbolic-execution test variant; experimental) deferred — flag set still in flux upstream.
+  - Dup-checked clean against `/usr/share/zsh` + `/opt/homebrew/share/zsh` + `/usr/local/share/zsh`.
+  - Blacklist additions: 3 entries (maelstrom-* cluster).
+  - Corpus 28,665 → 28,668 files.
+
 - **R238 — cargo-maelstrom (distributed-execution Rust test runner)** (1 file / 1 binary) — branches off the dependabot cluster (R237) into distributed test-runner tooling.  cargo-maelstrom is the **canonical distributed test runner for Rust** — runs `cargo test` workloads across a fleet of "broker" + "worker" machines, dramatically parallelizing large test suites that can't fit on a single machine.  Alternative to `cargo-nextest` (single-machine local parallel; already in corpus) and the default `cargo test` (single-process).  Also supports running tests inside isolated container images.
   - `_cargo-maelstrom` (1-stem; maelstrom-software/maelstrom; **22 flags from 3 flattened structs + 5 hidden flags**) — decoded source-direct from:
     * `crates/cargo-maelstrom/src/main.rs` lines 7-13 (the cargo-subcommand argv massage + dispatch to `maelstrom_test_runner::main`)
