@@ -1,0 +1,169 @@
+#compdef slivar
+# ============================================================================
+#  _slivar — Genetic variant expressions, annotation, and filtering for
+#            great good (bioinformatics tool in Nim)
+#
+#  Source-direct extraction from
+#    https://github.com/brentp/slivar/blob/master/src/slivar.nim
+#    https://github.com/iffy/nim-argparse (the nim-argparse library)
+#
+#  Authored by Brent Pedersen (brentp/slivar).  274 GH stars.  slivar
+#  applies JavaScript-style expressions to VCF/BCF variant data files —
+#  filter trio/family/group/sample expressions, annotate with gnotate
+#  databases, find compound hets, find denovo deletions, generate
+#  data-driven cutoffs.  Used in clinical genetics + variant analysis
+#  pipelines.  Sister tools: vcfanno (Brent Pedersen's VCF annotation
+#  tool, in corpus), bcftools (samtools project, in corpus), gnomad
+#  (population genome AF database).
+#
+#  CLI library taxonomy update: 3rd Nim CLI library — iffy/nim-argparse.
+#  Nim ecosystem now has 3 documented CLI libraries (R287 parseopt +
+#  R301 cligen + R365 iffy/nim-argparse) joining the multi-library
+#  leaders.
+#
+#  iffy/nim-argparse (129 GH stars on iffy/nim-argparse) is a
+#  MACRO-DRIVEN DECLARATIVE DSL for Nim CLI parsing — uses Nim's
+#  powerful TEMPLATE/MACRO system to convert a block-syntax DSL into
+#  a typed result object at COMPILE TIME.
+#
+#  nim-argparse API:
+#    import argparse
+#
+#    var p = newParser("name"):
+#      option("-v", "--vcf", help="path to VCF/BCF")
+#      option("-o", "--out-vcf", default="/dev/stdout", help="...")
+#      flag("--pass-only", help="only output passing variants")
+#      option("--trio", multiple=true, help="trio expressions (repeatable)")
+#      arg("infile", help="input file")
+#      command("subcommand"):
+#        option("--inner", help="inner option")
+#        run:
+#          # subcommand handler
+#
+#    var opts = p.parse(argv)
+#    if opts.help:
+#      quit 0
+#    if opts.vcf == "":
+#      stderr.write_line "must specify --vcf"
+#
+#  nim-argparse distinctive features:
+#    - MACRO-DRIVEN BLOCK DSL via `newParser("name"):` block
+#    - `option("-s", "--long", help="X", default="V", multiple=BOOL)`
+#      registers a VALUE-TAKING option; field name AUTO-DERIVED from
+#      long flag (kebab-case → camelCase: `--out-vcf` → `outVcf`)
+#    - `flag("-f", "--flag", help="X")` registers a BOOLEAN FLAG
+#    - `arg("name", help="X")` registers a POSITIONAL ARG
+#    - `command("verb"):` block declares a nested SUBCOMMAND with its
+#      own option/flag/arg/run/command blocks
+#    - `run:` block declares an EXECUTION HANDLER for the parser or
+#      subcommand
+#    - `multiple=true` makes a flag REPEATABLE (accumulating into seq)
+#    - `default="V"` sets the default value
+#    - `p.parse(argv)` returns a typed RECORD with one field per
+#      option/flag/arg
+#    - `opts.help` is AUTO-GENERATED — true when `--help` was given
+#    - COMPILE-TIME GENERATION via Nim's `template`+`macro` produces
+#      the typed result object's CLASS DEFINITION at compile time
+#  Distinct from R287 Nim parseopt (low-level char-by-char iteration —
+#  `for kind, key, val in getopt(...)`), R301 Nim cligen (proc-
+#  signature-as-spec — `proc main(name: string="default", flag: bool=false)`
+#  becomes the CLI via cligen's compile-time inspection of proc
+#  signatures), R275 Rust clap-derive (struct + proc-macro), R344
+#  argh (similar Rust), R322 JCommander (Java annotations), R346
+#  mainargs (Scala method annotations).  nim-argparse's approach:
+#  MACRO-DRIVEN BLOCK DSL with `newParser`/`option`/`flag`/`arg`/
+#  `command`/`run` blocks + COMPILE-TIME TYPED-RECORD GENERATION —
+#  corpus's **first documented Nim-macro-block-DSL-with-compile-time-
+#  typed-record-generation CLI pattern**.  Brings cross-language CLI
+#  library taxonomy variant count to 104; Nim ecosystem now has 3
+#  documented CLI libraries.
+#
+#  Surface (verbatim from src/slivar.nim):
+#
+#  Subcommands (dispatched via OrderedTable lookup, not nim-argparse's
+#  `command` blocks — slivar uses manual dispatch on argv[0]):
+#    expr                       Filter/annotate with expressions
+#    make-gnotate               Make a gnotate zip file for a VCF
+#    compound-hets              Find compound hets in annotated VCF
+#    tsv                        Convert filtered VCF to TSV spreadsheet
+#    duo-del                    Find large denovo deletions
+#    ddc                        Data-driven cutoffs using mendelian
+#                               violations and transmissions
+#
+#  `slivar expr` options (the rich subcommand using nim-argparse):
+#    -v, --vcf FILE             Path to VCF/BCF
+#        --region REG           Region to limit (chr1, 1:222-333, BED)
+#    -x, --exclude FILE         BED file of exclude regions
+#    -j, --js FILE              Path to JavaScript functions to expose
+#    -p, --ped FILE             Pedigree file (family, sex, affected)
+#    -a, --alias FILE           File of group aliases
+#    -o, --out-vcf FILE         Output VCF/BCF (default /dev/stdout)
+#        --pass-only            Only output passing variants
+#        --skip-non-variable    Skip when all samples have ref allele
+#        --trio EXPR            Trio expression (repeatable)
+#        --family-expr EXPR     Family expression (repeatable)
+#        --group-expr EXPR      Group expression (repeatable)
+#        --sample-expr EXPR     Sample expression (repeatable)
+#        --info EXPR            INFO field expression
+#    -g, --gnotate FILE         Compressed gnotate file (repeatable)
+#
+#  Env variables:
+#    SLIVAR_QUIET=1             Suppress startup banner
+#
+#  Dup-skipped neighbors during hunt (already in corpus or smaller):
+#    - imgcat (not-lum/imgcat 14 stars — IN CORPUS via _imgcat)
+#    - jigv (brentp/jigv 133 stars — uses nim-argparse, would be sister
+#      demo; HOLD for future round)
+#    - joyn (jiro4989/joyn 3 stars — too narrow)
+# ============================================================================
+
+_slivar() {
+  local context state state_descr line curcontext=$curcontext
+  typeset -A opt_args
+
+  _arguments -C \
+    '1: :->cmd' \
+    '*:: :->subargs'
+
+  case $state in
+    cmd)
+      local -a verbs
+      verbs=(
+        'expr:filter/annotate with INFO/trio/sample/group expressions'
+        'make-gnotate:make a gnotate zip file for a VCF'
+        'compound-hets:find compound hets in annotated VCF'
+        'tsv:convert filtered VCF to tab-separated spreadsheet'
+        'duo-del:find large denovo deletions (parent-child duos)'
+        'ddc:data-driven cutoffs using mendelian violations'
+      )
+      _describe -t commands 'slivar subcommand' verbs
+      ;;
+    subargs)
+      case $line[1] in
+        expr)
+          _arguments -s -S \
+            '(-v --vcf)'{-v,--vcf}'=[path to VCF/BCF]:file:_files -g "*.{vcf,vcf.gz,bcf}"' \
+            '--region=[region (chr1, 1:222-333, or BED file)]:region' \
+            '(-x --exclude)'{-x,--exclude}'=[BED file of exclude regions]:file:_files -g "*.bed"' \
+            '(-j --js)'{-j,--js}'=[JavaScript functions file]:file:_files -g "*.js"' \
+            '(-p --ped)'{-p,--ped}'=[pedigree file]:file:_files -g "*.ped"' \
+            '(-a --alias)'{-a,--alias}'=[group aliases file]:file:_files' \
+            '(-o --out-vcf)'{-o,--out-vcf}'=[output VCF/BCF]:file:_files' \
+            '--pass-only[only output passing variants]' \
+            '--skip-non-variable[skip when all samples are reference]' \
+            '*--trio=[trio expression (repeatable)]:expression' \
+            '*--family-expr=[family expression (repeatable)]:expression' \
+            '*--group-expr=[group expression (repeatable)]:expression' \
+            '*--sample-expr=[sample expression (repeatable)]:expression' \
+            '--info=[INFO field expression]:expression' \
+            '*'{-g,--gnotate}'=[compressed gnotate file (repeatable)]:file:_files -g "*.zip"'
+          ;;
+        tsv|compound-hets|duo-del|make-gnotate|ddc)
+          _files
+          ;;
+      esac
+      ;;
+  esac
+}
+
+_slivar "$@"
