@@ -1,0 +1,86 @@
+#compdef cargo-typify
+# Documentation: source-direct extraction from upstream
+# oxidecomputer/typify —
+#   cargo-typify/src/main.rs lines 8-13 (CargoCli wrapper
+#     that intercepts `cargo typify <ARGS>` and unwraps
+#     to CliArgs)
+#   cargo-typify/src/lib.rs lines 15-64 (CliArgs struct with
+#     8 flags + 1 positional + ArgGroup mutex)
+#   `ArgGroup::new("build").args(["builder", "no_builder"])`
+#     at lib.rs:17-18 (mutex group for --builder / --no-builder)
+#   `value_parser = ["generate", "allow", "deny"]` at
+#     lib.rs:60-62 (3-value enum for --unknown-crates)
+#   `output_path()` at lib.rs:67-83 (auto-rename input extension
+#     to .rs; `-` means stdout)
+# Reference accessed: 2026-05-30 via gh api.
+#
+# cargo-typify is **Oxide Computer's JSON Schema → Rust type
+# generator** — a Rust-API-design pillar of the Oxide cloud
+# platform that consumes OpenAPI / JSON Schema files (e.g.
+# from the Oxide control plane) and emits idiomatic Rust
+# structs + enums + builder-style constructors with serde
+# annotations.  Sister tools at Oxide: progenitor (the HTTP
+# client generator that USES typify), dropshot (the REST
+# server framework), schemars (the schema generator).
+#
+# Critical extraction note: cargo-typify uses the **cargo
+# subcommand intercept pattern** at main.rs:8-13:
+#   enum CargoCli { Typify(CliArgs) }
+#   with #[command(name = "cargo")] + #[command(bin_name =
+#   "cargo")]
+# This is the **CANONICAL clap-derive cargo-subcommand
+# pattern** — different from R238 cargo-maelstrom's argv-
+# massage approach.  When invoked as `cargo typify foo.json`,
+# clap parses argv[0]="cargo", argv[1]="typify" as the
+# CargoCli::Typify variant, then unwraps the inner CliArgs.
+# This is the corpus's first explicit documentation of the
+# **enum-wrapper-with-bin_name="cargo" idiom** (vs R238's
+# argv-rewrite approach).
+#
+# Critical extraction note: **ArgGroup mutex** at lib.rs:16-19:
+#   #[command(group(
+#       ArgGroup::new("build")
+#           .args(["builder", "no_builder"]),
+#   ))]
+# This is the corpus's FIRST documented `ArgGroup::new(...).
+# args([...])` mutex group (vs R239 maelstrom-run's
+# `#[group(multiple = false)]` attribute on the OneOrTty
+# Args struct).  Both approaches enforce mutex but the
+# ArgGroup approach is field-level (each flag tagged with
+# `group = "build"`) while the `#[group]` approach is
+# struct-level.  Documented in completion comment block
+# for future hunters.
+#
+# Critical extraction note: **`value_parser = ["generate",
+# "allow", "deny"]`** at lib.rs:60-62 — clap-derive's
+# **static-string-slice value-parser shortcut** for fixed-
+# value enum flags.  Equivalent to clap's `PossibleValuesParser`
+# or `#[derive(clap::ValueEnum)]` but inline and lighter-
+# weight.  This is the corpus's first documented "inline
+# string-slice value-parser" pattern.
+#
+# Critical extraction note: **`-o`/`--output` accepts `-` for
+# stdout** (output_path() at lib.rs:71-74).  When `-` is
+# given, no file is written; otherwise the input file's
+# extension is auto-renamed to `.rs` if no output is
+# specified (lib.rs:78-80).  This is the same `-` convention
+# as `tar -f -`, `gpg -o -`, and most Unix utilities.
+
+local -a unknown_crates_policies=(
+  'generate:generate types for unknown crates (DEFAULT)'
+  'allow:allow unknown crates (use type aliases)'
+  'deny:fail compilation on unknown crates'
+)
+
+_arguments -s -S \
+  '(-h --help)'{-h,--help}'[show help and exit]' \
+  '(-V --version)'{-V,--version}'[show version and exit]' \
+  '(-b --builder -B --no-builder)'{-b,--builder}'[include builder-style interface (DEFAULT; mutex with --no-builder)]' \
+  '(-b --builder -B --no-builder)'{-B,--no-builder}'[do NOT include builder-style interface (mutex with --builder)]' \
+  \*{-d+,--additional-derive=}'[add a derive macro to all defined types (repeatable; e.g. -d Eq -d Hash)]:derive:' \
+  \*{-a+,--additional-attr=}'[add an attribute to all defined types (repeatable; e.g. -a "#[non_exhaustive]")]:attr:' \
+  '(-o --output)'{-o+,--output=}'[output file (default: input.rs; use "-" for stdout)]:file:_files -g "*.rs"' \
+  \*'--crate=[assume crate@version is available for x-rust-type extension (repeatable)]:crate@ver:' \
+  '--map-type=[Rust map-like type (e.g. std::collections::BTreeMap, indexmap::IndexMap)]:type:' \
+  '--unknown-crates=[policy for unknown x-rust-type crates (default: generate)]:policy:(generate allow deny)' \
+  '1:input JSON Schema file (e.g. schema.json):_files -g "*.(json|yaml|yml)"'
