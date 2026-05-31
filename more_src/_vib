@@ -1,0 +1,90 @@
+#compdef vib
+# Documentation: source-direct extraction from upstream
+# Vanilla-OS/vib —
+#   cmd/root.go lines 19-32 (the rootCmd cobra.Command + init()
+#     subcommand registration)
+#   cmd/build.go lines 18-36 (build subcommand + 2 flags)
+#   cmd/compile.go lines 14-30 (compile subcommand + 2 flags)
+#   cmd/test.go lines 12-22 (test subcommand — no flags)
+# Reference accessed: 2026-05-30 via gh api.
+#
+# vib is the **Vanilla Image Builder** — produces OCI images
+# from YAML recipes using composable modules.  The build tool
+# that creates the OCI images abroot (R225) consumes for A/B
+# atomic root deployment.  Recipe format: `recipe.yml` (or
+# `vib.yml` / `recipe.yaml` / `vib.yaml`) with module-driven
+# build steps.  Sister tool in the Vanilla OS atomic-distro
+# trio alongside R224's apx and R225's abroot + vso.
+#
+# Critical extraction note: vib uses **spf13/cobra DIRECTLY**
+# (NOT the cmdr wrapper that abroot / apx use).  This is the
+# first round in this Vanilla OS family run to see direct
+# cobra usage.  Differences from cmdr:
+#   - flag registration via `cmd.Flags().StringP(name, short,
+#     default, help)` rather than cmdr's
+#     `cmd.WithStringFlag(cmdr.NewStringFlag(...))`
+#   - no i18n indirection — help strings are inline literals
+#   - `cmd.Flags().SetInterspersed(false)` (build.go:33,
+#     compile.go:28, test.go:18) — disallow flags AFTER
+#     positional args, so `vib build /path/to/recipe -o
+#     out.dockerfile` works but `vib build -o out.dockerfile
+#     /path/to/recipe` is REQUIRED for the explicit-recipe
+#     form (build.go:53-87)
+#
+# Critical extraction note: the build/compile commands accept
+# an OPTIONAL recipe-file positional — if absent, vib searches
+# the CWD for one of 4 well-known names in priority order
+# (build.go:40-45): `recipe.yml`, `recipe.yaml`, `vib.yml`,
+# `vib.yaml`.  Completion offers all 4 patterns via the file
+# glob `*.(yml|yaml)`.
+#
+# Critical extraction note: build.go:78-81 enforces a strict
+# extension whitelist — recipe files MUST end in `.yml` or
+# `.yaml` (case-insensitive); any other extension returns
+# "is an invalid recipe file".  Completion's `_files -g`
+# pattern matches both cases.
+
+local curcontext="$curcontext" state line ret=1
+
+local -a subcommands=(
+  'build:build a Vib recipe into a Containerfile (cmd/build.go)'
+  'compile:compile a Vib recipe into a working container image via docker/podman (cmd/compile.go)'
+  'test:test a Vib recipe for validity without building (cmd/test.go)'
+)
+
+_arguments -C \
+  '(-h --help)'{-h,--help}'[show help and exit]' \
+  '(-v --version)'{-v,--version}'[show version and exit]' \
+  '1:subcommand:->subcmd' \
+  '*::args:->args' && ret=0
+
+case $state in
+  subcmd)
+    _describe -t subcommands 'vib subcommand' subcommands && ret=0
+    ;;
+  args)
+    case $words[1] in
+      build)
+        # build flags from cmd/build.go:31-32
+        _arguments \
+          '(-o --output)'{-o+,--output=}'[output Containerfile path, relative to recipe (default: Containerfile)]:file:_files' \
+          '(-a --arch)'{-a+,--arch=}'[target architecture (default: runtime.GOARCH)]:arch:(amd64 arm64 386 arm riscv64)' \
+          '1:recipe file (default: recipe.yml/yaml or vib.yml/yaml in CWD):_files -g "*.(yml|yaml|YML|YAML)"' && ret=0
+        ;;
+      compile)
+        # compile flags from cmd/compile.go:26-27
+        _arguments \
+          '(-o --output)'{-o+,--output=}'[output Containerfile path (default: Containerfile)]:file:_files' \
+          '(-r --runtime)'{-r+,--runtime=}'[container runtime (docker or podman)]:runtime:(docker podman)' \
+          '1:recipe file (default: recipe.yml/yaml or vib.yml/yaml in CWD):_files -g "*.(yml|yaml|YML|YAML)"' && ret=0
+        ;;
+      test)
+        # No flags — cmd/test.go just calls SetInterspersed.
+        _arguments \
+          '1:recipe file (default: recipe.yml/yaml or vib.yml/yaml in CWD):_files -g "*.(yml|yaml|YML|YAML)"' && ret=0
+        ;;
+    esac
+    ;;
+esac
+
+return ret

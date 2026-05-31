@@ -1,0 +1,138 @@
+#compdef abroot
+# Documentation: source-direct extraction from upstream
+# Vanilla-OS/abroot —
+#   cmd/root.go lines 28-48 (the cmdr.App init + the persistent
+#     --verbose/-V flag registration)
+#   cmd/conf.go, kargs.go, mount-sys.go, pkg.go, rebase.go,
+#     rollback.go, status.go, unlock-var.go,
+#     update-initramfs.go, upgrade.go (the 10 cmdr.NewCommand
+#     registrations, one per file)
+# Reference accessed: 2026-05-30 via gh api.
+#
+# abroot is the **Vanilla OS atomic A/B-root update engine** —
+# transacts between two immutable root filesystems using OCI
+# images as the deployment unit.  Sister tool to apx (R224 —
+# the userspace package manager that operates inside managed
+# containers since the root is immutable) and vib (R225 — the
+# image builder that produces the OCI images abroot consumes).
+# The Vanilla OS analog to rpm-ostree (R209/R210/R212 OTA
+# family) and bootc — but using A/B-disk-partition switch
+# rather than OSTree's deployment hardlinks.
+#
+# Critical extraction note: abroot uses **vanilla-os/orchid**
+# (the cmdr.App wrapper from `github.com/vanilla-os/orchid/
+# cmdr`) — same library family as R224's apx (which uses the
+# newer struct-driven cmdr API).  abroot uses the OLDER
+# cmdr.NewCommand / cmd.WithBoolFlag / cmd.WithStringFlag
+# function-call API.  Both share the same underlying spf13/
+# cobra dispatch with i18n-keyed help strings resolved via
+# `abroot.Trans("key")` at runtime.
+
+local curcontext="$curcontext" state line ret=1
+
+# Commands decoded source-direct from cmd/*.go NewCommand calls.
+# Each file registers exactly one top-level cmdr command.
+local -a subcommands=(
+  'config-editor:open the abroot config editor (cmd/conf.go)'
+  'kargs:edit or show kernel command-line args (cmd/kargs.go — subcommands edit|show)'
+  'mount-sys:mount the system as RW for direct modification (cmd/mount-sys.go)'
+  'pkg:overlay-package management (cmd/pkg.go — subcommands add|remove|list|apply)'
+  'rebase:rebase to a different OCI image (cmd/rebase.go — takes <name> positional)'
+  'rollback:roll back to the previous boot (cmd/rollback.go)'
+  'status:show abroot status (cmd/status.go — supports --json)'
+  'unlock-var:unlock the encrypted /var partition (cmd/unlock-var.go)'
+  'update-initramfs:rebuild the initramfs (cmd/update-initramfs.go)'
+  'upgrade:perform an atomic A/B upgrade (cmd/upgrade.go — the canonical command)'
+)
+
+# kargs sub-subcommands decoded source-direct from cmd/
+# kargs.go's NewCommand("kargs edit|show", ...) — the Use
+# string at line 30 declares 2 sub-actions.
+local -a kargs_subcommands=(
+  'edit:edit kernel command-line args interactively'
+  'show:show current kernel command-line args'
+)
+
+# pkg sub-subcommands decoded source-direct from cmd/pkg.go's
+# NewCommand("pkg add|remove|list|apply", ...).
+local -a pkg_subcommands=(
+  'add:add a package to the overlay'
+  'remove:remove a package from the overlay'
+  'list:list overlay packages'
+  'apply:apply pending overlay changes (creates the next boot environment)'
+)
+
+_arguments -C \
+  '(-V --verbose)'{-V,--verbose}'[enable verbose output (persistent flag from cmd/root.go:42)]' \
+  '(-h --help)'{-h,--help}'[show help and exit]' \
+  '--version[show version and exit]' \
+  '1:subcommand:->subcmd' \
+  '*::args:->args' && ret=0
+
+case $state in
+  subcmd)
+    _describe -t subcommands 'abroot command' subcommands && ret=0
+    ;;
+  args)
+    case $words[1] in
+      kargs)
+        _describe -t kargs-subs 'kargs action' kargs_subcommands && ret=0
+        ;;
+      pkg)
+        if (( CURRENT == 2 )); then
+          _describe -t pkg-subs 'pkg action' pkg_subcommands && ret=0
+        else
+          # pkg subcommands share 4 flags (cmd/pkg.go:44-72)
+          _arguments \
+            '(-d --dry-run)'{-d,--dry-run}'[show what would be done without doing it]' \
+            '--force-enable-user-agreement[force-enable user agreement (skip prompt)]' \
+            '--force-apply[force apply changes]' \
+            '--delete-old-system[delete old system after apply]' \
+            '*:packages:' && ret=0
+        fi
+        ;;
+      rebase)
+        # rebase has 4 flags (cmd/rebase.go:21-50) + 1 positional
+        _arguments \
+          '(-d --dry-run)'{-d,--dry-run}'[show what would be done]' \
+          '--remove-packages[remove overlay packages during rebase]' \
+          '--keep-packages[keep overlay packages during rebase]' \
+          '--rebase-only[skip the upgrade step]' \
+          '1:OCI image name (e.g. ghcr.io/vanilla-os/desktop\:main):' && ret=0
+        ;;
+      rollback)
+        _arguments '--check-only[only check if rollback is possible]' && ret=0
+        ;;
+      status)
+        _arguments \
+          '--json[output as JSON]' \
+          '--dump[dump full diagnostic state]' && ret=0
+        ;;
+      unlock-var)
+        _arguments \
+          '--dry-run[show what would be done]' \
+          '--var-disk=[explicit /var disk device path]:device:_files -g "/dev/*"' \
+          '--check-encrypted[only check if /var is encrypted]' && ret=0
+        ;;
+      update-initramfs)
+        _arguments \
+          '--dry-run[show what would be done]' \
+          '--delete-old-system[delete old system after rebuild]' && ret=0
+        ;;
+      upgrade)
+        _arguments \
+          '(-c --check-only)'{-c,--check-only}'[only check for updates; exit 0 if available, 1 if none]' \
+          '(-d --dry-run)'{-d,--dry-run}'[run the upgrade without committing]' \
+          '(-f --force)'{-f,--force}'[force upgrade even if blocked]' \
+          '--delete-old-system[delete the previous root after committing the new one]' \
+          '--cancel[stop an in-progress upgrade]' \
+          '--unblock[unblock a previously-cancelled upgrade]' && ret=0
+        ;;
+      mount-sys)
+        _arguments '--dry-run[show what would be done]' && ret=0
+        ;;
+    esac
+    ;;
+esac
+
+return ret
