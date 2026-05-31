@@ -1,0 +1,94 @@
+#compdef cargo-maelstrom
+# Documentation: source-direct extraction from upstream
+# maelstrom-software/maelstrom —
+#   crates/cargo-maelstrom/src/main.rs lines 7-13 (the
+#     cargo-subcommand argv massage + dispatch to
+#     maelstrom_test_runner::main)
+#   crates/maelstrom-test-runner/src/config.rs lines 72-153
+#     (Config + ExtraCommandLineOptions structs)
+#   crates/maelstrom-client/src/config.rs lines 12-86
+#     (ClientConfig struct, flattened into the test-runner
+#     Config at line 110-111)
+# Reference accessed: 2026-05-30 via gh api.
+#
+# cargo-maelstrom is the **distributed-execution Rust test
+# runner** from maelstrom-software/maelstrom — runs `cargo
+# test` workloads across a fleet of "broker" + "worker"
+# machines, dramatically parallelizing large test suites that
+# can't fit on a single machine.  Alternative to cargo-
+# nextest (which is single-machine local parallel) and the
+# default `cargo test` (which is single-process).  Also
+# supports running tests inside isolated container images.
+#
+# Critical extraction note: cargo-maelstrom uses a **custom
+# `#[derive(Config)]` proc macro** (from maelstrom-macro
+# crate) — NOT clap::Parser directly.  The macro emits clap
+# arg attributes from `#[config(short = 'X', value_name =
+# "Y", default = "...")]` annotations.  This is the corpus's
+# first round to document the **`#[derive(Config)]` pattern**
+# — similar in spirit to clap-derive but with config-file +
+# env-var + cli triple-source resolution built in.
+#
+# Critical extraction note: cargo-maelstrom is also a
+# **cargo subcommand** — at main.rs:9-11, the argv-massage
+# `if args.len() > 1 && args[0].ends_with(format!("cargo-{}",
+# args[1]).as_str()) { args.remove(1); }` strips the `cargo`
+# prefix when invoked as `cargo maelstrom test-pattern`,
+# allowing the same binary to work as either `cargo-maelstrom
+# test-pattern` (when cargo dispatches it) or `cargo
+# maelstrom test-pattern` (when invoked via the cargo
+# subcommand bridge).  Decoded source-direct.  Same pattern
+# as cargo-edit, cargo-deny, cargo-machete, etc.
+#
+# Critical extraction note: 3 ClientConfig flags are **HIDDEN
+# from --help** (decoded source-direct from `hide` attribute
+# at client config.rs:26, 36, 46): `--cluster-communication-
+# strategy`, `--github-actions-token`, `--github-actions-url`.
+# These are auto-populated by maelstrom's GitHub Actions
+# integration when running CI workloads.  Completion lists
+# them since they're valid options users may want to override
+# for advanced use cases.
+#
+# Critical extraction note: ExtraCommandLineOptions
+# `--client-process` flag is **HIDDEN** (config.rs:152
+# `hide(true)`) — used internally for testing the
+# test-runner harness itself.  Listed for forward compat.
+#
+# Critical extraction note: `--repeat`/`-r` has an alias
+# `--loop` (config.rs:85 `alias = "loop"`) — both work
+# interchangeably.  Documented in the comment block.
+
+local -a log_levels=(error warn info debug trace)
+local -a ui_styles=(
+  'auto:auto-detect based on TTY (default)'
+  'simple:simple line-based output'
+  'quiet:only report failures'
+  'fancy:full-screen TUI with progress bars'
+)
+local -a comm_strategies=(
+  'tcp:direct TCP connection to broker (default)'
+  'github:GitHub Actions integration (use ACTIONS_RUNTIME_TOKEN)'
+)
+
+_arguments -s -S \
+  '(-h --help)'{-h,--help}'[show help and exit]' \
+  '(-V --version)'{-V,--version}'[show version and exit]' \
+  '(-L --log-level)'{-L+,--log-level=}'[minimum log level (default info)]:level:(error warn info debug trace)' \
+  '--ui=[UI style (default auto)]:style:(auto simple quiet fancy)' \
+  '(-r --repeat --loop)'{-r+,--repeat=,--loop=}'[number of times to run each selected test (must be non-zero)]:count:' \
+  '(-s --stop-after)'{-s+,--stop-after=}'[stop after N failures (default: never stop)]:num-failures:' \
+  '(-t --timeout)'{-t+,--timeout=}'[override timeout for all tests in seconds (0 = no timeout)]:seconds:' \
+  '(-b --broker)'{-b+,--broker=}'[socket address of broker (host:port; standalone mode if absent)]:sockaddr:' \
+  '--cluster-communication-strategy=[(HIDDEN) cluster communication strategy]:strategy:(tcp github)' \
+  '--github-actions-token=[(HIDDEN) ACTIONS_RUNTIME_TOKEN for GitHub strategy]:token:' \
+  '--github-actions-url=[(HIDDEN) ACTIONS_RESULTS_URL for GitHub strategy]:url:_urls' \
+  '--cache-size=[local worker cache size (SI/binary suffixes; default ~1GB)]:bytes:' \
+  '--inline-limit=[max bytes returned inline for stdout/stderr]:bytes:' \
+  '--slots=[number of job slots available (default: CPU count)]:n:' \
+  '--container-image-depot-root=[directory for cached container images (default: $XDG_CACHE_HOME/maelstrom/container)]:path:_files -/' \
+  '--accept-invalid-remote-container-tls-certs[accept invalid TLS certs when downloading container images]' \
+  \*{-i+,--include=}'[only include tests matching the filter expression (repeatable; default "all")]:filter:' \
+  \*{-x+,--exclude=}'[exclude tests matching the filter expression (repeatable)]:filter:' \
+  '--init[write a starter test metadata file (cargo-maelstrom.toml) if absent, then exit]' \
+  '(-w --watch)'{-w,--watch}'[loop running tests then wait for changes (watch mode)]' \
+  '--client-process[(HIDDEN) used internally for testing the test-runner harness]'
