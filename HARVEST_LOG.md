@@ -19,6 +19,35 @@ Entries are in original README order: older themed-cluster entries (accumulated
 before the per-round numbering convention) appear first, followed by the
 R-numbered rounds with the newest R-round at the top of that section.
 
+- **R240 — Maelstrom infrastructure trio: maelstrom-admin + maelstrom-broker + maelstrom-worker** (3 files / 3 binaries) — direct follow-up to R239's hunt-skip on `maelstrom-admin`, `maelstrom-broker`, and `maelstrom-worker`.  **Closes the 7-binary Maelstrom family**: R238 cargo-maelstrom (Rust runner) + R239 trio (pytest/go-test/run) + R240 infrastructure (admin/broker/worker daemons).
+  - `_maelstrom-admin` (1-stem; crates/maelstrom-admin/): **2 subcommands (each with 2 invisible aliases) + 5 flags (3 hidden) + `disable_help_subcommand`** decoded source-direct from:
+    * `config.rs` lines 6-47 (Config struct: 5 flags, 3 with `hide` attribute)
+    * `lib.rs` lines 20-36 (Subcommand enum: 2 variants Status + Stop with `aliases` attribute lists)
+    * `#[command(disable_help_subcommand = true)]` at lib.rs:21 (disables auto-injected `help` subcommand)
+  - `_maelstrom-broker` (1-stem; crates/maelstrom-broker/src/config.rs): **8 flags (1 cfg-gated + 3 hidden)** decoded source-direct from Config struct at lines 60-119.
+  - `_maelstrom-worker` (1-stem; crates/maelstrom-worker/src/config.rs): **8 flags (3 hidden) with mandatory-for-TCP `-b`/`--broker`** decoded source-direct from Config struct at lines 13-80.
+  - Critical extraction note: **maelstrom-admin uses 2 new clap-derive attributes documented here for the first time**:
+    1. **`#[command(disable_help_subcommand = true)]`** at lib.rs:21 — DISABLES the auto-injected `help` subcommand that clap normally adds.  **Corpus's first explicit help-subcommand opt-out documentation**.  Used when an app wants to use `--help` only (no `app help` subcommand).
+    2. **`aliases = ["stats", "stat"]` array syntax** — INVISIBLE multi-alias attribute on Status and Stop variants (lib.rs:25 + 32).  Compare to clap's `visible_aliases = [...]` which would show them in `--help`.  Continues R238's `alias = "loop"` single-alias documentation by adding the **multi-alias ARRAY syntax**.  Documented in completion description so users see all 6 valid forms (status, stats, stat, stop, shut-down, shutdown).
+  - Critical extraction note: **maelstrom-broker's `-H`/`--http-port` flag is cfg-gated on `feature = "web-ui"`** (config.rs:67-69).  Continues R233 regorus's feature-gating documentation (variant-level + body-bail + inner-flag patterns).  This is the **corpus's first documented feature-gated single flag** on a `#[derive(Config)]` struct.  Completion lists it unconditionally since installed binary features are opaque.
+  - Critical extraction note: **maelstrom-broker's `--port`/`-p` defaults to `0`** — the Linux convention for "let the OS pick an unused port".  The broker logs the actual bound port at startup so workers know where to connect.  Documented in completion description for users wondering why no default port is exposed.
+  - Critical extraction note: **maelstrom-worker does NOT use `#[config(flatten)]`** to share the ClientConfig flag set (unlike R239's pytest/go-test/run which all flatten ClientConfig).  Instead it duplicates the flag set verbatim in its own Config struct (config.rs:13-80).  This is an upstream code-duplication choice — likely because the worker has slightly different defaults (e.g. `broker` is mandatory for TCP rather than defaulting to standalone mode).  Documents that **even within the same project, not every shared flag set goes through the #[config(flatten)] composition layer**.  This is the corpus's first documented "code-duplication-vs-#[config(flatten)] tradeoff" example.
+  - Critical extraction note: **maelstrom-worker's `-b`/`--broker` mandatory-for-TCP error message** at config.rs:18-22 — the default value `"no default, must be specified if cluster-communication-strategy is tcp (the default)"` is a STRING literal that gets printed if the user forgets to provide it.  Continues the corpus's documentation of context-dependent default values (R236 evcc's dual-purpose binary, R239 maelstrom-run's `--escape-char` tri-syntax).
+  - **The Maelstrom 7-binary family is now COMPLETE in the corpus**:
+    | Binary | Round | Role | Specific flags |
+    |---|---|---|---|
+    | cargo-maelstrom | R238 | Rust test runner | 22 flags (22 base) |
+    | maelstrom-pytest | R239 | Python test runner | 22 base + 4 pytest |
+    | maelstrom-go-test | R239 | Go test runner | 22 base + 4 Go-test |
+    | maelstrom-run | R239 | standalone job runner | 3 own + 9 ClientConfig + OneOrTty mutex |
+    | maelstrom-admin | R240 | broker admin | 5 flags + 2 subcmds |
+    | maelstrom-broker | R240 | broker daemon | 8 flags (1 cfg-gated) |
+    | maelstrom-worker | R240 | worker daemon | 8 flags |
+  - Hunt-skip notes: `maelstrom-simex` (the symbolic-execution test runner; experimental) deferred — flag set still in flux upstream.  `maelstrom-client-process` (the client subprocess; internal infrastructure) deferred — not a user-facing CLI.  `maelstrom-fuse` (the FUSE-based test isolation layer; internal) deferred.  `maelstrom-plot` (results plotting; small CLI surface) deferred.  `maelstrom-github` (GitHub Actions integration; subcommand of cargo-maelstrom) covered indirectly via the github strategy flags in R238/R239/R240.
+  - Dup-checked clean against `/usr/share/zsh` + `/opt/homebrew/share/zsh` + `/usr/local/share/zsh`.
+  - Blacklist additions: 3 entries (maelstrom-* cluster).
+  - Corpus 28,668 → 28,671 files.
+
 - **R239 — Maelstrom sister-binary trio: maelstrom-pytest + maelstrom-go-test + maelstrom-run** (3 files / 3 binaries) — direct follow-up to R238's hunt-skip on `maelstrom-pytest`, `maelstrom-go-test`, and `maelstrom-run`.  Completes the Maelstrom 4-binary family (R238 cargo-maelstrom + R239 trio).  pytest + go-test inherit the same 22-flag TestRunnerConfig + ClientConfig as cargo-maelstrom and add 4 framework-specific flags each.  maelstrom-run is the standalone job-spec runner (NOT a test runner) for arbitrary distributed computation.
   - `_maelstrom-pytest` (1-stem; maelstrom-software/maelstrom crates/maelstrom-pytest/src/config.rs): **22 inherited TestRunnerConfig+ClientConfig flags + 4 pytest-specific extras** decoded source-direct from:
     * `Config` at lines 4-11 (flattens TestRunnerConfig + PytestConfig)
