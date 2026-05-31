@@ -19,6 +19,27 @@ Entries are in original README order: older themed-cluster entries (accumulated
 before the per-round numbering convention) appear first, followed by the
 R-numbered rounds with the newest R-round at the top of that section.
 
+- **R222 — Wayland: xwayland-satellite (XWayland bridge for niri / minimal compositors)** (1 file / 1 binary) — branches off the systemd v257+ family run (R218-R221) into the Wayland compositor ecosystem.  xwayland-satellite is the canonical X11-on-Wayland bridge for `niri` (existing completion in the corpus) and other minimalist Wayland compositors that don't have built-in XWayland support.  Runs an unmodified Xwayland server as a satellite process and reconciles its X11 surfaces with the parent Wayland compositor via the standard wl_surface protocol.
+  - `_xwayland-satellite` (1-stem; Supreeeme/xwayland-satellite src/main.rs): **15 flags + 1 positional DISPLAY** decoded source-direct from:
+    * parse_args() at lines 94-247 (the hand-rolled argv match dispatcher; NO clap)
+    * ParsedFlags struct at lines 31-58 (the state machine for accumulated flag values)
+    * ParsedFlags::to_vec() at lines 60-91 (the actual Xwayland command-line that the wrapper produces internally)
+    * essential-extension whitelist at line 148 (the 4 extensions that cannot be disabled)
+  - Critical extraction note: **xwayland-satellite uses X.org-style single-dash long-form flags** (`-ac`, `-audit`, `-auth`, `-core`, `+extension`, `-extension`, `-glamor`, `-help`, `-listen`, `-nolisten`, `-listenfd`, `-verbose`, `-version`) rather than GNU getopt double-dash flags — intentional for CLI compatibility with Xwayland's own flag syntax so existing scripts can be reused.  This matches the qmlimportscanner convention documented in R215 — both Wayland-adjacent / Qt-tools binaries adopt their parent ecosystem's flag-syntax convention rather than GNU conventions.  Only ONE flag uses double-dash: `--test-listenfd-support` (line 227) — used for capability probing.
+  - Critical extraction note: **4 X server extensions are HARDCODED as essential and CANNOT be disabled** via `-extension NAME` — attempts are silently ignored at line 148.  The 4 immutable extensions are: `COMPOSITE`, `RANDR`, `XFIXES`, `X-Resource`.  These are required by xwayland-satellite's internal Wayland↔X11 surface reconciliation logic.  Documented in completion comment + the `-extension` flag description so users understand why some `-extension` invocations are no-ops.
+  - Critical extraction note: **xwayland-satellite does NOT use clap or any parser library** despite being a Rust binary — it's a hand-rolled `while let Some(arg) = args.next()` match dispatcher at main.rs:109-244.  This means:
+    1. Flag parsing is STRICTLY POSITIONAL — no `--flag=VALUE` syntax (only `--flag VALUE` with space separation)
+    2. Unknown flags PANIC the process at line 241: `panic!("Unrecognized argument: {arg}")`
+    3. `-auth` panics on multiple invocations at line 124 (`panic!("Multiple -auth flags passed")`) — unlike Xwayland's own behavior of silently using the last
+    4. `-listenfd` panics on duplicate fd at line 222 (`Multiple -listenfd with the same fd is not allowed`) to prevent double-close UB
+  - Critical extraction note: **`-verbose` has dual-mode behavior** at lines 228-235: `-verbose 3` parses the next arg as `u32` and sets verbosity to 3; `-verbose` alone (or followed by a non-numeric token) INCREMENTS the current verbosity by 1.  Same idiom as Xwayland and most X.org server binaries.  Completion documents this in the description and allows numeric completions (0..5).
+  - Critical extraction note: the DISPLAY positional (first non-flag arg starting with `:`) is OPTIONAL at lines 100-106 — if absent, xwayland-satellite asks Xwayland to pick the next available display number itself.  Documented in the `1:` positional spec.
+  - Critical extraction note: `+extension` and `-extension` toggle entries are MUTUALLY ANNIHILATING — if `-extension foo` is later followed by `+extension foo`, the first is removed from the "minus" list at line 141 before adding to "plus".  Same for the opposite direction (lines 150-153).  This means flags processed in argv order — the LAST mention of each extension wins.
+  - Hunt-skip notes: `xwayland-satellite-systemd-shim` (the systemd-integration wrapper that some distros ship as a separate package; thin shell wrapper around the main binary) deferred — small flag surface.  `Xwayland` itself (the X.org server) is OS-shipped under `/usr/bin/Xwayland`; covered by existing X.org completion (man-page generated).
+  - Dup-checked clean against `/usr/share/zsh` + `/opt/homebrew/share/zsh` + `/usr/local/share/zsh`.
+  - Blacklist additions: 1 entry (x*).
+  - Corpus 28,644 → 28,645 files.
+
 - **R221 — systemd v257+ low-level utility quad: storagetm + binfmt + veritysetup + update-utmp** (4 files / 4 binaries) — direct follow-up to R220's hunt-skip on systemd-storagetm.  Covers 4 distinct corners of systemd's low-level system-management surface: NVMe-oF target manager, binfmt_misc registrar, dm-verity activator, and utmp/wtmp+audit writer.  Continues coverage of the modern OptionParser idiom established in R218 + R219 + R220.
   - `_systemd-storagetm` (1-stem; systemd/systemd src/storagetm/storagetm.c): **3 flags + 1 positional family** decoded source-direct from:
     * parse_argv() at lines 76-145 (OptionParser FOREACH_OPTION_OR_RETURN + OPTION_LONG + OPTION entries)
