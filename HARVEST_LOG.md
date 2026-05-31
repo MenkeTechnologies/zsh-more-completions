@@ -19,6 +19,38 @@ Entries are in original README order: older themed-cluster entries (accumulated
 before the per-round numbering convention) appear first, followed by the
 R-numbered rounds with the newest R-round at the top of that section.
 
+- **R234 — ueberzugpp (C++ port of ueberzug; terminal image display)** (1 file / 1 binary) — branches off the policy-evaluation cluster into terminal-image-display tooling.  ueberzugpp is the C++ port of the original Python ueberzug (already in corpus) — displays images in a terminal as if they were native widgets, used heavily by TUI file managers (ranger / lf / yazi / vifm / joshuto) to preview images alongside file listings.  Supports more backend output methods than the original ueberzug: x11 + wayland + sixel + kitty graphics + iTerm2 inline + chafa ASCII art.
+  - `_ueberzugpp` (1-stem; jstkdng/ueberzugpp src/main.cpp): **4 subcommands + ~20 flags + 4-action JSON enum + 6-value output-method enum** decoded source-direct from:
+    * `CLI::App program` + `add_subcommand()` registrations at lines 82-115
+    * `layer_command` flag set at lines 85-98 (8 flags + 2 UNUSED-but-kept-for-compat options + the output enum)
+    * `cmd_comand` flag set at lines 100-108 (8 flags for IPC to a running ueberzugpp daemon)
+    * action enum decoded source-direct from `src/util/util.cpp` lines 187-208 (`flags.cmd_action == "exit"` and `== "remove"` branches; other actions like `add` are passed through verbatim to the daemon JSON)
+    * `CLI::IsMember` validator at line 95 (6-value output method enum: x11|wayland|sixel|kitty|iterm2|chafa)
+  - Critical extraction note: **ueberzugpp uses CLI11** — the canonical modern C++ CLI library (header-only, clap-derive-style API).  This is the **FIRST round in the corpus to document CLI11-based binaries**.  CLI11 idioms relevant to completion:
+    1. **`add_flag("-V,--version", var, "help")`** — comma-separated short+long form in a SINGLE string.  No dual-call pattern like Go's stdlib flag (R227 ssh-tpm-* + R228 fido2-hmac + R230 jjui).
+    2. **`add_subcommand(name, help)`** — returns a `CLI::App*` for method chaining further options into the subcommand.
+    3. **`->check(CLI::IsMember({...}))`** — value validation against a fixed enum (the x11/wayland/sixel/... choice at line 95).
+    4. **`->needs("--other-flag")`** — dependency edge declaring that this flag requires another to be present.  Documented in ueberzugpp at line 91 (`--no-stdin` needs `--pid-file`).  Corpus's first documented dependency-edge pattern.
+    5. **`->allow_extras()`** — opt-in to accepting positional args without explicit registration (used by tmux + query_windows subcommands at lines 111, 115).
+    6. **`CLI11_PARSE` macro** at line 117 — the parse+exit+error-handling boilerplate.
+  - Critical extraction note: **the `cmd action` enum is OPEN-ENDED** — main.cpp registers `-a/--action` as a free-form string at line 103; the daemon-side dispatch at src/util/util.cpp lines 189-208 only special-cases `exit` and `remove`.  All other action strings are passed through verbatim to the daemon in JSON.  The CANONICAL actions used by file managers are `add` / `remove` / `exit` (and `query` for older ueberzug compat).  Completion offers these 4 as the recommended set but does NOT enforce mutex since extensions may add more.  This is the corpus's first documented "open-ended enum" pattern — alongside R233's `--data` multi-extension `value_name` and R231's swapped doc strings.
+  - Critical extraction note: **`-p`/`--parser` and `-l`/`--loader` flags on `layer` are explicitly marked `**UNUSED**, only present for backwards compatibility`** at lines 97-98.  Kept so existing TUI file managers that invoke ueberzugpp with these flags don't error out.  Completion lists them with the `DEPRECATED` prefix so users don't accidentally use them in new scripts.  This is similar to R220 importctl's `--magic-identity` deprecation but with the "backwards-compat with another tool" rationale.
+  - Critical extraction note: **ueberzugpp's `tmux` subcommand uses `allow_extras()`** at line 111 — accepts 2 positional args (`hook_name` numeric_id) without explicit CLI11 registration.  Decoded source-direct from main.cpp:139-143's `tmux_command->remaining()` + `std::stoi(positionals.at(1))`.  Completion explicitly documents this in the position spec since CLI11 normally requires explicit positional registration.
+  - Critical extraction note: **6-value output-method enum** decoded source-direct from line 95's `CLI::IsMember({"x11", "wayland", "sixel", "kitty", "iterm2", "chafa"})`.  This documents the modern terminal-image-protocol landscape:
+    | Method | Mechanism | Where it works |
+    |---|---|---|
+    | x11 | Xorg child window overlay (original ueberzug method) | X11 desktops |
+    | wayland | Wayland layer-shell overlay | Wayland desktops |
+    | sixel | Sixel graphics escape codes | mlterm, foot, xterm w/ sixel, kitty fallback |
+    | kitty | Kitty graphics protocol | Kitty terminal, ghostty, wezterm |
+    | iterm2 | iTerm2 inline image protocol | iTerm2, wezterm |
+    | chafa | Chafa ASCII / Unicode-block art | Any terminal (fallback) |
+    Documented in completion enum-value descriptions for users choosing the right backend.
+  - Hunt-skip notes: `uberzug` was a probe typo (the original is `ueberzug` with both 'u's; already in corpus).  `ueberzug-x11` / `ueberzug-wayland` (per-backend variants in some distros) — same binary; the choice is via `-o/--output` flag.  `ueberzug-py-rs` (a Rust port that's still nascent) deferred.
+  - Dup-checked clean against `/usr/share/zsh` + `/opt/homebrew/share/zsh` + `/usr/local/share/zsh`.
+  - Blacklist additions: 1 entry (u).
+  - Corpus 28,661 → 28,662 files.
+
 - **R233 — regorus (Microsoft Rust Rego interpreter)** (1 file / 1 binary) — branches off the Hugging Face cluster (R232 hf) into policy-evaluation tooling.  regorus implements the Open Policy Agent (OPA) Rego language as a pure-Rust library + CLI — alternative to the canonical Go-based OPA (existing `_opa` in the corpus) for embedded policy evaluation in Rust / embedded / WASM contexts.  Sister tool in the policy-evaluation cluster alongside OPA + Gatekeeper.
   - `_regorus` (1-stem; microsoft/regorus examples/regorus/main.rs): **6 subcommands + 8 eval-flags + 5 azure-policy-eval flags + 2 azure-policy-aliases flags** decoded source-direct from:
     * `enum RegorusCommand` at lines 211-309 (the `#[derive(clap::Subcommand)]` enum with 6 variants)
