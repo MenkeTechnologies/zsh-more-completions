@@ -1,0 +1,128 @@
+#compdef regorus
+# Documentation: source-direct extraction from upstream
+# microsoft/regorus examples/regorus/main.rs —
+#   `enum RegorusCommand` at lines 211-309 (the
+#     clap::Subcommand derive enum with 6 variants, 2 gated
+#     on `feature = "azure_policy"`, 1 gated on `feature =
+#     "ast"`, 1 inner-flag gated on `feature = "coverage"`)
+#   `struct Cli` at lines 311-316 (the top-level clap::Parser
+#     with no global flags besides clap's auto --help / -V /
+#     --version)
+# Reference accessed: 2026-05-30 via gh api.
+#
+# regorus is the **Microsoft Rust Rego interpreter** —
+# implements the Open Policy Agent (OPA) Rego language as a
+# pure-Rust library + CLI.  Alternative to the canonical
+# Go-based OPA (`_opa` already in the corpus) for embedded
+# policy evaluation in Rust/embedded/WASM contexts.  Sister
+# tool in the policy-evaluation cluster (OPA + Gatekeeper
+# already covered).
+#
+# Critical extraction note: regorus uses **clap-derive** with
+# `#[derive(clap::Subcommand)]` on an enum (NOT the imperative
+# `clap::Command::new()` API).  This is the corpus's
+# canonical derive-enum-subcommand pattern.  clap-derive
+# converts PascalCase variants to kebab-case automatically:
+#   Ast                  -> `ast`
+#   Eval                 -> `eval`
+#   Lex                  -> `lex`
+#   Parse                -> `parse`
+#   AzurePolicyEval      -> `azure-policy-eval`
+#   AzurePolicyAliases   -> `azure-policy-aliases`
+#
+# Critical extraction note: 3 SUBCOMMANDS are FEATURE-GATED
+# at upstream (cfg!(feature = "..."))):
+#   `ast` — gated on `feature = "ast"` (lines 205-208 bail
+#           if feature missing; the variant ITSELF is NOT
+#           cfg-gated, so the help text always shows it,
+#           but invoking it without the feature panics)
+#   `azure-policy-eval` and `azure-policy-aliases` — gated on
+#           `feature = "azure_policy"` at variant level (lines
+#           275, 299 with `#[cfg(...)]`) — these variants ARE
+#           omitted from --help when the feature is absent
+# Completion lists ALL 6 variants since the installed binary's
+# build features are opaque.  Documented in comment block.
+#
+# Critical extraction note: the `eval` subcommand has the
+# `--coverage`/-c flag CFG-GATED on `feature = "coverage"`
+# at lines 245-247 (`#[cfg(feature = "coverage")] #[arg(...)]
+# coverage: bool`).  Same pattern as ferrishot's Debug
+# group in R231.  Completion lists `--coverage`
+# unconditionally with a "(coverage feature)" tag.
+#
+# Critical extraction note: `--non-strict` documentation
+# explicitly says **"default behavior of OPA"** (line 240).
+# This means regorus is STRICT by default (rejects programs
+# with errors that OPA would silently pass).  Users who want
+# OPA-compat behavior must pass `--non-strict`.  Documented
+# in the flag description for users familiar with `opa`.
+#
+# Critical extraction note: `--bundles`/-b and `--data`/-d
+# are **REPEATABLE** (`Vec<String>` field type at lines
+# 223 + 227).  Completion uses `*-b+`/`*-d+` for repeatability.
+
+local curcontext="$curcontext" state line ret=1
+
+local -a subcommands=(
+  'ast:parse a Rego policy and dump AST (gated on `ast` feature; bails if missing)'
+  'eval:evaluate a Rego Query against bundles/data (the primary verb)'
+  'lex:tokenize a Rego policy file'
+  'parse:parse a Rego policy file (--v0 for Rego v0)'
+  'azure-policy-eval:evaluate an Azure Policy definition against a resource (gated on `azure_policy`)'
+  'azure-policy-aliases:list aliases from an alias registry file (gated on `azure_policy`)'
+)
+
+_arguments -C \
+  '(-h --help)'{-h,--help}'[show help and exit (clap auto-injected)]' \
+  '(-V --version)'{-V,--version}'[show version and exit (clap auto-injected)]' \
+  '1:subcommand:->subcmd' \
+  '*::args:->args' && ret=0
+
+case $state in
+  subcmd)
+    _describe -t subcommands 'regorus subcommand' subcommands && ret=0
+    ;;
+  args)
+    case $words[1] in
+      ast)
+        _arguments '1:Rego policy file:_files -g "*.rego"' && ret=0
+        ;;
+      eval)
+        _arguments \
+          \*{-b+,--bundles=}'[directory containing Rego files (repeatable)]:bundle:_files -/' \
+          \*{-d+,--data=}'[policy or data file: .rego, .json, or .yaml (repeatable)]:file:_files -g "*.(rego|json|yaml|yml)"' \
+          {-i+,--input=}'[input file: json or yaml]:file:_files -g "*.(json|yaml|yml)"' \
+          '(-t --trace)'{-t,--trace}'[enable tracing of evaluation steps]' \
+          '(-n --non-strict)'{-n,--non-strict}'[perform non-strict evaluation (OPA-compat; default is STRICT)]' \
+          '(-c --coverage)'{-c,--coverage}'[(coverage feature) display coverage information]' \
+          '--v0[turn on Rego language v0 (legacy syntax compat)]' \
+          '1:Rego query block (e.g. `data.example.allow`):' && ret=0
+        ;;
+      lex)
+        _arguments \
+          '(-v --verbose)'{-v,--verbose}'[verbose output (show token positions)]' \
+          '1:Rego policy file:_files -g "*.rego"' && ret=0
+        ;;
+      parse)
+        _arguments \
+          '--v0[turn on Rego language v0 (legacy syntax compat)]' \
+          '1:Rego policy file:_files -g "*.rego"' && ret=0
+        ;;
+      azure-policy-eval)
+        _arguments \
+          '--policy-definition=[Azure Policy definition JSON file]:file:_files -g "*.json"' \
+          '--resource=[ARM resource JSON file to evaluate]:file:_files -g "*.json"' \
+          '--aliases=[Aliases JSON file (provider aliases)]:file:_files -g "*.json"' \
+          '--parameters=[Policy parameters as a JSON string]:json:' \
+          '--api-version=[API version for alias path selection]:version:' && ret=0
+        ;;
+      azure-policy-aliases)
+        _arguments \
+          '--aliases=[Aliases JSON file (provider aliases)]:file:_files -g "*.json"' \
+          '--resource-type=[filter aliases by resource type prefix]:prefix:' && ret=0
+        ;;
+    esac
+    ;;
+esac
+
+return ret
