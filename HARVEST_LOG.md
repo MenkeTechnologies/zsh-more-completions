@@ -19,6 +19,36 @@ Entries are in original README order: older themed-cluster entries (accumulated
 before the per-round numbering convention) appear first, followed by the
 R-numbered rounds with the newest R-round at the top of that section.
 
+- **R225 — Vanilla OS atomic-distro trio: abroot + vib + vso** (3 files / 3 binaries) — direct follow-up to R224 (apx v3 rewrite).  Completes coverage of the four-tool Vanilla OS CLI family: package management (apx) + atomic root updates (abroot) + image building (vib) + system tasks/maintenance (vso).
+  - `_abroot` (1-stem; Vanilla-OS/abroot; **10 commands + 1 persistent flag**) — decoded source-direct from:
+    * `cmd/root.go` lines 28-48 (cmdr.App init + persistent `--verbose`/`-V` flag)
+    * 10 per-command files in `cmd/`: conf.go (config-editor), kargs.go (kargs edit/show), mount-sys.go, pkg.go (pkg add/remove/list/apply), rebase.go, rollback.go, status.go, unlock-var.go, update-initramfs.go, upgrade.go
+  - `_vib` (1-stem; Vanilla-OS/vib; **3 subcommands + 4 flags total**) — decoded source-direct from:
+    * `cmd/root.go` lines 19-32 (rootCmd cobra.Command + init() subcommand registration)
+    * `cmd/build.go` lines 18-36 (build + -o/--output + -a/--arch)
+    * `cmd/compile.go` lines 14-30 (compile + -o/--output + -r/--runtime)
+    * `cmd/test.go` lines 12-22 (test — no flags)
+  - `_vso` (1-stem; Vanilla-OS/vanilla-system-operator; **4 management groups + 21 subcommands + ~50 flags**) — decoded source-direct from:
+    * `cmd/main.go` lines 31-88 (Apx-style App initialization via vanilla-os/sdk)
+    * `internal/cli/structs.go` lines 19-188 (struct dispatch tree: RootCmd + TasksCmd + UpgradeCmd + ConfigCmd + NativeCmd)
+  - Critical extraction note: **abroot is the Vanilla OS analog to rpm-ostree/bootc** — transacts between TWO immutable root filesystems using OCI images as the deployment unit.  Differs from OSTree's deployment-hardlinks model by using A/B-disk-partition switch.  Continues the embedded-Linux OTA family established in R209-R221 with the systemd-native + atomic-distro variant.
+  - Critical extraction note: **abroot uses vanilla-os/orchid's OLDER cmdr function-call API** (`cmdr.NewCommand` / `cmd.WithBoolFlag(cmdr.NewBoolFlag(...))` / `cmd.WithStringFlag(...)`) while R224's apx uses the NEWER struct-driven cmdr API (`cmd:""`/`flag:""` tags).  Both wrap spf13/cobra and share the i18n indirection (`abroot.Trans("key")` resolves help text from embedded `locales/` FS).  This documents BOTH cmdr API styles for future hunters.
+  - Critical extraction note: **vib uses spf13/cobra DIRECTLY** (NOT the cmdr wrapper) — the only Vanilla OS tool of the trio to do so.  Implications:
+    1. Flag registration via inline `cmd.Flags().StringP(name, short, default, help)` rather than cmdr's `cmd.WithStringFlag(cmdr.NewStringFlag(...))`
+    2. No i18n indirection — help strings are inline literals
+    3. `cmd.Flags().SetInterspersed(false)` at build.go:33 + compile.go:28 + test.go:18 — **disallows flags AFTER positional args**, so `vib build /path/to/recipe -o out.dockerfile` is the REQUIRED order when supplying both
+  - Critical extraction note: **vib's build/compile commands search the CWD for recipe files in priority order** if no positional is supplied (build.go:40-45): `recipe.yml`, `recipe.yaml`, `vib.yml`, `vib.yaml`.  Completion offers all 4 patterns via the file glob `*.(yml|yaml|YML|YAML)` matching the case-insensitive extension check at build.go:78-81.
+  - Critical extraction note: **vso is essentially a scheduled-task runner like systemd-timer or cron**, but with a vastly richer trigger-condition set than either.  `TasksNewCmd` at structs.go:45-70 has **20 trigger-condition flags** beyond the time-based `--every`/`--at`:
+    * **Event triggers (10)**: `--on-network`, `--on-disconnect`, `--on-battery`, `--on-low-battery`, `--on-charge`, `--on-full-battery`, `--on-condition-command`, `--on-process`, `--on-device-connect`, `--on-device-disconnect`
+    * **Threshold triggers (7)**: `--on-internet-usage`, `--on-high-internet-usage`, `--on-memory-usage`, `--on-high-memory-usage`, `--on-cpu-usage`, `--on-high-cpu-usage`, `--on-cpu-temp`
+    This is the **rich-flag gem of R225** — vastly richer than systemd-timer's `OnCalendar=`/`OnBoot=`/`OnUnitActiveSec=` set.
+  - Critical extraction note: **vso's `native` group is the counterpart to apx's per-subsystem dispatch** — but instead of running commands inside a managed container, it runs them in a "native" subsystem (the host system's package set, e.g. the Vanilla OS base image's apt).  Has 10 verbs mirroring the apx subsystem-verb set: `init` / `install` / `remove` / `run` / `export` / `unexport` / `shell` / `sideload` / `update` / `upgrade`.  This is how Vanilla OS supports "I just want to install a package on the base system without a container" workflows.
+  - **Vanilla OS CLI family complete**: this round + R224 closes the corpus's coverage of the Vanilla OS 4-tool atomic-distro suite (apx + abroot + vib + vso).
+  - Hunt-skip notes: `orchid` (the cmdr library itself; a Go package not a CLI) is library code, not a binary; skipped.  `differ` (the OCI image diff library used by abroot) similarly library code.  `vanilla-installer` (graphical installer; not a CLI) skipped.  `vlc-msd` was a probe typo; not a real binary.
+  - Dup-checked clean against `/usr/share/zsh` + `/opt/homebrew/share/zsh` + `/usr/local/share/zsh`.
+  - Blacklist additions: 3 entries (a* / v* cluster).
+  - Corpus 28,646 → 28,649 files.
+
 - **R224 — Vanilla OS apx v3 rewrite** (1 file source-direct rewrite) — major architecture-level refresh of the existing `_apx` completion (which targeted apx v1's flat-subcommand design and is incorrect for current upstream).  apx is the **Vanilla OS atomic-distro package manager** — wraps distrobox/podman to install packages and run commands inside named "subsystems" (per-package-manager / per-distro managed containers).  v3 rewrote the entire architecture from v1's flat verb list (install/remove/upgrade as top-level) to a nested model with THREE management groups (stacks / subsystems / pkgmanagers) and a dynamic per-subsystem dispatch.
   - `_apx` (1-stem; Vanilla-OS/apx; **REWRITTEN source-direct from R224**): **3 top-level management groups + 18 group-subcommands + 16-verb dynamic per-subsystem dispatch** decoded source-direct from:
     * `cmd/main.go` lines 31-104 (CLI bootstrap + dynamic subsystem registration loop)

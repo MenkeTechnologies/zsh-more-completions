@@ -1,0 +1,183 @@
+#compdef vso
+# Documentation: source-direct extraction from upstream
+# Vanilla-OS/vanilla-system-operator —
+#   cmd/main.go lines 31-88 (CLI bootstrap + Apx-style App
+#     initialization via vanilla-os/sdk)
+#   internal/cli/structs.go lines 19-188 (the Kong-style
+#     struct dispatch tree: RootCmd + TasksCmd + UpgradeCmd +
+#     ConfigCmd + NativeCmd)
+# Reference accessed: 2026-05-30 via gh api.
+#
+# vso (Vanilla System Operator) is the Vanilla OS user-facing
+# CLI for system maintenance + task scheduling + native-
+# container management.  Sister tool to R225's abroot (atomic
+# updates) and vib (image builder), and to R224's apx (package
+# manager).  Uses the SAME vanilla-os/sdk Kong-style struct-
+# driven CLI parser documented in R224 — the SECOND round to
+# document this CLI library convention.
+#
+# Critical extraction note: vso is essentially a **scheduled-
+# task runner** like systemd-timer or cron, but with a vastly
+# richer trigger-condition set than either.  TasksNewCmd at
+# structs.go:45-70 has **20 trigger condition flags** beyond
+# the time-based --every/--at — including event triggers
+# (--on-network, --on-disconnect, --on-battery, --on-low-
+# battery, --on-charge, --on-full-battery, --on-condition-
+# command, --on-process, --on-device-connect, --on-device-
+# disconnect) and threshold triggers (--on-internet-usage,
+# --on-high-internet-usage, --on-memory-usage, --on-high-
+# memory-usage, --on-cpu-usage, --on-high-cpu-usage,
+# --on-cpu-temp).  This is the rich-flag gem of R225.
+#
+# Critical extraction note: vso's `native` group is the
+# COUNTERPART to apx's per-subsystem dispatch — but instead of
+# running commands inside a managed container, it runs them in
+# a "native" subsystem (the host system's package set, e.g.
+# the Vanilla OS base image's apt).  Has 10 verbs that mirror
+# the apx subsystem-verb set: init / install / remove / run /
+# export / unexport / shell / sideload / update / upgrade.
+
+local curcontext="$curcontext" state line ret=1
+
+local -a top_subcommands=(
+  'tasks:manage scheduled tasks (list/new/rm/rotate)'
+  'upgrade:perform a system upgrade (delegates to abroot)'
+  'config:manage vso config (get/set/show)'
+  'native:manage the native subsystem (the host package set: 10 verbs)'
+)
+
+local -a tasks_subcommands=(
+  'list:list all scheduled tasks (-j/--json for JSON)'
+  'new:create a new task (~24 flags including 20 trigger conditions)'
+  'rm:remove a task by name (-n/--name) with optional -f/--force'
+  'rotate:rotate task private events (-e/--private-event, -s/--silent)'
+)
+
+local -a config_subcommands=(
+  'get:get a config value by key'
+  'set:set a config key to a value'
+  'show:show the full config'
+)
+
+local -a native_subcommands=(
+  'init:initialize the native subsystem (-f/--force to reinit)'
+  'install:install packages in the native subsystem'
+  'remove:remove packages from the native subsystem'
+  'run:run a command inside the native subsystem (--no-reset)'
+  'export:export an app/binary from the native subsystem to host'
+  'unexport:unexport an app/binary'
+  'shell:open an interactive shell in the native subsystem'
+  'sideload:install a local package file'
+  'update:update package metadata for the native subsystem'
+  'upgrade:upgrade installed packages in the native subsystem'
+)
+
+local -a upgrade_subcommands=(
+  'check:check for available system updates (--json for JSON)'
+)
+
+_arguments -C \
+  '(-h --help)'{-h,--help}'[show help and exit]' \
+  '(-v --version)'{-v,--version}'[show version and exit]' \
+  '--now[immediately apply (used with `upgrade`)]' \
+  '1:subcommand:->topcmd' \
+  '*::args:->args' && ret=0
+
+case $state in
+  topcmd)
+    _describe -t top-subcommands 'vso command' top_subcommands && ret=0
+    ;;
+  args)
+    case $words[1] in
+      tasks)
+        if (( CURRENT == 2 )); then
+          _describe -t tasks-subs 'tasks verb' tasks_subcommands && ret=0
+        else
+          case $words[2] in
+            list)
+              _arguments '(-j --json)'{-j,--json}'[output JSON]' && ret=0 ;;
+            new)
+              # TasksNewCmd at structs.go:45-70 — 24 flags total.
+              _arguments \
+                '(-y --assume-yes)'{-y,--assume-yes}'[non-interactive: assume yes to prompts]' \
+                '--need-confirm[require user confirmation before each run]' \
+                '--name=[task name (REQUIRED)]:name:' \
+                '--description=[task description]:desc:' \
+                '--command=[shell command to run]:cmd:' \
+                '--every=[recurring interval (e.g. 5m, 1h, daily)]:interval:' \
+                '--at=[absolute time (HH:MM or full RFC3339)]:time:' \
+                '--on-network[trigger when network becomes available]' \
+                '--on-disconnect[trigger when network disconnects]' \
+                '--on-battery[trigger when running on battery]' \
+                '--on-low-battery[trigger when battery is low]' \
+                '--on-charge[trigger when AC power connects]' \
+                '--on-full-battery[trigger when battery is full]' \
+                '--on-condition-command=[trigger when a shell command exits 0]:cmd:' \
+                '--on-process=[trigger when a process name is running]:proc:' \
+                '--on-internet-usage=[trigger when internet usage exceeds threshold (KB/s)]:kbps:' \
+                '--on-high-internet-usage[trigger when internet usage is high]' \
+                '--on-memory-usage=[trigger when memory usage exceeds threshold (MB)]:mb:' \
+                '--on-high-memory-usage[trigger when memory usage is high]' \
+                '--on-cpu-usage=[trigger when CPU usage exceeds threshold (%)]:percent:' \
+                '--on-high-cpu-usage[trigger when CPU usage is high]' \
+                '--on-cpu-temp=[trigger when CPU temp exceeds threshold (deg C)]:celsius:' \
+                '--on-device-connect=[trigger when device name connects]:device:' \
+                '--on-device-disconnect=[trigger when device name disconnects]:device:' && ret=0 ;;
+            rm)
+              _arguments \
+                '(-n --name)'{-n+,--name=}'[task name to remove]:name:' \
+                '(-f --force)'{-f,--force}'[force removal without confirmation]' && ret=0 ;;
+            rotate)
+              _arguments \
+                '(-e --private-event)'{-e+,--private-event=}'[private event name]:event:' \
+                '(-s --silent)'{-s,--silent}'[silent rotation]' && ret=0 ;;
+          esac
+        fi
+        ;;
+      upgrade)
+        if (( CURRENT == 2 )); then
+          _describe -t upgrade-subs 'upgrade verb' upgrade_subcommands && ret=0
+        else
+          # UpgradeCheckCmd at structs.go:93-96 — only --json
+          _arguments '--json[output as JSON]' && ret=0
+        fi
+        ;;
+      config)
+        if (( CURRENT == 2 )); then
+          _describe -t config-subs 'config verb' config_subcommands && ret=0
+        else
+          case $words[2] in
+            get)
+              _arguments '1:key:' && ret=0 ;;
+            set)
+              _arguments '1:key:' '2:value:' && ret=0 ;;
+            show) ;;
+          esac
+        fi
+        ;;
+      native)
+        if (( CURRENT == 2 )); then
+          _describe -t native-subs 'native verb' native_subcommands && ret=0
+        else
+          case $words[2] in
+            init)
+              _arguments '(-f --force)'{-f,--force}'[force re-initialization]' && ret=0 ;;
+            install|remove|sideload)
+              _arguments '*:packages:' && ret=0 ;;
+            run)
+              _arguments \
+                '--no-reset[do not reset environment]' \
+                '*:command:_command_names -e' && ret=0 ;;
+            export|unexport)
+              _arguments \
+                '--app=[application name]:app:' \
+                '--bin=[binary name]:bin:' \
+                '--bin-output=[binary output path]:path:_files' && ret=0 ;;
+          esac
+        fi
+        ;;
+    esac
+    ;;
+esac
+
+return ret
