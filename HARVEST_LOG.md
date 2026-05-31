@@ -19,6 +19,37 @@ Entries are in original README order: older themed-cluster entries (accumulated
 before the per-round numbering convention) appear first, followed by the
 R-numbered rounds with the newest R-round at the top of that section.
 
+- **R236 — evcc (open-source EV charging controller)** (1 file / 1 binary) — branches off the TTS cluster (R235 edge-tts) into EV charging infrastructure tooling.  evcc is the **premier open-source EV charging orchestrator** for home + small-business installations — supports 200+ wallbox brands (KEBA, ABB, Wallbe, OpenWB, Phoenix Contact, go-e, etc.) + 100+ vehicle brands (Tesla, BMW, VW Group, Hyundai/Kia, Mercedes, Audi, etc.) via per-brand cloud APIs.  Orchestrates EV charging across wallbox + solar PV + grid + battery + vehicles + tariff providers (dynamic-price, fixed, PV-export).  This is the **FIRST round in the corpus to document EV-charging tooling**.
+  - `_evcc` (1-stem; evcc-io/evcc cmd/): **21 subcommands + 3-level subcommand tree + ~30 flags + persistent flag group** decoded source-direct from:
+    * `cmd/root.go` lines 87-105 (rootCmd persistent + daemon-only flags)
+    * 20 per-subcommand .go files: cache.go + cache-get.go + cache-clear.go, charger.go, check_config.go, config.go + config_delete.go, detect.go, device.go, discuss.go, dump.go, easee_ocpp.go, gendock.go, meter.go, metrics.go, migrate.go, password.go, settings.go, sponsor.go, sunspec.go, tariff.go, token.go, vehicle.go
+  - Critical extraction note: **evcc is a dual-purpose binary** — when invoked with NO subcommand it runs as a **long-lived daemon** (the canonical use case: `evcc -c /etc/evcc.yaml` under systemd).  Each subcommand provides a debug / admin / inspection workflow that exits after one operation.  Root-only flags (`--metrics`, `--profile`, `--disable-auth`, `--demo`, `--custom-css`) apply ONLY to daemon mode.  Completion documents this dual-mode pattern in the comment block and via "(daemon mode)" prefixes on daemon-only flag descriptions.  This is similar to `_jjui` (R230) which has early-exit branches before TUI launch, but inverted — evcc's "exit after operation" branches are the subcommands themselves.
+  - Critical extraction note: **evcc uses spf13/cobra with a 3-level subcommand tree** — 21 top-level subcommands, 3 of which have their own sub-subcommands:
+    * `cache`: `get` / `clear` (cache-get.go + cache-clear.go register `cacheCmd.AddCommand(...)`)
+    * `config`: `delete <id>` (config_delete.go)
+    * `easee-ocpp`: `enable` / `disable` / `status` (easee_ocpp.go inline)
+    Continues cobra documentation effort from R225/R229 (Vanilla OS + kbst).  evcc's 3-level depth + 21-branch breadth makes it the corpus's most-substantial cobra tree.
+  - Critical extraction note: **persistent flags decoded source-direct from root.go:87-94** apply to ALL subcommands:
+    * `-c`/`--config FILE` — config file path (default ~/evcc.yaml or /etc/evcc.yaml)
+    * `--database FILE` — database location (default ~/.evcc/evcc.db)
+    * `-h`/`--help`
+    * `--headers` — show HTTP headers in dumps
+    * `--ignore-database` — YAML-only mode
+    * `-l`/`--log LEVEL` — log level (6-value enum: fatal/error/warn/info/debug/trace)
+    This is the corpus's first documented "persistent flag group" pattern at full depth — same pattern in cobra as the OPTION_COMMON_* macros in systemd's modern CLIs (R218/R219/R220).
+  - Critical extraction note: **`charger`/`meter`/`vehicle` subcommands share 3 common flags** (decoded source-direct from charger.go:25-34, meter.go:23-30, vehicle.go:25-31):
+    * `-i`/`--current N` — set max current (Amperes for charger; A for vehicle)
+    * `--diagnose` — dump diagnostic info
+    * `(varies)` — enable/disable/start/stop/wakeup verbs
+    This documents the symmetric-with-differences pattern for device-control subcommands — similar to R229 kbst's 3-cloud-provider symmetry pattern.  The `meter` subcommand additionally has battery-mode control (`-b/--battery-mode (normal|locked|charge|discharge)`) for solar+battery installations.
+  - Critical extraction note: **`sunspec` subcommand is unique** — it's the only subcommand that takes a Modbus connection string positional (e.g. `tcp://192.168.1.42:502` or `/dev/ttyUSB0`).  Used for debugging SunSpec-compatible inverters (Fronius, SMA, Solaredge, Kostal) at the Modbus protocol level.  Documented in the completion description.
+  - Critical extraction note: **`migrate` is marked DEPRECATED** at upstream (migrate.go:14 `"Migrate yaml to database (deprecated), reset only"`) — kept for the `--reset` workflow but the yaml→db migration is no longer supported.  Completion tags with DEPRECATED prefix.  Similar pattern to R234's ueberzugpp `--parser`/`--loader` deprecation.
+  - Critical extraction note: **`detect` subcommand takes variadic host/subnet arguments** (`detect [host ...] [subnet ...]`) — accepts both single IP addresses and CIDR notation subnets.  Uses local network mDNS + per-brand UDP/HTTP probes to identify compatible hardware.  Completion uses `_hosts` for completion.
+  - Hunt-skip notes: `evcc-cli` was a probe typo — the binary is just `evcc`.  `evcc-admin` / `evcc-web` (sometimes referenced as separate binaries in distro packaging) deferred — same `evcc` binary launched in daemon mode with `--disable-auth` for admin/dev mode.  `evcc-mqtt` (the standalone MQTT bridge) deferred — exists as a separate tool in some installations but small flag surface.
+  - Dup-checked clean against `/usr/share/zsh` + `/opt/homebrew/share/zsh` + `/usr/local/share/zsh`.
+  - Blacklist additions: 1 entry (e).
+  - Corpus 28,663 → 28,664 files.
+
 - **R235 — edge-tts (Microsoft Edge TTS reverse-engineered CLI)** (1 file / 2-stem binary) — branches off the terminal-image cluster (R234 ueberzugpp) into text-to-speech tooling.  edge-tts provides programmatic access to the same 400+ neural voice TTS service that the Edge browser uses for "Read Aloud", **without requiring a Microsoft account or Azure subscription**.  Widely used in screen-reader / accessibility / video-narration / audiobook-generation workflows.
   - `_edge-tts` (2-stem covering `edge-tts` + `edge-playback`; rany2/edge-tts src/edge_tts/util.py): **10 flags + DEFAULT_VOICE constant + 3-form mutex group + 12-voice common-list completion** decoded source-direct from:
     * `amain()` at lines 88-141 (the argparse.ArgumentParser + 10 `add_argument` calls)

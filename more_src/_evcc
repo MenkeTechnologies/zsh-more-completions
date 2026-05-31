@@ -1,0 +1,199 @@
+#compdef evcc
+# Documentation: source-direct extraction from upstream
+# evcc-io/evcc cmd/ —
+#   root.go lines 87-105 (rootCmd persistent + daemon flags)
+#   20 per-subcommand files: cache.go + cache-get.go +
+#     cache-clear.go, charger.go, check_config.go, config.go +
+#     config_delete.go, detect.go, device.go, discuss.go,
+#     dump.go, easee_ocpp.go, gendock.go, meter.go,
+#     metrics.go, migrate.go, password.go, settings.go,
+#     sponsor.go, sunspec.go, tariff.go, token.go,
+#     vehicle.go
+# Reference accessed: 2026-05-30 via gh api.
+#
+# evcc is the **open-source EV charging controller** — the
+# premier OSS solution for orchestrating EV charging across
+# wallbox chargers + solar PV + grid + battery + vehicles +
+# tariff providers.  Supports 200+ wallbox brands (KEBA, ABB,
+# Wallbe, OpenWB, Phoenix Contact, etc.) + 100+ vehicle
+# brands (Tesla, BMW, VW Group, Hyundai/Kia, Mercedes, etc.)
+# via per-brand cloud APIs.  Written in Go + Cobra.  This is
+# the FIRST round in the corpus to document EV-charging
+# tooling.
+#
+# Critical extraction note: evcc is a **dual-purpose binary**
+# — when invoked with NO subcommand it runs as a long-lived
+# daemon (the canonical use case: `evcc -c /etc/evcc.yaml`
+# under systemd).  Each subcommand provides a debug / admin
+# / inspection workflow that exits after one operation.
+# Root-only flags (--metrics, --profile, --disable-auth,
+# --demo, --custom-css) apply ONLY to daemon mode.
+#
+# Critical extraction note: evcc uses **spf13/cobra** with a
+# 21-subcommand tree, 3 of which have their own sub-
+# subcommands (cache: get/clear; config: delete; easee-ocpp:
+# enable/disable/status).  Persistent flags at root.go:87-94
+# apply to ALL subcommands; daemon-only flags at root.go:
+# 97-105 apply only when no subcommand is given.
+
+local curcontext="$curcontext" state line ret=1
+
+local -a subcommands=(
+  'cache:manage cache entries (sub: get/clear)'
+  'charger:query and control configured chargers (debug/admin)'
+  'checkconfig:check the config file for errors and exit'
+  'config:dump database configuration (sub: delete <id>)'
+  'detect:auto-detect compatible hardware on a host or subnet'
+  'device:query database-configured devices (debug only)'
+  'discuss:open browser to evcc GitHub Discussions support category'
+  'dump:dump the effective config (--cfg for raw file)'
+  'easee-ocpp:manage Easee charger local OCPP config (sub: enable/disable/status)'
+  'gendoc:generate Cobra CLI docs as markdown to <output-dir>'
+  'meter:query configured meters (smart meter readings + battery control)'
+  'metrics:inspect stored energy metrics from the database'
+  'migrate:migrate yaml->db config (DEPRECATED; reset-only)'
+  'password:password administration for the admin UI'
+  'settings:manage configuration settings stored in the database'
+  'sponsor:validate sponsor token'
+  'sunspec:dump SunSpec model information for a Modbus connection'
+  'tariff:query configured tariffs (PVE / dynamic price / grid feed-in)'
+  'token:generate token credentials for a vehicle integration'
+  'vehicle:query and control configured vehicles (SoC, start/stop charge)'
+)
+
+local -a easee_ocpp_subcommands=(
+  'enable:enable local OCPP on the Easee charger'
+  'disable:disable local OCPP on the Easee charger'
+  'status:show the current Easee local OCPP configuration'
+)
+
+local -a cache_subcommands=(
+  'get:get cache entries (filtered output)'
+  'clear:clear all cache entries'
+)
+
+local -a log_levels=(fatal error warn info debug trace)
+
+# Persistent flags decoded source-direct from root.go:87-94.
+# Apply to ALL subcommands.
+local -a persistent_flags=(
+  '(-c --config)'{-c+,--config=}'[config file (default: ~/evcc.yaml or /etc/evcc.yaml)]:file:_files -g "*.(yaml|yml)"'
+  '--database=[database location (default: ~/.evcc/evcc.db)]:file:_files'
+  '(-h --help)'{-h,--help}'[show help and exit]'
+  '--headers[show HTTP headers in dumps]'
+  '--ignore-database[ignore the database; YAML config only]'
+  '(-l --log)'{-l+,--log=}'[log level (default info)]:level:(fatal error warn info debug trace)'
+)
+
+_arguments -C \
+  $persistent_flags \
+  '--metrics[(daemon mode) expose Prometheus metrics on /api/metrics]' \
+  '--profile[(daemon mode) expose Go pprof profiles on /debug/pprof]' \
+  '--disable-auth[(daemon mode) disable authentication (DEVELOPMENT ONLY)]' \
+  '--demo[(daemon mode) run in demo mode with the bundled demo.yaml]' \
+  '--custom-css=[(daemon mode) load custom CSS file]:file:_files -g "*.css"' \
+  '1:subcommand (omit to run as daemon):->subcmd' \
+  '*::args:->args' && ret=0
+
+case $state in
+  subcmd)
+    _describe -t subcommands 'evcc subcommand' subcommands && ret=0
+    ;;
+  args)
+    case $words[1] in
+      cache)
+        if (( CURRENT == 2 )); then
+          _describe -t cache-subs 'cache verb' cache_subcommands && ret=0
+        fi
+        ;;
+      config)
+        if (( CURRENT == 2 )); then
+          _arguments \
+            '--class=[filter by device class (e.g. charger, meter, vehicle, tariff)]:class:' \
+            '1:verb (or "delete <id>"):(delete)' && ret=0
+        else
+          case $words[2] in
+            delete)
+              _arguments '1:device id:' && ret=0 ;;
+          esac
+        fi
+        ;;
+      easee-ocpp)
+        if (( CURRENT == 2 )); then
+          _describe -t easee-ocpp-subs 'easee-ocpp verb' easee_ocpp_subcommands && ret=0
+        else
+          _arguments \
+            '--user=[Easee account email (REQUIRED)]:email:' \
+            '--password=[Easee account password (REQUIRED)]:password:' && ret=0
+        fi
+        ;;
+      charger)
+        # charger flags decoded source-direct from
+        # charger.go:25-34 (8 flags)
+        _arguments \
+          '(-i --current)'{-i+,--current=}'[set max current (Amperes)]:amps:' \
+          '(-e --enable)'{-e,--enable}'[enable charging]' \
+          '(-d --disable)'{-d,--disable}'[disable charging]' \
+          '--diagnose[dump diagnostic info]' \
+          '(-u --curtail)'{-u+,--curtail=}'[curtail to N watts (-1 = clear)]:watts:' \
+          '(-m --dim)'{-m+,--dim=}'[dim to N percent (-1 = clear)]:percent:' \
+          '(-w --wakeup)'{-w,--wakeup}'[wake up the charger from sleep]' \
+          '(-p --phases)'{-p+,--phases=}'[set phases (1 or 3)]:phases:(1 3)' \
+          '*:charger name (from config):' && ret=0
+        ;;
+      meter)
+        # meter flags decoded source-direct from meter.go:23-30
+        _arguments \
+          '(-b --battery-mode)'{-b+,--battery-mode=}'[set battery mode]:mode:(normal locked charge discharge)' \
+          '(-w --battery-mode-wait)'{-w+,--battery-mode-wait=}'[wait duration after mode change]:duration:' \
+          '--diagnose[dump diagnostic info]' \
+          '(-u --curtail)'{-u+,--curtail=}'[curtail to N watts (-1 = clear)]:watts:' \
+          '(-m --dim)'{-m+,--dim=}'[dim to N percent (-1 = clear)]:percent:' \
+          '(-r --repeat)'{-r,--repeat}'[repeat the query indefinitely]' \
+          '--repeat-interval=[repeat interval (Go duration: 1s/5s/1m)]:duration:' \
+          '--heartbeat[run as long-running heartbeat]' \
+          '*:meter name (from config):' && ret=0
+        ;;
+      vehicle)
+        # vehicle flags decoded source-direct from
+        # vehicle.go:25-31
+        _arguments \
+          '(-i --current)'{-i+,--current=}'[set max charge current (Amperes)]:amps:' \
+          '(-a --start)'{-a,--start}'[start charging]' \
+          '(-o --stop)'{-o,--stop}'[stop charging]' \
+          '(-w --wakeup)'{-w,--wakeup}'[wake up the vehicle]' \
+          '--diagnose[dump diagnostic info]' \
+          '--cloud[force use of cloud API even if local available]' \
+          '--timeout=[query timeout (default 1s)]:duration:' \
+          '*:vehicle name (from config):' && ret=0
+        ;;
+      sunspec)
+        # sunspec.go:31
+        _arguments \
+          '(-i --id)'{-i+,--id=}'[Modbus slave id (default 1)]:id:' \
+          '1:connection (Modbus host:port or RTU device path):' && ret=0
+        ;;
+      dump)
+        _arguments \
+          '--cfg[dump the raw YAML config file (not the effective merged config)]' \
+          '--timeout=[query timeout]:duration:' && ret=0
+        ;;
+      migrate)
+        _arguments \
+          '(-r --reset)'{-r,--reset}'[reset the database (DEPRECATED)]' && ret=0
+        ;;
+      gendoc)
+        _arguments '1:output directory:_files -/' && ret=0
+        ;;
+      detect)
+        # detect.go: takes [host ...] [subnet ...]
+        _arguments '*:host or subnet (e.g. 192.168.1.1 or 192.168.1.0/24):_hosts' && ret=0
+        ;;
+      tariff|sponsor|token)
+        _arguments '1:name (optional):' && ret=0
+        ;;
+    esac
+    ;;
+esac
+
+return ret
