@@ -19,6 +19,26 @@ Entries are in original README order: older themed-cluster entries (accumulated
 before the per-round numbering convention) appear first, followed by the
 R-numbered rounds with the newest R-round at the top of that section.
 
+- **R230 — jjui (TUI for the Jujutsu VCS)** (1 file / 1 binary) — companion to the existing `_jujutsu` binary completion in the corpus.  jjui is the canonical TUI frontend for jj (Jujutsu version control system) — provides interactive log / rebase / squash / split / diff operations in a curses-style UI using bubbletea + lipgloss.  Sister to lazygit (existing in the corpus) but for jj instead of git.
+  - `_jjui` (1-stem; idursun/jjui cmd/jjui/main.go): **7 unique flags + 1 optional positional** decoded source-direct from:
+    * `var` block at lines 43-51 (7 flag-state variables)
+    * `init()` at lines 53-69 (10 flag.{String,Int,Bool}Var calls registering 7 unique options, 3 with dual short+long forms)
+    * `run()` at lines 86-145 (dispatch logic + positional location handling)
+  - Critical extraction note: **jjui uses Go's standard `flag` package** — continuing the corpus's documentation of Go-stdlib-flag CLI patterns from R227 ssh-tpm-* family and R228 age-plugin-fido2-hmac.  3 of the 7 unique options have BOTH short and long forms (registered via TWO flag calls each): `-r`/`--revset` at main.go:54-55, `-p`/`--period` at 56-57, `-n`/`--limit` at 58-59.  The remaining 4 are long-only (`--version`, `--config`, `--install-lua-types`, `--help`).
+  - Critical extraction note: **4 flags trigger early-exit branches** at main.go:99-121 (the `switch` block before TUI launch):
+    1. `--help` — prints usage + returns 0
+    2. `--version` — prints version + returns 0
+    3. `--install-lua-types` — writes Lua type defs + returns 0
+    4. `--config` — opens config in $EDITOR + returns config.Edit()'s status
+    These do NOT launch the TUI.  All other flags + the positional location launch the TUI.  Documented in completion descriptions.
+  - Critical extraction note: **jjui's `location` positional is optional** — defaults to `os.Getwd()` at main.go:130.  When supplied, it's a directory path that contains (or is inside) a jj repo (`jj root --color=always` is run to resolve to the repo root at main.go:73).  Completion offers directory completion.
+  - Critical extraction note: **jjui sets `JJUI=1` in its environment** (main.go:92) so spawned subprocesses can detect they were invoked by jjui.  Useful for `jj` revset condition variables that adjust behavior when running under the TUI (e.g. an alias might want different colors when running under jjui vs the standalone `jj` CLI).  Documented in the completion comment block but not surfaced as a completable option since it's an env var.
+  - Critical extraction note: **jjui depends on the `jj` binary being on PATH** (main.go:73 `exec.Command("jj", "root", ...)`).  Without it, jjui exits with the error message from `jj`'s exit-with-stderr.  Completion does NOT enforce this dependency but documents the relationship in the comment block.
+  - Hunt-skip notes: `jujutsu-rs` (community Rust port; nascent project) deferred — small flag surface.  `jj-tui` (alternative TUI; less popular than jjui) deferred.  `sapling` (Meta's git-compat VCS; already in corpus) confirmed covered.  `jjui.nvim` (the Neovim plugin) is plugin code, not a CLI binary.
+  - Dup-checked clean against `/usr/share/zsh` + `/opt/homebrew/share/zsh` + `/usr/local/share/zsh`.
+  - Blacklist additions: 1 entry (j*).
+  - Corpus 28,657 → 28,658 files.
+
 - **R229 — kbst Kubestack Framework CLI** (1 file / 1 binary) — branches off the security tooling run (R227 ssh-tpm-* + R228 age plugins) into multi-cloud Kubernetes infrastructure-as-code.  kbst is the Kubestack Framework CLI for multi-cloud K8s cluster management — scaffolds and manages Terraform modules for AKS (Azure) + EKS (AWS) + GKE (Google Cloud) clusters using a single declarative repo layout.
   - `_kbst` (1-stem; kbst/kbst cmd/): **6 top-level subcommands + 3-level subcommand tree + ~30 flags total** decoded source-direct from:
     * `cmd/root.go` lines 33-69 (rootCmd cobra.Command + persistent `-p`/`--path` flag)
