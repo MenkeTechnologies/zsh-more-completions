@@ -1,0 +1,465 @@
+#compdef sprite-tool
+# Documentation: source-direct extraction from upstream
+# phiat/sprite-scripts ports/forth/sprite-tool.fs
+# (**Forth** (Gforth dialect); uses **Gforth
+# stdlib `next-arg`** primitive + handwritten
+# string-equality matching — no formal CLI parser
+# library since Forth's culture prizes minimalism
+# and the language itself is the "library".
+# Corpus's **first documented Forth CLI pattern**.
+# Pivots from R316 _leela (C++ boost::program_
+# options) into the Forth concatenative-language
+# ecosystem):
+#   ports/forth/sprite-tool.fs line 1
+#     (`#! /usr/bin/env gforth` — Forth SHEBANG
+#     via Gforth, the GNU Forth implementation.
+#     Distinct from R311 Guile `#! /bin/sh ...
+#     exec guile ...` shebang dance, R313 Idris 2
+#     compiled binary.  Forth's approach: DIRECT
+#     SHEBANG TO INTERPRETER — corpus's **first
+#     documented Forth-shebang CLI pattern**)
+#   ports/forth/sprite-tool.fs line 4
+#     (`\ Subcommands: launch, push, pull, watch`
+#     — Forth `\` (BACKSLASH-COMMENT-TO-EOL) is
+#     the LINE COMMENT syntax.  Distinct from `(
+#     ... )` INLINE COMMENT.  Both are Forth
+#     standard)
+#   ports/forth/sprite-tool.fs lines 11-14
+#     (`4096 constant cmd-max
+#     create cmdbuf   cmd-max allot      \ primary command builder
+#     create escbuf   1024 allot         \ shell-escape output
+#     ...` — Forth MEMORY ALLOCATION:
+#       `N constant NAME` ← define a named constant
+#       `create NAME N allot` ← allocate N bytes and
+#                                bind NAME to the
+#                                start address
+#     Forth has NO HEAP for fixed buffers — uses
+#     static memory.  Distinct from R305 C++ CLI11
+#     (`std::string` heap-allocated), R311 Guile
+#     (managed Scheme strings).  Forth's approach:
+#     EXPLICIT STATIC-MEMORY ALLOCATION — corpus's
+#     **first documented static-buffer CLI pattern**)
+#   ports/forth/sprite-tool.fs lines 462-471
+#     (`: collect-args ( -- )
+#       0 arg-count !
+#       begin
+#         next-arg dup 0<> while
+#         arg-count @ max-args < while
+#         arg-count @ store-arg
+#         1 arg-count +!
+#       repeat then
+#       2drop ;`
+#     — `next-arg` is GFORTH'S PRIMITIVE for
+#     accessing the next argv element; returns
+#     `( -- addr len )` of the next argument or
+#     `( -- 0 0 )` when exhausted.  Stack-based
+#     loop accumulates argv into a side array.
+#     Distinct from R272 C POSIX getopt's
+#     `getopt_long` (loop with index), R311 Guile
+#     `(option-ref options '() #f)` (alist
+#     lookup), R313 Idris 2 `getArgs` (returns
+#     `List String`), R287 Nim parseopt (`for
+#     kind, key, val in getopt():`).  Gforth's
+#     approach: STACK-PRIMITIVE `next-arg` returns
+#     a 2-cell value `(addr, len)` — pure stack
+#     handling, no allocation.  Corpus's **first
+#     documented stack-primitive-as-argv-accessor
+#     CLI pattern**)
+#   ports/forth/sprite-tool.fs lines 477-481
+#     (`: arg-is-help? ( i -- flag )
+#       fetch-arg
+#       2dup s" --help" str= if 2drop true exit then
+#       s" -h" str= ;`
+#     — handwritten flag matching via `s"...";
+#     str=`.  `s" --help"` creates an `(addr, len)`
+#     pair on the stack representing the literal
+#     string.  `str=` compares two `(addr, len)`
+#     strings on the stack.  Distinct from R272 C
+#     POSIX getopt (option-string parsed
+#     internally), R311 Guile `getopt-long` spec,
+#     R307 Vala GLib OptionEntry table.  Forth's
+#     approach: HANDWRITTEN STRING-EQUALITY
+#     MATCHING — caller writes the matching code
+#     explicitly using stack operations.  Sister
+#     to R272 C POSIX getopt but lower-level —
+#     even getopt's option-string abstraction is
+#     absent.  Corpus's **first documented
+#     handwritten-stack-string-equality CLI
+#     pattern**)
+#   ports/forth/sprite-tool.fs lines 488-516
+#     (`: do-launch ( -- )
+#       load-config
+#       0 { idx }
+#       true { parsing }
+#       begin idx arg-count @ < parsing and while
+#         idx fetch-arg
+#         over c@ [char] - <> if
+#           2drop false to parsing
+#         else 2dup s" --dry-run" str= if
+#           2drop 1 flag-dry-run ! idx 1+ to idx
+#         else 2dup s" --no-checkpoint" str= if
+#           2drop 0 flag-checkpointing ! idx 1+ to idx
+#         else 2dup s" --upload" str= if
+#           ... store upload-dir
+#         ... `
+#     — DEEPLY NESTED `else 2dup s"...";  str= if
+#     ... then` chain — Forth has no `match`/
+#     `case` for strings, so each flag becomes
+#     ANOTHER nested `if ... else ... then` arm.
+#     Distinct from R313 Idris 2 ADT pattern-match,
+#     R290 Racket `match`, R311 Guile `case`/
+#     `cond`.  Forth's approach: NESTED-`then`
+#     CHAINS FOR FLAG DISPATCH — each `then`
+#     closes one if-else.  Corpus's **first
+#     documented nested-if-chain CLI dispatch
+#     pattern**)
+#   ports/forth/sprite-tool.fs lines 490, 493
+#     (`0 { idx }` and `true { parsing }` —
+#     Gforth LOCAL VARIABLES.  `{ name }` declares
+#     a local bound to the value on top of the
+#     stack.  `to idx` STORES a new value to the
+#     local.  Distinct from `variable VAR` /
+#     `VAR !` (Forth global variable + `!` store)
+#     — locals are scoped to the word, globals are
+#     module-level.  Sister to R311 Guile `(let ((var
+#     value)) ...)` (lexical bindings) but Gforth
+#     locals have RPN syntax.  Corpus's **first
+#     documented Gforth-locals-`{ }`-syntax CLI
+#     pattern**)
+#   ports/forth/sprite-tool.fs lines 391-397
+#     (`: usage-main ( -- )
+#       ." Usage: sprite-tool <command> [args...]" cr cr
+#       ."   launch    Create and configure a sprite ..." cr
+#       ."   push      Push local file or directory ..." cr
+#       ."   pull      Pull file or directory ..." cr
+#       ."   watch     Poll a sprite's beads tracker ..." cr cr
+#       ." Run 'sprite-tool <command> --help' ..." cr ;`
+#     — HELP TEXT generation via inline `." ... "`
+#     STRING-OUTPUT-LITERAL.  Forth's `." text"`
+#     prints `text` to current output (compile-
+#     time string + print word combined).  `cr`
+#     prints CARRIAGE RETURN.  Distinct from R310
+#     Fortran M_CLI2 (auto-generated from spec),
+#     R311 Guile `usageInfo` helper.  Forth's
+#     approach: HANDWRITTEN HELP via successive
+#     `." ... "` calls — no auto-generation
+#     because there's no formal spec to generate
+#     from.  Corpus's **first documented
+#     handwritten-`."`-help CLI pattern**)
+#   ports/forth/sprite-tool.fs lines 945-957
+#     (`: main ( -- )
+#       next-arg
+#       dup 0= if 2drop usage-main then
+#       2dup s" --" str= if 2drop next-arg then
+#       dup 0= if 2drop usage-main then
+#       2dup s" launch" str= if 2drop collect-args do-launch exit then
+#       2dup s" push"   str= if 2drop collect-args do-push   exit then
+#       2dup s" pull"   str= if 2drop collect-args do-pull   exit then
+#       2dup s" watch"  str= if 2drop collect-args do-watch  exit then
+#       2dup s" --help" str= if 2drop usage-main then
+#       2dup s" -h"     str= if 2drop usage-main then
+#       ." Unknown command: " type cr cr
+#       usage-main ;
+#
+#     main bye` — TOP-LEVEL DISPATCH.  `next-arg`
+#     fetches the first argv element.  Each
+#     subcommand is matched via `s"..."  str=`.
+#     The TOP-LEVEL `main bye` invokes main then
+#     calls `bye` to exit Gforth cleanly.
+#     Distinct from R311 Guile `(main args)`
+#     (function call, returns), R313 Idris 2
+#     `main : IO ()` (IO monadic), R310 Fortran
+#     `program iapwscli` (named program block).
+#     Forth's approach: FALL-THROUGH WORDS
+#     INVOKED AT TOP LEVEL — when the source file
+#     is interpreted by Gforth, `main bye` runs
+#     immediately.  Corpus's **first documented
+#     fall-through-top-level CLI invocation
+#     pattern**)
+#   ports/forth/sprite-tool.fs line 952
+#     (`2dup s" --" str= if 2drop next-arg then`
+#     — handles GFORTH'S `--` SEPARATOR.  Gforth
+#     passes its OWN argv to the script PLUS the
+#     user's argv; the convention is that gforth
+#     scripts use `--` to separate gforth-flags
+#     from script-flags.  This `2dup ... if 2drop
+#     next-arg then` skips the `--` if present.
+#     Corpus's **first documented gforth-`--`-
+#     separator-skip CLI pattern**)
+# Reference accessed: 2026-05-31 via gh api.
+#
+# sprite-tool CLI surface (decoded source-direct):
+#   sprite-tool launch [options] <sprite-name> [plan-file]
+#     --dry-run              show what would happen
+#     --no-checkpoint        disable auto-checkpointing
+#     --upload <dir>         upload directory (repeatable, max 8)
+#     -h / --help            launch-specific help
+#   sprite-tool push <local-path> <remote-path> [sprite-name]
+#   sprite-tool pull <remote-path> <local-path> [sprite-name]
+#   sprite-tool watch <sprite-name> [task-id] [poll-interval]
+#   sprite-tool -h / --help  global help
+#
+# sprite-tool is a CLI tool for managing AI coding
+# agents on sprites.dev — push plans, auto-
+# checkpoint, monitor progress.  Authored by phiat
+# (3 GH stars; described in README as "mad opus
+# 4.6 porting speedrunning").  The Forth port at
+# `ports/forth/sprite-tool.fs` is one of several
+# implementations in the sprite-scripts repo
+# (other ports include shell, Python, possibly
+# Go).  Sister tools: sprite (the underlying
+# sprites.dev CLI client), bd (Beads dependency
+# tracker used internally).
+#
+# Critical extraction note: sprite-tool uses
+# **Gforth stdlib `next-arg` primitive + hand-
+# written matching** at sprite-tool.fs:468 et seq
+# — corpus's **first documented Forth CLI
+# pattern**.  Forth has NO FORMAL CLI PARSER
+# LIBRARY in the stdlib — the language's
+# philosophy is that every program builds the
+# abstractions it needs from PRIMITIVES.
+# `next-arg` is Gforth's argv-accessor primitive
+# that returns `(addr len)` pairs on the stack
+# (or `(0 0)` when exhausted); the caller writes
+# the parsing logic by hand using `str=` for
+# string comparison and stack operations for
+# control flow.  Distinct from R272 C POSIX
+# getopt (provides at least an option-string
+# abstraction), R287 Nim parseopt (token
+# iterator at language level), R311 Guile
+# `(ice-9 getopt-long)` (full spec language).
+# Forth's approach: LANGUAGE-AS-LIBRARY — the
+# CLI parser IS the application code.  Extends
+# cross-language CLI taxonomy to FIFTY-SIX
+# library variants: Rust (6), Go (4),
+# Python (3), Crystal 1 OptionParser (R269),
+# Haskell (R270), OCaml (R271), C (R272),
+# Java (R276), Kotlin (R277), Scala (R278),
+# Dart (R279), Ruby (R280), Perl (R281),
+# PHP (R282), Swift (R283), F# (R284),
+# Lua (R285), C# (R286), Nim 1 parseopt (R287),
+# Zig (R288), D (R289), Racket (R290),
+# Common Lisp 1 (R291), Erlang (R292),
+# Tcl (R293), Pharo Smalltalk (R294), Common
+# Lisp 2 clingon (R295), Julia (R296), SWI-
+# Prolog optparse (R297), Pony stdlib cli (R298),
+# Crystal 2 Admiral (R299), V stdlib `flag`
+# (R300), Nim 2 cligen (R301), Clojure babashka.
+# cli (R302), Gleam Glint (R303), Ada GNAT.
+# Command_Line (R304), C++ 1 CLI11 (R305),
+# Elixir Optimus (R306), Vala GLib.OptionContext
+# (R307), Hare stdlib getopt (R308), Standard ML
+# stdlib GetOpt (R309), Fortran M_CLI2 (R310),
+# Guile (ice-9 getopt-long) (R311), Free Pascal
+# TCustomApplication (R312), Idris 2 System.
+# GetOpts (R313), Mercury stdlib getopt_io
+# (R314), Eiffel Gobo AP_PARSER (R315), C++ 2
+# boost::program_options (R316), **Forth/Gforth
+# `next-arg`** (R317 — NEW).  **MAJOR PATTERN
+# MILESTONE**: 56 cross-language CLI library
+# variants documented.  Forth joins the taxonomy
+# as one of the OLDEST languages still in use
+# (Chuck Moore, 1968) with the MOST MINIMAL CLI
+# handling — language-as-library where the
+# parser IS the application code.
+#
+# Critical extraction note: sprite-tool uses
+# **Forth handwritten-stack-string-equality
+# matching** at sprite-tool.fs:477-481, 500-516,
+# 949-957 — `2dup s" --help" str= if 2drop ...
+# then` is the canonical pattern.  `s" ..."`
+# creates an `(addr len)` pair on the stack;
+# `str=` compares two `(addr len)` strings on the
+# stack and pushes a Forth flag (true/false).
+# `2dup` duplicates the top 2 cells (preserving
+# the arg-string for next match), `2drop` cleans
+# them when matched.  Distinct from R272 C POSIX
+# getopt (option-string parsed internally), R311
+# Guile `getopt-long` spec, R307 Vala GLib
+# OptionEntry table.  Forth's approach: HAND-
+# WRITTEN STRING-EQUALITY MATCHING — caller
+# writes the matching code explicitly using stack
+# operations.  Corpus's **first documented
+# handwritten-stack-string-equality CLI pattern**.
+#
+# Critical extraction note: sprite-tool uses
+# **Forth nested `then`-chains for flag dispatch**
+# at sprite-tool.fs:500-516 — DEEPLY NESTED
+# `else 2dup s"...";  str= if ... else 2dup ...`
+# chain.  Forth has no `match`/`case` for strings,
+# so each flag becomes ANOTHER nested `if ...
+# else ... then` arm.  Each `then` CLOSES one
+# `if`-`else`.  Distinct from R313 Idris 2 ADT
+# pattern-match, R290 Racket `match`, R311 Guile
+# `case`/`cond`, R314 Mercury `;`-separated
+# Prolog clauses.  Forth's approach: NESTED-
+# `then` CHAINS — corpus's **first documented
+# nested-if-chain CLI dispatch pattern**.
+#
+# Critical extraction note: sprite-tool uses
+# **Gforth `{ var }` local-variable syntax** at
+# sprite-tool.fs:490, 493 — `0 { idx }` and
+# `true { parsing }` declare locals bound to the
+# top-of-stack value.  `to idx` STORES a new
+# value to the local.  Distinct from `variable
+# VAR` / `VAR !` (Forth global variable + `!`
+# store) — locals are scoped to the word, globals
+# are module-level.  Sister to R311 Guile `(let
+# ((var value)) ...)` (lexical bindings) but
+# Gforth locals have RPN syntax.  Corpus's **first
+# documented Gforth-locals-`{ }`-syntax CLI
+# pattern**.
+#
+# Critical extraction note: sprite-tool uses
+# **Forth handwritten `." ... "` usage text** at
+# sprite-tool.fs:391-446 — HELP TEXT generation
+# via inline `." text" cr` STRING-OUTPUT-LITERAL.
+# Forth's `." text"` is a COMPILE-TIME-STRING +
+# PRINT-WORD combined token; `cr` prints carriage
+# return.  No `--help` auto-generation because
+# there's no formal spec to generate from —
+# each usage block is hand-written.  Distinct
+# from R310 Fortran M_CLI2 (help_text passed as
+# array to set_args), R311 Guile `usageInfo`
+# helper, R313 Idris 2 `usageInfo` helper.
+# Forth's approach: HANDWRITTEN HELP via
+# successive `." ... " cr` calls.  Corpus's
+# **first documented handwritten-`."`-help CLI
+# pattern**.
+#
+# Critical extraction note: sprite-tool uses
+# **Forth fall-through-top-level invocation** at
+# sprite-tool.fs:966 — `main bye` at the FILE
+# BOTTOM invokes the `main` word then calls
+# `bye` to exit Gforth.  Forth files are
+# INTERPRETED LINEARLY — when Gforth reaches
+# `main bye`, it RUNS those words immediately.
+# Distinct from R311 Guile (must `(main args)`
+# inside `(define (main ...))`), R313 Idris 2
+# `main : IO ()` (IO monad), R310 Fortran
+# `program iapwscli` (named program block),
+# R305 C++ `int main(int argc, char** argv)`
+# (formal main function).  Forth's approach:
+# NO MAIN FUNCTION — the entire script is just
+# words; the LAST WORDS in the file ARE the
+# entry-point invocation.  Corpus's **first
+# documented fall-through-top-level CLI
+# invocation pattern**.
+#
+# Critical extraction note: sprite-tool uses
+# **Forth `s"..."  str=` literal-string-on-stack
+# pattern** at sprite-tool.fs:477-481, 500-516 —
+# `s" --help"` is a COMPILE-TIME STRING LITERAL
+# that pushes `(addr len)` onto the stack at
+# runtime.  Distinct from R272 C `"..."` (C
+# string literal — null-terminated), R270 Haskell
+# `"..."` (immutable String type), R313 Idris 2
+# `"..."` (typed String literal).  Forth's
+# approach: STRING-AS-STACK-PAIR — each string is
+# TWO stack cells `(address, length)` rather than
+# a pointer or boxed value.  This is the
+# QUINTESSENTIAL Forth string convention,
+# affecting how every CLI matching operation is
+# expressed.  Corpus's **first documented
+# `(addr, len)`-stack-pair string CLI pattern**.
+#
+# Hunt-skip notes: skipped `_beadm` (STOCK DUP
+# with stock zsh — illumos boot-environment
+# admin tool has _beadm in `/opt/homebrew/share/
+# zsh/site-functions` and stock zsh), `_unison`
+# (DUP with stock zsh), `_gforth` (Gforth itself
+# in corpus).  Skipped `_melter` (declined per
+# previous round — Hacking Team malware injector;
+# security-policy concern).  Probed `kanaka/mal
+# impls/forth/core.fs` (Mal Forth implementation
+# — REPL, not CLI tool), `forthy42/gforth
+# heartbleed.fs` (specific exploit demo), various
+# `manwar/perlweeklychallenge-club` Forth
+# challenge solutions (one-shot scripts not real
+# CLIs), `harrypower/Rpi_Gforth_GPIO` (Pi GPIO
+# project — not CLI surface), `ronaaron/reva
+# argv.f` (Reva Forth, different Forth dialect —
+# would document a different "library"; deferred),
+# `openbios/openfirmware cpu/mips/argv.fth`
+# (OpenFirmware, embedded — too specialized),
+# `CoSyBob/CoSy examples/zipdb.f` (CoSy Forth —
+# different dialect; deferred), `illumos/illumos-
+# gate beadm.4th` (illumos uses Forth for boot
+# environment management — STOCK DUP with
+# `_beadm`).  Chose sprite-tool: 3 GH stars
+# (small but real user-facing tool), 4 subcommands
+# (launch/push/pull/watch) in single 966-line
+# sprite-tool.fs, exercises EVERY MAJOR Gforth
+# CLI PATTERN (`#! /usr/bin/env gforth` shebang,
+# `\` line comments and `( ... )` inline,
+# `create NAME N allot` static buffer allocation,
+# `variable` globals, `{ var }` Gforth locals,
+# `next-arg` stdlib primitive argv accessor,
+# `s"..."  str=` literal-string-on-stack matching,
+# nested `then`-chains for flag dispatch, hand-
+# written `." ... " cr` help text, `main bye`
+# fall-through-top-level invocation, Gforth `--`
+# separator handling), real binary distributed as
+# a shebang script.
+
+local curcontext="$curcontext" state line ret=1
+typeset -A opt_args
+
+# 4 subcommands decoded source-direct from main
+# dispatch at sprite-tool.fs:949-957.
+local -a sprite_tool_subcmds=(
+  'launch:create and configure a sprite with coding agent, git, beads'
+  'push:push local file or directory to a sprite'
+  'pull:pull file or directory from a sprite'
+  'watch:poll a sprite'\''s beads tracker task for progress'
+)
+
+_arguments -C \
+  '(- *)'{-h,--help}'[show sprite-tool top-level help]' \
+  '1: :->topcmd' \
+  '*:: :->args' && ret=0
+
+case $state in
+  topcmd)
+    _describe -t commands 'sprite-tool subcommand' sprite_tool_subcmds && ret=0
+    ;;
+  args)
+    case $words[1] in
+      launch)
+        # 3 flags + 2 positionals decoded from
+        # do-launch at sprite-tool.fs:488-516
+        _arguments -s -S \
+          '--dry-run[show what would happen without executing]' \
+          '--no-checkpoint[disable auto-checkpointing]' \
+          '*--upload=[upload a directory (repeatable; up to 8)]:directory:_files -/' \
+          '(-h --help)'{-h,--help}'[show launch-specific help]' \
+          '1:sprite name:' \
+          '2:plan file:_files' && ret=0
+        ;;
+      push)
+        # 2 required + 1 optional positionals (decoded
+        # from do-push at sprite-tool.fs)
+        _arguments -s -S \
+          '1:local path:_files' \
+          '2:remote path:' \
+          '3:sprite name:' && ret=0
+        ;;
+      pull)
+        _arguments -s -S \
+          '1:remote path:' \
+          '2:local path:_files' \
+          '3:sprite name:' && ret=0
+        ;;
+      watch)
+        # 1 required + 2 optional positionals
+        _arguments -s -S \
+          '1:sprite name:' \
+          '2:task id (e.g. CRM-1):' \
+          '3:poll interval (seconds):' && ret=0
+        ;;
+    esac
+    ;;
+esac
+
+return ret
