@@ -1,0 +1,67 @@
+#compdef maelstrom-run
+# Documentation: source-direct extraction from upstream
+# maelstrom-software/maelstrom —
+#   crates/maelstrom-run/src/main.rs lines 43-94 (Config +
+#     ExtraCommandLineOptions + OneOrTty mutex group)
+# Reference accessed: 2026-05-30 via gh api.
+#
+# maelstrom-run is the **standalone Maelstrom job runner** —
+# unlike R238 cargo-maelstrom + R239 maelstrom-pytest +
+# maelstrom-go-test (which are test-framework-specific
+# runners), maelstrom-run accepts an ARBITRARY job
+# specification JSON (from stdin or a file via `-f`) and
+# executes it on the broker fleet.  Used for one-off
+# distributed computation that isn't shaped like a test run
+# — e.g. distributed builds, distributed code analysis,
+# distributed batch processing.
+#
+# Critical extraction note: maelstrom-run is the ONE
+# maelstrom-family binary that does NOT inherit
+# TestRunnerConfig (since it doesn't run tests).  Instead its
+# Config at config.rs:43-68 has 3 own flags (log-level,
+# cache-root, escape-char) + flattens ClientConfig (the same
+# 9-flag base from R238).  Total flag count: 3 own + 9
+# inherited + ExtraCommandLineOptions = 15 flags.
+#
+# Critical extraction note: ExtraCommandLineOptions at
+# main.rs:70-94 has the corpus's first documented
+# **`#[group(multiple = false)]` mutex group**: OneOrTty at
+# lines 96-118.  Has 2 flags that are MUTUALLY EXCLUSIVE
+# AND collectively optional (not required like R235's
+# argparse `add_mutually_exclusive_group(required=True)`):
+#   -1 / --one    execute only one job (ignore additional)
+#   -t / --tty    execute one job with TTY assignment
+# The trailing positional args at line 85-93 use
+# `requires = "OneOrTty"` — they can ONLY appear if `--one`
+# OR `--tty` is given.  Documented in completion.
+#
+# Critical extraction note: the `--escape-char` flag at
+# config.rs:63 accepts THREE input syntaxes (decoded source-
+# direct from the doc comment at line 61-62):
+#   1. Single character: `~`
+#   2. Caret notation: `^C`
+#   3. Hexadecimal escape: `\x1a`
+# Used to override the TTY-mode escape character (default
+# `~`).  Same convention as ssh's `~` escape.
+
+local -a log_levels=(error warn info debug trace)
+
+_arguments -s -S \
+  '(-h --help)'{-h,--help}'[show help and exit]' \
+  '(-V --version)'{-V,--version}'[show version and exit]' \
+  '(-L --log-level)'{-L+,--log-level=}'[min log level (default info)]:level:(error warn info debug trace)' \
+  '--cache-root=[directory for the cache (default: $XDG_CACHE_HOME/maelstrom)]:path:_files -/' \
+  '--escape-char=[TTY-mode escape character (single char "~", caret "^C", or hex "\\x1a"; default "~")]:char:' \
+  '(-b --broker)'{-b+,--broker=}'[(inherited from ClientConfig) broker socket addr (standalone if absent)]:sockaddr:' \
+  '--cluster-communication-strategy=[(HIDDEN; inherited) tcp or github]:strategy:(tcp github)' \
+  '--github-actions-token=[(HIDDEN; inherited) ACTIONS_RUNTIME_TOKEN]:token:' \
+  '--github-actions-url=[(HIDDEN; inherited) ACTIONS_RESULTS_URL]:url:_urls' \
+  '--cache-size=[(inherited) local worker cache size]:bytes:' \
+  '--inline-limit=[(inherited) max bytes returned inline for stdout/stderr]:bytes:' \
+  '--slots=[(inherited) number of job slots]:n:' \
+  '--container-image-depot-root=[(inherited) container image cache directory]:path:_files -/' \
+  '--accept-invalid-remote-container-tls-certs[(inherited) accept invalid TLS for container images]' \
+  '(-f --file)'{-f+,--file=}'[read job specifications from FILE instead of stdin]:file:_files -g "*.json"' \
+  '(-1 --one -t --tty)'{-1,--one}'[execute only one job (additional specs ignored; required for positional override)]' \
+  '(-1 --one -t --tty)'{-t,--tty}'[execute one job with TTY (stdin/stdout connected to TTY; requires this process to be on a TTY)]' \
+  '*::program and arguments override (only with --one or --tty):'
