@@ -1,0 +1,66 @@
+#compdef systemd-export
+# Documentation: source-direct extraction from upstream
+# systemd/systemd src/import/export.c —
+#   verb dispatch table at lines 48-131 (VERB declarations
+#     for "tar" and "raw")
+#   parse_argv() with the OptionParser FOREACH_OPTION_OR_RETURN
+#     dispatch (OPTION_LONG entries) at lines 252-275
+#   compression flag at line 253 — `arg_compress =
+#     compression_from_string_harder(opts.arg)`
+# Reference accessed: 2026-05-30 via gh api.
+#
+# systemd-export is the **per-format image exporter** — the
+# libexec binary that R220's importctl invokes for
+# `importctl export-tar` and `importctl export-raw`.  Reads a
+# container/VM image from the machined image store and writes
+# it to a local FILE, optionally compressed (xz/lz4/zstd/gzip/
+# bzip2).  Sister to systemd-import (imports local files) and
+# systemd-pull (downloads from URLs).
+#
+# Critical extraction note: systemd-export has the SMALLEST
+# flag set in the systemd-{import,pull,export} family — only
+# 2 actual options (--format= and --class=).  This is because
+# export is a SIMPLE direction (image-store → file) with no
+# verification, no offset/size limits, no btrfs special
+# handling, no direct-to-file mode (the FILE positional
+# already specifies the destination).
+#
+# Critical extraction note: compression is **auto-detected
+# from the output FILE suffix** if `--format=` is not
+# supplied — `compression_from_filename(p)` at export.c:35.
+# So `systemd-export tar mycontainer /tmp/x.tar.zst` will use
+# zstd compression without needing `--format=zstd`.  The
+# `--format=` flag is only required when the FILE doesn't
+# have a recognized compression suffix.
+
+local curcontext="$curcontext" state line ret=1
+
+local -a subcommands=(
+  'tar:export TAR image to FILE (compression auto-detected from suffix)'
+  'raw:export RAW container/VM image to FILE (compression auto-detected from suffix)'
+)
+
+_arguments -C \
+  '(-h --help)'{-h,--help}'[show help and exit]' \
+  '--version[show package version and exit]' \
+  '--format=[explicit compression format (auto-detected from FILE suffix if omitted)]:format:(none xz lz4 zstd gzip bzip2)' \
+  '--class=[export the specified image class]:type:(machine portable sysext confext)' \
+  '1:verb (tar|raw):->subcmd' \
+  '*::verb-args:->args' && ret=0
+
+case $state in
+  subcmd)
+    _describe -t subcommands 'systemd-export verb' subcommands && ret=0
+    ;;
+  args)
+    case $words[1] in
+      tar|raw)
+        _arguments \
+          '1:NAME (image to export):' \
+          '2:FILE (output; "-" or omit for stdout):_files' && ret=0
+        ;;
+    esac
+    ;;
+esac
+
+return ret

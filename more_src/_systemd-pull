@@ -1,0 +1,83 @@
+#compdef systemd-pull
+# Documentation: source-direct extraction from upstream
+# systemd/systemd src/import/pull.c —
+#   verb dispatch table at lines 123-264 (VERB declarations
+#     for "tar", "raw", "oci")
+#   parse_argv() with the OptionParser FOREACH_OPTION_OR_RETURN
+#     dispatch (OPTION_LONG entries) at lines 378-540
+# Reference accessed: 2026-05-30 via gh api.
+#
+# systemd-pull is the **per-format URL-image downloader** —
+# the libexec binary that R220's importctl invokes for
+# `importctl pull-tar`, `pull-raw`, and `pull-oci`.  Can also
+# be run directly by the user for downloading TAR/RAW/OCI
+# container/VM images from URLs into the machined image store
+# (`/var/lib/machines/`) without going through the importd
+# D-Bus daemon.  Sister to systemd-import (imports local files)
+# and systemd-export (writes images back out).
+#
+# Critical extraction note: systemd-pull has 3 verbs (tar,
+# raw, oci) versus systemd-import's 2 (no OCI) — the OCI verb
+# is exclusive to systemd-pull because OCI image fetch
+# inherently requires a network URL+manifest dance.
+#
+# Critical extraction note: systemd-pull supports 4 ADDITIONAL
+# verification artifacts beyond systemd-import — each is a
+# separate BOOL flag controlling whether to download an
+# associated .signature/.roothash/.roothash.signature/.verity
+# file alongside the image.  These are used by systemd-nspawn
+# and systemd-portabled at runtime for dm-verity verification
+# and roothash binding.
+
+local curcontext="$curcontext" state line ret=1
+
+local -a subcommands=(
+  'tar:download a TAR image from URL'
+  'raw:download a RAW container/VM image from URL'
+  'oci:download an OCI container image from REF (registry/image:tag)'
+)
+
+_arguments -C \
+  '(-h --help)'{-h,--help}'[show help and exit]' \
+  '--version[show package version and exit]' \
+  '--force[force creation of image (overwrite existing)]' \
+  '--image-root=[image root directory (default /var/lib/machines)]:dir:_files -/' \
+  '--verify=[verification mode (no=skip, checksum=SHA256, signature=GPG)]:mode:(no checksum signature)' \
+  '--settings=[also download associated .nspawn settings file (yes|no)]:bool:(yes no true false 1 0)' \
+  '--roothash=[also download associated .roothash file for dm-verity (yes|no)]:bool:(yes no true false 1 0)' \
+  '--roothash-signature=[also download associated .roothash.signature file (yes|no)]:bool:(yes no true false 1 0)' \
+  '--verity=[also download associated .verity file (yes|no)]:bool:(yes no true false 1 0)' \
+  '--read-only[create a read-only image]' \
+  '--direct[download directly to specified output file (skip image-root)]' \
+  '--btrfs-subvol=[create image as a btrfs subvolume (yes|no)]:bool:(yes no true false 1 0)' \
+  '--btrfs-quota=[apply default btrfs quota to image (yes|no)]:bool:(yes no true false 1 0)' \
+  '--convert-qcow2=[convert qcow2 to raw before storing (yes|no)]:bool:(yes no true false 1 0)' \
+  '--sync=[sync() data to disk before completing (yes|no)]:bool:(yes no true false 1 0)' \
+  '--offset=[byte offset to seek to in destination]:bytes:' \
+  '--size-max=[maximum number of bytes to write to destination]:bytes:' \
+  '--class=[install as the specified TYPE]:type:(machine portable sysext confext)' \
+  '--keep-download=[keep downloaded image after install (yes|no)]:bool:(yes no true false 1 0)' \
+  '1:verb (tar|raw|oci):->subcmd' \
+  '*::verb-args:->args' && ret=0
+
+case $state in
+  subcmd)
+    _describe -t subcommands 'systemd-pull verb' subcommands && ret=0
+    ;;
+  args)
+    case $words[1] in
+      tar|raw)
+        _arguments \
+          '1:URL:_urls' \
+          '2:NAME (optional; default: derived from URL):' && ret=0
+        ;;
+      oci)
+        _arguments \
+          '1:OCI REF (e.g. docker://registry/image:tag):' \
+          '2:NAME (optional; default: derived from REF):' && ret=0
+        ;;
+    esac
+    ;;
+esac
+
+return ret

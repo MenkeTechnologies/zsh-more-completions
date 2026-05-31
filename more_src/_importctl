@@ -1,85 +1,128 @@
 #compdef importctl
-# Documentation: https://www.freedesktop.org/software/systemd/man/latest/importctl.html
-# Reference accessed: 2026-05-18
-# Verified: upstream docs at the URL above.
+# Documentation: source-direct extraction from upstream
+# systemd/systemd src/import/importctl.c —
+#   verb dispatch table at lines 264-964 (11 VERB declarations)
+#   parse_argv() at lines 1118-1232 (OptionParser FOREACH_
+#     OPTION_OR_RETURN + OPTION_COMMON_* + OPTION_LONG +
+#     OPTION_SHORT + OPTION entries)
+# Reference accessed: 2026-05-30 via gh api.
+#
+# Shared enums decoded source-direct from upstream type tables:
+#   ImportVerify (3 values: no, checksum, signature) at
+#     src/shared/import-util.h lines 14-20 + the lookup table
+#     at src/shared/import-util.c lines 133-137
+#   ImageClass (4 values: machine, portable, sysext, confext)
+#     at src/basic/os-util.c lines 26-30 image_class_table
+#   Compression (6 values: none, xz, lz4, zstd, gzip, bzip2)
+#     at src/basic/compress.h lines 6-14 + the lookup table at
+#     src/basic/compress.c lines 184-191
+#
+# importctl is the D-Bus client for systemd-importd (the
+# image import/export daemon).  Like updatectl (R219) is to
+# sysupdated, importctl talks to org.freedesktop.import1 to
+# manage container/VM image transfers (TAR/RAW/OCI download
+# and import-from-local + export-to-local) without requiring
+# the user to invoke the per-format binaries directly.
+#
+# Critical extraction note: importctl introduces 3 NEW
+# OPTION_COMMON_* macros not yet seen in earlier rounds:
+#   OPTION_COMMON_MACHINE       — auto-add -M/--machine= for
+#                                 machined-container target
+#   OPTION_COMMON_LOWERCASE_J   — auto-add -j (short alias for
+#                                 --json=pretty when tty /
+#                                 --json=short when no tty)
+#   OPTION_SHORT(letter, NULL, "desc") — short-only flag with
+#                                 no long form (used by -m/-P/
+#                                 -S/-C class shortcuts)
+#
+# Critical extraction note: the `--format=` flag uses the
+# Compression enum (6 values: none|xz|lz4|zstd|gzip|bzip2) for
+# the export-tar/export-raw verbs, NOT the file-suffix style
+# values (tar.gz/tar.xz/etc.) — the suffix is auto-appended
+# based on the compression choice.
+#
+# Critical extraction note: 4 short-only flags act as class
+# shortcuts (importctl.c:1209-1224):
+#   -m  →  --class=machine    (machined container image)
+#   -P  →  --class=portable   (portable service image)
+#   -S  →  --class=sysext     (system extension image)
+#   -C  →  --class=confext    (configuration extension image)
+# Mutex with each other and with --class=.
 
-# importctl: systemd import/export control for machine/container/portable images
 local curcontext="$curcontext" state line ret=1
-typeset -A opt_args
 
-_importctl_global_flags=(
-  '--force[force operation]'
-  '--read-only[create read-only image]'
-  '--verify=[verification mode]:mode:(no checksum signature)'
-  '--format=[image format]:format:(tar.gz tar.xz tar.bz2 tar.zst raw)'
-  '(-q --quiet)'{-q,--quiet}'[suppress output]'
-  '-j[produce JSON output]'
-  '(-H --host)'{-H+,--host=}'[operate on remote host]:host:_hosts'
-  '(-M --machine)'{-M+,--machine=}'[operate on local container]:machine:'
+local -a subcommands=(
+  'pull-tar:download a TAR container image from URL'
+  'pull-raw:download a RAW container or VM image from URL'
+  'pull-oci:download an OCI container image from REF'
+  'import-tar:import a local TAR container image from FILE'
+  'import-raw:import a local RAW container or VM image from FILE'
+  'import-fs:import a local directory as a container image (DIRECTORY)'
+  'export-tar:export a TAR container image to local FILE'
+  'export-raw:export a RAW container or VM image to local FILE'
+  'list-transfers:show list of transfers in progress (DEFAULT)'
+  'cancel-transfer:cancel a transfer by ID'
+  'list-images:show list of installed images'
+)
+
+local -a importctl_global_flags=(
+  '(-h --help)'{-h,--help}'[show help and exit]'
+  '--version[show package version and exit]'
   '--no-pager[do not pipe output into a pager]'
-  '--no-legend[do not show column headers and footers]'
-  '--no-ask-password[do not ask for password]'
-  '(-h --help)'{-h,--help}'[show help]'
-  '--version[show version]'
+  '--no-legend[do not print legend in output]'
+  '--no-ask-password[do not prompt for password]'
+  '(-H --host)'{-H+,--host=}'[execute on a remote host via ssh+dbus]:host:_hosts'
+  '(-M --machine)'{-M+,--machine=}'[execute on a local machined container]:machine:'
+  '--system[connect to system machine manager]'
+  '--user[connect to user machine manager]'
+  '--read-only[create read-only image]'
+  '(-q --quiet)'{-q,--quiet}'[suppress output]'
+  '--json=[output as JSON (format: off|pretty|short)]:format:(off pretty short)'
+  '-j[short for --json=pretty (tty) or --json=short (no tty)]'
+  '--verify=[verification mode (no=skip, checksum=SHA256, signature=GPG)]:mode:(no checksum signature)'
+  '--format=[export compression format]:format:(none xz lz4 zstd gzip bzip2)'
+  '--force[install image even if already exists]'
+  '--class=[install as the specified TYPE]:type:(machine portable sysext confext)'
+  '(--class -m -P -S -C)-m[install as --class=machine (machined container)]'
+  '(--class -m -P -S -C)-P[install as --class=portable (portable service)]'
+  '(--class -m -P -S -C)-S[install as --class=sysext (system extension)]'
+  '(--class -m -P -S -C)-C[install as --class=confext (configuration extension)]'
+  '--keep-download=[keep downloaded image even after install (yes|no)]:bool:(yes no true false 1 0)'
 )
 
 _arguments -s -S -C \
-  "${_importctl_global_flags[@]}" \
-  '1:command:->command' \
-  '*::arg:->args' && ret=0
+  "${importctl_global_flags[@]}" \
+  '1:verb (default: list-transfers):->subcmd' \
+  '*::verb-args:->args' && ret=0
 
-case "$state" in
-  command)
-    local -a commands
-    commands=(
-      'pull-tar:Download a tar image from a URL'
-      'pull-raw:Download a raw disk image from a URL'
-      'import-tar:Import a local tar image'
-      'import-raw:Import a local raw disk image'
-      'import-fs:Import a local directory'
-      'export-tar:Export an image as a tar archive'
-      'export-raw:Export an image as a raw disk image'
-      'list-transfers:List ongoing transfers'
-      'cancel-transfer:Cancel a transfer'
-      'list-images:List available images'
-    )
-    _describe -t commands 'importctl commands' commands && ret=0
+case $state in
+  subcmd)
+    _describe -t subcommands 'importctl verb' subcommands && ret=0
     ;;
   args)
-    case "${line[1]}" in
+    case $words[1] in
       pull-tar|pull-raw)
-        _arguments -s -S \
-          "${_importctl_global_flags[@]}" \
-          '1:URL:_urls' \
-          '2:local name:' && ret=0
-        ;;
-      import-tar|import-raw)
-        _arguments -s -S \
-          "${_importctl_global_flags[@]}" \
-          '1:file:_files' \
-          '2:local name:' && ret=0
-        ;;
+        _arguments "${importctl_global_flags[@]}" \
+          '1:URL:_urls' '2:NAME (optional):' && ret=0 ;;
+      pull-oci)
+        _arguments "${importctl_global_flags[@]}" \
+          '1:OCI REF (e.g. registry/image:tag):' '2:NAME (optional):' && ret=0 ;;
+      import-tar)
+        _arguments "${importctl_global_flags[@]}" \
+          '1:FILE:_files -g "*.tar*"' '2:NAME (optional):' && ret=0 ;;
+      import-raw)
+        _arguments "${importctl_global_flags[@]}" \
+          '1:FILE:_files -g "*.(raw|qcow2)*"' '2:NAME (optional):' && ret=0 ;;
       import-fs)
-        _arguments -s -S \
-          "${_importctl_global_flags[@]}" \
-          '1:directory:_files -/' \
-          '2:local name:' && ret=0
-        ;;
+        _arguments "${importctl_global_flags[@]}" \
+          '1:DIRECTORY:_files -/' '2:NAME (optional):' && ret=0 ;;
       export-tar|export-raw)
-        _arguments -s -S \
-          "${_importctl_global_flags[@]}" \
-          '1:local name:' \
-          '2:file:_files' && ret=0
-        ;;
+        _arguments "${importctl_global_flags[@]}" \
+          '1:NAME:' '2:FILE (optional; format from extension):_files' && ret=0 ;;
       cancel-transfer)
-        _arguments -s -S \
-          "${_importctl_global_flags[@]}" \
-          '1:transfer ID:' && ret=0
-        ;;
+        _message 'transfer ID (use list-transfers to find)' && ret=0 ;;
       list-transfers|list-images)
-        _arguments -s -S \
-          "${_importctl_global_flags[@]}" && ret=0
-        ;;
+        _arguments "${importctl_global_flags[@]}" && ret=0 ;;
     esac
     ;;
 esac
