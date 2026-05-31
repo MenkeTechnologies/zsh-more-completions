@@ -19,6 +19,41 @@ Entries are in original README order: older themed-cluster entries (accumulated
 before the per-round numbering convention) appear first, followed by the
 R-numbered rounds with the newest R-round at the top of that section.
 
+- **R245 — oxfmt source-direct rewrite (Rust-native Prettier replacement)** (1 file source-direct rewrite) — major source-direct rewrite of the existing `_oxfmt` completion which was cited from a documentation URL.  oxfmt is the **Rust-native JavaScript/TypeScript formatter** from the oxc-project (the Rust JS toolchain that also includes oxlint, oxc_parser, etc.).  Drop-in replacement for Prettier with 10-50x performance.  Reads Prettier's config format and emits Prettier-equivalent output; supports migrating Prettier + Biome configs to oxfmt's native `.oxfmtrc.json`.
+  - `_oxfmt` (1-stem; oxc-project/oxc apps/oxfmt/src/cli/command.rs; **REWRITTEN source-direct from R245**): **15 flags + 5-variant Mode enum + 3-variant OutputMode mutex group + positional PATH guard** decoded source-direct from:
+    * `FormatCommand` struct at lines 20-40 (the Bpaf-derived top-level CLI struct with 4 external sub-parsers + positional PATHs)
+    * `Mode` enum + `mode()` parser combinator at lines 46-101 (5 variants, 4 cfg-gated on `feature = "napi"`)
+    * `OutputMode` enum + `output_mode()` parser at lines 105-129 (3 variants: Write default | Check | ListDifferent)
+    * `ConfigOptions` at lines 145-152, `IgnoreOptions` at 155-164, `RuntimeOptions` at 168-175
+  - Critical extraction note: **oxfmt uses bpaf** (NOT clap, argh, structopt, or maelstrom-macro) — **THE CORPUS'S FIRST DOCUMENTED BPAF-BASED CLI BINARY**.  bpaf is the **5th Rust CLI library documented in the corpus**, joining the existing four:
+    | Library | Style | Documented in |
+    |---|---|---|
+    | clap v4 | proc-macro derive + builder | many rounds |
+    | argh | proc-macro derive | R223 yofi |
+    | structopt | proc-macro derive (clap v3 predecessor) | R228 sntrup |
+    | bpaf | proc-macro derive + COMBINATOR API | R245 oxfmt (NEW) |
+    | maelstrom-macro `#[derive(Config)]` | proc-macro for config+env+cli | R238 cargo-maelstrom |
+    bpaf's unique selling point: **combinator API** — `bpaf::long("name").argument::<PathBuf>("PATH").hide_usage()` builds a parser PROGRAMMATICALLY (vs declaratively via derive attributes).  Used for the Mode parser at lines 65-101 because the variants depend on `cfg!(feature = "napi")` and need RUNTIME combination via `bpaf::construct!([...])`.
+  - Critical extraction note: **oxfmt's bpaf-derive attribute matrix** documented (the corpus's first bpaf attribute documentation):
+    | Attribute | Purpose | Example |
+    |---|---|---|
+    | `#[bpaf(options, version(VERSION))]` | top-level annotation | = clap's `#[command(version)]` |
+    | `#[bpaf(external)]` | pull in sub-struct's bpaf-derived parser | external = inferred from field name |
+    | `#[bpaf(external(name))]` | pull in NAMED external parser fn | for fn-based parsers like `mode()` |
+    | `#[bpaf(positional("PATH"), many, guard(fn, "msg"))]` | positional with repeatable + validation | rejects `..` paths |
+    | `#[bpaf(short, long, argument("VALUE"))]` | flag with short+long+value | `-c PATH` / `--config PATH` |
+    | `#[bpaf(switch, hide_usage)]` | boolean switch, hidden from usage | `--with-node-modules` |
+    | `#[bpaf(argument("VALUE"), many, hide_usage)]` | repeatable Vec<> value, hidden | `--ignore-path` |
+  - Critical extraction note: **oxfmt has 5 mode variants with 4 cfg-gated on `feature = "napi"`** at lines 46-63.  The napi feature is the Node.js / N-API integration; oxfmt's `--init`, `--migrate`, `--lsp`, `--stdin-filepath` modes all dispatch to JavaScript-side logic (presumably for Prettier-compatible behavior).  The default `Cli(Write)` mode is the only one that's always available.  Continues R233's feature-gating documentation by adding the **4-of-5 variant gating pattern** where the MAJORITY of an enum is feature-gated.  Different from R244 codspeed's `Internal` sub-enum which is always present but contains an internally-flagged variant.
+  - Critical extraction note: **`--migrate SOURCE` uses bpaf's `argument::<String>("SOURCE").parse(|s| ...)` pattern** at lines 76-81 — a custom parser closure that accepts ONLY `prettier` or `biome` (case-insensitively via `CowUtils::cow_to_lowercase`) and returns a custom error for invalid values.  Documents bpaf's **parser-with-custom-validation** pattern — equivalent to clap's `value_parser = ...` closure but with explicit error message construction.  This is the corpus's first documented bpaf custom-parser pattern.
+  - Critical extraction note: **`--write` / `--check` / `--list-different` form a MUTUALLY EXCLUSIVE output mode group** via `bpaf::construct!([write, check, list_different]).group_help("Output Options:")` at line 128.  Default is `Write` (via `.fallback(Mode::Cli(OutputMode::Write))` at line 99).  This is the **corpus's first documented bpaf `construct!([a, b, c])` mutex enum pattern** — bpaf's equivalent of clap's `ArgGroup::new("X").args([...])` (R241 cargo-typify) or `#[group(multiple = false)]` (R239 maelstrom-run).
+  - Critical extraction note: **positional `PATH` arguments use `guard(validate_paths, PATHS_ERROR_MESSAGE)`** at line 38 to REJECT paths containing `..` (parent directory traversal).  Implemented at `validate_paths()` lines 10-16 using `Path::components()` + `Component::ParentDir`.  **Security measure** to prevent oxfmt from accidentally formatting files OUTSIDE the project root.  Documented in the completion description.  This is the corpus's first documented "security-motivated positional argument validation" pattern.
+  - Critical extraction note: **bpaf's `hide_usage`** attribute (used on MANY flags: `--disable-nested-config`, `--ignore-path`, `--with-node-modules`, `--no-error-on-unmatched-pattern`, `--threads`, all napi mode flags) keeps the `--help` output COMPACT while still accepting these flags.  Distinct from clap's `hide = true` which hides BOTH from help AND from completion suggestions; bpaf's `hide_usage` only suppresses the usage section but the flag IS shown in the long-form `--help` output.  Documents bpaf's nuanced visibility control.
+  - Hunt-skip notes: `oxlint` (the linter; already in corpus) confirmed.  `oxc-parser` / `oxc-formatter` (the libraries; not CLI binaries) deferred.  `oxc-language-server` (the LSP daemon) deferred — accessed via `--lsp` flag on oxfmt itself.
+  - Dup-checked clean against `/usr/share/zsh` + `/opt/homebrew/share/zsh` + `/usr/local/share/zsh`.
+  - Blacklist: already had `oxfmt`.
+  - Corpus 28,675 → 28,675 (rewrite, no new file).
+
 - **R244 — codspeed (Codspeed Runner CLI; host-side benchmark orchestrator)** (1 file / 1 binary) — direct follow-up to R243's hunt-skip on `codspeed-runner`.  Sister to R243 cargo-codspeed: while cargo-codspeed builds + runs Rust-specific benchmarks, codspeed handles the BROADER workflow — auth, profile management, multi-language benchmark execution via instrumentation injection, and result upload.  Used by Codspeed's GitHub Actions CI workflows + manual benchmark runs.  Closes the Codspeed R243/R244 pair.
   - `_codspeed` (1-stem; CodSpeedHQ/runner src/cli/mod.rs; **10 subcommands + 6 global flags + 2 visible single-letter aliases + #[deprecated] field + dual-disable-help internal subcommand**) decoded source-direct from:
     * `Cli` struct at mod.rs lines 41-77 (6 global flags + Commands subcommand)

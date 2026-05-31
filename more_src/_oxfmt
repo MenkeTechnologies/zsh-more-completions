@@ -1,28 +1,117 @@
 #compdef oxfmt
-# Documentation: https://oxc.rs/docs/guide/usage/formatter/cli.html
-# Reference accessed: 2026-05-20
-# Verified: upstream docs at the URL above.
-
-# Zsh completion for oxfmt (oxc-project/oxc formatter)
-
-local ret=1
+# Documentation: source-direct extraction from upstream
+# oxc-project/oxc apps/oxfmt/src/cli/command.rs —
+#   `FormatCommand` struct at lines 20-40 (the Bpaf-derived
+#     top-level CLI struct with 4 external sub-parsers +
+#     positional PATHs)
+#   `Mode` enum + `mode()` parser combinator at lines 46-101
+#     (5 variants, 4 cfg-gated on `feature = "napi"`)
+#   `OutputMode` enum + `output_mode()` parser at lines
+#     105-129 (3 variants: Write default | Check |
+#     ListDifferent)
+#   `ConfigOptions` at lines 145-152, `IgnoreOptions` at
+#     155-164, `RuntimeOptions` at 168-175
+# Reference accessed: 2026-05-30 via gh api.
+#
+# oxfmt is the **Rust-native JavaScript/TypeScript formatter**
+# from the oxc-project (the Rust JS toolchain that also
+# includes oxlint, oxc_parser, etc.).  Drop-in replacement
+# for Prettier with 10-50x performance.  Reads Prettier's
+# config format and emits Prettier-equivalent output;
+# supports migrating Prettier + Biome configs to oxfmt's
+# native `.oxfmtrc.json`.
+#
+# Critical extraction note: oxfmt uses **bpaf** (NOT clap,
+# argh, structopt, or maelstrom-macro) — **THE CORPUS'S
+# FIRST DOCUMENTED BPAF-BASED CLI BINARY**.  bpaf is the
+# 5th Rust CLI library documented in the corpus.  Quick
+# comparison of the 5:
+#   | Library | Style | Documented in |
+#   |---|---|---|
+#   | clap v4 | proc-macro derive + builder | many rounds |
+#   | argh | proc-macro derive | R223 yofi |
+#   | structopt | proc-macro derive (clap v3 predecessor) | R228 sntrup |
+#   | bpaf | proc-macro derive + COMBINATOR API | R245 oxfmt |
+#   | maelstrom-macro #[derive(Config)] | proc-macro for config+env+cli | R238 cargo-maelstrom |
+# bpaf's unique selling point: **combinator API** —
+# `bpaf::long("name").argument::<PathBuf>("PATH").hide_usage()`
+# builds a parser programmatically (vs declaratively via
+# derive attributes).  Used for the Mode parser at lines
+# 65-101 because the variants depend on `cfg!(feature =
+# "napi")` and need runtime combination via
+# `bpaf::construct!([...])`.
+#
+# Critical extraction note: oxfmt's bpaf-derive attribute set
+# documented:
+#   `#[bpaf(options, version(VERSION))]`
+#     — top-level annotation (= clap's `#[command(version)]`)
+#   `#[bpaf(external)]`
+#     — pulls in a sub-struct's bpaf-derived parser
+#   `#[bpaf(external(name))]`
+#     — pulls in a NAMED external parser function (vs the
+#       struct-based external)
+#   `#[bpaf(positional("PATH"), many, guard(fn, "msg"))]`
+#     — positional with `many` (repeatable Vec) +
+#       `guard(validate_fn, error_msg)` for validation
+#   `#[bpaf(short, long, argument("VALUE"))]`
+#     — flag with BOTH short + long + value argument
+#   `#[bpaf(switch, hide_usage)]`
+#     — boolean switch, HIDDEN from usage output (but still
+#       parseable)
+#   `#[bpaf(argument("VALUE"), many, hide_usage)]`
+#     — value argument that's repeatable (Vec<>) + hidden
+#
+# Critical extraction note: oxfmt has **5 mode variants with
+# 4 cfg-gated on `feature = "napi"`** at lines 46-63.  The
+# napi feature is the Node.js / N-API integration; oxfmt's
+# `--init`, `--migrate`, `--lsp`, `--stdin-filepath` modes
+# all dispatch to JavaScript-side logic (presumably for
+# Prettier-compatible behavior).  The default `Cli(Write)`
+# mode is the only one that's always available.  Continues
+# R233's feature-gating documentation by adding the
+# **4-of-5 variant gating pattern** where the majority of an
+# enum is feature-gated.
+#
+# Critical extraction note: `--migrate SOURCE` uses bpaf's
+# **`argument::<String>("SOURCE").parse(|s| ...)` pattern**
+# at lines 76-81 — a custom parser closure that accepts ONLY
+# `prettier` or `biome` (case-insensitively via CowUtils'
+# `cow_to_lowercase`) and returns a custom error for invalid
+# values.  Documents bpaf's **parser-with-custom-validation**
+# pattern — equivalent to clap's `value_parser = ...` closure
+# but with explicit error message construction.
+#
+# Critical extraction note: `--write` / `--check` /
+# `--list-different` form a **MUTUALLY EXCLUSIVE output mode
+# group** via `bpaf::construct!([write, check, list_different
+# ]).group_help("Output Options:")` at line 128.  Default is
+# `Write` (via `.fallback(Mode::Cli(OutputMode::Write))` at
+# line 99).  This is the corpus's first documented bpaf
+# `construct!([a, b, c])` mutex enum pattern.
+#
+# Critical extraction note: positional `PATH` arguments use
+# `guard(validate_paths, PATHS_ERROR_MESSAGE)` at line 38 to
+# REJECT paths containing `..` (parent directory traversal).
+# Implemented at validate_paths() lines 10-16 using
+# `Path::components()` + `Component::ParentDir`.  Security
+# measure to prevent oxfmt from accidentally formatting
+# files OUTSIDE the project root.  Documented in the
+# completion description.
 
 _arguments -s -S \
-  '(- *)'{-h,--help}'[show help]' \
-  '(- *)'{-V,--version}'[show version]' \
-  '--init[bootstrap .oxfmtrc.json with defaults]' \
-  '--migrate=[import config from another formatter]:source:(prettier biome)' \
-  '--lsp[start the oxfmt language server]' \
-  '--stdin-filepath=[virtual filename for stdin input]:path:_files' \
-  '--write[format files in place (default mode)]' \
-  '--check[verify formatting without writing]' \
-  '--list-different[list files that differ from formatted output]' \
-  '(-c --config)'{-c,--config=}'[config file (.json .jsonc .ts .js variants)]:config:_files' \
-  '--disable-nested-config[ignore config files in child directories]' \
-  '*--ignore-path=[additional ignore file]:ignore file:_files' \
-  '--with-node-modules[format files inside node_modules]' \
-  '--no-error-on-unmatched-pattern[exit successfully when globs match nothing]' \
-  '--threads=[number of worker threads]:count:' \
-  '*:path or glob pattern:_files' && ret=0
-
-return ret
+  '(-h --help)'{-h,--help}'[show help and exit]' \
+  '(-V --version)'{-V,--version}'[show version and exit]' \
+  '--init[(napi feature) initialize .oxfmtrc.json with default values]' \
+  '--migrate=[(napi feature) migrate Prettier or Biome config to .oxfmtrc.json]:source:(prettier biome)' \
+  '--lsp[(napi feature) start language server protocol server (for editor integration)]' \
+  '--stdin-filepath=[(napi feature) read from stdin; use this filepath to infer parser]:path:_files' \
+  '(--write --check --list-different)--write[format and write files in place (DEFAULT)]' \
+  '(--write --check --list-different)--check[check if files are formatted; show statistics; exit non-zero if any need formatting]' \
+  '(--write --check --list-different)--list-different[list files that would be changed]' \
+  '(-c --config)'{-c+,--config=}'[config file path (.json/.jsonc/.ts/.mts/.cts/.js/.mjs/.cjs)]:file:_files -g "*.(json|jsonc|ts|mts|cts|js|mjs|cjs)"' \
+  '--disable-nested-config[do not search for config files in subdirectories]' \
+  \*'--ignore-path=[ignore file path (repeatable; default: .gitignore + .prettierignore in CWD)]:file:_files' \
+  '--with-node-modules[format code in node_modules dir (SKIPPED by default)]' \
+  '--no-error-on-unmatched-pattern[do not exit with error when pattern matches no files]' \
+  '--threads=[number of threads to use (default: CPU count; set to 1 for single-threaded)]:n:' \
+  '*:path or glob pattern (default: CWD; "!" prefix to exclude; ".." rejected for security):_files'
