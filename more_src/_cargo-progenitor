@@ -1,0 +1,102 @@
+#compdef cargo-progenitor
+# Documentation: source-direct extraction from upstream
+# oxidecomputer/progenitor —
+#   cargo-progenitor/src/main.rs lines 19-87 (CargoCli enum
+#     wrapper + Args struct + 2 ValueEnum + From impls)
+#   `is_non_release()` at lines 15-17 (cfg!(debug_assertions)
+#     check that runs at compile time)
+# Reference accessed: 2026-05-30 via gh api.
+#
+# cargo-progenitor is **Oxide Computer's OpenAPI → Rust HTTP
+# client generator** — sister tool to R241 cargo-typify (the
+# JSON Schema → Rust type generator).  Takes an OpenAPI 3.x
+# document and emits a complete stand-alone Rust crate
+# (Cargo.toml + src/lib.rs + types + per-endpoint methods)
+# that wraps a REST API.  Used heavily within the Oxide
+# control plane stack: Oxide's `oxide.rs` CLI is generated
+# via cargo-progenitor from the Oxide control-plane OpenAPI.
+# Also used in production by Kraken (the broker), MaterialX,
+# Iceberg-Rust, and other Rust shops consuming OpenAPI APIs.
+#
+# Critical extraction note: cargo-progenitor uses the SAME
+# enum-wrapper cargo-subcommand intercept pattern as R241
+# cargo-typify (`#[command(name = "cargo")] + #[command(
+# bin_name = "cargo")] + enum CargoCli { Progenitor(Args) }`).
+# This continues the documentation of Oxide's preferred
+# cargo-subcommand idiom (vs R238 cargo-maelstrom's argv-
+# massage approach).
+#
+# Critical extraction note: cargo-progenitor uses `#[derive(
+# ValueEnum)]` (lines 59 + 74) — DIFFERENT enum pattern from
+# R241 cargo-typify's inline `value_parser = ["generate",
+# "allow", "deny"]` shortcut.  ValueEnum implementations
+# auto-derive `PossibleValue`s for clap and emit kebab-case
+# names from PascalCase variants:
+#   InterfaceArg::Positional → `positional`
+#   InterfaceArg::Builder    → `builder`
+#   TagArg::Merged           → `merged`
+#   TagArg::Separate         → `separate`
+# Two From<X> for Y impls (lines 65-72 + 80-87) bridge the
+# CLI types to the library types (InterfaceStyle, TagStyle).
+# This is the corpus's first documented "From<CLI> for
+# Library" newtype-bridge pattern — common in Oxide's
+# codebases where CLI args need slightly different semantics
+# than the underlying library APIs.
+#
+# Critical extraction note: **`--include-client` has a
+# RUNTIME-COMPUTED default value** at lines 54-56:
+#   #[clap(
+#     default_value = match is_non_release() {
+#       true => "true",
+#       false => "false"
+#     },
+#     ...
+#   )]
+# `is_non_release()` returns `cfg!(debug_assertions)` which
+# is `true` for `cargo build` (no --release) and `false` for
+# `cargo build --release`.  So in debug builds, `--include-
+# client` defaults to `true` (include client code inline);
+# in release builds, it defaults to `false` (depend on
+# progenitor-client crate).  This is the **corpus's first
+# documented runtime-computed clap default value via cfg!**.
+# Completion documents this in the flag description.
+#
+# Critical extraction note: cargo-progenitor uses the OLDER
+# clap v3 `#[clap(...)]` attribute syntax (lines 30, 33, 36,
+# 39, 42, 45, 49, 52, 55) — while R241 cargo-typify used the
+# NEWER clap v4 `#[arg(...)]` syntax.  Both are equivalent;
+# the older syntax is still accepted by clap v4 for backward
+# compatibility.  Documents that two attribute syntaxes
+# co-exist across the Rust ecosystem (R237 dependabot's
+# `pflag.StringVarP` Go pattern, R238 cargo-maelstrom's
+# `#[config(...)]` macro, R241 cargo-typify's `#[arg(...)]`,
+# R242 cargo-progenitor's `#[clap(...)]`).
+#
+# Critical extraction note: 4 of 8 flags are REQUIRED (no
+# `Option<>`, no `default_value`): `-i`/`--input`,
+# `-o`/`--output`, `-n`/`--name`, `-v`/`--version`.  Missing
+# any one causes clap to error out at parse time.  Completion
+# documents these with "(REQUIRED)" prefix in descriptions.
+
+local -a interface_styles=(
+  'positional:positional-argument-based method calls (DEFAULT)'
+  'builder:builder-pattern method calls (chainable .with_X())'
+)
+
+local -a tag_styles=(
+  'merged:all tagged endpoints in one impl block (DEFAULT)'
+  'separate:per-tag impl blocks (NamedTagOps, OtherTagOps, etc.)'
+)
+
+_arguments -s -S \
+  '(-h --help)'{-h,--help}'[show help and exit]' \
+  '(-V --version)'{-V,--version}'[show version and exit]' \
+  '(-i --input)'{-i+,--input=}'[OpenAPI document JSON or YAML (REQUIRED)]:file:_files -g "*.(json|yaml|yml)"' \
+  '(-o --output)'{-o+,--output=}'[output directory for the generated Rust crate (REQUIRED)]:dir:_files -/' \
+  '(-n --name)'{-n+,--name=}'[target Rust crate name (REQUIRED; e.g. "my-api-client")]:name:' \
+  '(-v --version)'{-v+,--version=}'[target Rust crate version (REQUIRED; e.g. "0.1.0")]:version:' \
+  '--registry-name=[target Rust crate registry (default: crates.io)]:registry:' \
+  '--license-name=[target Rust crate license (default: "SPECIFY A LICENSE BEFORE PUBLISHING")]:license:(MIT Apache-2.0 BSD-2-Clause BSD-3-Clause GPL-3.0 MPL-2.0 ISC)' \
+  '--interface=[SDK interface style (default: positional)]:style:(positional builder)' \
+  '--tags=[SDK tag style (default: merged)]:style:(merged separate)' \
+  '--include-client=[include client code inline (default: cfg!(debug_assertions) — true in debug builds, false in --release)]:bool:(true false)'
