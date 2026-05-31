@@ -1,0 +1,180 @@
+#compdef mgmt
+# ============================================================================
+#  _mgmt — Next-gen distributed, event-driven, parallel config management
+#
+#  Source-direct extraction from
+#    https://github.com/purpleidea/mgmt/blob/master/cli/cli.go
+#    https://github.com/purpleidea/mgmt/blob/master/cli/{run,deploy,check,setup,firstboot,docs,tools}.go
+#    https://github.com/purpleidea/mgmt/blob/master/lib/main.go (Config)
+#    https://github.com/alexflint/go-arg (the library itself)
+#
+#  Authored by James Shubin and the project contributors.  4254 GH stars.
+#  Event-driven config management system written in Go — replaces puppet
+#  agent / chef-client / ansible / salt with a single distributed binary
+#  that supervises resources and reacts to changes in real time using a
+#  graph-based execution engine.  Embeds an `mcl` DSL frontend, a yaml
+#  graph frontend, and a puppet-compatible frontend.
+#
+#  CLI library taxonomy update: 6th Go CLI library — alexflint/go-arg.
+#  mgmt uses `import "github.com/alexflint/go-arg"` — go-arg is Alex
+#  Flint's struct-tag-based CLI parser using TWO TAGS PER FIELD
+#  (`arg:"..."` for spec + `help:"..."` for description) and TYPE-BASED
+#  SUBCOMMAND DETECTION (POINTER-TO-STRUCT field with `arg:"subcommand:X"`
+#  tag becomes a SUBCOMMAND).  Distinct from R334 Go alecthomas/kong
+#  which uses SINGLE COMBINED `kong:"..."` TAG with key-value DSL.
+#  Distinct from cobra (verb-method-binding), urfave/cli (builder),
+#  kingpin (fluent), pflag (drop-in).  Adds env-var-fallback via
+#  `arg:"env:VARNAME"` directive + `arg:"separate"` for repeated flags
+#  + `arg:"-"` for parser-ignored fields + EMBEDDED CONFIG-STRUCTS for
+#  flag inheritance.  Brings cross-language CLI library taxonomy variant
+#  count to 81; Go ecosystem now has 6 documented CLI libraries.
+#
+#  Surface (verbatim from cli/cli.go `Args` struct):
+#
+#  Top-level flag:
+#    --license               Display the license and exit
+#
+#  Top-level subcommands:
+#    check       Check mcl code on this machine
+#    run         Run mcl/yaml/puppet/langpuppet code on this machine
+#    deploy      Deploy code into an mgmt cluster via etcd
+#    setup       Setup bootstrapping tasks (pkg/svc/firstboot)
+#    firstboot   Run tasks on first boot
+#    docs        Generate documentation
+#    tools       Collection of useful tools
+#    etcd        Run standalone etcd (preempted before parse)
+#    provisioner Provision bare metal machines (preempted before parse)
+#
+#  Frontends used by run/deploy/check (frontend takes its own flags):
+#    empty       Run empty payload
+#    lang        Run lang (mcl) payload
+#    yaml        Run yaml graph payload
+#    puppet      Run puppet graph payload
+#    langpuppet  Run combined lang/puppet graph payload
+#
+#  Setup sub-verbs:
+#    pkg / svc / firstboot
+#
+#  Common engine flags (from lib.Config embedded into run/check/deploy):
+#    --hostname=STR          Hostname to use
+#    --prefix=PATH           Working prefix directory  (env: MGMT_PREFIX)
+#    --tmp-prefix            Use pseudo-random temp prefix
+#    --allow-tmp-prefix      Allow temp prefix fallback
+#    --no-watch              Don't update graph on switch events
+#    --no-stream-watch       Don't update on stream switch events
+#    --no-deploy-watch       Don't change deploys after initial deploy
+#    --no-autoedges          Skip autoedges stage
+#    --no-autogroup          Skip autogroup stage
+#    --noop                  Force all resources into no-op mode
+#    --sema=N                Semaphore lock count
+#
+#  Deploy-specific flags:
+#    --ssh-url=URL           Transport etcd client over SSH
+#    --ssh-hostkey=KEY       SSH known-hosts key
+#    --seeds=URL             Etcd client endpoints (env: MGMT_SEEDS, repeatable)
+#    --no-git                Don't check git commit id for safe deploys
+#    --force                 Force new deploy even if safety chain breaks
+#
+#  Dup-skipped neighbors during hunt (different CLI library or in corpus):
+#    - meshbird (3525 stars, distributed networking) — IN CORPUS check skipped
+#    - libaws (nathants/libaws 449 stars, AWS shipping CLI) — narrow
+# ============================================================================
+
+_mgmt() {
+  local context state state_descr line curcontext=$curcontext
+  typeset -A opt_args
+
+  _arguments -C \
+    '--license[display the license and exit]' \
+    '1: :->top' \
+    '*:: :->subargs'
+
+  case $state in
+    top)
+      local -a verbs
+      verbs=(
+        'check:check mcl code on this machine'
+        'run:run mcl/yaml/puppet/langpuppet payload'
+        'deploy:deploy code into a cluster via etcd'
+        'setup:setup bootstrapping tasks (pkg/svc/firstboot)'
+        'firstboot:run tasks on first boot'
+        'docs:generate documentation'
+        'tools:collection of useful tools'
+        'etcd:run standalone etcd'
+        'provisioner:provision bare metal machines'
+      )
+      _describe -t commands 'mgmt subcommand' verbs
+      ;;
+    subargs)
+      case $line[1] in
+        run|deploy|check)
+          if [[ $CURRENT == 2 ]]; then
+            local -a sub=(
+              'empty:run empty payload'
+              'lang:lang (mcl) payload'
+              'yaml:yaml graph payload'
+              'puppet:puppet graph payload'
+              'langpuppet:combined lang/puppet payload'
+            )
+            _describe -t subcommands "$line[1] frontend" sub
+          else
+            local -a flags
+            flags=(
+              '--hostname=[hostname to use]:hostname'
+              '--prefix=[working prefix directory]:path:_directories'
+              '--tmp-prefix[use pseudo-random temp prefix]'
+              '--allow-tmp-prefix[allow temp prefix fallback]'
+              '--no-watch[do not update graph on switch events]'
+              '--no-stream-watch[do not update on stream switch]'
+              '--no-deploy-watch[do not change deploys after initial]'
+              '--no-autoedges[skip autoedges stage]'
+              '--no-autogroup[skip autogroup stage]'
+              '--noop[force all resources into no-op mode]'
+              '--sema=[semaphore lock count]:count'
+            )
+            if [[ $line[1] == deploy ]]; then
+              flags+=(
+                '*--seeds=[etcd client endpoint]:url'
+                '--ssh-url=[transport etcd client over SSH]:ssh url'
+                '--ssh-hostkey=[SSH known-hosts key]:hostkey'
+                '--no-git[do not check git commit id]'
+                '--force[force a new deploy]'
+              )
+            fi
+            _arguments -s -S $flags
+          fi
+          ;;
+        setup)
+          if [[ $CURRENT == 2 ]]; then
+            local -a sub=(
+              'pkg:setup packages'
+              'svc:setup services'
+              'firstboot:setup firstboot'
+            )
+            _describe -t subcommands 'setup target' sub
+          fi
+          ;;
+        firstboot)
+          if [[ $CURRENT == 2 ]]; then
+            _describe -t subcommands 'firstboot subcommand' \
+              'start:start firstboot service'
+          fi
+          ;;
+        docs)
+          if [[ $CURRENT == 2 ]]; then
+            _describe -t subcommands 'docs subcommand' \
+              'generate:generate documentation'
+          fi
+          ;;
+        tools)
+          if [[ $CURRENT == 2 ]]; then
+            _describe -t subcommands 'tools subcommand' \
+              'grow:tools for growing storage'
+          fi
+          ;;
+      esac
+      ;;
+  esac
+}
+
+_mgmt "$@"
