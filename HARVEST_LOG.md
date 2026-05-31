@@ -19,6 +19,52 @@ Entries are in original README order: older themed-cluster entries (accumulated
 before the per-round numbering convention) appear first, followed by the
 R-numbered rounds with the newest R-round at the top of that section.
 
+- **R242 — cargo-progenitor (Oxide OpenAPI → Rust HTTP client generator)** (1 file / 1 binary) — direct follow-up to R241's hunt-skip on `cargo-progenitor` (was deferred for flag-set flux but is now stable).  cargo-progenitor is the **canonical OpenAPI → Rust HTTP client generator** at Oxide Computer — takes an OpenAPI 3.x document and emits a complete stand-alone Rust crate (Cargo.toml + src/lib.rs + types + per-endpoint methods) that wraps a REST API.  Used heavily within the Oxide control plane stack: Oxide's `oxide.rs` CLI is generated via cargo-progenitor.  Closes the Oxide R241/R242 pair (typify generates the types; progenitor generates the API client methods using those types).
+  - `_cargo-progenitor` (1-stem; oxidecomputer/progenitor; **8 flags including 4 REQUIRED + 2 ValueEnum + 1 runtime-computed default**) decoded source-direct from:
+    * `cargo-progenitor/src/main.rs` lines 19-87 (CargoCli enum wrapper + Args struct + 2 ValueEnum + From impls)
+    * `is_non_release()` at lines 15-17 (`cfg!(debug_assertions)` check that runs at compile time)
+  - Critical extraction note: **cargo-progenitor uses the SAME enum-wrapper cargo-subcommand intercept pattern as R241 cargo-typify** (`#[command(name = "cargo")] + #[command(bin_name = "cargo")] + enum CargoCli { Progenitor(Args) }`).  Continues the documentation of Oxide's preferred cargo-subcommand idiom (vs R238 cargo-maelstrom's argv-massage approach).
+  - Critical extraction note: **cargo-progenitor uses `#[derive(ValueEnum)]` (lines 59 + 74) — DIFFERENT enum pattern from R241 cargo-typify's inline `value_parser = ["generate", "allow", "deny"]` shortcut**.  Two patterns documented across the corpus:
+    | Pattern | Where used | Mechanism |
+    |---|---|---|
+    | `value_parser = ["a", "b", "c"]` inline | cargo-typify (R241) | static string slice; lightest weight |
+    | `#[derive(ValueEnum)]` on enum | cargo-progenitor (R242) | full PascalCase → kebab-case; supports Display impls + custom value names; bridges to library types via From impls |
+    | `enum X` with named clap variants | dependabot (R237) | enum-based clap-derive Subcommand variant matching |
+    Documents that ValueEnum is preferred when the CLI enum needs to BRIDGE to a different library-internal enum type (cargo-progenitor's two `From<InterfaceArg> for InterfaceStyle` impls at lines 65-72 + 80-87 — the **corpus's first documented "From<CLI> for Library" newtype-bridge pattern**).
+  - Critical extraction note: **`--include-client` has a RUNTIME-COMPUTED default value** at lines 54-56:
+    ```rust
+    #[clap(
+        default_value = match is_non_release() {
+            true => "true",
+            false => "false"
+        },
+        long, action = clap::ArgAction::Set
+    )]
+    pub include_client: bool,
+    ```
+    `is_non_release()` returns `cfg!(debug_assertions)` which is `true` for `cargo build` (no `--release`) and `false` for `cargo build --release`.  So in debug builds, `--include-client` defaults to `true` (include client code inline); in release builds, it defaults to `false` (depend on `progenitor-client` crate).  This is the **corpus's first documented runtime-computed clap default value via `cfg!`**.  Completion documents this in the flag description.
+  - Critical extraction note: **cargo-progenitor uses the OLDER clap v3 `#[clap(...)]` attribute syntax** (lines 30, 33, 36, 39, 42, 45, 49, 52, 55) — while R241 cargo-typify used the NEWER clap v4 `#[arg(...)]` syntax.  Both are equivalent; the older syntax is still accepted by clap v4 for backward compatibility.  Documents that two attribute syntaxes co-exist across the Rust ecosystem.  This adds to the corpus's documentation of CLI attribute styles:
+    | Library | Attribute syntax | Round documented |
+    |---|---|---|
+    | spf13/cobra (Go) | `pflag.StringVarP(...)` | R237 dependabot |
+    | maelstrom-macro Config (Rust) | `#[config(short = 'X', value_name = "Y")]` | R238 cargo-maelstrom |
+    | clap v3 (Rust) | `#[clap(short = 'X', long)]` | R242 cargo-progenitor |
+    | clap v4 (Rust) | `#[arg(short = 'X', long)]` | R241 cargo-typify |
+    | argh (Rust) | `#[argh(switch, short = 'X')]` | R223 yofi |
+    | argparse (Python) | `parser.add_argument("-X", "--long")` | R226 ublue-update + R235 edge-tts |
+    | typer (Python) | `@app.command()` with type-annotated params | R232 hf |
+    | argp (C) | `static struct argp_option const options[]` | R217 mptcpd |
+    | CLI11 (C++) | `app.add_flag("-X,--long")` | R234 ueberzugpp |
+    | Go stdlib flag | `flag.StringVar(&var, "long", ...)` | R227 ssh-tpm-* |
+    | cmdr (Go; Vanilla OS) | function-call `cmdr.NewCommand()` + `WithBoolFlag()` | R225 abroot |
+    | cmdr-struct (Go; Vanilla OS sdk) | `cmd:"name"` / `flag:"short:n, long:name"` | R224 apx |
+    This documents the corpus's 12 distinct CLI-attribute syntaxes documented across 25+ rounds.
+  - Critical extraction note: **4 of 8 flags are REQUIRED** (no `Option<>`, no `default_value`): `-i`/`--input`, `-o`/`--output`, `-n`/`--name`, `-v`/`--version`.  Missing any one causes clap to error out at parse time.  Completion documents these with "(REQUIRED)" prefix in descriptions.  This is the **corpus's first documented "required-flag cluster" pattern** — useful for tools where the bare minimum is several flags rather than a single positional.
+  - Hunt-skip notes: `progenitor` (the library crate; consumed AS a library, not invoked as a CLI) deferred — library code, not a user-facing CLI.  `progenitor-impl` / `progenitor-client` (the runtime support crates) deferred.  `progenitor-macro` (the proc-macro variant that does the same generation at macro-expansion time inside a Cargo.toml dependency) deferred — has no CLI surface (it's compile-time only).
+  - Dup-checked clean against `/usr/share/zsh` + `/opt/homebrew/share/zsh` + `/usr/local/share/zsh`.
+  - Blacklist additions: 1 entry (cargo-progenitor).
+  - Corpus 28,672 → 28,673 files.
+
 - **R241 — cargo-typify (Oxide JSON Schema → Rust types generator)** (1 file / 1 binary) — branches off the Maelstrom family run (R238-R240) into Oxide Computer's Rust-API-design tooling.  cargo-typify is the **canonical JSON Schema → Rust type generator** that consumes OpenAPI / JSON Schema files (e.g. from the Oxide control plane) and emits idiomatic Rust structs + enums + builder-style constructors with serde annotations.  Sister tools at Oxide: progenitor (HTTP client generator that USES typify), dropshot (REST server framework; already in corpus), schemars (schema generator).
   - `_cargo-typify` (1-stem; oxidecomputer/typify; **8 flags + 1 positional + ArgGroup mutex + 3-value enum**) decoded source-direct from:
     * `cargo-typify/src/main.rs` lines 8-13 (CargoCli wrapper that intercepts `cargo typify <ARGS>` and unwraps to CliArgs)
