@@ -1,0 +1,235 @@
+#compdef redox_installer
+# =============================================================================
+# redox_installer — The Redox OS filesystem builder.  redox_installer takes
+#                   a TOML filesystem configuration (packages to install,
+#                   partition table layout, bootloader settings, post-install
+#                   scripts) and writes a complete Redox OS disk image
+#                   (or installs into a mounted target).  Used by the Redox
+#                   OS build system to produce installable images, by the
+#                   Redox OS team to release Redox builds, and by Redox
+#                   distribution forks (Coros OS, etc.) to roll their own
+#                   variants.
+#
+# Author:  Jeremy Soller (jackpot51) — Redox OS founder/lead, ex-System76
+# Source:  https://gitlab.redox-os.org/redox-os/installer
+# Mirror:  https://github.com/redox-os/installer
+# CLI:     src/bin/installer.rs (uses redox-os/arg-parser)
+# Library: redox-os/arg-parser
+#          ("Argument parser for Redox OS")
+# License: MIT
+# Status:  Active — used in EVERY official Redox OS release since ~2017;
+#          maintained alongside the Redox kernel and userland tools.
+#
+# -----------------------------------------------------------------------------
+# CROSS-LANGUAGE CLI LIBRARY TAXONOMY MILESTONE — RUST CROSSES TO 28 LIBRARIES
+# -----------------------------------------------------------------------------
+# With this completion the cross-language CLI library taxonomy documents the
+# 28TH Rust CLI library variant.  Rust climbs from 27 to 28 documented
+# libraries (Redox arg-parser via redox_installer).  New leaderboard:
+# Rust=28 (SOLO LEAD), Go=27, TypeScript-Node=27.  Taxonomy now spans 221
+# cross-language CLI library variants across 53 documented languages.
+# -----------------------------------------------------------------------------
+#
+# WHAT IS redox-os/arg-parser AND WHY IS IT A DISTINCT 28TH RUST CLI LIBRARY?
+#
+# redox-os/arg-parser (https://gitlab.redox-os.org/redox-os/arg-parser,
+# mirrored at github.com/redox-os/arg-parser, 5+ stars) is the Redox OS
+# project's IN-HOUSE Rust CLI parsing library.  It powers the entire Redox
+# user-space tool ecosystem:
+#
+#   * redox_installer — Redox filesystem image builder (THIS completion)
+#   * redox-os/extrautils — grep, df, kill, free, du, ps, etc. (the
+#     Redox-rewritten coreutils replacement set)
+#   * redox-os/coreutils — POSIX-compatible utilities for Redox
+#   * redox-os/relibc — Redox's libc tooling
+#   * redox-os/orbutils — Orbital window-system tools (orbterm, orbital)
+#   * redox-os/netutils — network tools
+#   * Various Redox-OS-specific binaries
+#
+# Redox-arg-parser is DISTINCT from every other Rust CLI library documented
+# in the corpus on SIX axes:
+#
+#   1. CAPACITY-HINTED CONSTRUCTOR — `ArgParser::new(N)` takes the EXPECTED
+#      FLAG COUNT as its first argument, used to pre-allocate internal
+#      HashMap/Vec capacity.  This is unique among Rust CLI libraries —
+#      every other one either accepts no constructor args (clap-derive),
+#      a single arg-iterator (lexopt, getargs), or a struct reference
+#      (Kong, go-arg-style).  Capacity hinting matters in Redox where
+#      allocation under memory pressure is more expensive than on Linux.
+#
+#   2. SEPARATE add_opt VS add_flag METHODS — `.add_opt("c", "config")` for
+#      value-taking flags vs `.add_flag(&["l", "list-packages"])` for
+#      boolean flags.  Most other Rust CLI libraries unify these (clap
+#      has one `Arg::new()` method with type inference; lapp R464 uses
+#      `(string)` annotation; getargs R471 uses `Opt::Short`/`Opt::Long`).
+#      Redox arg-parser's SPLIT makes the type-of-flag explicit at the
+#      API level.
+#
+#   3. SHORT-AND-LONG-AS-TWO-ARGS — `.add_opt(short, long)` takes both
+#      forms as positional arguments.  Empty string `""` for missing
+#      short.  Compare arguably R478 which uses space-separated string
+#      ("c config"); Redox uses two distinct &str arguments.  Slightly
+#      more verbose but more explicit.
+#
+#   4. SLICE-OF-NAMES FOR FLAGS — `.add_flag(&["l", "list-packages"])`
+#      takes a SLICE of equivalent names.  Both `-l` and `--list-packages`
+#      trigger the same flag.  This is a NICE BALANCE between
+#      arguably's "force f" string-split form and clap's chained
+#      `.short('f').long("force")` calls.
+#
+#   5. CHAINABLE BUILDER ON ArgParser INSTANCE — methods return `&mut
+#      Self` allowing fluent chaining of `.add_opt().add_opt().add_flag()`.
+#      Distinct from getargs (R471) which uses iterator-pull, noargs
+#      (R474) which uses take-consume, lapp (R464) which uses usage-text
+#      parsing.  Closest to clap-builder (R440) but more minimal.
+#
+#   6. NO IMPLICIT I/O — like noargs (R474) and getargs (R471), Redox
+#      arg-parser doesn't auto-print help or write to stderr on parse
+#      failure.  Callers are responsible for printing the const HELP_STR
+#      themselves when they detect `parser.found("help")`.  In
+#      `redox_installer` the HELP_STR is a r#"..."# raw string literal.
+#
+# WHAT MAKES REDOX-ARG-PARSER NOT JUST ANOTHER getopt-style library?
+#
+# Its design constraints come from REDOX OS itself:
+#
+#   * Works under REDOX's libstd subset — Redox is a Rust-based microkernel
+#     with its own kernel-syscall API.  Standard libstd primitives like
+#     `std::env::args()` work, but some Linux-specific syscalls are absent
+#     or limited.  Redox arg-parser uses only basic `std::env::args()` +
+#     `Vec` + `HashMap` — no fancy iterators, no async, no allocator
+#     specialization.  This makes it the FIRST Rust CLI library
+#     documented that is portable to a NON-LINUX RUST OS by design.
+#
+#   * Distributed as a Cargo crate that vendors into the Redox cookbook
+#     build system — every Redox userspace tool's `Cargo.toml` lists
+#     `arg-parser` as a path dependency.  The same crate compiles for
+#     Linux (when used in cross-tools) and Redox (when used in target
+#     binaries).
+#
+#   * Designed by Jeremy Soller (jackpot51), Redox OS lead.  Other
+#     contributors include Jackpot51's collaborators on Redox.
+#
+# THE Redox arg-parser API SURFACE (verbatim from redox_installer usage)
+#
+#   use arg_parser::ArgParser;
+#
+#   let mut parser = ArgParser::new(4)              // capacity hint
+#       .add_opt("b", "cookbook")                    // -b / --cookbook
+#       .add_opt("", "config-name")                  // --config-name only
+#       .add_opt("c", "config")                      // -c / --config
+#       .add_opt("o", "output-config")               // -o / --output-config
+#       .add_opt("", "write-bootloader")             // --write-bootloader
+#       .add_flag(&["skip-partition"])
+#       .add_flag(&["filesystem-size"])
+#       .add_flag(&["r", "repo-binary"])
+#       .add_flag(&["l", "list-packages"])
+#       .add_flag(&["live"])
+#       .add_flag(&["no-mount"]);
+#
+#   parser.parse(env::args());
+#
+#   // Query results:
+#   parser.found("skip-partition")     // → bool
+#   parser.get_opt("config")            // → Option<String>
+#
+# Builder methods:
+#   .add_opt(short, long)              — value-taking option
+#   .add_flag(&[names...])              — boolean flag with multiple names
+#   .parse(iter)                        — parse against argv iterator
+#
+# Query methods:
+#   .found(name)                        — was the flag/option present?
+#   .get_opt(name)                      — Option<String> for value-taking
+#   .args                               — Vec<String> of positionals
+#
+# CONTRAST WITH OTHER MINIMAL RUST CLI LIBRARIES DOCUMENTED IN THE CORPUS
+#
+#   * pico-args (R347)                  — pull-based: "ask for what you need"
+#   * lexopt (R407)                     — iterator-based: yield each arg
+#   * gumdrop (R410)                    — older derive-based
+#   * lapp (R464)                       — usage-text-as-spec
+#   * onlyargs (R445)                   — minimal no-derive
+#   * getargs (R471)                    — zero-cost iterator
+#   * noargs (R474)                     — imperative "consuming take"
+#   * arguably (R478)                   — minimal builder, space-separated
+#                                         aliases
+#   * Redox arg-parser (THIS)           — capacity-hinted, split opt/flag
+#                                         methods, slice-of-names for
+#                                         multi-aliases, microkernel-OS
+#                                         portable
+#
+# Redox arg-parser is closest in spirit to arguably (R478) — both are
+# minimal builders with string-keyed accessors (`.found(name)` /
+# `.value(name)` vs `.found(name)` / `.get_opt(name)`).  Distinctions:
+#   * Capacity-hinted constructor (Redox) vs no hint (arguably)
+#   * Split opt/flag methods (Redox) vs unified flag() (arguably)
+#   * Slice-of-names (Redox) vs space-separated string (arguably)
+#   * Microkernel portability (Redox) vs general-purpose (arguably)
+#
+# REAL-WORLD redox-arg-parser USERS:
+#
+#   * redox-os/installer — Redox filesystem image builder (THIS completion)
+#   * redox-os/extrautils — grep, df, kill, free, du, ps, etc.
+#   * redox-os/coreutils — POSIX-compat utilities for Redox
+#   * redox-os/orbutils — Orbital window-system tools
+#   * redox-os/netutils — network tools (dhcpd, ping, etc.)
+#   * coros-os/installer — Coros OS (Redox fork)
+#   * CLEckhardt/os_project — academic Redox-derived OS project
+#   * Essentially ALL of Redox OS userland
+#
+# -----------------------------------------------------------------------------
+# REDOX_INSTALLER'S CLI SURFACE (verbatim from src/bin/installer.rs HELP_STR)
+# -----------------------------------------------------------------------------
+#
+# USAGE:
+#   redox_installer <diskpath.img> [OPTIONS]
+#   redox_installer --config=file.toml [REPORT-OPTIONS]
+#
+# INSTALLER MODE (write a disk image):
+#   <diskpath.img>             Disk image file to write to (positional)
+#   -c, --config <FILE>        Path to filesystem config TOML
+#   --write-bootloader <FILE>  Path to write UEFI bootloader to in addition
+#                              to the embedded ESP partition
+#   --skip-partition           Skip writing GPT partition tables (use only
+#                              if you plan to use other partition tools)
+#   --live                     Use bootloader configured for live disk
+#                              (writable overlay, no installation needed)
+#   --no-mount                 Use RedoxFS-AR (archive mode) instead of
+#                              FUSE to write files — needed on systems
+#                              without FUSE support
+#   -b, --cookbook <PATH>      Use local Redox OS build system rather than
+#                              downloading packages from static.redox-os.org
+#   --config-name <NAME>       Name of the filesystem configuration; used
+#                              as VARIANT= in /usr/lib/os-release
+#
+# REPORT MODE (parse config, output info, don't write):
+#   -l, --list-packages        List packages that will be installed
+#   --filesystem-size          Output filesystem size in MB
+#   -o, --output-config <FILE> Path to write the parsed merged config
+#                              as another TOML (for debugging / inspection)
+#
+# =============================================================================
+
+_redox_installer() {
+    local curcontext="$curcontext" state line ret=1
+    typeset -A opt_args
+
+    _arguments -s \
+        '(-c --config)'{-c,--config}'[path to filesystem config TOML]:config:_files -g "*.toml"' \
+        '--write-bootloader[path to write UEFI bootloader]:bootloader file:_files' \
+        '--skip-partition[skip writing GPT partition tables]' \
+        '--live[use live disk bootloader (writable overlay)]' \
+        '--no-mount[use RedoxFS-AR instead of FUSE]' \
+        '(-b --cookbook)'{-b,--cookbook}'[use local Redox build system]:cookbook path:_directories' \
+        '--config-name[filesystem configuration variant name]:variant:' \
+        '(-l --list-packages)'{-l,--list-packages}'[list packages that will be installed]' \
+        '--filesystem-size[output filesystem size in MB]' \
+        '(-o --output-config)'{-o,--output-config}'[write parsed merged config to file]:output:_files' \
+        '*:disk image:_files' \
+        && ret=0
+
+    return ret
+}
+
+_redox_installer "$@"
