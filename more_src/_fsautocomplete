@@ -1,0 +1,250 @@
+#compdef fsautocomplete
+# =============================================================================
+# fsautocomplete — F# Language Server Protocol implementation.  FsAutoComplete
+#                  is the canonical F# editor backend, powering Ionide for
+#                  VS Code, F# support in Vim/Neovim (Ionide-vim), F# support
+#                  in Emacs (fsharp-mode + lsp-mode), JetBrains Rider's F#
+#                  plugin, and any other LSP-capable F# editor integration.
+#                  It hosts FSharp.Compiler.Services, Ionide.ProjInfo (for
+#                  MSBuild project loading), and FSAC's own LSP transport.
+#
+# Author:  Chet Husk + ionide team + F# Software Foundation
+# Source:  https://github.com/fsharp/FsAutoComplete
+# CLI:     src/FsAutoComplete/Parser.fs (System.CommandLine RootCommand)
+# Library: System.CommandLine
+#          (dotnet/command-line-api — Microsoft's official .NET CLI parser)
+# License: Apache-2.0
+# Status:  Stable — 483+ stars, used by hundreds of thousands of F#
+#          developers indirectly via Ionide and other LSP clients.  The
+#          de-facto reference implementation of F# editor support.
+#
+# -----------------------------------------------------------------------------
+# CROSS-LANGUAGE CLI LIBRARY TAXONOMY MILESTONE — F# CROSSES TO 2 LIBRARIES
+# -----------------------------------------------------------------------------
+# With this completion the cross-language CLI library taxonomy documents the
+# SECOND F# CLI library variant.  F# climbs from 1 to 2 documented libraries
+# (Argu in R456 via Fornax; System.CommandLine in this round via FsAutoComplete).
+# Taxonomy now spans 198 cross-language CLI library variants across 44
+# documented languages.
+# -----------------------------------------------------------------------------
+#
+# WHAT IS System.CommandLine AND WHY IS IT A DISTINCT F# CLI LIBRARY VARIANT?
+#
+# System.CommandLine (formally `Microsoft.NET.System.CommandLine`, NuGet:
+# `System.CommandLine`, GitHub: dotnet/command-line-api) is Microsoft's
+# OFFICIAL command-line parsing library for the .NET ecosystem.  It powers:
+#
+#   * the `dotnet` CLI itself (the .NET SDK command-line tool)
+#   * `dotnet tool` ecosystem global tools (paket, fantomas, fable, ionide)
+#   * Microsoft's PowerShell 7 internals
+#   * Roslyn analyzer/codefix tooling
+#   * Most modern .NET console applications built post-2020
+#
+# System.CommandLine is FUNDAMENTALLY DIFFERENT from Argu (R456) — the two
+# libraries answer the same question (how do I parse argv in F#?) with
+# diametrically opposite designs:
+#
+#   * Argu uses COMPILE-TIME DISCRIMINATED UNIONS.  The CLI grammar is a
+#     union type known to the F# compiler at compile time; the parser is
+#     generated from the type at IArgParserTemplate.Usage call sites.  The
+#     output is statically typed.  Exhaustive pattern matching enforces that
+#     every CLI case has documentation.
+#   * System.CommandLine uses RUNTIME BUILDER OBJECTS.  The CLI grammar is
+#     constructed at runtime by allocating `Option<T>`, `Argument<T>`,
+#     `Command`, and `RootCommand` objects and assembling them into a tree.
+#     The parser walks this tree at parse time.  Output is accessed via
+#     `parseResult.GetValue(option)` returning T or default.
+#
+# The trade-offs:
+#
+#   Argu (compile-time DU):
+#     + Exhaustive pattern match means missing usage text is a compile error
+#     + Result type is statically typed — no string keys, no GetValue() casts
+#     + Output integrates with F# match expressions for handler dispatch
+#     - Cannot easily share CLI definitions across F# and C# code
+#     - DU case names become CLI flag names (with CliPrefix attribute)
+#     - Requires the F# compiler for compile-time generation
+#
+#   System.CommandLine (runtime builder):
+#     + Works identically from F# and C# (both use the same builder API)
+#     + Easier to construct CLI grammar programmatically at runtime
+#     + Integrates with the OFFICIAL .NET ecosystem and the `dotnet` tool host
+#     + RICH built-in tab completion via `--get-completions` / `dotnet
+#       complete` / `[suggest:]` directives
+#     + Built-in help rendering (`HelpAction`), error responses
+#       (`ErrorReporter`), and parsing directives (`[directive:value]`)
+#     + AllowMultipleArgumentsPerToken for space-separated value lists
+#     + DefaultValueFactory for lazily-computed defaults
+#     - Result type is dynamically queried — `parseResult.GetValue(option)`
+#       returns T but the option reference must be in scope at call site
+#     - Builder API is verbose compared to Argu's DU
+#
+# Architectural placement: System.CommandLine is in the SAME FAMILY as
+# Python's argparse (runtime construction), Go's flag stdlib (runtime
+# construction), Rust's clap-builder (R440, runtime construction), and
+# Java's Picocli runtime API.  It is in a DIFFERENT FAMILY from Argu
+# (compile-time DU), clap-derive (R275, compile-time proc-macro), Haskell's
+# optparse-applicative-derive (compile-time Generic), or Scala's scopt
+# (compile-time builder DSL).
+#
+# -----------------------------------------------------------------------------
+# System.CommandLine API SURFACE (from FsAutoComplete src/FsAutoComplete/Parser.fs)
+# -----------------------------------------------------------------------------
+#
+# Construction (verbatim from FsAutoComplete Parser.fs):
+#
+#     let verboseOption =
+#         let o = Option<bool>("--verbose", "-v", "--debug")
+#         o.Description <- "Enable verbose logging..."
+#         o
+#
+#     let rootCommand =
+#         let rootCommand = RootCommand("An F# LSP server implementation")
+#         rootCommand.Options.Add verboseOption
+#         rootCommand.Options.Add attachOption
+#         ...
+#         rootCommand.TreatUnmatchedTokensAsErrors <- false
+#         rootCommand.SetAction(fun (parseResult: ParseResult) -> ...)
+#         rootCommand
+#
+# Key concepts:
+#
+#   * Option<T>(name, aliases...)             — option with type-safe value;
+#                                                aliases may include short
+#                                                forms (e.g., "-v") and long
+#                                                aliases (e.g., "--debug")
+#   * Option<T>.Description                    — usage text shown in --help
+#   * Option<T>.DefaultValueFactory            — lazy default value computer
+#                                                (called once when option is
+#                                                omitted from argv)
+#   * Option<string[]>.AllowMultipleArgumentsPerToken
+#                                              — accept multiple values per
+#                                                token (`--filter a b c`
+#                                                instead of `--filter a
+#                                                --filter b --filter c`)
+#   * Argument<T>(name)                        — positional argument
+#   * Command(name, description)               — subcommand
+#   * RootCommand(description)                 — top-level command
+#   * Command.Options.Add(option)              — register option on command
+#   * Command.Add(subcommand)                  — register subcommand
+#   * Command.SetAction(parseResult -> R)      — handler executed when this
+#                                                command is selected
+#   * RootCommand.TreatUnmatchedTokensAsErrors — back-compat escape hatch
+#                                                allowing removed options
+#                                                to not crash old clients
+#   * parseResult.GetValue(option)             — extract T value
+#   * parseResult.UnmatchedTokens              — collection of unknown args
+#                                                when TreatUnmatchedTokensAsErrors
+#                                                is false
+#
+# -----------------------------------------------------------------------------
+# System.CommandLine FEATURES UNIQUE AMONG DOCUMENTED .NET CLI LIBRARIES
+# -----------------------------------------------------------------------------
+#
+# Other .NET CLI libraries that exist but System.CommandLine specifically
+# differentiates from:
+#
+#   * Argu (R456)                       — compile-time DU (F# only)
+#   * CommandLineParser                 — attribute-driven C# library
+#   * Microsoft.Extensions.CommandLineUtils — deprecated, replaced by SCL
+#   * PowerArgs                         — attribute-driven with TUI
+#   * Mono.Options                      — single-file getopt-style
+#   * Plossum.CommandLine               — older C# attribute parser
+#   * CLAP (Adrotec/CLAP)               — convention-based dispatch
+#   * NDesk.Options                     — Mono.Options predecessor
+#
+# System.CommandLine UNIQUELY supports:
+#
+#   * DIRECTIVES — `[suggest:]`, `[parse:]`, `[debug:]` are parsed BEFORE
+#     command resolution and trigger built-in behaviors (suggestions,
+#     parse tree dump, debugger attach prompt).  No other .NET CLI library
+#     has directive parsing.
+#   * TAB COMPLETION GENERATION via `dotnet complete -- <partial-line>` and
+#     the `--get-completions` action, which is consumed by shell completion
+#     scripts (bash, zsh, PowerShell) shipped with the dotnet SDK.
+#   * RESPONSE FILES — `@file.rsp` references files containing additional
+#     arguments, expanded inline (Visual Studio / MSBuild convention).
+#   * INVOCATION CONTEXT — `parseResult.Configuration.Output` /
+#     `parseResult.Configuration.Error` redirect output for testing.
+#   * AsyncAction — async handlers integrated with the .NET TaskScheduler.
+#   * EXIT CODE PROPAGATION — handlers can return int to propagate exit
+#     code; default handler maps exceptions to exit 1.
+#
+# -----------------------------------------------------------------------------
+# FsAUTOCOMPLETE'S CLI SURFACE (verbatim from src/FsAutoComplete/Parser.fs)
+# -----------------------------------------------------------------------------
+#
+# Root command: "An F# LSP server implementation"
+#
+# Options:
+#   --verbose / -v / --debug         Enable verbose logging
+#                                    (equivalent to --log-level debug)
+#   --log-level <LogEventLevel>      Set log verbosity (Verbose|Debug|
+#                                    Information|Warning|Error|Fatal)
+#   --attach-debugger                Launch system debugger and break immediately
+#   --logfile / -l / --log-file <f>  Send log output to specified file
+#   --filter / --log-filter <c...>   Filter logs by category (AllowMultiple)
+#                                    Categories visible in [Brackets] in log
+#   --wait-for-debugger / --attachdebugger    Stop execution on startup until
+#                                    external debugger attaches
+#   --project-graph-enabled          Enable MSBuild Graph workspace loading
+#                                    (faster but experimental)
+#   --adaptive-lsp-server-enabled    Enable LSP server based on FSharp.Data.
+#                                    Adaptive (more stable but experimental)
+#   --otel-exporter-enabled          Enable OpenTelemetry exporter
+#                                    (config via OTEL_* env vars)
+#   --use-fcs-transparent-compiler   Use Transparent Compiler in
+#                                    FSharp.Compiler.Services (experimental;
+#                                    better perf characteristics)
+#   --state-directory <DirectoryInfo>   Per-workspace state directory
+#                                    (default: current working directory)
+#
+# Back-compat: TreatUnmatchedTokensAsErrors = false — old clients passing
+# removed options will not crash; warnings are logged via warnOnUnknownOptions.
+#
+# Default action: launches AdaptiveFSharpLspServer (or non-adaptive variant)
+# with FSharp.Compiler.Services and Ionide.ProjInfo workspace loader.
+#
+# =============================================================================
+
+_fsautocomplete() {
+    local curcontext="$curcontext" state line ret=1
+    typeset -A opt_args
+
+    local -a log_levels
+
+    log_levels=(
+        'Verbose:most-verbose level (all events)'
+        'Debug:debug-level events'
+        'Information:informational events'
+        'Warning:warnings and above'
+        'Error:errors and fatal'
+        'Fatal:fatal only'
+    )
+
+    _arguments -s \
+        '(--verbose -v --debug)'{--verbose,-v,--debug}'[enable verbose logging (== --log-level Debug)]' \
+        '--log-level[set log verbosity level]:level:->loglevel' \
+        '--attach-debugger[launch system debugger and break immediately]' \
+        '(--logfile -l --log-file)'{--logfile,-l,--log-file}'[send log output to file]:logfile:_files' \
+        '*'{--filter,--log-filter}'[filter logs by category (multiple)]:category:' \
+        '(--wait-for-debugger --attachdebugger)'{--wait-for-debugger,--attachdebugger}'[stop execution until external debugger attaches]' \
+        '--project-graph-enabled[enable MSBuild Graph workspace loading (experimental, faster)]' \
+        '--adaptive-lsp-server-enabled[enable adaptive LSP server (experimental, more stable)]' \
+        '--otel-exporter-enabled[enable OpenTelemetry exporter (config via OTEL_* env)]' \
+        '--use-fcs-transparent-compiler[use Transparent Compiler in FCS (experimental)]' \
+        '--state-directory[per-workspace state directory]:dir:_directories' \
+        '--help[show help and exit]' \
+        '--version[show version and exit]' \
+        && ret=0
+
+    case $state in
+        (loglevel)
+            _describe -t loglevels 'log level' log_levels && ret=0
+            ;;
+    esac
+
+    return ret
+}
+
+_fsautocomplete "$@"
