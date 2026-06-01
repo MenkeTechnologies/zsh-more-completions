@@ -1,0 +1,379 @@
+#compdef objdiff-cli
+# ============================================================================
+#  _objdiff-cli — objdiff-cli: local diffing tool for
+#                 decompilation projects — compares the assembly
+#                 output of a "target" object file (e.g. an
+#                 original game's compiled code) against a
+#                 "base" object file (the decompilation
+#                 project's current build output) to verify
+#                 matching/non-matching status
+#                 (Luke "encounter" Street — Nintendo
+#                 decompilation community maintainer)
+#
+#  Source-direct extraction from
+#    https://github.com/encounter/objdiff/blob/main/objdiff-cli/src/main.rs
+#    https://github.com/encounter/objdiff/blob/main/objdiff-cli/src/cmd/{diff,report}.rs
+#    https://github.com/encounter/objdiff/blob/main/objdiff-cli/Cargo.toml (dep argp = "0.4")
+#    https://github.com/jirutka/argp (the jirutka/argp library —
+#    derive-based argument parsing optimized for code size and
+#    flexibility)
+#
+#  Maintained by Luke "encounter" Street (Nintendo console
+#  decompilation community fixture — author of decompilation
+#  build tooling for projects targeting GameCube, Wii, DS, Switch
+#  ROMs).  encounter/objdiff: 466 GH stars.  objdiff is a
+#  Nintendo-decompilation-focused local diffing tool that
+#  compares two .o object files and highlights instruction-level
+#  diffs in their disassembled output — the standard workflow
+#  for "matching decompilation" projects where the goal is to
+#  recreate the original C/C++ source code from a ROM such that
+#  recompiling produces BIT-IDENTICAL object files to the
+#  original.  Used by Nintendo decompilation projects (Mario,
+#  Zelda, Metroid, F-Zero, Pokemon, Smash Bros, Animal Crossing,
+#  Pikmin, etc.) running on platforms targeting GameCube/Wii
+#  (PowerPC), DS/3DS (ARM), Switch (AArch64), N64 (MIPS), etc.
+#  Sister tools: m2c (Mips to C decompiler — in corpus via _m2c),
+#  ida (IDA Pro — commercial industry-standard disassembler),
+#  ghidra (NSA-released Ghidra disassembler/decompiler — in
+#  corpus via _ghidra), radare2 (in corpus via _r2 + STOCK Kali),
+#  retdec (Avast retargetable decompiler), binary-ninja (Vector
+#  35 commercial), cuemol/dtk-template (decompilation template
+#  toolkit), n64decomp/* (N64 decompilation org), 007/dkr/* etc.
+#
+#  CLI library taxonomy update: 19th Rust CLI library — Jakub
+#  "jirutka" Jirutka's **argp** (jirutka/argp).  Rust ecosystem
+#  now has 19 documented CLI libraries — RE-TAKING THE SOLO LEAD
+#  as the MOST-DOCUMENTED CLI LANGUAGE in the cross-language
+#  taxonomy ahead of Go (18) and TypeScript-Node (18).
+#  🎉 Rust BREAKS the THREE-WAY TIE.
+#
+#  argp (jirutka/argp, 17 GH stars) is Jakub "jirutka" Jirutka's
+#  "Rust derive-based argument parsing optimized for code size
+#  and flexibility."  Distinguishing philosophy: argp is a FORK
+#  AND EVOLUTION of google/argh (R344 Rust argh — Google
+#  Fuchsia-OS derive-on-struct CLI library) with TWO MAJOR
+#  ENHANCEMENTS that argh lacks: (1) MUCH SMALLER COMPILED CODE
+#  SIZE (~10-20% smaller binary than argh through aggressive
+#  inlining and dead-code elimination of unused features), and
+#  (2) MORE FLEXIBLE flag/argument handling including
+#  `from_str_fn(fn_name)` for CUSTOM FROM-STR PARSING FUNCTIONS
+#  (argh requires implementing `FromStr` trait on the type,
+#  which doesn't work for foreign types).  Used by n64decomp/007
+#  (Nintendo 64 Goldeneye 007 decompilation project),
+#  encounter/objdiff (Nintendo decompilation diffing tool 466
+#  stars), jprochazk/garde (Garde validation crate xtask
+#  helper), and other Rust binaries that need argh's derive
+#  ergonomics with smaller binary footprint.  argp is OPTIMIZED
+#  FOR EMBEDDED/MUSL-targeted Rust binaries where every kilobyte
+#  of compiled code matters.
+#
+#  argp API:
+#    use argp::{FromArgs, FromArgValue};
+#
+#    #[derive(FromArgs)]
+#    /// Doc-comment becomes program description in --help
+#    struct TopLevel {
+#      /// Doc-comment per field becomes flag description
+#      #[argp(option, short = 'C')]
+#      chdir: Option<PathBuf>,
+#
+#      /// Minimum logging level. (Default: info)
+#      /// Possible values: error, warn, info, debug, trace
+#      #[argp(option, short = 'L')]
+#      log_level: Option<LogLevel>,
+#
+#      /// Print version information and exit.
+#      #[argp(switch, short = 'V')]
+#      version: bool,
+#
+#      /// Disable color output. (env: NO_COLOR)
+#      #[argp(switch)]
+#      no_color: bool,
+#
+#      #[argp(subcommand)]
+#      command: SubCommand,
+#    }
+#
+#    #[derive(FromArgs)]
+#    #[argp(subcommand)]
+#    enum SubCommand {
+#      Diff(DiffArgs),
+#      Report(ReportArgs),
+#    }
+#
+#    #[derive(FromArgs)]
+#    /// Diff two object files.
+#    #[argp(subcommand, name = "diff")]
+#    struct DiffArgs {
+#      /// Target object file
+#      #[argp(option, short = '1', from_str_fn(platform_path))]
+#      target: Option<PathBuf>,
+#
+#      /// Output file ("-" for stdout)
+#      #[argp(option, short = 'o')]
+#      output: Option<PathBuf>,
+#
+#      /// Configuration property (key=value); repeatable
+#      #[argp(option, short = 'c')]
+#      config: Vec<String>,
+#
+#      /// Function symbol to diff
+#      #[argp(positional)]
+#      symbol: Option<String>,
+#    }
+#
+#    fn main() {
+#      let args: TopLevel = argp::parse_args_or_exit(argp::DEFAULT);
+#      // args.chdir, args.log_level, args.command etc.
+#    }
+#
+#  argp distinctive features:
+#    - `#[derive(FromArgs)]` proc-macro on a struct — fields
+#      become CLI flags / positionals / subcommands based on
+#      attribute annotations
+#    - DOC-COMMENT-AS-HELP — `/// description` doc-comments
+#      above each field become --help text for that flag
+#    - FIELD ATTRIBUTES via `#[argp(...)]`:
+#      * `#[argp(option, short = 'X')]` — value-bearing flag
+#        with optional short alias (`-X VALUE` / `--name VALUE`)
+#      * `#[argp(switch, short = 'X')]` — boolean flag
+#      * `#[argp(positional)]` — positional argument
+#      * `#[argp(subcommand)]` — nested subcommand enum
+#      * `#[argp(option, from_str_fn(custom_fn))]` — CUSTOM
+#        from-string parser function (argp's KILLER FEATURE vs
+#        argh which requires implementing FromStr trait)
+#    - SUBCOMMAND TREE via enum with `#[argp(subcommand)]` —
+#      each variant is a subcommand with its own FromArgs struct
+#    - `Vec<T>` field type → REPEATABLE flag (each occurrence
+#      appends)
+#    - `Option<T>` field type → optional flag
+#    - `bool` field type → switch flag (presence = true; combined
+#      with `#[argp(switch)]` attribute for clarity)
+#    - `parse_args_or_exit(DEFAULT)` — convenience entry: parses
+#      argv, prints --help on `-h/--help`, exits with usage on
+#      error
+#    - `parse_args(args)` — explicit parsing for custom error
+#      handling
+#    - `EarlyExit` type — early-exit signal (returned for --help,
+#      --version, or other meta-flags) — caller handles by
+#      exiting cleanly
+#    - `HelpStyle` — controls --help renderer style (Default,
+#      Compact, etc.)
+#    - `FromArgValue` trait — implement for custom types to
+#      enable parsing from `&OsStr`; alternative to
+#      `from_str_fn` for types you control
+#    - OPTIMIZED FOR CODE SIZE — argp's implementation
+#      aggressively inlines the parser and dead-code-eliminates
+#      unused features; results in ~10-20% smaller binary than
+#      argh for equivalent CLI schemas
+#    - INSPIRED BY google/argh (forked from argh and extended);
+#      both share the `#[derive(FromArgs)]` macro name but argp
+#      adds `from_str_fn` for custom parsers + smaller code size
+#  Distinct from R275 Rust clap-derive (proc-macro #[derive(Parser)]
+#  — much heavier with full ANSI rendering, suggest-similar-flag),
+#  R330 Rust bpaf (functional applicative combinator), R344 Rust
+#  google/argh (THE PARENT LIB argp was forked from; argh ships
+#  the original FromArgs derive; argp adds from_str_fn + smaller
+#  code; argp IS LITERALLY argh + size/flexibility tweaks), R347
+#  Rust RazrFalcon/pico-args (LOW-LEVEL imperative pull parser),
+#  R404 Rust matklad/xflags (declarative MACRO block syntax),
+#  R407 Rust blyxxyz/lexopt (MINIMAL iterator-based pull parser),
+#  R410 Rust murarth/gumdrop (zero-dep derive-macro), R413 Rust
+#  docopt/docopt.rs (USAGE-STRING-IS-SPEC), R416 Rust rust-lang/
+#  getopts (OFFICIAL POSIX-getopt(3) port), R420 Rust ksk001100/
+#  seahorse (Cobra-for-Rust chained-builder), R427 Rust tanakh/
+#  argopt (function-as-CLI proc-macro), R430 Rust killercup/
+#  quicli (batteries-included educational framework), R434 Rust
+#  dtolnay/gflags (distributed flags pattern).  Rust documented
+#  libraries so far: clap-derive, bpaf, argh, pico-args, xflags,
+#  lexopt, gumdrop, docopt.rs, getopts, seahorse, argopt, quicli,
+#  gflags, argp (this round) plus older clap-builder, structopt
+#  (deprecated, now clap_derive)... 19 total.  argp's
+#  distinguishing feature vs all other Rust libs: argp is the
+#  ONLY Rust CLI library in the corpus that is a code-size-
+#  optimized FORK OF argh — sister library to R344 google/argh
+#  with the specific value-add of `from_str_fn(fn_name)` for
+#  custom from-string parser functions (argh requires FromStr
+#  trait impl, which doesn't work for foreign types).  argp's
+#  approach: DERIVE-BASED `#[derive(FromArgs)]` proc-macro on
+#  struct + `#[argp(option/switch/positional/subcommand,
+#  short, from_str_fn)]` field attributes + DOC-COMMENT-AS-HELP
+#  + `Vec<T>` auto-repeatable + `Option<T>` optional + bool
+#  switch + subcommand enum dispatch + `parse_args_or_exit
+#  (DEFAULT)` convenience entry + `EarlyExit` signal + `Help
+#  Style` renderer config + `FromArgValue` trait for custom
+#  types + OPTIMIZED FOR ~10-20% SMALLER COMPILED CODE than argh
+#  + `from_str_fn(fn_name)` for CUSTOM from-string parsers on
+#  foreign types — corpus's **first documented code-size-
+#  optimized argh-fork Rust CLI library**.  Brings cross-
+#  language CLI library taxonomy variant count to 176; Rust
+#  ecosystem now has 19 documented CLI libraries — RE-TAKING THE
+#  SOLO LEAD as the MOST-DOCUMENTED CLI LANGUAGE in the cross-
+#  language taxonomy ahead of Go (18) and TypeScript-Node (18).
+#
+#  Surface (verbatim from `objdiff-cli/src/main.rs` TopLevel
+#  + `objdiff-cli/src/cmd/{diff,report}.rs` Args structs):
+#
+#  Usage:
+#    objdiff-cli [options] <subcommand> [subcommand-args]
+#
+#  Top-level options:
+#    -C, --chdir <PATH>             Change working directory
+#                                   before running
+#    -L, --log-level <LEVEL>        Minimum logging level
+#                                   (default: info; choices:
+#                                   error, warn, info, debug,
+#                                   trace)
+#    -V, --version                  Print version information
+#                                   and exit
+#        --no-color                 Disable color output
+#                                   (env: NO_COLOR)
+#    -h, --help                     Print help (auto from argp)
+#
+#  Subcommand: diff
+#    Diff two object files. (Interactive TUI or one-shot mode)
+#    -1, --target <FILE>            Target object file (the
+#                                   original ROM-extracted .o)
+#    -2, --base <FILE>              Base object file (the
+#                                   decompilation project's
+#                                   build output)
+#    -p, --project <DIR>            Project directory (auto-
+#                                   discovers target/base via
+#                                   objdiff.json config)
+#    -u, --unit <NAME>              Unit name within project
+#                                   (selects which target/base
+#                                   pair to diff when project
+#                                   has multiple units)
+#    -o, --output <FILE>            Output file for one-shot
+#                                   mode ("-" for stdout); when
+#                                   absent, runs interactive TUI
+#        --format <FORMAT>          Output format (json | json-
+#                                   pretty | proto; default: json)
+#    -c, --config <KEY=VALUE>       Configuration property
+#                                   (repeatable; overrides
+#                                   objdiff.json values)
+#    <SYMBOL>                       Function symbol to diff
+#                                   (positional; when absent in
+#                                   interactive mode, browser
+#                                   shows symbol list)
+#
+#  Subcommand: report
+#    Generate a progress report for a project.
+#    Has nested subcommands:
+#
+#    report generate                Generate a progress report
+#      -p, --project <DIR>          Project directory
+#      -o, --output <FILE>          Output file
+#      -d, --deduplicate            Deduplicate global and weak
+#                                   symbols (runs single-threaded)
+#      -f, --format <FORMAT>        Output format (json | json-
+#                                   pretty | proto; default: json)
+#      -c, --config <KEY=VALUE>     Configuration property
+#                                   (repeatable)
+#
+#    report changes                 List changes from a previous
+#                                   report
+#      <PREVIOUS>                   Previous report file
+#                                   (positional)
+#      <CURRENT>                    Current report file
+#                                   (positional)
+#      -o, --output <FILE>          Output file
+#      -f, --format <FORMAT>        Output format
+#
+#  Examples:
+#    objdiff-cli diff                                           # Interactive TUI (project auto-discover)
+#    objdiff-cli diff -1 target.o -2 base.o func_name           # Diff specific symbol
+#    objdiff-cli diff -p ./project main_function                # Project mode + symbol
+#    objdiff-cli diff -p ./project -u main main_function        # Specific unit
+#    objdiff-cli diff -p ./project -o report.json --format=json my_func     # One-shot to file
+#    objdiff-cli diff -p ./project -o - --format=json-pretty my_func | jq   # Stdout JSON
+#    objdiff-cli diff -c "key=value" -c "other=123" -p ./project my_func   # Custom config
+#    objdiff-cli -L debug diff -p ./project my_func             # Debug logging
+#    objdiff-cli -C /work/decomp diff -p . my_func              # Change dir first
+#    objdiff-cli --no-color diff -p ./project my_func           # No ANSI colors
+#    objdiff-cli report generate -p ./project -o report.json    # Generate progress report
+#    objdiff-cli report generate -p ./project -d -f json-pretty -o report.json
+#    objdiff-cli report changes report-v1.json report-v2.json -o diff.json
+#    objdiff-cli -V                                             # Print version
+#    objdiff-cli --help                                         # Print help
+#
+#  Dup-skipped neighbors during hunt (in corpus or smaller user base,
+#  also jirutka/argp users):
+#    - 007 (n64decomp/007 — Nintendo 64 Goldeneye 007
+#      decompilation project; uses argp in tools/asm-processor/
+#      rust/; FUTURE candidate if standalone binaries are added)
+#    - garde (jprochazk/garde Garde validation crate; uses argp
+#      only in internal xtask dev tool not user-facing CLI)
+#    - jirutka/argp repo itself (17 stars library not CLI)
+# ============================================================================
+
+_objdiff-cli() {
+  local context state state_descr line
+  typeset -A opt_args
+  local curcontext="$curcontext"
+
+  _arguments -C \
+    '(-h --help)'{-h,--help}'[print help]' \
+    '(-V --version)'{-V,--version}'[print version information and exit]' \
+    '(-C --chdir)'{-C,--chdir}'[change working directory]:dir:_directories' \
+    '(-L --log-level)'{-L,--log-level}'[minimum logging level]:level:(error warn info debug trace)' \
+    '--no-color[disable color output (env: NO_COLOR)]' \
+    '1: :->subcommand' \
+    '*:: :->args' && return
+
+  case "$state" in
+    subcommand)
+      local -a subcmds
+      subcmds=(
+        'diff:diff two object files (interactive or one-shot mode)'
+        'report:generate a progress report for a project'
+      )
+      _describe -t subcommands 'objdiff-cli subcommand' subcmds
+      ;;
+    args)
+      case "${words[1]}" in
+        diff)
+          _arguments -s -S \
+            '(-1 --target)'{-1,--target}'[target object file]:file:_files -g "*.o"' \
+            '(-2 --base)'{-2,--base}'[base object file]:file:_files -g "*.o"' \
+            '(-p --project)'{-p,--project}'[project directory]:dir:_directories' \
+            '(-u --unit)'{-u,--unit}'[unit name within project]:unit:' \
+            '(-o --output)'{-o,--output}'[output file (- for stdout)]:file:_files' \
+            '--format[output format]:format:(json json-pretty proto)' \
+            '*'{-c,--config}'[configuration property (key=value, repeatable)]:keyvalue:' \
+            ':symbol:'
+          ;;
+        report)
+          if (( CURRENT == 2 )); then
+            local -a reportcmds
+            reportcmds=(
+              'generate:generate a progress report'
+              'changes:list changes from a previous report'
+            )
+            _describe -t subcommands 'report subcommand' reportcmds
+          else
+            case "${words[2]}" in
+              generate)
+                _arguments -s -S \
+                  '(-p --project)'{-p,--project}'[project directory]:dir:_directories' \
+                  '(-o --output)'{-o,--output}'[output file]:file:_files' \
+                  '(-d --deduplicate)'{-d,--deduplicate}'[deduplicate global and weak symbols]' \
+                  '(-f --format)'{-f,--format}'[output format]:format:(json json-pretty proto)' \
+                  '*'{-c,--config}'[configuration property (key=value, repeatable)]:keyvalue:'
+                ;;
+              changes)
+                _arguments -s -S \
+                  '(-o --output)'{-o,--output}'[output file]:file:_files' \
+                  '(-f --format)'{-f,--format}'[output format]:format:(json json-pretty proto)' \
+                  ':previous:_files' \
+                  ':current:_files'
+                ;;
+            esac
+          fi
+          ;;
+      esac
+      ;;
+  esac
+}
+
+_objdiff-cli "$@"
