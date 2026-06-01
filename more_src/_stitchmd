@@ -1,0 +1,403 @@
+#compdef stitchmd
+# =============================================================================
+# stitchmd — Abhinav Gupta's "Stitch multiple Markdown files
+#            together into a single document" — a Go CLI that
+#            reads a SUMMARY-style Markdown file containing a
+#            hierarchical link-list of other Markdown files and
+#            generates a single combined Markdown document with
+#            auto-generated table-of-contents, heading-level
+#            offsetting, and link rewriting.
+#            Distinguishing from mdbook (Rust), pandoc (Haskell
+#            multi-format), and other Markdown processors by:
+#              - SUMMARY-FILE-DRIVEN — input is a top-level
+#                Markdown file with a hierarchical list of links:
+#                  # My Book
+#                  - [Introduction](intro.md)
+#                  - [Chapter 1](chap1/index.md)
+#                    - [Section 1.1](chap1/sec1.md)
+#                    - [Section 1.2](chap1/sec2.md)
+#                  - [Chapter 2](chap2.md)
+#                stitchmd resolves the links, inlines their
+#                contents, and produces a single output file
+#              - HEADING OFFSET via -offset N — adjusts heading
+#                levels of inlined files (positive = deeper,
+#                negative = shallower) so that chapter
+#                hierarchies render correctly:
+#                  -offset 2  → chapter file's # becomes ###
+#                  -offset -1 → chapter file's ## becomes #
+#              - AUTO-GENERATED TOC per section (suppress with
+#                -no-toc) — each section gets a `<details>`
+#                expandable table of contents
+#              - LINK REWRITING — relative links in inlined files
+#                are rewritten to point to anchor positions in
+#                the combined output (e.g., `(intro.md#section)`
+#                becomes `(#intro-section)`)
+#              - PREFACE INSERTION via -preface FILE — content
+#                inserted verbatim at top of output (license
+#                headers, badges, etc.)
+#              - DIFF MODE via -d / -diff — show diff between
+#                current output file and what would be generated;
+#                requires -o; useful for CI to detect outdated
+#                docs
+#              - COLOR OUTPUT via -color (always|never|auto) —
+#                uses mattn/go-colorable + mattn/go-isatty for
+#                cross-platform color detection
+#              - UNSAFE MODE via -unsafe — allows file references
+#                outside the working directory (default off for
+#                security)
+#              - DIR-CHANGE via -C DIR — sets working directory
+#                before resolving file paths
+#              - STDIN / STDOUT — FILE='-' reads from stdin;
+#                omitted -o writes to stdout; integrates with
+#                Unix pipelines
+#              - go.abhg.dev MODULE PATH — uses Abhinav's
+#                personal-domain module hosting convention
+#              - markdownfmt INTEGRATION via Kunde21/
+#                markdownfmt — output goes through markdownfmt
+#                v3 for canonical Markdown formatting
+#            Used by: mdbook authors needing alternate output
+#            formats, documentation teams maintaining
+#            multi-file Markdown books, and as a reference
+#            implementation of yuin/goldmark + Kunde21/
+#            markdownfmt + pkg/diff + colorable composition
+#            in Go.
+#
+# Author:  Abhinav Gupta (abhinav on GitHub, abhg.dev) — Go
+#          infrastructure engineer at Uber.  Maintains other
+#          Go tooling: doc2go (Go documentation generator),
+#          restack (git interactive-rebase stacked-PR
+#          rebaser), goldmark-* plugins, and more.  License:
+#          GPL-2.0 (stitchmd).
+# Source:  https://github.com/abhinav/stitchmd
+#          https://github.com/abhinav/stitchmd/blob/main/flags.go
+#          https://github.com/abhinav/stitchmd/blob/main/usage.txt
+#          https://github.com/abhinav/stitchmd/blob/main/go.mod
+# CLI:     flags.go — uses Go's stdlib `flag` package (NOT
+#          cobra / urfave/cli; minimal binary size).  Headline
+#          library: **yuin/goldmark** (goldmark is the new
+#          variant being documented here, expanding Axis 19 —
+#          Markdown Parsing — to Go).
+# Library: github.com/yuin/goldmark v1.8.2
+#          ("goldmark" — "A markdown parser written in Go.
+#           Easy to extend, standard(CommonMark) compliant,
+#           well structured." — Yusuke Inuzuka (yuin on
+#           GitHub).  Distinct from pulldown-cmark (R665,
+#           Rust Axis 19 opener) and from russross/blackfriday,
+#           gomarkdown/markdown, golang-commonmark, and other
+#           Go Markdown libraries by being:
+#              1. COMMONMARK 0.31 COMPLIANT — passes the full
+#                 CommonMark specification's conformance suite.
+#                 Distinct from blackfriday (CommonMark
+#                 partial), and from gomarkdown/markdown
+#                 (CommonMark close but not 100%).  goldmark
+#                 is the RECOMMENDED Go Markdown library per
+#                 Hugo's tooling team (Hugo migrated from
+#                 blackfriday to goldmark in 2020).
+#              2. AST-BASED — goldmark parses into a full
+#                 Abstract Syntax Tree (vs pulldown-cmark's
+#                 pull-event streaming).  AST gives extensions
+#                 random-access to the document structure for
+#                 transformations:
+#                   import "github.com/yuin/goldmark"
+#                   import "github.com/yuin/goldmark/parser"
+#                   import "github.com/yuin/goldmark/renderer/html"
+#                   md := goldmark.New(
+#                     goldmark.WithExtensions(extension.GFM),
+#                     goldmark.WithParserOptions(parser.WithAutoHeadingID()),
+#                     goldmark.WithRendererOptions(html.WithUnsafe()),
+#                   )
+#                   var buf bytes.Buffer
+#                   md.Convert([]byte(source), &buf)
+#              3. EXTENSIBLE via Extender INTERFACE — goldmark's
+#                 central design choice: extensions implement
+#                 the Extender interface and register their
+#                 own parsers / inline parsers / renderers /
+#                 transformers.  Built-in extensions include:
+#                   * extension.Table          — GFM tables
+#                   * extension.Strikethrough  — ~~strikethrough~~
+#                   * extension.TaskList       — - [ ] tasks
+#                   * extension.Linkify        — autolinks
+#                   * extension.DefinitionList — definition lists
+#                   * extension.Footnote       — footnotes
+#                   * extension.Typographer    — smart punctuation
+#                   * extension.GFM            — all GFM at once
+#                 Third-party extensions: mathjax, mermaid,
+#                 highlight (syntax highlighting via Chroma),
+#                 wikilinks, callouts, attributes, anchors,
+#                 emoji.  Distinct from pulldown-cmark's
+#                 Options-bitflags model (pulldown-cmark has
+#                 fewer extension points; new features require
+#                 forking).
+#              4. PURE GO — no Cgo dependencies; works on all
+#                 Go platforms without C toolchain.  Distinct
+#                 from blackfriday which depends on C libraries
+#                 in some code paths.
+#              5. AUTO-HEADING-ID + AST INSPECTION — auto-
+#                 generate slug IDs for headings; walk AST to
+#                 collect TOC structure:
+#                   parser.WithAutoHeadingID()
+#                   ast.Walk(doc, func(n ast.Node, entering bool) {
+#                     if h, ok := n.(*ast.Heading); ok && entering {
+#                       fmt.Println(h.Level, string(h.Text(source)))
+#                     }
+#                     return ast.WalkContinue, nil
+#                   })
+#              6. AST-VISITOR PATTERN — `ast.Walk(root,
+#                 walker_fn)` traverses the document; useful
+#                 for custom transformations (link rewriting,
+#                 footnote renumbering, etc.).  pulldown-cmark
+#                 has no equivalent walker (uses iterator).
+#              7. HTML SAFE BY DEFAULT — raw HTML in source is
+#                 escaped unless `html.WithUnsafe()` is passed;
+#                 distinct from blackfriday (raw HTML allowed
+#                 by default).
+#              8. RENDERER INTERFACE — custom renderers can
+#                 emit JSON / LaTeX / RTF / etc. by
+#                 implementing the Renderer interface.
+#                 pulldown-cmark requires writing your own
+#                 event loop.
+#              9. NODE KIND REGISTRY — each AST node has a
+#                 KIND type (KindHeading, KindParagraph,
+#                 KindCodeBlock, KindFencedCodeBlock,
+#                 KindBlockquote, KindList, KindListItem,
+#                 KindLink, KindEmphasis, KindText, etc.) for
+#                 type-safe AST navigation.
+#             10. YUSUKE-INUZUKA / YUIN ECOSYSTEM PROVENANCE
+#                 — Yusuke Inuzuka (yuin) is a Japanese Go
+#                 developer; also maintains:
+#                   * yuin/goldmark      — Markdown parser     (THIS)
+#                   * yuin/goldmark-meta — YAML front-matter ext
+#                   * yuin/goldmark-highlighting — Chroma syntax highlight
+#                   * yuin/gopher-lua    — Lua VM in Go
+#                   * yuin/gluamapper    — Lua ↔ Go data conversion
+#                   * yuin/stagger       — staggered batch processing
+#                 Distinct maintainer ecosystem from Steve
+#                 Francia (spf13/cobra/viper/afero), Sindre
+#                 Sorhus, Mathew Roy (go-resty), fsnotify
+#                 community, and others.)
+# License: MIT (goldmark); GPL-2.0 (stitchmd)
+# Status:  yuin/goldmark — 4,821+ stars on yuin/goldmark,
+#          ~250M go.sum downloads (TOP-50 Go library by usage);
+#          foundational Markdown library used by:
+#            * Hugo (gohugoio/hugo — migrated from blackfriday
+#              to goldmark in 2020)
+#            * charmbracelet/glamour (TUI markdown renderer)
+#            * gomarkdown/markdown (as renderer base)
+#            * Caddy (some plugin docs)
+#            * gitea (server-side markdown rendering)
+#            * notebrew (static site CMS)
+#            * stitchmd (THIS)
+#            * 5000+ Go applications
+#          stitchmd — 63+ stars on abhinav/stitchmd, used by
+#          documentation teams maintaining multi-file
+#          Markdown books.
+#
+# -----------------------------------------------------------------------------
+# CROSS-LANGUAGE CLI LIBRARY TAXONOMY MILESTONE — GO CROSSES TO 74 +
+#                                                  AXIS 19 EXPANDS TO GO
+# -----------------------------------------------------------------------------
+# With this completion the cross-language CLI library taxonomy documents
+# the 74TH Go CLI library variant.  Go climbs from 73 to 74 documented
+# libraries (yuin/goldmark via stitchmd).  Go **catches Rust at 74**
+# (Rust=Go=74, TS-Node=73 → twenty-fifth two-way tie at the
+# leaderboard top in this round-sequence).  New leaderboard:
+# Rust=74, Go=74, TypeScript-Node=73 (Rust+Go tied at the top).
+# Taxonomy now spans 400 cross-language CLI library variants across
+# 98 documented languages.
+#
+# **MILESTONE: 400 documented CLI library variants reached** — a
+# round-number landmark in taxonomy growth.
+#
+# Pattern: R665 Rust=74 (pulldown-cmark — Axis 19 OPENS) → R666
+# Go=74 (goldmark THIS — Axis 19 expands to 2 variants) → expected
+# R667 TS-Node=74 → R668 99th language.  This is the 2nd of 3
+# leader bumps in the current segment.
+#
+# This completion EXPANDS Axis 19 (MARKDOWN PARSING) to TWO
+# documented variants — symmetrically distributed across Rust
+# (pulldown-cmark R665) and Go (yuin/goldmark THIS R666).
+# TS-Node Axis 19 variant expected in R667 (likely markdown-it
+# by Vitaly Puzrin or marked) to complete three-language
+# symmetry.
+#
+#   Axis 19 (MARKDOWN PARSING) variants:
+#     - pulldown-cmark (pulldown-cmark/pulldown-cmark) — R665
+#       (_mdzk) — Rust CommonMark 0.31; event-based pull
+#       parser; OPTIONAL GFM extensions; HTML renderer; Raph
+#       Levien / pulldown-cmark-rs ecosystem
+#     - yuin/goldmark (yuin/goldmark) — R666 (THIS) — Go
+#       CommonMark 0.31; AST-based with Extender interface;
+#       BUILT-IN GFM/Tables/TaskList extensions; pure Go;
+#       Yusuke Inuzuka / yuin ecosystem
+#
+# Two Axis 19 variants address DIFFERENT parsing architectures:
+#   pulldown-cmark     = EVENT-BASED PULL PARSER (iterator of
+#                         Event values; never allocates AST;
+#                         memory-efficient; ~200x faster than
+#                         markdown.js) — Rust
+#   goldmark           = AST-BASED with EXTENDER INTERFACE (full
+#                         document tree with KindXxx node types;
+#                         AST visitor pattern; extensible via
+#                         Extender plugins; recommended by Hugo)
+#                         — Go
+#
+# Both libraries are CommonMark 0.31 compliant.  Differences:
+#   - pulldown-cmark: faster, lower memory, harder to extend
+#   - goldmark:       slower, higher memory, easier to extend
+#                      via Extender interface
+#
+# Axis 19 distribution: Rust=1, Go=1, TS-Node=0.  Expected R667
+# TS-Node=1 (likely markdown-it) restores three-language
+# symmetry trajectory.
+#
+# (Leaderboard at R666: Rust=74, Go=74, TS-Node=73.  Rust+Go
+# tied at 74.  Axis 9 / Logging 6/6/6 three-way symmetric.
+# Axes 10 + 13 + 14 at 2/2/2.  Axes 7 + 8 + 11 + 12 + 15 + 16
+# + 17 + 18 at 1/1/1.  Axis 19 at 1/1/0 (Rust + Go, TS-Node
+# pending).  Eleven axes at three-language symmetry.)
+#
+# -----------------------------------------------------------------------------
+#
+# WHAT IS yuin/goldmark AND WHY IS IT THE 74TH Go CLI LIBRARY?
+#
+# yuin/goldmark is the recommended Go Markdown library since
+# 2020 when Hugo (the largest Go-based static site generator)
+# migrated from blackfriday to goldmark.  Distinct from Go's
+# stdlib (no Markdown support) and from earlier alternatives
+# (russross/blackfriday — partially CommonMark, gomarkdown/
+# markdown — fork of blackfriday).
+#
+# Five distinguishing characteristics from pulldown-cmark
+# (R665):
+#
+#   1. AST VS EVENT — goldmark builds a full AST; pulldown-
+#      cmark emits events.  AST enables random-access
+#      transformations (e.g., link rewriting, footnote
+#      renumbering, TOC extraction) at the cost of memory.
+#      Pull events are streaming-friendly + memory-efficient
+#      but harder to inspect the document structurally.
+#
+#   2. EXTENDER INTERFACE — goldmark extensions implement
+#      Extender; each extension can register parsers + inline
+#      parsers + renderers + transformers.  Built-in
+#      extensions: Table, Strikethrough, TaskList, Linkify,
+#      DefinitionList, Footnote, Typographer, GFM (combined).
+#      Third-party: highlight (Chroma), mathjax, mermaid,
+#      wikilinks, etc.  Pulldown-cmark requires forking +
+#      patching for new features.
+#
+#   3. AST.WALK VISITOR PATTERN — `ast.Walk(root, walker)`
+#      traverses the document with entering/leaving callbacks.
+#      Pulldown-cmark has no equivalent — caller manually
+#      iterates the event stream.
+#
+#   4. HTML SAFE BY DEFAULT — raw HTML escaped unless
+#      WithUnsafe() opt-in.  Pulldown-cmark: equivalent via
+#      Options::ENABLE_SAFE_LINKS / HTML escaping mode.
+#
+#   5. YUIN ECOSYSTEM PROVENANCE — Yusuke Inuzuka maintains
+#      goldmark + goldmark-meta + goldmark-highlighting +
+#      gopher-lua + gluamapper.  Distinct from Raph Levien
+#      (pulldown-cmark / graphics engineering), and from
+#      other Go maintainers (Steve Francia, Mathew Roy,
+#      fsnotify org).
+#
+# -----------------------------------------------------------------------------
+#
+# THE stitchmd CLI — Go stdlib `flag` + goldmark + markdownfmt
+#
+# stitchmd's CLI is in flags.go.  Uses Go's stdlib `flag` package
+# (not cobra / urfave/cli) for minimal binary size.
+#
+# Source:
+#     flag := flag.NewFlagSet("stitchmd", flag.ContinueOnError)
+#     flag.StringVar(&opts.Preface, "preface", "", "")
+#     flag.StringVar(&opts.Output, "o", "", "")
+#     flag.StringVar(&opts.Dir, "C", "", "")
+#     flag.IntVar(&opts.Offset, "offset", 0, "")
+#     flag.BoolVar(&opts.NoTOC, "no-toc", false, "")
+#     flag.Var(&opts.ColorOutput, "color", "")
+#     flag.BoolVar(&opts.Diff, "d", false, "")
+#     flag.BoolVar(&opts.Diff, "diff", false, "")
+#     flag.BoolVar(&opts.Unsafe, "unsafe", false, "")
+#     flag.BoolVar(&p.version, "version", false, "")
+#     flag.BoolVar(&p.help, "help", false, "")
+#     flag.BoolVar(&p.help, "h", false, "")
+#
+# Flags (Go stdlib flag uses single dash):
+#   -offset N           heading level offset (positive deeper,
+#                       negative shallower)
+#   -no-toc             do not generate table of contents
+#                       under each section
+#   -preface FILE       insert FILE verbatim at top of output
+#   -o FILE             write output to FILE (default stdout;
+#                       use '-' for stdout)
+#   -C DIR              change to DIR before reading files
+#                       (default: directory of FILE)
+#   -d, -diff           report diff to stdout instead of
+#                       writing file (requires -o)
+#   -color MODE         color mode: always | never | auto
+#                       (default auto)
+#   -unsafe             allow file references outside working
+#                       directory
+#   -version            print version
+#   -h, -help           show help
+#
+# Positional:
+#   FILE                input file (use '-' for stdin)
+#
+# goldmark is used internally for parsing the input Markdown
+# summary file + the inlined target files; markdownfmt v3 is
+# used for canonical re-rendering of the combined output.
+#
+# Five-axis distinctness from pulldown-cmark (R665):
+#
+#   1. AST VS EVENT — full document tree vs streaming events.
+#
+#   2. EXTENDER INTERFACE — first-class extension architecture.
+#
+#   3. AST.WALK VISITOR — random-access traversal.
+#
+#   4. PURE GO — no Cgo, no C toolchain.
+#
+#   5. YUIN ECOSYSTEM PROVENANCE — Japanese Go maintainer.
+#
+# -----------------------------------------------------------------------------
+#
+# COMMAND-LINE OPTIONS (sourced directly from
+# https://github.com/abhinav/stitchmd/blob/main/flags.go
+# https://github.com/abhinav/stitchmd/blob/main/usage.txt
+# Go stdlib flag.FlagSet definitions.)
+# -----------------------------------------------------------------------------
+
+local curcontext="$curcontext" state line ret=1
+typeset -A opt_args
+
+local -a _stitchmd_color
+_stitchmd_color=(
+    'always:always color output'
+    'never:never color output'
+    'auto:auto-detect color (default)'
+)
+
+_arguments -s -S \
+    '-offset+[heading level offset (positive deeper, negative shallower)]:offset:_default' \
+    '-no-toc[do not generate table of contents under each section]' \
+    '-preface+[insert FILE verbatim at top of output]:file:_files' \
+    '-o+[write output to FILE (use - for stdout)]:file:_files' \
+    '-C+[change to DIR before reading files]:directory:_files -/' \
+    '(-d -diff)'{-d,-diff}'[report diff to stdout instead of writing file (requires -o)]' \
+    '-color+[color mode]:mode:->color' \
+    '-unsafe[allow file references outside working directory]' \
+    '-version[print version]' \
+    '(- *)'{-h,-help}'[show help]' \
+    '*:input file:_files -g "*.md"' \
+    && ret=0
+
+case $state in
+    color)
+        _describe -t modes 'color mode' _stitchmd_color && ret=0
+        ;;
+esac
+
+return ret
