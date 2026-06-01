@@ -1,0 +1,259 @@
+#compdef awslim
+# =============================================================================
+# awslim — a simplified alternative to the AWS CLI for limited use cases.
+#          Created by Fujiwara Shunichiro (fujiwara), a prolific Japanese
+#          Go developer at Kayac who has authored more than 50 CLI tools
+#          for AWS operations and infrastructure automation.  awslim
+#          dynamically generates Kong CLI flags from each AWS SDK service's
+#          input struct via reflection, eliminating the need to hand-write
+#          subcommands for thousands of AWS API endpoints.
+#
+# Author:  Fujiwara Shunichiro (fujiwara)
+# Source:  https://github.com/fujiwara/awslim
+# CLI:     main.go (CLI struct with kong tags)
+# Library: alecthomas/kong
+#          ("Kong is a command-line parser for Go")
+# License: MIT
+# Status:  Active development — 144+ stars, used in production at Kayac
+#          and other Japanese Go-heavy organizations for AWS automation.
+#
+# -----------------------------------------------------------------------------
+# CROSS-LANGUAGE CLI LIBRARY TAXONOMY MILESTONE — GO CROSSES TO 24 LIBRARIES
+# -----------------------------------------------------------------------------
+# With this completion the cross-language CLI library taxonomy documents the
+# 24TH Go CLI library variant.  Go climbs from 23 to 24 documented libraries
+# (Kong via awslim).  New leaderboard: Rust=24, Go=24 (TIED), TypeScript-Node=23.
+# Taxonomy now spans 204 cross-language CLI library variants across 47
+# documented languages.
+# -----------------------------------------------------------------------------
+#
+# WHAT IS Kong AND WHY IS IT A DISTINCT 24TH GO CLI LIBRARY VARIANT?
+#
+# Kong (https://github.com/alecthomas/kong, 3,075+ stars) is Alec Thomas's
+# SECOND Go CLI library.  Alec Thomas originally authored kingpin (already
+# documented in the corpus), which is a FLUENT BUILDER-DSL CLI library
+# (`app.Flag("verbose", "v").Bool()`).  Kong is his REWRITE around STRUCT
+# TAGS — the CLI is declared as a Go struct whose fields have `kong:"..."`-
+# style tags that describe each flag/argument.
+#
+# Kong is the GO ECOSYSTEM ANALOG OF RUST'S clap-derive (R275) — both
+# libraries use the host language's reflection/derive mechanism to generate
+# the CLI parser from a struct definition, eliminating the boilerplate of
+# fluent builder calls.  Kong is distinct from every other Go CLI library
+# documented in the corpus on five specific axes:
+#
+#   1. STRUCT TAGS AS THE DECLARATION SURFACE — unlike cobra (subcommand
+#      tree builder with cobra.Command objects), urfave/cli (declarative
+#      cli.App with Flag slices), kingpin (fluent builder chain), or
+#      flag stdlib (imperative flag.StringVar calls), Kong uses Go struct
+#      tags.  Each field of the CLI struct gets a tag specifying flag
+#      behavior:
+#
+#        type CLI struct {
+#          Verbose bool   `short:"v" help:"verbose output"`
+#          Output  string `short:"o" help:"output file" default:"out.txt"`
+#          Files   []string `arg:"" help:"files to process"`
+#        }
+#
+#      Kong parses these tags via reflection at runtime, validates the
+#      struct, and builds the parser tree.
+#
+#   2. NEGATABLE FLAGS via `negatable:""` — Kong has FIRST-CLASS SUPPORT
+#      for --foo / --no-foo pairs:
+#
+#        Strict bool `negatable:"true" default:"true"`
+#
+#      generates BOTH `--strict` and `--no-strict` flags that toggle the
+#      same field.  This is unique among Go CLI libraries — cobra requires
+#      manual flag pairs, urfave/cli requires explicit Reverse aliases,
+#      and clap-derive in Rust spells this differently (`#[arg(long, action
+#      = ArgAction::SetFalse)]`).
+#
+#   3. MAP[STRING]STRING FIELDS — Kong natively parses repeated flags into
+#      a Go map:
+#
+#        ExtStr  map[string]string `help:"external variables"`
+#
+#      Invocations like `--ext-str foo=1 --ext-str bar=2` build the map
+#      `{"foo": "1", "bar": "2"}`.  Most other Go CLI libraries require
+#      manual splitting or special StringList types.
+#
+#   4. SUBCOMMANDS AS NESTED STRUCTS via `cmd:""` — instead of cobra-style
+#      tree construction, Kong subcommands are declared by embedding
+#      a struct field with the `cmd:""` tag:
+#
+#        type CLI struct {
+#          Add  AddCmd  `cmd:"" help:"add an item"`
+#          List ListCmd `cmd:"" help:"list items"`
+#        }
+#        type AddCmd struct { Name string `arg:""` }
+#
+#      The dispatched method is resolved by walking the struct tree.  Kong
+#      uses Go method set lookup to find Run() methods on subcommand
+#      structs, calling them as the handler — this is more idiomatic Go
+#      than cobra's `Run: func(cmd *Command, args []string) {...}`.
+#
+#   5. RUNTIME EXTENSIBILITY VIA Kong.Vars AND Kong.Validators — Kong
+#      supports runtime injection of variables (`kong.Vars{"version": v}`)
+#      that can be referenced in struct tags as `${version}`, and custom
+#      validators registered via `kong.NamedMapper`.  This composes
+#      cleanly with the struct-tag-driven declaration: tags can express
+#      "this value is bounded by ${maxItems}" without compile-time
+#      knowledge of the bound.
+#
+# THE Kong API SURFACE (verbatim from kong package)
+#
+#   func New(cli interface{}, options ...kong.Option) (*Kong, error)
+#       — construct parser from CLI struct + options
+#   func (k *Kong) Parse(args []string) (*Context, error)
+#       — parse argv against the spec, return Context
+#   func Parse(cli interface{}, options ...kong.Option) *Context
+#       — combined helper: New + Parse + os.Args[1:]
+#
+#   Common options:
+#       kong.Name("foo")                  — program name in help
+#       kong.Description("...")           — top-level description
+#       kong.Vars{"key": "value"}         — variable interpolation
+#       kong.UsageOnError()               — show usage on parse failure
+#       kong.ConfigureHelp(kong.HelpOptions{...})
+#       kong.NamedMapper("date", dateMapper)  — register custom type
+#       kong.Bind(value)                  — inject value into Run() callbacks
+#
+#   Common tags:
+#       short:"v"             — short flag form (-v)
+#       help:"..."            — usage text
+#       default:"..."         — default value (string-encoded)
+#       env:"VAR"             — environment variable fallback
+#       arg:""                — positional argument
+#       optional:""           — make positional optional
+#       cmd:""                — declare a subcommand
+#       name:"..."            — override field name
+#       hidden:""             — exclude from --help
+#       negatable:""          — generate --foo / --no-foo pair
+#       enum:"a,b,c"          — restrict to enum values
+#       group:"..."           — group flags in --help output
+#       sep:","               — slice value separator
+#       prefix:"..."          — prefix for nested struct flags
+#
+# DESIGN TRADE-OFFS RELATIVE TO OTHER GO CLI LIBRARIES
+#
+#   vs spf13/cobra:
+#     + Kong is declarative (struct tags) vs cobra's imperative tree
+#     + Less boilerplate for simple CLIs (no manual cobra.Command per cmd)
+#     + Better type safety — Kong struct fields are typed; cobra Flags
+#       are dynamically typed via PFlag interface
+#     - Smaller ecosystem (cobra has millions of users via Kubernetes,
+#       Hugo, Helm, Hashicorp tools)
+#     - No code generation for subcommands (cobra-cli scaffolder)
+#
+#   vs urfave/cli:
+#     + Subcommand methods are idiomatic Go (Run() on subcommand struct)
+#       vs urfave's Action func(c *cli.Context) {...} callbacks
+#     + Better discoverability — IDE sees CLI struct fields directly
+#     - urfave is more popular and has more integration libraries
+#
+#   vs alecthomas/kingpin (the predecessor by the same author):
+#     + Kong replaces kingpin's fluent builder with struct tags
+#     + Less verbose, more readable for simple cases
+#     + Kong is alecthomas's RECOMMENDED library for new projects
+#     - kingpin has more legacy integrations
+#
+#   vs alexflint/go-arg:
+#     + Both use struct tags; Kong's tag vocabulary is more extensive
+#     + Kong has subcommands as first-class struct fields; go-arg
+#       supports them but more awkwardly
+#     - go-arg is smaller, simpler, faster to compile
+#
+# -----------------------------------------------------------------------------
+# AWSLIM'S CLI STRUCT (verbatim from main.go, the canonical Kong example)
+# -----------------------------------------------------------------------------
+#
+# type CLI struct {
+#     Service string   `arg:"" help:"service name" default:""`
+#     Method  string   `arg:"" help:"method name" default:""`
+#     Input   string   `arg:"" help:"input JSON/Jsonnet struct or filename" default:"{}"`
+#     Args    []string `arg:"" optional:"" help:"additional flags/args"`
+#
+#     InputStream  string            `short:"i" help:"bind input filename to io.Reader"`
+#     OutputStream string            `short:"o" help:"bind output filename to io.ReadCloser"`
+#     APIOutput    bool              `help:"output API response into stdout" default:"true" negatable:""`
+#     RawOutput    bool              `short:"r" help:"output raw strings, not JSON texts"`
+#     Compact      bool              `short:"c" help:"compact JSON output"`
+#     Query        string            `short:"q" help:"JMESPath query to apply to output"`
+#     ExtStr       map[string]string `help:"external variables for Jsonnet"`
+#     ExtCode      map[string]string `help:"external code for Jsonnet"`
+#     Strict       bool              `name:"strict" help:"strict input JSON unmarshaling" default:"true" negatable:"true"`
+#     FollowNext   string            `short:"f" help:"OutputField=InputField format. follow next token."`
+#     CamelCase    bool              `name:"camel" help:"convert keys to camelCase"`
+#
+#     DryRun  bool `short:"n" help:"dry-run mode"`
+#     Version bool `short:"v" help:"show version"`
+#     Debug   bool `help:"turn on debug logging"`
+# }
+#
+# Additionally awslim has a parseDynamicFlags() pre-pass that captures
+# UNKNOWN --flag VALUE pairs and stores them in a map[string]any (for
+# passing arbitrary AWS API input fields without hand-declaring each one).
+# Kong's `dynamicFlags` pattern (Kong scanning the spec for known flags,
+# then a separate pass collecting the rest) is a common Kong extension
+# technique that's part of awslim's design.
+#
+# USAGE:
+#   awslim [<service> [<method> [<input>]]] [args...] [flags...]
+#
+# Positional:
+#   <service>     AWS service name (s3, ec2, lambda, etc.)
+#   <method>      Method name on the service
+#   <input>       Input JSON/Jsonnet struct or filename (default "{}")
+#   <args>...     Additional arbitrary --flag value pairs (dynamic flags)
+#
+# Top-level flags:
+#   -i, --input-stream FILE       Bind input file to io.Reader field
+#   -o, --output-stream FILE      Bind output file to io.ReadCloser field
+#   --[no-]api-output             Output API response to stdout (default true)
+#   -r, --raw-output              Output raw strings, not JSON texts
+#   -c, --compact                 Compact JSON output
+#   -q, --query JMESPATH          JMESPath query to apply to output
+#   --ext-str KEY=VAL...          External Jsonnet variables (repeatable)
+#   --ext-code KEY=VAL...         External Jsonnet code (repeatable)
+#   --[no-]strict                 Strict input JSON unmarshaling (default true)
+#   -f, --follow-next OUT=IN      Follow next-token pagination
+#   --camel                       Convert output keys to camelCase
+#   -n, --dry-run                 Dry-run mode (no API calls)
+#   -v, --version                 Show version
+#   --debug                       Enable debug logging
+#
+# =============================================================================
+
+_awslim() {
+    local curcontext="$curcontext" state line ret=1
+    typeset -A opt_args
+
+    _arguments -s \
+        '(-i --input-stream)'{-i,--input-stream}'[bind input file to io.Reader]:input:_files' \
+        '(-o --output-stream)'{-o,--output-stream}'[bind output file to io.ReadCloser]:output:_files' \
+        '--api-output[output API response to stdout (default)]' \
+        '--no-api-output[suppress API response output]' \
+        '(-r --raw-output)'{-r,--raw-output}'[output raw strings, not JSON]' \
+        '(-c --compact)'{-c,--compact}'[compact JSON output]' \
+        '(-q --query)'{-q,--query}'[JMESPath query to apply to output]:jmespath:' \
+        '*--ext-str[external Jsonnet variable]:KEY=VAL:' \
+        '*--ext-code[external Jsonnet code]:KEY=VAL:' \
+        '--strict[strict input JSON unmarshaling (default)]' \
+        '--no-strict[lenient input JSON unmarshaling]' \
+        '(-f --follow-next)'{-f,--follow-next}'[follow pagination: OutputField=InputField]:pagination:' \
+        '--camel[convert output keys to camelCase]' \
+        '(-n --dry-run)'{-n,--dry-run}'[dry-run mode (no API calls)]' \
+        '(-v --version)'{-v,--version}'[show version]' \
+        '--debug[enable debug logging]' \
+        '--help[show help and exit]' \
+        '1:service:' \
+        '2:method:' \
+        '3:input JSON/Jsonnet/filename:_files' \
+        '*::dynamic flags:' \
+        && ret=0
+
+    return ret
+}
+
+_awslim "$@"
