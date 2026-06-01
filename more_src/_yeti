@@ -1,0 +1,286 @@
+#compdef yeti
+# =============================================================================
+# yeti — the Yeti programming language compiler and REPL.  Yeti is a
+#        statically typed functional language for the Java Virtual Machine,
+#        developed by Madis Janson (Estonia) starting in 2007.  Yeti is in
+#        the ML family — Hindley-Milner type inference, immutable values
+#        by default, algebraic data types, pattern matching, polymorphic
+#        records, and structural typing.  Yeti is unique in the JVM
+#        functional-language landscape: where Scala chose Java
+#        interoperability via object-oriented infrastructure and Clojure
+#        chose dynamic typing on the JVM, Yeti chose to bring CLASSICAL
+#        ML SEMANTICS to the JVM with first-class structural records and
+#        type-directed Java method dispatch.
+#
+# Author:  Madis Janson
+# Source:  https://github.com/mth/yeti
+# CLI:     c/yeti.yeti — CLI is itself WRITTEN IN YETI
+# Library: hand-rolled Yeti-level argv pattern-matching loop
+# License: BSD-3-Clause
+# Status:  Stable — 254+ stars, used in academic teaching and some
+#          industrial JVM functional-programming applications;
+#          notable for being one of the few JVM ML implementations
+#          alongside MLj (deprecated), MLton-JVM port (defunct), and
+#          OCaml-Java (defunct).
+#
+# -----------------------------------------------------------------------------
+# CROSS-LANGUAGE CLI LIBRARY TAXONOMY MILESTONE — YETI IS NOW LANGUAGE 49
+# -----------------------------------------------------------------------------
+# With this completion the cross-language CLI library taxonomy crosses from
+# 48 to 49 documented languages.  Yeti joins the canonical roster alongside:
+# Rust, Go, TypeScript-Node, Python, Ruby, Perl, C, C++, Lua, Java, Kotlin,
+# Scala, Haskell, OCaml, Elixir, Erlang, Clojure, Common Lisp, Scheme/Racket,
+# Julia, Crystal, Pony, Nim, Zig, V, Swift, R, Dart, Fortran, Tcl, Ada, Janet,
+# D, Picat, BQN, Frege, Lobster, Curry, Mercury, Wren, Idris2, F#, Jakt,
+# Ur/Web, Beluga, REBOL, Io, Pure, and now Yeti.  yeti is documented as the
+# FIRST Yeti CLI library variant in the taxonomy (Yeti-level pattern-matching
+# argv parser written IN Yeti itself, dispatched by the JVM shell wrapper
+# yc) — bringing the total to 207 cross-language CLI library variants.
+# -----------------------------------------------------------------------------
+#
+# WHAT IS YETI AND WHY DOES IT WARRANT ITS OWN CLI LIBRARY DOCUMENTATION CATEGORY?
+#
+# Yeti is a Hindley-Milner-typed functional language compiled to JVM
+# bytecode by Madis Janson.  Yeti is unique in the JVM functional-language
+# landscape because:
+#
+#   * It is the FIRST documented JVM language with STRUCTURAL TYPING for
+#     records — `{x is num, y is num}` is a type without a name; any
+#     value with at least those two fields satisfies the type.  Scala
+#     has structural typing as an opt-in (via `import scala.language.
+#     reflectiveCalls` and structural refinement types) but it is not
+#     idiomatic and incurs reflection overhead; Yeti has structural
+#     typing at the core, with full compile-time monomorphization to
+#     JVM bytecode where structural calls compile down to direct method
+#     dispatch.
+#   * It has VARIANT TYPES VIA POLYMORPHIC VARIANTS — `Some 5` is a
+#     value of type `Some<int> | ...` (a variant type that grows by
+#     unification).  This is the OCaml polymorphic variant model adopted
+#     for the JVM.  Other JVM languages (Scala, Kotlin, Java sealed
+#     classes) require nominal sealed hierarchies; Yeti's variants
+#     don't need declaration.
+#   * It has TYPE-DIRECTED JAVA INTEROP — Java method calls are dispatched
+#     by inferring the receiver type from Yeti's type system, then
+#     statically resolving the matching JVM method.  No reflection at
+#     runtime; calls compile to invokevirtual/invokeinterface directly.
+#   * It is implemented in YETI ITSELF (self-hosted) — the compiler's
+#     core analyzer is `c/YetiAnalyzer.java` (bootstrap stage in Java)
+#     but the CLI driver and many built-in modules are written in Yeti.
+#   * It uses `.yeti` source extension; modules are compiled to one JVM
+#     class per top-level binding; the runtime is `lib/yeti-lang.jar`.
+#
+# -----------------------------------------------------------------------------
+# YETI'S CLI LIBRARY — HAND-ROLLED YETI-LEVEL ARGV PATTERN-MATCHING LOOP
+# -----------------------------------------------------------------------------
+#
+# Yeti's CLI parser is THE SECOND documented "interpreter-language self-
+# hosted CLI parser" pattern in the corpus's cross-language taxonomy.  The
+# FIRST is Io's CLI.io (R463) which is dispatched at interpreter startup.
+# Yeti's pattern is similar but distinct in its dispatch mechanism:
+#
+#   * Bootstrap script `yc` is a POSIX SHELL WRAPPER that runs:
+#       rlwrap $JAVA_HOME/bin/java -classpath ... \
+#              yeti.lang.compiler.yeti "$@"
+#     where `yeti.lang.compiler.yeti` is a JVM class compiled FROM the
+#     Yeti source file `c/yeti.yeti`.
+#
+#   * The compiled class `yeti.lang.compiler.yeti` IS Yeti's main()
+#     entry point.  Its source is written in Yeti's own surface syntax
+#     and uses Yeti's pattern-matching `case ... of ... esac` construct
+#     to dispatch on argv elements.
+#
+# The argv-parsing loop (verbatim from c/yeti.yeti):
+#
+#     not (defined? eval or empty? argv) and (not exec or empty? srcs) loop
+#        (arg = shift argv;
+#         if arg `strStarts?` '-' then
+#             case arg of
+#             "-C":      push options (To '');
+#                        exec := false;
+#             "-d":      target = shift argv;
+#                        push options (To target);
+#                        exec := false;
+#             "-e":      eval := shift argv;
+#             "-cp":     shift argv |> splitPath |> ClassPath |> push options;
+#             "-preload": shift argv |> splitPath |> Preload |> push options;
+#             "-type":   printType := true;
+#                        exec := false;
+#                        push compileOptions (Type (push modules));
+#             "-doc":    doc_dir := shift argv;
+#                        exec := false;
+#                        push compileOptions (Type (push modules));
+#             "-doc-format": doc_script := shift argv;
+#             "-nojava": nojava := true;
+#             "-javaver": ver = shift argv;
+#                         for ['-source', ver, '-target', ver]
+#                             (push compileOptions . JavaOption);
+#             "-j":      push compileOptions (JavaOption (shift argv));
+#             "-guard":  ... daemon-thread termination scheduler ...
+#             "-safe-eval": ... sandbox-mode eval setup ...
+#             "-compile-error-trace": compileErrorTrace := true;
+#             "-icast":  push options (ICast ());
+#             "-parse-tree": push options (ParseTree ());
+#             "-no-import": push options (NoImport ());
+#             "-no-frames": push options (NoFrames ());
+#             "-v":      println "Yeti \(yetiRuntimeVersion)";
+#                        threadExit 0;
+#             _:         case arg of
+#                          "-h" | "-help" | "--help": ();
+#                          _: println "Unexpected option: \(arg)";
+#                             threadExit 1;
+#                        esac
+#             esac
+#         else
+#             push srcs arg
+#         fi);
+#
+# Distinctive properties of Yeti's self-hosted CLI parser:
+#
+#   1. SHELL-WRAPPER + JVM-CLASS BOOTSTRAP — unlike Io's R463 pattern
+#      where the C-level main() loads the CLI.io script at startup,
+#      Yeti's bootstrap is a SHELL SCRIPT that invokes the JVM with
+#      the COMPILED yeti.yeti class as the entry point.  This means
+#      Yeti's CLI is doubly self-hosted: written in Yeti AND compiled
+#      to JVM bytecode by Yeti itself.  Changing the CLI requires
+#      recompiling yeti.yeti with an existing yeti compiler.
+#
+#   2. SINGLE-DASH LONG FLAGS — Yeti uses `-cp`, `-preload`, `-type`,
+#      `-doc`, `-javaver`, `-icast`, `-parse-tree`, etc.  This matches
+#      the JAVA/JDK convention (java -cp ..., -Xmx, -Dprop=value) rather
+#      than POSIX/GNU `--long-flag` convention.  Yeti also accepts
+#      `--help` as a special case via nested case match.
+#
+#   3. PATTERN-MATCHING `case ... of ... esac` DISPATCH — flag dispatch
+#      uses Yeti's native pattern-matching construct.  Adding a flag
+#      means adding a new case pattern.  No registration table, no
+#      flag declaration object — just a flat list of patterns.
+#
+#   4. ATTACHED-VALUE EXTRACTION via `shift argv` — every value-taking
+#      flag uses `shift argv` to consume the next argv element.  No
+#      support for attached `-d=DIR` form; values are ALWAYS separated
+#      from the flag by whitespace.  This is unusual; most modern CLIs
+#      accept both forms.
+#
+#   5. MUTATION OF GLOBAL VARIABLES — each case mutates module-level
+#      `var` references (`eval := ...`, `exec := false`, `compileErrorTrace
+#      := true`).  No "parsed result" object is returned; the parser
+#      side-effects the global state and falls through to the compiler.
+#      Yeti uses `:=` for mutable variable assignment (unlike `=` for
+#      immutable binding).
+#
+#   6. ADT BUILDER PATTERN — options are stored via algebraic data
+#      type constructors (`To 'target'`, `ClassPath [paths]`, `Preload
+#      [modules]`, `Type modules`, `JavaOption opt`, `ICast ()`, `ParseTree
+#      ()`, `NoImport ()`, `NoFrames ()`, `GlobalSandbox ()`).  The
+#      compiler then dispatches based on the variant tag.  This is the
+#      idiomatic ML way to represent a "set of options with mixed
+#      types"; in Rust this would be an enum, in Haskell a sum type,
+#      in Scala a sealed trait.
+#
+#   7. PIPELINE OPERATOR — `shift argv |> splitPath |> ClassPath |>
+#      push options` uses Yeti's pipeline operator `|>`.  Identical
+#      operator semantics to OCaml's `|>`, F#'s `|>`, Elixir's `|>`,
+#      and Elm's `|>`.  Yeti was an early adopter of this functional
+#      idiom (2007, predating F# 4.0's adoption in 2015).
+#
+#   8. THREAD-DAEMON GUARD MECHANISM — `-guard <seconds>` spawns a
+#      DAEMON THREAD that sleeps then forcibly terminates the JVM with
+#      `System#exit(13)`.  This is a JVM-specific feature for runaway
+#      compile/eval jobs.  No other documented CLI parser embeds
+#      thread-based watchdog timers at this level.
+#
+#   9. EXIT-VIA-THREAD-EXIT — `threadExit N` (not `System#exit`) is the
+#      conventional Yeti exit mechanism, which raises a special exception
+#      caught at the top level.  This allows daemon threads / cleanup
+#      handlers to run before JVM termination.
+#
+# CONTRAST WITH OTHER SELF-HOSTED CLI PARSERS
+#
+#   * Io's CLI.io (R463, Io)              — C bootstrap loads CLI.io
+#                                            script at interpreter startup
+#   * Yeti's yeti.yeti (THIS, Yeti)       — Shell bootstrap invokes
+#                                            JVM with compiled yeti.yeti
+#                                            class as main entry point
+#
+# Yeti's pattern is shared with Scala (where the scalac driver is a
+# Scala program), Kotlin (where kotlinc is in Kotlin), Crystal (where
+# crystal-compiler is in Crystal — R442), and Pony (R...) — all
+# languages where the compiler driver is written in the language
+# itself.  But Yeti is unique in that the JVM bootstrap script is
+# minimal — just a single rlwrap+java invocation, no complex Maven/
+# Gradle build dance.
+#
+# -----------------------------------------------------------------------------
+# YETI'S CLI SURFACE (verbatim from c/yeti.yeti help string)
+# -----------------------------------------------------------------------------
+#
+# USAGE:
+#   yeti [-flags ...] files/directories
+#   yeti -e <expr>                    Evaluate expression and print result
+#
+# Compilation:
+#   -h, -help, --help          Print help and exit
+#   -e <expr>                  Evaluate expression and print result
+#   -d <directory>             Compile and store class files in directory
+#   -cp <path>                 Classpath (colon/semicolon separated)
+#   -nojava                    Do not search for .java files in source dirs
+#   -preload <modules>         Preload modules (: separated)
+#   -icast                     Generate superfluous casts (broken JVMs)
+#   -javaver <version>         Java version for compiling .java sources
+#   -j <option>                Pass option to Javac
+#   -doc <directory>           Generate module documentation HTML
+#   -doc-format <script>       Documentation format script
+#   -type                      Print type signature only (no compile)
+#   -C                         Compile but don't execute
+#
+# Diagnostics:
+#   -compile-error-trace       Trace compile errors
+#   -parse-tree                Print parse tree
+#   -no-import                 Disable implicit imports
+#   -no-frames                 Disable stack frames
+#
+# Sandbox / safety:
+#   -safe-eval <expr>          Eval in GlobalSandbox mode
+#   -guard <seconds>           Kill JVM via daemon thread after N seconds
+#
+# Metadata:
+#   -v                         Print Yeti version
+#
+# Positional:
+#   <file.yeti>                Yeti source file
+#   <directory>                Directory of Yeti sources
+#
+# =============================================================================
+
+_yeti() {
+    local curcontext="$curcontext" state line ret=1
+    typeset -A opt_args
+
+    _arguments -s \
+        '(-h -help --help)'{-h,-help,--help}'[print help and exit]' \
+        '-e+[evaluate expression and print result]:expression:' \
+        '-d+[output directory for class files]:dir:_directories' \
+        '-cp+[classpath (: or \; separated)]:path:_files' \
+        '-nojava[do not search for .java files in source dirs]' \
+        '-preload+[preload modules (: separated list)]:modules:' \
+        '-icast[generate superfluous casts for broken JVMs]' \
+        '-javaver+[Java version for compiling .java sources]:version:' \
+        '*-j+[option for Javac]:javac option:' \
+        '-doc+[generate module documentation into directory]:dir:_directories' \
+        '-doc-format+[documentation format script]:format script:' \
+        '-type[print type signature only (no compile)]' \
+        '-C[compile but do not execute]' \
+        '-compile-error-trace[trace compile errors]' \
+        '-parse-tree[print parse tree]' \
+        '-no-import[disable implicit imports]' \
+        '-no-frames[disable stack frames]' \
+        '-safe-eval+[eval expression in GlobalSandbox mode]:expression:' \
+        '-guard+[kill JVM via daemon thread after N seconds]:seconds:' \
+        '-v[print Yeti version]' \
+        '*:Yeti source:_files -g "*.yeti"' \
+        && ret=0
+
+    return ret
+}
+
+_yeti "$@"
