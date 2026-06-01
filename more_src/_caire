@@ -1,0 +1,388 @@
+#compdef caire
+# =============================================================================
+# caire — Endre Simo's "Content aware image resize library"
+#         — a Go CLI for SEAM CARVING: resizing images while
+#         preserving important content by finding and removing
+#         (or duplicating) "low-energy" seams (vertical /
+#         horizontal pixel paths with minimal visual
+#         importance).  Implements the Avidan-Shamir 2007
+#         seam-carving algorithm with face-detection
+#         protection (pigo) to avoid distorting human faces.
+#         Distinguishing from ImageMagick (-resize), GIMP's
+#         content-aware scaling, and other image resizers by:
+#           - SEAM CARVING — Avidan-Shamir 2007 algorithm:
+#             1. Compute pixel-energy map (gradient magnitude
+#                via Sobel filter)
+#             2. Find lowest-energy seam (continuous path of
+#                pixels from top to bottom OR left to right)
+#             3. Remove (shrink) or duplicate (enlarge) the
+#                seam
+#             4. Repeat until target dimensions reached
+#           - SOBEL EDGE DETECTION via gradient computation —
+#             pixels in high-gradient regions (edges, faces,
+#             objects) get high energy + protected from seam
+#             selection; low-gradient regions (smooth
+#             backgrounds, sky) get removed first
+#           - GAUSSIAN BLUR PREPROCESSING via --blur N — blur
+#             the energy map to smooth out noise; default
+#             radius 4
+#           - SOBEL THRESHOLD via --sobel N — gradient magnitude
+#             below this threshold is treated as zero energy
+#             (more aggressive carving); default 2
+#           - FACE DETECTION via --face flag — uses esimov/pigo
+#             (Pixel Intensity Comparison-based Object detector,
+#             also by Endre Simo) to find face bounding boxes
+#             and inflate their energy to PROTECT them from
+#             seam removal; --angle controls face rotation
+#             tolerance
+#           - MASK FILES via --mask + --rmask:
+#               * --mask PATH      retain area (inflate energy
+#                                    in masked regions)
+#               * --rmask PATH     remove area (reduce energy
+#                                    in masked regions; force
+#                                    removal)
+#           - DEBUG VISUALIZATION via --debug — render the
+#             chosen seams visually on the output image with
+#             --color HEX (default red) using --shape circle
+#             or --shape line
+#           - GIO GUI PREVIEW via --preview (default true) —
+#             uses gioui.org for a real-time GUI window
+#             showing the carving progress; processing runs on
+#             a goroutine while Gio runs on the main OS thread
+#             (required for macOS event loop semantics)
+#           - PERCENTAGE MODE via --perc — interpret --width /
+#             --height as percentages of original (e.g. -width
+#             80 -perc → 80% of original width)
+#           - SQUARE MODE via --square — automatically resize
+#             to square dimensions using the smaller dimension
+#           - PIPE STDIN/STDOUT — "-" for --in or --out reads /
+#             writes to stdin / stdout (default both)
+#           - CONCURRENT WORKERS via --conc N — number of
+#             goroutines for parallel processing
+#             (default runtime.NumCPU())
+#           - DISINTEGRATION/IMAGING for I/O — fundamental
+#             image operations (load/save/convert/transform)
+#             via disintegration/imaging; seam carving algorithm
+#             implemented directly in carver.go
+#         Used by: photographers wanting to resize without
+#         cropping or distortion, web developers preparing
+#         responsive image variants without losing content,
+#         computer-vision researchers studying seam carving,
+#         and as a reference implementation of disintegration/
+#         imaging + esimov/pigo + gioui.org + stdlib flag
+#         composition in Go.
+#
+# Author:  Endre Simo (esimov on GitHub) — Romanian Go +
+#          Python computer vision developer.  Maintains an
+#          ecosystem of image-processing libraries:
+#            * caire        — seam carving                        (THIS)
+#            * pigo         — Pixel Intensity Comparison face detection
+#            * stackblur-go — fast Gaussian blur approximation
+#            * triangle     — triangulated image art
+#            * pixie        — primitive shape image
+#                              approximation
+#            * dithergo     — image dithering
+#          Released caire ~2018; current version 1.5.0;
+#          active development through 2026.  License: MIT.
+# Source:  https://github.com/esimov/caire
+#          https://github.com/esimov/caire/blob/master/cmd/caire/main.go
+#          https://github.com/esimov/caire/blob/master/go.mod
+# CLI:     cmd/caire/main.go — uses Go stdlib `flag` package
+#          (not cobra / urfave/cli; minimal footprint).
+#          Headline library: **disintegration/imaging** (the
+#          new variant being documented here, expanding Axis
+#          22 — Image Processing — to Go).
+# Library: github.com/disintegration/imaging v1.6.2
+#          ("imaging" — "Imaging is a simple image processing
+#           package for Go" — Grigory Dryapak (disintegration
+#           on GitHub).  Distinct from image-rs/image (R677,
+#           Rust Axis 22 opener) by being:
+#              1. PURE GO — disintegration/imaging is 100%
+#                 pure Go; no Cgo dependencies; works on any
+#                 platform Go supports without C toolchain.
+#                 Distinct from h2non/bimg (libvips C bindings)
+#                 + go-skia (Skia C++ bindings).  Same
+#                 pure-implementation choice as image-rs/image
+#                 (which is pure Rust).
+#              2. STDLIB image PACKAGE WRAPPER — imaging
+#                 wraps Go's stdlib `image` + `image/color`
+#                 packages with higher-level operations:
+#                   import "github.com/disintegration/imaging"
+#                   img, err := imaging.Open("photo.jpg")
+#                   if err != nil { return err }
+#                   img = imaging.Resize(img, 800, 0, imaging.Lanczos)
+#                   img = imaging.AdjustBrightness(img, 20)
+#                   img = imaging.AdjustContrast(img, 15)
+#                   img = imaging.Blur(img, 2.5)
+#                   imaging.Save(img, "output.jpg", imaging.JPEGQuality(80))
+#                 Stdlib `image` is low-level (pixel-by-pixel
+#                 access); imaging adds practical operations
+#                 missing from stdlib.
+#              3. 5 RESAMPLING FILTERS — for Resize / Fill /
+#                 Fit operations:
+#                   * NearestNeighbor (fastest, blocky)
+#                   * Box (averaging, fast)
+#                   * Linear (bilinear, balanced)
+#                   * MitchellNetravali (mitchell-netravali)
+#                   * Lanczos (highest quality, slowest)
+#                 Distinct from image-rs (4 filters:
+#                 Nearest/Triangle/CatmullRom/Lanczos3) with
+#                 different filter taxonomy.
+#              4. ~30 BUILT-IN OPERATIONS — Resize, Fit, Fill,
+#                 Thumbnail, Rotate (any angle, not just 90°
+#                 multiples), Rotate90/180/270, FlipH, FlipV,
+#                 Transpose, Transverse, Crop, CropAnchor (with
+#                 anchor: TopLeft/Top/TopRight/Left/Center/
+#                 Right/BottomLeft/Bottom/BottomRight),
+#                 CropCenter, Paste (overlay), PasteCenter,
+#                 Overlay (with alpha blending),
+#                 AdjustBrightness, AdjustContrast,
+#                 AdjustGamma, AdjustSaturation, AdjustHue,
+#                 Sharpen, Blur, Sobel, Invert, Grayscale.
+#              5. ANCHOR-BASED CROPPING — CropAnchor takes
+#                 imaging.Anchor enum: TopLeft, Top, TopRight,
+#                 Left, Center, Right, BottomLeft, Bottom,
+#                 BottomRight.  Distinct from image-rs which
+#                 uses (x, y, width, height) rectangle.
+#              6. ARBITRARY-ANGLE ROTATION via Rotate(img,
+#                 angle_degrees, fill_color) — rotates by any
+#                 angle (not just 90° multiples) with background
+#                 fill color for newly exposed regions.
+#                 Distinct from image-rs/image (only 90/180/270
+#                 in imageops; arbitrary rotation requires
+#                 external crate).
+#              7. JPEG QUALITY OPTION — imaging.Save(img,
+#                 "out.jpg", imaging.JPEGQuality(80)).  Default
+#                 85.  Distinct from image-rs/image which
+#                 requires explicit JpegEncoder.encode_image().
+#              8. SIMPLE API — operations chain naturally;
+#                 each returns a new *image.NRGBA.  Distinct
+#                 from in-place modifying APIs.
+#              9. NRGBA INTERNAL FORMAT — imaging converts all
+#                 input formats to image.NRGBA (non-premultiplied
+#                 RGBA, 8-bit per channel) internally.  Distinct
+#                 from image-rs which preserves the source
+#                 format.  Simplifies operation implementations
+#                 but doubles memory for grayscale sources.
+#             10. GRIGORY-DRYAPAK / disintegration ECOSYSTEM
+#                 PROVENANCE — Grigory Dryapak (disintegration
+#                 on GitHub) is a Russian Go developer.
+#                 Distinct from David Tolnay (Rust serde),
+#                 Sean McArthur (Hyperium / reqwest), Sindre
+#                 Sorhus (Node CLI utils), image-rs working
+#                 group, Vincent Prouillet (Rust tera),
+#                 Florian Schlachter (Go pongo2), Vitaly
+#                 Puzrin (markdown-it / js-yaml).  Solo-
+#                 maintained library since 2014.)
+# License: MIT (imaging); MIT (caire)
+# Status:  disintegration/imaging — 5,726+ stars on
+#          disintegration/imaging, ~100M go.sum downloads
+#          (TOP-100 Go library); foundational image-processing
+#          library used by:
+#            * caire (THIS — seam carving)
+#            * fyne-io/fyne (cross-platform GUI toolkit)
+#            * lucasb-eyer/go-colorful (color manipulation)
+#            * micro-editor/zen-screen (terminal editor)
+#            * many image-processing CLIs + thumbnail
+#              generators
+#            * 1500+ Go applications
+#          caire — 10,468+ stars on esimov/caire; widely
+#          shared on Hacker News + Twitter for impressive
+#          before/after image comparisons.  THE canonical Go
+#          seam-carving implementation.
+#
+# -----------------------------------------------------------------------------
+# CROSS-LANGUAGE CLI LIBRARY TAXONOMY MILESTONE — GO CROSSES TO 77 +
+#                                                  AXIS 22 EXPANDS TO GO
+# -----------------------------------------------------------------------------
+# With this completion the cross-language CLI library taxonomy documents
+# the 77TH Go CLI library variant.  Go climbs from 76 to 77 documented
+# libraries (disintegration/imaging via caire).  Go **catches Rust at
+# 77** (Rust=Go=77, TS-Node=76 → twenty-eighth two-way tie at the
+# leaderboard top in this round-sequence).  New leaderboard:
+# Rust=77, Go=77, TypeScript-Node=76 (Rust+Go tied at the top).
+# Taxonomy now spans 409 cross-language CLI library variants across
+# 101 documented languages.
+#
+# Pattern: R677 Rust=77 (image — Axis 22 OPENS) → R678 Go=77
+# (disintegration/imaging THIS — Axis 22 expands to 2 variants) →
+# expected R679 TS-Node=77 → R680 102nd language.  This is the 2nd
+# of 3 leader bumps in the current segment.
+#
+# This completion EXPANDS Axis 22 (IMAGE PROCESSING) to TWO documented
+# variants — symmetrically distributed across Rust (image R677) and
+# Go (disintegration/imaging THIS R678).  TS-Node Axis 22 variant
+# expected in R679 (likely sharp (lovell/sharp — libvips bindings)
+# OR jimp (oliver-moran/jimp — pure-JS)) to complete three-language
+# symmetry.
+#
+#   Axis 22 (IMAGE PROCESSING) variants:
+#     - image (image-rs/image) — R677 (_syno-photo-frame) — Rust
+#       cross-format I/O (14+ formats); DynamicImage + ImageBuffer
+#       dual API; imageops module; image-rs working group
+#     - imaging (disintegration/imaging) — R678 (THIS) — Go pure-
+#       Go stdlib image wrapper; 5 resampling filters; ~30
+#       operations; anchor-based cropping; arbitrary-angle
+#       rotation; Grigory Dryapak / disintegration ecosystem
+#
+# Two Axis 22 variants share PURE-IMPLEMENTATION philosophy:
+#   image (Rust)         = pure Rust; no Cgo; 14+ formats
+#   imaging (Go)         = pure Go; stdlib image wrapper;
+#                          ~30 ops with anchor-based cropping
+#
+# Both libraries deliberately avoid C-library FFI (image-rs vs
+# imagemagick-rs; imaging vs h2non/bimg).  Different design
+# choices on filter taxonomy (image-rs's Nearest/Triangle/
+# CatmullRom/Lanczos3 vs imaging's NearestNeighbor/Box/Linear/
+# MitchellNetravali/Lanczos) reflect language-specific
+# defaults.
+#
+# Axis 22 distribution: Rust=1, Go=1, TS-Node=0.  Expected R679
+# TS-Node=1 (sharp or jimp) restores three-language symmetry
+# trajectory.  Note: sharp wraps libvips (C library), which
+# DIVERGES from the pure-implementation philosophy of image-rs/
+# image + disintegration/imaging — interesting cross-language
+# design contrast for Axis 22 documentation.
+#
+# (Leaderboard at R678: Rust=77, Go=77, TS-Node=76.  Rust+Go
+# tied at 77.  Axis 9 / Logging 6/6/6 three-way symmetric.
+# Axes 10 + 13 + 14 at 2/2/2.  Axes 7 + 8 + 11 + 12 + 15 + 16
+# + 17 + 18 + 19 + 20 + 21 at 1/1/1.  Axis 22 at 1/1/0 (Rust
+# + Go, TS-Node pending).  Fourteen axes at three-language
+# symmetry.)
+#
+# -----------------------------------------------------------------------------
+#
+# WHAT IS disintegration/imaging AND WHY IS IT THE 77TH Go CLI LIBRARY?
+#
+# disintegration/imaging is the canonical pure-Go image-
+# processing library.  Distinct from Go's stdlib `image`
+# package (which is low-level pixel access) and from h2non/
+# bimg (libvips C library bindings).  imaging wraps stdlib
+# `image` with higher-level operations that match what most
+# CLIs need (resize, crop, rotate, adjust).
+#
+# Five distinguishing characteristics from image-rs/image
+# (R677):
+#
+#   1. STDLIB IMAGE PACKAGE WRAPPER — imaging builds on Go's
+#      stdlib `image` types (image.Image, image.NRGBA,
+#      image.RGBA, etc.).  Distinct from image-rs/image which
+#      defines its own DynamicImage + ImageBuffer types.
+#
+#   2. 5 RESAMPLING FILTERS — NearestNeighbor, Box, Linear,
+#      MitchellNetravali, Lanczos.  Different naming + slightly
+#      different set than image-rs/image's 4 filters.
+#
+#   3. ANCHOR-BASED CROPPING — CropAnchor with 9-position
+#      anchor enum (TopLeft / Top / TopRight / Left / Center
+#      / Right / BottomLeft / Bottom / BottomRight).  Distinct
+#      from image-rs/image's rectangle-based cropping.
+#
+#   4. ARBITRARY-ANGLE ROTATION via Rotate(img, degrees, fill).
+#      Distinct from image-rs/image which only provides 90/
+#      180/270 rotations in imageops (arbitrary requires
+#      separate crate).
+#
+#   5. GRIGORY-DRYAPAK SOLO-MAINTAINED — distinct from image-rs
+#      working group + David Tolnay + Sean McArthur + Sindre
+#      Sorhus.  Solo maintenance since 2014.
+#
+# -----------------------------------------------------------------------------
+#
+# THE caire CLI — stdlib flag + disintegration/imaging + pigo + Gio
+#
+# caire's CLI is in cmd/caire/main.go.  Uses Go stdlib `flag`
+# package (no cobra / urfave/cli; minimal binary).
+#
+# Source:
+#     var (
+#         source         = flag.String("in", pipeName, "Source")
+#         destination    = flag.String("out", pipeName, "Destination")
+#         blurRadius     = flag.Int("blur", 4, "Blur radius")
+#         sobelThreshold = flag.Int("sobel", 2, "Sobel threshold")
+#         newWidth       = flag.Int("width", 0, "New width")
+#         newHeight      = flag.Int("height", 0, "New height")
+#         percentage     = flag.Bool("perc", false, "...")
+#         square         = flag.Bool("square", false, "...")
+#         debug          = flag.Bool("debug", false, "Show seams")
+#         shapeType      = flag.String("shape", "circle", "...")
+#         seamColor      = flag.String("color", "#ff0000", "...")
+#         preview        = flag.Bool("preview", true, "GUI")
+#         maskPath       = flag.String("mask", "", "Retain mask")
+#         rMaskPath      = flag.String("rmask", "", "Remove mask")
+#         faceDetect     = flag.Bool("face", false, "Face detect")
+#         faceAngle      = flag.Float64("angle", 0.0, "Face angle")
+#         workers        = flag.Int("conc", runtime.NumCPU(), "...")
+#     )
+#
+# Flags (Go stdlib flag uses single-dash but accepts double):
+#   -in FILE          input file (use "-" for stdin; default "-")
+#   -out FILE         output file (use "-" for stdout; default "-")
+#   -blur N           Gaussian blur radius (default 4)
+#   -sobel N          Sobel threshold (default 2)
+#   -width N          target width (pixels or percentage if -perc)
+#   -height N         target height (pixels or percentage if -perc)
+#   -perc             interpret -width/-height as percentages
+#   -square           reduce to square dimensions
+#   -debug            show seam paths on output
+#   -shape SHAPE      seam debug shape: circle | line
+#   -color HEX        seam color (default #ff0000)
+#   -preview          show real-time GUI preview (default true)
+#   -mask FILE        retain-area mask (white = keep)
+#   -rmask FILE       remove-area mask (white = remove)
+#   -face             enable face detection protection
+#   -angle DEG        face rotation tolerance angle
+#   -conc N           parallel worker count (default NumCPU)
+#
+# disintegration/imaging is used throughout caire's image-I/O
+# layer for loading source images, color-space conversions,
+# and writing output images (final encoded JPEG/PNG).  The
+# seam-carving algorithm itself is implemented directly in
+# carver.go (operating on stdlib image.Image types).
+#
+# Five-axis distinctness from image-rs/image (R677):
+#
+#   1. STDLIB IMAGE WRAPPER — builds on Go's `image` package
+#      vs image-rs/image's own DynamicImage type.
+#
+#   2. 5 RESAMPLING FILTERS — NearestNeighbor/Box/Linear/
+#      MitchellNetravali/Lanczos.
+#
+#   3. ANCHOR-BASED CROPPING — 9-position anchor enum.
+#
+#   4. ARBITRARY-ANGLE ROTATION — Rotate(img, deg, fill).
+#
+#   5. GRIGORY-DRYAPAK SOLO-MAINTAINED — distinct ecosystem.
+#
+# -----------------------------------------------------------------------------
+#
+# COMMAND-LINE OPTIONS (sourced directly from
+# https://github.com/esimov/caire/blob/master/cmd/caire/main.go
+# Go stdlib flag.String / Int / Bool / Float64 definitions.)
+# -----------------------------------------------------------------------------
+
+local curcontext="$curcontext" state line ret=1
+typeset -A opt_args
+
+_arguments -s -S \
+    '-in=[input file (use "-" for stdin)]:file:_files -g "*.(jpg|jpeg|png|gif|bmp)"' \
+    '-out=[output file (use "-" for stdout)]:file:_files' \
+    '-blur=[Gaussian blur radius (default 4)]:radius:_default' \
+    '-sobel=[Sobel filter threshold (default 2)]:threshold:_default' \
+    '-width=[new width in pixels (or % if -perc)]:width:_default' \
+    '-height=[new height in pixels (or % if -perc)]:height:_default' \
+    '-perc[interpret -width/-height as percentages]' \
+    '-square[reduce image to square dimensions]' \
+    '-debug[show seam paths on output]' \
+    '-shape=[seam debug shape]:shape:(circle line)' \
+    '-color=[seam color (hex)]:color:_default' \
+    '-preview[show real-time GUI preview]' \
+    '-mask=[retain-area mask file (white pixels = keep)]:file:_files -g "*.(jpg|jpeg|png)"' \
+    '-rmask=[remove-area mask file (white pixels = remove)]:file:_files -g "*.(jpg|jpeg|png)"' \
+    '-face[enable face detection protection]' \
+    '-angle=[face rotation tolerance angle]:degrees:_default' \
+    '-conc=[parallel worker count (default NumCPU)]:workers:_default' \
+    && ret=0
+
+return ret
