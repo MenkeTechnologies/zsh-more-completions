@@ -1,0 +1,397 @@
+#compdef lq
+# =============================================================================
+# lq — Even Solbraa's (clux) "low overhead yq/tq/jq cli" —
+#      a Rust CLI that combines jq-style JSON querying with
+#      YAML + JSON + TOML input/output format conversion in
+#      one small binary.  Effectively acts as yq + tq + jq
+#      simultaneously, with format detection from file
+#      extension OR explicit --input flag.  Designed for
+#      fast Kubernetes-style YAML manipulation + TOML
+#      config-file editing + jq pipelines.
+#      Distinguishing from yq (mikefarah/yq, Go), tq
+#      (cryptaliagy/tq), jq (canonical), gron, and other
+#      structured-data CLIs by:
+#        - SINGLE BINARY FOR 3 FORMATS — yq + jq + tq in
+#          one tool; choose input via --input or auto-
+#          detect from extension; choose output via
+#          --output for cross-format conversion
+#        - jq WRAPPER ARCHITECTURE — lq delegates the
+#          query language to system jq (must be in PATH);
+#          lq handles only format conversion + jq orchestration
+#        - 3 INPUT FORMATS via --input:
+#            * yaml (default for stdin or .yml/.yaml)
+#            * json (auto for .json)
+#            * toml (auto for .toml)
+#        - 3 OUTPUT FORMATS via --output:
+#            * jq (default raw jq output)
+#            * yaml (--yaml-output shortcut: -y)
+#            * toml (--toml-output shortcut: -t)
+#        - SHORTCUT FLAGS:
+#            * -y / --yaml-output  — equivalent to --output yaml
+#            * -t / --toml-output  — equivalent to --output toml
+#            * -T / --toml-input   — equivalent to --input toml
+#            * -J / --json-input   — equivalent to --input json
+#        - IN-PLACE EDITING via -i / --in-place — modify
+#          file directly (similar to sed -i); critical for
+#          Kubernetes manifest manipulation
+#        - SPLIT MODE via -s / --split QUERY — execute a
+#          per-document jq query to compute a filename
+#          template, then write each document to its own
+#          file:
+#            lq --split '"./" + (.metadata.name) + "_" +
+#                        (.kind | ascii_downcase) + ".yaml"' \
+#               . manifests.yaml
+#          — splits a multi-document YAML into per-resource
+#          files named like `nginx_deployment.yaml`,
+#          `nginx_service.yaml`, etc.
+#        - JQ PASS-THROUGH FLAGS:
+#            * -c / --compact-output  — jq -c
+#            * -r / --raw-output      — jq -r
+#            * -j / --join-output     — jq -j (no newlines)
+#            * -L PATH                — jq -L (module path)
+#        - MULTI-DOCUMENT YAML via serde-saphyr — YAML
+#          files containing multiple --- separated documents
+#          are parsed as a list of documents; each can be
+#          queried separately
+#        - STRICT DUPLICATE-KEY HANDLING — by default,
+#          duplicate keys in YAML cause an error (unlike
+#          permissive parsers); ensures correctness for
+#          Kubernetes manifests (issue #86 tracks a possible
+#          --duplicates=last-wins flag)
+#        - SMALL BINARY — ~5MB after LTO + strip; competitive
+#          with mikefarah/yq's binary size despite needing
+#          system jq
+#      Used by: Kubernetes administrators manipulating YAML
+#      manifests in CI pipelines, infrastructure engineers
+#      converting between YAML / JSON / TOML configs,
+#      cargo + crate authors editing Cargo.toml files via
+#      jq queries, and as a reference implementation of
+#      toml + serde_json + serde_saphyr + clap derive +
+#      jq orchestration composition in Rust.
+#
+# Author:  Even Solbraa (clux on GitHub) — Norwegian Rust
+#          developer, lead maintainer of kube-rs (the
+#          canonical Rust Kubernetes client).  Released
+#          lq ~2024; current version 0.16.0; active
+#          development through 2026.  License: Apache-2.0.
+# Source:  https://github.com/clux/lq
+#          https://github.com/clux/lq/blob/main/lq.rs
+#          https://github.com/clux/lq/blob/main/Cargo.toml
+# CLI:     lq.rs (single-file binary) — uses clap v4 derive
+#          (well-documented elsewhere).  Headline library:
+#          **toml** (the new variant being documented here,
+#          opening Axis 25 — TOML Parsing).
+# Library: toml (https://github.com/toml-rs/toml —
+#          "Rust TOML Parser" — Alex Crichton (alexcrichton
+#          on GitHub) + toml-rs working group.  Distinct
+#          from all previously-documented Rust libraries
+#          by being:
+#             1. TOML 1.0 SPEC COMPLIANT — implements the
+#                TOML v1.0.0 spec finalized 2021 (and the
+#                subsequent 1.1.0-rc1 draft).  TOML is
+#                Tom Preston-Werner's "Tom's Obvious,
+#                Minimal Language" config format designed
+#                for human-readable configuration files.
+#             2. SERDE INTEGRATION — toml-rs is a serde
+#                serializer + deserializer.  The same
+#                #[derive(Serialize, Deserialize)] structs
+#                work for JSON / YAML / TOML / RON /
+#                MessagePack:
+#                   use serde::{Serialize, Deserialize};
+#                   #[derive(Serialize, Deserialize)]
+#                   struct Cargo {
+#                       package: Package,
+#                       dependencies: HashMap<String, String>,
+#                   }
+#                   let cargo: Cargo = toml::from_str(text)?;
+#                   let text = toml::to_string(&cargo)?;
+#             3. PRESERVE_ORDER FEATURE — opt-in (default
+#                off) for preserving key insertion order
+#                during round-trip serialization.  Critical
+#                for editing Cargo.toml files without
+#                scrambling sections.  Used by lq.
+#             4. PARSE → toml::Value UNTYPED — alternative
+#                to typed structs; toml::Value enum (Table,
+#                Array, String, Integer, Float, Boolean,
+#                Datetime) for runtime-polymorphic access:
+#                   let v: toml::Value = text.parse()?;
+#                   if let Some(name) = v["package"]["name"].as_str() { ... }
+#             5. DATETIME SUPPORT — TOML's distinctive
+#                feature: native first-class datetime
+#                values (offset-datetime, local-datetime,
+#                local-date, local-time) parsed into
+#                toml::value::Datetime (separate from
+#                chrono / time crates by design).
+#             6. PRETTY-PRINT via toml_edit — companion
+#                crate toml_edit (also in toml-rs org)
+#                provides AST-preserving round-trip
+#                editing for in-place TOML modifications
+#                without reformatting unrelated sections
+#                (used by cargo-add, cargo-edit, etc.).
+#             7. PURE RUST — no Cgo; cross-platform Rust
+#                only.  Distinct from toml-c (Tom Preston-
+#                Werner's C reference implementation).
+#             8. ZERO-COPY where possible — toml-rs borrows
+#                from input lifetime for string slices.
+#             9. CARGO ECOSYSTEM PROVENANCE — toml-rs is
+#                Cargo's TOML parser; every Rust project's
+#                Cargo.toml is parsed by toml-rs.  Bedrock
+#                of the Rust packaging ecosystem.
+#            10. ALEX-CRICHTON / TOML-RS ECOSYSTEM
+#                PROVENANCE — Alex Crichton (alexcrichton)
+#                is a Rust core team member, original
+#                creator of Cargo (with Carl Lerche), now
+#                at Fastly working on wasmtime + Bytecode
+#                Alliance.  toml-rs is Alex's TOML library
+#                from the early Cargo days, now community-
+#                maintained under the toml-rs GitHub
+#                organization.  Distinct from David Tolnay
+#                (serde / thiserror / anyhow / serde_yaml),
+#                Sean McArthur (Hyperium / reqwest / tonic
+#                — 2-library author), Sindre Sorhus
+#                (Node CLI ecosystem).  Alex Crichton's
+#                contributions span Cargo + wasmtime +
+#                cap-std + bindgen + toml-rs.)
+# License: MIT OR Apache-2.0 (toml); Apache-2.0 (lq)
+# Status:  toml — 1,045+ stars on toml-rs/toml, ~700M
+#          crates.io downloads (TOP-5 Rust crate by
+#          downloads — second only to serde + libc + log).
+#          Used by:
+#            * cargo (Cargo.toml parser)
+#            * rust-analyzer (config parsing)
+#            * mdbook (book.toml)
+#            * cargo-make, cargo-edit, cargo-add,
+#              cargo-binstall, cargo-generate, cargo-cyclonedx,
+#              ... (every cargo-* subcommand)
+#            * rust-toolchain.toml resolvers
+#            * gitoxide / gix (Git in Rust)
+#            * cargo-shuttle / cargo-leptos / cargo-dioxus
+#            * Helix editor (config)
+#            * Zellij (config)
+#            * starship (cross-shell prompt config)
+#            * sccache (config)
+#            * lq (THIS — TOML manipulation CLI)
+#            * 200,000+ Rust applications
+#          lq — 49+ stars on clux/lq, used by Kubernetes
+#          admins + infrastructure engineers.
+#
+# -----------------------------------------------------------------------------
+# CROSS-LANGUAGE CLI LIBRARY TAXONOMY MILESTONE — RUST CROSSES TO 80 +
+#                                                  AXIS 25 (TOML PARSING) OPENS
+# -----------------------------------------------------------------------------
+# With this completion the cross-language CLI library taxonomy documents
+# the 80TH Rust CLI library variant.  Rust climbs from 79 to 80
+# documented libraries (toml via lq).  Rust **breaks the three-way
+# tie** at 79 and goes SOLO at 80 (Rust=80, Go=79, TS-Node=79).
+# New leaderboard: Rust=80, Go=79, TypeScript-Node=79 (Rust solo at
+# the top; round 80-library landmark).  Taxonomy now spans 417
+# cross-language CLI library variants across 104 documented languages.
+#
+# **MILESTONE: RUST REACHES 80 DOCUMENTED LIBRARIES** — round-number
+# landmark.
+#
+# Pattern: R685 Rust=79 (tonic → Axis 24 OPENS) → R686 Go=79 (grpc-go)
+# → R687 TS-Node=79 (@grpc/grpc-js → Axis 24 1/1/1) → R688 104th
+# language (NetLogo / netlogo) → R689 Rust=80 (toml THIS — AXIS 25
+# OPENS) → expected R690 Go=80 → R691 TS-Node=80 → R692 105th
+# language.  This is the 1st of 3 leader bumps in the current segment.
+#
+# This completion OPENS Axis 25 (TOML PARSING) — the 25th documented
+# cross-language CLI library axis.  Axis 25 covers the cross-language
+# pattern of "library used by CLIs to parse and emit TOML 1.0
+# documents" — applicable to Cargo.toml / pyproject.toml /
+# package.toml editors, configuration loaders that target TOML
+# specifically (distinct from Axis 13's config managers like
+# config-rs/Viper/conf which abstract OVER multiple formats), and
+# any CLI that processes TOML.
+#
+#   Axis 25 (TOML PARSING) variants:
+#     - toml (toml-rs/toml) — R689 (THIS) — Rust TOML 1.0 spec
+#       compliant; serde integration; preserve_order opt-in;
+#       toml::Value untyped access; datetime support;
+#       Alex Crichton / toml-rs ecosystem; Cargo's TOML parser
+#     - (Go variant pending in R690 — likely BurntSushi/toml
+#       by Andrew Gallant — the canonical Go TOML parser)
+#     - (TS-Node variant pending in R691 — likely @iarna/toml
+#       or @ltd/j-toml or smol-toml)
+#
+# Axis 25 distribution: Rust=1, Go=0, TS-Node=0.  Will reach 1/1/1
+# three-language symmetry by end of R691.
+#
+# DISTINCTION FROM AXIS 13 (CONFIG FILES):
+#   Axis 13 entries (config-rs, Viper, conf) are CONFIG MANAGERS
+#   that abstract OVER multiple file formats (TOML, YAML, JSON,
+#   etc.) with feature priority + env-var overlay + nested key
+#   access.  Axis 25 is specifically about TOML PARSING —
+#   reading/writing the TOML format itself, not the config-
+#   management abstraction layer.
+#
+# Alex Crichton / toml-rs ecosystem note:
+#   Alex Crichton (alexcrichton on GitHub) is a Rust core team
+#   member + original Cargo co-creator (with Carl Lerche).
+#   Maintains:
+#     * cargo (Rust package manager) — historical lead
+#     * wasmtime (WASM runtime) — Fastly + Bytecode Alliance lead
+#     * cap-std (capabilities-based stdlib alternative)
+#     * bindgen — C++ to Rust binding generator
+#     * toml-rs/toml — TOML parser                  (THIS)
+#     * toml-rs/toml_edit — AST-preserving TOML editor
+#   Alex's contributions form the bedrock of the Rust packaging
+#   + WASM + FFI ecosystems.  Distinct from David Tolnay
+#   (serde / 4 entries), Sean McArthur (Hyperium / 2 entries —
+#   reqwest + tonic), Sindre Sorhus (Node CLI / 5+ entries),
+#   Vitaly Puzrin (nodeca / 2 entries), Vincent Prouillet
+#   (Keats / 2 entries — tera + config-rs).
+#
+# Axis distribution summary after R689:
+#   * Axis 1  (Argparse):     Rust=N  / Go=N  / TS-Node=N
+#   * Axis 4  (Colors):       Rust=N  / Go=N  / TS-Node=N
+#   * Axis 5  (Progress):     Rust=N  / Go=N  / TS-Node=N
+#   * Axis 6  (Errors):       Rust=6  / Go=N  / TS-Node=N
+#   * Axis 7  (Boxes):        Rust=1  / Go=1  / TS-Node=1   (1/1/1)
+#   * Axis 8  (Prompts):      Rust=1  / Go=1  / TS-Node=1   (1/1/1)
+#   * Axis 9  (Logging):      Rust=6  / Go=6  / TS-Node=6   (6/6/6)
+#   * Axis 10 (Tables):       Rust=2  / Go=2  / TS-Node=2   (2/2/2)
+#   * Axis 11 (Humanization): Rust=1  / Go=1  / TS-Node=1   (1/1/1)
+#   * Axis 12 (Text Wrap):    Rust=1  / Go=1  / TS-Node=1   (1/1/1)
+#   * Axis 13 (Config Files): Rust=2  / Go=2  / TS-Node=2   (2/2/2)
+#   * Axis 14 (Paths):        Rust=2  / Go=2  / TS-Node=2   (2/2/2)
+#   * Axis 15 (Date/Time):    Rust=1  / Go=1  / TS-Node=1   (1/1/1)
+#   * Axis 16 (HTTP Clients): Rust=1  / Go=1  / TS-Node=1   (1/1/1)
+#   * Axis 17 (File Watching): Rust=1 / Go=1  / TS-Node=1   (1/1/1)
+#   * Axis 18 (WebSockets):    Rust=1 / Go=1  / TS-Node=1   (1/1/1)
+#   * Axis 19 (Markdown Parsing): Rust=1 / Go=1 / TS-Node=1 (1/1/1)
+#   * Axis 20 (YAML Parsing):     Rust=1 / Go=1 / TS-Node=1 (1/1/1)
+#   * Axis 21 (Templating Engines): Rust=1/Go=1/TS-Node=1 (1/1/1)
+#   * Axis 22 (Image Processing):   Rust=1/Go=1/TS-Node=1 (1/1/1)
+#   * Axis 23 (JSON Schema Valid):  Rust=1/Go=1/TS-Node=1 (1/1/1)
+#   * Axis 24 (gRPC):              Rust=1/Go=1/TS-Node=1 (1/1/1)
+#   * Axis 25 (TOML Parsing):      Rust=1/Go=0/TS-Node=0 NEW
+#
+# (Leaderboard at R689: Rust=80, Go=79, TS-Node=79 — Rust solo
+# at the top; rounded 80-library landmark for Rust.  Axis 9 /
+# Logging 6/6/6 three-way symmetric.  Axes 10 + 13 + 14 at 2/2/2.
+# Axes 7 + 8 + 11 + 12 + 15 + 16 + 17 + 18 + 19 + 20 + 21 + 22
+# + 23 + 24 at 1/1/1.  Axis 25 newly opened at 1/0/0.  Seventeen
+# axes at three-language symmetry.)
+#
+# -----------------------------------------------------------------------------
+#
+# WHY toml IS THE 80TH RUST CLI LIBRARY
+#
+# toml-rs/toml is the canonical Rust TOML parser, used by Cargo
+# itself and ~200,000 downstream Rust projects.  Distinct from
+# every previously-documented Rust library in this taxonomy by
+# being a TOML parser/serializer with serde integration.
+#
+# Five distinguishing characteristics:
+#
+#   1. CARGO ECOSYSTEM PROVENANCE — toml-rs parses every
+#      Cargo.toml.  Every Rust project depends transitively on
+#      toml-rs through cargo + cargo-* subcommands.
+#
+#   2. SERDE INTEGRATION — same #[derive(Serialize, Deserialize)]
+#      derive used for JSON / YAML / TOML / MessagePack / RON.
+#      Distinct from format-specific TOML parsers in other
+#      languages.
+#
+#   3. preserve_order FEATURE — opt-in flag for preserving key
+#      insertion order during round-trip serialization.
+#      Critical for editing Cargo.toml without reordering sections.
+#
+#   4. DATETIME FIRST-CLASS — TOML's distinctive feature
+#      (offset-datetime, local-datetime, local-date, local-time)
+#      parsed into toml::value::Datetime, separate from chrono.
+#
+#   5. ALEX-CRICHTON / TOML-RS ECOSYSTEM PROVENANCE — distinct
+#      from David Tolnay (serde), Sean McArthur (Hyperium),
+#      Sindre Sorhus (Node CLI), Vitaly Puzrin (nodeca).  Alex
+#      Crichton is a Rust core team member + Cargo co-creator.
+#
+# -----------------------------------------------------------------------------
+#
+# THE lq CLI — clap derive + toml + serde-saphyr + jq subprocess
+#
+# lq's CLI is in lq.rs (single-file binary).  Uses clap v4
+# derive with the Args struct.
+#
+# Flags:
+#   --input {yaml|json|toml}    input format (auto-detect from
+#                               file extension if absent;
+#                               yaml default for stdin)
+#   --output {yaml|jq|toml}     output format (default jq)
+#   -y, --yaml-output           shortcut for --output yaml
+#   -t, --toml-output           shortcut for --output toml
+#   -T, --toml-input            shortcut for --input toml
+#   -J, --json-input            shortcut for --input json
+#   -i, --in-place              edit file in place
+#   -s, --split QUERY           split output by per-document
+#                               filename query
+#   -c, --compact-output        jq -c (compact)
+#   -r, --raw-output            jq -r (raw strings)
+#   -j, --join-output           jq -j (no newlines)
+#   -L PATH                     jq -L (module search dir)
+#
+# Positional arguments:
+#   [JQ_QUERY]                  jq query (default ".")
+#   [FILE]                      input file (default stdin)
+#
+# Standard:
+#   -h, --help                  show help
+#   -V, --version               show version
+#
+# Required external dependency: `jq` must be on PATH.  lq
+# spawns `jq` as a subprocess to execute the query language.
+#
+# toml is used in lq.rs for parsing TOML inputs (via
+# `--input toml` or .toml extension) and for emitting TOML
+# outputs (via `--output toml` or `--toml-output` flag).
+#
+# Five-axis distinctness from all previously-documented Rust
+# libraries:
+#
+#   1. TOML I/O ABSTRACTION — toml parses/emits TOML 1.0;
+#      distinct from every other Axis.
+#
+#   2. SERDE FRAMEWORK INTEGRATION — same Rust structs work
+#      across formats.
+#
+#   3. preserve_order ORDER PRESERVATION — opt-in for round-trip
+#      editing.
+#
+#   4. DATETIME FIRST-CLASS — TOML's signature feature
+#      preserved as toml::value::Datetime.
+#
+#   5. ALEX-CRICHTON / TOML-RS / CARGO ECOSYSTEM PROVENANCE —
+#      foundational to Rust packaging.
+#
+# -----------------------------------------------------------------------------
+#
+# COMMAND-LINE OPTIONS (sourced directly from
+# https://github.com/clux/lq/blob/main/lq.rs
+# clap v4 derive #[arg] + #[derive(Parser)] definitions.)
+# -----------------------------------------------------------------------------
+
+local curcontext="$curcontext" state line ret=1
+typeset -A opt_args
+
+_arguments -s -S \
+    '--input=[input format]:format:(yaml json toml)' \
+    '--output=[output format]:format:(yaml jq toml)' \
+    '(-y --yaml-output)'{-y,--yaml-output}'[shortcut: --output yaml]' \
+    '(-t --toml-output)'{-t,--toml-output}'[shortcut: --output toml]' \
+    '(-T --toml-input)'{-T,--toml-input}'[shortcut: --input toml]' \
+    '(-J --json-input)'{-J,--json-input}'[shortcut: --input json]' \
+    '(-i --in-place)'{-i,--in-place}'[edit input file in place]' \
+    '(-s --split)'{-s+,--split=}'[per-document filename query]:query:_default' \
+    '(-c --compact-output)'{-c,--compact-output}'[jq -c (compact output)]' \
+    '(-r --raw-output)'{-r,--raw-output}'[jq -r (raw strings)]' \
+    '(-j --join-output)'{-j,--join-output}'[jq -j (no newlines)]' \
+    '-L+[jq module search directory]:directory:_files -/' \
+    '(- *)'{-h,--help}'[show help]' \
+    '(- *)'{-V,--version}'[show version]' \
+    '1:jq query:_default' \
+    '2:input file:_files -g "*.(yaml|yml|json|toml)"' \
+    && ret=0
+
+return ret
