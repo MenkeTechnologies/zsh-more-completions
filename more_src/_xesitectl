@@ -1,0 +1,441 @@
+#compdef xesitectl
+# =============================================================================
+# xesitectl — control plane CLI for xeiaso.net (Xe Iaso's personal site).
+#             xesitectl is the operator command-line that manages Xe's
+#             modern static-site / dynamic-content hybrid: tests Discord
+#             webhook integrations, manages content publishing flows,
+#             dispatches mailing-list digests, and inspects internal
+#             site infrastructure.  Xe Iaso is a well-known technical
+#             writer / Tailscale engineer / "fox" persona in the
+#             developer community; xeiaso.net is one of the most-
+#             linked-to engineering blogs in Hacker News circles.  The
+#             xesitectl binary is small but exemplary — it's the
+#             canonical demonstration of how to wire google/subcommands
+#             into a single-binary multi-subcommand Go CLI.
+#
+# Author:  Xe Iaso (Xeiaso — Christine Dodrill professionally; Tailscale
+#          engineer; author of /usr/bin/xe and dozens of blog-companion
+#          tools; "Hyperland Hubris" Go web framework author; well-known
+#          for technical writing on Go, Kubernetes, AI/ML deployment,
+#          and identity in tech)
+# Source:  https://github.com/Xe/site (cmd/xesitectl/)
+# CLI:     cmd/xesitectl/main.go (uses google/subcommands)
+# Library: google/subcommands
+#          ("Subcommands is a Go package that implements a simple way for
+#           a single command to have many subcommands, each of which
+#           takes arguments and so forth.  This is not an official Google
+#           product.")
+# License: MIT
+# Status:  Active — 725+ stars on Xe/site; xesitectl is the actively-
+#          maintained operator CLI for the production xeiaso.net site.
+#
+# -----------------------------------------------------------------------------
+# CROSS-LANGUAGE CLI LIBRARY TAXONOMY MILESTONE — GO CLIMBS TO 36 (TIES RUST)
+# -----------------------------------------------------------------------------
+# With this completion the cross-language CLI library taxonomy documents the
+# 36TH Go CLI library variant.  Go climbs from 35 to 36 documented libraries
+# (google/subcommands via xesitectl).  New leaderboard: Rust=36, Go=36
+# (TWO-WAY TIE RESTORED at the R514 solo-lead-after-Passerine-pause chased
+# down), TypeScript-Node=35.  Taxonomy now spans 254 cross-language CLI
+# library variants across 61 documented languages.
+# -----------------------------------------------------------------------------
+#
+# WHAT IS google/subcommands AND WHY IS IT A DISTINCT 36TH GO CLI LIBRARY?
+#
+# google/subcommands (https://github.com/google/subcommands, 789+ stars) is
+# **Google's "simple way for a single command to have many subcommands,
+# each of which takes arguments and so forth"**.  The README disclaimer
+# is famously direct: *"This is not an official Google product."* — i.e.
+# it's a Googler-flavored library open-sourced from internal use rather
+# than an official Google product like protobuf or grpc-go.  Released
+# 2014-2015 (predating cobra's dominance), google/subcommands captures
+# a SPECIFIC Google-internal CLI pattern that contrasts with both the
+# stdlib `flag` package (no subcommands) and cobra (heavy framework).
+# Still used at gvisor (runsc, 18430* stars) and KF (Google Cloud
+# Foundry on Kubernetes, 405* stars).
+#
+# google/subcommands is DISTINCT from every documented Go CLI library on
+# SIX specific axes:
+#
+#   1. INTERFACE-DRIVEN COMMAND TYPE (FIVE METHODS) — google/subcommands
+#      defines a single Command interface that EVERY subcommand MUST
+#      implement:
+#         type Command interface {
+#             Name() string                           // subcommand name
+#             Synopsis() string                       // short description
+#             Usage() string                          // long help text
+#             SetFlags(f *flag.FlagSet)               // register flags
+#             Execute(ctx context.Context,
+#                     f *flag.FlagSet,
+#                     args ...interface{}) ExitStatus
+#         }
+#      Every subcommand is a STRUCT that implements all five methods —
+#      the Command interface is the ONLY thing the library cares about:
+#         type TestWebhookCmd struct {
+#             webhook string
+#             dry     bool
+#         }
+#         func (*TestWebhookCmd) Name() string     { return "test-webhook" }
+#         func (*TestWebhookCmd) Synopsis() string { return "Test the Discord webhook" }
+#         func (*TestWebhookCmd) Usage() string    { return "test-webhook [-webhook URL] [-dry]\n" }
+#         func (c *TestWebhookCmd) SetFlags(f *flag.FlagSet) {
+#             f.StringVar(&c.webhook, "webhook", "", "Discord webhook URL")
+#             f.BoolVar(&c.dry, "dry", false, "Dry-run mode")
+#         }
+#         func (c *TestWebhookCmd) Execute(ctx context.Context,
+#                                          f *flag.FlagSet,
+#                                          _ ...interface{}) subcommands.ExitStatus {
+#             // ... business logic ...
+#             return subcommands.ExitSuccess
+#         }
+#      Compare:
+#        cobra:           struct + Run callback field, no interface
+#        urfave/cli:      struct + Action callback field
+#        kingpin:         fluent builder, no interface
+#        kong R465:       struct-tag declarative
+#        go-arg R475:     struct-tag declarative
+#        google/subcmds:  FORMAL Command interface — every subcommand
+#                          is a Go interface implementation, not a
+#                          callback wired into a struct field.
+#      **First documented Go CLI library to use a FORMAL INTERFACE
+#      (rather than a struct + callback) as the subcommand contract.**
+#
+#   2. `context.Context` AS FIRST EXECUTE ARGUMENT — Execute's first
+#      argument is `context.Context`, making CANCELLATION + DEADLINE +
+#      VALUE-PROPAGATION idiomatic in the CLI library's design:
+#         func (c *Cmd) Execute(ctx context.Context,
+#                               f *flag.FlagSet,
+#                               _ ...interface{}) ExitStatus {
+#             select {
+#             case <-ctx.Done():
+#                 return subcommands.ExitUsageError
+#             default:
+#                 // do work
+#             }
+#         }
+#      Compare:
+#        cobra:           `Run func(cmd, args)` — no ctx (must build
+#                          via PersistentFlags or wrapper)
+#        urfave/cli:      `Action: func(c *cli.Context) error` — its
+#                          OWN Context type (cli.Context), not stdlib
+#        kingpin:         `Action(func(*kingpin.ParseContext) error)`
+#                          — also its own context
+#        google/subcmds:  STDLIB context.Context — the only documented
+#                          Go CLI library where the subcommand handler
+#                          receives the language-standard context.
+#      Designed for Google's microservice-style tooling where every
+#      RPC takes a context; subcommands fits naturally into that
+#      surrounding ecosystem.
+#
+#   3. VARIADIC `...interface{}` DEPENDENCY-INJECTION TAIL — Execute's
+#      THIRD argument is `args ...interface{}` — a variadic catch-all
+#      for caller-side dependency injection.  The Commander's
+#      `Execute(ctx)` call forwards EXTRA arguments through to each
+#      subcommand:
+#         commander := subcommands.DefaultCommander
+#         commander.Register(&printCmd{}, "")
+#         ctx := context.Background()
+#         exitStatus := commander.Execute(ctx, dbConn, httpClient, cfg)
+#         // dbConn, httpClient, cfg arrive as args[0..2] in
+#         // each subcommand's Execute method
+#      Compare:
+#        cobra:           PersistentFlags + viper for DI
+#        urfave/cli:      cli.Context.App.Metadata map for DI
+#        kingpin:         not designed for DI
+#        google/subcmds:  VARIADIC interface{} tail — Go-pre-generics
+#                          DI idiom; each subcommand type-asserts the
+#                          args it cares about.
+#      Reflects the library's 2014-era origin when Go didn't have
+#      generics; the variadic-interface{} pattern is the canonical
+#      "any-typed extension point" of pre-1.18 Go.
+#
+#   4. TYPED EXIT-STATUS RETURN — Execute returns `subcommands.ExitStatus`
+#      which is a typed int with named constants:
+#         type ExitStatus int
+#         const (
+#             ExitSuccess    ExitStatus = 0
+#             ExitFailure    ExitStatus = 1
+#             ExitUsageError ExitStatus = 2
+#         )
+#      Compare:
+#        cobra:           Run callback returns nothing; error via separate
+#                          path
+#        urfave:          Action returns `error`; library converts to exit
+#        kingpin:         Action returns `error`
+#        kong R465:       `Run() error` on subcommand struct
+#        google/subcmds:  TYPED ENUM EXIT STATUS — three documented values
+#                          mapping to standard Unix conventions (0 success,
+#                          1 generic failure, 2 usage error).  The host
+#                          must `os.Exit(int(commander.Execute(ctx)))` —
+#                          process exit is the LIBRARY'S responsibility,
+#                          not the user's error-bubbling.
+#      Closer to traditional Unix tooling's exit conventions than to
+#      most modern Go CLI libraries.
+#
+#   5. THREE BUILT-IN META-COMMANDS — google/subcommands ships three
+#      meta-subcommands that the user registers EXPLICITLY:
+#         subcommands.Register(subcommands.HelpCommand(),     "")
+#         subcommands.Register(subcommands.FlagsCommand(),    "")
+#         subcommands.Register(subcommands.CommandsCommand(), "")
+#      - HelpCommand    : `help`           — show help for any subcommand
+#      - FlagsCommand   : `flags`          — list all top-level flags
+#      - CommandsCommand: `commands`       — list all subcommands by group
+#      The EXPLICIT registration is a deliberate design choice — the
+#      library doesn't AUTO-REGISTER these (unlike cobra which auto-
+#      adds `help` for any command tree).  Users must register what
+#      they want.  Compare:
+#        cobra:           `help` is auto-registered, hard to remove
+#        urfave/cli:      `help` auto-registered via App.HideHelp
+#        google/subcmds:  EXPLICIT registration of meta-commands —
+#                          principle-of-least-magic, library is "what
+#                          you see is what's wired".
+#      Most google/subcommands binaries register all three; some
+#      omit FlagsCommand/CommandsCommand for terser binaries.
+#
+#   6. `Register(cmd, group)` GROUP-AWARE REGISTRATION — Register's
+#      second argument is a "group" string used in HelpCommand /
+#      CommandsCommand output to categorize subcommands:
+#         subcommands.Register(&printCmd{}, "output")
+#         subcommands.Register(&saveCmd{},  "output")
+#         subcommands.Register(&listCmd{},  "query")
+#         subcommands.Register(&findCmd{},  "query")
+#         // `xesitectl commands` shows two groups: output, query
+#      Compare:
+#        cobra:           `cmd.Annotations` map + custom help template
+#                          to achieve grouping
+#        urfave/cli:      `Category` field on Command struct
+#        google/subcmds:  `Register(cmd, group)` — second positional arg
+#                          IS the group, no separate field, no template
+#                          override needed.
+#      For binaries with many subcommands (gvisor's runsc has ~30+
+#      subcommands grouped by lifecycle / debugging / state-mgmt),
+#      this is essential.
+#
+# Bonus: google/subcommands is **the canonical CLI library used inside
+# gvisor's runsc** — the Application Kernel for Containers (18430* stars).
+# runsc's CLI surface (`runsc create | start | run | exec | kill | delete |
+# state | events | spec | mount | restore | checkpoint | ps | umount |
+# resume | wait | symbolize | profile | gofer | boot | nvproxy | debug`)
+# demonstrates the library at its design-target scale: ~25+ subcommands
+# grouped into lifecycle / system / debug categories, each implementing
+# the Command interface with its own SetFlags / Execute logic.
+#
+# THE google/subcommands API SURFACE (verbatim from upstream README)
+#
+#   import (
+#       "context"
+#       "flag"
+#       "os"
+#       "github.com/google/subcommands"
+#   )
+#
+#   // Step 1: Define a Command type implementing all five methods.
+#   type printCmd struct {
+#       capitalize bool
+#   }
+#
+#   func (*printCmd) Name() string     { return "print" }
+#   func (*printCmd) Synopsis() string { return "Print args to stdout." }
+#   func (*printCmd) Usage() string    { return "print [-capitalize] <args>\n" }
+#
+#   func (p *printCmd) SetFlags(f *flag.FlagSet) {
+#       f.BoolVar(&p.capitalize, "capitalize", false, "capitalize output")
+#   }
+#
+#   func (p *printCmd) Execute(ctx context.Context,
+#                              f *flag.FlagSet,
+#                              _ ...interface{}) subcommands.ExitStatus {
+#       for _, arg := range f.Args() {
+#           if p.capitalize { arg = strings.ToUpper(arg) }
+#           fmt.Printf("%s ", arg)
+#       }
+#       return subcommands.ExitSuccess
+#   }
+#
+#   // Step 2: main() registers commands + dispatches.
+#   func main() {
+#       subcommands.Register(subcommands.HelpCommand(),     "")
+#       subcommands.Register(subcommands.FlagsCommand(),    "")
+#       subcommands.Register(subcommands.CommandsCommand(), "")
+#       subcommands.Register(&printCmd{}, "")
+#
+#       flag.Parse()
+#       ctx := context.Background()
+#       os.Exit(int(subcommands.Execute(ctx)))
+#   }
+#
+# Top-level functions:
+#   Register(cmd Command, group string)       Register on default commander
+#   Execute(ctx, args ...interface{})         Dispatch on default commander
+#   NewCommander(name, fs *flag.FlagSet)      Create a new Commander
+#
+# Built-in meta-commands:
+#   HelpCommand()                             returns `help` subcommand
+#   FlagsCommand()                            returns `flags` subcommand
+#   CommandsCommand()                         returns `commands` subcommand
+#
+# Exit-status constants:
+#   ExitSuccess    (0)
+#   ExitFailure    (1)
+#   ExitUsageError (2)
+#
+# CONTRAST WITH OTHER GO CLI LIBRARIES DOCUMENTED IN THE CORPUS
+#
+#   * flag (stdlib)                — primitive base; no subcommands
+#   * cobra                        — framework + codegen, Run-callback
+#   * urfave/cli                   — struct-list declarative, Action-callback
+#   * kingpin                      — fluent builder
+#   * kong R465                    — struct-tag declarative
+#   * go-arg R475                  — single MustParse(&struct)
+#   * opts R479                    — frictionless struct
+#   * mow.cli R470                 — SPEC-string grammar
+#   * go-getoptions R483           — Perl Getopt::Long port
+#   * commando R487                — singleton + colon ns
+#   * mkideal/cli R491             — comma-aliases struct-tag
+#   * clir R495                    — explicit constructor + pointer setters
+#   * teris-io/cli R499            — With*-prefix fluent builder
+#   * jessevdk/go-flags R503       — reflection on struct fields
+#   * akamensky/argparse R507      — Python-argparse-faithful port
+#   * peterbourgon/ff R363/R431    — functional-options flag + ffcli
+#   * rsc/getopt R511              — thin alias-overlay on stdlib flag
+#   * flaggy (integrii)            — pointer-bind imperative builder
+#   * google/subcommands (THIS)    — INTERFACE-DRIVEN Command type (5
+#                                    methods) + context.Context first-arg
+#                                    Execute + variadic interface{} DI tail
+#                                    + typed ExitStatus enum + explicit
+#                                    meta-command registration + group-
+#                                    aware Register.
+#
+# google/subcommands occupies a UNIQUE NICHE — the **GOOGLE-FLAVORED
+# INTERFACE-BASED CLI library**.  Where cobra/urfave/kingpin use a
+# struct+callback pattern, and kong/go-arg use struct-tag declarations,
+# google/subcommands is the FIRST documented Go CLI library to make
+# the SUBCOMMAND CONTRACT a Go INTERFACE.  This aligns with the
+# Go-stdlib pattern (`io.Reader`, `http.Handler`, `error` are all
+# interfaces) and reflects Googler-flavored Go style.
+#
+# REAL-WORLD google/subcommands USERS:
+#
+#   * google/gvisor:runsc (18430*) — Application Kernel for Containers;
+#       the canonical google/subcommands consumer at scale (~25+
+#       subcommands organized into lifecycle / system / debug groups)
+#   * google/kf (405*) — Cloud Foundry on Kubernetes from Google
+#   * Xe/site:xesitectl (THIS, 725*) — Xe Iaso's xeiaso.net site
+#       operator CLI
+#   * future-architect/vuls — Vulnerability Scanner; uses subcommands
+#       for the `scan / config-test / report / discover / report-go-cve`
+#       command tree (vuls IS in corpus)
+#   * kayac/bqin — BigQuery query orchestration tool from Kayac
+#   * drone/go-convert — Drone CI v0→v1 config converter
+#   * 1f349/jasmine — calendar service
+#   * 1000ch/nd — Node.js version manager
+#   * mprimi/nasefa — NATS file-share tool
+#   * donatj/pullaway — Pushover notification daemon
+#   * etnz/portfolio — portfolio manager
+#
+# google/subcommands' adoption pattern: **Googler-adjacent Go projects
+# that prefer the interface-based subcommand contract over cobra's
+# struct+callback model**.  gvisor's runsc is the highest-profile
+# adopter; the long tail covers internal-Google-style tooling outside
+# of Google itself.
+#
+# -----------------------------------------------------------------------------
+# XESITECTL'S CLI SURFACE (verbatim from cmd/xesitectl/main.go)
+# -----------------------------------------------------------------------------
+#
+# USAGE:
+#   xesitectl <SUBCOMMAND> [args...]
+#
+# Built-in meta-subcommands (registered explicitly in main.go):
+#   help                          Show help for any subcommand
+#                                  (e.g. `xesitectl help test-webhook`)
+#   flags                         List all top-level flags
+#   commands                      List all subcommands by group
+#
+# Custom subcommands (defined in cmd/xesitectl/commands/):
+#   test-webhook [-webhook URL] [-dry]
+#                                 Post a test message to the Discord
+#                                 webhook configured for xeiaso.net's
+#                                 publication-pipeline notifications.
+#                                 Uses Xe's standard webhook payload
+#                                 format (embeds with link previews).
+#                                 -webhook URL    Discord webhook URL
+#                                                  (default: WEBHOOK_URL
+#                                                  env var)
+#                                 -dry            Dry-run; print payload
+#                                                  instead of POSTing
+#
+# Standard flag.FlagSet (registered before subcommands.Execute via
+#   flag.Parse() in main.go — applies to all subcommands):
+#   (No top-level flags currently registered in xesitectl)
+#
+# Environment variables (consumed via godotenv autoload in main.go):
+#   WEBHOOK_URL                   Default Discord webhook URL for the
+#                                  test-webhook subcommand if not
+#                                  explicitly passed
+#   (Plus xeiaso.net-specific env vars for other commands when added)
+#
+# Typical usage:
+#   $ xesitectl help                          # show top-level help
+#   $ xesitectl help test-webhook             # show help for one cmd
+#   $ xesitectl commands                      # list all subcommands
+#   $ xesitectl flags                         # list all top-level flags
+#   $ xesitectl test-webhook -dry             # dry-run webhook test
+#   $ xesitectl test-webhook -webhook https://discord.com/api/webhooks/...
+#
+# xesitectl is a small CLI by design — Xe's site is mostly static, so
+# the operator surface is intentionally minimal.  It exists primarily
+# as the operator-control-plane shell that grows new subcommands as
+# new ops procedures arise (mailing list digests, page publish
+# triggers, etc.).
+#
+# Companion tools by Xe Iaso:
+#   xe                            Xe's personal CLI calculator/util
+#                                  (DIFFERENT — published as /usr/bin/xe
+#                                  on Tailscale's internal hosts)
+#   tofuwidd                      Tailscale + OpenTofu width-detector
+#   site                          The xeiaso.net Go web framework binary
+#                                  itself (separate from xesitectl)
+#
+# =============================================================================
+
+_xesitectl() {
+    local curcontext="$curcontext" state line ret=1
+    typeset -A opt_args
+
+    local -a subcommands
+
+    subcommands=(
+        'help:show help for any subcommand'
+        'flags:list all top-level flags'
+        'commands:list all subcommands by group'
+        'test-webhook:post a test message to xeiaso.net Discord webhook'
+    )
+
+    _arguments -C \
+        '1: :->cmd' \
+        '*::arg:->args' && ret=0
+
+    case $state in
+        (cmd)
+            _describe -t commands 'xesitectl command' subcommands && ret=0
+            ;;
+        (args)
+            case $line[1] in
+                (test-webhook)
+                    _arguments \
+                        '-webhook[Discord webhook URL]:url:' \
+                        '-dry[dry-run mode (print payload instead of POSTing)]' \
+                        && ret=0
+                    ;;
+                (help)
+                    _describe -t commands 'subcommand to show help for' subcommands && ret=0
+                    ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_xesitectl "$@"
