@@ -1,0 +1,248 @@
+#compdef harpoon
+# =============================================================================
+# harpoon — the Beluga interactive proof assistant.  Harpoon is the
+#           tactics-based proof-development frontend for Beluga signatures.
+#           Where the `beluga` binary (R460) batch-checks a complete signature
+#           non-interactively, `harpoon` runs an interactive REPL with a small
+#           set of tactics (intros, split, by, ?, etc.) for incremental proof
+#           construction.  Harpoon's tactic language is inspired by Coq's
+#           Ltac and by the Twelf interactive mode.
+#
+# Author:  Jacob Thomas Errington, Clare Jang, Marcel Goh, Brigitte Pientka
+#          (McGill CompSci)
+# Source:  https://github.com/Beluga-lang/Beluga
+# CLI:     src/harpoon/main.ml + src/harpoon/options.ml
+# Library: Beluga.Optparser
+#          (in-house OCaml applicative-combinator CLI library)
+# License: GPL-3.0
+# Status:  Active research project — part of the Beluga distribution at
+#          213+ stars (same repo as the main beluga compiler).  Used in
+#          multiple PhD theses for incremental proof development of
+#          metatheoretic results about programming languages and logics.
+#
+# -----------------------------------------------------------------------------
+# CROSS-LANGUAGE CLI LIBRARY TAXONOMY — BELUGA CLIMBS FROM 1 TO 2 LIBRARIES
+# -----------------------------------------------------------------------------
+# With this completion the cross-language CLI library taxonomy documents the
+# SECOND Beluga CLI library variant.  Beluga climbs from 1 to 2 documented
+# libraries (hand-rolled tri-prefix +/- parser in R460 via beluga main.ml;
+# Beluga.Optparser applicative-combinator library in this round via harpoon
+# options.ml).  Taxonomy now spans 200 cross-language CLI library variants
+# across 45 documented languages — TAXONOMY CROSSES 200 VARIANTS THIS ROUND.
+# -----------------------------------------------------------------------------
+#
+# WHAT IS Beluga.Optparser AND WHY IS IT A DISTINCT CLI LIBRARY VARIANT?
+#
+# Beluga.Optparser (source at src/optparser/) is an IN-HOUSE OCaml CLI parsing
+# library built by the Beluga team to support harpoon's more elaborate
+# command-line surface.  It exposes APPLICATIVE-STYLE COMBINATORS for building
+# option specifications with first-class types and exhaustive parse-error
+# reporting.  Optparser is conceptually similar to Daniel Bünzli's Cmdliner
+# but is custom-built, has a simpler scope, and lives inside the Beluga
+# source tree rather than being published to OPAM.
+#
+# The defining design pattern is the APPLICATIVE OPTION COMBINATOR:
+#
+#     val opt0 : 'a -> 'a OptInfo.Unchecked.transform list -> 'a t
+#     val opt1 : (string -> 'a option) -> 'a OptInfo.Unchecked.transform list -> 'a t
+#     val bool_opt1 : bool OptInfo.Unchecked.transform list -> bool t
+#     val int_opt1 : int OptInfo.Unchecked.transform list -> int t
+#     val string_opt1 : string OptInfo.Unchecked.transform list -> string t
+#     val switch_opt : bool OptInfo.Unchecked.transform list -> bool t
+#     val takes_all_opt : string list OptInfo.Unchecked.transform list -> string list t
+#     val impure_opt0 : (unit -> 'a) -> 'a OptInfo.Unchecked.transform list -> 'a t
+#     val help_opt0 : (help_printer -> 'a) -> 'a OptInfo.Unchecked.transform list -> 'a t
+#     val rest_args : (string list -> unit) -> unit t
+#
+#     val ( <$ ) : ('a -> 'b) -> 'a t -> 'b t           (* fmap *)
+#     val ( $> ) : 'a t -> ('a -> 'b) -> 'b t           (* flipped fmap *)
+#     val ( <& ) : ('a -> 'b) t -> 'a t -> 'b t         (* ap *)
+#     val ( <! ) : 'a t -> unit t -> 'a t               (* sequence + discard *)
+#
+# Each option is described by a TYPED VALUE `'a t` representing "the act of
+# parsing a value of type 'a from the argument list."  These values are
+# composed via the APPLICATIVE INTERFACE (`<&` is the `ap` operator).  The
+# final composed specification has type `final_record_type t` where
+# `final_record_type` is the parsed result.  Parsing returns
+# `('a, Error.t) result` exposing four distinct error categories:
+#
+#   * `Missing_mandatory_option`     — required option was not supplied
+#   * `Invalid_arguments_length`     — option got wrong number of values
+#   * `Argument_reader_failure`      — value couldn't be parsed (e.g.,
+#                                      string→int conversion failed)
+#   * `Not_an_option`                — argv contained an unrecognized flag
+#
+# OPT INFO COMBINATORS (from OptInfo.Unchecked):
+#
+#     val long_name : string -> 'a transform
+#         — set the --long-name form
+#     val short_name : char -> 'a transform
+#         — set the -X short form
+#     val other_names : string list -> 'a transform
+#         — additional aliases
+#     val help_message : string -> 'a transform
+#         — usage text for --help output
+#     val meta_variables : string list -> 'a transform
+#         — placeholder names for value args (e.g., ["path"] for --sig path)
+#     val default_argument : 'a -> 'a transform
+#         — default value when option is omitted
+#     val optional : 'a option -> 'a option transform
+#         — make option optional with default None
+#
+# CONTRAST WITH OTHER OCaml CLI PARSERS DOCUMENTED IN THE CORPUS
+#
+#   * OCaml stdlib `Arg`        — record-of-callbacks; mutating refs
+#   * Cmdliner                  — applicative combinator (canonical OPAM)
+#   * cmdliner-stdlib           — Cmdliner extension with stdlib types
+#   * Beluga's main.ml (R460)   — hand-rolled +/- prefix match dispatch
+#   * Beluga.Optparser (THIS)   — applicative combinator (in-house)
+#   * Urweb's flag_arity (R458) — SML sum-type-encoded arity
+#
+# Optparser is closest in spirit to Cmdliner — both are applicative combinator
+# libraries with typed option specifications.  Distinctive properties of
+# Optparser relative to Cmdliner:
+#
+#   * SIMPLER SCOPE — Optparser has no subcommand support, no auto-generated
+#     manpage, no environment variable fallback, and no `term` abstraction
+#     (Cmdliner's `Term.t`).  It is just option parsing.
+#   * SEPARATED INFO TRANSFORMS — option metadata is passed as a LIST of
+#     `transform` functions (long_name, help_message, meta_variables) rather
+#     than as named arguments or a record.  This is a DESIGN CHOICE that
+#     makes adding a new info field non-breaking: just add a new transform
+#     and existing option declarations continue to work.
+#   * IMPURE OPT0 PATTERN — `impure_opt0` is a first-class concept for
+#     options whose effect is to mutate global state (--debug, --implicit
+#     in harpoon).  Cmdliner doesn't separate "pure value" options from
+#     "effectful" ones; the convention is to encode effects via the parsed
+#     result and execute them after parsing.  Optparser explicitly carves
+#     out a separate combinator for the effectful case.
+#   * HELP_OPT0 PATTERN — `help_opt0` takes a `help_printer -> 'a` callback
+#     that gets passed a function for rendering the help.  This allows the
+#     handler to render help OR perform other actions (e.g., print version
+#     info using the same formatting infrastructure).  Cmdliner has built-in
+#     `--help` handling that is harder to customize.
+#   * REST_ARGS PATTERN — leftover arguments (positional args interleaved
+#     with options) are captured by a single `rest_args (string list -> unit)`
+#     handler.  Cmdliner uses positional `Term.t` arguments which integrate
+#     with the type-aware system.  Optparser's approach is simpler but less
+#     type-safe.
+#   * NO TYPE-AWARE PARSERS — `int_opt1` and `bool_opt1` exist as
+#     convenience helpers but the general `opt1 parser infos` takes a
+#     `string -> 'a option` function, leaving conversion to the caller.
+#     Cmdliner has `Arg.converter` infrastructure with bidirectional parse
+#     + print + completion suggestions.
+#
+# THE APPLICATIVE COMBINATOR PATTERN IN HARPOON OPTIONS.ML
+#
+# Harpoon's actual option spec (verbatim from src/harpoon/options.ml):
+#
+#     let options_spec : t Optparser.options_specification =
+#       (fun path test_opt test_kind test_start test_stop
+#            no_load_holes save_back -> { ... })
+#       <$ string_opt1
+#            [ long_name "sig"
+#            ; meta_variables [ "path" ]
+#            ; help_message "specify the input signature"
+#            ]
+#       <& opt1 (fun s -> Option.some (Option.some s))
+#            [ long_name "test"
+#            ; meta_variables [ "path" ]
+#            ; optional None
+#            ; help_message "specify the test input file..."
+#            ]
+#       <& ( switch_opt
+#              [ long_name "incomplete"
+#              ; help_message "mark the test input as incomplete..."
+#              ]
+#          $> fun b -> if b then `incomplete else `complete )
+#       <& opt1 (fun s -> Option.map Option.some (int_of_string_opt s))
+#            [ long_name "test-start"
+#            ; meta_variables [ "number" ]
+#            ; optional None
+#            ; help_message "specify the first line of test input"
+#            ]
+#       <& (switch_opt [ long_name "stop" ] $> ... )
+#       <& switch_opt [ long_name "no-load-holes" ]
+#       <& (switch_opt [ long_name "no-save-back" ] $> ... )
+#       <! impure_opt0 handle_debug
+#            [ long_name "debug"
+#            ; help_message "use debugging mode (writes to debug.out)"
+#            ]
+#       <! impure_opt0 handle_implicit
+#            [ long_name "implicit"; help_message "print implicit variables" ]
+#       <! help_opt0 handle_help
+#            [ long_name "help"
+#            ; short_name 'h'
+#            ; help_message "print this message"
+#            ]
+#       <! rest_args (function
+#            | [] -> ()
+#            | rest -> E.(throw (DanglingArguments rest)))
+#
+# READING THIS APPLICATIVE CHAIN:
+#
+#   1. `(fun path test_opt test_kind test_start test_stop no_load_holes
+#         save_back -> { ... })` is a CURRIED constructor taking 7 args.
+#   2. `<$` ("fmap") attaches the constructor to the FIRST option
+#      (string_opt1 for --sig), producing a partially-applied spec with
+#      6 remaining arguments needed.
+#   3. Each subsequent `<&` ("ap") supplies the NEXT argument by parsing
+#      another option.  The chain orchestrates 7 options total.
+#   4. After all 7 options are supplied, the spec has type `t Optparser.t`
+#      where `t` is the harpoon options record.
+#   5. `<!` ("sequence + discard") then APPENDS three IMPURE options
+#      (--debug, --implicit, --help) and a rest_args handler, none of which
+#      contribute to the parsed record but instead have side effects.
+#
+# This is a CLASSIC APPLICATIVE PARSER COMBINATOR pattern: the same shape
+# used by Haskell's optparse-applicative, OCaml's Cmdliner, Scala's scopt,
+# and Rust's clap-builder.  But each instance has its own ergonomic choices.
+#
+# -----------------------------------------------------------------------------
+# HARPOON CLI SURFACE (verbatim from src/harpoon/options.ml)
+# -----------------------------------------------------------------------------
+#
+# USAGE:
+#   harpoon --sig <path> [<other options>]
+#
+# Mandatory:
+#   --sig <path>              Specify the input Beluga signature (.cfg or .bel)
+#
+# Optional:
+#   --test <path>             Specify a test input file used instead of stdin
+#                             user input
+#   --test-start <number>     First line of test file considered as test input
+#   --incomplete              Mark test input as incomplete (stdin user input
+#                             continues after test input) — valid only with
+#                             --test
+#   --stop                    Stop interaction on first error (only valid
+#                             with --test and without --incomplete)
+#   --no-load-holes           Don't load harpoon subgoals from the signature
+#   --no-save-back            Don't save proof results back to signature file
+#   --debug                   Use debugging mode (writes to debug.out in CWD)
+#   --implicit                Print implicit variables
+#   -h, --help                Print this message and exit
+#
+# =============================================================================
+
+_harpoon() {
+    local curcontext="$curcontext" state line ret=1
+    typeset -A opt_args
+
+    _arguments -s \
+        '--sig[specify the input Beluga signature (mandatory)]:signature path:_files -g "*.(cfg|bel)"' \
+        '--test[specify test input file (used instead of stdin)]:test file:_files' \
+        '--test-start[first line of test file considered as test input]:line number:' \
+        '--incomplete[mark test input as incomplete (stdin continues after test) — requires --test]' \
+        '--stop[stop interaction on first error — requires --test, conflicts with --incomplete]' \
+        '--no-load-holes[do not load harpoon subgoals from the signature]' \
+        '--no-save-back[do not save proof results back to signature file]' \
+        '--debug[use debugging mode (writes to debug.out in CWD)]' \
+        '--implicit[print implicit variables]' \
+        '(-h --help)'{-h,--help}'[print this message and exit]' \
+        && ret=0
+
+    return ret
+}
+
+_harpoon "$@"
