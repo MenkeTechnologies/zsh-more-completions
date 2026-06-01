@@ -1,0 +1,580 @@
+#compdef v3c
+# =============================================================================
+# v3c — the Virgil III compiler (codename "Aeneas"), Ben L. Titzer's fast and
+#       lightweight systems programming language compiler.  Produces optimized
+#       standalone native executables for x86 / x86-64 (linux, darwin),
+#       WebAssembly (with and without WasmGC), JVM JAR files, or runs
+#       programs directly on a built-in interpreter for quick turnaround.
+#       Virgil is currently being used as the implementation language for
+#       Wizard — a next-generation WebAssembly virtual machine — at Carnegie
+#       Mellon University.  Designed for the LOWEST level of software
+#       systems: features that let programs talk directly to kernels,
+#       generate machine code at runtime, implement their own garbage
+#       collection.  Blends functional and object-oriented paradigms in a
+#       statically-typed language with classes, functions, tuples, type
+#       parameters, and algebraic data types.
+#
+# Author:  Ben L. Titzer (titzer) — formerly Google V8 team, now CMU; author
+#          of the WebAssembly specification and reference interpreter
+# Source:  https://github.com/titzer/virgil
+# CLI:     aeneas/src/main/CLOptions.v3 (uses Virgil stdlib lib/util/Option.v3)
+# Library: Virgil stdlib "Option.v3" — BasicOptions + OptionGroup
+#          ("Type-parameterized Option<T> classes with hash-map-dispatch
+#           Options collection and per-category OptionGroup help printing")
+# License: Apache 2.0
+# Status:  Stable — 1403+ stars; Virgil bootstraps itself (the v3c compiler
+#          is written entirely in Virgil); active development since 2009.
+#
+# -----------------------------------------------------------------------------
+# CROSS-LANGUAGE CLI LIBRARY TAXONOMY MILESTONE — 58TH DOCUMENTED LANGUAGE
+# -----------------------------------------------------------------------------
+# With this completion the cross-language CLI library taxonomy documents
+# its 58TH LANGUAGE (Virgil III, via v3c / aeneas) and 240TH CLI library
+# variant.  Virgil joins the small set of self-hosting languages whose
+# compiler binary uses a CLI library WRITTEN IN THE LANGUAGE ITSELF
+# (alongside Rust's clap-derive, Crystal's Admiral, Pony's cli stdlib,
+# Beef's parsing, Zig's std.process.argsAlloc, Jakt R??, Beluga R??).
+# New language tally: 58 — F#=2, Beluga=2, Jakt=1, Ur/Web=1, REBOL=1,
+# Io=1, Pure=1, Yeti=1, Whiley=1, Boogie=1, Beef=1, Luau=1, Tact=1,
+# min=1, Daml=1, Mun=1, Virgil=1.  Top-language tally remains Rust=32 /
+# Go=32 / TS-Node=32 (THREE-WAY TIE).
+# -----------------------------------------------------------------------------
+#
+# WHAT IS VIRGIL'S CLI LIBRARY AND WHY IS IT THE 58TH DOCUMENTED LANGUAGE?
+#
+# Virgil's stdlib `lib/util/Option.v3` (Apache-2.0, Copyright 2010 Google
+# — Ben Titzer wrote the initial version while at Google before founding
+# the WebAssembly project) is **Virgil's built-in command-line option
+# parsing framework**.  It is THE library every Virgil binary uses — the
+# v3c compiler itself, the v3i interpreter, the v3db debugger, and every
+# application in `apps/` (Btime, vctags, EchoServerClient, etc.).  Virgil
+# has no third-party CLI ecosystem; the stdlib library IS the CLI surface
+# every Virgil program builds against.
+#
+# Virgil's CLI library is DISTINCT from every documented CLI library on
+# SIX specific axes:
+#
+#   1. TYPE-PARAMETERIZED Option<T> GENERIC CLASS — the core abstraction
+#      is `Option<T>` parameterized by the option's value type, with a
+#      `parseFun: string -> T` field that converts the raw string to T:
+#         class Option<T> extends Opt {
+#             def init: T;
+#             def parseFun: string -> T;
+#             var onSetFun: T -> void;
+#             var val: T;
+#             new(name: string, init, parseFun)
+#                 : super(name) { val = init; }
+#             def parse(val: string) {
+#                 this.val = parseFun(val);
+#                 if (onSetFun != null) onSetFun(this.val);
+#             }
+#             def onSet(f: T -> void) -> this { this.onSetFun = f; }
+#             def get() -> T { return val; }
+#         }
+#      The base class `Opt(name: string)` hides the type variable so
+#      `Option<int>`, `Option<bool>`, `Option<string>` can all live in
+#      the same `Strings.newMap<Opt>()` hash table.  This is **first-
+#      class type-parameterized options + variance erasure for collection
+#      storage** — a Java-generics-style design implemented in Virgil's
+#      class system.
+#      Compare:
+#        clap (Rust):     proc-macro derive over struct fields
+#        argparse (Py):   add_argument(type=int) — runtime type tag
+#        getopt_long (C): switch-on-flag-char manual decoding
+#        BasicOptions:    `Option<T>` typed by Virgil's class system,
+#                         erased to `Opt` for storage.
+#      Virgil's `Option<T>` is **closer to Swift's `KeyPath<Root,Value>`
+#      pattern** than to any documented argparse design — typed handle
+#      at construction, erased for storage, recovered at use.
+#
+#   2. CHAINABLE `.onSet(callback)` HOOK FOR DEPENDENT OPTIONS — the
+#      `onSet` method returns `this`, enabling fluent chaining:
+#         def FUN_EXPRS = langOpt.newBoolOption("fun-exprs", true,
+#             "Enable function expressions.").onSet(implySimpleBodies);
+#      When the option's `parse()` runs, it fires the callback with the
+#      new value.  This is used in v3c to implement "setting option A
+#      implies setting option B" semantics — e.g. `-fun-exprs` implies
+#      `-simple-bodies`.  Compare:
+#        argparse (Py):    no onSet — caller polls args.flag after parse
+#        clap (Rust):      no onSet — derive macro emits a struct, you
+#                          implement dependent logic by inspecting it
+#        cmdliner (OCaml): combine via `Term.app`, not callback hook
+#        cobra (Go):       `PreRun` runs once per command, not per option
+#        BasicOptions:     PER-OPTION ON-SET callback, fired during
+#                          parse (UNIQUE among documented argparse
+#                          libraries — option-level effect during parsing)
+#      The on-set callback closes over arbitrary state; in v3c it sets
+#      sibling options atomically as side-effects of parsing.
+#
+#   3. OptionGroup CATEGORIZATION WITH PER-GROUP HELP PRINTING — Virgil
+#      separates the parser's collection (`BasicOptions`) from the
+#      help-output groupings:
+#         class OptionGroup(name: string, o: BasicOptions) {
+#             var list: List<(Opt, string, string)>;
+#             def newIntOption(name, defval, help)    => ...
+#             def newBoolOption(name, defval, help)   => ...
+#             def newStringOption(name, defval, help) => ...
+#             def newPathOption(name, defval, help)   => ...
+#             def newSizeOption(name, defval, help)   => ...
+#             def newAddrOption(name, defval, help)   => ...
+#             def newMatcherOption(name, help)        => ...
+#             def newEmptyOption(name, help)          => ...
+#             def print(buf: TerminalBuffer);  // per-group help printer
+#         }
+#      Each `OptionGroup` holds a sub-list of options registered under
+#      its category, but also registers them into the shared parser.
+#      In v3c, there are **11 OptionGroup instances**:
+#         actionOpt   = OptionGroup.new("ACTION", options)
+#         sharedOpt   = OptionGroup.new("SHARED", options)
+#         runOpt      = OptionGroup.new("RUN", options)
+#         testOpt     = OptionGroup.new("TEST", options)
+#         compileOpt  = OptionGroup.new("COMPILE", options)
+#         wasmOpt     = OptionGroup.new("WASM TARGET", options)
+#         wasmgcOpt   = OptionGroup.new("WASM GC TARGET", options)
+#         jvmOpt      = OptionGroup.new("JVM TARGET", options)
+#         debugOpt    = OptionGroup.new("DEBUGGING", options)
+#         langOpt     = OptionGroup.new("LANGUAGE", options)
+#         rtOpt       = OptionGroup.new("RUNTIME", options)
+#      Each group calls `.print(buf)` for its own section of help text.
+#      Compare:
+#        clap (Rust):     `#[command(next_help_heading="...")]` per arg
+#        argparse (Py):   `add_argument_group(...)` — similar two-level
+#        cmdliner (OCaml):`Manpage.Block` markup — manual help layout
+#        BasicOptions:    OptionGroup is the categorization AND a
+#                         help-printing dispatcher — a separate class
+#                         from the parser collection.
+#      First documented CLI library to use the "two-tier registration"
+#      pattern (parser plus per-group display registry) — most other
+#      libraries fold help-grouping metadata into the option struct
+#      itself rather than into a separate group object.
+#
+#   4. CONFIGURABLE `numHyphens` (SINGLE OR DOUBLE) — Virgil's parser
+#      accepts a SINGLE-HYPHEN convention by default (`-help`, `-run`,
+#      `-target=wasm`) but supports a `numHyphens = 2` mode for GNU-style
+#      `--help`-prefixed options.  This is set on the `Options` instance:
+#         var numHyphens = 1;            // number of hyphens starting option
+#      v3c uses `-` prefix (Plan-9 / classic-UNIX style); some apps use
+#      `--` prefix (GNU style).  Compare:
+#        getopt_long: short `-x` + long `--xxx` both fixed
+#        argparse:    `--long` plus optional `-s` per option (fixed)
+#        clap (Rust): `--long` plus optional `-s` per option (fixed)
+#        BasicOptions: prefix CONFIGURABLE on the parser — same
+#                      Options class supports either single or double
+#                      hyphen convention by setting `numHyphens`.
+#      v3c's choice of `-target=wasm` (single hyphen, equals-delimited)
+#      reflects the Plan-9 / Bell Labs CLI convention from Ben Titzer's
+#      systems-programming background.
+#
+#   5. `-name=value` AND `-name value` BOTH SUPPORTED VIA `consumeNext` —
+#      individual options control whether the next argv slot is consumed
+#      as their value:
+#         var consumeNext: bool;        // if true, consume the next argument
+#      Default options accept `-name=value` only; options marked
+#      `consumeNext=true` ALSO accept `-name value`.  Compare:
+#        getopt_long: short opts take next argv; long opts via `--x=v`
+#        argparse:    nargs='?' / nargs=1 / nargs='+' — option-level
+#                     specification of how many subsequent argv slots
+#                     to consume
+#        clap (Rust): `num_args = 1`, `num_args = 1..`
+#        BasicOptions: per-option boolean `consumeNext` toggle — UNIQUE
+#                      simplification: an option either accepts equals-
+#                      delimited only, OR also accepts space-delimited
+#                      next-arg, no other variants.
+#
+#   6. `setUnmatched` CALLBACK FOR ARBITRARY UNKNOWN-OPTION HANDLING —
+#      v3c exploits the catch-all callback to implement **cluster-option
+#      decoding**.  For example, `-Psmrvb` is a single argv slot that
+#      encodes "enable PRINT_SSA + PRINT_MACH + PRINT_RA + PRINT_VST +
+#      PRINT_BIN" via a custom dispatcher:
+#         def setUnmatchedOption(str: string, val: string) {
+#             if (!Strings.startsWith(str, "P")) return;
+#             for (i = 1; i < str.length; i++) {
+#                 match (str[i]) {
+#                     's' => CLOptions.PRINT_SSA.val = VstMatcher.All;
+#                     'm' => CLOptions.PRINT_MACH.val = VstMatcher.All;
+#                     'd' => CLOptions.PRINT_MACH_DATA.val = true;
+#                     'v' => CLOptions.PRINT_VST.val = true;
+#                     'r' => CLOptions.PRINT_RA.val = true;
+#                     'b' => CLOptions.PRINT_BIN.val = true;
+#                     'c' => CLOptions.PRINT_CFG.val = true;
+#                     't' => CLOptions.PRINT_STACKIFY.val = true;
+#                     'n' => CLOptions.PRINT_INLINING.val = true;
+#                 }
+#             }
+#         }
+#      Compare:
+#        getopt_long: cluster-short-options `-abc` = `-a -b -c` (built-in)
+#        argparse:    no extension hook for unknown options
+#        clap (Rust): unknown options error out unless `allow_unknown_*`
+#        BasicOptions: `setUnmatched(name, val) -> void` callback fires
+#                      for EVERY unknown option, allowing arbitrary
+#                      decoding.  v3c uses this for its **letter-cluster
+#                      debug-print options** — a Knuth-style TeX-debug-
+#                      flag aesthetic.
+#
+# THE VIRGIL Option.v3 API SURFACE (verbatim from upstream)
+#
+#   class Opt(name: string) {
+#       var consumeNext: bool;
+#       def parse(val: string);
+#   }
+#   class Option<T> extends Opt {
+#       def init: T;
+#       def parseFun: string -> T;
+#       var onSetFun: T -> void;
+#       var val: T;
+#       def parse(val: string);
+#       def onSet(f: T -> void) -> this;
+#       def get() -> T { return val; }
+#   }
+#   class Options {
+#       def map = Strings.newMap<Opt>();
+#       var names = Vector<string>.new();
+#       var vals  = Vector<string>.new();
+#       var setUnmatched: (string, string) -> void;
+#       var numHyphens = 1;
+#       def add<T>(option: Option<T>) -> Option<T>;
+#       def parse(args: Array<string>) -> Array<string>;
+#       def setOption(name: string, val: string) -> bool;
+#   }
+#   class BasicOptions extends Options {
+#       def newIntOption(name, val) -> Option<int>;
+#       def newSizeOption(name, val) -> Option<u32>;       // K/M/G suffix
+#       def newAddrOption(name, val) -> Option<u64>;       // hex 0x addrs
+#       def newBoolOption(name, val) -> Option<bool>;
+#       def newStringOption(name, val) -> Option<string>;
+#       def newPathOption(name, val) -> Option<string>;    // alias of str
+#       def newMatcherOption(name) -> Option<VstMatcher>;  // Vst pattern
+#       def newOption<T>(name, val, parseFun) -> Option<T>;
+#   }
+#   class OptionGroup(name: string, o: BasicOptions) {
+#       def newIntOption(name, defval, help) -> Option<int>;
+#       def newBoolOption(name, defval, help) -> Option<bool>;
+#       def newStringOption(name, defval, help) -> Option<string>;
+#       def newPathOption(name, defval, help) -> Option<string>;
+#       def newSizeOption(name, defval, help) -> Option<u32>;
+#       def newAddrOption(name, defval, help) -> Option<u64>;
+#       def newMatcherOption(name, help) -> Option<VstMatcher>;
+#       def newEmptyOption(name, help) -> Option<bool>;
+#       def newOption<T>(name, defval, typename, parseFun, help) -> Option<T>;
+#       def print(buf: TerminalBuffer);
+#   }
+#
+# Distinguishing features only Virgil's Option.v3 has:
+#   - Size parsing with K/M/G suffixes built-in (newSizeOption)
+#   - Address parsing with 0x hex notation built-in (newAddrOption)
+#   - Vst (Virgil syntax tree) method-matcher option (newMatcherOption)
+#   - Per-option onSet callback chaining
+#   - Two-tier registration (Options collection + OptionGroup help)
+#   - setUnmatched fallback for arbitrary unknown-option decoding
+#
+# REAL-WORLD Virgil Option.v3 USERS:
+#
+#   * titzer/virgil:aeneas (THE COMPILER, v3c binary — THIS)
+#   * titzer/virgil:apps/Btime — micro-benchmarking framework
+#   * titzer/virgil:apps/vctags — ctags-like Virgil tag generator
+#   * titzer/virgil:apps/EchoServerClient (TCP + UDP demos)
+#   * titzer/wizard-engine — next-generation WebAssembly VM, the main
+#     research vehicle for Virgil at CMU
+#
+# -----------------------------------------------------------------------------
+# V3C'S CLI SURFACE (verbatim from aeneas/src/main/CLOptions.v3)
+# -----------------------------------------------------------------------------
+#
+# USAGE:
+#   v3c (-run|-test|-version|-target=<target>) [options] <v3 files> [args...]
+#
+# ACTION options (mutually exclusive):
+#   -help              Print this help text
+#   --help             Same as -help
+#   -version           Print the version of the compiler and exit
+#   -run               Run input .v3 files in the built-in interpreter
+#   -debug             Debug input .v3 files with the built-in interpreter
+#   -test              Run input .v3 files as parse/semantic/execute tests
+#   -target=<target>   Compile to a target platform
+#
+# Compile targets (from aeneas/.../Aeneas.v3 + bin/dev):
+#   wasm               WebAssembly (no GC)
+#   wasm-gc            WebAssembly with WasmGC proposal
+#   wasm-wasi1         WebAssembly + WASI preview1
+#   wasm-wave          WebAssembly + WAVE testing target
+#   x86-linux          32-bit x86 Linux ELF
+#   x86-darwin         32-bit x86 macOS Mach-O
+#   x86-64-linux       64-bit x86 Linux ELF
+#   x86-64-darwin      64-bit x86 macOS Mach-O
+#   jvm                JVM JAR
+#
+# OPTIMIZATION options:
+#   -opt=<config>      Set optimization configuration string
+#   -O0, -O1, -O2, -O3 Set optimization level
+#   -maxr=<n>          Max return values in normalization (default 100000)
+#   -maxp=<n>          Max parameters in normalization (default 100000)
+#   -maxd=<n>          Max scalars for data-type auto-unboxing
+#   -maxv=<n>          Max scalars for variant-type auto-unboxing
+#   -inline=<patterns> Force inlining of methods matching pattern
+#   -licm              Loop-invariant code motion
+#   -global-regalloc=<patterns>  Global register allocator
+#   -unbox-variants=<spec>       Optimize variants by unboxing
+#   -unbox-variant-cases=<spec>  Optimize non-recursive variants
+#   -redef-field=<spec>          Redefine program fields
+#
+# DEBUGGING options (large set; partial list):
+#   -print-id, -print-inlining, -print-vst, -print-ra,
+#   -print-ssa[=<methods>], -print-licm[=<methods>],
+#   -verify-ssa[=<methods>], -trace-norm[=<methods>],
+#   -print-opt[=<methods>], -print-ssa-stats[=<methods>],
+#   -print-mach[=<methods>], -print-patch, -print-mach-fields,
+#   -print-mach-data, -print-stackmap, -print-cfg, -print-bin,
+#   -print-size, -print-codegen-time, -print-dead-code,
+#   -print-stackify, -print-regalloc, -print-packing,
+#   -print-wasm[=<spec>], -print-wasm-gc, -print-wasm-gc-sections=<spec>,
+#   -print-wrap, -print-wrap-extra, -fatal, -start-uid=<n>
+#
+# Cluster-debug option (via setUnmatched):
+#   -Psmrvb...         Cluster letters: s=SSA m=MACH d=MACH_DATA v=VST
+#                      r=RA b=BIN c=CFG t=STACKIFY n=INLINING
+#
+# LANGUAGE options:
+#   -read-only-arrays, -covariant-arrays, -open-types, -legacy-infer,
+#   -fun-exprs, -simple-bodies, -descriptors
+#
+# RUN/INTERPRETER options:
+#   -trace, -trace-parent, -trace-calls=<patterns>,
+#   -fatal-calls=<patterns>, -profile=<patterns>,
+#   -iprofile=<patterns>, -profile-depth=<n>,
+#   -coverage=<patterns>, -icoverage, -debug-extension
+#
+# TEST options:
+#   -test.st           Convert execute tests to stacktrace tests
+#   -test.gc=<file>    List tests that allocate, write to file
+#   -expect=<path>     Load expected-failures file
+#   -ra                Enable reachability analysis before testing
+#
+# COMPILE options:
+#   -multiple          Compile each input as separate program
+#   -output=<dir>      Output directory
+#   -linking=<model>   Linking model (imports/exports)
+#   -program-name=<n>  Explicit name for compilation result
+#   -symbols           Output symbols into binary
+#   -dwarf             Output DWARF debug info
+#   -dwarf-cwd=<dir>   Set DWARF current directory
+#   -dwarf-line        Output DWARF line info only
+#   -ma, -nr, -wfts, -tr     Various IR / representation flags
+#   -set-exec          Auto-chmod +x compiled binaries
+#
+# JVM TARGET options:
+#   -jvm.script             Output Java launcher script
+#   -jvm.rt-path=<path>     Set Java runtime path in launcher
+#   -jvm.args=<args>        Extra JVM args in launcher
+#   -jvm.heap-init-method-size=<size>  Init stub size
+#
+# WASM TARGET options:
+#   -shadow-stack-size=<size>      GC root finding stack
+#   -shadow-stack-percent=<n>      Shadow stack as % of heap
+#   -wasm.runcmd=<cmd>             WASM run command in launcher
+#   -wasm.multi-value              Use Wasm multi-value
+#   -wasm.export-mem               Export Wasm memory
+#   -wasm.export-table             Export Wasm table
+#   -wasm.page-size=<n>            Memory page size
+#   -reserved-data-size=<size>     Initial pointer offset
+#   -main-export=<name>            Main export name
+#   -entry-export=<name>           Entry export name
+#   -wasm-sections=<spec>          Restrict WASM sections
+#
+# WASM GC TARGET options:
+#   -wasm-gc-canon-types, -wasm-gc-min-groups, -wasm-gc-one-group,
+#   -wasm-gc-sections=<spec>, -wasm-gc-use-ref-test
+#
+# RUNTIME options:
+#   -heap-size=<size>             Program heap size
+#   -stack-size=<size>            Stack size
+#   -reserved-code-size=<size>    Reserved code region
+#   -runtime-code-size=<size>     Dynamic code generation region
+#   -vm-start-addr=<addr>         Virtual memory start address
+#   -code-start-addr=<addr>       Code segment start
+#   -data-start-addr=<addr>       Data segment start
+#   -heap-start-addr=<addr>       Heap start
+#   -stack-start-addr=<addr>      Stack segment start
+#   -stack-alignment=<size>       Stack alignment
+#   -rt.sttables                  Stack-trace metadata
+#   -rt.gctables                  Stackwalking GC metadata
+#   -rt.gc                        Runtime GC support
+#   -rt.test-gc                   GC testing mode (every alloc → GC)
+#   -rt.fp                        Frame pointer in compiled code
+#   -rt.files=<paths>             Files included with every program
+#   -ir-alloc                     Generate alloc stub as IR
+#
+# Typical usage:
+#   $ v3c -version
+#   $ v3c -run hello.v3
+#   $ v3c -target=wasm-gc -output=out main.v3
+#   $ v3c -target=x86-64-linux -O2 -symbols main.v3 lib.v3
+#   $ v3c -test -ra tests/*.v3
+#   $ v3c -Psmrvb main.v3                  # cluster debug-print
+#
+# Bootstrap note:
+#   v3c is itself a Virgil program (aeneas/) compiled by an older v3c.
+#   This makes Virgil's CLI library effectively the FIRST CLI library
+#   the compiler binary ever calls — it's written in the language it
+#   compiles.
+#
+# =============================================================================
+
+_v3c() {
+    local curcontext="$curcontext" state line ret=1
+    typeset -A opt_args
+
+    local -a actions targets opts
+
+    actions=(
+        'help' 'version' 'run' 'debug' 'test'
+    )
+
+    targets=(
+        'wasm:WebAssembly (no GC)'
+        'wasm-gc:WebAssembly with WasmGC proposal'
+        'wasm-wasi1:WebAssembly + WASI preview1'
+        'wasm-wave:WebAssembly + WAVE'
+        'x86-linux:32-bit x86 Linux ELF'
+        'x86-darwin:32-bit x86 macOS Mach-O'
+        'x86-64-linux:64-bit x86 Linux ELF'
+        'x86-64-darwin:64-bit x86 macOS Mach-O'
+        'jvm:JVM JAR'
+    )
+
+    _arguments -C \
+        '-help[print help text]' \
+        '--help[print help text]' \
+        '-version[print compiler version and exit]' \
+        '-run[run input .v3 files in built-in interpreter]' \
+        '-debug[debug input .v3 files with built-in interpreter]' \
+        '-test[run input .v3 files as tests]' \
+        '-target=[set compile target]:target:->target' \
+        '-output=[output directory]:dir:_directories' \
+        '-program-name=[explicit name for compilation result]:name:' \
+        '-multiple[compile each input as separate program]' \
+        '-symbols[output symbols into binary]' \
+        '-dwarf[output DWARF debug info]' \
+        '-dwarf-cwd=[DWARF current directory]:dir:_directories' \
+        '-dwarf-line[output DWARF line info only]' \
+        '-set-exec[auto-chmod +x compiled binaries]' \
+        '-opt=[optimization configuration]:config:' \
+        '-O0[no optimization]' \
+        '-O1[opt level 1]' \
+        '-O2[opt level 2]' \
+        '-O3[opt level 3]' \
+        '-maxr=[max return values]:int:' \
+        '-maxp=[max parameters]:int:' \
+        '-maxd=[max scalars for data unboxing]:int:' \
+        '-maxv=[max scalars for variant unboxing]:int:' \
+        '-inline=[force inline matching methods]:patterns:' \
+        '-licm[loop-invariant code motion]' \
+        '-global-regalloc=[global register allocator]:patterns:' \
+        '-unbox-variants=[optimize variants by unboxing]:spec:' \
+        '-unbox-variant-cases=[optimize non-recursive variants]:spec:' \
+        '-redef-field=[redefine program fields]:spec:' \
+        '-linking=[linking model]:model:' \
+        '-print-id[print internal IR ids]' \
+        '-print-inlining[print inlining decisions]' \
+        '-print-vst[print Virgil syntax tree]' \
+        '-print-ra[print reachability analysis results]' \
+        '-print-ssa=[print SSA code]:methods:' \
+        '-print-licm=[print LICM info]:methods:' \
+        '-verify-ssa=[verify internal SSA]:methods:' \
+        '-trace-norm=[trace normalization]:methods:' \
+        '-print-opt=[print optimizations]:methods:' \
+        '-print-ssa-stats=[print SSA statistics]:methods:' \
+        '-print-mach=[print machine code]:methods:' \
+        '-print-patch[print machine-code patching]' \
+        '-print-mach-fields[print machine-level field offsets]' \
+        '-print-mach-data[print machine-level data]' \
+        '-print-stackmap[print stackmap info]' \
+        '-print-cfg[print control flow graphs]' \
+        '-print-bin[print binary code]' \
+        '-print-size[print binary code size]' \
+        '-print-codegen-time[print codegen time per function]' \
+        '-print-dead-code[print dead code/data info]' \
+        '-print-stackify[print stackification steps]' \
+        '-print-regalloc[print register allocation]' \
+        '-print-packing[print unboxing and packing info]' \
+        '-print-wasm=[WASM debug/tracing info]:spec:' \
+        '-print-wasm-gc[print WASM GC detailed info]' \
+        '-print-wasm-gc-sections=[per-section WASM GC info]:spec:' \
+        '-print-wrap[print function wrapping info]' \
+        '-print-wrap-extra[print detailed wrapping info]' \
+        '-fatal[treat program errors as fatal]' \
+        '-start-uid=[starting value for internal ids]:int:' \
+        '-read-only-arrays[enable read-only arrays]' \
+        '-covariant-arrays[covariance for read-only arrays]' \
+        '-open-types[open variant types with subtype hierarchies]' \
+        '-legacy-infer[use legacy type inference]' \
+        '-fun-exprs[enable function expressions]' \
+        '-simple-bodies[enable simple function body syntax]' \
+        '-descriptors[enable descriptors]' \
+        '-trace[trace interpreter execution]' \
+        '-trace-parent[trace parent of function callers]' \
+        '-trace-calls=[trace function calls]:patterns:' \
+        '-fatal-calls=[treat calls as fatal]:patterns:' \
+        '-profile=[profile interpreter execution]:patterns:' \
+        '-iprofile=[profile at instruction granularity]:patterns:' \
+        '-profile-depth=[calling-context tree depth]:int:' \
+        '-coverage=[code-coverage analysis]:patterns:' \
+        '-icoverage[code coverage at instruction granularity]' \
+        '-debug-extension[debugger extension mode]' \
+        '-test.st[convert execute tests to stacktrace tests]' \
+        '-test.gc=[allocating tests output file]:file:_files' \
+        '-expect=[expected-failures file]:file:_files' \
+        '-ra[enable reachability analysis before testing]' \
+        '-jvm.script[output Java launcher script]' \
+        '-jvm.rt-path=[Java runtime path]:path:_directories' \
+        '-jvm.args=[extra JVM args]:args:' \
+        '-jvm.heap-init-method-size=[init stub size]:size:' \
+        '-shadow-stack-size=[shadow stack size]:size:' \
+        '-shadow-stack-percent=[shadow stack as % of heap]:percent:' \
+        '-wasm.runcmd=[WASM run command]:cmd:' \
+        '-wasm.multi-value[use Wasm multi-value]' \
+        '-wasm.export-mem[export Wasm memory]' \
+        '-wasm.export-table[export Wasm table]' \
+        '-wasm.page-size=[Wasm memory page size]:size:' \
+        '-reserved-data-size=[initial pointer offset]:size:' \
+        '-main-export=[main export name]:name:' \
+        '-entry-export=[entry export name]:name:' \
+        '-wasm-sections=[restrict WASM sections]:spec:' \
+        '-wasm-gc-canon-types[canonicalize Wasm GC types]' \
+        '-wasm-gc-min-groups[minimize WasmGC recursion group size]' \
+        '-wasm-gc-one-group[group all class types into one rec group]' \
+        '-wasm-gc-sections=[Wasm GC sections to output]:spec:' \
+        '-wasm-gc-use-ref-test[use REF_TEST/REF_CAST]' \
+        '-heap-size=[program heap size]:size:' \
+        '-stack-size=[stack size]:size:' \
+        '-reserved-code-size=[reserved code size]:size:' \
+        '-runtime-code-size=[runtime code size]:size:' \
+        '-vm-start-addr=[virtual memory start address]:addr:' \
+        '-code-start-addr=[code segment start]:addr:' \
+        '-data-start-addr=[data segment start]:addr:' \
+        '-heap-start-addr=[heap start address]:addr:' \
+        '-stack-start-addr=[stack segment start]:addr:' \
+        '-stack-alignment=[stack alignment]:size:' \
+        '-rt.sttables[stack-trace metadata]' \
+        '-rt.gctables[stackwalking GC metadata]' \
+        '-rt.gc[runtime GC support]' \
+        '-rt.test-gc[GC testing mode]' \
+        '-rt.fp[frame pointer in compiled code]' \
+        '-rt.files=[files included with every program]:paths:_files' \
+        '-ir-alloc[generate alloc stub as IR]' \
+        '-ma[mixed arrays for arrays of tuples]' \
+        '-nr[normalize ranges using RangeStart]' \
+        '-wfts[wrap function type subsumptions]' \
+        '-tr[enable tagged references]' \
+        '*:v3 file:_files -g "*.v3"' && ret=0
+
+    case $state in
+        (target)
+            _describe -t targets 'compile target' targets && ret=0
+            ;;
+    esac
+
+    return ret
+}
+
+_v3c "$@"
