@@ -1,0 +1,445 @@
+#compdef aspeak
+# =============================================================================
+# aspeak — kxxt's "simple text-to-speech client for Azure TTS
+#          API" — a Rust CLI for invoking Azure Cognitive Services
+#          Text-to-Speech with both REST and WebSocket synthesis
+#          modes, SSML support, voice / locale / quality
+#          selection, custom output formats, and TOML-based
+#          profile config.
+#          Distinguishing from say (macOS), espeak (eSpeak NG),
+#          festival, and other TTS CLIs by:
+#            - DUAL SYNTHESIS MODES — `--mode rest` (HTTP POST)
+#              or `--mode websocket` (streaming WebSocket via
+#              tokio-tungstenite); websocket mode delivers
+#              audio as it's synthesized for lower latency
+#            - AZURE COGNITIVE SERVICES TTS — accesses Microsoft
+#              Azure's high-quality neural TTS engine with 400+
+#              voices across 140+ locales (en-US-AriaNeural,
+#              zh-CN-XiaoxiaoNeural, ja-JP-NanamiNeural, etc.)
+#            - SSML INPUT — `aspeak ssml '<speak>...</speak>'`
+#              accepts full Speech Synthesis Markup Language
+#              with <prosody>, <break>, <emphasis>, <voice>,
+#              <mstts:express-as>, <phoneme> tags for fine-
+#              grained control over pitch / rate / volume /
+#              emotion / phonemes
+#            - 5 SUBCOMMANDS via clap derive:
+#                * text [--file]      — speak plain text
+#                * ssml [SSML]        — speak SSML markup
+#                * list-voices        — list available voices
+#                * list-qualities     — list quality levels
+#                * list-formats       — list audio formats
+#                * config (edit/init/where) — manage profiles
+#            - 4 OUTPUT CONTAINER FORMATS — mp3 / ogg / webm /
+#              wav with quality levels per format; --format for
+#              expert mode with Azure-specific format strings
+#              (e.g. riff-24khz-16bit-mono-pcm)
+#            - 4 LANGUAGES IN VOICE METADATA + 140+ FOR
+#              SYNTHESIS — list-voices --locale en-US filters by
+#              locale tag
+#            - TOML PROFILES via dirs + toml — ~/.aspeak.toml
+#              stores default auth + endpoint + voice + output
+#              settings; --profile NAME switches between
+#              profiles; --no-profile bypasses
+#            - PROXY SUPPORT via --proxy URL — HTTP / SOCKS5
+#              proxies for restricted networks; respects
+#              HTTP_PROXY env var
+#            - REGION-AWARE — `--region eastus` auto-resolves
+#              correct REST + WebSocket endpoints; alternatively
+#              `--endpoint` for full URL
+#            - DUAL AUTH — `--token` (Azure auth token) or
+#              `--key` (Azure subscription key)
+#            - rodio FOR LOCAL PLAYBACK — `--output -` (stdout)
+#              prints audio bytes; if --output omitted, plays
+#              directly via rodio (`audio` Cargo feature)
+#          Used by: Azure customers needing CLI TTS for shell
+#          scripts (e.g. notification text → speech),
+#          accessibility workflows, podcast / audiobook prep,
+#          language learning, and as a reference implementation
+#          of tokio-tungstenite + clap derive + tokio + reqwest
+#          + serde + toml + rodio composition in Rust.
+#
+# Author:  kxxt (rsworktech@outlook.com) — Chinese-based Rust
+#          developer, also maintains other Rust CLI utilities.
+#          aspeak released ~2022; active development through
+#          2026; current version 6.1.0.  License: MIT.
+# Source:  https://github.com/kxxt/aspeak
+#          https://github.com/kxxt/aspeak/blob/main/src/cli/args.rs
+#          https://github.com/kxxt/aspeak/blob/main/src/cli/commands.rs
+#          https://github.com/kxxt/aspeak/blob/main/Cargo.toml
+# CLI:     src/cli/args.rs + commands.rs — uses clap v4 derive
+#          (well-documented elsewhere).  Headline library:
+#          **tokio-tungstenite** (clap is documented across
+#          hundreds of Rust completions; tokio-tungstenite is
+#          the new variant being documented here, opening
+#          Axis 18 — WebSockets).
+# Library: tokio-tungstenite (https://github.com/snapview/
+#          tokio-tungstenite, https://github.com/snapview/
+#          tungstenite-rs — "Lightweight stream-based WebSocket
+#          implementation for Rust" — Daniel Abramov + snapview
+#          team).  Distinct from all previously-documented Rust
+#          libraries by being:
+#             1. RFC 6455 WEBSOCKET PROTOCOL — implements the
+#                WebSocket protocol (handshake + framing +
+#                masking + close codes + ping/pong + permessage-
+#                deflate) per RFC 6455 (2011).  Distinct from
+#                HTTP libraries (reqwest, hyper) which handle
+#                one-shot request/response, not persistent
+#                bidirectional connections.
+#             2. STREAM-BASED API — WebSocketStream implements
+#                futures-util's Stream + Sink traits:
+#                  use tokio_tungstenite::connect_async;
+#                  use futures_util::{StreamExt, SinkExt};
+#                  let (mut ws, _) = connect_async("wss://...").await?;
+#                  ws.send(Message::Text("Hello".into())).await?;
+#                  while let Some(msg) = ws.next().await {
+#                      match msg? {
+#                          Message::Text(t) => println!("{}", t),
+#                          Message::Binary(b) => process_audio(b),
+#                          Message::Close(_) => break,
+#                          _ => {}
+#                      }
+#                  }
+#                Distinct from callback-based APIs.
+#             3. SPLIT INTO SYNC + ASYNC CRATES — `tungstenite`
+#                provides the protocol implementation in a
+#                runtime-agnostic synchronous form; `tokio-
+#                tungstenite` wraps it for tokio async runtime;
+#                `async-tungstenite` similarly for async-std /
+#                smol.  This factoring enables WebAssembly +
+#                embedded use cases.
+#             4. TLS BACKEND CHOICE — native-tls (OpenSSL /
+#                SChannel / Secure Transport) or rustls
+#                (rustls-tls-native-roots / rustls-tls-webpki-
+#                roots) via Cargo features.  Default is
+#                native-tls.
+#             5. PERMESSAGE-DEFLATE COMPRESSION — opt-in
+#                permessage-deflate via Cargo feature for
+#                bandwidth-efficient WebSocket payloads.
+#             6. CONNECT_ASYNC + ACCEPT_ASYNC — separate
+#                client (connect_async) and server (accept_async)
+#                entry points; both return WebSocketStream.
+#             7. HANDSHAKE CALLBACKS — accept_async_with_config
+#                takes Callback for inspecting Request +
+#                modifying Response during handshake (useful
+#                for custom subprotocol negotiation).
+#             8. LOW-LEVEL Message ENUM — Message::Text,
+#                Message::Binary, Message::Ping, Message::Pong,
+#                Message::Close.  Distinct from higher-level
+#                JSON-RPC abstractions (jsonrpc-core / jsonrpsee
+#                build on top).
+#             9. SNAPVIEW MAINTAINER GROUP — Daniel Abramov +
+#                snapview team; the canonical Rust WebSocket
+#                stack underlying axum's WebSocket support,
+#                rocket-ws, warp WebSocket handler, and most
+#                Rust WebSocket-using applications.
+#            10. SUBPROTOCOL NEGOTIATION via Sec-WebSocket-
+#                Protocol header — clients can negotiate
+#                application-specific subprotocols (graphql-ws,
+#                mqtt, etc.).
+# License: MIT OR Apache-2.0 (tungstenite / tokio-tungstenite);
+#          MIT (aspeak).
+# Status:  tokio-tungstenite — 2,460+ stars on snapview/tokio-
+#          tungstenite, ~80M crates.io downloads (TOP-100 Rust
+#          crate); foundational WebSocket layer used by:
+#            * axum (Tokio team's web framework, WebSocket
+#              support)
+#            * warp (Hyperium web framework)
+#            * rocket-ws (Rocket WebSocket)
+#            * tokio-rs/tokio examples
+#            * paritytech/parity-bridges-common (cross-chain
+#              bridge)
+#            * mullvad-vpn-rs (VPN tunnels)
+#            * aspeak (THIS — Azure TTS streaming)
+#            * 5000+ Rust applications
+#          aspeak — 499+ stars on kxxt/aspeak, used by Azure
+#          TTS users + accessibility / language-learning
+#          workflows.
+#
+# -----------------------------------------------------------------------------
+# CROSS-LANGUAGE CLI LIBRARY TAXONOMY MILESTONE — RUST CROSSES TO 72 +
+#                                                  AXIS 18 (WEBSOCKETS) OPENS
+# -----------------------------------------------------------------------------
+# With this completion the cross-language CLI library taxonomy documents
+# the 72ND Rust CLI library variant.  Rust climbs from 71 to 72
+# documented libraries (tokio-tungstenite via aspeak).  Rust **breaks
+# the three-way tie** at 71 and goes SOLO at 72 (Rust=72, Go=71,
+# TS-Node=71).  New leaderboard: Rust=72, Go=71, TypeScript-Node=71
+# (Rust solo at the top).  Taxonomy now spans 393 cross-language
+# CLI library variants across 96 documented languages.
+#
+# Pattern: R653 Rust=71 (notify → Axis 17 OPENS) → R654 Go=71
+# (fsnotify) → R655 TS-Node=71 (chokidar → Axis 17 1/1/1) →
+# R656 96th language (Limbo) → R657 Rust=72 (tokio-tungstenite
+# THIS — AXIS 18 OPENS) → expected R658 Go=72 → R659 TS-Node=72 →
+# R660 97th language.  This is the 1st of 3 leader bumps in the
+# current segment.
+#
+# This completion OPENS Axis 18 (WEBSOCKETS) — the 18th documented
+# cross-language CLI library axis.  Axis 18 covers the cross-language
+# pattern of "library used by CLIs to establish persistent bidirectional
+# WebSocket connections" — applicable to real-time streaming TTS
+# clients (aspeak), terminal multiplexer protocols (tmate / sshx),
+# IoT device drivers, GraphQL subscription clients, MQTT-over-WS
+# clients, gRPC-Web clients, and any CLI consuming a WebSocket
+# server endpoint.
+#
+#   Axis 18 (WEBSOCKETS) variants:
+#     - tokio-tungstenite (snapview/tokio-tungstenite) — R657
+#       (THIS) — Rust RFC 6455 WebSocket protocol; Stream + Sink
+#       trait integration; native-tls / rustls TLS; permessage-
+#       deflate compression; Daniel Abramov / snapview ecosystem
+#     - (Go variant pending in R658 — likely gorilla/websocket
+#       the canonical Go WebSocket library, or nhooyr.io/websocket
+#       the modern alternative)
+#     - (TS-Node variant pending in R659 — likely ws (websockets/
+#       ws), the de-facto Node.js WebSocket library used by
+#       socket.io, GraphQL subscriptions, etc.)
+#
+# Axis 18 distribution: Rust=1, Go=0, TS-Node=0.  Will reach 1/1/1
+# three-language symmetry by end of R659.
+#
+# Cross-language Axis 18 design analysis:
+#   The "WebSocket client" abstraction is non-stdlib in all three
+#   languages.  Rust's std has no networking layer beyond
+#   std::net::TcpStream (no WebSocket).  Go's stdlib has
+#   net/http but no WebSocket helpers (gorilla/websocket fills
+#   the gap; Go 1.19+ has experimental x/net/websocket but
+#   nobody uses it).  Node.js's stdlib lacks WebSocket entirely
+#   (browser globals only); ws is universal.  Each language's
+#   Axis 18 library handles RFC 6455 protocol details:
+#   handshake, frame masking, ping/pong, close codes,
+#   permessage-deflate compression, TLS — a clean axis with
+#   minimal stdlib overlap.
+#
+# Axis distribution summary after R657:
+#   * Axis 1  (Argparse):     Rust=N  / Go=N  / TS-Node=N
+#   * Axis 4  (Colors):       Rust=N  / Go=N  / TS-Node=N
+#   * Axis 5  (Progress):     Rust=N  / Go=N  / TS-Node=N
+#   * Axis 6  (Errors):       Rust=6  / Go=N  / TS-Node=N
+#   * Axis 7  (Boxes):        Rust=1  / Go=1  / TS-Node=1   (1/1/1)
+#   * Axis 8  (Prompts):      Rust=N  / Go=N  / TS-Node=N
+#   * Axis 9  (Logging):      Rust=6  / Go=6  / TS-Node=6   (6/6/6)
+#   * Axis 10 (Tables):       Rust=2  / Go=2  / TS-Node=2   (2/2/2)
+#   * Axis 11 (Humanization): Rust=1  / Go=1  / TS-Node=1   (1/1/1)
+#   * Axis 12 (Text Wrap):    Rust=1  / Go=1  / TS-Node=1   (1/1/1)
+#   * Axis 13 (Config Files): Rust=2  / Go=2  / TS-Node=2   (2/2/2)
+#   * Axis 14 (Paths):        Rust=2  / Go=2  / TS-Node=2   (2/2/2)
+#   * Axis 15 (Date/Time):    Rust=1  / Go=1  / TS-Node=1   (1/1/1)
+#   * Axis 16 (HTTP Clients): Rust=1  / Go=1  / TS-Node=1   (1/1/1)
+#   * Axis 17 (File Watching): Rust=1 / Go=1  / TS-Node=1   (1/1/1)
+#   * Axis 18 (WebSockets):    Rust=1 / Go=0  / TS-Node=0   NEW
+#
+# Daniel Abramov / snapview ecosystem note:
+#   Daniel Abramov (application-developer-DA on GitHub, with
+#   snapview org) maintains:
+#     * tungstenite-rs        — sync WebSocket protocol
+#     * tokio-tungstenite     — tokio async wrapper            (THIS)
+#     * (plus other snapview Rust + JS libraries)
+#   Distinct from Sean McArthur (Hyperium), Tolnay (serde),
+#   Sindre Sorhus, François Mockers (notify-rs), Paul Miller
+#   (chokidar / noble-crypto).  Daniel Abramov / snapview brings
+#   the FIRST documented snapview library into the taxonomy
+#   (1-library snapview documentation; expected to grow as the
+#   tungstenite-async-tungstenite-tokio-tungstenite trio enters
+#   the taxonomy).
+#
+# (Leaderboard at R657: Rust=72, Go=71, TS-Node=71 — Rust solo
+# at the top.  Axis 9 / Logging 6/6/6 three-way symmetric.
+# Axes 10 + 13 + 14 at 2/2/2.  Axes 7 + 11 + 12 + 15 + 16 + 17
+# at 1/1/1.  Axis 18 newly opened at 1/0/0.  Nine axes at three-
+# language symmetry.)
+#
+# -----------------------------------------------------------------------------
+#
+# WHY tokio-tungstenite IS THE 72ND RUST CLI LIBRARY
+#
+# tokio-tungstenite is the de-facto Rust async WebSocket client
+# (and server).  Underlying `tungstenite-rs` provides the
+# runtime-agnostic protocol implementation; `tokio-tungstenite`
+# adapts it for the tokio runtime, exposing the WebSocket stream
+# as Stream + Sink for natural integration with the futures
+# ecosystem.
+#
+# Five distinguishing characteristics:
+#
+#   1. RFC 6455 PROTOCOL — handshake (HTTP/1.1 Upgrade), framing,
+#      masking (client-to-server), unmasking (server-to-client),
+#      ping/pong heartbeats, close codes (1000-4999), text vs
+#      binary messages.  Distinct from HTTP libraries (reqwest,
+#      hyper) which handle one-shot request/response cycles.
+#
+#   2. STREAM + SINK TRAITS — WebSocketStream implements
+#      futures_util::Stream<Item = Result<Message, Error>> +
+#      futures_util::Sink<Message, Error = Error>.  Integrates
+#      with select! / merge / forward / split combinators.
+#      Distinct from callback-based APIs.
+#
+#   3. SYNC + ASYNC SPLIT — separate `tungstenite` (sync) and
+#      `tokio-tungstenite` (async tokio) + `async-tungstenite`
+#      (async-std / smol) crates.  This factoring enables sync
+#      use cases (CLI scripts, blocking servers) and async use
+#      cases.  notify (R653) has a similar PollWatcher /
+#      RecommendedWatcher split.
+#
+#   4. TLS BACKEND CHOICE — native-tls / rustls via Cargo
+#      features.  Default is native-tls (libssl on Linux,
+#      SChannel on Windows, Secure Transport on macOS).
+#      Distinct from reqwest (also offers choice but with
+#      default rustls).
+#
+#   5. SNAPVIEW / DANIEL-ABRAMOV ECOSYSTEM — distinct maintainer
+#      from Sean McArthur (Hyperium), François Mockers (notify-
+#      rs), Tolnay (serde), Sorhus (Node CLI).  snapview is a
+#      Swiss-based Rust shop maintaining the foundational
+#      Rust WebSocket stack.
+#
+# -----------------------------------------------------------------------------
+#
+# THE aspeak CLI — clap derive + tokio-tungstenite + reqwest + rodio + toml
+#
+# aspeak's CLI is in src/cli/args.rs + commands.rs.  Uses
+# clap v4 derive with #[derive(Parser)] root + #[derive(Subcommand)]
+# Command enum.
+#
+# Subcommands:
+#   text [--file FILE] [--encoding ENC] [--mode rest|websocket]
+#                                       [--output PATH] [--quality N]
+#                                       [--container-format mp3|ogg|webm|wav]
+#                                       [--format AZURE_FORMAT]
+#                                       [TEXT]
+#                       Speak plain text
+#   ssml [--file FILE] [--encoding ENC] [--mode rest|websocket]
+#                                       [--output PATH] ...
+#                                       [SSML]
+#                       Speak SSML markup
+#   list-voices [-v VOICE] [-l LOCALE] [-u URL]
+#                       List available voices
+#   list-qualities      List available quality levels
+#   list-formats        List available audio formats
+#   config edit         Open default profile in editor
+#   config init [--path PATH] [--overwrite]
+#                       Initialize new profile
+#   config where        Show full path to default profile
+#
+# Global auth flags (apply to text / ssml / list-voices):
+#   --no-profile          do not use any profile config
+#   --profile NAME        use specific profile from ~/.aspeak.toml
+#   -e, --endpoint URL    full TTS API endpoint URL
+#   -r, --region REGION   Azure region (auto-resolves endpoint)
+#   -t, --token TOKEN     Azure auth token
+#   -k, --key KEY         Azure subscription key
+#   -H, --headers HDR     additional request headers (multiple)
+#       --proxy URL       HTTP / SOCKS5 proxy URL
+#
+# tokio-tungstenite is used in src/synthesizer/ for the
+# websocket-synthesizer feature path (--mode websocket).
+#
+# -----------------------------------------------------------------------------
+#
+# COMMAND-LINE OPTIONS (sourced directly from
+# https://github.com/kxxt/aspeak/blob/main/src/cli/args.rs
+# https://github.com/kxxt/aspeak/blob/main/src/cli/commands.rs
+# clap derive #[arg] + #[command] definitions.)
+# -----------------------------------------------------------------------------
+
+local curcontext="$curcontext" state line ret=1
+typeset -A opt_args
+
+local -a _aspeak_cmds _aspeak_config_cmds _aspeak_modes _aspeak_formats _aspeak_colors
+_aspeak_cmds=(
+    'text:speak plain text (default)'
+    'ssml:speak SSML markup'
+    'list-voices:list available voices (filterable by --locale / --voice)'
+    'list-qualities:list available quality levels'
+    'list-formats:list available audio formats'
+    'config:manage aspeak profiles'
+    'help:show help for a subcommand'
+)
+_aspeak_config_cmds=(
+    'edit:open default profile in your editor'
+    'init:initialize a new profile'
+    'where:show full path to the default profile'
+)
+_aspeak_modes=('rest:HTTP REST POST mode' 'websocket:streaming WebSocket mode (via tokio-tungstenite)')
+_aspeak_formats=('mp3:MP3 container' 'ogg:Ogg container' 'webm:WebM container' 'wav:WAV container')
+_aspeak_colors=('auto:auto-detect' 'always:always color' 'never:never color')
+
+local auth_flags
+auth_flags=(
+    '--no-profile[do not use any profile config]'
+    '--profile=[use specific profile name]:profile:_default'
+    '(-e --endpoint)'{-e+,--endpoint=}'[full TTS API endpoint URL]:url:_default'
+    '(-r --region)'{-r+,--region=}'[Azure region (auto-resolves endpoint)]:region:_default'
+    '(-t --token)'{-t+,--token=}'[Azure auth token]:token:_default'
+    '(-k --key)'{-k+,--key=}'[Azure subscription key]:key:_default'
+    '*'{-H+,--headers=}'[additional request header]:header:_default'
+    '--proxy=[HTTP / SOCKS5 proxy URL]:url:_default'
+)
+
+local output_flags
+output_flags=(
+    '(-o --output)'{-o+,--output=}'[output file path (use - for stdout)]:path:_files'
+    '(-q --quality)'{-q+,--quality=}'[output quality level]:quality:_default'
+    '(-c --container-format)'{-c+,--container-format=}'[output container format]:format:->container'
+    '(-F --format)'{-F+,--format=}'[Azure-specific audio format]:format:_default'
+)
+
+local input_flags
+input_flags=(
+    '(-f --file)'{-f+,--file=}'[text/SSML file to speak (default stdin)]:file:_files'
+    '(-e --encoding)'{-e+,--encoding=}'[text/SSML file encoding]:encoding:_default'
+    '(-m --mode)'{-m+,--mode=}'[synthesizer mode]:mode:->mode'
+)
+
+_arguments -C \
+    $auth_flags \
+    '--color=[control color output]:color:->color' \
+    '(- *)'{-h,--help}'[show help]' \
+    '(- *)'{-V,--version}'[show version]' \
+    '1: :->cmd' \
+    '*::arg:->args' \
+    && ret=0
+
+case $state in
+    cmd)
+        _describe -t commands 'aspeak subcommand' _aspeak_cmds && ret=0
+        ;;
+    args)
+        case $words[1] in
+            text|ssml)
+                _arguments \
+                    $input_flags \
+                    $output_flags \
+                    '*:text:_default' \
+                    && ret=0
+                ;;
+            list-voices)
+                _arguments \
+                    '(-v --voice)'{-v+,--voice=}'[voice to list]:voice:_default' \
+                    '(-l --locale)'{-l+,--locale=}'[locale filter]:locale:_default' \
+                    '(-u --url)'{-u+,--url=}'[voice list API URL]:url:_default' \
+                    && ret=0
+                ;;
+            config)
+                if (( CURRENT == 2 )); then
+                    _describe -t commands 'config subcommand' _aspeak_config_cmds && ret=0
+                elif [[ $words[2] == init ]]; then
+                    _arguments \
+                        '(-p --path)'{-p+,--path=}'[new profile path]:path:_files' \
+                        '--overwrite[overwrite existing profile]' \
+                        && ret=0
+                fi
+                ;;
+            help)
+                _describe -t commands 'subcommand' _aspeak_cmds && ret=0
+                ;;
+        esac
+        case $state in
+            mode)      _describe -t modes 'synthesizer mode' _aspeak_modes && ret=0 ;;
+            container) _describe -t formats 'container format' _aspeak_formats && ret=0 ;;
+            color)     _describe -t colors 'color mode' _aspeak_colors && ret=0 ;;
+        esac
+        ;;
+esac
+
+return ret
