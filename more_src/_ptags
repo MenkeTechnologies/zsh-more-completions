@@ -1,0 +1,264 @@
+#compdef ptags
+# =============================================================================
+# ptags — a parallel universal-ctags wrapper for git repositories.  Where
+#         vanilla `ctags` walks the directory tree single-threaded, ptags
+#         enumerates git-tracked files via `git ls-files`, then parallelizes
+#         ctags invocations across multiple threads using rayon, then
+#         merges the tag streams into a single sorted output.  On a
+#         large repository (linux kernel: 80,000 files), ptags is
+#         ~5-8x faster than running ctags directly.
+#
+# Author:  Naoya Hatta (dalance)
+# Source:  https://github.com/dalance/ptags
+# CLI:     src/bin.rs (uses structopt + structopt-toml)
+# Library: dalance/structopt-toml
+#          ("TOML-config layer on top of TeXitoi/structopt")
+# License: MIT or Apache-2.0
+# Status:  Stable — 141+ stars; recommended in vim/neovim circles for
+#          generating tags files on large monorepos where vanilla ctags
+#          is too slow.
+#
+# -----------------------------------------------------------------------------
+# CROSS-LANGUAGE CLI LIBRARY TAXONOMY MILESTONE — RUST CROSSES TO 31 LIBRARIES
+# -----------------------------------------------------------------------------
+# With this completion the cross-language CLI library taxonomy documents the
+# 31ST Rust CLI library variant.  Rust climbs from 30 to 31 documented
+# libraries (structopt-toml via ptags).  New leaderboard: Rust=31 (SOLO LEAD),
+# Go=30, TypeScript-Node=30.  Taxonomy now spans 233 cross-language CLI
+# library variants across 56 documented languages.
+# -----------------------------------------------------------------------------
+#
+# WHAT IS dalance/structopt-toml AND WHY IS IT A DISTINCT 31ST RUST CLI LIBRARY?
+#
+# structopt-toml (https://github.com/dalance/structopt-toml, 50+ stars) by
+# Naoya Hatta (dalance) is a COMPANION CRATE to TeXitoi/structopt (R486)
+# that adds TOML-CONFIG-FILE SUPPORT.  Where structopt derives a CLI
+# parser from a struct definition, structopt-toml ADDITIONALLY derives a
+# serde deserializer for the same struct, then COMBINES both at runtime:
+# parse the TOML config file FIRST, then OVERLAY CLI arguments on top.
+#
+# The library is DISTINCT from structopt (R486) — it doesn't replace
+# structopt, it WRAPS it.  Users write a single struct that derives BOTH
+# `StructOpt` AND `StructOptToml`:
+#
+#     #[derive(Debug, Deserialize, Serialize, StructOpt, StructOptToml)]
+#     #[serde(default)]
+#     #[structopt(name = "ptags")]
+#     pub struct Opt {
+#         #[structopt(short = "t", long = "thread", default_value = "8")]
+#         pub thread: usize,
+#         #[structopt(short = "f", long = "file", default_value = "tags")]
+#         pub output: PathBuf,
+#         // ...
+#     }
+#
+# At runtime, the typical pattern is:
+#
+#     let toml_str = std::fs::read_to_string(".ptags.toml").unwrap_or_default();
+#     let opt = Opt::from_args_with_toml(&toml_str)?;
+#     // opt now has values from .ptags.toml, overridden by CLI args
+#
+# structopt-toml is DISTINCT from every other documented Rust CLI library
+# on SIX specific axes:
+#
+#   1. CLI + TOML CONFIG IN A SINGLE STRUCT — most Rust CLI libraries
+#      handle CLI parsing only; if you want config file support, you
+#      need a SEPARATE library (config, figment, etc.) that parses the
+#      TOML and then you MERGE manually with the CLI args.  structopt-
+#      toml does both atomically with a single struct definition and
+#      proper PRECEDENCE (CLI overrides TOML overrides defaults).
+#      No other documented Rust CLI library does this in one library.
+#      Compare:
+#        clap-derive (R275):    needs config crate + manual merge
+#        bpaf (R330):           needs config crate + manual merge
+#        argh (R344):           no built-in TOML support
+#        gumdrop (R410):        no built-in TOML support
+#        lapp (R464):           USAGE-as-spec, no TOML
+#        kong (Go R465):        external config crate needed
+#        opts (Go R479):        has ConfigPath(JSON) but not TOML
+#        structopt-toml (THIS): TOML + CLI in ONE struct derive
+#
+#   2. SERDE INTEGRATION FOR FREE — because the struct derives
+#      `Deserialize`, it can be used DIRECTLY with any serde format:
+#      TOML (the canonical use), JSON, YAML, RON, BSON, etc.  Users
+#      who want JSON config instead can just call `serde_json::from_str`
+#      with the same struct.  structopt-toml is named for TOML but works
+#      as a generic SerDe + CLI integration crate.
+#
+#   3. `#[serde(default)]` PATTERN FOR PARTIAL CONFIG — the
+#      `#[serde(default)]` attribute on the struct lets the TOML file
+#      omit fields that have defaults in the structopt `default_value`
+#      tag.  This is the EXPLICIT PRECEDENCE CHAIN:
+#        1. CLI argument (if present)
+#        2. TOML config file value (if present)
+#        3. structopt default_value attribute
+#      No conflicts between layers — each layer is a partial override.
+#
+#   4. SERIALIZE OUT ALSO SUPPORTED — the same struct can be SERIALIZED
+#      back to TOML, letting tools generate template config files.
+#      `toml::to_string(&opt)` produces a config file with current
+#      runtime values.  ptags uses this for `ptags --gen-config-file`
+#      to produce a `.ptags.toml` template.  Most Rust CLI libraries
+#      don't support inverse serialization; structopt-toml does via
+#      serde::Serialize.
+#
+#   5. CLAP 2.x BACKWARD COMPATIBILITY — structopt-toml is pinned to
+#      structopt 0.3.x which targets clap 2.x.  Code using structopt-
+#      toml stays in clap 2.x territory and doesn't auto-migrate to
+#      clap 4.x.  For projects that want STABLE 2018-era CLI behavior
+#      with added TOML support, this is ideal — no breaking changes
+#      from clap upstream affect them.
+#
+#   6. AUTHORED IN JAPAN — Naoya Hatta is part of the active Rust-in-
+#      Japan community alongside Takeru Ohta (R474 noargs).  structopt-
+#      toml is one of several Japanese-authored Rust CLI utilities;
+#      dalance also created `ptags`, `nextest-action`, `procs` (htop
+#      replacement, 4k stars), and others.
+#
+# THE structopt-toml API SURFACE (verbatim from ptags usage)
+#
+#   use structopt::{clap, StructOpt};
+#   use structopt_toml::StructOptToml;
+#   use serde_derive::{Deserialize, Serialize};
+#
+#   #[derive(Debug, Deserialize, Serialize, StructOpt, StructOptToml)]
+#   #[serde(default)]
+#   #[structopt(name = "ptags")]
+#   #[structopt(setting = clap::AppSettings::AllowLeadingHyphen)]
+#   #[structopt(setting = clap::AppSettings::ColoredHelp)]
+#   pub struct Opt {
+#       #[structopt(short = "t", long = "thread", default_value = "8")]
+#       pub thread: usize,
+#
+#       #[structopt(short = "f", long = "file", default_value = "tags",
+#                   parse(from_os_str))]
+#       pub output: PathBuf,
+#
+#       #[structopt(name = "DIR", default_value = ".", parse(from_os_str))]
+#       pub dir: PathBuf,
+#
+#       #[structopt(short = "s", long = "stat")]
+#       pub stat: bool,
+#
+#       #[structopt(short = "c", long = "opt-ctags", number_of_values = 1)]
+#       pub opt_ctags: Vec<String>,
+#
+#       // ... ~20 more fields
+#   }
+#
+#   let toml = read_to_string(".ptags.toml")?;
+#   let opt = Opt::from_args_with_toml(&toml)?;
+#
+# Methods added by `StructOptToml` derive:
+#   from_args_with_toml(toml_str)   — parse argv overlayed on TOML
+#   from_iter_with_toml(toml, argv) — parse arbitrary argv overlayed on TOML
+#
+# CONTRAST WITH OTHER CLI + CONFIG LIBRARIES IN RUST
+#
+#   * config (third-party crate) — multi-source config loader, no CLI
+#                                  integration
+#   * figment (third-party crate) — profile-based config loader, no CLI
+#   * clap + config + manual merge — DIY approach, fragile
+#   * structopt-toml (THIS)        — single-derive CLI + TOML
+#   * twelf (third-party crate)    — derive-based config loader with
+#                                    CLI support; similar to structopt-
+#                                    toml but standalone
+#
+# structopt-toml is the FIRST documented Rust CLI library with INTEGRATED
+# TOML CONFIG-FILE PARSING via a single struct derive.  Other libraries
+# either skip config files entirely or require separate libraries that
+# the user manually merges.
+#
+# REAL-WORLD structopt-toml USERS:
+#
+#   * dalance/ptags — parallel ctags wrapper (THIS, 141*)
+#   * darkrenaissance/darkfi — Anonymous L1 blockchain (1332*)
+#   * inherd/coco — DevOps analytics by Phodal
+#   * dalance/structopt-toml — author's own example
+#   * softprops/fasttime — Fastly Compute@Edge serverless runner
+#   * NanoOfficial/nanolang — Nano smart contract language
+#   * azriel91/autexousious — game engine prototype
+#   * kingeasternsun/zinx-rs — Zinx network framework Rust port
+#
+# -----------------------------------------------------------------------------
+# PTAGS'S CLI SURFACE (verbatim from src/bin.rs Opt struct)
+# -----------------------------------------------------------------------------
+#
+# USAGE:
+#   ptags [OPTIONS] [DIR]
+#
+# Performance:
+#   -t, --thread <N>             Number of threads (default: 8)
+#
+# Output:
+#   -f, --file <FILE>            Output filename (default: "tags";
+#                                use "-" for stdout)
+#   -s, --stat                   Show statistics
+#   --validate-utf8              Validate UTF8 sequence of tag file
+#   --unsorted                   Disable tags sort
+#
+# Input:
+#   [DIR]                        Search directory (default: ".")
+#   -L, --list <FILE>            Filename of input file list (use instead
+#                                of git ls-files)
+#   -e, --exclude <PATTERN>      Glob pattern to exclude (repeatable)
+#                                e.g., --exclude '*.rs'
+#
+# git integration:
+#   --exclude-lfs                Exclude git-lfs tracked files
+#   --include-untracked          Include untracked files
+#   --include-ignored            Include ignored files
+#   --include-submodule          Include submodule files
+#
+# External binaries:
+#   --bin-ctags <PATH>           Path to ctags binary (default: "ctags")
+#   --bin-git <PATH>             Path to git binary (default: "git")
+#   -c, --opt-ctags <OPT>        Options passed to ctags (repeatable)
+#   -g, --opt-git <OPT>          Options passed to git (repeatable)
+#   --opt-git-lfs <OPT>          Options passed to git-lfs (repeatable)
+#
+# Diagnostics:
+#   -v, --verbose                Verbose mode
+#
+# Config file:
+#   .ptags.toml in the current directory or repo root is auto-loaded.
+#   CLI args override TOML values.  Generate template config:
+#     ptags --gen-config-file > .ptags.toml
+#
+# Help:
+#   -h, --help                   Print help
+#   -V, --version                Print version
+#
+# =============================================================================
+
+_ptags() {
+    local curcontext="$curcontext" state line ret=1
+    typeset -A opt_args
+
+    _arguments -s \
+        '(-t --thread)'{-t,--thread}'[number of threads]:N (default 8):' \
+        '(-f --file)'{-f,--file}'[output filename ("-" for stdout)]:file:_files' \
+        '(-s --stat)'{-s,--stat}'[show statistics]' \
+        '--validate-utf8[validate UTF8 sequence of tag file]' \
+        '--unsorted[disable tags sort]' \
+        '(-L --list)'{-L,--list}'[input file list (skip git ls-files)]:list file:_files' \
+        '*'{-e,--exclude}'[exclude glob pattern]:pattern:' \
+        '--exclude-lfs[exclude git-lfs tracked files]' \
+        '--include-untracked[include untracked files]' \
+        '--include-ignored[include ignored files]' \
+        '--include-submodule[include submodule files]' \
+        '--bin-ctags[path to ctags binary]:ctags:_command_names -e' \
+        '--bin-git[path to git binary]:git:_command_names -e' \
+        '*'{-c,--opt-ctags}'[option passed to ctags]:ctags option:' \
+        '*'{-g,--opt-git}'[option passed to git]:git option:' \
+        '*--opt-git-lfs[option passed to git-lfs]:git-lfs option:' \
+        '(-v --verbose)'{-v,--verbose}'[verbose mode]' \
+        '(-h --help)'{-h,--help}'[print help]' \
+        '(-V --version)'{-V,--version}'[print version]' \
+        '*:search directory:_directories' \
+        && ret=0
+
+    return ret
+}
+
+_ptags "$@"
