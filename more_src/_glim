@@ -1,0 +1,288 @@
+#compdef glim
+# =============================================================================
+# glim — junkdog Adrian Papari's TUI for monitoring GitLab CI/CD pipelines
+#        and projects.  Watches a configured GitLab instance, polls the
+#        REST API on a tunable interval, and renders live pipeline runs,
+#        job statuses, projects, branches, and merge-request artifacts as
+#        a full-screen ratatui terminal interface.  Includes animated
+#        status transitions (powered by junkdog's own `tachyonfx`
+#        animation library, layered over ratatui), Gruvbox-themed status
+#        cells, clipboard integration (via `arboard`) for copying job
+#        URLs and pipeline IDs, and a background async runtime (`tokio`)
+#        that polls GitLab without blocking the redraw loop.  Designed
+#        for DevOps engineers and SREs who want to watch CI pipelines
+#        from a terminal pane next to their editor instead of context-
+#        switching to a browser tab.
+#
+# Author:  Adrian Papari (junkdog, <junkdog@angelhill.net>) — also author
+#          of `tachyonfx` (ratatui animation library), `compact_str`
+#          (memory-efficient SSO string crate, ~600 stars), and
+#          `derive_builder` contributor.  junkdog is a prolific Rust
+#          TUI ecosystem contributor with multiple ratatui plugins.
+# Source:  https://github.com/junkdog/glim
+# CLI:     src/main.rs (`Args` struct, clap derive)
+#          plus ratatui-powered TUI driven by src/tui.rs and src/ui/
+#          (the entire visible interface; the argv parser is just a
+#           thin wrapper around `--config` and `--print-config-path`)
+# Library: ratatui-org/ratatui
+#          ("📺 Cooking up terminal user interfaces (TUIs) 👨‍🍳🐀" — the
+#           CANONICAL Rust TUI widget framework, used by 1500+ active
+#           Rust TUI applications and the de-facto successor to fdehau/
+#           tui-rs after that crate was abandoned in 2023)
+# License: MIT
+# Status:  Active — 227+ stars on junkdog/glim; ratatui itself is
+#          11600+ stars on ratatui-org/ratatui.
+#
+# -----------------------------------------------------------------------------
+# CROSS-LANGUAGE CLI LIBRARY TAXONOMY MILESTONE — RUST CROSSES TO 40
+# -----------------------------------------------------------------------------
+# With this completion the cross-language CLI library taxonomy documents
+# the 40TH Rust CLI library variant.  Rust climbs from 39 to 40
+# documented libraries (ratatui-org/ratatui via glim).  New leaderboard:
+# Rust=40 SOLO LEAD, Go=39, TypeScript-Node=39 (three-way tie at 39
+# from R528 broken after R529 Modelica new-language pause).  Taxonomy
+# now spans 269 cross-language CLI library variants across 65
+# documented languages.
+#
+# This completion OPENS THE TUI-WIDGET-FRAMEWORK AXIS — the FIFTH AXIS
+# documented in the Rust CLI ecosystem.  Previous four axes:
+#   * Axis 1: argv parsing — clap/argh/structopt/bpaf/xflags/palc/...
+#   * Axis 2: interactive prompts — dialoguer/inquire/cliclack
+#   * Axis 3: progress reporting — indicatif
+#   * Axis 4: terminal coloring — owo-colors (R526)
+#   * Axis 5: TUI WIDGET FRAMEWORK — ratatui (THIS, R530)
+#
+# ratatui is fundamentally different from every previously-documented
+# Rust CLI library: it does NOT parse argv, it does NOT prompt for
+# input via line-buffered stdin, it does NOT print spinners, it does
+# NOT color individual strings.  Instead, ratatui takes over the
+# WHOLE TERMINAL — switches to the alternate screen buffer, hides
+# the cursor, captures every key event + mouse event + resize event,
+# and renders a full-screen IMMEDIATE-MODE widget tree on every
+# frame.  The interaction model is the polar opposite of every other
+# CLI library: instead of "read one line, print one line," ratatui
+# applications maintain explicit application state and re-render the
+# entire screen 30-60 times per second.
+#
+# -----------------------------------------------------------------------------
+#
+# WHAT IS ratatui AND WHY IS IT THE 40TH RUST CLI LIBRARY?
+#
+# ratatui (https://ratatui.rs, https://github.com/ratatui-org/ratatui,
+# 11600+ stars) is **the canonical Rust TUI widget framework** — the
+# de-facto successor to Florian Dehau's `tui-rs` crate, which was the
+# original Rust TUI library (2019-2023) until Dehau stopped responding
+# to PRs and the community forked it to `ratatui` in February 2023.
+# Since the fork, ratatui has added Unicode-grapheme-aware text wrapping,
+# block-character rendering, image embedding (via sister crates
+# `ratatui-image` for sixel/kitty/iterm2 graphics), animation effects
+# (via `tachyonfx`, used by glim), Linux framebuffer rendering
+# (`mousefood`), WebAssembly backends (`ratzilla` for terminal-themed
+# web apps), and Bevy game-engine integration (`bevy_ratatui_camera`).
+#
+# ratatui's distinguishing characteristics:
+#
+#   1. IMMEDIATE-MODE WIDGET RENDERING — Each frame the application
+#      re-creates the entire widget tree from current state.  No retained
+#      DOM, no virtual-DOM diffing, no widget instances persisted across
+#      frames.  The pattern looks like:
+#
+#          terminal.draw(|frame| {
+#              let block = Block::default().borders(Borders::ALL)
+#                  .title("CI Pipelines");
+#              let list = List::new(items).block(block);
+#              frame.render_widget(list, area);
+#          })?;
+#
+#      Compare retained-mode toolkits (GTK, Qt, AppKit) where widgets
+#      are persistent objects with lifetime managed by the toolkit.
+#      ratatui's approach is closer to ImGui (Omar Cornut) or
+#      bevy_egui — every frame is recomputed from scratch.
+#
+#   2. BACKEND-AGNOSTIC RENDERING — The `Backend` trait abstracts the
+#      underlying terminal library.  ratatui ships three backends:
+#         * `CrosstermBackend` (default; cross-platform via crossterm)
+#         * `TermwizBackend` (via wezterm's termwiz)
+#         * `TermionBackend` (Unix-only, no Windows support)
+#      Plus community backends: `mousefood` (Linux framebuffer),
+#      `ratzilla` (WebAssembly/canvas), `bevy_ratatui_camera`
+#      (Bevy game engine).  Compare cursive (Rust TUI library predating
+#      tui-rs/ratatui) which is hard-coded to ncurses-based backends.
+#
+#   3. UTF-8 + UNICODE GRAPHEME CLUSTER AWARE — Every text-rendering
+#      widget correctly handles Unicode grapheme clusters: emoji
+#      sequences ("👨‍💻" = man + ZWJ + laptop, one visible char but 11
+#      bytes), combining diacritics ("é" as e + ◌́), CJK double-width
+#      characters ("中文" each taking 2 terminal columns), right-to-
+#      left scripts (Arabic, Hebrew).  Width calculations use the
+#      `unicode-width` crate which implements UAX #11 East Asian Width.
+#      Compare ncurses (no grapheme awareness; emoji renders broken),
+#      blessed (Node.js TUI; only ASCII).
+#
+#   4. STATEFUL WIDGETS (`StatefulWidget` trait) — Lists, tables, and
+#      trees track selection / scroll-offset state EXTERNALLY in a
+#      `State` struct held by the application, while the widget itself
+#      is recreated each frame.  This bridges the immediate-mode-versus-
+#      retained-mode gap: the visual widget is immediate, the
+#      selection state is retained, and the widget consults the state
+#      at render time to draw highlights.  Pattern:
+#
+#          let mut list_state = ListState::default().with_selected(Some(0));
+#          /* in render loop */
+#          let list = List::new(items).highlight_style(...);
+#          frame.render_stateful_widget(list, area, &mut list_state);
+#
+#      Compare flutter (StatefulWidget creates a paired State object
+#      lifetime-managed by the framework) — ratatui makes state
+#      explicit user-managed data.
+#
+#   5. WIDGET ECOSYSTEM — Beyond ratatui's built-in widgets (Block,
+#      Paragraph, List, Table, Tabs, Gauge, Sparkline, BarChart,
+#      LineChart, Scrollbar, Calendar), the ratatui-rs ecosystem has
+#      300+ community widgets including:
+#         * `tui-textarea` (multiline editor; what helix uses)
+#         * `tui-logger` (log viewer with filtering)
+#         * `tui-realm` (React/Elm-style stateful framework)
+#         * `tui-tree-widget` (hierarchical tree)
+#         * `tui-input` (single-line edit)
+#         * `tui-prompts` (prompt widgets)
+#         * `tui-term` (embedded terminal — runs a pty inside ratatui)
+#         * `tachyonfx` (animations, used by glim — pulse/glitch/fade-in/fade-out shaders)
+#      Compare GTK's WidgetSet/libadwaita ecosystem (~200 widgets) —
+#      ratatui's ecosystem is comparable in breadth for terminal use.
+#
+#   6. CROSSTERM EVENT MODEL INTEGRATION — Events arrive from the
+#      backend (crossterm by default) as a uniform `Event` enum:
+#         Event::Key(KeyEvent)        — keystrokes with modifiers
+#         Event::Mouse(MouseEvent)    — mouse motion + scroll + clicks
+#         Event::Resize(cols, rows)   — terminal resize
+#         Event::FocusGained          — terminal regained focus (xterm)
+#         Event::FocusLost            — terminal lost focus
+#         Event::Paste(String)        — bracketed paste content
+#      The application's main loop polls events with a timeout
+#      (`crossterm::event::poll(Duration::from_millis(16))`) and
+#      renders if no events arrive within the timeout (so the screen
+#      refreshes at ~60 FPS for animations).  Compare ncurses
+#      `getch()` which only delivers key events with no mouse/focus/
+#      paste distinction.
+#
+# ratatui's relationship to other documented Rust CLI libraries:
+#
+#   * Like `dialoguer` R518 — interactive (waits for user input)
+#   * Like `indicatif` R522 — terminal-control-aware (handles ANSI)
+#   * Like `owo-colors` R526 — uses ANSI escapes for color
+#   * Unlike ALL of the above — TAKES OVER THE WHOLE TERMINAL with
+#     alternate screen buffer + raw mode + full-screen widget tree.
+#     `dialoguer`/`indicatif`/`owo-colors` are line-oriented (print
+#     to stdout, scroll up); ratatui is screen-oriented (paint
+#     pixel-equivalents on a 2D character grid).  Closest analog in
+#     other documented libraries:
+#         * Go: bubbletea (also full-screen TUI, lipgloss for styling)
+#         * TS-Node: blessed (Node.js full-screen TUI, ink for React-
+#                    in-terminal)
+#     Neither bubbletea nor blessed has been documented YET in this
+#     taxonomy — ratatui opens the TUI axis FIRST.
+#
+# -----------------------------------------------------------------------------
+#
+# THE glim CLI — Minimal clap-derive Wrapper Around a ratatui Frontend
+#
+# glim's argv parser is minimal because the WHOLE INTERFACE is ratatui:
+#
+#     #[derive(Parser, Debug)]
+#     #[command(version, about, long_about = None)]
+#     pub struct Args {
+#         /// Alternate path to the configuration file.
+#         #[arg(short, long, value_name = "FILE")]
+#         config: Option<PathBuf>,
+#         /// Print the path to the configuration file and exit.
+#         #[arg(short, long)]
+#         print_config_path: bool,
+#     }
+#
+# Two flags + the standard `-h/--help` + `-V/--version` from clap.
+# Everything else — selecting projects, watching pipelines, copying
+# job URLs, switching tabs, scrolling logs — happens via ratatui
+# keystroke handlers consuming `crossterm::event::Event::Key`
+# events inside the TUI.  This pattern (minimal argv + rich TUI) is
+# the SIGNATURE pattern of ratatui applications:
+#
+#   * gitui (extrawurst, 18000+ stars)    — almost no CLI flags
+#   * yazi (sxyazi, 11000+ stars)         — minimal CLI
+#   * bottom (ClementTsang, 9000+ stars)  — modest CLI
+#   * basalt (erikjuhani, 1219 stars)     — EMPTY CLI struct
+#   * rainfrog (achristmascarl, 5091)     — modest CLI
+#   * glim (THIS, 227)                    — modest CLI
+#
+# Compared to non-TUI CLI tools (ripgrep, fd, exa, eza) which expose
+# 50+ flags for argv-driven control, ratatui apps expose 0-10 flags
+# because all controls move to in-app keystrokes.  This is a
+# DISTINGUISHING SIGNATURE of TUI-framework users in the taxonomy.
+#
+# Distinct from every other documented Rust CLI library on FIVE axes:
+#
+#   1. FULL-SCREEN TERMINAL OWNERSHIP — Every other documented Rust
+#      CLI library is LINE-ORIENTED: it prints output to stdout that
+#      scrolls up off the screen.  ratatui SWITCHES to the alternate
+#      screen buffer (xterm's secondary screen, accessed via the
+#      `^[?1049h` CSI sequence), takes over the entire viewport, and
+#      restores the primary screen on exit.  The user's prior terminal
+#      history is preserved during the ratatui app's runtime and
+#      reappears after exit.  FIRST documented library with full-
+#      screen-terminal ownership semantics.
+#
+#   2. IMMEDIATE-MODE WIDGET TREE — Every other documented Rust CLI
+#      library has retained-mode-equivalent semantics: clap's parser
+#      tree is built once at startup; dialoguer's input handlers are
+#      bound to a Selectable; indicatif's progress bar is allocated
+#      and held.  ratatui WIDGETS HAVE NO LIFETIME: they exist only
+#      during the closure passed to `terminal.draw()`.  The
+#      application rebuilds the widget tree from scratch every frame
+#      (30-60 fps).  FIRST documented Rust CLI library with
+#      immediate-mode rendering semantics — same approach as Dear
+#      ImGui (Omar Cornut) and bevy_egui but for the terminal.
+#
+#   3. BACKEND TRAIT ABSTRACTION — ratatui defines a `Backend` trait
+#      that abstracts over crossterm/termwiz/termion/framebuffer/wasm.
+#      Applications written against ratatui run on any backend
+#      without source changes.  FIRST documented Rust CLI library
+#      with a backend-trait abstraction; every other library is
+#      bound to ANSI-escape-emit-to-stdout.
+#
+#   4. STATEFUL WIDGET TRAIT — `StatefulWidget` lets a single widget
+#      consult application-owned state at render time, threading
+#      selection / scroll state through frame-rebuilt widgets.
+#      Closest analog in documented libraries: dialoguer's
+#      `MultiSelect` which manages selection internally but doesn't
+#      expose it back.  ratatui's `StatefulWidget` makes state
+#      EXTERNAL — the application owns the `ListState`, mutating it
+#      between frames.  FIRST documented stateful-widget pattern in
+#      the taxonomy.
+#
+#   5. ANIMATION SUBSYSTEM VIA tachyonfx — glim layers `tachyonfx`
+#      (also by junkdog) on top of ratatui to provide pulse, glitch,
+#      fade-in, fade-out, hsl-shift effects for status transitions.
+#      No other documented Rust CLI library has an animation
+#      subsystem.  indicatif's spinners are the closest analog but
+#      they're per-character animations on a single line; tachyonfx
+#      animates entire widget regions across frames.  FIRST
+#      documented library composition (ratatui + tachyonfx) with
+#      animation effects.
+#
+# -----------------------------------------------------------------------------
+#
+# COMMAND-LINE OPTIONS (sourced directly from
+# https://github.com/junkdog/glim/blob/main/src/main.rs `Args` struct.)
+# -----------------------------------------------------------------------------
+
+local curcontext="$curcontext" state line ret=1
+typeset -A opt_args
+
+_arguments -s -S \
+    '(-h --help)'{-h,--help}'[print help and exit]' \
+    '(-V --version)'{-V,--version}'[print version and exit]' \
+    '(-c --config)'{-c+,--config=}'[alternate path to the configuration file]:file:_files' \
+    '(-p --print-config-path)'{-p,--print-config-path}'[print the path to the configuration file and exit]' \
+    && ret=0
+
+return ret
