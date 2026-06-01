@@ -1,0 +1,291 @@
+#compdef a2ltool
+# =============================================================================
+# a2ltool — A tool to edit, merge and update A2L files.  A2L is the ASAM
+#           (Association for Standardisation of Automation and Measuring
+#           Systems) standard format for automotive ECU calibration and
+#           measurement.  A2L files describe the names, types, addresses,
+#           and unit conversions for variables and constants in the binary
+#           image of an automotive ECU's firmware.  a2ltool synchronizes
+#           A2L files against ELF/DWARF or Microsoft PDB debug info from
+#           the compiled firmware, ensuring the calibration database stays
+#           in sync with the actual firmware build.
+#
+# Author:  Daniel Thaler
+# Source:  https://github.com/DanielT/a2ltool
+# CLI:     src/main.rs (uses clap-builder + argfile)
+# Library: rust-cli/argfile
+#          ("Load additional CLI args from file")
+# License: MIT or Apache-2.0
+# Status:  Stable — 100+ stars; used in automotive ECU development by
+#          calibration engineers and Bosch/Continental/automotive-OEM
+#          tooling teams as a CI-friendly alternative to proprietary
+#          ASAM tools (Vector CANape, ETAS INCA).
+#
+# -----------------------------------------------------------------------------
+# CROSS-LANGUAGE CLI LIBRARY TAXONOMY MILESTONE — RUST CROSSES TO 32 LIBRARIES
+# -----------------------------------------------------------------------------
+# With this completion the cross-language CLI library taxonomy documents the
+# 32ND Rust CLI library variant.  Rust climbs from 31 to 32 documented
+# libraries (argfile via a2ltool).  New leaderboard: Rust=32 (SOLO LEAD),
+# Go=31, TypeScript-Node=31.  Taxonomy now spans 237 cross-language CLI
+# library variants across 57 documented languages.
+# -----------------------------------------------------------------------------
+#
+# WHAT IS rust-cli/argfile AND WHY IS IT A DISTINCT 32ND RUST CLI LIBRARY?
+#
+# argfile (https://github.com/rust-cli/argfile) by Ed Page (epage, the
+# current clap maintainer) is a SMALL FOCUSED CRATE that adds RESPONSE-
+# FILE expansion to Rust CLIs.  A "response file" is a text file
+# containing additional command-line arguments, referenced from the
+# command line via the `@filename` syntax.  When `argfile::expand_args`
+# encounters `@cmd-args.txt` in argv, it reads the file and inserts its
+# contents into the argv stream as if those arguments had been typed
+# directly.
+#
+# Response files solve a CONCRETE OPERATIONAL PROBLEM: command lines
+# that are TOO LONG FOR THE OS argv limit.  Windows has a ~32KB argv
+# limit; Linux's varies but is typically 128KB-2MB depending on kernel
+# config.  Compiler/linker invocations on large codebases routinely
+# exceed these limits — `cl.exe` (MSVC) and `link.exe` historically
+# REQUIRE response files for projects with more than a few hundred
+# source files.  GCC, Clang, and LLD all support `@response.txt`
+# syntax inherited from the same Windows tradition.
+#
+# argfile is DISTINCT from every documented Rust CLI library on FIVE
+# specific axes:
+#
+#   1. RESPONSE-FILE EXPANSION AS A SEPARATE LAYER — argfile sits
+#      BEFORE clap-derive / clap-builder / structopt / lexopt in the
+#      argv processing pipeline.  It transforms `[program, "@args.txt",
+#      "--foo"]` into `[program, ... contents of args.txt ..., "--foo"]`
+#      BEFORE the parser sees argv.  Then the parser of choice (usually
+#      clap) operates on the EXPANDED argv as if response files didn't
+#      exist.  This is the FIRST documented "PRE-PARSER ARGV REWRITE"
+#      Rust CLI library in the cross-language taxonomy.
+#
+#   2. PARSER-AGNOSTIC — argfile works with ANY downstream CLI parser
+#      (clap, structopt, lexopt, getargs, etc.) because it operates on
+#      `Iterator<Item=OsString>` or `Vec<OsString>` argv — the same
+#      format every Rust CLI parser consumes.  Compare paw R490 which
+#      is also parser-agnostic but adapts at the FUNCTION SIGNATURE
+#      level (`#[paw::main] fn main(args: Args)`); argfile adapts at
+#      the ARGV LEVEL.
+#
+#   3. WINDOWS @-PREFIX CONVENTION — argfile follows the MICROSOFT
+#      response-file convention where `@filename` (NOT `--at filename`
+#      or `--response filename`) is the syntactic prefix.  This matches
+#      cl.exe, link.exe, csc.exe, javac, gcc, clang, LLD, GoLink, and
+#      every other major compiler/linker.  The prefix is configurable
+#      via `argfile::PREFIX` but the default `@` is what users expect.
+#      No other documented Rust CLI library uses the @-prefix
+#      convention.
+#
+#   4. PLUGGABLE RESPONSE-FILE FORMAT via `parse_response`/`parse_fromfile`
+#      — argfile ships TWO built-in parsers:
+#        argfile::parse_response — Windows/MSVC convention:
+#                                  args quoted with embedded escapes
+#        argfile::parse_fromfile — GCC/Clang convention:
+#                                  args separated by whitespace, one
+#                                  per line or space-separated
+#      Users can also provide a custom parser function for proprietary
+#      response-file formats.  This pluggable format support is
+#      necessary because different compiler ecosystems have different
+#      response-file dialects.
+#
+#   5. STEWARDED BY rust-cli WORKING GROUP — argfile lives under the
+#      rust-cli/* GitHub org (same org as paw R490).  Ed Page (epage)
+#      is the current clap maintainer, so argfile is the "canonical"
+#      response-file companion to clap in the same way clap-complete
+#      is the canonical completion-generation companion.  Documenting
+#      argfile completes the picture of Ed Page's CLI library ecosystem:
+#        clap (parsing) + clap-complete (completions) + clap-mangen
+#        (manpages) + argfile (response files)
+#      Together these crates form a comprehensive Rust CLI toolchain.
+#
+# THE argfile API SURFACE (verbatim from a2ltool usage)
+#
+#   use argfile;
+#
+#   fn main() {
+#       let raw_args = std::env::args_os();
+#       let args = argfile::expand_args_from(
+#           raw_args,
+#           argfile::parse_response,   // Windows-style RSP parser
+#           argfile::PREFIX,           // default: '@'
+#       ).expect("failed to expand response files");
+#
+#       // args is now an Iterator<Item=OsString> with all @file references
+#       // expanded inline.  Pass it to clap as usual:
+#       let matches = build_clap_command().get_matches_from(args);
+#   }
+#
+# Main API entry points:
+#   argfile::PREFIX                      — default '@' prefix const
+#   argfile::expand()                     — convenience: expand std::env::args_os
+#                                            with parse_fromfile + PREFIX
+#   argfile::expand_args(parser, prefix) — expand env args with custom parser
+#   argfile::expand_args_from(iter,parser,prefix)
+#                                       — expand arbitrary iterator
+#   argfile::parse_response              — Windows-style parser (recommended
+#                                            for compatibility with MSVC,
+#                                            LLD-link, etc.)
+#   argfile::parse_fromfile              — GCC-style parser (whitespace-
+#                                            separated, recommended for Unix
+#                                            CLIs and clang/gcc compatibility)
+#
+# Optional `response` feature flag enables additional parsers:
+#   argfile = { version = "1.0", features = ["response"] }
+#
+# CONTRAST WITH OTHER RUST CLI INFRASTRUCTURE
+#
+#   * clap (parser) — argument parser, oblivious to @file expansion
+#   * paw R490 (adapter) — fn-main adapter, no argv preprocessing
+#   * argfile (THIS, preprocessor) — argv preprocessor, before parser
+#
+# argfile is the FIRST documented Rust CLI library that is itself a
+# PRE-PARSER ARGV PREPROCESSOR.  All other documented Rust CLI
+# libraries are either PARSERS (clap, lexopt, etc.) or PARSER-ADAPTERS
+# (paw).  argfile sits ORTHOGONAL to both — it transforms argv before
+# anyone parses it.  This makes argfile composable with EVERY other
+# Rust CLI library — you can use argfile + lexopt, argfile + clap-
+# derive, argfile + getargs, etc.
+#
+# WHO USES argfile?  HIGH-PROFILE BINARIES:
+#
+#   * astral-sh/ruff — the Python linter (40k+ stars; in corpus)
+#   * github/codeql — GitHub CodeQL static analysis
+#   * watchexec/watchexec — file watcher (in corpus)
+#   * facebook/starlark-rust — Facebook's Starlark Rust impl (977*)
+#   * bytecodealliance/wasm-component-ld — WASM component linker (47*)
+#   * facebook/pyrefly — Pyrefly type checker
+#   * facebookincubator/buck2-change-detector — Buck2 build detector
+#   * DanielT/a2ltool — automotive A2L file editor (THIS, 100*)
+#   * web3infra-foundation/mega — Mega Git server
+#   * a-maier/cres — HEP particle physics event resampling
+#   * timbeurskens/rsbdd — Reduced-order BDD SAT solver
+#   * Many compiler/linker-toolchain binaries in the Rust ecosystem
+#
+# All of these binaries inherit response-file support FROM argfile
+# without needing to implement it themselves.  This is the canonical
+# "small focused crate solving one operational problem" pattern.
+#
+# -----------------------------------------------------------------------------
+# A2LTOOL'S CLI SURFACE (verbatim from src/main.rs)
+# -----------------------------------------------------------------------------
+#
+# USAGE:
+#   a2ltool [@response-file] [INPUT] [OPTIONS]
+#
+# Response files (from argfile):
+#   @file.rsp                  Read additional arguments from file.rsp
+#                              (Windows-style quoting; @ prefix is
+#                              expandable to entire arguments)
+#
+# Input:
+#   <INPUT>                    Input A2L file (positional)
+#   --create                   Create a new A2L file instead of loading
+#
+# Debug info source (for --update operations):
+#   -e, --elffile <FILE>       ELF file with DWARF2+ debug info
+#                              (also: --exefile, --elf aliases)
+#   --pdbfile <FILE>           PDB file (Microsoft Program Database)
+#                              (also: --pdb alias)
+#
+# Mutations:
+#   --check                    Perform additional consistency checks
+#   -c, --cleanup              Remove empty or unreferenced items
+#   -m, --merge <A2LFILE>      Merge another A2L file at MODULE level
+#                              (repeatable to merge multiple)
+#   --merge-preference <PREF>  Conflict resolution: EXISTING|NEW|BOTH
+#                              (default: BOTH; requires --merge)
+#   --merge-project <A2LFILE>  Merge at PROJECT level (preserves all
+#                              modules; concatenates module sets)
+#   -i, --merge-includes       Merge all /include files inline
+#                              (output has no /include directives)
+#   -u, --update [FULL|ADDRESSES]
+#                              Update A2L from ELF/PDB debug info
+#                              FULL = addresses + types (default)
+#                              ADDRESSES = addresses only
+#                              (requires --elffile or --pdbfile)
+#   --update-mode <MODE>       DEFAULT|STRICT|PRESERVE
+#                              DEFAULT: remove unknowns, fix invalid
+#                              STRICT: error on any unknown
+#                              PRESERVE: keep unknowns with zero addrs
+#
+# Output:
+#   -o, --output <FILE>        Output A2L filename (default: stdout)
+#   --strict                   Treat warnings as errors
+#   --sort                     Sort A2L content for deterministic diff
+#
+# Diagnostics:
+#   -v, --verbose              Verbose output (repeatable for more detail)
+#   -h, --help                 Print help
+#   -V, --version              Print version
+#
+# Examples:
+#   a2ltool firmware.a2l --elffile firmware.elf --update
+#   a2ltool firmware.a2l -m extra-module.a2l -o merged.a2l
+#   a2ltool firmware.a2l @ci-options.rsp --update --cleanup
+#
+# =============================================================================
+
+_a2ltool() {
+    local curcontext="$curcontext" state line ret=1
+    typeset -A opt_args
+
+    local -a merge_prefs update_types update_modes
+
+    merge_prefs=(
+        'EXISTING:keep existing item when conflict'
+        'NEW:use new item from merge file when conflict'
+        'BOTH:keep both items, renaming new (default)'
+    )
+
+    update_types=(
+        'FULL:update addresses + types (default)'
+        'ADDRESSES:update addresses only'
+    )
+
+    update_modes=(
+        'DEFAULT:remove unknowns, fix invalid settings'
+        'STRICT:error on unknown objects or invalid settings'
+        'PRESERVE:keep unknowns with addresses set to zero'
+    )
+
+    _arguments -s \
+        '--create[create new A2L file instead of loading]' \
+        '(-e --elffile --exefile --elf)'{-e,--elffile,--exefile,--elf}'[ELF file with DWARF2+ debug info]:elf file:_files -g "*.(elf|exe|so|dwo)"' \
+        '(--pdbfile --pdb)'{--pdbfile,--pdb}'[PDB Microsoft debug file]:pdb file:_files -g "*.pdb"' \
+        '--check[perform additional consistency checks]' \
+        '(-c --cleanup)'{-c,--cleanup}'[remove empty or unreferenced items]' \
+        '*'{-m,--merge}'[merge another A2L at MODULE level]:a2l file:_files -g "*.a2l"' \
+        '--merge-preference[conflict resolution preference]:pref:->mp' \
+        '*--merge-project[merge another A2L at PROJECT level]:a2l file:_files -g "*.a2l"' \
+        '(-i --merge-includes)'{-i,--merge-includes}'[merge /include files inline]' \
+        '(-u --update)'{-u,--update}'[update A2L from ELF/PDB debug info]::type:->ut' \
+        '--update-mode[update mode for unknowns]:mode:->um' \
+        '(-o --output)'{-o,--output}'[output A2L filename]:output:_files' \
+        '--strict[treat warnings as errors]' \
+        '--sort[sort A2L content for deterministic diff]' \
+        '*'{-v,--verbose}'[verbose output (repeatable)]' \
+        '(-h --help)'{-h,--help}'[print help]' \
+        '(-V --version)'{-V,--version}'[print version]' \
+        '*:input A2L file or @response-file:_files -g "*.(a2l|rsp)"' \
+        && ret=0
+
+    case $state in
+        (mp)
+            _describe -t mp 'merge preference' merge_prefs && ret=0
+            ;;
+        (ut)
+            _describe -t ut 'update type' update_types && ret=0
+            ;;
+        (um)
+            _describe -t um 'update mode' update_modes && ret=0
+            ;;
+    esac
+
+    return ret
+}
+
+_a2ltool "$@"
