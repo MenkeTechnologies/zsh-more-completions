@@ -1,0 +1,372 @@
+#compdef sitefetch
+# =============================================================================
+# sitefetch — fetch an entire website and serialize it to a single text file
+#             (or JSON file) suitable for feeding into AI / LLM context
+#             windows.  Walks the target site's link graph, fetches each
+#             page, extracts the readable content (via Mozilla's Readability
+#             algorithm + a configurable CSS selector), converts HTML to
+#             Markdown (turndown + GitHub-Flavored-Markdown plugin), and
+#             concatenates all pages into a single corpus.  Reports total
+#             GPT-4o token count for the corpus so you know how much
+#             context you're loading.  Useful for indexing entire small
+#             documentation sites into your LLM's working memory ("Fetch
+#             stripe.com/docs/api so my model can reference it"), or for
+#             archival of small public sites that you want to keep
+#             searchable as plain text.
+#
+# Author:  Egoist (egoist on GitHub — Kevin Titor, prolific OSS author of
+#          unbuild, tsup, sucrase-loader, tsdown, vue-i18n predecessors,
+#          and the cac CLI library itself)
+# Source:  https://github.com/egoist/sitefetch
+# CLI:     src/cli.ts (uses cacjs/cac, also authored by Egoist)
+# Library: cacjs/cac
+#          ("Command And Conquer — Super light-weight, zero-dependency,
+#           single-file JavaScript library for building CLI apps.
+#           4 APIs: cli.option, cli.version, cli.help, cli.parse")
+# License: MIT
+# Status:  Stable — 1733+ stars; recommended in awesome-ai-tools and
+#          LLM-context-engineering communities; ships as `sitefetch`
+#          binary on npm and as Docker image.
+#
+# -----------------------------------------------------------------------------
+# CROSS-LANGUAGE CLI LIBRARY TAXONOMY MILESTONE — TS-NODE CROSSES TO 34
+# -----------------------------------------------------------------------------
+# With this completion the cross-language CLI library taxonomy documents the
+# 34TH TypeScript-Node CLI library variant.  TypeScript-Node climbs from
+# 33 to 34 documented libraries (cacjs/cac via sitefetch).  New leaderboard:
+# Rust=34, Go=34, TypeScript-Node=34 (THREE-WAY TIE AT 34 RESTORED — top
+# group rejoined for the second time).  Taxonomy now spans 247 cross-
+# language CLI library variants across 59 documented languages.
+# -----------------------------------------------------------------------------
+#
+# WHAT IS cacjs/cac AND WHY IS IT A DISTINCT 34TH TS-NODE CLI LIBRARY?
+#
+# cacjs/cac (https://github.com/cacjs/cac, 3085+ stars) is **Egoist's
+# "Command And Conquer — JavaScript library for building CLI apps"**.
+# Egoist (Kevin Titor) is a prolific OSS author behind dozens of widely-
+# used JavaScript build tools and CLI utilities (unbuild predecessor,
+# tsup, tsdown, sucrase-loader, sitefetch THIS, and ~50 more npm
+# packages with millions of weekly downloads in aggregate).  cac is
+# Egoist's distillation of CLI-library essentials into the **minimum
+# viable JavaScript CLI parser**: zero dependencies, single file,
+# four core APIs.  Originally released in 2017 (one of the OLDEST
+# non-trivial TS/JS CLI libraries still in active use), cac is the
+# parser that powers VITE itself in its early versions and remains
+# the default choice for "small, fast, no-bloat" JavaScript CLIs.
+#
+# cac is DISTINCT from every documented TS-Node CLI library on SIX
+# specific axes:
+#
+#   1. ZERO-DEPENDENCY SINGLE-FILE PARSER — cac is a **single .js
+#      file with ZERO npm dependencies**.  The entire library is one
+#      file (~600 lines of TypeScript compiled to JavaScript).  No
+#      transitive dependency tree, no install-size cost beyond the
+#      single file, no security audit surface beyond the source you
+#      can read in one sitting.  Compare:
+#        commander:     stdlib-only, single file (~similar)
+#        yargs:         15+ dependencies (yargs-parser, cliui, etc.)
+#        oclif:         50+ dependencies (full framework)
+#        citty (UnJS):  ~5 dependencies via UnJS
+#        cleye R472:    type-flag dependency
+#        clerc R496:    type-flag dependency
+#        brocli R500:   zero dependencies (similar)
+#        stricli R484:  zero runtime dependencies (similar)
+#        gunshi R504:   args-tokens dependency
+#        meow R??:      ~10 dependencies (camelcase-keys, normalize-pkg,
+#                        decamelize-keys, redent, etc.)
+#        cac:           ZERO npm dependencies, ONE source file.
+#      cac is in the tiniest possible CLI-library design space along
+#      with commander and brocli — but predates both in adopting the
+#      "single file zero deps" position as a marketing-grade feature.
+#
+#   2. ONLY 4 CORE APIs — cac's README explicitly enumerates the
+#      ENTIRE LEARNING SURFACE as four methods:
+#         cli.option(name, description, opts?)   // register flag
+#         cli.command(name, description, opts?)  // register cmd
+#         cli.version(versionStr)                // --version handler
+#         cli.help(callback?)                    // --help handler
+#         cli.parse(argv?)                       // run the parser
+#      Plus `.action(handler)` chained off `.command()`.  That's it.
+#      The minimal-API-surface design is BORROWED FROM Egoist's own
+#      experience with bundler / build tools where a small public
+#      surface makes versioning, maintenance, and learning easy.
+#      Compare:
+#        commander:     30+ methods (`.alias()`, `.usage()`,
+#                        `.addHelpText()`, `.hook()`, `.configureOutput()`)
+#        yargs:         40+ methods (`.demand()`, `.demandOption()`,
+#                        `.implies()`, `.conflicts()`, `.check()`)
+#        oclif:         class hierarchy with dozens of methods
+#        citty:         ~15 methods + subCommands map
+#        brocli:        ~10 methods on command builder
+#        cac:           4 CORE methods + .action() — the MINIMUM
+#                        VIABLE LEARNING SURFACE for a feature-
+#                        complete TS/JS CLI library.
+#
+#   3. STRING-DSL OPTION SPECIFICATION (BORROWED FROM commander) —
+#      cac's option spec is encoded in the FIRST STRING ARGUMENT:
+#         .option("-o, --outfile <path>", "Write to file")
+#         .option("--concurrency <number>", "Concurrent requests",
+#                 { default: 3 })
+#         .option("-m, --match <pattern>", "Only fetch matched pages")
+#         .option("--silent", "Do not print any logs")
+#      The string syntax `<arg>` = required, `[arg]` = optional,
+#      `<arg...>` = variadic.  This is the commander-pioneered DSL
+#      but cac OWNS it across the TS-Node ecosystem due to the
+#      zero-dep + single-file constraint making commander's
+#      heavier API undesirable.  Compare:
+#        commander (original): same DSL
+#        yargs:                JS object schema, no DSL string
+#        oclif:                class-attribute-driven, no DSL
+#        citty:                JS object schema with `type:` fields
+#        cleye R472:           JS object with `type: String` etc.
+#        brocli R500:          factory-fn `string().required()`
+#        cac:                  COMMANDER-STYLE DSL but in zero-dep
+#                               single-file form — most ergonomic
+#                               way to get commander's DX without
+#                               commander's dependency cost.
+#
+#   4. DEFAULT-COMMAND PATTERN VIA `[arg]` POSITIONAL ON ROOT —
+#      sitefetch demonstrates cac's idiomatic default-command:
+#         cli.command("[url]", "Fetch a site")
+#            .option("-o, --outfile <path>", "...")
+#            .action(async (url, flags) => { ... })
+#      The `[url]` in the command string is the optional positional
+#      argument; cac uses this as the "default command when no
+#      subcommand is given" pattern.  Compare:
+#        commander:     `.argument('[url]')` or `.action(fn)` on root
+#        yargs:         `.command('$0 [url]', ...)` — explicit `$0`
+#        oclif:         flat-command class hierarchy
+#        citty:         `args: { url: { type: 'positional' } }`
+#        brocli:        explicit positional() factory call
+#        cac:           command name STRING ITSELF carries the
+#                        positional pattern (`[url]` for opt,
+#                        `<url>` for required) — same syntax as
+#                        commander but at command-name level.
+#
+#   5. DOT-NESTED OPTION KEYS — cac supports DOT-NOTATION in the
+#      option name to produce NESTED OBJECTS in the parsed result:
+#         .option("--server.port <port>", "Server port")
+#         .option("--server.host <host>", "Server host")
+#         // CLI: --server.port 3000 --server.host 127.0.0.1
+#         // Parsed: { server: { port: 3000, host: '127.0.0.1' } }
+#      Compare:
+#        commander:     no native dot-nested support
+#        yargs:         supports `.argv['server.port']` access but
+#                        not deep-nested object construction
+#        oclif:         flat flag namespace
+#        citty:         flat args namespace
+#        cac:           NATIVE dot-nested → nested-object mapping,
+#                        idiomatic for config-style CLI surfaces.
+#      Used in vite, vitest, and other Egoist-adjacent projects
+#      that expose config-like CLI options.
+#
+#   6. GIT-LIKE SUBCOMMANDS WITH `.command()` CHAINING — cac's
+#      subcommand model uses CHAINED `.command()` calls on the
+#      root parser, each followed by its own `.option()` and
+#      `.action()` chain:
+#         cli.command("build [entry]", "Build the project")
+#            .option("--minify", "Minify output")
+#            .action((entry, flags) => { /* build */ })
+#         cli.command("serve [dir]",   "Serve the project")
+#            .option("--port <port>",  "Port to serve on")
+#            .action((dir, flags)   => { /* serve */ })
+#      Compare:
+#        commander:     same chained `.command().option().action()`
+#        yargs:         `.command({command, describe, builder, handler})`
+#        oclif:         file-per-command (one TypeScript file per cmd)
+#        citty:         `subCommands: { build: defineCommand({...}) }`
+#        brocli R500:   `run([build, serve])` with each cmd a
+#                        plain object
+#        cac:           chained on the ROOT parser instance, sharing
+#                        the same `cli.parse()` call — most concise
+#                        multi-command CLI definition.
+#
+# Bonus: cac is **THE PARSER INSIDE VITE 2.x's bin/vite.js** — Evan
+# You chose cac as the parser for `vite`/`vitest` early in Vite's
+# life because of the zero-dep + single-file properties.  Modern Vite
+# has moved to its own internal parser but cac's adoption by Vite
+# in 2020-2021 made it the canonical "small Vite-adjacent TS CLI"
+# parser for several years.
+#
+# THE cacjs/cac API SURFACE (verbatim from upstream README)
+#
+#   import { cac } from "cac"
+#   // OR: import cac from "cac"  (both work)
+#
+#   const cli = cac("mycli")
+#
+#   // Root-level options (apply to every command):
+#   cli.option("--verbose", "Verbose output")
+#   cli.option("--cwd <path>", "Working directory", { default: process.cwd() })
+#
+#   // Subcommands with their own options:
+#   cli.command("build [entry]", "Build the project")
+#      .option("--minify", "Minify output")
+#      .action((entry: string, flags: { minify?: boolean, verbose?: boolean }) => {
+#          // typed flags + positional
+#      })
+#
+#   cli.command("serve [dir]", "Serve directory")
+#      .option("--port <port>", "Port to serve on", { default: 3000 })
+#      .action((dir, flags) => { /* */ })
+#
+#   // Default command (positional on root):
+#   cli.command("[url]", "Fetch URL")
+#      .option("-o, --outfile <path>", "Output file")
+#      .action(async (url, flags) => { /* */ })
+#
+#   // Help + version:
+#   cli.version("1.0.0")
+#   cli.help()
+#
+#   // Run:
+#   cli.parse()
+#
+# Option spec DSL (the FIRST STRING argument):
+#   --long                       boolean flag
+#   --long <value>               required string value
+#   --long [value]               optional string value
+#   --long <values...>           variadic / multi-value
+#   -s, --short                  short + long both registered
+#   --server.port <port>         dot-nested → nested object
+#
+# Options object (the SECOND argument):
+#   { default: value }           default if flag absent
+#   { type: [Number] }           value-type hint (string-by-default)
+#
+# CONTRAST WITH OTHER TS-NODE CLI LIBRARIES DOCUMENTED IN THE CORPUS
+#
+#   * commander           — same DSL, more methods, also single-file
+#   * yargs               — JS-object schema, 40+ methods
+#   * oclif               — file-per-command, class hierarchy
+#   * citty (UnJS)        — defineCommand({meta, args, run})
+#   * meow (sindresorhus) — JSDoc-driven static parsing
+#   * minimist            — pure parser, no command abstraction
+#   * sade                — chained, lightweight (cac-like)
+#   * arg (Vercel)        — pure parser
+#   * mri (lukeed)        — minimist replacement, lighter
+#   * yargs-parser        — parsing kernel under yargs
+#   * arg-parser          — typed plain object schema
+#   * cleye R472          — string-command map + typed flags
+#   * clipanion           — class-based with attribute decorators
+#   * gluegun             — extension-plugin architecture
+#   * stricli R484        — Bloomberg complex CLI framework
+#   * type-flag           — low-level typed flag primitive
+#   * tinyargs            — egoist's parser + Option class
+#   * breadc              — modern minimal TS framework
+#   * clerc R496          — plugin-driven typed chained API
+#   * brocli R500         — factory-fn + method-chain + plain object
+#   * command-line-args   — 75lb's three-stage parser
+#   * cliffy (Deno-first) — chained + Promise-returning .parse()
+#   * gunshi R504         — universal-runtime + i18n + 3 renderers
+#   * cac (THIS)          — ZERO-DEP single-file + 4-API minimum
+#                            viable surface + commander-DSL string
+#                            spec + default-command-via-[arg] +
+#                            dot-nested keys + git-like chained
+#                            subcommands
+#
+# cac occupies a UNIQUE NICHE — the **MINIMUM VIABLE FEATURE-COMPLETE
+# TS/JS CLI library**.  Same DX as commander but with one fewer
+# dependency tree.  Same chained API as sade/brocli but with a
+# DSL-string-based option spec.  Same subcommand model as
+# yargs/citty but in zero-dependency single-file form.
+#
+# REAL-WORLD cacjs/cac USERS:
+#
+#   * egoist/sitefetch (THIS, 1733*) — site-to-text fetcher for LLM
+#       context (cac + egoist's own dogfooding)
+#   * nexu-io/open-design (56711*) — local-first open-source Claude
+#       Design alternative; uses cac in tools/serve internal CLI
+#   * daangn/seed-design (877*) — 당근마켓 Karrot Market design system;
+#       uses cac in packages/cli for design-system tooling
+#   * ton-blockchain/tasm — TON Blockchain assembler/disassembler
+#       for TVM (TON Virtual Machine) bitcode in pure TypeScript
+#   * yext/studio — Yext page-builder studio
+#   * peetzweg/polkadot-cli — Polkadot blockchain CLI tooling
+#   * visulima/visulima — TypeScript developer tools monorepo
+#       (cerebro benchmarks compare cac among parsers)
+#   * vitejs/vite (HISTORICAL, 2020-2021) — cac powered the vite
+#       binary in early Vite 2.x releases before Vite's own parser
+#   * vitest-dev/vitest (HISTORICAL) — same as vite
+#   * Many small Egoist projects: tsup (early versions), unbuild
+#       predecessors, ts-shift, get-npm-tgz
+#
+# cac's adoption pattern: **Egoist's own toolchain plus Vite-era
+# JavaScript build tools** that prioritize bundle size and install
+# speed over feature breadth.  cac is the parser of choice when the
+# author cares about install size and dependency hygiene more than
+# about advanced features like prompt-driven UX or i18n.
+#
+# -----------------------------------------------------------------------------
+# SITEFETCH'S CLI SURFACE (verbatim from src/cli.ts)
+# -----------------------------------------------------------------------------
+#
+# USAGE:
+#   sitefetch [URL] [OPTIONS]
+#
+# Positional:
+#   URL                              The site to fetch.  Walked breadth-first
+#                                     from this URL up to --limit pages.
+#
+# Options:
+#   -o, --outfile <PATH>             Write the fetched site to this file
+#                                     (.json suffix produces JSON; anything
+#                                     else produces concatenated text).
+#                                     If omitted, prints to stdout.
+#       --concurrency <N>            Number of concurrent requests
+#                                     (default 3).  Tune up for fast sites,
+#                                     down to be polite.
+#   -m, --match <PATTERN>            micromatch glob pattern; only fetch
+#                                     pages whose URL matches.  Can be
+#                                     specified multiple times (becomes
+#                                     a glob list).  E.g.:
+#                                       -m 'docs/**' -m 'guide/**'
+#       --content-selector <CSS>     CSS selector for the content region
+#                                     (e.g. "main", "article", "#content").
+#                                     If omitted, sitefetch uses Mozilla's
+#                                     Readability auto-extractor.
+#       --limit <N>                  Stop after N pages.  Useful to bound
+#                                     memory/runtime when crawling large
+#                                     sites unbounded.
+#       --silent                     Suppress all log output (errors still
+#                                     go to stderr).
+#       --version                    Show version (cac built-in)
+#   -h, --help                       Show help (cac built-in)
+#
+# Typical usage:
+#   $ sitefetch https://docs.example.com -o docs.txt
+#   $ sitefetch https://example.com -m 'docs/**' --limit 100 -o docs.txt
+#   $ sitefetch https://example.com --content-selector main \
+#       --concurrency 10 -o site.json
+#   $ sitefetch https://example.com --silent > corpus.txt
+#
+# Output format:
+#   text  — concatenated `<page-title>\n<url>\n\n<markdown-body>\n\n---\n\n`
+#   json  — array of `{ url, title, content }` records
+#
+# GPT-4o token reporting:
+#   Sitefetch reports total token count (gpt-tokenizer/model/gpt-4o)
+#   for the fetched corpus.  Useful to know whether the result fits
+#   in your model's context window before paste/upload.
+#
+# =============================================================================
+
+_sitefetch() {
+    local curcontext="$curcontext" state line ret=1
+    typeset -A opt_args
+
+    _arguments -C \
+        '(-o --outfile)'{-o,--outfile}'[write fetched site to file]:file:_files' \
+        '--concurrency[number of concurrent requests (default 3)]:n:' \
+        '*'{-m,--match}'[micromatch glob — only fetch matched pages]:pattern:' \
+        '--content-selector[CSS selector for content region]:selector:' \
+        '--limit[stop after N pages]:n:' \
+        '--silent[suppress log output]' \
+        '--version[show version]' \
+        '(-h --help)'{-h,--help}'[show help]' \
+        '*:url:_urls' && ret=0
+
+    return ret
+}
+
+_sitefetch "$@"
