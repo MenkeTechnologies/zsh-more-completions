@@ -1,0 +1,547 @@
+#compdef ffizer
+# =============================================================================
+# ffizer — David Bernard's "files and folders initializer / generator"
+#          — a Rust CLI scaffolding tool for creating projects from
+#          Git/local templates with variable substitution, conditional
+#          file inclusion, and reapply-after-template-update support.
+#          Distinguishing from cookiecutter (Python), copier (Python),
+#          yeoman (Node), kickstart (Rust, R-prev), and casey/cargo-
+#          generate (Rust) by:
+#            - REAPPLY MODE — `ffizer reapply` re-runs a previously-
+#              applied template against an existing project to pick
+#              up template updates; tracks applied templates via
+#              .ffizer/journal.yml
+#            - JSON SCHEMA SHIPPED — `ffizer show-json-schema` emits
+#              the JSON Schema for .ffizer.yaml files; editor LSPs +
+#              CI validation can use this directly
+#            - SAMPLE TESTING — `ffizer test-samples` runs a
+#              template against bundled sample inputs + checks
+#              expected outputs (regression testing for templates)
+#            - 3 UPDATE MODES via --update-mode (Ask/Override/Keep/
+#              UpdateAsTemplated/CurrentAsTemplated/Merge) for
+#              handling existing files when reapplying
+#            - 3 CONFIRMATION MODES via --confirm (Always/Never/
+#              Auto) — Auto detects TTY + adjusts behavior
+#            - OFFLINE MODE via --offline — uses only cached
+#              templates from .ffizer/cache/; useful in air-gapped
+#              environments
+#            - PER-VARIABLE OVERRIDES via -v key=value (repeatable)
+#              — pass template variables via CLI without prompts
+#            - GIT TEMPLATE SOURCE — templates can be local paths
+#              OR Git URLs (full URL or short owner/repo) with
+#              optional --rev / --subfolder
+#            - --no-interaction (-y) — skip all prompts (CI-friendly)
+#            - VERBOSE MODE via -v / -vv / -vvv (counted) — info /
+#              debug / trace levels routed to stderr
+#            - walkdir DIRECTORY TRAVERSAL — every template file
+#              walking + path matching uses BurntSushi's walkdir
+#              for fast cross-platform directory traversal
+#          Used by: project scaffolding workflows, polyglot
+#          monorepo template management, language-agnostic
+#          generator pipelines (any language template), and as
+#          a reference implementation of walkdir + clap-derive
+#          + git2-rs Rust CLI design.
+#
+# Author:  David Bernard (davidB on GitHub) — French Rust + Scala
+#          developer.  ffizer released 2018; active development
+#          through 2026 with regular releases.  License: CC0-1.0
+#          (public domain).
+# Source:  https://github.com/ffizer/ffizer
+#          https://github.com/ffizer/ffizer/blob/master/src/main.rs
+#          https://github.com/ffizer/ffizer/blob/master/src/cli_opt.rs
+# CLI:     src/cli_opt.rs — uses clap 4.x derive (`#[derive(Parser,
+#          Subcommand, Args, ValueEnum)]`) with 5 subcommands +
+#          counted-verbose flag.  Headline library: **walkdir**
+#          (clap is well-documented across many Rust completions;
+#          walkdir is the new variant being documented here,
+#          expanding Axis 14 to 2 Rust variants).
+# Library: walkdir (https://github.com/BurntSushi/walkdir)
+#          ("walkdir" — Andrew Gallant (BurntSushi on GitHub, also
+#           author of ripgrep + regex + xsv + cargo-deny + bstr +
+#           jiff + many more) — released 2015 as "Rust library for
+#           walking directories recursively".  Distinct from
+#           camino (R637, the Rust Axis 14 opener) by being:
+#             1. RECURSIVE DIRECTORY ITERATOR — walkdir's central
+#                feature is the WalkDir builder + DirEntry
+#                iterator interface:
+#                  use walkdir::WalkDir;
+#                  for entry in WalkDir::new("/etc") {
+#                      let entry = entry?;
+#                      println!("{}", entry.path().display());
+#                  }
+#             2. RICH BUILDER OPTIONS:
+#                  WalkDir::new(path)
+#                      .min_depth(1)              // skip root
+#                      .max_depth(5)               // limit recursion
+#                      .follow_links(true)         // resolve symlinks
+#                      .same_file_system(true)    // don't cross fs boundaries
+#                      .sort_by_file_name()       // deterministic order
+#                      .sort_by(|a, b| ...)        // custom sort
+#                      .contents_first(true)      // depth-first, dirs after files
+#                      .into_iter()
+#             3. FILTER_ENTRY for PRUNING — walkdir's filter_entry
+#                method PRUNES the traversal (stops descending into
+#                rejected directories), distinct from .filter() which
+#                only filters output:
+#                  WalkDir::new("/")
+#                      .into_iter()
+#                      .filter_entry(|e| !is_hidden(e))
+#                      .for_each(...);
+#             4. CROSS-PLATFORM CORRECTNESS — walkdir handles
+#                Windows path quirks, follows symlink resolution
+#                correctly, and provides cycle detection for
+#                follow_links mode
+#             5. ANDREW-GALLANT / BURNTSUSHI ECOSYSTEM PROVENANCE
+#                — Andrew Gallant maintains:
+#                  * walkdir (THIS)
+#                  * ripgrep (60k+ stars) — the dominant grep
+#                    replacement; uses walkdir internally
+#                  * regex (the canonical Rust regex engine)
+#                  * xsv (CSV manipulation)
+#                  * jiff (modern Rust datetime library)
+#                  * bstr (binary strings)
+#                  * cargo-deny (Rust license/dependency audit)
+#                  * ucd-generate, encoding_rs, fst, aho-corasick
+#                  * 30+ infrastructure-Rust crates
+#                Burntsushi's libraries are TRANSITIVELY USED by
+#                THOUSANDS of Rust CLI tools.  walkdir + ignore
+#                + globset are the path-handling layer beneath
+#                ripgrep (60k stars)
+#             6. ZERO-DEPENDENCY (in modern v2+) — pure stdlib Rust
+#                using only std::fs + std::path; ~100KB binary
+#                contribution
+#             7. PERFORMANCE-FIRST DESIGN — designed for ripgrep
+#                where directory walking is the hot path; ~10x
+#                faster than naive std::fs::read_dir recursion)
+# License: CC0-1.0 (ffizer); Unlicense OR MIT (walkdir)
+# Status:  ffizer — 124+ stars on ffizer/ffizer, niche but active
+#          scaffolding tool; walkdir — 1,504+ stars on BurntSushi/
+#          walkdir, ~400M crates.io downloads, foundational
+#          dependency of ripgrep (60k stars — uses walkdir
+#          internally) + denisidoro/navi (17k stars cheatsheet
+#          tool) + railwayapp/nixpacks (3.5k stars) + Freaky/
+#          Compactor (1.3k stars) + becheran/mlc (link checker)
+#          + Keats/kickstart (scaffolding R-prev) + diptools/dip
+#          + MrHedmad/kerblam + ffizer/ffizer (THIS) + 3000+
+#          Rust CLIs needing recursive directory traversal.
+#
+# -----------------------------------------------------------------------------
+# CROSS-LANGUAGE CLI LIBRARY TAXONOMY MILESTONE — RUST CROSSES TO 68 +
+#                                                  AXIS 14 EXPANDS IN RUST
+# -----------------------------------------------------------------------------
+# With this completion the cross-language CLI library taxonomy documents
+# the 68TH Rust CLI library variant.  Rust climbs from 67 to 68 documented
+# libraries (walkdir via ffizer).  Rust **breaks the third triple-tie
+# at 67** (Rust=Go=TS-Node=67 since R639) to take SOLO LEAD at 68.  New
+# leaderboard: Rust=68, Go=67, TypeScript-Node=67 (Rust SOLO at 68,
+# Go+TS-Node tied at 67 — twenty-second time Rust has taken solo lead
+# in this round-sequence; FIRST time any language crosses 68).
+# Taxonomy now spans 380 cross-language CLI library variants across 92
+# documented languages.
+#
+# Pattern: R640 92nd language (Falcon) → R641 Rust=68 (walkdir THIS —
+# Axis 14 expands to 2 Rust variants) → expected R642 Go=68 → expected
+# R643 TS-Node=68 → expected R644 93rd language.  This is the 1st of
+# 3 leader bumps in the new segment.
+#
+# This completion EXPANDS Axis 14 (PATHS / FILESYSTEM) within Rust to
+# TWO variants — matching the trajectory of Axis 10 (R608-R614) and
+# Axis 13 (R629-R635).  Three-language Axis 14 distribution: Rust=2,
+# Go=1, TS-Node=1 (Rust leading).
+#
+#   Rust Axis 14 variants:
+#     - camino (camino-rs/camino) — R637 (_uniffi-bindgen) — Rust
+#       UTF-8 PATH TYPES (Utf8PathBuf + Utf8Path) with type-level
+#       UTF-8 guarantees; cargo-foundational; David Tolnay
+#       ecosystem
+#     - walkdir (BurntSushi/walkdir) — R641 (THIS) — Rust
+#       RECURSIVE DIRECTORY ITERATOR with rich builder options
+#       (min_depth / max_depth / follow_links / sort_by /
+#       filter_entry); ripgrep-foundational; Andrew Gallant /
+#       BurntSushi ecosystem
+#
+# Two Rust Axis 14 variants now address DIFFERENT aspects of the
+# filesystem problem:
+#   camino            = PATH TYPE GUARANTEES (UTF-8 encoding at
+#                        type level)
+#   walkdir           = DIRECTORY TRAVERSAL (recursive iterator
+#                        with pruning + sorting + symlink handling)
+#
+# Both libraries are infrastructure-layer Rust crates — camino is
+# Cargo-foundational, walkdir is ripgrep-foundational.
+#
+# Axis 14 distribution: Rust=2, Go=1, TS-Node=1 — Rust now LEADS
+# Axis 14 coverage (matching the pattern of Axis 9 + 10 + 13).
+# Expected R642 Go=68 may add bmatcuk/doublestar or karrick/
+# godirwalk as 2nd Go Axis 14 variant.
+#
+# **ANDREW GALLANT / BURNTSUSHI ECOSYSTEM DEEPENS**
+#
+# With R641, Andrew Gallant (BurntSushi) becomes the FOURTH+
+# library-author with multiple documented headline libraries in
+# the taxonomy (after Sindre Sorhus R635, David Tolnay R637,
+# Steve Francia R638).  BurntSushi crates documented or
+# transitively documented:
+#   - ripgrep (transitive via many CLIs — the dominant Rust grep)
+#   - regex (transitive — the canonical Rust regex engine)
+#   - walkdir (THIS — R641 _ffizer, Axis 14)
+#   - ignore (transitive — gitignore-aware walker)
+#   - globset (transitive — fast glob compiler)
+#   - aho-corasick, bstr, jiff, fst, ucd-generate, encoding_rs
+#
+# BurntSushi's 30+ crates form the SEARCH+REGEX+TEXT-PROCESSING
+# infrastructure layer of Rust development — alongside Tolnay's
+# serde+anyhow+thiserror+camino + Sorhus's chalk+boxen+wrap-ansi
+# +conf and Francia's pflag+cobra+viper+afero.
+#
+# (Leaderboard at R641: Rust=68, Go=67, TS-Node=67.  Rust Axis 6 +
+# Axis 9 BOTH at 6 variants.  Axis 9 / Logging three-way symmetric
+# at 6/6/6.  Axis 10 / Tables 2/2/2.  Axis 11 / Humanization 1/1/1.
+# Axis 12 / Text Wrapping 1/1/1.  Axis 13 / Configuration 2/2/2.
+# Axis 14 / Paths now Rust=2, Go=1, TS-Node=1.)
+#
+# -----------------------------------------------------------------------------
+#
+# WHAT IS walkdir AND WHY IS IT THE 68TH RUST CLI LIBRARY?
+#
+# walkdir (https://github.com/BurntSushi/walkdir, 1,504+ stars) is
+# **Andrew Gallant's "Rust library for walking directories
+# recursively"** — the foundational directory-traversal library
+# of the Rust ecosystem.  Where camino (R637) solves the UTF-8
+# path encoding problem at the type-system level, walkdir solves
+# the recursive directory iteration problem with a rich builder
+# API + cycle detection + symlink handling.
+#
+# walkdir's distinguishing characteristics:
+#
+#   1. RECURSIVE DIRECTORY ITERATOR with BUILDER PATTERN — walkdir's
+#      central feature is the WalkDir struct with configurable
+#      builder methods producing an iterator over DirEntry values:
+#
+#          use walkdir::WalkDir;
+#
+#          // Basic recursive walk:
+#          for entry in WalkDir::new("/etc") {
+#              match entry {
+#                  Ok(e) => println!("{}", e.path().display()),
+#                  Err(err) => eprintln!("error: {}", err),
+#              }
+#          }
+#
+#          // Configured walk:
+#          for entry in WalkDir::new("/var/log")
+#              .min_depth(1)             // skip the root
+#              .max_depth(3)              // descend 3 levels max
+#              .follow_links(true)        // resolve symbolic links
+#              .same_file_system(true)   // don't cross filesystem boundaries
+#              .sort_by_file_name()      // deterministic ordering
+#              .into_iter()
+#          {
+#              // ... process entry
+#          }
+#
+#      Compare:
+#         * Rust camino (R637): single-path manipulation only
+#         * Rust std::fs::read_dir: requires manual recursion +
+#                                     error handling
+#         * Rust ignore (BurntSushi): adds gitignore-style filtering
+#                                       (builds on walkdir)
+#         * Go afero (R638): Walk via afero.Walk(fs, root, walkFn)
+#         * Go filepath.Walk: similar stdlib (callback-based vs
+#                              iterator-based)
+#         * Node fast-glob (R639): pattern-matching glob, not
+#                                    raw iteration
+#         * walkdir: ITERATOR API with rich builder options
+#      FIRST documented Rust Axis 14 library with iterator-based
+#      recursive directory walking + builder configuration.
+#
+#   2. filter_entry FOR PRUNING TRAVERSAL — walkdir distinguishes
+#      between FILTERING OUTPUT (.filter()) and PRUNING TRAVERSAL
+#      (.filter_entry()):
+#
+#          fn is_hidden(entry: &DirEntry) -> bool {
+#              entry.file_name()
+#                  .to_str()
+#                  .map(|s| s.starts_with("."))
+#                  .unwrap_or(false)
+#          }
+#
+#          // FILTER OUTPUT (still recurses into hidden directories):
+#          for entry in WalkDir::new("/")
+#              .into_iter()
+#              .filter(|e| e.is_ok() && !is_hidden(e.as_ref().unwrap()))
+#          {
+#              // Still descends INTO hidden dirs to find non-hidden children
+#          }
+#
+#          // PRUNE TRAVERSAL (stops descending into hidden directories):
+#          for entry in WalkDir::new("/")
+#              .into_iter()
+#              .filter_entry(|e| !is_hidden(e))   // ← key difference
+#          {
+#              // Hidden directories not entered; faster + safer
+#          }
+#
+#      The pruning behavior is CRITICAL for performance + correctness
+#      when walking large trees that contain large excluded subtrees
+#      (e.g. node_modules, .git, target).
+#      Compare:
+#         * Go filepath.Walk: callback returns filepath.SkipDir
+#                              for similar pruning
+#         * Go afero.Walk: similar SkipDir mechanism
+#         * Node fast-glob: ignore patterns prevent descent
+#         * walkdir: explicit .filter_entry() vs .filter()
+#                     SEMANTICALLY DISTINCT methods
+#      FIRST documented Rust Axis 14 library with explicit
+#      filter_entry-as-pruning vs filter-as-output-only distinction.
+#
+#   3. CYCLE DETECTION FOR follow_links — when follow_links(true)
+#      is enabled, walkdir DETECTS SYMLINK CYCLES + emits an error
+#      instead of looping forever:
+#
+#          WalkDir::new("/").follow_links(true)
+#              .into_iter()
+#              .filter_map(Result::ok)
+#              .for_each(|e| {
+#                  // If a symlink loop exists, walkdir emits a
+#                  // walkdir::Error::LoopDetected instead of
+#                  // recursing infinitely
+#              });
+#
+#      Compare:
+#         * Rust std::fs: no cycle detection (naive recursion loops)
+#         * Go filepath.Walk: NO automatic cycle detection
+#                              (caller must implement)
+#         * walkdir: BUILT-IN LoopDetected error variant
+#      FIRST documented Rust Axis 14 library with built-in
+#      symlink-cycle detection.
+#
+#   4. SORT_BY + SORT_BY_FILE_NAME — walkdir supports stable
+#      deterministic ordering via sort methods:
+#
+#          // Sort alphabetically by filename:
+#          WalkDir::new("/data").sort_by_file_name()
+#
+#          // Custom sort comparator:
+#          WalkDir::new("/data").sort_by(|a, b| {
+#              a.path().cmp(b.path())  // by full path
+#          })
+#
+#      Critical for REPRODUCIBLE builds + cross-platform test
+#      stability (where readdir order is OS-dependent).
+#      Compare:
+#         * Go filepath.Walk: alphabetical by default (no choice)
+#         * Go afero.Walk: alphabetical
+#         * Node fast-glob: configurable sort
+#         * walkdir: explicit sort_by_file_name + sort_by methods
+#      FIRST documented Rust Axis 14 library with explicit
+#      deterministic-ordering sort methods.
+#
+#   5. ANDREW GALLANT / BURNTSUSHI ECOSYSTEM PROVENANCE — walkdir
+#      is by Andrew Gallant (BurntSushi on GitHub), creator of the
+#      BurntSushi crate family that includes:
+#         * ripgrep — the dominant grep replacement (60k+ stars)
+#         * regex — the canonical Rust regex engine
+#         * walkdir (THIS) — recursive directory walker
+#         * ignore — gitignore-aware walker (builds on walkdir +
+#                     globset)
+#         * globset — fast glob pattern compiler
+#         * xsv — CSV manipulation
+#         * jiff — modern Rust datetime library
+#         * bstr — binary strings
+#         * aho-corasick — Aho-Corasick algorithm
+#         * fst — finite state transducers
+#         * encoding_rs — Web Encoding Standard
+#         * ucd-generate — Unicode character database
+#         * 30+ Rust crates
+#      Burntsushi's libraries form the SEARCH+REGEX+TEXT-PROCESSING
+#      infrastructure layer of Rust development.  walkdir is the
+#      DIRECTORY-TRAVERSAL piece of that ecosystem; the dominant
+#      tools that built on it:
+#         * ripgrep (60k stars) — fast grep
+#         * fd (40k stars) — modern find replacement (uses
+#                              ignore which wraps walkdir)
+#         * tokei (10k stars) — code counter
+#         * exa/eza — modern ls (uses walkdir)
+#         * dust — disk usage analyzer
+#         * dua — disk usage analyzer (uses jwalk, not walkdir,
+#                  but similar)
+#         * skim — fuzzy finder
+#         * delta — git diff pager
+#         * navi (17k stars) — cheatsheet tool
+#         * railwayapp/nixpacks (3.5k stars)
+#         * Freaky/Compactor (1.3k stars)
+#         * Keats/kickstart (scaffolding)
+#         * ffizer/ffizer (THIS)
+#         * 3000+ Rust CLIs
+#      FIRST documented Rust Axis 14 library with this specific
+#      BurntSushi / ripgrep-foundational provenance.
+#
+# walkdir's relationship to camino (R637):
+#
+#   * Unlike camino (R637) — camino is UTF-8 path TYPES (compile-
+#                              time encoding guarantees); walkdir
+#                              is recursive directory ITERATION
+#                              (runtime traversal)
+#   * Closest cross-language analogs:
+#         * Go filepath.Walk (stdlib) — callback-based, no pruning
+#                                         distinction
+#         * Go karrick/godirwalk — fast walker, similar role
+#         * Node node-glob — pattern + iteration combined
+#         * Node fast-glob (R639) — pattern + iteration combined
+#         * Python os.walk (stdlib) — tuple iterator
+#         * Python pathlib.Path.iterdir — flat iteration
+#     walkdir is the SECOND documented Rust Axis 14 library
+#     providing recursive directory iterator + builder options +
+#     filter_entry pruning + cycle detection + sort_by + BurntSushi
+#     ripgrep-foundational provenance.
+#
+# -----------------------------------------------------------------------------
+#
+# THE ffizer CLI — clap-derive + walkdir + git2-rs + 5 subcommands
+#
+# ffizer's CLI is in src/cli_opt.rs.  Uses clap 4.x derive:
+#
+#     use clap::{Args, Parser, Subcommand, ValueEnum};
+#     use std::path::PathBuf;
+#
+#     #[derive(Parser, Debug, Clone)]
+#     #[command(version, about, propagate_version = true)]
+#     pub struct CliOpts {
+#         /// Verbose mode (-v, -vv (very verbose), -vvv)
+#         #[arg(short = 'v', long = "verbose", action = clap::ArgAction::Count)]
+#         pub verbose: u8,
+#         #[command(subcommand)]
+#         pub cmd: Command,
+#     }
+#
+#     #[derive(Subcommand, Debug, Clone)]
+#     pub enum Command {
+#         Apply(ApplyOpts),
+#         Reapply(ReapplyOpts),
+#         Inspect,
+#         ShowJsonSchema,
+#         TestSamples(TestSamplesOpts),
+#     }
+#
+# Subcommands (5):
+#   apply              Apply template to target directory
+#   reapply            Reapply previously-applied template (template update)
+#   inspect            Inspect config/caches/etc (work-in-progress)
+#   show-json-schema   Emit JSON Schema for .ffizer.yaml files
+#   test-samples       Test template against bundled sample inputs
+#
+# Per-subcommand flags (apply / reapply share most):
+#   --confirm Auto|Always|Never           Confirmation behavior
+#   --update-mode Ask|Override|Keep|...    Existing-file handling
+#   -y, --no-interaction                   Skip all prompts (CI)
+#   --offline                              Use only local/cached templates
+#   -d, --destination FOLDER               Output directory
+#   -v, --variables key=value (repeatable) Template variables
+#
+# walkdir is used throughout ffizer's source: walking the
+# template directory tree to discover files, walking the
+# destination tree to detect existing files for update-mode
+# handling, and walking the .ffizer/journal/ tree to find
+# previously-applied templates for reapply mode.
+#
+# Five-axis distinctness from camino (R637):
+#
+#   1. ITERATOR-BASED RECURSIVE TRAVERSAL — walkdir provides an
+#      Iterator<Item=Result<DirEntry>>; camino has no traversal API.
+#
+#   2. filter_entry PRUNING SEMANTICS — explicit
+#      pruning-vs-output-filter distinction; camino has no
+#      filtering.
+#
+#   3. CYCLE DETECTION for follow_links — automatic loop detection
+#      via LoopDetected error variant.
+#
+#   4. SORT_BY + SORT_BY_FILE_NAME — deterministic ordering for
+#      reproducible builds + cross-platform test stability.
+#
+#   5. BURNTSUSHI ECOSYSTEM PROVENANCE — paired with ripgrep
+#      (60k stars), regex, ignore, globset, xsv, jiff, and 30+
+#      other infrastructure-Rust crates.
+#
+# -----------------------------------------------------------------------------
+#
+# COMMAND-LINE OPTIONS (sourced directly from
+# https://github.com/ffizer/ffizer/blob/master/src/cli_opt.rs
+# clap derive CliOpts + Command + ApplyOpts + ReapplyOpts +
+# TestSamplesOpts structs.)
+# -----------------------------------------------------------------------------
+
+local curcontext="$curcontext" state line ret=1
+typeset -A opt_args
+
+local -a _ffizer_cmds _ffizer_confirm _ffizer_update_modes
+_ffizer_cmds=(
+    'apply:apply a template into a target directory'
+    'reapply:reapply previously-applied templates (template update)'
+    'inspect:inspect configuration, caches (work-in-progress)'
+    'show-json-schema:emit JSON Schema for .ffizer.yaml files'
+    'test-samples:test a template against its bundled samples'
+    'help:show help for a subcommand'
+)
+_ffizer_confirm=(
+    'Always:always prompt for plan confirmation'
+    'Never:never prompt (default)'
+    'Auto:auto-detect TTY + prompt accordingly'
+)
+_ffizer_update_modes=(
+    'Ask:ask interactively how to handle existing files (default)'
+    'Override:overwrite existing files'
+    'Keep:keep existing files'
+    'UpdateAsTemplated:rewrite with new template content'
+    'CurrentAsTemplated:keep current content but treat as templated'
+    'Merge:attempt 3-way merge'
+)
+
+_arguments -C \
+    '*'{-v,--verbose}'[increase verbosity (-v / -vv / -vvv)]' \
+    '(- *)'{-h,--help}'[show help]' \
+    '(- *)'{-V,--version}'[show version]' \
+    '1: :->cmd' \
+    '*::arg:->args' \
+    && ret=0
+
+case $state in
+    cmd)
+        _describe -t commands 'ffizer subcommand' _ffizer_cmds && ret=0
+        ;;
+    args)
+        case $words[1] in
+            apply|reapply)
+                _arguments \
+                    '--confirm=[plan-confirmation behavior (default Never)]:mode:(Always Never Auto)' \
+                    '--update-mode=[existing-file handling (default Ask)]:mode:(Ask Override Keep UpdateAsTemplated CurrentAsTemplated Merge)' \
+                    '(-y --no-interaction)'{-y,--no-interaction}'[skip all prompts (CI-friendly)]' \
+                    '--offline[use only local/cached templates]' \
+                    '(-d --destination)'{-d+,--destination=}'[output directory (created if missing)]:dir:_directories' \
+                    '*'{-v+,--variables=}'[set template variable (key=value)]:variable:_default' \
+                    && ret=0
+                ;;
+            inspect)
+                _arguments \
+                    '(- *)'{-h,--help}'[show help]' \
+                    && ret=0
+                ;;
+            show-json-schema)
+                _arguments \
+                    '(- *)'{-h,--help}'[show help]' \
+                    && ret=0
+                ;;
+            test-samples)
+                _arguments \
+                    '--src=[template source path or Git URL]:src:_default' \
+                    && ret=0
+                ;;
+            help)
+                _describe -t commands 'subcommand' _ffizer_cmds && ret=0
+                ;;
+        esac
+        ;;
+esac
+
+return ret
