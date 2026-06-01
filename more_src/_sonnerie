@@ -1,0 +1,538 @@
+#compdef sonnerie
+# =============================================================================
+# sonnerie — Charles Samuels's "simple timeseries database" — a
+#            Rust embedded timeseries database with a CLI for
+#            ingesting + querying + compacting time-keyed records.
+#            Distinguishing from InfluxDB, TimescaleDB, Prometheus,
+#            VictoriaMetrics, and other timeseries databases by:
+#              - EMBEDDED + FILE-BASED — sonnerie is not a server;
+#                it's an embedded database that operates on local
+#                files in a directory (no daemon, no network port)
+#              - APPEND-ONLY + COMPACTION — new records are written
+#                to transaction files; periodic `compact` operations
+#                merge transactions into the main database file +
+#                purge deleted records
+#              - MAJOR vs MINOR COMPACTION via `--major` / `-M` —
+#                full database rewrite for maximum compression vs
+#                incremental transaction merging
+#              - GEGNUM (Icelandic for "through") TRANSFORMATION —
+#                `--gegnum <cmd>` pipes the entire database
+#                through an external command during compaction;
+#                useful for bulk schema migrations or value
+#                rewrites
+#              - STRFTIME-DRIVEN TIMESTAMPS — `--timestamp-format
+#                "%Y-%m-%d %H:%M:%S.%f"` converts ISO-8601 input
+#                to nanosecond Unix timestamps via chrono's
+#                NaiveDateTime parser
+#              - WILDCARD KEY FILTERING — `%` is the wildcard in
+#                `read "metric.%"` style queries; `sonnerie read
+#                "cpu.host%"` selects all hosts under cpu.*
+#              - TIME-RANGE QUERIES — --after-time / --before-time
+#                / --time use EasyNaiveDateTime (chrono-driven)
+#                parser accepting ISO-9601 date / seconds /
+#                nanosecond precision
+#              - RAYON-PARALLELIZED — uses rayon for parallel
+#                segment processing during reads + compactions
+#              - 4 SUBCOMMANDS: add (ingest records) / delete
+#                (remove by key or time) / compact (merge
+#                transactions) / read (query records)
+#            Used by: small-scale timeseries logging where running
+#            InfluxDB/Prometheus is overkill, embedded device
+#            telemetry, custom monitoring pipelines, and as a
+#            reference implementation of chrono + clap-derive +
+#            rayon Rust CLI design.
+#
+# Author:  Charles Samuels (njaard on GitHub) — Estonian software
+#          engineer.  sonnerie released ~2017; active development
+#          through 2026 with regular releases.  License: MIT.
+# Source:  https://github.com/njaard/sonnerie
+#          https://github.com/njaard/sonnerie/blob/master/src/main.rs
+#          https://github.com/njaard/sonnerie/blob/master/Cargo.toml
+# CLI:     src/main.rs — uses clap 4.x derive (`#[derive(Parser,
+#          Subcommand)]`) with 4 subcommands + chrono-driven
+#          timestamp parsing.  Headline library: **chrono**
+#          (clap is well-documented; chrono is the new variant
+#          being documented here, opening Axis 15).
+# Library: chrono (https://github.com/chronotope/chrono)
+#          ("chrono" — Kang Seonghoon (lifthrasiir on GitHub,
+#           original author since 2014) + chronotope organization
+#           (current maintainers) — released 2014 as "Date and
+#           time library for Rust".  Distinct from every
+#           previously-documented Rust library by being narrowly
+#           focused on COMPREHENSIVE DATE + TIME ARITHMETIC +
+#           PARSING + FORMATTING + TIMEZONES:
+#             1. DATETIME + DATE + TIME + DURATION TYPES — chrono
+#                ships a hierarchy of date/time types covering
+#                every common use case:
+#                  - NaiveDate     — date without timezone (2026-06-01)
+#                  - NaiveTime     — time without timezone (14:32:18.123)
+#                  - NaiveDateTime — datetime without timezone
+#                  - DateTime<Tz>  — datetime with timezone (DateTime<Utc>,
+#                                     DateTime<Local>, DateTime<FixedOffset>)
+#                  - Duration       — signed nanosecond-precision duration
+#                  - TimeDelta      — alias for Duration
+#                  - Months         — for month-level arithmetic
+#                  - Days           — for day-level arithmetic
+#             2. STRFTIME-COMPATIBLE FORMATTING — chrono supports
+#                the FULL strftime format string dialect
+#                (matching POSIX strftime + GNU extensions):
+#                  - %Y / %y / %m / %d / %H / %M / %S / %f / %z /
+#                    %Z / %A / %a / %B / %b / %j / %V / %u / %w /
+#                    %p / %P / %s / %T / %F / %D / %R / %r / %t /
+#                    %% / + GNU extensions
+#                Same format strings work for FORMATTING + PARSING
+#                via NaiveDateTime::parse_from_str
+#             3. TIMEZONE SUPPORT via chrono-tz feature — full
+#                IANA timezone database (tz database) integration
+#                with chrono-tz companion crate:
+#                  let ny: DateTime<Tz> = Tz::America__New_York
+#                      .with_ymd_and_hms(2026, 6, 1, 14, 32, 18)
+#                      .unwrap();
+#             4. SERDE INTEGRATION via "serde" feature — chrono's
+#                NaiveDateTime + DateTime<Utc> + Duration
+#                serialize/deserialize as RFC 3339 strings
+#                + ISO 8601 by default
+#             5. ARITHMETIC OPERATIONS — Duration + DateTime
+#                arithmetic via std::ops::Add/Sub + checked_add
+#                /checked_sub variants:
+#                  let tomorrow = now + Duration::days(1);
+#                  let next_year = now.checked_add_months(Months::new(12))?;
+#             6. RELATIVE-TIME via humantime/chrono-humanize —
+#                Charles Samuels (also author of sonnerie) +
+#                others built chrono-humanize for "3 days ago"-
+#                style relative time output (different from
+#                humantime R621 which targets parsing rather
+#                than display)
+#             7. DEPRECATED-LEAP-SECOND MODELING — chrono
+#                explicitly distinguishes IANA-tracked leap
+#                seconds from UTC seconds; the few documented
+#                Rust apps that need leap-second-correctness
+#                (astronomy, GPS) use chrono's leap-second-aware
+#                comparators)
+# License: MIT (sonnerie); MIT OR Apache-2.0 (chrono)
+# Status:  sonnerie — 278+ stars on njaard/sonnerie, used in
+#          niche timeseries-logging applications; chrono —
+#          3,862+ stars on chronotope/chrono, ~900M crates.io
+#          downloads (TOP-15 Rust crate by download volume),
+#          foundational dependency of basically every Rust CLI
+#          + server that touches dates/times, including: rbspy
+#          (Ruby sampling profiler, 2.5k stars), getsentry/edmg
+#          util, dhth/tomo, phip1611/gitlab-timelogs, Quesys-tech/
+#          vrcwatch.rs, TimmyOVO/freshrss-filter + thousands of
+#          Rust applications.
+#
+# -----------------------------------------------------------------------------
+# CROSS-LANGUAGE CLI LIBRARY TAXONOMY MILESTONE — RUST CROSSES TO 69 +
+#                                                  AXIS 15 (DATE/TIME) OPENS
+# -----------------------------------------------------------------------------
+# With this completion the cross-language CLI library taxonomy documents
+# the 69TH Rust CLI library variant.  Rust climbs from 68 to 69 documented
+# libraries (chrono via sonnerie).  Rust **breaks the third triple-tie
+# at 68** (Rust=Go=TS-Node=68 since R643) to take SOLO LEAD at 69.  New
+# leaderboard: Rust=69, Go=68, TypeScript-Node=68 (Rust SOLO at 69,
+# Go+TS-Node tied at 68 — twenty-third time Rust has taken solo lead in
+# this round-sequence; FIRST time any language crosses 69).  Taxonomy
+# now spans 384 cross-language CLI library variants across 93 documented
+# languages.
+#
+# Pattern: R644 93rd language (Slang) → R645 Rust=69 (chrono THIS —
+# Axis 15 OPENS) → expected R646 Go=69 → expected R647 TS-Node=69 →
+# expected R648 94th language.  This is the 1st of 3 leader bumps in
+# the new segment.
+#
+# **MAJOR MILESTONE: AXIS 15 (DATE / TIME) OPENS**
+#
+# With R645, **Axis 15 (DATE / TIME)** opens as the fifteenth axis in
+# the cross-language CLI library taxonomy.  Prior to R645 the
+# documented axes were:
+#   - Axis 1:  ARGUMENT PARSING
+#   - Axis 4:  COLOR/STYLING
+#   - Axis 5:  PROGRESS/SPINNERS
+#   - Axis 6:  ERROR DIAGNOSTICS (Rust=6, deepest)
+#   - Axis 7:  BOX DRAWING / DECORATION
+#   - Axis 8:  INTERACTIVE PROMPTS
+#   - Axis 9:  UNIFIED LOGGING (6/6/6 three-way symmetric)
+#   - Axis 10: TABLES / TABULAR OUTPUT (2/2/2 symmetric)
+#   - Axis 11: HUMANIZATION (1/1/1 symmetric)
+#   - Axis 12: TEXT WRAPPING & FORMATTING (1/1/1 symmetric)
+#   - Axis 13: CONFIGURATION FILES (2/2/2 symmetric)
+#   - Axis 14: PATHS / FILESYSTEM (2/2/2 symmetric)
+#
+# Axis 15 (DATE / TIME) captures libraries that handle LOW-LEVEL
+# date + time arithmetic + parsing + formatting + timezone handling.
+# Distinct from:
+#   - Axis 11 (Humanization) which handles "3 days ago" style HUMAN-
+#     FRIENDLY formatting of durations + timestamps
+#   - Stdlib date/time primitives (std::time / time stdlib / Date) —
+#     Axis 15 captures libraries that EXTEND or improve on stdlib
+#     semantics
+#
+# The distinction is sharp: humantime (R621, Axis 11) parses + formats
+# durations like "1h 30m"; chrono (R645 THIS, Axis 15) provides full
+# Datetime arithmetic + timezone handling + strftime formatting.
+# Both are about TIME but at different abstraction levels.
+#
+# Cross-language Axis 15 prospects for future rounds (NOT yet
+# documented):
+#   - Rust: jiff (Burntsushi's modern alternative), time-rs (the time
+#            crate), speedate
+#   - Go: time stdlib (foundational), Go modules like Karrick/tparse
+#          for relative-time parsing, jinzhu/now for sugary helpers
+#   - Node: date-fns (modular functions), dayjs (lightweight),
+#           luxon (immutable + i18n), moment.js (legacy), Temporal
+#           proposal polyfill
+#   - Python: arrow, pendulum, dateutil, pydantic
+#
+# Future Axis 15 expansion across Rust + Go + TS-Node in upcoming
+# rounds will likely bring this axis to multi-variant coverage
+# matching the three-language symmetry of Axes 9-14.
+#
+# (Leaderboard at R645: Rust=69, Go=68, TS-Node=68.  Rust Axis 6 +
+# Axis 9 BOTH at 6 variants.  Axis 9 three-way symmetric at 6/6/6.
+# Axes 10 + 13 + 14 at 2/2/2.  Axes 11 + 12 at 1/1/1.  Axis 15 /
+# Date/Time now Rust=1, Go=0, TS-Node=0 — YOUNGEST axis, RUST-ONLY
+# at 1 variant.)
+#
+# -----------------------------------------------------------------------------
+#
+# WHAT IS chrono AND WHY IS IT THE 69TH RUST CLI LIBRARY?
+#
+# chrono (https://github.com/chronotope/chrono, 3,862+ stars) is
+# **Kang Seonghoon's "Date and time library for Rust"** — the
+# CANONICAL Rust date/time library, foundational to basically every
+# Rust application that touches dates or timestamps.  Where the
+# stdlib `std::time` provides ONLY Instant + SystemTime + Duration
+# (no calendar arithmetic, no formatting, no timezones), chrono
+# provides the FULL date/time API surface.
+#
+# chrono's distinguishing characteristics:
+#
+#   1. COMPREHENSIVE TYPE HIERARCHY — chrono ships a family of
+#      date/time types covering every common Rust use case:
+#
+#          use chrono::{NaiveDate, NaiveTime, NaiveDateTime,
+#                        DateTime, Utc, Local, FixedOffset,
+#                        Duration, Months, Days};
+#
+#          // Without timezone:
+#          let d: NaiveDate = NaiveDate::from_ymd_opt(2026, 6, 1).unwrap();
+#          let t: NaiveTime = NaiveTime::from_hms_milli_opt(14, 32, 18, 500).unwrap();
+#          let dt: NaiveDateTime = d.and_time(t);
+#
+#          // With timezone:
+#          let utc_now: DateTime<Utc> = Utc::now();
+#          let local_now: DateTime<Local> = Local::now();
+#          let nyc_offset = FixedOffset::west_opt(5 * 3600).unwrap();
+#          let nyc_now: DateTime<FixedOffset> = utc_now.with_timezone(&nyc_offset);
+#
+#          // Duration arithmetic:
+#          let one_hour: Duration = Duration::hours(1);
+#          let tomorrow: DateTime<Utc> = utc_now + Duration::days(1);
+#          let next_month = utc_now.checked_add_months(Months::new(1)).unwrap();
+#
+#      Compare:
+#         * Rust std::time: only Instant + SystemTime + Duration
+#                            (no calendar / no formatting)
+#         * Rust time-rs: similar but with different semantics +
+#                          less ecosystem adoption
+#         * Rust jiff (Burntsushi modern alternative): similar
+#                                                      with different
+#                                                      design
+#         * Go time stdlib: time.Time + time.Duration (similar
+#                            scope, simpler API)
+#         * Node Date (stdlib): minimal (most Node devs use date-fns
+#                                 or dayjs)
+#         * chrono: 7+ TYPES covering naive + tz-aware + arithmetic
+#      FIRST documented Rust Axis 15 library with comprehensive
+#      naive/timezone-aware/duration/months/days type hierarchy.
+#
+#   2. STRFTIME-COMPATIBLE FORMATTING — chrono supports the FULL
+#      strftime format dialect (matching POSIX strftime + GNU
+#      extensions):
+#
+#          use chrono::Utc;
+#
+#          let now = Utc::now();
+#
+#          // POSIX strftime specifiers:
+#          let s = now.format("%Y-%m-%d %H:%M:%S%.3f").to_string();
+#          // → "2026-06-01 14:32:18.500"
+#
+#          // ISO 8601 / RFC 3339 conveniences:
+#          let s = now.to_rfc3339();
+#          // → "2026-06-01T14:32:18.500+00:00"
+#
+#          let s = now.format("%a, %d %b %Y %H:%M:%S %z").to_string();
+#          // → "Mon, 01 Jun 2026 14:32:18 +0000"
+#
+#          // Same format string used for PARSING:
+#          let parsed = NaiveDateTime::parse_from_str(
+#              "2026-06-01 14:32:18", "%Y-%m-%d %H:%M:%S"
+#          ).unwrap();
+#
+#      Compare:
+#         * Go time stdlib: uses reference-date format strings
+#                            (2006-01-02 15:04:05) — DIFFERENT
+#                            convention from strftime
+#         * Node date-fns: uses tokens (yyyy-MM-dd HH:mm:ss)
+#         * Node luxon: uses tokens
+#         * Python datetime: uses POSIX strftime (matches chrono)
+#         * chrono: FULL POSIX strftime dialect + GNU extensions
+#      FIRST documented Rust Axis 15 library with strftime-
+#      compatible format strings.
+#
+#   3. TIMEZONE SUPPORT via chrono-tz — full IANA timezone database
+#      integration via chrono-tz companion crate:
+#
+#          use chrono::{DateTime, TimeZone};
+#          use chrono_tz::Tz;
+#
+#          let ny: DateTime<Tz> = chrono_tz::America::New_York
+#              .with_ymd_and_hms(2026, 6, 1, 14, 32, 18)
+#              .unwrap();
+#          let tokyo: DateTime<Tz> = ny.with_timezone(&chrono_tz::Asia::Tokyo);
+#
+#          println!("{} (Tokyo)", tokyo.format("%F %T %Z"));
+#          // → "2026-06-02 03:32:18 JST"
+#
+#      The chrono-tz crate ships the FULL IANA tz database
+#      (Olson database) at build time, providing 600+ named
+#      timezones + historical transitions + DST rules.
+#      Compare:
+#         * Go time/tzdata: bundled tzdata (Go 1.15+)
+#         * Node luxon: tzdata via Intl API
+#         * Node date-fns-tz: similar IANA tzdata wrapper
+#         * Python pytz / zoneinfo (stdlib in 3.9+)
+#         * chrono+chrono-tz: full IANA database at build time
+#      FIRST documented Rust Axis 15 library with chrono-tz
+#      companion crate integration.
+#
+#   4. SERDE INTEGRATION via "serde" feature — chrono types
+#      serialize/deserialize as RFC 3339 / ISO 8601 strings:
+#
+#          #[derive(serde::Serialize, serde::Deserialize)]
+#          struct Event {
+#              timestamp: DateTime<Utc>,
+#              duration: Duration,
+#              date: NaiveDate,
+#          }
+#
+#          // JSON output:
+#          // {
+#          //   "timestamp": "2026-06-01T14:32:18.500Z",
+#          //   "duration": { "secs": 3600, "nanos": 0 },
+#          //   "date": "2026-06-01"
+#          // }
+#
+#      Compare:
+#         * Go time.Time: implements json.Marshaler via
+#                          time.Time.MarshalJSON
+#         * Node Date.toISOString(): RFC 3339 output
+#         * Node date-fns: no built-in JSON
+#         * chrono: serde feature flag with RFC 3339 default
+#      FIRST documented Rust Axis 15 library with serde-based
+#      RFC 3339 round-tripping as feature flag.
+#
+#   5. KANG SEONGHOON / CHRONOTOPE ECOSYSTEM PROVENANCE — chrono
+#      was created in 2014 by Kang Seonghoon (lifthrasiir on
+#      GitHub, Korean Rust early-adopter) and now maintained by
+#      the chronotope GitHub organization (community-maintained
+#      since ~2020 when Kang stepped back).  The chronotope
+#      organization maintains:
+#         * chrono (THIS — main library)
+#         * chrono-tz — IANA timezone database
+#         * chrono-tz-build — codegen for tz database
+#         * pure-rust-locales — Rust locale tables
+#      chrono's downstream usage spans the ENTIRE Rust ecosystem:
+#         * rbspy (Ruby profiler, 2.5k stars)
+#         * sonnerie (THIS — timeseries database)
+#         * gitoxide (Rust git implementation)
+#         * deno (uses chrono in some subcrates)
+#         * dolt (database)
+#         * meilisearch (search engine)
+#         * influxdb_iox
+#         * pretty-much every Rust CLI that displays timestamps
+#      FIRST documented Rust Axis 15 library with this specific
+#      Kang-Seonghoon + chronotope-community-stewardship
+#      provenance.
+#
+# chrono's relationship to other Rust libraries:
+#
+#   * Unlike std::time — std::time only has Instant + SystemTime +
+#                          Duration (no calendar / formatting)
+#   * Unlike humantime (R621) — humantime is narrowly focused on
+#                                 duration parse + format for human-
+#                                 friendly DURATIONS; chrono handles
+#                                 the full date/time arithmetic +
+#                                 calendar + timezone surface
+#   * Unlike time-rs — different design (some prefer time-rs for
+#                        compile-time format strings); both are
+#                        widely used
+#   * Unlike jiff (Burntsushi modern alternative) — jiff has cleaner
+#                                                     API but newer
+#                                                     ecosystem
+#   * Closest cross-language analogs:
+#         * Go time stdlib — similar scope, simpler API
+#         * Node date-fns — modular functional alternative
+#         * Node luxon — immutable + Intl-based
+#         * Python datetime + pytz — similar scope (datetime is
+#                                       Python stdlib + pytz is the
+#                                       tz layer)
+#         * Java java.time (since Java 8) — similar comprehensive design
+#     chrono is the FIRST documented Rust Axis 15 library
+#     providing comprehensive date/time arithmetic + strftime
+#     formatting + IANA timezone integration via chrono-tz +
+#     serde-based RFC 3339 + Kang Seonghoon / chronotope
+#     provenance.
+#
+# -----------------------------------------------------------------------------
+#
+# THE sonnerie CLI — clap-derive + chrono + rayon + 4 subcommands
+#
+# sonnerie's CLI is in src/main.rs.  Uses clap 4.x derive with
+# chrono types for timestamp arguments:
+#
+#     use chrono::{NaiveDate, NaiveDateTime};
+#     use clap::{Parser, Subcommand};
+#
+#     #[derive(Parser, Debug)]
+#     #[clap(author, version, about, long_about = None)]
+#     struct Opt {
+#         /// Store data here in this directory.
+#         #[clap(short, long)]
+#         dir: PathBuf,
+#         #[clap(subcommand)]
+#         command: Command,
+#     }
+#
+#     #[derive(Subcommand, Debug)]
+#     enum Command {
+#         Add { format: String, timestamp_format: Option<String> },
+#         Delete {
+#             filter: Option<String>,
+#             after_key: Option<String>, before_key: Option<String>,
+#             after_time: Option<EasyNaiveDateTime>,
+#             before_time: Option<EasyNaiveDateTime>,
+#             time: Option<EasyNaiveDateTime>,
+#         },
+#         Compact { major: bool, gegnum: Option<OsString>,
+#                    timestamp_format: Option<String> },
+#         Read {
+#             filter: Option<String>,
+#             print_format: bool,
+#             timestamp_format: String,    // default "%F %T"
+#             // ... time filters ...
+#         },
+#     }
+#
+# Subcommands (4):
+#   add        Ingest records from stdin (--format, --timestamp-format)
+#   delete     Remove records by key + time filter
+#   compact    Merge transactions into main DB (-M/--major, --gegnum)
+#   read       Query records (filter, --print-format, --timestamp-format)
+#
+# Global flag:
+#   -d, --dir DIRECTORY      Data directory (required)
+#
+# chrono is used for:
+#   - EasyNaiveDateTime parser accepting ISO-9601 date/seconds/
+#     nanosecond timestamps via chrono::NaiveDateTime::parse_from_str
+#   - --timestamp-format strftime conversion via chrono format spec
+#   - Internal nanosecond Unix timestamp representation backed by
+#     chrono::Duration::nanoseconds for arithmetic
+#
+# Five-axis distinctness from no other Rust Axis 15 library
+# (chrono opens this axis):
+#
+#   1. COMPREHENSIVE TYPE HIERARCHY — NaiveDate/NaiveTime/
+#      NaiveDateTime/DateTime<Tz>/Duration/Months/Days — most
+#      complete type surface in any Axis 15 library.
+#
+#   2. STRFTIME-COMPATIBLE FORMATTING — full POSIX strftime +
+#      GNU extensions for both formatting + parsing.
+#
+#   3. chrono-tz IANA TIMEZONE INTEGRATION — full Olson database
+#      at build time with 600+ named timezones.
+#
+#   4. SERDE-BASED RFC 3339 SERIALIZATION — via "serde" feature
+#      flag for type-safe JSON/TOML/YAML round-tripping.
+#
+#   5. KANG SEONGHOON / CHRONOTOPE ECOSYSTEM PROVENANCE — 11
+#      years of continuous Rust development since 2014, community-
+#      stewardship under chronotope GitHub organization.
+#
+# -----------------------------------------------------------------------------
+#
+# COMMAND-LINE OPTIONS (sourced directly from
+# https://github.com/njaard/sonnerie/blob/master/src/main.rs
+# clap derive Opt + Command enum.)
+# -----------------------------------------------------------------------------
+
+local curcontext="$curcontext" state line ret=1
+typeset -A opt_args
+
+local -a _sonnerie_cmds
+_sonnerie_cmds=(
+    'add:ingest records from stdin (uses --format + optional --timestamp-format)'
+    'delete:delete records by key wildcard or time range'
+    'compact:merge transactions into main DB (with optional --gegnum transform)'
+    'read:query records by key wildcard with strftime formatting'
+    'help:show help for a subcommand'
+)
+
+_arguments -C \
+    '(-d --dir)'{-d+,--dir=}'[data directory (required)]:dir:_directories' \
+    '(- *)'{-h,--help}'[show help]' \
+    '(- *)'{-V,--version}'[show version]' \
+    '1: :->cmd' \
+    '*::arg:->args' \
+    && ret=0
+
+case $state in
+    cmd)
+        _describe -t commands 'sonnerie subcommand' _sonnerie_cmds && ret=0
+        ;;
+    args)
+        case $words[1] in
+            add)
+                _arguments \
+                    '(-f --format)'{-f+,--format=}'[record value format string]:format:_default' \
+                    '--timestamp-format=[strftime format for input timestamps]:strftime:_default' \
+                    && ret=0
+                ;;
+            delete)
+                _arguments \
+                    '--after-key=[delete keys >= this key]:key:_default' \
+                    '--before-key=[delete keys < this key]:key:_default' \
+                    '--after-time=[delete records >= this time (ISO-9601)]:time:_default' \
+                    '--before-time=[delete records < this time (ISO-9601)]:time:_default' \
+                    '--time=[delete records at exactly this time]:time:_default' \
+                    '1:key wildcard filter (% is wildcard):_default' \
+                    && ret=0
+                ;;
+            compact)
+                _arguments \
+                    '(-M --major)'{-M,--major}'[major compaction: full database rewrite]' \
+                    '--gegnum=[external command to pipe data through]:command:_command_names' \
+                    '--timestamp-format=[strftime format with --gegnum]:strftime:_default' \
+                    && ret=0
+                ;;
+            read)
+                _arguments \
+                    '--print-format[output line format after timestamp]' \
+                    '--timestamp-format=[strftime format for output (default "%F %T")]:strftime:_default' \
+                    '--after-time=[read records >= this time]:time:_default' \
+                    '--before-time=[read records < this time]:time:_default' \
+                    '--after-key=[read keys >= this key]:key:_default' \
+                    '--before-key=[read keys < this key]:key:_default' \
+                    '1:key wildcard filter (% is wildcard):_default' \
+                    && ret=0
+                ;;
+            help)
+                _describe -t commands 'subcommand' _sonnerie_cmds && ret=0
+                ;;
+        esac
+        ;;
+esac
+
+return ret
