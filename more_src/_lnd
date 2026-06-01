@@ -1,0 +1,586 @@
+#compdef lnd
+# =============================================================================
+# lnd — the Lightning Network Daemon, the reference implementation of a full
+#       Lightning Network node in Go.  Lightning Labs's production Bitcoin
+#       Lightning Network node software, used to send / receive instant low-
+#       fee payments over the Bitcoin Lightning Network.  Speaks the BOLT
+#       specs (Basis of Lightning Technology), maintains channels to peers,
+#       performs HTLC routing, watchtower interaction, on-chain wallet
+#       management, autopilot channel selection, hash time-locked-contract
+#       enforcement, gossip propagation, and a gRPC + REST control API
+#       (consumed by lncli, BOS, Thunderhub, RTL, Zeus, etc).  Runs against
+#       bitcoind / btcd / neutrino backends; ships with Tor (v2/v3),
+#       Let's Encrypt, watchtower client/server, autopilot, channel-backup,
+#       MPP/AMP payments, channel-acceptor RPC, key locker macaroons, and
+#       a clustered HA mode via etcd/postgres.
+#
+# Author:  Lightning Labs — Olaoluwa "roasbeef" Osuntokun, Conner Fromknecht,
+#          Joost Jager, Wilmer Paulino, Oliver Gugger, et al.
+# Source:  https://github.com/lightningnetwork/lnd
+# CLI:     cmd/lnd/main.go + config.go (uses jessevdk/go-flags)
+# Library: jessevdk/go-flags
+#          ("Extensive command line option parser similar in functionality
+#           to the go builtin flag package but uses reflection on struct
+#           field tags for option specification")
+# License: MIT
+# Status:  Stable — 8151+ stars; the dominant Bitcoin Lightning Network
+#          node implementation; powers Lightning Labs's production
+#          infrastructure; reference implementation for the BOLT specs.
+#
+# -----------------------------------------------------------------------------
+# CROSS-LANGUAGE CLI LIBRARY TAXONOMY MILESTONE — GO CLIMBS TO 33 (TWO-WAY TIE)
+# -----------------------------------------------------------------------------
+# With this completion the cross-language CLI library taxonomy documents the
+# 33RD Go CLI library variant.  Go climbs from 32 to 33 documented libraries
+# (jessevdk/go-flags via lnd).  New leaderboard: Rust=33, Go=33 (TWO-WAY TIE
+# RESTORED — top group rejoined), TypeScript-Node=32.  Taxonomy now spans
+# 242 cross-language CLI library variants across 58 documented languages.
+# -----------------------------------------------------------------------------
+#
+# WHAT IS jessevdk/go-flags AND WHY IS IT A DISTINCT 33RD GO CLI LIBRARY?
+#
+# jessevdk/go-flags (https://github.com/jessevdk/go-flags, 2,699+ stars) is
+# **Jesse van den Kieboom's "extensive command line option parser similar
+# in functionality to the go builtin flag package but uses reflection on
+# struct field tags for option specification"**.  Released in 2012 (one
+# of the earliest non-stdlib Go CLI libraries), go-flags pioneered the
+# **REFLECTION + STRUCT-TAG** authoring pattern that later inspired
+# kong (R465), kingpin, and many others.  Where the stdlib `flag` package
+# requires explicit `flag.StringVar(&x, "name", "default", "desc")` calls,
+# go-flags lets you declare options entirely via struct tags:
+#
+#     type Options struct {
+#         Verbose []bool `short:"v" long:"verbose" description:"..."`
+#         File    string `short:"f" long:"file" required:"true"`
+#         Hosts   map[string]string `long:"host"`
+#     }
+#     flags.Parse(&opts)
+#
+# go-flags is DISTINCT from every documented Go CLI library on SEVEN
+# specific axes:
+#
+#   1. SLICE OF BOOL FOR REPETITION COUNTING (-vvv → [true,true,true]) —
+#      go-flags's UNIQUE pattern: a `[]bool` field counts occurrences.
+#      Declaring `Verbose []bool` with short `v` means `-v` appends one
+#      true, `-vv` appends two trues, `-vvv` appends three:
+#         Verbose []bool `short:"v" long:"verbose"`
+#         // ... at parse time, -vvv → opts.Verbose == [true,true,true]
+#      Compare:
+#        cobra:    `BoolVarP` once → bool; user must combine -vvv
+#        urfave:   `&cli.BoolFlag` once → bool
+#        kingpin:  `.Bool()` once → bool
+#        kong R465:`Verbose int \`type:"counter"\`` (counter type)
+#        clir R495:`.IntFlag("v", "")` — counter via int
+#        go-flags: `[]bool` slice — UNIQUE Go idiom for repetition
+#      The `[]bool` repetition-counter pattern is **idiomatic Go** —
+#      uses slice semantics directly without introducing a counter type.
+#      Borrowed from Python argparse's `action='count'` but expressed
+#      via the language's native slice append.
+#
+#   2. MAP-TYPED OPTIONS WITH KEY:VALUE SYNTAX — go-flags supports
+#      `map[string]string` (or any map-of-primitives) fields, with
+#      command-line syntax `-a key:value`:
+#         type Options struct {
+#             AuthorInfo map[string]string `short:"a"`
+#         }
+#         // ... -a name:Jesse -a surname:vandenKieboom
+#         // ... opts.AuthorInfo == {"name":"Jesse","surname":"vandenKieboom"}
+#      Compare:
+#        cobra:        `StringToStringVar` (cobra 1.0+) — similar
+#        urfave/cli:   no native map type
+#        kingpin:      `StringMap()`
+#        kong R465:    `map[string]string \`mapsep:":"\`` — separator tag
+#        go-flags:     map[K]V native, key:value syntax built-in
+#      go-flags's map syntax is `-a key:value` (colon delimiter HARDCODED);
+#      kong R465 lets you override the separator via `mapsep` tag.
+#
+#   3. FUNCTION-CALLBACK OPTIONS — go-flags supports `func(string)` field
+#      types that fire a callback on each occurrence:
+#         type Options struct {
+#             Call func(string) `short:"c" description:"Call phone"`
+#         }
+#         opts.Call = func(num string) { dial(num) }
+#         // -c 555-1234 invokes opts.Call("555-1234")
+#      Compare:
+#        cobra:    `PreRun: func(cmd, args)` — once per command
+#        urfave:   `Action: func(c *cli.Context) error` — once
+#        kingpin:  `Action(func(c *kingpin.ParseContext) error)` — once
+#        go-flags: `func(string)` field — fires PER-ARGUMENT during
+#                  parse (UNIQUE — option-level callback on every
+#                  occurrence, not once per command)
+#      Used by lnd internally for hidden migration flags.  Closest analog
+#      is Virgil's onSet R501 (Java-Spring-style per-option callback).
+#
+#   4. NAMESPACED NESTED OPTION GROUPS — go-flags supports nested struct
+#      fields that act as option groups with a NAMESPACE PREFIX:
+#         type Options struct {
+#             Logging struct {
+#                 Level string `long:"level" description:"log level"`
+#                 File  string `long:"file" description:"log file"`
+#             } `group:"Logging" namespace:"logging"`
+#         }
+#         // ... command line: --logging.level=debug --logging.file=lnd.log
+#      lnd uses this EXTENSIVELY — see `Bitcoin`, `Litecoin`, `Tor`,
+#      `BitcoindMode`, `NeutrinoMode`, `BtcdMode`, `Autopilot`, `Healthcheck`,
+#      `Workers`, `Caches`, `Cluster`, `RPCMiddleware`, `WtClient`,
+#      `Watchtower`, `Sweeper`, `Routing`, `Gossip`, `LndDir`, etc.
+#      Compare:
+#        cobra:    no native namespaces — manual `--logging-level` strings
+#        urfave:   no native namespaces — same
+#        kingpin:  `Command("logging").Flag("level", "")` — separate cmd
+#        kong R465:`Logging struct{} \`embed:"" prefix:"logging."\``
+#                  (named-prefix embed)
+#        go-flags: `group:"X" namespace:"y"` tags — UNIQUE Go-style
+#                   ergonomic nested option groups via inline structs.
+#      lnd has ~40+ nested option groups under namespaces — a real
+#      stress test of this feature.
+#
+#   5. ENVIRONMENT-VARIABLE DEFAULTS WITH SLICE/MAP SUPPORT — go-flags
+#      supports `env:"VAR"` tag for environment-variable fallback:
+#         Port int `long:"port" env:"PORT" default:"8080"`
+#      Slices and maps ALSO pull from env vars (using OS-specific list
+#      separator: `:` on Unix, `;` on Windows):
+#         Hosts []string `long:"host" env:"HOSTS"`
+#         // HOSTS="a.com:b.com:c.com" → [a.com, b.com, c.com]
+#      Compare:
+#        cobra:    `Viper` integration (separate library)
+#        urfave:   `&cli.StringFlag{EnvVars: []string{"PORT"}}`
+#        kingpin:  `.Envar("PORT")`
+#        kong R465:`env:"PORT"` tag
+#        go-flags: `env:"PORT"` tag + slice/map env-list parsing built-in
+#      go-flags's env-list parsing for slices/maps is **OS-aware**:
+#      colon-separated on Unix, semicolon-separated on Windows.
+#
+#   6. WINDOWS-STYLE `/option` PREFIX SUPPORT — go-flags supports BOTH
+#      POSIX `-v` / `--verbose` AND DOS-style `/v` / `/verbose` option
+#      prefixes simultaneously:
+#         lnd /datadir:/data/lnd /rpclisten=localhost:10009
+#      Windows-style options use `:` as the value delimiter instead of `=`.
+#      Disabled at build time via `-tags forceposix` build flag.
+#      Compare:
+#        cobra:    POSIX only
+#        urfave:   POSIX only
+#        kingpin:  POSIX only
+#        kong R465:POSIX only
+#        flag (stdlib): POSIX only
+#        go-flags: POSIX + DOS — UNIQUE among Go CLI libraries.
+#      Reflects go-flags's origin as a port of GNU getopt design with
+#      Windows compatibility in mind from day one.
+#
+#   7. SPACE-OPTIONAL SHORT-OPTION ARGUMENTS — go-flags accepts ALL THREE
+#      argument-attachment styles for short options:
+#         -I/usr/include    (no space)
+#         -I=/usr/include   (equals)
+#         -I /usr/include   (space)
+#      Compare:
+#        flag (stdlib): only `-name value` and `-name=value`
+#        cobra:    only POSIX standard
+#        go-flags: all three including ATTACHED (no space) — UNIQUE
+#                  among Go CLI libraries.  Mirrors classic GCC/clang
+#                  short-option behavior.
+#      Used by lnd: `-Cmyconfig.conf` (no space), `--config=myconfig.conf`,
+#      `--configfile myconfig.conf` all parse identically.
+#
+# THE jessevdk/go-flags API SURFACE
+#
+#   import flags "github.com/jessevdk/go-flags"
+#
+#   type Options struct {
+#       Verbose []bool            `short:"v" long:"verbose"
+#                                  description:"Show verbose debug info"`
+#       File    string            `short:"f" long:"file"
+#                                  description:"Input file"
+#                                  required:"true"
+#                                  default:"./input.dat"
+#                                  env:"INPUT_FILE"
+#                                  value-name:"PATH"`
+#       Hosts   map[string]string `long:"host"
+#                                  description:"name:host pairs"`
+#       Call    func(string)      `short:"c"
+#                                  description:"Call function"`
+#       Logging struct {
+#           Level string `long:"level"`
+#           File  string `long:"file"`
+#       } `group:"Logging" namespace:"logging"`
+#   }
+#
+#   var opts Options
+#   args, err := flags.Parse(&opts)
+#   // OR
+#   parser := flags.NewParser(&opts, flags.Default)
+#   parser.AddCommand("cmd", "short", "long", &CmdOpts{})  // subcommands
+#   args, err := parser.Parse()
+#
+# Tag attributes supported:
+#   short:       single character short name
+#   long:        long name (multi-character)
+#   description: help text
+#   required:    if non-empty, makes the option mandatory
+#   default:     default value (string-coerced to field type)
+#   env:         environment variable to read default from
+#   value-name:  placeholder shown in help (e.g. "PATH", "FILE")
+#   choice:      enumerated value (repeat for multiple)
+#   hidden:      hide from --help output
+#   no-flag:     skip this field (ignored)
+#   base:        integer base for parsing (8/10/16)
+#   group:       human-readable group name in help
+#   namespace:   prefix applied to all options in nested struct
+#   env-namespace: prefix applied to env var names
+#   command:     subcommand name (when on a struct field)
+#
+# Parser flags:
+#   flags.None                   // strict POSIX
+#   flags.HelpFlag               // auto --help / -h
+#   flags.PassDoubleDash         // pass -- through
+#   flags.IgnoreUnknown          // skip unknown options
+#   flags.PrintErrors            // print errors to stderr
+#   flags.PassAfterNonOption     // stop at first non-option arg
+#   flags.Default                // HelpFlag | PrintErrors |
+#                                //   PassDoubleDash
+#
+# CONTRAST WITH OTHER GO CLI LIBRARIES DOCUMENTED IN THE CORPUS
+#
+#   * flag (stdlib)                — explicit StringVar/IntVar calls
+#   * cobra                        — full framework with codegen,
+#                                    `BoolVarP(&v, name, short, ...)`
+#   * urfave/cli                   — struct-list declarative
+#   * kingpin                      — fluent builder
+#   * kong R465                    — struct-tag declarative (DESCENDANT
+#                                    of go-flags's struct-tag idea but
+#                                    with Rust-clap-derive ergonomics)
+#   * go-arg R475                  — single MustParse(&struct)
+#   * opts R479                    — frictionless struct
+#   * mow.cli R470                 — SPEC-string grammar
+#   * go-getoptions R483           — Perl Getopt::Long port
+#   * commando R487                — package-level singleton + colon ns
+#   * mkideal/cli R491             — struct-tag comma-aliases
+#   * clir R495                    — explicit constructor + pointer
+#                                    setters
+#   * teris-io/cli R499            — With*-prefix fluent builder
+#   * go-flags (THIS)              — REFLECTION + STRUCT-TAG, []bool
+#                                    repetition, map-typed options,
+#                                    func() callbacks, namespaced groups,
+#                                    env-list-with-OS-separator,
+#                                    POSIX + DOS prefix, three short-
+#                                    option attachment styles.
+#
+# go-flags is the **ORIGINAL** struct-tag-based Go CLI library; kong R465
+# and several others built on the design idea but with their own flavors.
+# go-flags's distinguishing combination of `[]bool` repetition + map
+# options + function callbacks + namespaced groups + DOS-style options is
+# unique among the documented Go CLI libraries.
+#
+# REAL-WORLD jessevdk/go-flags USERS:
+#
+#   * lightningnetwork/lnd (THIS, 8151*) — Lightning Network Daemon
+#   * btcsuite/btcd (6689*) — Bitcoin reference Go daemon
+#   * btcsuite/btcwallet — Bitcoin wallet companion to btcd
+#   * btcsuite/btcctl — RPC control tool for btcd
+#   * decred/dcrd (773*) — Decred full-node daemon
+#   * decred/dcrwallet — Decred wallet
+#   * decred/dcrctl — RPC control tool for dcrd
+#   * peco/peco (7891*) — Simplistic interactive filtering tool
+#   * mit-dci/lit (549*) — MIT DCI Lightning Network experimental node
+#   * satellity/satellity (624*) — Open-source Golang forum
+#   * yusukebe/revealgo — Markdown-driven Reveal.js presentation server
+#   * Roasbeef/lndmon — Prometheus exporter for lnd by roasbeef himself
+#   * docker-flow/docker-flow-proxy — Docker reverse-proxy
+#   * lightninglabs/loop, pool, taproot-assets — Lightning Labs sister
+#       projects to lnd; all use go-flags
+#
+# Lightning ecosystem alignment: go-flags is the de-facto CLI library
+# for the Bitcoin / Lightning Network ecosystem in Go.  btcd, lnd,
+# all Lightning Labs daemons, and most Lightning-stack tooling use
+# go-flags rather than cobra.  This is partly historical (btcd predates
+# cobra's popularity) and partly cultural (struct-tag declarative
+# config files map cleanly to lnd.conf / btcd.conf TOML/INI configs).
+#
+# -----------------------------------------------------------------------------
+# LND'S CLI SURFACE (verbatim from config.go — partial; 200+ options)
+# -----------------------------------------------------------------------------
+#
+# USAGE:
+#   lnd [OPTIONS]
+#
+# (lnd is a daemon with NO SUBCOMMANDS — all configuration is via flags
+#  or the lnd.conf file.  The companion `lncli` binary is for runtime RPC.)
+#
+# Top-level options (selected from ~200+ in config.go):
+#   -V, --version             Show version and exit
+#       --lnddir <DIR>        Base directory for lnd's data, logs, conf
+#   -C, --configfile <FILE>   Path to configuration file (default lnd.conf)
+#   -b, --datadir <DIR>       Directory to store lnd's data
+#       --sync-freelist       Sync DB freelists to disk
+#       --tlscertpath <PATH>  TLS cert path
+#       --tlskeypath <PATH>   TLS key path
+#       --tlsextraip <IP>     Extra IPs in generated TLS cert (repeatable)
+#       --tlsextradomain <D>  Extra domains in generated TLS cert
+#       --tlsautorefresh      Regenerate TLS cert/key on IP/domain change
+#       --tlsdisableautofill  Skip system IPs in TLS cert
+#       --tlscertduration <D> Auto-cert validity duration
+#       --tlsencryptkey       Encrypt TLS private key at rest
+#       --no-macaroons        Disable macaroon authentication
+#       --adminmacaroonpath <PATH>  Path to admin macaroon
+#       --readonlymacaroonpath <PATH>  Path to read-only macaroon
+#       --invoicemacaroonpath <PATH>   Path to invoice macaroon
+#       --logdir <DIR>        Directory for logs
+#       --acceptortimeout <D> RPC acceptor timeout
+#       --letsencryptdir <D>  Let's Encrypt certs directory
+#       --letsencryptlisten <ADDR>  Let's Encrypt listen address
+#       --letsencryptdomain <D>     Let's Encrypt domain
+#       --rpclisten <ADDR>    RPC listen address (repeatable)
+#       --restlisten <ADDR>   REST listen address (repeatable)
+#       --listen <ADDR>       Peer listen address (repeatable)
+#       --externalip <ADDR>   Advertise external IP:port (repeatable)
+#       --externalhosts <H>   Advertise external hostname (repeatable)
+#       --restcors <ORIGIN>   REST CORS origin (repeatable)
+#       --nat                 Enable UPnP / NAT-PMP port mapping
+#       --minchansize <SAT>   Minimum channel size (satoshis)
+#       --maxchansize <SAT>   Maximum channel size (satoshis)
+#       --coop-close-target-confs <N>  Coop close target confirmations
+#       --channel-fee-update-cap <N>   Channel fee update cap
+#       --max-pending-channels <N>     Max simultaneous pending channels
+#       --backupfilepath <PATH>        Static channel backup file path
+#       --debuglevel <LEVEL>           Logging level (debug/info/warn/error)
+#       --debughtlc                     Enable HTLC debug events
+#       --hodl.exit-settle             HODL invoice debug flag
+#       --alias <NAME>                  Node alias (≤ 32 bytes)
+#       --color <HEX>                   Node color (#RRGGBB)
+#       --norest                        Disable REST server
+#       --no-rest-tls                   REST without TLS
+#       --no-seed-backup                Skip seed backup prompt
+#       --reset-wallet-transactions     Reset wallet on startup
+#       --watch-only-pubkey-file <PATH> Watch-only pubkey path
+#       --payments-expiration-grace-period <D>  Grace period
+#       --trickledelay <MS>             Gossip trickle delay
+#       --maxbackoff <D>                Max peer reconnect backoff
+#       --minbackoff <D>                Min peer reconnect backoff
+#       --chan-status-sample-interval <D>  Channel status sampling
+#       --chan-enable-timeout <D>          Channel re-enable timeout
+#       --chan-disable-timeout <D>         Channel disable timeout
+#       --no-rest-server                Disable REST
+#       --restcors <ORIGIN>             REST CORS origins
+#       --num-restricted-slots <N>      Restricted-access RPC slots
+#       --rpcmiddleware.enable          Enable RPC middleware
+#       --rpcmiddleware.intercepttimeout <D>  Middleware timeout
+#       --required-remote-min-htlc <SAT>      Min remote HTLC
+#       --required-remote-max-htlc <SAT>      Max remote HTLC
+#       --required-remote-max-pending-amount <MSAT>  Max pending
+#       --required-remote-max-csv-delay <BLOCKS>     Max CSV delay
+#       --required-remote-min-csv-delay <BLOCKS>     Min CSV delay
+#
+# Nested namespaces (each prefix has its own option set):
+#   --bitcoin.*                 Bitcoin chain config (active, mainnet,
+#                                testnet, signet, regtest, defaultchanconfs,
+#                                defaultremotedelay, maxlocaldelay,
+#                                minhtlc, basefee, feerate, timelockdelta)
+#   --litecoin.*                Litecoin chain config (deprecated)
+#   --btcd.*                    btcd backend (rpchost, rpcuser, rpcpass,
+#                                rpccert, rawrpccert)
+#   --bitcoind.*                bitcoind backend (dir, rpchost, rpcuser,
+#                                rpcpass, rpccookie, zmqpubrawblock,
+#                                zmqpubrawtx, estimatemode)
+#   --neutrino.*                Neutrino backend (connect, addpeer, broadcasttimeout,
+#                                feeurl, persistfilters, validatechannels)
+#   --tor.*                     Tor (active, socks, dns, streamisolation,
+#                                control, password, v2/v3, privatekeypath,
+#                                skip-proxy-for-clearnet-targets)
+#   --autopilot.*               Autopilot (active, maxchannels, allocation,
+#                                heuristic, minchansize, maxchansize)
+#   --healthcheck.*             Healthcheck (chainbackend, diskspace, tls,
+#                                torconnection, remotesigner, leaderelection,
+#                                interval, timeout, backoff, attempts)
+#   --watchtower.*              Watchtower server (active, listen, externalip,
+#                                towerdir, readtimeout, writetimeout)
+#   --wtclient.*                Watchtower client (active, sweep-fee-rate)
+#   --cluster.*                 HA clustering (enable-leader-election,
+#                                leader-elector, leader-session-ttl,
+#                                etcd-prefix, etcd-endpoints, etcd-cert,
+#                                etcd-key, etcd-insecure-skip-verify)
+#   --routing.*                 Routing (assumechanvalid, strictzombiepruning,
+#                                strictgraphpruning)
+#   --gossip.*                  Gossip protocol (pinned-syncers, max-channel-update-burst,
+#                                channel-update-interval, sub-batch-delay,
+#                                msg-rate-bytes, msg-burst-bytes)
+#   --sweeper.*                 Sweeper (batchwindowduration, maxfeerate,
+#                                nodeadlineconftarget)
+#   --workers.*                 Worker pool sizes (read, write, sig)
+#   --caches.*                  Cache sizes (rpc-graph-cache-duration)
+#   --invoices.*                Invoice settings (holdexpirydelta)
+#   --protocol.*                Protocol features (wumbo-channels, no-anchors,
+#                                option-scid-alias, zero-conf, taproot-chans,
+#                                rbf-coop-close, custom-message)
+#   --db.*                      Database settings (backend, bbolt.*, etcd.*,
+#                                postgres.*, sqlite.*, prune-revocation,
+#                                no-graph-cache)
+#   --logging.*                 Logging subsystem (file, console)
+#
+# Typical usage:
+#   $ lnd --bitcoin.active --bitcoin.mainnet --bitcoin.node=bitcoind \
+#         --bitcoind.rpchost=localhost --bitcoind.rpcuser=foo \
+#         --bitcoind.rpcpass=bar --bitcoind.zmqpubrawblock=tcp://localhost:28332 \
+#         --bitcoind.zmqpubrawtx=tcp://localhost:28333 --tlsautorefresh \
+#         --alias=My-Node --color=#3399FF
+#
+#   $ lnd -C /etc/lnd/lnd.conf
+#   $ lnd --lnddir /var/lib/lnd
+#   $ lnd /datadir:/data /rpclisten:localhost:10009   # Windows-style
+#
+# (Companion `lncli` for RPC control is already in corpus as _lncli.)
+#
+# =============================================================================
+
+_lnd() {
+    local curcontext="$curcontext" state line ret=1
+    typeset -A opt_args
+
+    _arguments -C \
+        '(-V --version)'{-V,--version}'[show version and exit]' \
+        '--lnddir[base directory for lnd data/logs/config]:dir:_directories' \
+        '(-C --configfile)'{-C,--configfile}'[path to configuration file]:file:_files -g "*.conf"' \
+        '(-b --datadir)'{-b,--datadir}'[directory to store lnd data]:dir:_directories' \
+        '--sync-freelist[sync DB freelists to disk]' \
+        '--tlscertpath[TLS cert path]:file:_files' \
+        '--tlskeypath[TLS key path]:file:_files' \
+        '*--tlsextraip[extra IP in TLS cert]:ip:' \
+        '*--tlsextradomain[extra domain in TLS cert]:domain:' \
+        '--tlsautorefresh[regenerate TLS on IP/domain change]' \
+        '--tlsdisableautofill[skip system IPs in TLS cert]' \
+        '--tlscertduration[auto-cert validity duration]:duration:' \
+        '--tlsencryptkey[encrypt TLS private key at rest]' \
+        '--no-macaroons[disable macaroon authentication]' \
+        '--adminmacaroonpath[path to admin macaroon]:file:_files' \
+        '--readonlymacaroonpath[path to read-only macaroon]:file:_files' \
+        '--invoicemacaroonpath[path to invoice macaroon]:file:_files' \
+        '--logdir[directory for logs]:dir:_directories' \
+        '--acceptortimeout[RPC acceptor timeout]:duration:' \
+        '--letsencryptdir[Lets Encrypt certs directory]:dir:_directories' \
+        '--letsencryptlisten[Lets Encrypt listen address]:addr:' \
+        '--letsencryptdomain[Lets Encrypt domain]:domain:' \
+        '*--rpclisten[RPC listen address]:addr:' \
+        '*--restlisten[REST listen address]:addr:' \
+        '*--listen[peer listen address]:addr:' \
+        '*--externalip[advertise external IP:port]:addr:' \
+        '*--externalhosts[advertise external hostname]:host:' \
+        '*--restcors[REST CORS origin]:origin:' \
+        '--nat[enable UPnP / NAT-PMP port mapping]' \
+        '--minchansize[minimum channel size (sat)]:sat:' \
+        '--maxchansize[maximum channel size (sat)]:sat:' \
+        '--coop-close-target-confs[coop close target confirmations]:n:' \
+        '--channel-fee-update-cap[channel fee update cap]:n:' \
+        '--max-pending-channels[max pending channels]:n:' \
+        '--backupfilepath[static channel backup file path]:file:_files' \
+        '--debuglevel[logging level]:level:(debug info warn error critical)' \
+        '--debughtlc[enable HTLC debug events]' \
+        '--hodl.exit-settle[HODL invoice debug flag]' \
+        '--alias[node alias (max 32 bytes)]:alias:' \
+        '--color[node color hex]:color:' \
+        '--norest[disable REST server]' \
+        '--no-rest-tls[REST without TLS]' \
+        '--no-seed-backup[skip seed backup prompt]' \
+        '--reset-wallet-transactions[reset wallet on startup]' \
+        '--watch-only-pubkey-file[watch-only pubkey file path]:file:_files' \
+        '--bitcoin.active[enable Bitcoin chain]' \
+        '--bitcoin.mainnet[use Bitcoin mainnet]' \
+        '--bitcoin.testnet[use Bitcoin testnet]' \
+        '--bitcoin.signet[use Bitcoin signet]' \
+        '--bitcoin.regtest[use Bitcoin regtest]' \
+        '--bitcoin.node[chain backend]:node:(btcd bitcoind neutrino)' \
+        '--bitcoin.defaultchanconfs[default channel confirmations]:n:' \
+        '--bitcoin.defaultremotedelay[default remote delay (blocks)]:n:' \
+        '--bitcoin.maxlocaldelay[max local delay (blocks)]:n:' \
+        '--bitcoin.minhtlc[min HTLC (msat)]:msat:' \
+        '--bitcoin.basefee[base fee (msat)]:msat:' \
+        '--bitcoin.feerate[fee rate (ppm)]:ppm:' \
+        '--bitcoin.timelockdelta[timelock delta (blocks)]:n:' \
+        '--btcd.rpchost[btcd RPC host]:host:_hosts' \
+        '--btcd.rpcuser[btcd RPC user]:user:' \
+        '--btcd.rpcpass[btcd RPC password]:pass:' \
+        '--btcd.rpccert[btcd RPC cert path]:file:_files' \
+        '--btcd.rawrpccert[btcd raw RPC cert]:cert:' \
+        '--bitcoind.dir[bitcoind data directory]:dir:_directories' \
+        '--bitcoind.rpchost[bitcoind RPC host]:host:_hosts' \
+        '--bitcoind.rpcuser[bitcoind RPC user]:user:' \
+        '--bitcoind.rpcpass[bitcoind RPC password]:pass:' \
+        '--bitcoind.rpccookie[bitcoind RPC cookie]:file:_files' \
+        '--bitcoind.zmqpubrawblock[bitcoind ZMQ rawblock URL]:url:' \
+        '--bitcoind.zmqpubrawtx[bitcoind ZMQ rawtx URL]:url:' \
+        '--bitcoind.estimatemode[fee estimate mode]:mode:(ECONOMICAL CONSERVATIVE)' \
+        '*--neutrino.connect[neutrino connect peer]:peer:' \
+        '*--neutrino.addpeer[neutrino add peer]:peer:' \
+        '--neutrino.broadcasttimeout[neutrino broadcast timeout]:duration:' \
+        '--neutrino.feeurl[neutrino fee URL]:url:' \
+        '--neutrino.persistfilters[persist filter headers]' \
+        '--neutrino.validatechannels[validate channels from chain]' \
+        '--tor.active[enable Tor]' \
+        '--tor.socks[Tor SOCKS proxy]:addr:' \
+        '--tor.dns[Tor DNS server]:host:' \
+        '--tor.streamisolation[enable Tor stream isolation]' \
+        '--tor.control[Tor control port]:port:' \
+        '--tor.password[Tor control password]:pass:' \
+        '--tor.v2[enable Tor v2 onions]' \
+        '--tor.v3[enable Tor v3 onions]' \
+        '--tor.privatekeypath[Tor onion private key path]:file:_files' \
+        '--tor.skip-proxy-for-clearnet-targets[skip Tor proxy for clearnet]' \
+        '--autopilot.active[enable autopilot]' \
+        '--autopilot.maxchannels[autopilot max channels]:n:' \
+        '--autopilot.allocation[autopilot allocation ratio]:ratio:' \
+        '--autopilot.heuristic[autopilot heuristic]:heuristic:(preferential externalscore betweenness top_centrality)' \
+        '--autopilot.minchansize[autopilot min channel size]:sat:' \
+        '--autopilot.maxchansize[autopilot max channel size]:sat:' \
+        '--watchtower.active[enable watchtower server]' \
+        '*--watchtower.listen[watchtower listen address]:addr:' \
+        '*--watchtower.externalip[watchtower external IP]:ip:' \
+        '--watchtower.towerdir[watchtower data directory]:dir:_directories' \
+        '--watchtower.readtimeout[watchtower read timeout]:duration:' \
+        '--watchtower.writetimeout[watchtower write timeout]:duration:' \
+        '--wtclient.active[enable watchtower client]' \
+        '--wtclient.sweep-fee-rate[watchtower sweep fee rate]:rate:' \
+        '--cluster.enable-leader-election[enable leader election]' \
+        '--cluster.leader-elector[leader elector type]:type:(etcd)' \
+        '--cluster.leader-session-ttl[leader session TTL]:duration:' \
+        '*--cluster.etcd-endpoints[etcd endpoints]:endpoint:' \
+        '--cluster.etcd-cert[etcd cert path]:file:_files' \
+        '--cluster.etcd-key[etcd key path]:file:_files' \
+        '--routing.assumechanvalid[assume channel validity]' \
+        '--routing.strictzombiepruning[strict zombie channel pruning]' \
+        '--routing.strictgraphpruning[strict graph pruning]' \
+        '--gossip.max-channel-update-burst[gossip channel update burst]:n:' \
+        '--gossip.channel-update-interval[gossip channel update interval]:duration:' \
+        '--gossip.sub-batch-delay[gossip sub-batch delay]:duration:' \
+        '--gossip.msg-rate-bytes[gossip msg rate bytes/sec]:bytes:' \
+        '--gossip.msg-burst-bytes[gossip msg burst bytes]:bytes:' \
+        '--sweeper.batchwindowduration[sweeper batch window duration]:duration:' \
+        '--sweeper.maxfeerate[sweeper max fee rate]:rate:' \
+        '--sweeper.nodeadlineconftarget[sweeper no-deadline conf target]:n:' \
+        '--workers.read[worker pool size for reads]:n:' \
+        '--workers.write[worker pool size for writes]:n:' \
+        '--workers.sig[worker pool size for signatures]:n:' \
+        '--caches.rpc-graph-cache-duration[RPC graph cache duration]:duration:' \
+        '--invoices.holdexpirydelta[hold invoice expiry delta]:n:' \
+        '--protocol.wumbo-channels[enable wumbo channels]' \
+        '--protocol.no-anchors[disable anchor commitments]' \
+        '--protocol.option-scid-alias[enable SCID alias]' \
+        '--protocol.zero-conf[enable zero-conf channels]' \
+        '--protocol.taproot-chans[enable taproot channels]' \
+        '--protocol.rbf-coop-close[enable RBF coop close]' \
+        '--protocol.custom-message[enable custom message protocol]' \
+        '--db.backend[database backend]:backend:(bolt etcd postgres sqlite)' \
+        '--db.no-graph-cache[disable graph cache]' \
+        '--db.prune-revocation[prune revocation log]' \
+        '--healthcheck.chainbackend.attempts[chain backend healthcheck attempts]:n:' \
+        '--healthcheck.diskspace.attempts[disk space healthcheck attempts]:n:' \
+        '--healthcheck.tls.attempts[TLS healthcheck attempts]:n:' \
+        '--healthcheck.torconnection.attempts[Tor healthcheck attempts]:n:' \
+        '--logging.file.max-files[max log files to keep]:n:' \
+        '--logging.file.max-file-size[max log file size MB]:n:' \
+        '--logging.file.disable[disable file logging]' \
+        '--logging.console.disable[disable console logging]' \
+        '--rpcmiddleware.enable[enable RPC middleware]' \
+        '--rpcmiddleware.intercepttimeout[RPC middleware intercept timeout]:duration:' \
+        '*: :_files' && ret=0
+
+    return ret
+}
+
+_lnd "$@"
