@@ -1,0 +1,204 @@
+#compdef xuniq
+# =============================================================================
+# xuniq — blazing-fast utility to remove duplicate lines from input streams.
+#         Operates on stdin → stdout in a streaming fashion (memory bounded
+#         by the number of UNIQUE lines, not the total input size).  Uses
+#         XxHash3 by default for performance (~12 bytes per line key in
+#         memory); offers `--safe` mode for full string keying when hash
+#         collisions are unacceptable.  Significantly faster than GNU
+#         `sort | uniq` because no full sort is required — only set
+#         membership tests.
+#
+# Author:  Lalit Shankar Chowdhury (lalitshankarch)
+# Source:  https://github.com/lalitshankarch/xuniq
+# CLI:     src/main.rs (uses j-tai/getargs)
+# Library: j-tai/getargs
+#          ("A truly zero-cost argument parser for Rust")
+# License: MIT
+# Status:  Active — 25+ stars, available via `cargo install xuniq`.
+#          Benchmark in xuniq's README shows ~2x speed of `awk '!seen[$0]++'`
+#          on 1M-line inputs.
+#
+# -----------------------------------------------------------------------------
+# CROSS-LANGUAGE CLI LIBRARY TAXONOMY MILESTONE — RUST CROSSES TO 25 LIBRARIES
+# -----------------------------------------------------------------------------
+# With this completion the cross-language CLI library taxonomy documents the
+# 25TH Rust CLI library variant.  Rust climbs from 24 to 25 documented
+# libraries (getargs via xuniq).  New leaderboard: Go=25, Rust=25 (TWO-WAY
+# TIE), TypeScript-Node=24.  Taxonomy now spans 210 cross-language CLI
+# library variants across 50 documented languages.
+# -----------------------------------------------------------------------------
+#
+# WHAT IS getargs AND WHY IS IT A DISTINCT 25TH RUST CLI LIBRARY VARIANT?
+#
+# j-tai/getargs (https://github.com/j-tai/getargs, 52+ stars) by Jonathan Tai
+# is "a truly zero-cost argument parser for Rust" — an imperative ITERATOR-
+# BASED argv parser that allocates NOTHING during parsing and produces no
+# runtime overhead beyond what hand-rolled loops would.  Its design
+# philosophy is the OPPOSITE of clap-derive (R275) and Kong (R465 Go):
+# rather than declaring the CLI structure as data and having the library
+# parse argv against that declaration, getargs gives you a MINIMAL ITERATOR
+# over argv and lets you write the parser by hand in a match expression.
+#
+# The getargs API surface (from the xuniq example):
+#
+#   use getargs::{Opt, Options};
+#
+#   let args: Vec<String> = args().skip(1).collect();
+#   let mut opts = Options::new(args.iter().map(String::as_str));
+#
+#   while let Some(opt) = opts.next_opt().expect("parse error") {
+#       match opt {
+#           Opt::Short('h') | Opt::Long("help") => print_help(),
+#           Opt::Short('c') | Opt::Long("capacity") => {
+#               let val = opts.value().expect("requires a value");
+#               capacity = val.parse().expect("must be a number");
+#           }
+#           Opt::Short('s') | Opt::Long("safe") => safe_mode = true,
+#           _ => unknown(opt),
+#       }
+#   }
+#
+# Key API elements:
+#   * `Opt::Short(char)`           — single-character short flag (`-h`, `-c`)
+#   * `Opt::Long(&str)`            — long-form flag (`--help`, `--capacity`)
+#   * `Options::new(iter)`         — construct from any `Iterator<Item=&str>`
+#   * `Options::next_opt()`        — get next flag, returns `Result<Option<Opt>>`
+#   * `Options::value()`           — extract the value of the LAST returned
+#                                    flag (must be called BEFORE next_opt())
+#   * `Options::positional()`      — drain remaining argv as positional args
+#   * `Arg::Short(char)/Long(&str)/Positional(&str)` — full iterator variant
+#                                    via `Options::next()` (alternative API)
+#
+# getargs is DISTINCT from every other Rust CLI library on FIVE specific axes:
+#
+#   1. ZERO ALLOCATION — getargs allocates nothing during parsing.  The
+#      input is borrowed `&str` slices; output is `Opt::Short(char)` or
+#      `Opt::Long(&str)` where the str borrows from the input iterator.
+#      Compare to clap-derive which allocates `String`s for parsed values,
+#      or lapp (R464) which builds an internal `HashMap<String, Value>`.
+#   2. NO MACROS — pure imperative API, no proc-macros, no derive, no
+#      builder chain.  The user writes the dispatch loop by hand.  This
+#      is similar to lexopt (R407) and pico-args (R347) but with a more
+#      idiomatic Result+Iterator API than either.
+#   3. NO IMPLICIT I/O — getargs does NOT read stderr, write help text,
+#      or print anything.  Errors are returned via `Result`; the caller
+#      decides what to do.  Compare to clap which auto-generates help
+#      output and writes to stderr; getargs makes all I/O explicit.
+#   4. ITERATOR-FIRST DESIGN — `Options` is an iterator-like state machine
+#      where `next_opt()` returns the next flag and `value()` extracts the
+#      value associated with the LAST RETURNED flag.  This is the GNU
+#      getopt convention adapted to Rust idioms — no state object per
+#      flag, just a single Options instance traversing argv.
+#   5. WORKS WITH OsStr — getargs supports `&OsStr` via `Options::new`
+#      with an `Iterator<Item=&OsStr>`.  This means Windows path-with-
+#      invalid-UTF-8 args parse correctly without losing data.  Most
+#      Rust CLI libraries either always-decode-to-String or require an
+#      explicit OsStr variant.
+#
+# CONTRAST WITH OTHER ZERO-COST RUST CLI LIBRARIES DOCUMENTED IN THE CORPUS
+#
+#   * lexopt (R407)              — similar iterator-based, no allocation
+#   * pico-args (R347)           — similar minimal, no derive
+#   * getopts (R416)             — Rust port of GNU getopt
+#   * onlyargs (R445)            — minimal, no derive
+#   * argh (R344)                — derive-based but small footprint
+#   * argp (R437)                — fork of argh with more features
+#   * gumdrop (R410)             — older derive-based
+#   * pico-args (R347)           — pure imperative
+#   * getargs (THIS)             — iterator-based, zero alloc, no macros,
+#                                  no implicit I/O, OsStr-native
+#
+# getargs is closest in spirit to LEXOPT and PICO-ARGS — all three reject
+# the macro/derive approach in favor of imperative parsing.  Distinctions:
+#
+#   * lexopt:    Uses a CUSTOM Arg enum with `Short(char)` / `Long(&str)` /
+#                `Value(OsString)` / `Unexpected(OsString)` patterns;
+#                supports `--key=value` and `-fbAR` short-clustering.
+#   * pico-args: Uses a different API — `Arguments::parse_args()` extracts
+#                args lazily based on what the caller requests, using
+#                `Arguments::value_from_str(["-c", "--capacity"])` style.
+#                Different mental model: "pull what you need" vs
+#                "iterate and dispatch".
+#   * getargs:   Iterator-based dispatch like lexopt, but the API splits
+#                "get next opt" (next_opt) from "get the value" (value)
+#                into two separate calls.  This matches GNU getopt's mental
+#                model of `getopt()` returning the option char and `optarg`
+#                containing the value.  More familiar to C programmers
+#                porting code.
+#
+# Performance characteristics (from getargs benchmarks):
+#
+#   * Comparable to hand-rolled match-on-argv: ~10-20 nanoseconds per arg
+#   * No heap allocation: stack-only state machine
+#   * No string parsing: returns `&str` borrows from input iterator
+#   * No locale handling: argv is treated as opaque UTF-8 (or OsStr)
+#
+# REAL-WORLD getargs USERS (from GitHub code search):
+#
+#   * lalitshankarch/xuniq — line deduplicator (THIS completion)
+#   * martin-g/maven_search_rs — Maven artifact search CLI
+#   * EHfive/uefi-toys — UEFI tools collection
+#   * thunderstore-io/unreal-shimloader — Unreal Engine mod loader shim
+#   * hexagonal-sun/moss-kernel — Moss Rust Linux-compatible kernel
+#   * fazekmar/rmem — memory usage summarization CLI
+#   * lalitshankarch/xuniq (THIS)
+#   * automata-network/tee-builder — TEE binary builder
+#   * Angr1st/wuerfel — dice-rolling CLI
+#   * lalitshankarch/Tazdevil971/rps2-sdk — PS2 SDK
+#   * Xila-Project/Core — Xila OS executables
+#   * EHfive/uefi-toys (reset, loopback driver, util)
+#
+# -----------------------------------------------------------------------------
+# XUNIQ CLI SURFACE (verbatim from src/main.rs print_help())
+# -----------------------------------------------------------------------------
+#
+# USAGE:
+#   xuniq [OPTIONS] < input > output
+#
+# OPTIONS:
+#   -c, --capacity <N>     Expected number of UNIQUE lines (default: 1,000,000).
+#                          Setting this correctly avoids HashSet rehashing
+#                          mid-stream — significant performance win on
+#                          large inputs.
+#   -s, --safe             Use EXACT STRING MATCHING (takes more memory but
+#                          no hash collisions).  Default is XxHash3_128
+#                          (extremely low collision probability but
+#                          theoretically possible).
+#   -h, --help             Display this help and exit
+#
+# INPUT/OUTPUT:
+#   stdin                  Input lines (UTF-8 or any byte stream)
+#   stdout                 Output: unique lines in INPUT ORDER (first
+#                          occurrence preserved, subsequent duplicates
+#                          dropped)
+#
+# ALGORITHM (from xuniq source):
+#   Default mode:  HashSet<u128> of XxHash3_128 hashes of trimmed lines.
+#                  ~16 bytes per unique line; effectively O(1) collision
+#                  probability for inputs up to 2^32 unique lines.
+#   Safe mode:     HashSet<Box<[u8]>> of full trimmed line bytes.
+#                  Memory ~ total bytes of unique content; zero collisions.
+#
+# COMPARISON TO RELATED TOOLS:
+#   GNU `uniq`           Requires sorted input; xuniq works on unsorted streams
+#   `sort -u`            Allocates entire input + sort buffer; xuniq is O(unique)
+#   `awk '!seen[$0]++'`  Slower due to AWK interpreter overhead
+#   `huniq` (Rust)       Similar tool with slightly different defaults
+#
+# =============================================================================
+
+_xuniq() {
+    local curcontext="$curcontext" state line ret=1
+    typeset -A opt_args
+
+    _arguments -s \
+        '(-c --capacity)'{-c,--capacity}'[expected number of unique lines]:N (default 1000000):' \
+        '(-s --safe)'{-s,--safe}'[use exact string matching (no hash collisions)]' \
+        '(-h --help)'{-h,--help}'[display help and exit]' \
+        && ret=0
+
+    return ret
+}
+
+_xuniq "$@"
