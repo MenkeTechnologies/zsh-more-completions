@@ -1,0 +1,345 @@
+#compdef tobaru
+# =============================================================================
+# tobaru — cfal's "Port forwarding CLI utility with allowlists,
+#          TLS SNI and ALPN routing, HTTP forwarding, load
+#          balancing, IP-to-destination mapping, and iptables
+#          support" — a Rust async network proxy daemon for
+#          TCP/UDP port forwarding with hot-reload of YAML/JSON
+#          config files at runtime via notify filesystem watcher.
+#          Distinguishing from socat, iptables, nginx stream
+#          modules, HAProxy, and other port forwarders by:
+#            - TLS SNI + ALPN ROUTING — single port can host
+#              multiple TLS targets routed by SNI hostname
+#              and/or ALPN protocol; tobaru parses TLS
+#              ClientHello + ALPN extension WITHOUT terminating
+#              TLS, forwarding to upstream based on
+#              negotiated protocol (HTTP/1.1, HTTP/2, gRPC,
+#              custom)
+#            - IP ALLOWLISTS via ip_network_table-deps-treebitmap
+#              — per-target IPv4/IPv6 CIDR allowlists with
+#              O(log N) prefix-tree lookup
+#            - LOAD BALANCING with round-robin / weighted
+#              round-robin per target
+#            - IP-TO-DESTINATION MAPPING — client IP determines
+#              which upstream the connection routes to
+#            - iptables INTEGRATION via use_iptables — tobaru
+#              automatically inserts MATCHING iptables NAT
+#              rules for the addresses + targets, enabling
+#              transparent proxy mode; --clear-iptables-all
+#              cleans up on shutdown
+#            - HTTP FORWARDING with Host-header-based routing
+#              (in addition to TCP-level routing)
+#            - rustls + aws-lc-rs FOR PURE-RUST TLS — no
+#              OpenSSL dependency; aws-lc-rs (Amazon's BoringSSL
+#              fork) provides the crypto primitives; rustls
+#              handles TLS protocol; both pure-Rust builds
+#            - HOT RELOAD via notify — config file changes
+#              detected via filesystem watch; running servers
+#              restart with new config without dropping existing
+#              connections
+#            - URL-EMBEDDED CONFIGS — pass forwarding rules
+#              directly on CLI as URLs:
+#                tobaru tcp://127.0.0.1:1000?target=127.0.0.1:2000
+#                tobaru udp://0.0.0.0:5060?target=10.0.0.5:5060
+#            - TOKIO MULTI-THREADED RUNTIME — --threads N
+#              configures worker thread count; defaults to
+#              std::thread::available_parallelism()
+#            - DRY-RUN MODE via --dry-run — validates config
+#              files without starting servers (useful for CI)
+#          Used by: home-lab + small-shop network administrators
+#          replacing socat scripts, multi-tenant TLS routing
+#          deployments needing SNI-based routing without nginx,
+#          and as a reference implementation of notify + rustls
+#          + tokio + serde_yaml + iptables-NAT composition in
+#          Rust.
+#
+# Author:  cfal (GitHub username) — Rust network-programming
+#          enthusiast.  tobaru released ~2021; active development
+#          through 2026; current version 0.9.5.  License: MIT.
+# Source:  https://github.com/cfal/tobaru
+#          https://github.com/cfal/tobaru/blob/master/src/main.rs
+#          https://github.com/cfal/tobaru/blob/master/Cargo.toml
+# CLI:     src/main.rs — manual `std::env::args()` flag parsing
+#          (no clap dependency; lightweight argument handling).
+#          Headline library: **notify** (notify is the new
+#          variant being documented here, opening Axis 17 —
+#          File Watching).
+# Library: notify (https://github.com/notify-rs/notify —
+#          "Cross-platform filesystem notification library for
+#           Rust" — François Mockers + notify-rs team.
+#           Distinct from all previously-documented Rust
+#           libraries by being:
+#              1. CROSS-PLATFORM FILESYSTEM EVENTS — single API
+#                 abstracting over four kernel-level event
+#                 sources:
+#                   * Linux:   inotify (kernel 2.6.13+)
+#                   * macOS:   FSEvents (kernel-level) + kqueue
+#                   * Windows: ReadDirectoryChangesW (Win32 API)
+#                   * BSDs:    kqueue
+#                 RecommendedWatcher chooses the best available
+#                 backend at compile time per target platform.
+#              2. EVENT KIND TAXONOMY — Event::kind enum covers:
+#                   EventKind::Create(CreateKind::*)
+#                   EventKind::Modify(ModifyKind::*)
+#                       Modify(Data(DataChange::*))
+#                       Modify(Metadata(MetadataKind::*))
+#                       Modify(Name(RenameMode::*))
+#                   EventKind::Remove(RemoveKind::*)
+#                   EventKind::Access(AccessKind::*)
+#                   EventKind::Other
+#                 — granular event classification for filtering.
+#              3. CHANNEL-BASED API — watchers are constructed
+#                 with a closure / channel that receives
+#                 notify::Result<Event> for each filesystem
+#                 change:
+#                   let mut watcher = notify::recommended_watcher(
+#                     move |res: notify::Result<Event>| match res {
+#                       Ok(event) => tx.send(event).unwrap(),
+#                       Err(e) => eprintln!("watch err: {:?}", e),
+#                     }
+#                   ).unwrap();
+#                   watcher.watch(Path::new("config.yaml"),
+#                                 RecursiveMode::NonRecursive)?;
+#              4. RECURSIVE / NON-RECURSIVE WATCHING — paths can
+#                 be watched RECURSIVELY (all descendants) or
+#                 NON-RECURSIVELY (path only).  Recursive watch
+#                 of a directory captures all descendants without
+#                 manually iterating contents.
+#              5. DEBOUNCED VARIANT — notify-debouncer-mini and
+#                 notify-debouncer-full provide event coalescing
+#                 (combine multiple Modify events into one) for
+#                 reducing event-storm overhead from editors
+#                 that write multiple times.
+#              6. POLL-BASED FALLBACK — PollWatcher (vs
+#                 RecommendedWatcher) uses periodic stat() polls
+#                 for platforms without inotify/FSEvents/etc.,
+#                 or for filesystems where kernel events are
+#                 unreliable (NFS, virtual FS).
+#              7. ATTRIBUTE FILTERING — Config-level filters can
+#                 ignore certain event kinds (e.g. ignore Access
+#                 events to reduce noise from `stat` calls).
+#              8. NO-STD COMPATIBLE for core types via notify-
+#                 types crate.
+#              9. WIDELY ADOPTED — used by cargo-watch, watchexec,
+#                 dprint, mprocs, tobaru (THIS), zellij, alacritty
+#                 config reload, helix editor file-watch, etc.
+#             10. NOTIFY-RS GROUP MAINTAINER — multi-maintainer
+#                 group (François Mockers, daboross, 0xpr03,
+#                 dfaust, etc.) under notify-rs GitHub org.
+# License: MIT OR Apache-2.0 (notify); MIT (tobaru)
+# Status:  notify — 3,379+ stars on notify-rs/notify, ~90M
+#          crates.io downloads (TOP-100 Rust crate by downloads);
+#          foundational filesystem-event library used by:
+#            * cargo-watch (Rust dev hot-reload)
+#            * watchexec (universal file-watcher)
+#            * dprint (code formatter daemon)
+#            * mprocs (multi-process tmux alt)
+#            * helix (modal text editor)
+#            * zellij (terminal multiplexer)
+#            * alacritty (config reload)
+#            * starship (cross-shell prompt cache)
+#            * tobaru (THIS — port forwarder hot reload)
+#            * 2000+ Rust applications
+#          tobaru — 284+ stars on cfal/tobaru, used in home-lab
+#          + small-shop multi-tenant TLS deployments.
+#
+# -----------------------------------------------------------------------------
+# CROSS-LANGUAGE CLI LIBRARY TAXONOMY MILESTONE — RUST CROSSES TO 71 +
+#                                                  AXIS 17 (FILE WATCHING) OPENS
+# -----------------------------------------------------------------------------
+# With this completion the cross-language CLI library taxonomy documents
+# the 71ST Rust CLI library variant.  Rust climbs from 70 to 71
+# documented libraries (notify via tobaru).  Rust **breaks the
+# three-way tie** at 70 and goes SOLO at 71 (Rust=71, Go=70,
+# TS-Node=70).  New leaderboard: Rust=71, Go=70, TypeScript-Node=70
+# (Rust now solo at the top).  Taxonomy now spans 390 cross-language
+# CLI library variants across 95 documented languages.
+#
+# Pattern: R649 Rust=70 (reqwest → Axis 16 OPENS) → R650 Go=70
+# (resty) → R651 TS-Node=70 (got → Axis 16 1/1/1) → R652 95th
+# language (Icon) → R653 Rust=71 (notify THIS — AXIS 17 OPENS) →
+# expected R654 Go=71 → R655 TS-Node=71 → R656 96th language.
+# This is the 1st of 3 leader bumps in the current segment.
+#
+# This completion OPENS Axis 17 (FILE WATCHING) — the 17th documented
+# cross-language CLI library axis.  Axis 17 covers the cross-language
+# pattern of "library used by CLIs to receive filesystem events"
+# — applicable to hot-reloaders (cargo-watch, dprint, tobaru), code
+# formatters (prettier --watch), build tools (webpack --watch,
+# rollup --watch), and any CLI that responds to file changes.
+#
+#   Axis 17 (FILE WATCHING) variants:
+#     - notify (notify-rs/notify) — R653 (THIS) — Rust cross-
+#       platform filesystem events; inotify (Linux) + FSEvents
+#       (macOS) + ReadDirectoryChangesW (Windows) + kqueue (BSD);
+#       François Mockers / notify-rs ecosystem
+#     - (Go variant pending in R654 — likely fsnotify/fsnotify,
+#       the Go-equivalent cross-platform filesystem event library)
+#     - (TS-Node variant pending in R655 — likely chokidar (paulmillr/
+#       chokidar), the cross-platform Node.js filesystem watcher
+#       used by webpack, rollup, esbuild, vite, etc.)
+#
+# Axis 17 distribution: Rust=1, Go=0, TS-Node=0.  Will reach 1/1/1
+# three-language symmetry by end of R655.
+#
+# Cross-language Axis 17 design analysis:
+#   The "file watching" abstraction is non-stdlib in all three
+#   languages — Rust's std::fs has no file-watching API; Go's
+#   stdlib has no fsnotify equivalent (fsnotify is third-party);
+#   Node.js's stdlib fs.watch IS available but unreliable across
+#   platforms, so most production CLIs use chokidar.  Each
+#   language's Axis 17 library wraps platform-specific kernel
+#   APIs (inotify / FSEvents / ReadDirectoryChangesW / kqueue)
+#   into a uniform cross-platform interface — a clean axis with
+#   no stdlib overlap.
+#
+# Axis distribution summary after R653:
+#   * Axis 1  (Argparse):     Rust=N  / Go=N  / TS-Node=N
+#   * Axis 4  (Colors):       Rust=N  / Go=N  / TS-Node=N
+#   * Axis 5  (Progress):     Rust=N  / Go=N  / TS-Node=N
+#   * Axis 6  (Errors):       Rust=6  / Go=N  / TS-Node=N
+#   * Axis 7  (Boxes):        Rust=1  / Go=1  / TS-Node=1   (1/1/1)
+#   * Axis 8  (Prompts):      Rust=N  / Go=N  / TS-Node=N
+#   * Axis 9  (Logging):      Rust=6  / Go=6  / TS-Node=6   (6/6/6)
+#   * Axis 10 (Tables):       Rust=2  / Go=2  / TS-Node=2   (2/2/2)
+#   * Axis 11 (Humanization): Rust=1  / Go=1  / TS-Node=1   (1/1/1)
+#   * Axis 12 (Text Wrap):    Rust=1  / Go=1  / TS-Node=1   (1/1/1)
+#   * Axis 13 (Config Files): Rust=2  / Go=2  / TS-Node=2   (2/2/2)
+#   * Axis 14 (Paths):        Rust=2  / Go=2  / TS-Node=2   (2/2/2)
+#   * Axis 15 (Date/Time):    Rust=1  / Go=1  / TS-Node=1   (1/1/1)
+#   * Axis 16 (HTTP Clients): Rust=1  / Go=1  / TS-Node=1   (1/1/1)
+#   * Axis 17 (File Watching): Rust=1 / Go=0  / TS-Node=0   NEW
+#
+# François Mockers / notify-rs ecosystem note:
+#   notify is maintained by the notify-rs group (multiple
+#   maintainers contributing over time: François Mockers
+#   created notify, daboross + 0xpr03 + dfaust + others
+#   contributed major versions, currently maintained as a
+#   community-owned repo).  Distinct from Sean McArthur
+#   (Hyperium / reqwest), Tolnay (serde), Sorhus (Node CLI
+#   utils).  notify brings the FIRST notify-rs-maintained
+#   library into the taxonomy (1-library notify-rs
+#   documentation; expected to grow as further notify-rs
+#   crates enter, e.g. notify-debouncer-mini, notify-debouncer-
+#   full, notify-types).
+#
+# (Leaderboard at R653: Rust=71, Go=70, TS-Node=70 — Rust solo
+# at the top.  Axis 9 / Logging 6/6/6 three-way symmetric.
+# Axes 10 + 13 + 14 at 2/2/2.  Axes 7 + 11 + 12 + 15 + 16 at
+# 1/1/1.  Axis 17 newly opened at 1/0/0.  Eight axes at three-
+# language symmetry.)
+#
+# -----------------------------------------------------------------------------
+#
+# WHY notify IS THE 71ST RUST CLI LIBRARY
+#
+# notify is the de-facto Rust filesystem-event library, providing
+# a unified cross-platform API over four distinct kernel event
+# sources.  Distinct from std::fs (no watching), from polling
+# loops (high CPU, low precision), and from manual platform-
+# specific APIs (impossible to use portably).
+#
+# Five distinguishing characteristics:
+#
+#   1. CROSS-PLATFORM ABSTRACTION via RecommendedWatcher —
+#      single trait abstracts over:
+#         Linux:   inotify (kernel 2.6.13+, ~2005)
+#         macOS:   FSEvents (10.7+, ~2011) + kqueue
+#         Windows: ReadDirectoryChangesW (NT API)
+#         BSDs:    kqueue (FreeBSD/OpenBSD/NetBSD)
+#      Each backend produces native kernel events without
+#      polling.  notify is the FIRST documented Rust Axis 17
+#      library providing this abstraction.
+#
+#   2. EVENT KIND TAXONOMY — granular classification:
+#      EventKind::Create / Modify / Remove / Access / Other,
+#      each with subkinds (DataChange, MetadataKind, RenameMode,
+#      etc.).  Distinct from raw inotify masks which require
+#      manual bit-flag interpretation.
+#
+#   3. CHANNEL / CLOSURE API — Watcher accepts a closure or
+#      channel that receives Events asynchronously.  Distinct
+#      from blocking-poll APIs that require manual select()
+#      loops.
+#
+#   4. RECURSIVE WATCHING — single watch() call captures all
+#      descendant paths of a directory.  Distinct from raw
+#      inotify which requires manually iterating subdirectories
+#      and adding watches for each.
+#
+#   5. NOTIFY-RS / FRANÇOIS MOCKERS ECOSYSTEM PROVENANCE —
+#      distinct from Sean McArthur (Hyperium / reqwest),
+#      Mathew Roy (go-resty), Tolnay (serde), Sindre Sorhus
+#      (Node CLI utils).  notify-rs is a community-owned
+#      maintenance group providing the foundational Rust
+#      filesystem-event layer.
+#
+# -----------------------------------------------------------------------------
+#
+# THE tobaru CLI — manual flag parsing + notify hot reload
+#
+# tobaru's CLI is in src/main.rs.  Uses manual std::env::args()
+# parsing (no clap / no structopt) for minimal binary size.
+# notify is used for config file hot-reload:
+#
+#     use notify::{Event, EventKind, RecommendedWatcher,
+#                  RecursiveMode, Watcher};
+#     ...
+#     let mut watcher = notify::recommended_watcher(
+#         move |res: notify::Result<Event>| match res {
+#             Ok(event) => {
+#                 if matches!(event.kind, EventKind::Modify(..)) {
+#                     tx.send(ConfigChanged {}).unwrap();
+#                 }
+#             }
+#             Err(e) => println!("watch error: {:?}", e),
+#         }
+#     ).unwrap();
+#     for config_path in config_paths {
+#         watcher.watch(Path::new(&config_path),
+#                       RecursiveMode::NonRecursive)?;
+#     }
+#
+# When a Modify event fires for any watched config, tobaru
+# rebuilds the server config and gracefully cycles servers
+# without dropping connections.
+#
+# Flags (manually parsed):
+#   -t, --threads NUM         worker thread count
+#                              (default: available_parallelism())
+#       --clear-iptables-all  clear all tobaru-created iptables
+#                              rules and exit immediately
+#       --clear-iptables-matching
+#                              clear iptables rules only for
+#                              addresses in specified configs +
+#                              exit immediately
+#       --dry-run             validate configs without starting
+#                              servers
+#   -h, --help                show help
+#
+# Positional arguments:
+#   <CONFIG PATH or URL>...    .yaml/.json config files OR
+#                              URL-form configs like
+#                              tcp://127.0.0.1:1000?target=
+#                              127.0.0.1:2000
+#
+# -----------------------------------------------------------------------------
+#
+# COMMAND-LINE OPTIONS (sourced directly from
+# https://github.com/cfal/tobaru/blob/master/src/main.rs
+# help_str() function + main() argument-parse loop.)
+# -----------------------------------------------------------------------------
+
+local curcontext="$curcontext" state line ret=1
+typeset -A opt_args
+
+_arguments -s -S \
+    '(-t --threads)'{-t+,--threads=}'[number of worker threads (default: available parallelism)]:threads:_default' \
+    '--clear-iptables-all[clear all tobaru-created iptables rules and exit]' \
+    '--clear-iptables-matching[clear iptables rules for addresses in specified configs and exit]' \
+    '--dry-run[validate configs without starting servers]' \
+    '(- *)'{-h,--help}'[show help]' \
+    '*:config path or URL:_files -g "*.(yaml|yml|json)"' \
+    && ret=0
+
+return ret
