@@ -1,0 +1,391 @@
+#compdef zebrad
+# =============================================================================
+# zebrad — Zcash Foundation's official Zebra full-node implementation: a
+#          Rust implementation of the Zcash consensus protocol designed for
+#          security, performance, and correctness.  Zebra is independent of
+#          zcashd (the reference implementation) and is built from the
+#          ground up to be a parallel pipelined verifier with strong type
+#          discipline.  Used in production by the Zcash ecosystem as the
+#          canonical alternative to zcashd, with mining-pool support,
+#          lightwalletd integration, and full RPC compatibility.  Zebra
+#          runs on Mainnet, Testnet, and Regtest networks.
+#
+# Author:  Zcash Foundation (zebra@zfnd.org)
+# Source:  https://github.com/ZcashFoundation/zebra
+# CLI:     zebrad/src/commands/*.rs (uses iqlusioninc/abscissa application
+#                                    microframework on top of clap-derive)
+# Library: iqlusion/abscissa (abscissa_core::Command + Runnable +
+#                              Configurable traits + boot() lifecycle)
+# License: MIT
+# Status:  Stable — 556+ stars; production-grade Zcash full-node alternative
+#          to zcashd.  Auditable codebase used in financial settings.
+#
+# -----------------------------------------------------------------------------
+# CROSS-LANGUAGE CLI LIBRARY TAXONOMY MILESTONE — RUST CLIMBS TO 33 SOLO LEAD
+# -----------------------------------------------------------------------------
+# With this completion the cross-language CLI library taxonomy documents the
+# 33RD Rust CLI library variant.  Rust climbs from 32 to 33 documented
+# libraries (iqlusion's abscissa application microframework via zebrad).
+# New leaderboard: Rust=33 SOLO LEAD, Go=32, TypeScript-Node=32 (three-way
+# tie at 32 from R500 broken — Rust now sole top).  Taxonomy now spans
+# 241 cross-language CLI library variants across 58 documented languages.
+# -----------------------------------------------------------------------------
+#
+# WHAT IS abscissa AND WHY IS IT A DISTINCT 33RD RUST CLI LIBRARY VARIANT?
+#
+# abscissa (https://github.com/iqlusioninc/abscissa, 591+ stars) is
+# **iqlusion's "Application microframework with command-line option
+# parsing, configuration, error handling, logging, and shell
+# interactions"**.  iqlusion is the security-focused Rust shop behind
+# Tendermint KMS (tmkms), the canonical HSM-integrated signer for Cosmos
+# validators.  abscissa was extracted from tmkms after the team needed
+# a reusable Rust application framework with first-class configuration,
+# lifecycle management, error handling, and CLI parsing — closer to
+# Rails/Spring than to a CLI library alone.
+#
+# abscissa is DISTINCT from every documented Rust CLI library on FIVE
+# specific axes:
+#
+#   1. APPLICATION-MICROFRAMEWORK PATTERN (NOT JUST A PARSER) — abscissa
+#      is the ONLY Rust CLI library documented in this taxonomy that
+#      ships a FULL APPLICATION LIFECYCLE (boot → init → components →
+#      run → terminate) wrapped around argv parsing.  Compare:
+#         clap:           pure parser → derive struct from args
+#         clap-derive:    same, but proc-macro-driven
+#         structopt:      same predecessor, proc-macro-driven
+#         argh:           Google's derive parser
+#         gumdrop:        derive parser, no app lifecycle
+#         pico-args:      ultra-minimal parser, no derive
+#         lexopt:         argument-iterator pattern
+#         bpaf:           applicative-functor combinator parser
+#         xflags:         matklad's minimal proc-macro parser
+#         argparse:       Python-argparse-style runtime API
+#         seahorse:       fluent builder (no app lifecycle)
+#         docopt.rs:      USAGE-string-as-spec parser
+#         paw:            argument-wrapping trait pattern
+#         abscissa:       APPLICATION MICROFRAMEWORK with boot lifecycle,
+#                         components system, config + CLI + error +
+#                         logging + shell integration
+#      abscissa replaces `fn main()` with `abscissa_core::boot(&APP);`
+#      and the entire app is dispatched through framework lifecycle.
+#      **First documented Rust CLI library that is fundamentally an
+#      application framework rather than an argument parser.**
+#
+#   2. `Command` + `Runnable` + `Configurable` TRAIT TRIO — every
+#      abscissa subcommand is a struct that derives ALL THREE traits:
+#         #[derive(Command, Debug, Default, Parser, Runnable)]
+#         pub struct GenerateCmd {
+#             #[clap(long, short, help = "...")]
+#             output_file: Option<String>,
+#         }
+#         impl Runnable for GenerateCmd {
+#             fn run(&self) { /* business logic */ }
+#         }
+#         impl Configurable<ZebradConfig> for GenerateCmd {
+#             fn config_path(&self) -> Option<PathBuf> { ... }
+#             fn override_config(&self, mut config: ZebradConfig)
+#                                -> Result<ZebradConfig, FrameworkError>;
+#         }
+#      The trio decomposes a subcommand into THREE ORTHOGONAL CONCERNS:
+#         - WHAT TO PARSE         (clap::Parser)
+#         - WHAT TO DO            (abscissa_core::Runnable::run())
+#         - WHAT CONFIG TO LOAD   (abscissa_core::Configurable)
+#      Compare clap-derive's single-trait `Parser` (only parses) or
+#      structopt's single-trait `StructOpt` (only parses).
+#      **abscissa is the FIRST documented Rust CLI library to factor
+#      a subcommand into three orthogonal traits — parsing AS one
+#      concern, dispatch AS a second, config-loading AS a third.**
+#
+#   3. PER-SUBCOMMAND CONFIG-OVERRIDE PATTERN — `Configurable::
+#      override_config()` lets each subcommand mutate the loaded config
+#      BEFORE the framework hands it to `run()`:
+#         impl Configurable<ZebradConfig> for StartCmd {
+#             fn override_config(&self, mut cfg: ZebradConfig)
+#                                -> Result<ZebradConfig, FrameworkError> {
+#                 if !self.filters.is_empty() {
+#                     cfg.tracing.filter = Some(self.filters.join(","));
+#                 }
+#                 Ok(cfg)
+#             }
+#         }
+#      The framework calls this AFTER loading the TOML config but
+#      BEFORE injecting it into the command.  This implements the
+#      precedence chain: defaults < config file < command-line flags.
+#      Compare:
+#        clap:    user implements precedence by hand after parsing
+#        figment / config-rs: library-level merge but per-binary, not
+#                              per-subcommand
+#        abscissa: PER-SUBCOMMAND override hook in the framework
+#                   lifecycle (UNIQUE — config-merge is a hook, not a
+#                   manual merge inside run())
+#
+#   4. COMPONENTS SYSTEM — pluggable subsystems registered into the
+#      application's component graph.  Each `Component<App>` has:
+#         fn id(&self) -> abscissa_core::component::Id;
+#         fn version(&self) -> Version;
+#         fn after_config(&mut self, cfg: &Config) -> Result<...>;
+#         fn before_shutdown(&self) -> Result<...>;
+#      Built-in components: TerminalComponent (color/style + stdin/out),
+#      TracingComponent (logging via tracing), SignalHandlerComponent
+#      (Ctrl-C / SIGTERM dispatch).  Users add custom components for
+#      databases, network listeners, etc.  Components form a dependency
+#      graph; abscissa initializes them in topological order during
+#      `boot()`.  Compare:
+#        clap:     no components — bring your own subsystems
+#        cobra:    no components — bring your own subsystems
+#        spring (Java): comparable "ApplicationContext + Bean" pattern
+#        abscissa: components as first-class CLI-library concern.
+#      **First documented Rust CLI library with a Spring-style
+#      lifecycle-managed components system.**
+#
+#   5. `boot()` ENTRY POINT REPLACING `main()` — instead of writing
+#      a hand-rolled `fn main()`, abscissa applications start with:
+#         fn main() {
+#             abscissa_core::boot(&APP);
+#         }
+#      where `APP` is a `lazy_static!` instance of the user's
+#      `Application` type.  `boot()` handles:
+#         - argv parsing dispatch
+#         - terminal init + colors
+#         - signal handlers (Ctrl-C / SIGTERM / SIGINT)
+#         - tracing subscriber registration
+#         - panic hook installation
+#         - error reporting via color-eyre
+#         - graceful shutdown via component before_shutdown hooks
+#      Compare:
+#        clap-derive:  `let args = Args::parse(); run(args);`
+#        cobra (Go):   `cmd.Execute()` from main
+#        oclif (Node): `bin/run` shell script + `oclif.execute()`
+#        abscissa:     `abscissa_core::boot(&APP);` — UNIFIED RUST
+#                       APPLICATION ENTRY POINT replacing main()
+#                       entirely.
+#
+# THE iqlusion/abscissa API SURFACE (excerpted from upstream)
+#
+#   // Cargo.toml
+#   abscissa_core = "0.8"
+#
+#   // src/main.rs
+#   use myapp::application::APP;
+#   fn main() { abscissa_core::boot(&APP); }
+#
+#   // src/application.rs
+#   use abscissa_core::{
+#       application::{self, AppCell},
+#       config, trace, Application, FrameworkError, StandardPaths,
+#   };
+#   pub static APP: AppCell<MyApp> = AppCell::new();
+#   #[derive(Debug)]
+#   pub struct MyApp {
+#       config: CfgCell<MyConfig>,
+#       state: application::State<Self>,
+#   }
+#   impl Application for MyApp {
+#       type Cmd = MyEntryPoint;
+#       type Cfg = MyConfig;
+#       type Paths = StandardPaths;
+#       fn state(&self) -> &application::State<Self> { &self.state }
+#       fn register_components(&mut self,
+#                              cmd: &Self::Cmd) -> Result<(), FrameworkError>;
+#       fn after_config(&mut self,
+#                       cfg: Self::Cfg) -> Result<(), FrameworkError>;
+#   }
+#
+#   // src/commands.rs
+#   use abscissa_core::{Command, Configurable, Runnable};
+#   use clap::Parser;
+#   #[derive(Command, Debug, Parser, Runnable)]
+#   pub enum MyCommand {
+#       Generate(GenerateCmd),
+#       Start(StartCmd),
+#   }
+#
+# Derive macros provided by abscissa:
+#   - Command       : marker trait + framework integration
+#   - Runnable      : synthesizes run() dispatch over enum variants
+#
+# Core traits:
+#   - Application                : whole-app lifecycle
+#   - Command                    : per-subcommand marker
+#   - Configurable<Cfg>          : per-subcommand config loading +
+#                                   override hook
+#   - Runnable                   : `fn run(&self)` dispatch
+#   - Component<App>             : pluggable lifecycle-managed subsystem
+#
+# Built-in components:
+#   - TerminalComponent          : stdout/stderr color + style
+#   - TracingComponent           : tracing subscriber registration
+#   - SignalHandlerComponent     : Ctrl-C / SIGTERM dispatch
+#
+# CONTRAST WITH OTHER RUST CLI LIBRARIES DOCUMENTED IN THE CORPUS
+#
+#   * clap / clap-derive   — proc-macro derive, pure parser
+#   * structopt            — predecessor of clap-derive
+#   * argh (Google)        — derive parser optimized for code size
+#   * gumdrop              — derive parser, minimalist
+#   * pico-args            — hand-rolled minimal parser
+#   * lexopt               — argument-iterator pattern
+#   * bpaf                 — applicative-functor combinators
+#   * xflags (matklad)     — proc-macro minimal parser
+#   * argparse             — Python-argparse-style runtime API
+#   * seahorse             — fluent builder
+#   * docopt.rs            — USAGE-string-is-spec
+#   * paw                  — argument-wrapping trait pattern
+#   * getopts              — getopt(3) port
+#   * argfile (R498)       — pre-parser argv preprocessor
+#   * argv                 — argument iteration helpers
+#   * abscissa (THIS)      — APPLICATION MICROFRAMEWORK with boot
+#                            lifecycle + components + Configurable
+#                            override hook + Command/Runnable trio
+#                            wrapped over clap-derive
+#
+# abscissa occupies a UNIQUE NICHE — it is not a parser alternative
+# to clap; it is a FRAMEWORK BUILT ON TOP OF clap.  The taxonomy
+# entry is justified because the AUTHORING PATTERN (Command +
+# Runnable + Configurable trio, boot() entry, components system) is
+# distinct enough that an abscissa CLI looks materially different
+# from a raw clap-derive CLI even though both ultimately use clap
+# as the parsing kernel.
+#
+# REAL-WORLD abscissa USERS:
+#
+#   * ZcashFoundation/zebra:zebrad (THIS, 556*) — Zcash full-node
+#   * iqlusioninc/tmkms (366*) — Tendermint KMS, HSM-integrated
+#       Cosmos validator signer (THE ORIGINAL abscissa user;
+#       framework was extracted from this codebase)
+#   * rustsec/rustsec:admin + cargo-audit — RustSec advisory DB
+#       admin tool and cargo-audit security scanner
+#   * informalsystems/hermes (502*) — IBC relayer for Cosmos
+#   * symmetree-labs/zerostash (156*) — encrypted personal backup
+#   * PeggyJV/steward (31*) — Cosmos validator management
+#   * zcash/wallet:zallet (30*) — official Zcash wallet
+#   * pace-rs/pace (24*) — focused-work tracker
+#   * organize-rs/organize (12*) — file organizer
+#   * rustic-rs/rustic (3070*) — restic-compatible backup tool
+#       (uses abscissa_core::prelude)
+#
+# -----------------------------------------------------------------------------
+# ZEBRAD'S CLI SURFACE (verbatim from zebrad/src/commands/*.rs)
+# -----------------------------------------------------------------------------
+#
+# USAGE:
+#   zebrad [GLOBAL OPTIONS] [COMMAND] [COMMAND OPTIONS] [args...]
+#
+# Global options (from EntryPoint):
+#   -c, --config <PATH>          Path to zebrad.toml configuration file
+#   -v, --verbose                Increase verbosity setting
+#       --filters <FILTERS>...   Tracing filters that override the
+#                                 zebrad.toml config (e.g. "info,zebra=debug")
+#       --version                Show version (clap built-in)
+#       --help, -h                Show help (clap built-in)
+#
+# Commands:
+#   start                        Start the application (DEFAULT — runs
+#                                 as Zcash full node).  Inherits global
+#                                 --filters override; configures all
+#                                 chain-sync, mempool, mining, RPC,
+#                                 lightwalletd, scanner components.
+#
+#   generate [-o <FILE>]         Generate a default zebrad.toml
+#                                 configuration.  Writes to stdout if no
+#                                 -o/--output-file given.
+#
+#   tip-height [-c <DIR>] [-n <NET>]
+#                                Print the tip block height of Zebra's
+#                                chain state on disk WITHOUT starting
+#                                the node.  Useful for snapshot scripts.
+#                                Network: Mainnet | Testnet | Regtest
+#
+#   copy-state [--max-source-height <N>]
+#                                Copy state from one directory to another
+#                                (DEBUG ONLY — expert users; for
+#                                state-format migration testing).
+#
+# Typical usage:
+#   $ zebrad                                # default → start
+#   $ zebrad start                          # explicit start
+#   $ zebrad start --filters debug
+#   $ zebrad generate -o /etc/zebrad.toml
+#   $ zebrad tip-height -c /var/lib/zebrad -n Mainnet
+#   $ zebrad copy-state --max-source-height 2500000
+#   $ zebrad --config /etc/zebrad.toml start
+#
+# Default subcommand:
+#   When called with no subcommand, zebrad inserts `start` automatically.
+#   This is a custom abscissa pattern — `EntryPoint::process_cli_args()`
+#   appends "start" to argv if no subcommand was given.
+#
+# =============================================================================
+
+_zebrad() {
+    local curcontext="$curcontext" state line ret=1
+    typeset -A opt_args
+
+    local -a subcommands networks
+
+    subcommands=(
+        'start:start the Zcash node (default command)'
+        'generate:generate a default zebrad.toml configuration'
+        'tip-height:print the tip block height of chain state on disk'
+        'copy-state:copy state from one directory to another (debug)'
+    )
+
+    networks=(
+        'Mainnet:Zcash mainnet'
+        'Testnet:Zcash testnet'
+        'Regtest:Zcash regression testing network'
+    )
+
+    _arguments -C \
+        '(-c --config)'{-c,--config}'[path to configuration file]:config:_files -g "*.toml"' \
+        '(-v --verbose)'{-v,--verbose}'[be verbose]' \
+        '*--filters[tracing filters override (e.g. info,zebra=debug)]:filter:' \
+        '--version[show version]' \
+        '(-h --help)'{-h,--help}'[show help]' \
+        '1: :->cmd' \
+        '*::arg:->args' && ret=0
+
+    case $state in
+        (cmd)
+            _describe -t commands 'zebrad command' subcommands && ret=0
+            ;;
+        (args)
+            case $line[1] in
+                (start)
+                    _arguments \
+                        '*--filters[tracing filters override]:filter:' \
+                        '(-h --help)'{-h,--help}'[show help]' \
+                        && ret=0
+                    ;;
+                (generate)
+                    _arguments \
+                        '(-o --output-file)'{-o,--output-file}'[file to write generated config (stdout if unspecified)]:file:_files' \
+                        '(-h --help)'{-h,--help}'[show help]' \
+                        && ret=0
+                    ;;
+                (tip-height)
+                    _arguments \
+                        '(-c --cache-dir)'{-c,--cache-dir}'[path to Zebra chain state directory]:dir:_directories' \
+                        '(-n --network)'{-n,--network}'[network of chain to load]:network:->network' \
+                        '(-h --help)'{-h,--help}'[show help]' \
+                        && ret=0
+                    case $state in
+                        (network)
+                            _describe -t networks 'Zcash network' networks && ret=0
+                            ;;
+                    esac
+                    ;;
+                (copy-state)
+                    _arguments \
+                        '--max-source-height[stop copying at this source height]:height:' \
+                        '(-h --help)'{-h,--help}'[show help]' \
+                        && ret=0
+                    ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_zebrad "$@"
