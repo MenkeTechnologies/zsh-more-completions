@@ -1,0 +1,477 @@
+#compdef buffdb
+# =============================================================================
+# buffdb — Marcus Eagan + Jacob Pratt's "Embedded storage
+#          built for AI model management over gRPC.  Smart
+#          machines don't need to read JSON, they only need
+#          protocol buffers.  The world's first MODMS
+#          (Machine-Oriented Database Management System),
+#          built to support SQLite and eventually DuckDB as
+#          backends." — a Rust embedded key-value + BLOB
+#          store accessed exclusively via gRPC + Protocol
+#          Buffers (no REST / JSON layer).  Designed for
+#          machine-to-machine workflows where humans rarely
+#          query the data directly.
+#          Distinguishing from Redis, etcd, SQLite, and other
+#          key-value / blob stores by:
+#            - gRPC-NATIVE API — all client interactions go
+#              through Protocol Buffers + gRPC; no HTTP/JSON
+#              REST endpoints.  Distinct philosophy: "smart
+#              machines don't need JSON."  Clients are
+#              generated from .proto files.
+#            - 2 DATA MODELS — separate stores for:
+#                * KV (key-value)  — string→string mapping
+#                                    optimized for small,
+#                                    frequently-accessed
+#                                    values (configs, secrets,
+#                                    feature flags, AI model
+#                                    hyperparameters)
+#                * BLOB             — binary-large-object
+#                                    storage for big payloads
+#                                    (ML model weights, image
+#                                    files, embeddings)
+#                Both backed by SQLite (default) with metadata
+#                tables tracking access patterns
+#            - SQLITE BACKEND via rusqlite — embedded SQLite
+#              engine compiled into the binary; no external
+#              database server required
+#            - DuckDB BACKEND (temporarily disabled) — analytic
+#              workloads supported when stabilized
+#            - 3 ROOT SUBCOMMANDS via clap derive:
+#                * run (alias: serve)  — gRPC server with
+#                                        configurable --kv-store
+#                                        + --blob-store paths
+#                                        + listen ADDR
+#                                        (default [::1]:9313)
+#                * kv (aliases: key-value, k-v) — direct KV ops
+#                                                without
+#                                                requiring the
+#                                                gRPC server
+#                                                running
+#                * blob                — direct BLOB ops
+#            - KV OPERATIONS:
+#                * get (fetch) KEYS...     get value(s)
+#                * set (put/save/store) KEY VALUE  set value
+#                * delete (remove/rm) KEY  delete by key
+#                * eq (equal/equals) KEYS...   check equality
+#                * not-eq (unique/ne/neq) KEYS...  check inequality
+#            - BLOB OPERATIONS:
+#                * get (fetch) ID [MODE]   get BLOB by id
+#                                          MODE: data | metadata | both
+#                * store (put/save/set) FILE_PATH [METADATA]
+#                                          store BLOB with optional metadata
+#                                          ("-" reads stdin)
+#                * update ID MODE          update BLOB
+#                * delete (remove/rm) ID   delete BLOB
+#                * eq-data IDS...          check data equality
+#                * not-eq-data IDS...      check data inequality
+#            - tonic gRPC FRAMEWORK — uses Sean McArthur's
+#              tonic (the canonical Rust gRPC implementation)
+#              for both server + generated client code
+#            - tonic-build PROTO COMPILATION — generates Rust
+#              code from .proto definitions at build time;
+#              proto/ directory contains schema definitions
+#            - PROCESS-EXIT STATUS for predicates — `eq` /
+#              `eq-data` / `not-eq` / `not-eq-data` use exit
+#              status to indicate result (0 = true, non-zero
+#              = false) for shell-script integration
+#            - STREAMING ASYNC via async-stream — bulk
+#              operations return gRPC streams (e.g., listing
+#              all keys yields a stream of KvEntry messages)
+#            - FEATURE-GATED — `--features sqlite,binary,tracing`
+#              etc. control which backends + CLI binary +
+#              telemetry are compiled in
+#          Used by: AI/ML production teams needing low-latency
+#          configuration + model-weight storage with gRPC
+#          schema enforcement, edge / IoT devices needing
+#          embedded storage with M2M protocol, and as a
+#          reference implementation of tonic + tonic-build +
+#          rusqlite + clap derive + async-stream composition
+#          in Rust gRPC services.
+#
+# Author:  Marcus Eagan (@marcuseagan) + Jacob Pratt
+#          (@jhpratt on GitHub).  Released ~2023; current
+#          version 0.5.0; active development through 2026.
+#          License: Apache-2.0.
+# Source:  https://github.com/buffdb/buffdb
+#          https://github.com/buffdb/buffdb/blob/main/src/cli.rs
+#          https://github.com/buffdb/buffdb/blob/main/Cargo.toml
+#          https://buffdb.com (project site)
+# CLI:     src/cli.rs — uses clap v4 derive (well-documented
+#          elsewhere).  Headline library: **tonic** (the new
+#          variant being documented here, opening Axis 24 —
+#          gRPC).
+# Library: tonic (https://github.com/hyperium/tonic —
+#          "A native gRPC client & server implementation with
+#           async/await support" — Sean McArthur + Hyperium
+#           project team.  Distinct from all previously-
+#           documented Rust libraries by being:
+#              1. RUST-NATIVE gRPC IMPLEMENTATION — tonic is
+#                 the canonical Rust gRPC framework, written
+#                 directly against the gRPC-over-HTTP/2 spec
+#                 (no FFI / no grpc-c bindings).  Distinct
+#                 from grpcio-rs (Cgo bindings to gRPC C++)
+#                 which preceded tonic but added C++
+#                 dependency.
+#              2. ASYNC/AWAIT FROM DAY ONE — tonic was the
+#                 first major Rust gRPC framework built on
+#                 async/await syntax (since Rust 1.39, 2019).
+#                 Distinct from grpcio-rs (callback-based) +
+#                 earlier Rust gRPC experiments.
+#              3. tonic-build PROTO COMPILATION — generates
+#                 Rust types + service traits + client structs
+#                 from .proto files at Cargo build time:
+#                   // build.rs
+#                   fn main() -> Result<(), Box<dyn std::error::Error>> {
+#                       tonic_build::compile_protos("proto/helloworld.proto")?;
+#                       Ok(())
+#                   }
+#                 Generated code uses serde-like idioms;
+#                 services implemented by impl-ing the
+#                 generated trait:
+#                   use helloworld::greeter_server::{Greeter, GreeterServer};
+#                   #[derive(Default)]
+#                   pub struct MyGreeter {}
+#                   #[tonic::async_trait]
+#                   impl Greeter for MyGreeter {
+#                       async fn say_hello(&self, request: Request<HelloRequest>)
+#                           -> Result<Response<HelloReply>, Status> {
+#                           ... }
+#                   }
+#              4. HYPER HTTP/2 BACKEND — tonic uses Sean
+#                 McArthur's hyper for HTTP/2 transport (gRPC
+#                 mandates HTTP/2); same hyper used by reqwest
+#                 (R649 Axis 16 opener).  hyper provides
+#                 connection pooling, multiplexing, flow
+#                 control.
+#              5. tower MIDDLEWARE — tonic services compose
+#                 with tower::Service trait for middleware
+#                 (auth, retry, rate-limit, tracing, metrics).
+#                 Same tower used by axum (Tokio's web
+#                 framework).  Distinct from grpcio-rs (no
+#                 middleware integration).
+#              6. STREAMING — bidirectional streaming via
+#                 futures Stream; client + server can both
+#                 send + receive sequences of messages on a
+#                 single RPC.  Same async stream model as
+#                 tokio-tungstenite (R657 Axis 18).
+#              7. TLS via rustls OR native-tls — opt-in TLS
+#                 via Cargo features; mTLS supported (mutual
+#                 client + server certificates).
+#              8. INTERCEPTORS for cross-cutting concerns —
+#                 tower::Service-based interceptors enable
+#                 distributed tracing (OpenTelemetry), auth
+#                 token validation, request/response logging
+#                 across all RPCs.
+#              9. tonic-reflection FOR REFLECTION — implements
+#                 the gRPC Server Reflection protocol for
+#                 dynamic service discovery (used by grpcurl,
+#                 Postman, BloomRPC).
+#             10. HYPERIUM PROJECT PROVENANCE — Sean McArthur
+#                 + Hyperium team maintain:
+#                   * hyper      — HTTP/1.1 + HTTP/2 backbone
+#                   * reqwest    — high-level HTTP client      (R649)
+#                   * tonic      — gRPC framework               (THIS)
+#                   * tower      — middleware
+#                   * warp       — web framework
+#                 Sean McArthur becomes a 2-LIBRARY AUTHOR in
+#                 the taxonomy (after reqwest R649).  Hyperium
+#                 is the foundational Rust HTTP+gRPC stack.)
+# License: MIT (tonic); Apache-2.0 (buffdb)
+# Status:  tonic — 12,216+ stars on hyperium/tonic, ~100M
+#          crates.io downloads (TOP-30 Rust crate by downloads);
+#          foundational gRPC framework used by:
+#            * Apache OpenDAL (gRPC service ports)
+#            * Apache DataFusion Ballista (distributed query
+#              execution)
+#            * Apache Arrow Flight (high-speed data transport)
+#            * Influx Data IOx (time-series database)
+#            * Vector (Datadog observability pipeline)
+#            * Linkerd2 (some control-plane components)
+#            * Edgee (edge computing platform)
+#            * SurrealDB (multi-model database)
+#            * QuestDB Rust client
+#            * Apollo Router (GraphQL gateway — some adapters)
+#            * Lighthouse (Ethereum consensus client)
+#            * NEAR Protocol (blockchain)
+#            * 5000+ Rust applications
+#          buffdb — 304+ stars on buffdb/buffdb; used by AI/ML
+#          production teams + edge IoT.
+#
+# -----------------------------------------------------------------------------
+# CROSS-LANGUAGE CLI LIBRARY TAXONOMY MILESTONE — RUST CROSSES TO 79 +
+#                                                  AXIS 24 (gRPC) OPENS
+# -----------------------------------------------------------------------------
+# With this completion the cross-language CLI library taxonomy documents
+# the 79TH Rust CLI library variant.  Rust climbs from 78 to 79
+# documented libraries (tonic via buffdb).  Rust **breaks the
+# three-way tie** at 78 and goes SOLO at 79 (Rust=79, Go=78,
+# TS-Node=78).  New leaderboard: Rust=79, Go=78, TypeScript-Node=78
+# (Rust solo at the top).  Taxonomy now spans 414 cross-language
+# CLI library variants across 103 documented languages.
+#
+# Pattern: R681 Rust=78 (jsonschema → Axis 23 OPENS) → R682 Go=78
+# (santhosh-tekuri/jsonschema) → R683 TS-Node=78 (ajv → Axis 23
+# 1/1/1) → R684 103rd language (CafeOBJ / cafeobj) → R685 Rust=79
+# (tonic THIS — AXIS 24 OPENS) → expected R686 Go=79 → R687
+# TS-Node=79 → R688 104th language.  This is the 1st of 3 leader
+# bumps in the current segment.
+#
+# This completion OPENS Axis 24 (gRPC) — the 24th documented
+# cross-language CLI library axis.  Axis 24 covers the cross-
+# language pattern of "library used by CLIs to implement gRPC
+# clients and servers" — applicable to microservice CLIs
+# (kubectl, helm port-forwarding), database CLIs (CockroachDB
+# cli, etcdctl), distributed-system CLIs (Linkerd, Vector),
+# and any CLI that talks gRPC.
+#
+#   Axis 24 (gRPC) variants:
+#     - tonic (hyperium/tonic) — R685 (THIS) — Rust native gRPC
+#       client+server; async/await; tonic-build proto
+#       compilation; hyper HTTP/2 backend; tower middleware;
+#       Sean McArthur / Hyperium ecosystem
+#     - (Go variant pending in R686 — likely google.golang.org/
+#       grpc, the canonical Go gRPC implementation by Google)
+#     - (TS-Node variant pending in R687 — likely @grpc/grpc-js,
+#       the pure-JS gRPC client by Google)
+#
+# Axis 24 distribution: Rust=1, Go=0, TS-Node=0.  Will reach 1/1/1
+# three-language symmetry by end of R687.
+#
+# Sean McArthur / Hyperium ecosystem note (UPDATED):
+#   Sean McArthur becomes a 2-LIBRARY AUTHOR in the taxonomy:
+#     * reqwest (R649 — Axis 16 — HTTP Clients)
+#     * tonic   (R685 — Axis 24 — gRPC)        (THIS)
+#   Both maintained under hyperium/ on GitHub.  Hyperium
+#   provides the foundational Rust HTTP + gRPC stack:
+#     - hyper      — HTTP/1.1 + HTTP/2 (used by reqwest + tonic)
+#     - reqwest    — high-level HTTP client                       (R649)
+#     - tonic      — gRPC over HTTP/2                              (THIS)
+#     - tower      — middleware abstraction
+#     - warp       — web framework
+#     - tower-http — HTTP middleware (CORS, compression, etc.)
+#   Sean McArthur's contributions span the entire Rust networking
+#   layer.  Distinct from other multi-library authors:
+#   David Tolnay (serde / thiserror / anyhow / serde_yaml — 4),
+#   Sindre Sorhus (chalk / ora / etc. — 5+), Vitaly Puzrin
+#   (markdown-it / js-yaml — 2), Vincent Prouillet (tera /
+#   config-rs — 2).
+#
+# Axis distribution summary after R685:
+#   * Axis 1  (Argparse):     Rust=N  / Go=N  / TS-Node=N
+#   * Axis 4  (Colors):       Rust=N  / Go=N  / TS-Node=N
+#   * Axis 5  (Progress):     Rust=N  / Go=N  / TS-Node=N
+#   * Axis 6  (Errors):       Rust=6  / Go=N  / TS-Node=N
+#   * Axis 7  (Boxes):        Rust=1  / Go=1  / TS-Node=1   (1/1/1)
+#   * Axis 8  (Prompts):      Rust=1  / Go=1  / TS-Node=1   (1/1/1)
+#   * Axis 9  (Logging):      Rust=6  / Go=6  / TS-Node=6   (6/6/6)
+#   * Axis 10 (Tables):       Rust=2  / Go=2  / TS-Node=2   (2/2/2)
+#   * Axis 11 (Humanization): Rust=1  / Go=1  / TS-Node=1   (1/1/1)
+#   * Axis 12 (Text Wrap):    Rust=1  / Go=1  / TS-Node=1   (1/1/1)
+#   * Axis 13 (Config Files): Rust=2  / Go=2  / TS-Node=2   (2/2/2)
+#   * Axis 14 (Paths):        Rust=2  / Go=2  / TS-Node=2   (2/2/2)
+#   * Axis 15 (Date/Time):    Rust=1  / Go=1  / TS-Node=1   (1/1/1)
+#   * Axis 16 (HTTP Clients): Rust=1  / Go=1  / TS-Node=1   (1/1/1)
+#   * Axis 17 (File Watching): Rust=1 / Go=1  / TS-Node=1   (1/1/1)
+#   * Axis 18 (WebSockets):    Rust=1 / Go=1  / TS-Node=1   (1/1/1)
+#   * Axis 19 (Markdown Parsing): Rust=1 / Go=1 / TS-Node=1 (1/1/1)
+#   * Axis 20 (YAML Parsing):     Rust=1 / Go=1 / TS-Node=1 (1/1/1)
+#   * Axis 21 (Templating Engines): Rust=1/Go=1/TS-Node=1 (1/1/1)
+#   * Axis 22 (Image Processing):   Rust=1/Go=1/TS-Node=1 (1/1/1)
+#   * Axis 23 (JSON Schema Valid):  Rust=1/Go=1/TS-Node=1 (1/1/1)
+#   * Axis 24 (gRPC):              Rust=1 / Go=0 / TS-Node=0 NEW
+#
+# (Leaderboard at R685: Rust=79, Go=78, TS-Node=78 — Rust solo
+# at the top.  Axis 9 / Logging 6/6/6 three-way symmetric.
+# Axes 10 + 13 + 14 at 2/2/2.  Axes 7 + 8 + 11 + 12 + 15 + 16
+# + 17 + 18 + 19 + 20 + 21 + 22 + 23 at 1/1/1.  Axis 24 newly
+# opened at 1/0/0.  Sixteen axes at three-language symmetry.)
+#
+# -----------------------------------------------------------------------------
+#
+# THE buffdb CLI — clap derive + tonic + rusqlite + async-stream
+#
+# buffdb's CLI is in src/cli.rs.  Uses clap v4 derive with
+# nested subcommand groups (Backend value-enum + Command +
+# KvCommand + BlobCommand + BlobGetMode + BlobUpdateMode).
+#
+# Source structure:
+#     #[derive(Debug, Parser)]
+#     struct Args {
+#         #[arg(value_enum, short, long, default_value_t = Backend::default())]
+#         backend: Backend,
+#         #[command(subcommand)]
+#         command: Command,
+#     }
+#
+#     #[derive(Debug, Subcommand)]
+#     enum Command {
+#         #[clap(alias = "serve")] Run(RunArgs),
+#         #[clap(aliases = ["key-value", "k-v"])] Kv(KvArgs),
+#         Blob(BlobArgs),
+#     }
+#
+# Global flags:
+#   -b, --backend BACKEND        storage backend
+#                                (sqlite | duckdb [disabled])
+#
+# Subcommands:
+#   run [--kv-store PATH] [--blob-store PATH] [ADDR]
+#       Run as gRPC server (alias: serve)
+#       Default --kv-store: kv_store.db
+#       Default --blob-store: blob_store.db
+#       Default ADDR: [::1]:9313
+#   kv [-s STORE] <kv-command>
+#       Direct KV operations (aliases: key-value, k-v)
+#       Default -s/--store: kv_store.db
+#       Subcommands: get (fetch), set (put/save/store),
+#                    delete (remove/rm), eq (equal/equals),
+#                    not-eq (unique/ne/neq)
+#   blob [-s STORE] <blob-command>
+#       Direct BLOB operations
+#       Default -s/--store: blob_store.db
+#       Subcommands: get (fetch) ID [MODE], store (put/save/set),
+#                    update ID MODE, delete (remove/rm) ID,
+#                    eq-data IDS..., not-eq-data IDS...
+#       BLOB get MODE: data | metadata | both
+#
+# tonic is used in src/lib.rs + src/backend/* for:
+#   1. Server implementation: KvStoreServer / BlobStoreServer
+#      generated from proto definitions
+#   2. Client SDK generation: KvStoreClient / BlobStoreClient
+#      compiled in build.rs via tonic-build
+#   3. Streaming responses for bulk operations
+#
+# Five-axis distinctness from all previously-documented Rust
+# libraries:
+#
+#   1. gRPC I/O ABSTRACTION — tonic implements gRPC; distinct
+#      from every other Axis.
+#
+#   2. PROTO CODE GENERATION via tonic-build — Rust types
+#      generated from .proto files at compile time.
+#
+#   3. ASYNC/AWAIT FROM DAY ONE — first Rust gRPC framework
+#      designed for async/await syntax.
+#
+#   4. HYPER HTTP/2 BACKEND — shared transport layer with
+#      reqwest (R649).
+#
+#   5. tower MIDDLEWARE INTEGRATION — composes with the same
+#      middleware abstraction used by axum + warp.
+#
+# -----------------------------------------------------------------------------
+#
+# COMMAND-LINE OPTIONS (sourced directly from
+# https://github.com/buffdb/buffdb/blob/main/src/cli.rs
+# clap v4 derive #[command(subcommand)] + #[arg] definitions.)
+# -----------------------------------------------------------------------------
+
+local curcontext="$curcontext" state line ret=1
+typeset -A opt_args
+
+local -a _buffdb_cmds _buffdb_kv_cmds _buffdb_blob_cmds _buffdb_blob_modes
+_buffdb_cmds=(
+    'run:run BuffDB as a gRPC server'
+    'serve:run BuffDB as a gRPC server (alias)'
+    'kv:perform operations on the key-value store'
+    'key-value:perform operations on the key-value store (alias)'
+    'k-v:perform operations on the key-value store (alias)'
+    'blob:perform operations on the BLOB store'
+    'help:show help for a subcommand'
+)
+_buffdb_kv_cmds=(
+    'get:get values for keys'
+    'fetch:get values for keys (alias)'
+    'set:set a value for a key'
+    'put:set a value for a key (alias)'
+    'save:set a value for a key (alias)'
+    'store:set a value for a key (alias)'
+    'delete:delete a value for a key'
+    'remove:delete a value for a key (alias)'
+    'rm:delete a value for a key (alias)'
+    'eq:check if keys have equal values'
+    'equal:check if keys have equal values (alias)'
+    'equals:check if keys have equal values (alias)'
+    'not-eq:check if keys have unique values'
+    'unique:check if keys have unique values (alias)'
+    'ne:check if keys have unique values (alias)'
+    'neq:check if keys have unique values (alias)'
+)
+_buffdb_blob_cmds=(
+    'get:get a BLOB by ID'
+    'fetch:get a BLOB by ID (alias)'
+    'store:store a BLOB'
+    'put:store a BLOB (alias)'
+    'save:store a BLOB (alias)'
+    'set:store a BLOB (alias)'
+    'update:update a BLOB'
+    'delete:delete a BLOB'
+    'remove:delete a BLOB (alias)'
+    'rm:delete a BLOB (alias)'
+    'eq-data:check if BLOBs have equal data'
+    'not-eq-data:check if BLOBs have unique data'
+)
+_buffdb_blob_modes=(
+    'data:get the BLOB data only'
+    'bytes:get the BLOB data (alias)'
+    'metadata:get the BLOB metadata only'
+    'meta:get the BLOB metadata (alias)'
+    'both:get both data and metadata'
+)
+
+_arguments -C \
+    '(-b --backend)'{-b+,--backend=}'[storage backend]:backend:(sqlite duckdb)' \
+    '(- *)'{-h,--help}'[show help]' \
+    '(- *)'{-V,--version}'[show version]' \
+    '1: :->cmd' \
+    '*::arg:->args' \
+    && ret=0
+
+case $state in
+    cmd)
+        _describe -t commands 'buffdb subcommand' _buffdb_cmds && ret=0
+        ;;
+    args)
+        case $words[1] in
+            run|serve)
+                _arguments \
+                    '--kv-store=[location of the KV store]:file:_files' \
+                    '--blob-store=[location of the BLOB store]:file:_files' \
+                    '1:listen address:_default' \
+                    && ret=0
+                ;;
+            kv|key-value|k-v)
+                if (( CURRENT == 2 )); then
+                    _describe -t commands 'kv subcommand' _buffdb_kv_cmds && ret=0
+                else
+                    case $words[2] in
+                        get|fetch|delete|remove|rm|eq|equal|equals|not-eq|unique|ne|neq)
+                            _message 'key' && ret=0 ;;
+                        set|put|save|store)
+                            _message 'key value' && ret=0 ;;
+                    esac
+                fi
+                ;;
+            blob)
+                if (( CURRENT == 2 )); then
+                    _describe -t commands 'blob subcommand' _buffdb_blob_cmds && ret=0
+                else
+                    case $words[2] in
+                        get|fetch) _message 'BLOB ID + optional mode' && ret=0 ;;
+                        store|put|save|set)
+                            _arguments \
+                                '1:file (or - for stdin):_files' \
+                                '2:metadata:_default' \
+                                && ret=0
+                            ;;
+                    esac
+                fi
+                ;;
+            help)
+                _describe -t commands 'subcommand' _buffdb_cmds && ret=0
+                ;;
+        esac
+        ;;
+esac
+
+return ret
