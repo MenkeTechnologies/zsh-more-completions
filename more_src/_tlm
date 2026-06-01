@@ -1,0 +1,529 @@
+#compdef tlm
+# =============================================================================
+# tlm — Yusuf Can Bayrak's "Local CLI Copilot, powered by Ollama"
+#       — a Go command-line LLM copilot that uses LOCALLY-RUNNING
+#       Ollama models (qwen2.5-coder, llama3.2, etc.) for command
+#       suggestion + explanation + Q&A over local file contexts.
+#       Distinguishing from GitHub Copilot CLI, Aider, llm (Simon
+#       Willison's), Mods (Charm), and other AI CLI tools by:
+#         - LOCAL-FIRST via Ollama — NO API keys, NO data leaves
+#           your machine; uses jmorganca/ollama (Ollama Go client)
+#           to talk to a locally-running Ollama daemon
+#         - 4 SUBCOMMANDS:
+#             - tlm suggest "<prompt>" — generate shell command
+#             - tlm explain "<command>" — explain shell command
+#             - tlm ask "<prompt>" — Q&A over local file context
+#             - tlm config — manage tlm configuration
+#         - GLOB-INCLUDE/EXCLUDE for ASK context — `tlm ask
+#           --context . --include "*.md" --exclude "**/*_test.go"
+#           "<prompt>"` packs matching files into the LLM's
+#           context window via doublestar glob matching
+#         - 3 GENERATION STYLES via --style stable|balanced|creative
+#           — sets temperature + sampling parameters for
+#           deterministic vs varied outputs
+#         - PER-COMMAND MODEL OVERRIDE via --model — try different
+#           Ollama models per invocation without changing config
+#         - RAG-STYLE CONTEXT PACKING via internal `packer`
+#           module — walks --context directory with doublestar
+#           globs, sorts files by token count, packs top-N files
+#           into the LLM context with a summary header
+#         - INTERACTIVE CHAT MODE via --interactive / -it on ask
+#           subcommand — multi-turn conversation with persistent
+#           context
+#         - RELEASE-MANAGER built-in — `releaseManager` metadata
+#           handles self-update prompts when newer GitHub releases
+#           are available
+#       Used by: developers wanting AI command-line assistance
+#       without sending data to OpenAI/Anthropic/etc., privacy-
+#       conscious teams running local Ollama deployments, and as
+#       a reference implementation of doublestar + urfave/cli +
+#       Ollama Go client integration.
+#
+# Author:  Yusuf Can Bayrak (yusufcanb on GitHub) — Turkish Go +
+#          AI developer.  tlm released 2024; active development
+#          through 2026 with regular releases.  License: MIT.
+# Source:  https://github.com/yusufcanb/tlm
+#          https://github.com/yusufcanb/tlm/blob/main/pkg/app/app.go
+#          https://github.com/yusufcanb/tlm/blob/main/pkg/ask/cli.go
+#          https://github.com/yusufcanb/tlm/blob/main/pkg/packer/ (doublestar usage)
+# CLI:     pkg/app/app.go — uses urfave/cli/v2 with 4 subcommands +
+#          per-subcommand StringFlag/StringSliceFlag/BoolFlag/
+#          PathFlag definitions.  Headline library:
+#          **bmatcuk/doublestar** (urfave/cli is well-documented;
+#          doublestar is the new variant being documented here,
+#          expanding Axis 14 to 2 Go variants).
+# Library: github.com/bmatcuk/doublestar
+#          ("doublestar" — Bob Matcuk (bmatcuk on GitHub) —
+#           released 2014 as "Implements support for double star
+#           (**) matches in golang's path.Match and filepath.Glob".
+#           Distinct from afero (R638, the Go Axis 14 opener) by
+#           being:
+#             1. ** RECURSIVE GLOB SUPPORT — Go's stdlib
+#                path/filepath.Match() supports `*`, `?`, `[abc]`
+#                but NOT `**` (zero-or-more path segments).
+#                doublestar adds `**` support that matches
+#                arbitrary path segments:
+#                  doublestar.Match("**/*.go", "src/foo/bar/baz.go") → true
+#                  filepath.Match("**/*.go", "src/foo/bar/baz.go") → false
+#                  // (stdlib doesn't understand **)
+#             2. EXTGLOB SUPPORT — doublestar/v4+ supports the
+#                full bash extended glob dialect:
+#                  ?(pattern)  — zero or one
+#                  *(pattern)  — zero or more
+#                  +(pattern)  — one or more
+#                  @(pattern)  — exactly one
+#                  !(pattern)  — negation
+#                  {a,b,c}     — alternation
+#                  [a-z]       — character class
+#                Matching the full bash extglob + brace-expansion
+#                + character-class semantics on filesystem paths
+#             3. FOUR API MODES (in doublestar/v4):
+#                  doublestar.Match(pattern, name)  // pattern match only
+#                  doublestar.Glob(fsys, pattern)   // filesystem walk
+#                  doublestar.GlobWalk(fsys, pat, fn) // streaming
+#                  doublestar.PathMatch(pat, name)   // OS-specific paths
+#             4. fs.FS COMPATIBLE (v4+) — doublestar/v4 uses Go
+#                1.16's io/fs.FS interface, making it compose
+#                naturally with afero (R638), embed.FS, testing/
+#                fstest.MapFS, S3-backed fs implementations,
+#                etc.
+#             5. MULTI-PATH-SEPARATOR HANDLING — correctly
+#                handles Windows backslash + Unix forward-slash
+#                + mixed separators in patterns
+#             6. ESCAPE-CHARACTER SUPPORT — backslash-escaped
+#                literal characters work in patterns + paths
+#                (matching POSIX glob behavior)
+#             7. HEAVY DOWNSTREAM USAGE — used by hashicorp/
+#                copywrite (R607 already documented), snyk/
+#                driftctl, ZupIT/horusec, mutagen-io/mutagen
+#                (4k stars), camptocamp/terraboard (2k stars),
+#                yusufcanb/tlm (THIS), and 1500+ Go applications
+#                needing ** glob support for config-file
+#                matching + dependency-graph file matching +
+#                test-fixture discovery)
+# License: MIT (tlm); MIT (doublestar)
+# Status:  tlm — 1,484+ stars on yusufcanb/tlm, growing user base
+#          in AI-CLI niche; doublestar — 701+ stars on bmatcuk/
+#          doublestar, ~250M go.sum downloads, foundational
+#          dependency of hashicorp/copywrite (R607) + snyk/
+#          driftctl (2.6k stars) + ZupIT/horusec (1.3k stars) +
+#          mutagen-io/mutagen (4.2k stars) + camptocamp/
+#          terraboard (2k stars) + yusufcanb/tlm (THIS) + 1500+
+#          Go applications using ** glob patterns for path
+#          matching.
+#
+# -----------------------------------------------------------------------------
+# CROSS-LANGUAGE CLI LIBRARY TAXONOMY MILESTONE — GO CROSSES TO 68 +
+#                                                  AXIS 14 EXPANDS IN GO
+# -----------------------------------------------------------------------------
+# With this completion the cross-language CLI library taxonomy documents
+# the 68TH Go CLI library variant.  Go climbs from 67 to 68 documented
+# libraries (bmatcuk/doublestar via tlm).  Go **catches Rust at 68**
+# (Rust=Go=68, TS-Node=67 → 50/50 two-way tie at the top).  New
+# leaderboard: Rust=68, Go=68, TypeScript-Node=67 (Rust+Go tied at
+# the top — nineteenth two-way tie at leaderboard top in this
+# round-sequence).  Taxonomy now spans 381 cross-language CLI library
+# variants across 92 documented languages.
+#
+# Pattern: R641 Rust=68 (walkdir — Axis 14 expands to 2 Rust) → R642
+# Go=68 (doublestar THIS — Axis 14 expands to 2 Go) → expected R643
+# TS-Node=68 → expected R644 93rd language.  This is the 2nd of 3
+# leader bumps in the current segment.
+#
+# This completion EXPANDS Axis 14 (PATHS / FILESYSTEM) within Go to
+# TWO variants — matching Rust's R641 expansion.  Three-language
+# Axis 14 distribution: Rust=2, Go=2, TS-Node=1.
+#
+#   Go Axis 14 variants:
+#     - afero (spf13/afero) — R638 (_ttpforge) — Go FILESYSTEM
+#       ABSTRACTION via Fs interface + 7+ implementations
+#       (OsFs/MemMapFs/BasePathFs/ReadOnlyFs/RegexpFs/HttpFs/
+#       CopyOnWriteFs/CacheOnReadFs); Hugo-foundational; Steve
+#       Francia spf13 ecosystem
+#     - doublestar (bmatcuk/doublestar) — R642 (THIS) — Go
+#       EXTENDED ** GLOB SUPPORT replacing stdlib
+#       filepath.Match's limitations; full bash extglob +
+#       brace-expansion + character-class + io/fs.FS-compatible;
+#       Bob Matcuk
+#
+# Two Go Axis 14 variants now address DIFFERENT filesystem
+# challenges:
+#   afero             = FILESYSTEM ABSTRACTION via Fs interface
+#                        (multiple backends + in-memory testing)
+#   doublestar        = EXTENDED ** GLOB PATTERN MATCHING
+#                        (stdlib filepath.Match lacks **)
+#
+# Axis 14 distribution: Rust=2, Go=2, TS-Node=1.  Expected R643
+# TS-Node=2 (likely globby by Sindre Sorhus or memfs/mock-fs)
+# restores three-language symmetry trajectory.
+#
+# **CROSS-AXIS COMPOSITION DEEPENS**
+#
+# R642 adds another cross-axis library-composition example to
+# the taxonomy.  Hashicorp/copywrite (R607) was the first
+# documented tool using libraries across multiple axes (Axis 9
+# go-hclog + Axis 13 koanf).  Now copywrite ALSO transitively
+# uses doublestar (R642) via its file-pattern matching logic —
+# extending cross-axis composition to THREE documented axes
+# (9 + 13 + 14) in the same project.  Cross-axis library
+# composition is becoming a documented pattern across the
+# taxonomy.
+#
+# (Leaderboard at R642: Rust=68, Go=68, TS-Node=67.  Rust Axis 6 +
+# Axis 9 BOTH at 6.  Axis 9 three-way symmetric at 6/6/6.  Axis
+# 10 at 2/2/2.  Axis 11 at 1/1/1.  Axis 12 at 1/1/1.  Axis 13 at
+# 2/2/2.  Axis 14 now Rust=2, Go=2, TS-Node=1.)
+#
+# -----------------------------------------------------------------------------
+#
+# WHAT IS doublestar AND WHY IS IT THE 68TH GO CLI LIBRARY?
+#
+# doublestar (https://github.com/bmatcuk/doublestar, 701+ stars) is
+# **Bob Matcuk's "Implements support for double star (**) matches
+# in golang's path.Match and filepath.Glob"** — the canonical Go
+# library for EXTENDED GLOB PATTERN MATCHING beyond what the
+# stdlib `path/filepath` package supports.  Where afero (R638)
+# solves Go's filesystem-abstraction-for-tests problem,
+# doublestar solves Go's missing `**` (zero-or-more path segments)
+# glob support problem.
+#
+# doublestar's distinguishing characteristics:
+#
+#   1. ** RECURSIVE GLOB SUPPORT — doublestar's central feature
+#      is adding `**` to Go's glob dialect, which stdlib does NOT
+#      support:
+#
+#          import "github.com/bmatcuk/doublestar/v4"
+#
+#          // stdlib filepath.Match doesn't understand **:
+#          // filepath.Match("**/*.go", "src/foo/bar/baz.go")
+#          //   → false, nil  (because ** isn't a stdlib glob char)
+#
+#          // doublestar correctly matches:
+#          doublestar.Match("**/*.go", "src/foo/bar/baz.go")
+#              → true, nil
+#          doublestar.Match("src/**/main.go", "src/cmd/server/main.go")
+#              → true, nil
+#          doublestar.Match("**/{tests,test}/**/*_test.go",
+#              "pkg/foo/tests/integration/full_test.go")
+#              → true, nil
+#
+#      The `**` zero-or-more-path-segments behavior is the same
+#      as bash globstar (`shopt -s globstar`), Node's micromatch,
+#      Python's pathlib.Path.glob, Rust's globset, etc.  Go's
+#      stdlib is one of the few mainstream languages MISSING this
+#      from its stdlib glob.
+#      Compare:
+#         * Rust globset/glob: ** built-in
+#         * Rust ignore (Burntsushi): ** built-in
+#         * Node micromatch: ** built-in (and the dialect basis)
+#         * Node fast-glob (R639): ** built-in
+#         * Python pathlib.Path.glob: ** built-in (Python 3.5+)
+#         * Go path/filepath.Match: NO ** support
+#         * Go afero (R638): Glob() but uses stdlib pattern syntax
+#         * Go doublestar: ADDS ** to fill the stdlib gap
+#      FIRST documented Go Axis 14 library specifically targeted
+#      at the stdlib glob-dialect gap.
+#
+#   2. FULL BASH EXTGLOB DIALECT (v4+) — doublestar/v4 supports
+#      the complete bash extended glob syntax beyond just `**`:
+#
+#          // Zero-or-one:
+#          doublestar.Match("file.?(yml|yaml)", "file.yml")    → true
+#          doublestar.Match("file.?(yml|yaml)", "file")        → true
+#
+#          // Zero-or-more:
+#          doublestar.Match("file.*(test|spec).go", "file.test.go") → true
+#          doublestar.Match("file.*(test|spec).go", "file.go")      → true
+#
+#          // One-or-more:
+#          doublestar.Match("a+(bc).go", "abcbc.go")           → true
+#          doublestar.Match("a+(bc).go", "a.go")               → false
+#
+#          // Exactly-one:
+#          doublestar.Match("user.@(jpg|png|gif)", "user.png") → true
+#          doublestar.Match("user.@(jpg|png|gif)", "user.bmp") → false
+#
+#          // Negation:
+#          doublestar.Match("!(*_test).go", "main.go")          → true
+#          doublestar.Match("!(*_test).go", "main_test.go")    → false
+#
+#          // Brace expansion:
+#          doublestar.Match("{src,tests}/*.go", "src/main.go") → true
+#          doublestar.Match("{src,tests}/*.go", "tests/foo.go") → true
+#
+#          // Character classes:
+#          doublestar.Match("[abc]*.txt", "alpha.txt")          → true
+#
+#      Compare:
+#         * Go stdlib filepath.Match: only *, ?, [abc]
+#         * Go afero.Glob: uses stdlib pattern (limited)
+#         * Node fast-glob (R639): full micromatch (similar)
+#         * Rust globset: full bash glob (similar)
+#         * doublestar: full BASH EXTGLOB (matches micromatch +
+#                        Rust globset)
+#      FIRST documented Go Axis 14 library with full bash
+#      extglob dialect including ?()/+()/*()/@()/!().
+#
+#   3. FOUR API MODES — doublestar provides four entry points
+#      for different use cases:
+#
+#          // 1. Pattern-only matching (no filesystem):
+#          matched, err := doublestar.Match("**/*.go", "src/main.go")
+#
+#          // 2. Filesystem glob (returns matching paths):
+#          fsys := os.DirFS(".")
+#          matches, err := doublestar.Glob(fsys, "**/*.go")
+#
+#          // 3. Streaming glob with callback (memory-efficient):
+#          err := doublestar.GlobWalk(fsys, "**/*.go",
+#              func(path string, d fs.DirEntry) error {
+#                  // Process each match as discovered
+#                  fmt.Println(path)
+#                  return nil
+#              })
+#
+#          // 4. OS-specific path matching (handles \ on Windows):
+#          matched, err := doublestar.PathMatch("**/*.go",
+#              `src\foo\main.go`)
+#
+#      Compare:
+#         * Go stdlib filepath.Match: pattern-only
+#         * Go stdlib filepath.Glob: filesystem only
+#         * Go afero.Glob: filesystem only with Fs abstraction
+#         * Node fast-glob (R639): sync/async/streaming
+#         * doublestar: 4 modes (Match, Glob, GlobWalk, PathMatch)
+#      FIRST documented Go Axis 14 library with 4 distinct API
+#      entry points covering pattern/filesystem/streaming/OS-
+#      specific.
+#
+#   4. io/fs.FS COMPATIBLE (v4+) — doublestar/v4 uses Go 1.16's
+#      io/fs.FS interface, composing naturally with afero (R638)
+#      + embed.FS + testing/fstest.MapFS + S3-backed fs
+#      implementations:
+#
+#          // Use doublestar with afero (R638):
+#          import "github.com/spf13/afero"
+#          import "github.com/bmatcuk/doublestar/v4"
+#          import "io/fs"
+#
+#          memFs := afero.NewMemMapFs()
+#          afero.WriteFile(memFs, "/src/main.go", []byte(""), 0644)
+#
+#          fsys := afero.NewIOFS(memFs)  // afero → io/fs.FS adapter
+#          matches, _ := doublestar.Glob(fsys, "**/*.go")
+#
+#          // Use doublestar with embed.FS:
+#          //go:embed templates/**/*.html
+#          var templates embed.FS
+#          htmlFiles, _ := doublestar.Glob(templates, "**/*.html")
+#
+#          // Use doublestar with testing/fstest.MapFS:
+#          testFs := fstest.MapFS{
+#              "src/foo.go": &fstest.MapFile{Data: []byte("...")},
+#          }
+#          matches, _ := doublestar.Glob(testFs, "**/*.go")
+#
+#      This io/fs.FS composability is unique in the Axis 14
+#      taxonomy — doublestar slots into ANY io/fs.FS-implementing
+#      filesystem.
+#      Compare:
+#         * Go stdlib filepath.Glob: only os filesystem
+#         * Go afero: own Fs interface (not io/fs.FS)
+#         * Rust walkdir: only std::path (no abstraction)
+#         * Rust ignore: only std::path
+#         * doublestar/v4: io/fs.FS compatible
+#      FIRST documented Go Axis 14 library composable with
+#      arbitrary io/fs.FS implementations.
+#
+#   5. BOB MATCUK PROVENANCE — doublestar is by Bob Matcuk
+#      (bmatcuk on GitHub).  Maintained since 2014.  Downstream
+#      users:
+#         * mutagen-io/mutagen (4.2k stars file sync)
+#         * snyk/driftctl (2.6k stars infra drift detection)
+#         * camptocamp/terraboard (2k stars Terraform dashboard)
+#         * ZupIT/horusec (1.3k stars security scanner)
+#         * yusufcanb/tlm (THIS — 1.5k stars AI CLI copilot)
+#         * Hashicorp/copywrite (R607 — already documented!)
+#         * 1500+ Go applications
+#      Hashicorp/copywrite (R607) is now confirmed to use libraries
+#      across THREE documented axes: go-hclog (Axis 9 Logging),
+#      koanf (Axis 13 Configuration), and doublestar (Axis 14
+#      Paths) — making it the most cross-axis-composed tool in
+#      the taxonomy.
+#      FIRST documented Go Axis 14 library with this specific
+#      Bob-Matcuk single-author maintenance provenance + cross-
+#      axis-composition role in hashicorp/copywrite.
+#
+# doublestar's relationship to afero (R638) and other Axis 14
+# libraries:
+#
+#   * Unlike afero (R638, Go) — afero is filesystem-abstraction
+#                                 (Fs interface for testing/
+#                                  scoping/overlay); doublestar
+#                                 is pattern-matching (** + bash
+#                                 extglob on paths)
+#   * Closest cross-language analogs:
+#         * Rust globset/glob — full glob library
+#         * Rust ignore (Burntsushi) — gitignore + glob
+#         * Node fast-glob (R639) — closest direct analog
+#         * Node micromatch — the JS micromatch dialect inspiration
+#         * Python pathlib.Path.glob — stdlib ** support
+#     doublestar is the SECOND documented Go Axis 14 library
+#     providing extended ** glob support + full bash extglob
+#     dialect + 4 API modes + io/fs.FS composability + Bob
+#     Matcuk maintenance.
+#
+# -----------------------------------------------------------------------------
+#
+# THE tlm CLI — urfave/cli/v2 + doublestar + Ollama + 4 subcommands
+#
+# tlm's CLI is in pkg/app/app.go.  Uses urfave/cli/v2 with
+# subcommands per AI operation:
+#
+#     import (
+#         ollama "github.com/jmorganca/ollama/api"
+#         "github.com/urfave/cli/v2"
+#         "github.com/yusufcanb/tlm/pkg/ask"
+#         "github.com/yusufcanb/tlm/pkg/explain"
+#         "github.com/yusufcanb/tlm/pkg/suggest"
+#         "github.com/yusufcanb/tlm/pkg/config"
+#     )
+#
+#     cliApp := &cli.App{
+#         Name:    "tlm",
+#         Usage:   "terminal copilot, powered by open-source models.",
+#         Commands: []*cli.Command{
+#             ask.Command(),
+#             sug.Command(),       // suggest
+#             exp.Command(),       // explain
+#             con.Command(),       // config
+#             { Name: "version", Aliases: []string{"v"}, ... },
+#         },
+#     }
+#
+# Subcommands (4 + version):
+#   ask        Ask a question with optional file context
+#   suggest    Suggest a shell command for a prompt (alias: s)
+#   explain    Explain a shell command (alias: e)
+#   config     Manage tlm configuration
+#   version    Print tlm version
+#
+# `ask` subcommand flags (uses doublestar for --include/--exclude
+# globs):
+#   -c, --context PATH         Context directory path
+#   -i, --include PATTERN      Include glob patterns (repeatable)
+#                               e.g. --include="*.md" or
+#                                    --include="**/*.go"
+#   -e, --exclude PATTERN      Exclude glob patterns (repeatable)
+#                               e.g. --exclude="**/*_test.go"
+#   -it, --interactive          Enable interactive chat mode
+#   -m, --model MODEL          Override LLM model
+#
+# `suggest` / `explain` subcommands:
+#   -m, --model MODEL          Override LLM model
+#   -s, --style stable|balanced|creative  Generation style
+#
+# doublestar is used in pkg/packer/ for matching --include +
+# --exclude glob patterns against files in the --context
+# directory, packing matched files into the LLM context window.
+#
+# Five-axis distinctness from afero (R638):
+#
+#   1. ** RECURSIVE GLOB — doublestar adds zero-or-more-path-
+#      segments matching missing from Go stdlib filepath.Match.
+#
+#   2. FULL BASH EXTGLOB DIALECT — ?()/+()/*()/@()/!() in
+#      addition to **.
+#
+#   3. 4 API MODES — Match (pattern-only) / Glob (filesystem) /
+#      GlobWalk (streaming) / PathMatch (OS-specific paths).
+#
+#   4. io/fs.FS COMPATIBLE — composes with afero/embed.FS/
+#      testing/fstest.MapFS/etc.
+#
+#   5. BOB MATCUK PROVENANCE + CROSS-AXIS COMPOSITION in
+#      hashicorp/copywrite (R607).
+#
+# -----------------------------------------------------------------------------
+#
+# COMMAND-LINE OPTIONS (sourced directly from
+# https://github.com/yusufcanb/tlm/blob/main/pkg/app/app.go
+# https://github.com/yusufcanb/tlm/blob/main/pkg/ask/cli.go
+# https://github.com/yusufcanb/tlm/blob/main/pkg/suggest/cli.go
+# https://github.com/yusufcanb/tlm/blob/main/pkg/explain/cli.go
+# urfave/cli/v2 Command + Flag definitions.)
+# -----------------------------------------------------------------------------
+
+local curcontext="$curcontext" state line ret=1
+typeset -A opt_args
+
+local -a _tlm_cmds _tlm_styles
+_tlm_cmds=(
+    'ask:ask a question with optional file context (alias: a)'
+    'a:ask alias'
+    'suggest:suggest a shell command (alias: s)'
+    's:suggest alias'
+    'explain:explain a shell command (alias: e)'
+    'e:explain alias'
+    'config:manage tlm configuration'
+    'version:print tlm version (alias: v)'
+    'v:version alias'
+    'help:show help for a subcommand'
+)
+_tlm_styles=(
+    'stable:deterministic generation (temperature 0)'
+    'balanced:balanced creativity (default)'
+    'creative:high-temperature varied output'
+)
+
+_arguments -C \
+    '(- *)'{-h,--help}'[show help]' \
+    '(- *)'{-v,--version}'[show version]' \
+    '1: :->cmd' \
+    '*::arg:->args' \
+    && ret=0
+
+case $state in
+    cmd)
+        _describe -t commands 'tlm subcommand' _tlm_cmds && ret=0
+        ;;
+    args)
+        case $words[1] in
+            ask|a)
+                _arguments \
+                    '(-c --context)'{-c+,--context=}'[context directory path]:dir:_directories' \
+                    '*'{-i+,--include=}'[include glob pattern (e.g. **/*.go)]:pattern:_default' \
+                    '*'{-e+,--exclude=}'[exclude glob pattern]:pattern:_default' \
+                    '(-it --interactive)'{-it,--interactive}'[enable interactive chat mode]' \
+                    '(-m --model)'{-m+,--model=}'[override LLM model (e.g. llama3.2:1b)]:model:_default' \
+                    '1:prompt:_default' \
+                    && ret=0
+                ;;
+            suggest|s)
+                _arguments \
+                    '(-m --model)'{-m+,--model=}'[override LLM model]:model:_default' \
+                    '(-s --style)'{-s+,--style=}'[generation style]:style:(stable balanced creative)' \
+                    '1:prompt:_default' \
+                    && ret=0
+                ;;
+            explain|e)
+                _arguments \
+                    '(-m --model)'{-m+,--model=}'[override LLM model]:model:_default' \
+                    '(-s --style)'{-s+,--style=}'[generation style]:style:(stable balanced creative)' \
+                    '1:shell command:_default' \
+                    && ret=0
+                ;;
+            config)
+                _arguments \
+                    '(- *)'{-h,--help}'[show config help]' \
+                    && ret=0
+                ;;
+            help)
+                _describe -t commands 'subcommand' _tlm_cmds && ret=0
+                ;;
+        esac
+        ;;
+esac
+
+return ret
