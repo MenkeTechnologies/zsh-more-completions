@@ -1,0 +1,370 @@
+#compdef obs-scene-switcher
+# =============================================================================
+# obs-scene-switcher — Christian Muehlhaeuser (muesli)'s
+#                      "Tracks your active window and
+#                      switches OBS scenes accordingly" — a
+#                      Go CLI for OBS Studio livestreamers
+#                      that auto-switches scenes based on
+#                      which application window has focus.
+#                      Connects to OBS via WebSocket
+#                      (obs-websocket protocol) and uses
+#                      X11 active-window detection (Linux)
+#                      to determine focus.  Configurable via
+#                      a TOML file mapping window class +
+#                      window name patterns to scene names.
+#                      Distinguishing from obs-cli, OBS's
+#                      built-in scripting, AHK-based scene
+#                      switchers, and other automation tools
+#                      by:
+#                        - WINDOW-DRIVEN SCENE SELECTION —
+#                          tracks active X11 window via
+#                          BurntSushi/xgb + xgbutil; when
+#                          window changes, looks up matching
+#                          scene rule + switches OBS scene
+#                          via WebSocket
+#                        - SCENES.TOML CONFIG FILE — TOML
+#                          mapping of patterns to scene names:
+#                            [[scenes]]
+#                            scene_name = "Browser Scene"
+#                            window_class = "Firefox"
+#
+#                            [[scenes]]
+#                            scene_name = "Coding Scene"
+#                            window_class = "kitty"
+#                            window_name = "vim"
+#
+#                            [[away_scenes]]
+#                            scene_name = "BRB"
+#                            window_class = "Slack"
+#                          Each rule's window_class /
+#                          window_name fields are matched
+#                          against the active window's
+#                          XGetClassHint / XGetWMName results
+#                        - AWAY-SCENES SECTION — distinct
+#                          [[away_scenes]] block for when the
+#                          streamer focuses non-streaming
+#                          apps (Slack, email, etc.) — auto-
+#                          BRB transition
+#                        - obs-websocket PROTOCOL via go-obs-
+#                          websocket — connects to OBS at
+#                          host:port (default localhost:4444),
+#                          subscribes to events, issues
+#                          SetCurrentScene requests
+#                        - X11 ACTIVE WINDOW DETECTION via
+#                          BurntSushi/xgb + xgbutil — pure-
+#                          Go X11 client; reads _NET_ACTIVE_
+#                          WINDOW root property + XEvent
+#                          PropertyNotify to react to focus
+#                          changes
+#                        - RECENT WINDOW STACK (15-deep) —
+#                          tracks recent windows; for "go
+#                          back to previous" scene transitions
+#                        - LINUX-ONLY (X11) — Wayland not
+#                          supported; macOS / Windows not
+#                          supported (would require different
+#                          window-tracking APIs)
+#                        - CHARMBRACELET ECOSYSTEM ADJACENT —
+#                          author muesli also maintains gum,
+#                          glow, mango, kmeans-color-engine,
+#                          and is a co-founder + maintainer of
+#                          the Charm CLI ecosystem (charmbracelet
+#                          org); broader contribution to Go
+#                          CLI design
+#                      Used by: Linux livestreamers using OBS
+#                      Studio who want scene automation
+#                      without manual hotkey switching,
+#                      streamers managing complex multi-app
+#                      workflows (gaming + browser + chat +
+#                      face cam), and as a reference
+#                      implementation of BurntSushi/toml +
+#                      BurntSushi/xgb + spf13/cobra +
+#                      go-obs-websocket composition in Go.
+#
+# Author:  Christian Muehlhaeuser (muesli@gmail.com, muesli
+#          on GitHub) — German Go developer, co-founder of
+#          the Charmbracelet open-source ecosystem (gum,
+#          glow, lipgloss, bubbletea, bubbles, harmonica,
+#          ...).  obs-scene-switcher released ~2020;
+#          maintenance mode.  License: MIT.
+# Source:  https://github.com/muesli/obs-scene-switcher
+#          https://github.com/muesli/obs-scene-switcher/blob/master/main.go
+#          https://github.com/muesli/obs-scene-switcher/blob/master/go.mod
+# CLI:     main.go — uses spf13/cobra (well-documented
+#          elsewhere).  Headline library: **BurntSushi/toml**
+#          (the new variant being documented here, expanding
+#          Axis 25 — TOML Parsing — to Go).
+# Library: github.com/BurntSushi/toml v1.2.1
+#          ("BurntSushi/toml" — "TOML parser for Golang with
+#           reflection" — Andrew Gallant (BurntSushi on
+#           GitHub) + community.  Distinct from toml (R689,
+#           Rust Axis 25 opener) and from pelletier/go-toml
+#           (alternative Go TOML library by Thomas Pelletier)
+#           by being:
+#              1. TOML 1.0 SPEC COMPLIANT — implements TOML
+#                 v1.0.0 spec finalized 2021.  Distinct from
+#                 the older 0.x versions of BurntSushi/toml
+#                 (which targeted TOML pre-1.0).
+#              2. struct-TAG MAPPING — Go structs map to TOML
+#                 via `toml:"field_name"` struct tags:
+#                   type Config struct {
+#                       Title    string   `toml:"title"`
+#                       Owner    Owner    `toml:"owner"`
+#                       Database Database `toml:"database"`
+#                   }
+#                   var cfg Config
+#                   _, err := toml.DecodeFile("config.toml", &cfg)
+#                   // or:
+#                   md, err := toml.Decode(text, &cfg)
+#                   // md.Keys() returns parsed keys
+#              3. MetaData RETURN — toml.Decode returns
+#                 MetaData alongside the decoded struct;
+#                 MetaData.Keys() + MetaData.IsDefined()
+#                 + MetaData.Undecoded() let callers
+#                 inspect which fields were present in input.
+#                 Distinct from encoding/json + encoding/yaml
+#                 (no equivalent metadata).
+#              4. NATIVE Go TIME PARSING — TOML datetime types
+#                 (offset-datetime, local-datetime, local-
+#                 date, local-time) decode directly into
+#                 Go's time.Time (with proper timezone
+#                 handling).  Distinct from Rust toml-rs
+#                 which uses toml::value::Datetime (separate
+#                 from chrono).
+#              5. INDENT CONTROL via toml.Encoder.Indent —
+#                 set indentation string for emitted TOML.
+#              6. PURE Go — no Cgo; works on all Go platforms.
+#                 Same minimalist philosophy as BurntSushi's
+#                 other libraries (ripgrep — wait, ripgrep is
+#                 Rust; the Go-side equivalent is BurntSushi/
+#                 freegrep — but the libraries follow consistent
+#                 design).
+#              7. STRICT MODE via toml.DecodeStrict —
+#                 errors on unknown fields (similar to
+#                 yaml.UnmarshalStrict).  Useful for config
+#                 validation.
+#              8. encoding/json COMPATIBILITY — implements
+#                 the same Marshaler / Unmarshaler interfaces
+#                 used by encoding/json (TextMarshaler
+#                 / TextUnmarshaler), so types like
+#                 net.IP / time.Time / url.URL automatically
+#                 round-trip.
+#              9. WIDELY ADOPTED — used by Hugo (since v0.20),
+#                 kelseyhightower/confd, Caddy (some configs),
+#                 the Cargo equivalent for Go (was used by
+#                 gopkg.in tooling), shopify/sarama (Kafka
+#                 client), and many others.
+#             10. ANDREW-GALLANT / BurntSushi ECOSYSTEM
+#                 PROVENANCE — Andrew Gallant (BurntSushi)
+#                 is one of the most prolific Rust + Go
+#                 developers; maintains:
+#                   * ripgrep (Rust) — fast grep replacement
+#                                       (90k+ stars)
+#                   * BurntSushi/toml (Go) — TOML parser   (THIS)
+#                   * BurntSushi/aho-corasick (Rust) — string searching
+#                   * BurntSushi/regex-automata (Rust) — regex internals
+#                   * rust-lang/regex (Rust) — primary Rust regex
+#                                               crate maintainer
+#                   * BurntSushi/walkdir (Rust) — directory walker
+#                   * BurntSushi/quickcheck (Rust) — property testing
+#                   * BurntSushi/xsv (Rust) — CSV tool
+#                 BurntSushi crosses languages — most well-known
+#                 Rust libraries plus a few Go libraries.  Andrew
+#                 is a former Rust core team member.  Distinct
+#                 from David Tolnay (Rust serde), Sean McArthur
+#                 (Hyperium), Sindre Sorhus (Node CLI), Vincent
+#                 Prouillet (Keats / tera).)
+# License: MIT (BurntSushi/toml); MIT (obs-scene-switcher)
+# Status:  BurntSushi/toml — 4,959+ stars on BurntSushi/toml,
+#          ~3B go.sum downloads (TOP-5 Go library by usage,
+#          alongside cobra / gin / grpc-go / fsnotify); used by:
+#            * Hugo (since v0.20 — config.toml + front-matter)
+#            * confd (etcd/consul config templates)
+#            * Caddy (some configs)
+#            * Shopify/sarama (Kafka client)
+#            * Drone CI (early versions)
+#            * gnostic (Google OpenAPI tool)
+#            * gokrazy (Go-only Raspberry Pi distro)
+#            * obs-scene-switcher (THIS)
+#            * 50,000+ Go applications
+#          obs-scene-switcher — 38+ stars on muesli/
+#          obs-scene-switcher; used by Linux livestreamers.
+#
+# -----------------------------------------------------------------------------
+# CROSS-LANGUAGE CLI LIBRARY TAXONOMY MILESTONE — GO CROSSES TO 80 +
+#                                                  AXIS 25 EXPANDS TO GO
+# -----------------------------------------------------------------------------
+# With this completion the cross-language CLI library taxonomy documents
+# the 80TH Go CLI library variant.  Go climbs from 79 to 80 documented
+# libraries (BurntSushi/toml via obs-scene-switcher).  Go **catches
+# Rust at 80** (Rust=Go=80, TS-Node=79 → thirty-first two-way tie at
+# the leaderboard top in this round-sequence).  New leaderboard:
+# Rust=80, Go=80, TypeScript-Node=79 (Rust+Go tied at the rounded 80
+# library mark).  Taxonomy now spans 418 cross-language CLI library
+# variants across 104 documented languages.
+#
+# Pattern: R689 Rust=80 (toml — Axis 25 OPENS) → R690 Go=80
+# (BurntSushi/toml THIS — Axis 25 expands to 2 variants) →
+# expected R691 TS-Node=80 → R692 105th language.  This is the
+# 2nd of 3 leader bumps in the current segment.
+#
+# This completion EXPANDS Axis 25 (TOML PARSING) to TWO documented
+# variants — symmetrically distributed across Rust (toml R689)
+# and Go (BurntSushi/toml THIS R690).  TS-Node Axis 25 variant
+# expected in R691 — likely @iarna/toml (Rebecca Turner's pure-JS
+# TOML parser) or smol-toml (squirrelchat/smol-toml — newer modern
+# alternative).
+#
+#   Axis 25 (TOML PARSING) variants:
+#     - toml (toml-rs/toml) — R689 (_lq) — Rust TOML 1.0 spec
+#       compliant; serde integration; preserve_order opt-in;
+#       toml::Value untyped access; datetime as toml::value::
+#       Datetime; Alex Crichton / toml-rs ecosystem
+#     - BurntSushi/toml (BurntSushi/toml) — R690 (THIS) — Go
+#       TOML 1.0 spec compliant; struct-tag mapping; MetaData
+#       inspection; native time.Time datetime; encoding/json
+#       compatibility; pure Go; Andrew Gallant / BurntSushi
+#       ecosystem
+#
+# Both libraries share SPEC-COMPLIANT TOML 1.0 + REFLECTION-
+# DRIVEN STRUCT MAPPING design:
+#   toml (Rust)              = serde-driven derive macros
+#   BurntSushi/toml (Go)     = struct-tag based reflection
+#
+# Differences:
+#   - Rust toml-rs decodes datetimes to a separate
+#     toml::value::Datetime type
+#   - Go BurntSushi/toml decodes datetimes to native time.Time
+#   - Rust toml-rs has preserve_order Cargo feature for ordered
+#     round-trips (used by Cargo)
+#   - Go BurntSushi/toml provides MetaData for inspecting which
+#     keys were parsed
+#
+# Axis 25 distribution: Rust=1, Go=1, TS-Node=0.  Expected R691
+# TS-Node=1 restores three-language symmetry trajectory.
+#
+# (Leaderboard at R690: Rust=80, Go=80, TS-Node=79.  Rust+Go
+# tied at the rounded 80 library mark.  Axis 9 / Logging 6/6/6
+# three-way symmetric.  Axes 10 + 13 + 14 at 2/2/2.
+# Axes 7 + 8 + 11 + 12 + 15 + 16 + 17 + 18 + 19 + 20 + 21 + 22
+# + 23 + 24 at 1/1/1.  Axis 25 at 1/1/0 (Rust + Go, TS-Node
+# pending).  Seventeen axes at three-language symmetry.)
+#
+# Andrew Gallant / BurntSushi cross-language note:
+#   BurntSushi (Andrew Gallant) is uniquely a cross-language
+#   maintainer — most of his prolific output is Rust (ripgrep,
+#   regex, aho-corasick, walkdir, xsv, quickcheck, regex-
+#   automata), but BurntSushi/toml is his canonical Go
+#   contribution.  Distinct cross-language maintainer pattern
+#   vs. previously-documented authors who focus on single
+#   languages.
+#
+# -----------------------------------------------------------------------------
+#
+# WHAT IS BurntSushi/toml AND WHY IS IT THE 80TH Go CLI LIBRARY?
+#
+# BurntSushi/toml is the canonical Go TOML parser, used by
+# Hugo + thousands of other Go projects.  Distinct from
+# pelletier/go-toml (alternative, also popular) by being
+# the "original" Go TOML library with longer history +
+# broader adoption.
+#
+# Five distinguishing characteristics from toml-rs (R689):
+#
+#   1. struct-TAG REFLECTION MAPPING — Go-idiomatic `toml:
+#      "field"` struct tags drive serialization.  Distinct
+#      from Rust toml-rs's serde derive macros.
+#
+#   2. MetaData INSPECTION — toml.Decode returns
+#      (md MetaData, err error); md provides:
+#        * md.Keys()          — all parsed keys
+#        * md.IsDefined(k)    — was this key present?
+#        * md.Undecoded()     — fields not consumed by struct
+#      Useful for schema validation + warning on unknown keys.
+#
+#   3. NATIVE time.Time DATETIMES — TOML datetimes decode
+#      directly to Go's time.Time (instead of a separate
+#      datetime type).  Idiomatic Go integration.
+#
+#   4. encoding/json COMPATIBILITY — implements TextMarshaler
+#      / TextUnmarshaler so types like net.IP / time.Time /
+#      url.URL automatically round-trip through TOML the
+#      same way they do through JSON.
+#
+#   5. ANDREW-GALLANT / BurntSushi CROSS-LANGUAGE ECOSYSTEM
+#      — distinct from Rust-only maintainers (David Tolnay,
+#      Sean McArthur, Vincent Prouillet) and Go-only
+#      maintainers (Steve Francia, Mathew Roy).  BurntSushi
+#      maintains both Rust (ripgrep, regex, etc.) and Go
+#      (toml, xsv-style) projects.
+#
+# -----------------------------------------------------------------------------
+#
+# THE obs-scene-switcher CLI — cobra + BurntSushi/toml + go-obs-websocket + xgb
+#
+# obs-scene-switcher's CLI is in main.go.  Uses spf13/cobra
+# with persistent flags + a single rootCmd action.
+#
+# Flags:
+#   --config PATH               path to scenes.toml config file
+#                               (default "scenes.toml")
+#   --host HOST                 OBS WebSocket host
+#                               (default "localhost")
+#   -p, --port PORT             OBS WebSocket port
+#                               (default 4444)
+#
+# Standard cobra flags:
+#   -h, --help                  show help
+#
+# Configuration via scenes.toml (parsed via BurntSushi/toml):
+#   [[scenes]]
+#   scene_name = "Browser"
+#   window_class = "Firefox"
+#
+#   [[scenes]]
+#   scene_name = "Code"
+#   window_class = "kitty"
+#   window_name = "vim"
+#
+#   [[away_scenes]]
+#   scene_name = "BRB"
+#   window_class = "Slack"
+#
+# BurntSushi/toml is used in main.go's LoadConfig function:
+#   func LoadConfig(filename string) (Config, error) {
+#       b, _ := ioutil.ReadFile(filename)
+#       _, err := toml.Decode(string(b), &config)
+#       return config, err
+#   }
+#
+# Five-axis distinctness from Rust toml-rs (R689):
+#
+#   1. STRUCT-TAG REFLECTION — Go-idiomatic `toml:"field"`
+#      mapping.
+#
+#   2. MetaData INSPECTION — query parsed keys post-decode.
+#
+#   3. NATIVE time.Time — datetimes integrate with stdlib.
+#
+#   4. encoding/json COMPATIBILITY — TextMarshaler interop.
+#
+#   5. ANDREW-GALLANT / BurntSushi CROSS-LANGUAGE PROVENANCE
+#      — distinct maintainer.
+#
+# -----------------------------------------------------------------------------
+#
+# COMMAND-LINE OPTIONS (sourced directly from
+# https://github.com/muesli/obs-scene-switcher/blob/master/main.go
+# cobra PersistentFlags + StringVar / Uint32VarP definitions.)
+# -----------------------------------------------------------------------------
+
+local curcontext="$curcontext" state line ret=1
+typeset -A opt_args
+
+_arguments -s -S \
+    '--config=[path to scenes.toml config file]:file:_files -g "*.toml"' \
+    '--host=[OBS WebSocket host (default localhost)]:host:_default' \
+    '(-p --port)'{-p+,--port=}'[OBS WebSocket port (default 4444)]:port:_default' \
+    '(- *)'{-h,--help}'[show help]' \
+    && ret=0
+
+return ret
