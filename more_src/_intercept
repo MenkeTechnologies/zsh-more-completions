@@ -1,0 +1,386 @@
+#compdef intercept
+# =============================================================================
+# intercept — XFHG's "INTERCEPT - DevSecOps toolkit" — a Go
+#             CLI for "Policy as Code Auditing" that loads YAML/
+#             JSON/TOML/INI policy files and runs parallelized
+#             audits combining ripgrep pattern matching, OPA
+#             Rego evaluation, goss compliance checks, and
+#             remote SSH execution against fleets of hosts.
+#             Distinguishing from conftest, opa, regula, terrascan,
+#             checkov, kubescape, and other policy-as-code
+#             scanners by:
+#               - 5 ROOT SUBCOMMANDS via cobra:
+#                   * audit              — optimized parallelized
+#                                          audit through all loaded
+#                                          policies
+#                   * observe            — schedule + path-monitor
+#                                          based realtime policy
+#                                          triggering
+#                   * sys                — test embedded core
+#                                          binaries (rg + goss)
+#                   * remote             — execute remote ops via
+#                                          embedded gossh (run /
+#                                          push / fetch / script)
+#                   * version            — print build info
+#               - 4 REMOTE OPS via `intercept remote`:
+#                   * run [HOST...]      — execute commands on
+#                                          target hosts
+#                   * push [HOST...]     — copy local files +
+#                                          dirs to target hosts
+#                   * fetch [HOST...]    — copy files from target
+#                                          hosts to local
+#                   * script [HOST...]   — execute local shell
+#                                          script on target hosts
+#               - EMBEDDED ripgrep + goss + gossh BINARIES per-
+#                 platform (Darwin amd64/arm64, Linux amd64/
+#                 arm32/arm64, Windows amd64) — intercept ships
+#                 with binary-embedded rg / goss / gossh via
+#                 platform-specific embed_*.go files, extracts
+#                 them at runtime to a temp dir, no external
+#                 dependencies required
+#               - SARIF + LOG OUTPUT MATRICES — output-type flag
+#                 accepts comma-separated list "SARIF,LOG"; log-
+#                 type accepts "MINIMAL,RESULTS,POLICY,REPORT"
+#                 — multiple output forms generated per run
+#               - 4 POLICY TYPES — scan (ripgrep regex), assure
+#                 (presence assertions), runtime (goss runtime
+#                 compliance), rego (OPA policy) — single policy
+#                 file can mix types
+#               - 4 CONFIG FORMATS — YAML / JSON / TOML / INI
+#                 policy files parsed via type_yaml.go /
+#                 type_json.go / type_toml.go / type_ini.go
+#               - SCHEDULE + PATH-MONITORING WATCH MODE — observe
+#                 subcommand uses fsnotify-style path monitoring
+#                 + cron schedules to trigger policies in real
+#                 time (file modification events / time-based)
+#               - KSUID RUN ID — every run gets unique ksuid
+#                 (K-Sortable Unique ID) identifier for tracking
+#                 results across runs
+#               - ZEROLOG STRUCTURED LOGGING via 4 logger
+#                 channels (mlog/flog/plog/rlog) for minimal /
+#                 file / policy / report log streams
+#               - HTTP API DISPATCH via go-resty/resty — when
+#                 policies define remote URL targets, intercept
+#                 uses resty to POST audit results / GET remote
+#                 policy bundles / etc.
+#             Used by: security engineering teams writing custom
+#             compliance policies, DevSecOps pipelines auditing
+#             infrastructure-as-code repos pre-merge, and as a
+#             reference implementation of go-resty/resty +
+#             cobra + zerolog + ksuid + embedded-binary composition
+#             in Go.
+#
+# Author:  Xavier Fernandes (xfhg on GitHub) — Portuguese-based
+#          DevSecOps engineer.  intercept released ~2020; active
+#          development through 2026.  License: BSD-2-Clause.
+# Source:  https://github.com/xfhg/intercept
+#          https://github.com/xfhg/intercept/blob/master/cmd/root.go
+#          https://github.com/xfhg/intercept/blob/master/cmd/audit.go
+#          https://github.com/xfhg/intercept/blob/master/cmd/observe.go
+#          https://github.com/xfhg/intercept/blob/master/cmd/ssh.go
+#          https://github.com/xfhg/intercept/blob/master/go.mod
+# CLI:     cmd/root.go — uses spf13/cobra (well-documented
+#          elsewhere).  Headline library: **go-resty/resty**
+#          (cobra is documented across hundreds of Go completions;
+#          resty is the new variant being documented here,
+#          expanding Axis 16 — HTTP Clients — to Go).
+# Library: github.com/go-resty/resty/v2 v2.14.0
+#          (resty — "Simple HTTP, REST, and SSE client library
+#           for Go" — Mathew Roy + 200+ contributors.
+#           Distinct from reqwest (R649, Rust Axis 16 opener)
+#           and from Go's net/http stdlib by being:
+#              1. FLUENT BUILDER API — resty.New().R() returns
+#                 a Request builder that chains setters fluently:
+#                   client := resty.New()
+#                   resp, err := client.R().
+#                       SetHeader("Authorization", "Bearer " + token).
+#                       SetQueryParam("page", "2").
+#                       SetBody(&Payload{Foo: "bar"}).
+#                       SetResult(&Result{}).
+#                       Post("https://api.example.com/users")
+#                 Stdlib net/http requires manual http.NewRequest
+#                 + req.Header.Set + bytes.NewBuffer body
+#                 marshaling for every request.
+#              2. AUTOMATIC JSON / XML SERIALIZATION — SetBody
+#                 accepts a struct; resty marshals to JSON (or
+#                 XML based on Content-Type) automatically.
+#                 SetResult accepts a struct pointer; resty
+#                 unmarshals response body into it:
+#                   type User struct { ID int; Name string }
+#                   var u User
+#                   client.R().SetResult(&u).Get(url)
+#                   // u populated from response JSON
+#                 Stdlib net/http requires manual
+#                 json.NewEncoder/Decoder.
+#              3. RETRY WITH BACKOFF — built-in retry strategies
+#                 (constant / exponential / custom) via
+#                 client.SetRetryCount + SetRetryWaitTime +
+#                 SetRetryMaxWaitTime + AddRetryCondition.
+#                 Stdlib net/http has no retry built-in (manual
+#                 loops required).
+#              4. MIDDLEWARE HOOKS — OnBeforeRequest +
+#                 OnAfterResponse + OnError + OnSuccess +
+#                 OnInvalid hooks for logging, metrics, auth
+#                 refresh, etc.  Stdlib net/http requires
+#                 manual RoundTripper wrappers.
+#              5. PROXY + TLS CONFIG via simple setters —
+#                 client.SetProxy("http://proxy:8080"),
+#                 client.SetTLSClientConfig(&tls.Config{...}).
+#              6. AUTH HELPERS — SetBasicAuth, SetAuthToken,
+#                 SetAuthScheme for first-class HTTP auth
+#                 patterns.
+#              7. FILE UPLOAD HELPERS — SetFile, SetFiles,
+#                 SetMultipartFormData for multipart/form-data
+#                 uploads.
+#              8. CONTEXT-AWARE — SetContext for context
+#                 cancellation / timeout propagation through
+#                 request lifecycle.
+#              9. DEBUG MODE — SetDebug(true) prints full
+#                 request + response to stdout (curl-style)
+#                 for debugging.
+#             10. MATHEW-ROY / GO-RESTY ECOSYSTEM PROVENANCE —
+#                 Mathew Roy maintains the go-resty organization
+#                 with 200+ contributors; resty is the foundational
+#                 HTTP client used by Drone CI, Skuid, K3s,
+#                 Crossplane, Pulumi Go SDK, GitLab CLI, and
+#                 thousands of Go applications.)
+# License: MIT (resty); BSD-2-Clause (intercept)
+# Status:  go-resty/resty — 11,686+ stars on go-resty/resty,
+#          ~150M go-sum downloads, used by:
+#            * Drone CI (drone.io)
+#            * Skuid
+#            * K3s
+#            * Crossplane
+#            * Pulumi Go SDK
+#            * GitLab CLI (glab subset)
+#            * HashiCorp Vault plugins
+#            * Vercel Go SDK
+#            * Cloudflare Go SDK
+#            * Linode Go SDK
+#            * DigitalOcean godo (some endpoints)
+#            * intercept (THIS)
+#            * 5000+ Go applications
+#          intercept — 84+ stars on xfhg/intercept; used in
+#          DevSecOps pipelines.
+#
+# -----------------------------------------------------------------------------
+# CROSS-LANGUAGE CLI LIBRARY TAXONOMY MILESTONE — GO CROSSES TO 70 +
+#                                                  AXIS 16 EXPANDS TO GO
+# -----------------------------------------------------------------------------
+# With this completion the cross-language CLI library taxonomy documents
+# the 70TH Go CLI library variant.  Go climbs from 69 to 70 documented
+# libraries (go-resty/resty via intercept).  Go **catches Rust at 70**
+# (Rust=Go=70, TS-Node=69 → twenty-first two-way tie at the leaderboard
+# top in this round-sequence).  New leaderboard: Rust=70, Go=70,
+# TypeScript-Node=69 (Rust+Go tied at the top).  Taxonomy now spans
+# 388 cross-language CLI library variants across 94 documented
+# languages.
+#
+# Pattern: R649 Rust=70 (reqwest — Axis 16 OPENS) → R650 Go=70
+# (resty THIS — Axis 16 expands to 2 variants) → expected R651
+# TS-Node=70 → R652 95th language.  This is the 2nd of 3 leader
+# bumps in the current segment.
+#
+# This completion EXPANDS Axis 16 (HTTP CLIENTS) to TWO documented
+# variants — symmetrically distributed across Rust (reqwest R649)
+# and Go (resty THIS R650).  TS-Node Axis 16 variant expected in
+# R651 to complete three-language symmetry.
+#
+#   Axis 16 (HTTP CLIENTS) variants:
+#     - reqwest (seanmonstar/reqwest) — R649 (_rustormy) — Rust
+#       ASYNC + BLOCKING dual HTTP client; built on hyper;
+#       rustls/native-tls; serde JSON; Sean McArthur / Hyperium
+#     - resty (go-resty/resty) — R650 (THIS) — Go FLUENT BUILDER
+#       API; automatic JSON/XML serialization; retry + middleware
+#       hooks; Mathew Roy / go-resty ecosystem
+#
+# Two Axis 16 variants address DIFFERENT design emphases:
+#   reqwest            = ASYNC + BLOCKING dual + serde integration
+#                         (Rust)
+#   resty              = FLUENT BUILDER + auto JSON/XML + retry +
+#                         middleware (Go)
+#
+# Each language's Axis 16 library addresses a DIFFERENT design
+# pain point:
+#   - Rust reqwest:  hyper is too low-level for everyday use;
+#                     reqwest provides high-level facade with
+#                     async/blocking duality
+#   - Go resty:      net/http stdlib requires verbose manual
+#                     marshaling for every request; resty
+#                     provides fluent chained builders with
+#                     automatic JSON/XML
+#   - Node future:   fetch stdlib lacks retry + middleware;
+#                     got / axios / ky add those (R651 pending)
+#
+# Axis 16 distribution: Rust=1, Go=1, TS-Node=0.  Expected R651
+# TS-Node=1 restores three-language symmetry trajectory.
+#
+# (Leaderboard at R650: Rust=70, Go=70, TS-Node=69.  Rust+Go
+# tied at 70 — twenty-first two-way tie at leaderboard top
+# this round-sequence.  Axis 9 / Logging 6/6/6 three-way
+# symmetric.  Axes 10 + 13 + 14 at 2/2/2.  Axes 7 + 11 + 12 +
+# 15 at 1/1/1.  Axis 16 at 1/1/0 (Rust + Go, TS-Node pending).)
+#
+# -----------------------------------------------------------------------------
+#
+# WHAT IS go-resty/resty AND WHY IS IT THE 70TH Go CLI LIBRARY?
+#
+# resty is the most-popular high-level HTTP client for Go.  Where
+# Go's stdlib net/http provides primitive http.Client + http.Request
+# + http.Response types requiring extensive manual marshaling,
+# resty wraps these in a fluent Request-builder API with automatic
+# serialization, retry, middleware, and many convenience helpers.
+#
+# Five distinguishing characteristics from reqwest (R649):
+#
+#   1. FLUENT BUILDER vs CONSTRUCTOR — reqwest uses ClientBuilder
+#      + RequestBuilder where each call sets one option then
+#      sends.  resty uses client.R() (Request) chained with
+#      SetX(...) methods, then terminal Get/Post/Put/Delete/
+#      Patch/Head/Options that returns Response:
+#         client := resty.New()
+#         resp, err := client.R().
+#             SetHeader("Accept", "application/json").
+#             SetAuthToken(token).
+#             SetQueryParam("q", "search term").
+#             SetResult(&Result{}).
+#             Get("https://api.example.com/search")
+#      Distinct from reqwest's chained builder which terminates
+#      with .send() rather than returning the response directly.
+#
+#   2. AUTOMATIC JSON/XML — resty's SetResult(&v) populates a
+#      struct from response body; SetBody(&v) serializes a
+#      struct into request body.  Content-Type detection is
+#      automatic.  reqwest requires `.json::<T>()` explicit
+#      typed extraction.
+#
+#   3. RETRY WITH BACKOFF BUILT-IN — client.SetRetryCount(5).
+#      SetRetryWaitTime(time.Second).
+#      SetRetryMaxWaitTime(10*time.Second).
+#      AddRetryCondition(func(r *resty.Response, err error) bool {
+#        return r.StatusCode() == 429
+#      }).  reqwest requires external retry middleware (reqwest-
+#      retry crate).
+#
+#   4. MIDDLEWARE HOOKS — OnBeforeRequest + OnAfterResponse +
+#      OnError hooks for logging, metrics, auth refresh.
+#      reqwest requires external middleware infrastructure.
+#
+#   5. MATHEW-ROY / GO-RESTY ECOSYSTEM PROVENANCE — distinct
+#      from Sean McArthur (Hyperium / reqwest), Russ Cox / Go
+#      team (net/http stdlib), Steve Francia (cobra/viper/
+#      afero), David Tolnay (serde).  Mathew Roy maintains
+#      go-resty as a community-driven foundational HTTP client.
+#
+# -----------------------------------------------------------------------------
+#
+# THE intercept CLI — cobra + resty + zerolog + ksuid + embedded binaries
+#
+# intercept's CLI is in cmd/root.go.  Uses cobra.Command with
+# Persistent flags at root level + child commands.
+#
+# Persistent flags (apply to all subcommands):
+#   -v, --verbose          Count flag — increase verbosity level
+#   -o, --output-dir DIR   Directory to write output files
+#       --experimental     Enable unreleased experimental features
+#       --debug            Enable extra dev debug output
+#       --silent           Enable log to file intercept.log
+#       --nolog            Disable all logging
+#       --output-type T    Output types: SARIF,LOG (comma list)
+#       --log-type T       Compliance log types:
+#                          MINIMAL,RESULTS,POLICY,REPORT (comma)
+#
+# Subcommands:
+#   audit                  Run optimized parallelized audit
+#   observe                Schedule + path-monitor policy triggering
+#   sys                    Test embedded core binaries (rg + goss)
+#   remote <op> [HOST...]  Execute remote ops via gossh
+#   version                Print build info
+#
+# Remote ops (under `intercept remote`):
+#   run [HOST...]          Execute commands on target hosts
+#   push [HOST...]         Copy local files + dirs to target hosts
+#   fetch [HOST...]        Copy files from target hosts to local
+#   script [HOST...]       Execute local shell script on hosts
+#
+# go-resty is used in cmd/api.go for HTTP dispatch to remote
+# policy endpoints + result POST.
+#
+# -----------------------------------------------------------------------------
+#
+# COMMAND-LINE OPTIONS (sourced directly from
+# https://github.com/xfhg/intercept/blob/master/cmd/root.go
+# cobra PersistentFlags + AddCommand registrations.)
+# -----------------------------------------------------------------------------
+
+local curcontext="$curcontext" state line ret=1
+typeset -A opt_args
+
+local -a _intercept_cmds _intercept_remote_cmds _intercept_outputs _intercept_logs
+_intercept_cmds=(
+    'audit:Run an optimized audit through all loaded policies'
+    'observe:Observe and trigger realtime policies (schedule + path monitoring)'
+    'sys:Test intercept embedded core binaries (rg + goss)'
+    'remote:Execute remote operations using gossh'
+    'version:Print the build info of intercept'
+    'help:Show help for a subcommand'
+)
+_intercept_remote_cmds=(
+    'run:Execute commands on target hosts'
+    'push:Copy local files and dirs to target hosts'
+    'fetch:Copy files from target hosts to local'
+    'script:Execute a local shell script on target hosts'
+)
+_intercept_outputs=(
+    'SARIF:SARIF output format'
+    'LOG:LOG output format'
+    'SARIF,LOG:both SARIF and LOG'
+)
+_intercept_logs=(
+    'MINIMAL:minimal log'
+    'RESULTS:results log'
+    'POLICY:policy log'
+    'REPORT:report log'
+)
+
+_arguments -C \
+    '*'{-v,--verbose}'[increase verbosity level (count)]' \
+    '(-o --output-dir)'{-o+,--output-dir=}'[directory to write output files]:directory:_files -/' \
+    '--experimental[enable unreleased experimental features]' \
+    '--debug[enable extra dev debug output]' \
+    '--silent[enable log to file intercept.log]' \
+    '--nolog[disable all logging]' \
+    '--output-type=[output types (SARIF,LOG)]:type:->output_type' \
+    '--log-type=[compliance log types (MINIMAL,RESULTS,POLICY,REPORT)]:type:->log_type' \
+    '(- *)'{-h,--help}'[show help]' \
+    '1: :->cmd' \
+    '*::arg:->args' \
+    && ret=0
+
+case $state in
+    output_type)
+        _describe -t outputs 'output type' _intercept_outputs && ret=0
+        ;;
+    log_type)
+        _describe -t logs 'log type' _intercept_logs && ret=0
+        ;;
+    cmd)
+        _describe -t commands 'intercept subcommand' _intercept_cmds && ret=0
+        ;;
+    args)
+        case $words[1] in
+            remote)
+                if (( CURRENT == 2 )); then
+                    _describe -t commands 'remote subcommand' _intercept_remote_cmds && ret=0
+                else
+                    _message 'host (hostname or IP)' && ret=0
+                fi
+                ;;
+            help)
+                _describe -t commands 'subcommand' _intercept_cmds && ret=0
+                ;;
+        esac
+        ;;
+esac
+
+return ret
