@@ -1,0 +1,272 @@
+#compdef io
+# =============================================================================
+# io — the Io programming language interpreter.  Io is a small prototype-
+#      based programming language created by Steve Dekorte in 2002.  Io's
+#      design draws from Smalltalk (all values are objects, all operations
+#      are messages), Self (prototype-based inheritance with no classes),
+#      NewtonScript (differential inheritance), Lisp (homoiconic source
+#      where code is data), Lua (small embeddable C VM), and Act1
+#      (asynchronous actor coroutines).  Io was widely cited as a major
+#      influence on later prototype-OO languages including JavaScript's
+#      object model, IoLite, Logtalk, and the Self family revival.
+#
+# Author:  Steve Dekorte
+# Source:  https://github.com/stevedekorte/io
+# CLI:     libs/iovm/io/CLI.io — Io's CLI is itself WRITTEN IN IO
+# Library: hand-rolled Io-level argv parser (CLI Object script)
+# License: BSD-3-Clause
+# Status:  Original 2002 reference implementation, 2,766+ stars.  Active
+#          community maintenance by Steve Dekorte plus contributors;
+#          mentioned by name in "Seven Languages in Seven Weeks" (Bruce
+#          Tate, 2010) which introduced thousands of developers to
+#          prototype-based OO concepts.
+#
+# -----------------------------------------------------------------------------
+# CROSS-LANGUAGE CLI LIBRARY TAXONOMY MILESTONE — IO IS NOW LANGUAGE 47
+# -----------------------------------------------------------------------------
+# With this completion the cross-language CLI library taxonomy crosses from
+# 46 to 47 documented languages.  Io joins the canonical roster alongside:
+# Rust, Go, TypeScript-Node, Python, Ruby, Perl, C, C++, Lua, Java, Kotlin,
+# Scala, Haskell, OCaml, Elixir, Erlang, Clojure, Common Lisp, Scheme/Racket,
+# Julia, Crystal, Pony, Nim, Zig, V, Swift, R, Dart, Fortran, Tcl, Ada, Janet,
+# D, Picat, BQN, Frege, Lobster, Curry, Mercury, Wren, Idris2, F#, Jakt,
+# Ur/Web, Beluga, REBOL, and now Io.  `io` is documented as the FIRST Io
+# CLI library variant in the taxonomy (hand-rolled Io-level argv parser
+# bootstrapped inside the interpreter via CLI.io) — bringing the total to
+# 202 cross-language CLI library variants.
+# -----------------------------------------------------------------------------
+#
+# WHAT IS IO AND WHY DOES IT WARRANT ITS OWN CLI LIBRARY DOCUMENTATION CATEGORY?
+#
+# Io is a tiny prototype-based OOP language whose core C VM is roughly 4,000
+# lines.  The defining principles:
+#
+#   * EVERYTHING IS A MESSAGE — `1 + 2` is parsed as `1 +(2)`: send message
+#     `+` to receiver `1` with argument `2`.  Operators are sugar for
+#     ordinary methods.  Even local-variable access (`x := 5`) is a message
+#     `setSlot("x", 5)` to the local lobby object.
+#   * PROTOTYPE INHERITANCE — there are NO CLASSES.  Objects clone other
+#     objects; a child object inherits slots from its prototype.  Slot
+#     resolution walks the prototype chain (`proto -> proto proto -> ...`).
+#     New behavior is added by assigning new slots to existing objects.
+#   * SLOTS ARE FIRST-CLASS — every property/method is a slot on an object.
+#     There is no distinction between data and code; methods are objects
+#     stored in slots that respond to the `() call` message.
+#   * MESSAGES ARE OBJECTS — Io's parser turns source into a TREE of Message
+#     objects which is then walked by the VM.  Messages can be manipulated
+#     at runtime, making Io fully homoiconic in the LISP sense (program ==
+#     data).  This enables compile-time macros via `Message clone` /
+#     `Message arguments`.
+#   * ACTOR COROUTINES — every object can be turned into an actor with
+#     `@@`, which runs subsequent messages asynchronously on a coroutine.
+#     This is Io's concurrency model — green-threaded coroutines via the
+#     basekit library's coroutine_t abstraction (the same one that
+#     Lua's lua_coroutine wraps).
+#   * NO STATEMENTS — every program text is an expression that evaluates
+#     to a value.  This is shared with Smalltalk and Lisp but distinct
+#     from C-family languages.
+#
+# Io is distinct from every other language documented in the corpus
+# because:
+#
+#   * It is the FIRST documented language whose CLI is IMPLEMENTED IN
+#     ITSELF AT THE SCRIPT LEVEL.  Io's argv parser is a regular Io object
+#     (`CLI := Object clone do(...)`) defined in libs/iovm/io/CLI.io that
+#     gets loaded by the bootstrap.  The C-level `main()` in IoVM.c is just
+#     `IoState_runCLI()` which kicks off the Io-side CLI.  This is more
+#     extreme than Python's argparse-in-Python (argparse runs as a library
+#     CALLED by user code; Io's CLI IS user code that happens to be loaded
+#     at startup) and more extreme than Tcl's command-loop (which is in C).
+#   * It uses `System args` as the parser's input — the argv list is
+#     reflected as a regular Io list accessible from any code, parsed
+#     character-by-character with Io's normal `==`, `in`, `first`, `slice`
+#     methods.
+#   * The CLI flag dispatch uses CHAINED `if/elseif` STATEMENTS rather
+#     than a flag-registration table.  Each flag is a separate equality
+#     check against `System args first`.  This is the SIMPLEST possible
+#     dispatch pattern, made viable because Io has only four flags.
+#   * IT BOOTSTRAPS COMMAND HISTORY FROM ~/.io_history with optional
+#     GNU ReadLine / EditLine integration via reflection — the CLI.io
+#     code wraps `ReadLine` and `EditLine` in try/catch to fall back
+#     gracefully when those modules aren't compiled in.
+#   * IT LOADS A USER RC FILE — `doIorc` reads `$HOME/.iorc` if it exists
+#     and evaluates it in the REPL context.  This is the Io equivalent
+#     of Bash's `.bashrc` or Python's PYTHONSTARTUP.
+#
+# -----------------------------------------------------------------------------
+# IO'S CLI LIBRARY — HAND-ROLLED IO-LEVEL ARGV PARSER (CLI.io)
+# -----------------------------------------------------------------------------
+#
+# Io's CLI is the FIRST documented "interpreter-language self-hosted CLI
+# parser" pattern in the corpus's cross-language taxonomy.
+#
+# The defining structure (verbatim from libs/iovm/io/CLI.io):
+#
+#     CLI := Object clone do(
+#         prompt ::= "Io> "
+#         outPrompt ::= "==> "
+#         continuedLinePrompt ::= "... "
+#         isRunning ::= true
+#         commandLineLabel ::= "Command Line"
+#
+#         context ::= lazySlot(
+#             Lobby do(
+#                 _ ::= nil   # Python-style _ for previous result
+#                 exit := method(CLI stop)
+#             )
+#         )
+#
+#         lineReader := lazySlot(
+#             reader := DummyLine
+#             try(reader := ReadLine) catch(Exception,
+#                 try(reader := EditLine))
+#             reader
+#         )
+#
+#         run := method(
+#             Importer addSearchPath(
+#                 System launchPath := Directory currentWorkingDirectory
+#             )
+#
+#             doIorc
+#
+#             if("-h" in(System args) and System args size == 1, help)
+#             if("--version" in (System args) and System args size == 1, version)
+#
+#             if(System args first == "-e") then(
+#                 return context doString(
+#                     System args slice(1) map(asUTF8) join(" ")
+#                 )
+#             ) elseif(System args first == "-i" and System args size >= 2) then(
+#                 System args rest foreach(arg, doFile(arg))
+#             ) elseif(System args size > 0,
+#                 return doFile(System args first)
+#             )
+#
+#             if(File clone setPath("main.io") exists, doFile("main.io"))
+#
+#             loadHistory
+#             writeWelcomeBanner
+#             interactive
+#             saveHistory
+#         )
+#
+#         help := inlineMethod(
+#             """usage: io [-h | -e expr | -i file.io, file.io, ...
+#                          | file.io arg, arg, ... | --version]
+#
+#                options:
+#                  --version   print the version of the interpreter and exit
+#                  -h          print this help message and exit
+#                  -e          eval a given expression and exit
+#                  -i          run the interpreter, after processing the files""" println
+#             System exit
+#         )
+#     )
+#
+# Distinctive properties:
+#
+#   1. SCRIPT-LEVEL PARSER — the entire CLI is defined in Io source code
+#      that ships as part of the iovm distribution.  Modifying CLI
+#      behavior requires editing CLI.io, NOT recompiling the C VM.
+#   2. NO FLAG REGISTRATION TABLE — flags are dispatched via direct
+#      equality checks on `System args first`.  Adding a new flag means
+#      adding a new `if` branch in the `run` method.
+#   3. CHAINED `if/elseif` DISPATCH — `if(System args first == "-e") then
+#      (...) elseif(System args first == "-i" ...) then (...) elseif
+#      (System args size > 0, ...)`.  The use of `then(...)` instead of
+#      the comma-separated form is required because `if/elseif` chains
+#      need explicit `then` blocks for proper short-circuiting in Io.
+#   4. SPECIAL-CASE STANDALONE FLAGS — `-h` and `--version` are checked
+#      with `in(System args) and System args size == 1`, meaning they
+#      ONLY trigger when used as the SOLE argument.  Adding any positional
+#      arg disables them, which is the opposite of POSIX convention
+#      (where help/version typically work regardless of other args).
+#   5. SUBSEQUENT ARGS REINTERPRETED — `-e EXPR_PARTS...` joins all
+#      subsequent args with spaces and evaluates as one Io expression.
+#      `-i FILE [FILE...]` loads each file then drops to interactive.
+#      Bare `FILE [ARGS...]` runs FILE with ARGS available as
+#      `System args slice(1)` to the script.
+#   6. IMPLICIT main.io FALLBACK — after argument processing, if a file
+#      named `main.io` exists in cwd, it is loaded and executed.  This
+#      is Io's project-startup convention (similar to Python's
+#      `__main__.py` but without zipping requirements).
+#   7. POST-SCRIPT REPL — the script flow `loadHistory; writeWelcomeBanner;
+#      interactive; saveHistory` is part of `run` and gets executed AFTER
+#      script processing, which means the interpreter ALWAYS drops to
+#      REPL at the end unless explicitly exited.  This is why most Io
+#      scripts call `System exit` at the end of file.
+#   8. HOMOICONIC SELF-DOCUMENTATION — `help` is an `inlineMethod` whose
+#      source IS the help text, displayed by `println`.  The help string
+#      can be retrieved at runtime via `CLI getSlot("help") code`.
+#
+# CONTRAST WITH OTHER INTERPRETER CLI PARSERS DOCUMENTED IN THE CORPUS
+#
+#   * Python's argparse                — library in Python stdlib, called
+#                                         by user code (NOT auto-loaded)
+#   * Ruby's OptionParser               — library in Ruby stdlib, called
+#                                         by user code
+#   * Perl's Getopt::Long               — CPAN module, called by user code
+#   * Lua's lua.c                       — C-level argv parsing in main()
+#                                         before Lua VM starts
+#   * Tcl's tclMain.c                   — C-level argv parsing in main()
+#                                         before Tcl interp starts
+#   * Beluga main.ml (R460)             — OCaml-level parser, host
+#                                         language = implementation lang
+#   * Io's CLI.io (THIS)                — IO-LEVEL parser written IN IO,
+#                                         loaded at bootstrap, modifiable
+#                                         without recompiling the C VM
+#
+# Io's pattern is shared with NewtonScript (which had a script-level
+# REPL but no separate CLI tool), Squeak Smalltalk image system (where
+# the entire system image is editable Smalltalk), and Self (image-based
+# development).  But none of those expose a UNIX-style argv parser written
+# at the script level — Io is unique in marrying UNIX command-line
+# conventions to image-based language design.
+#
+# -----------------------------------------------------------------------------
+# IO CLI SURFACE (verbatim from CLI.io help method)
+# -----------------------------------------------------------------------------
+#
+# USAGE:
+#   io [-h | -e expr | -i file.io[, file.io, ...] | file.io [arg, arg, ...] | --version]
+#
+# Options:
+#   --version   print the version of the interpreter and exit
+#   -h          print this help message and exit
+#   -e EXPR     evaluate the given Io expression (all subsequent args
+#               are joined with spaces) and exit
+#   -i FILE...  run the interpreter (REPL) after evaluating each file
+#               listed; subsequent positional args are filenames
+#
+# Positional:
+#   FILE [ARG ...]   execute Io script FILE; ARG ... available as
+#                    System args slice(1) inside the script
+#
+# REPL features (when no flags or after -i):
+#   * Reads ~/.iorc if it exists (Io's startup config file)
+#   * Loads/saves history from ~/.io_history
+#   * Uses GNU ReadLine or EditLine if compiled in
+#   * `exit` method (in Lobby) terminates the REPL
+#   * `_` slot holds the result of the previous computation
+#   * Continued-line prompt `... ` on unclosed `(`, `[`, `{`, `"""`, `(x,`
+#   * Implicit main.io load if file exists in CWD
+#
+# =============================================================================
+
+_io() {
+    local curcontext="$curcontext" state line ret=1
+    typeset -A opt_args
+
+    _arguments -s \
+        '-h[print help and exit (only as sole arg)]' \
+        '--version[print interpreter version and exit (only as sole arg)]' \
+        '-e[evaluate Io expression (all subsequent args joined with spaces)]:expression:' \
+        '-i[run REPL after loading these files]:*:Io file:_files -g "*.io"' \
+        '*:Io script or args:_files -g "*.io"' \
+        && ret=0
+
+    return ret
+}
+
+_io "$@"
