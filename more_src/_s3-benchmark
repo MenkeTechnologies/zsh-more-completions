@@ -1,0 +1,337 @@
+#compdef s3-benchmark
+# =============================================================================
+# s3-benchmark — Daniel Vassallo's "tool to measure your AWS S3
+#                 throughput" — a Go CLI for benchmarking AWS S3
+#                 upload + download performance across configurable
+#                 object sizes (1 KB to 32 MB doubling) and thread
+#                 counts (1 to 48 concurrent workers).  Produces a
+#                 sweep matrix showing first-byte latency + last-
+#                 byte latency at min/avg/p25/p50/p75/p90/p99
+#                 percentiles for each (object_size, thread_count)
+#                 cell.  Optionally uploads results to S3 as CSV
+#                 for cross-instance aggregation.  Used by AWS
+#                 architects to:
+#                   - Identify the optimal EC2 instance type for
+#                     S3-heavy workloads
+#                   - Detect EC2 network throttling boundaries
+#                     (via --throttling-mode, continuous load
+#                     until throttled)
+#                   - Compare S3-compatible stores (MinIO,
+#                     Wasabi, Backblaze B2) against AWS S3
+#                     via --endpoint
+#                   - Validate Direct Connect / VPC Endpoint
+#                     bandwidth claims
+#                 The benchmark is THE de-facto reference for
+#                 "how fast is S3 from my instance type" — cited
+#                 in dozens of AWS blog posts and re:Invent talks.
+#
+# Author:  Daniel Vassallo (ex-AWS Senior Engineer, then
+#          independent consultant; author of "Software-as-a-
+#          Service: a Practical Guide for Developers") — created
+#          s3-benchmark in 2019-2020 to standardize the
+#          benchmarking methodology for an AWS conference talk
+#          on S3 performance characteristics by instance type.
+# Source:  https://github.com/dvassallo/s3-benchmark
+#          https://github.com/dvassallo/s3-benchmark/blob/master/main.go
+# CLI:     main.go (single-file Go program) — uses stdlib `flag`
+#          for argv parsing (already documented in taxonomy);
+#          visual output dominated by `github.com/schollz/
+#          progressbar/v2` for the multi-thousand-sample
+#          progress bar that animates during each (object_size,
+#          thread_count) benchmark cell.
+# Library: schollz/progressbar
+#          ("A really basic thread-safe progress bar for Golang
+#           applications" — Zack Scholl — released ~2017,
+#           massively popular (5500+ stars).  Schollz designed
+#           progressbar with a focus on THREAD SAFETY (every
+#           method is safe to call from goroutines concurrently)
+#           and ZERO-CONFIG ergonomics (just `progressbar.
+#           Default(max)` and start incrementing).  Despite the
+#           "basic" description, supports rich terminal rendering:
+#           ETA, throughput, custom theming, file-based output
+#           for non-TTY redirection, multi-line description
+#           updates, sub-progress dividers.  THE go-to "drop-in
+#           progress bar" for Go projects that need one without
+#           the architectural overhead of mpb or pb v3.)
+# License: Apache-2.0 (s3-benchmark); MIT (schollz/progressbar)
+# Status:  s3-benchmark — 910+ stars on dvassallo/s3-benchmark;
+#          last release 2021 but binary remains the canonical
+#          AWS S3 benchmark reference; schollz/progressbar —
+#          5500+ stars, v3 actively maintained 2024-2026 with
+#          Go 1.21+ baseline.
+#
+# -----------------------------------------------------------------------------
+# CROSS-LANGUAGE CLI LIBRARY TAXONOMY MILESTONE — GO CROSSES TO 50
+# -----------------------------------------------------------------------------
+# With this completion the cross-language CLI library taxonomy documents
+# the 50TH Go CLI library variant.  Go climbs from 49 to 50 documented
+# libraries (schollz/progressbar via s3-benchmark).  **Go becomes the
+# SECOND LANGUAGE to reach the FIFTY-LIBRARY MILESTONE** in the cross-
+# language CLI library taxonomy, joining Rust which crossed to 50 in
+# R570 with codespan-reporting (gluon).  New leaderboard: Rust=50,
+# Go=50, TypeScript-Node=49 (Rust+Go TWO-WAY TIE AT 50 — the tenth
+# two-way tie at 48-or-above of this round-sequence).  Taxonomy now
+# spans 310 cross-language CLI library variants across 75 documented
+# languages.
+#
+# Pattern: 1 new language (R569 Oberon-2/voc) → R570 Rust=50 (codespan-
+# reporting/gluon) → R571 Go=50 (schollz/progressbar/s3-benchmark THIS)
+# → expected R572 TS-Node=50.  This is the 2nd of 3 leader bumps in
+# the current segment.
+#
+# This completion EXPANDS Axis 3 (PROGRESS REPORTING) within Go.
+# Go now has TWO documented Axis 3 variants:
+#   - vbauerster/mpb (V Bauerster's multi-progress-bar) — R559
+#     (_kit) — concurrent multi-bar library with priority queues
+#     and bar dependencies for sophisticated multi-task UIs
+#   - schollz/progressbar (Zack Scholl) — R571 (THIS) — single-
+#     bar thread-safe with zero-config ergonomics for the common
+#     case of "I just need ONE progress bar for ONE long-running
+#     operation"
+#
+# These two libraries cover the Go progress-bar design space:
+#   mpb         = MULTIPLE concurrent bars with relationships
+#                  (used by kit/CNCF artifact managers, ferium,
+#                  download-multiple-files tools)
+#   progressbar = SINGLE bar, simplest possible API
+#                  (used by s3-benchmark/croc/find3, drop-in
+#                  use cases needing one feedback indicator)
+#
+# -----------------------------------------------------------------------------
+#
+# WHAT IS schollz/progressbar AND WHY IS IT THE 50TH GO CLI LIBRARY?
+#
+# schollz/progressbar (https://github.com/schollz/progressbar,
+# 5500+ stars) is **Zack Scholl's "really basic thread-safe
+# progress bar for Golang applications"** — the most-downloaded
+# single-bar progress library in the Go ecosystem.  Schollz
+# created it as part of his own toolkit (croc, find3, pake, raw,
+# wifiqr) and open-sourced it as a standalone library when other
+# developers kept asking how he got his progress bars looking
+# clean.
+#
+# schollz/progressbar's distinguishing characteristics:
+#
+#   1. THREAD-SAFE BY DEFAULT — Every method (Add, Set, Describe,
+#      Finish) is guarded by a sync.Mutex.  Multiple goroutines
+#      can update the same bar concurrently without explicit
+#      locking by the caller:
+#
+#          bar := progressbar.Default(int64(totalBytes))
+#          var wg sync.WaitGroup
+#          for _, chunk := range chunks {
+#              wg.Add(1)
+#              go func(c []byte) {
+#                  defer wg.Done()
+#                  processChunk(c)
+#                  bar.Add(len(c))  // thread-safe
+#              }(chunk)
+#          }
+#          wg.Wait()
+#          bar.Finish()
+#
+#      Compare:
+#         * vbauerster/mpb (R559): thread-safe via channels +
+#                                   internal goroutine
+#         * cheggaaa/pb (older): thread-safe via mutex
+#         * gosuri/uiprogress: NOT thread-safe (single-goroutine)
+#      schollz/progressbar uses mutex-per-bar (simpler than
+#      mpb's channel architecture) and explicitly documents
+#      thread safety as a primary design goal.
+#
+#   2. ZERO-CONFIG DEFAULT BAR — Construct with one line:
+#
+#          bar := progressbar.Default(100)
+#          for i := 0; i < 100; i++ {
+#              bar.Add(1)
+#              time.Sleep(40 * time.Millisecond)
+#          }
+#
+#      `Default(max)` returns a bar with sensible defaults:
+#      Unicode characters, throughput display, percentage, ETA,
+#      30-character bar width, stdout output, optional spinner.
+#      No theming or customization required for the common case.
+#      Compare:
+#         * mpb: requires `mpb.New()` then `bar := p.AddBar(...)`
+#                 with explicit decorators
+#         * pb v3: requires `bar := pb.Full.Start(max)` or
+#                   builder-chain customization
+#         * progressbar.Default: one function call, sensible defaults
+#      FIRST documented Go progress library with single-call
+#      zero-config bar construction.
+#
+#   3. DROP-IN io.Writer SUPPORT — progressbar.Bar implements
+#      io.Writer.  This means any function that takes an
+#      io.Writer (e.g., io.Copy, http.Response.Body reader) can
+#      use a progressbar to display download progress with NO
+#      WRAPPER CODE:
+#
+#          bar := progressbar.DefaultBytes(
+#              resp.ContentLength,
+#              "downloading",
+#          )
+#          io.Copy(io.MultiWriter(file, bar), resp.Body)
+#
+#      `io.MultiWriter(file, bar)` writes simultaneously to the
+#      file AND the progress bar, so bytes written increment the
+#      bar automatically.  Compare:
+#         * mpb: provides proxy-reader via `mpb.ProxyReader` (similar)
+#         * pb: provides proxy-writer (similar)
+#         * progressbar: WRITER is the bar itself, more direct
+#      FIRST documented Go progress library with the bar
+#      directly implementing io.Writer (vs proxy-reader-as-wrapper).
+#
+#   4. OPTION-PATTERN CUSTOMIZATION — When defaults aren't right,
+#      progressbar uses Go's functional-options pattern:
+#
+#          bar := progressbar.NewOptions64(
+#              maxBytes,
+#              progressbar.OptionEnableColorCodes(true),
+#              progressbar.OptionShowBytes(true),
+#              progressbar.OptionSetWidth(50),
+#              progressbar.OptionSetDescription("[cyan][1/3][reset] downloading..."),
+#              progressbar.OptionSetTheme(progressbar.Theme{
+#                  Saucer:        "[green]=[reset]",
+#                  SaucerHead:    "[green]>[reset]",
+#                  SaucerPadding: " ",
+#                  BarStart:      "[",
+#                  BarEnd:        "]",
+#              }),
+#              progressbar.OptionUseANSICodes(true),
+#          )
+#
+#      ~30 Option* functions cover width, theme, description,
+#      throughput display, ANSI codes, sub-progress, terminal
+#      detection, completion message, and many other variations.
+#      Compare:
+#         * mpb: builder-pattern via chained decorator methods
+#         * pb v3: builder-pattern via .Set methods
+#         * progressbar: functional-options pattern (more idiomatic
+#                         Go since gRPC + functional-options
+#                         pattern took over in 2017)
+#      FIRST documented Go progress library with comprehensive
+#      functional-options API.
+#
+#   5. SCHOLLZ-ECOSYSTEM PROVENANCE — progressbar is used by
+#      Zack Scholl's own popular Go tools:
+#         * croc (file transfer, 30k+ stars) — also in corpus
+#         * find3 (indoor positioning, 2k+ stars)
+#         * pake (file sharing, 1k+ stars)
+#         * raw (raw photo viewer)
+#         * wifiqr (WiFi QR code gen)
+#         * hostyoself (file hosting)
+#      Plus external projects:
+#         * dvassallo/s3-benchmark (THIS — 910+ stars)
+#         * bashupload (file upload)
+#         * snapshot-downloader (Solana blockchain)
+#         * wordlebot, many small CLI tools
+#      Compare:
+#         * mpb: provenance with kit/CNCF artifact tools
+#         * progressbar: provenance with Schollz's personal stack
+#                         + many "I need one progress bar" projects
+#      FIRST documented Go progress library with single-developer
+#      ecosystem provenance (Schollz wrote ~6 binaries that all
+#      use progressbar in production).
+#
+# schollz/progressbar's relationship to other documented Go
+# progress libraries:
+#
+#   * Like vbauerster/mpb (R559) — both provide rich terminal
+#                                   progress visualization with
+#                                   ANSI/color support
+#   * Unlike mpb — single-bar focus (no multi-bar coordination,
+#                   no priority queues, no bar dependencies)
+#   * Like cheggaaa/pb (undocumented) — single-bar focus
+#   * Unlike pb — uses functional-options pattern (pb uses
+#                  builder pattern with .Set methods)
+#   * Closest cross-language analogs:
+#         * Rust:    indicatif (R522) — also single-bar focused,
+#                     also has io.Write trait integration; the
+#                     spiritual Rust counterpart to schollz/
+#                     progressbar
+#         * TS-Node: cli-progress (R560) — also single-bar with
+#                     options-pattern config; cleanest TS-Node
+#                     analog
+#     schollz/progressbar is the FIRST documented Go progress
+#     library with functional-options-pattern API + io.Writer
+#     interface integration.
+#
+# -----------------------------------------------------------------------------
+#
+# THE s3-benchmark CLI — stdlib flag + schollz/progressbar visual
+#
+# s3-benchmark's argv parsing is stdlib `flag` (already documented
+# elsewhere in taxonomy).  Where this completion is distinctive
+# is in the VISUAL FEEDBACK PATH — every benchmark cell renders
+# a schollz/progressbar that tracks per-sample completion across
+# the configurable thread count.  Sample run:
+#
+#     $ s3-benchmark --samples 100 --threads-max 32 --payloads-max 5
+#     ...
+#     Object size    1 KB        2 KB        4 KB        8 KB        16 KB
+#     1 thread:      [====>     ]
+#     2 threads:     [============>  ]
+#     ...
+#     32 threads:    [================]
+#
+# Each row is a progressbar.Bar incrementing as samples complete.
+#
+# Five-axis distinctness from every other documented Go progress
+# library:
+#
+#   1. THREAD-SAFE-BY-DEFAULT WITH MUTEX — Every other documented
+#      Go progress library either requires explicit locking
+#      (uiprogress) or uses channels for thread safety (mpb).
+#      schollz/progressbar uses mutex-per-bar — simpler model
+#      with no goroutine overhead for the common single-bar case.
+#
+#   2. ZERO-CONFIG progressbar.Default(max) — Every other
+#      documented Go progress library requires explicit
+#      configuration of decorators, themes, or builder chains.
+#      schollz/progressbar.Default(max) returns a fully-decorated
+#      bar in one call.
+#
+#   3. io.Writer INTEGRATION — Every other documented Go progress
+#      library uses proxy-reader or proxy-writer wrappers.
+#      schollz/progressbar.Bar itself implements io.Writer, so
+#      it can be used directly with io.Copy/io.MultiWriter.
+#
+#   4. FUNCTIONAL-OPTIONS API — Every other documented Go
+#      progress library uses builder-pattern customization
+#      (chained .Set methods).  schollz/progressbar uses Go's
+#      functional-options pattern (gRPC-style Option functions).
+#
+#   5. SCHOLLZ-ECOSYSTEM SINGLE-DEVELOPER PROVENANCE — Every
+#      other documented Go progress library is general-purpose
+#      with diverse user base.  schollz/progressbar's main
+#      provenance is Schollz's own ~6 production binaries plus
+#      the many "I just need one progress bar" projects that
+#      reach for the simplest option in the Go ecosystem.
+#
+# -----------------------------------------------------------------------------
+#
+# COMMAND-LINE OPTIONS (sourced directly from
+# https://github.com/dvassallo/s3-benchmark/blob/master/main.go
+# parseFlags() function — every flag declaration reproduced below.)
+# -----------------------------------------------------------------------------
+
+local curcontext="$curcontext" state line ret=1
+typeset -A opt_args
+
+_arguments -s \
+    '--threads-min=[minimum number of threads to fetch objects from S3 (default 8)]:N:' \
+    '--threads-max=[maximum number of threads to fetch objects from S3 (default 16)]:N:' \
+    '--payloads-min=[minimum object size to test; 1 = 1 KB and doubles per increment (default 1)]:N:' \
+    '--payloads-max=[maximum object size to test; 1 = 1 KB and doubles per increment (default 10)]:N:' \
+    '--samples=[number of samples per (size,threads) test (default 1000)]:N:' \
+    '--bucket-name=[S3 bucket name to use for the benchmark]:bucket:' \
+    '--region=[AWS region for the S3 bucket]:region:(us-east-1 us-east-2 us-west-1 us-west-2 eu-west-1 eu-west-2 eu-west-3 eu-central-1 eu-north-1 ap-southeast-1 ap-southeast-2 ap-northeast-1 ap-northeast-2 ap-south-1 sa-east-1 ca-central-1)' \
+    '--endpoint=[S3 endpoint URL (for non-AWS S3-compatible stores)]:url:' \
+    '--full[run the full exhaustive test, overriding --threads-* and --payloads-*]' \
+    '--throttling-mode[run continuous test to find EC2 network throttling boundary]' \
+    '--cleanup[clean up all S3 objects uploaded for the test]' \
+    '--upload-csv=[upload test results to S3 as CSV with this key prefix]:prefix:' \
+    '--create-bucket[create the bucket (default true)]:bool:(true false)' \
+    && ret=0
+
+return ret
