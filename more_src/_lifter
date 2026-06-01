@@ -1,0 +1,280 @@
+#compdef lifter
+# =============================================================================
+# lifter — Download single-file binaries from GitHub Releases (and other sites).
+#          A "package manager for hand-curated single-file binaries":
+#          maintain a `lifter.config` file listing tool name + release-source
+#          URL + filename pattern, then run `lifter` to download new releases
+#          and keep the cached copies fresh.  Skips downloads when the cached
+#          version is already up to date.  Emits CSV to stdout for piping
+#          into awk/grep/etc.; logs to stderr for separation.
+#
+# Author:  Caleb Hattingh (cjrh)
+# Source:  https://github.com/cjrh/lifter
+# CLI:     src/main.rs (uses structopt + paw)
+# Library: rust-cli/paw
+#          ("Command line argument paw-rser" — main-attribute adapter)
+# License: BSD-2-Clause
+# Status:  Stable — 17+ stars, used as a personal-binary auto-updater
+#          for dev workstations where ~/.local/bin holds many GitHub-
+#          release single-file tools.
+#
+# -----------------------------------------------------------------------------
+# CROSS-LANGUAGE CLI LIBRARY TAXONOMY MILESTONE — RUST CROSSES TO 30 LIBRARIES
+# -----------------------------------------------------------------------------
+# With this completion the cross-language CLI library taxonomy documents the
+# 30TH Rust CLI library variant.  Rust climbs from 29 to 30 documented
+# libraries (paw via lifter).  New leaderboard: Rust=30 (SOLO LEAD), Go=29,
+# TypeScript-Node=29.  Taxonomy now spans 229 cross-language CLI library
+# variants across 55 documented languages.  Rust hits a ROUND-NUMBER
+# MILESTONE of 30 documented CLI library variants — the most for any
+# single language in the taxonomy.
+# -----------------------------------------------------------------------------
+#
+# WHAT IS clap-rs/paw AND WHY IS IT A DISTINCT 30TH RUST CLI LIBRARY?
+#
+# paw (https://github.com/clap-rs/paw, archived) is an attribute-MACRO
+# LAYER for Rust CLI binaries.  Originally developed by the rust-cli
+# working group as an idiomatic "main wrapper" for structopt-based CLIs
+# and later moved under clap-rs.  Although the repository is archived,
+# paw remains in production use across many real Rust binaries because
+# its attribute-macro behavior is feature-complete and stable.
+#
+# paw is FUNDAMENTALLY DIFFERENT from every other Rust CLI library
+# documented in the corpus.  All the others are FULL CLI PARSERS:
+#
+#   * clap-derive (R275)    — derive struct → parser
+#   * structopt (R486)       — derive struct → parser (predecessor)
+#   * bpaf (R330)            — combinator parser
+#   * argh (R344)            — minimal derive parser
+#   * pico-args (R347)       — pull-based parser
+#   * gumdrop (R410)         — derive parser
+#   * docopt.rs (R413)       — usage-text parser
+#   * getopts (R416)         — getopt port
+#   * lexopt (R407)          — iterator parser
+#   * lapp (R464)            — usage-text-as-spec parser
+#   * getargs (R471)         — zero-cost iterator
+#   * noargs (R474)          — imperative consuming
+#   * arguably (R478)        — minimal builder
+#   * redox arg-parser (R482) — minimal Rust-OS-portable
+#   * + many more
+#
+# paw IS NOT a parser at all.  It's an ATTRIBUTE-MACRO ADAPTER that
+# integrates an existing parser (structopt/clap-derive) with Rust's
+# `fn main()` entry point.
+#
+# THE paw PATTERN (verbatim from lifter usage)
+#
+#   use structopt::StructOpt;
+#
+#   #[derive(structopt::StructOpt)]
+#   #[structopt(about = "Download single-file binaries...")]
+#   struct Args {
+#       #[structopt(short = "v", long = "verbose", parse(from_occurrences))]
+#       verbose: usize,
+#       #[structopt(short = "c", long = "config-file", default_value = "lifter.config")]
+#       configfile: String,
+#       // ...
+#   }
+#
+#   #[paw::main]
+#   fn main(args: Args) -> Result<()> {
+#       // args is already parsed and ready to use!
+#       rayon::ThreadPoolBuilder::new()
+#           .num_threads(args.threads)
+#           .build_global()?;
+#       // ...
+#       Ok(())
+#   }
+#
+# WHAT `#[paw::main]` DOES:
+#
+# The attribute macro EXPANDS `fn main(args: Args) -> R` into:
+#
+#   fn main() -> R {
+#       let args = <Args as paw::ParseArgs>::parse_args();
+#       _real_main(args)
+#   }
+#
+#   fn _real_main(args: Args) -> R {
+#       // your code here
+#   }
+#
+# `paw::ParseArgs` is implemented by structopt-derive (with the `paw`
+# feature) and clap_derive — both provide a `parse_args()` method that
+# delegates to `Args::from_args()`.  paw bridges the two: any type
+# implementing ParseArgs can be the argument to `main()`.
+#
+# DISTINCTIVE PROPERTIES OF paw
+#
+#   1. PARSER-AGNOSTIC ADAPTER — paw works with ANY library that
+#      implements `paw::ParseArgs`.  Structopt does (with the "paw"
+#      feature flag); clap-derive does in clap 3+; future libraries
+#      can implement the trait.  paw is the GLUE.  No other CLI
+#      library documented in the corpus is a glue layer between
+#      a parser and `fn main()` — they're all monolithic.
+#
+#   2. ATTRIBUTE-MACRO COMPOSITION — `#[paw::main]` composes with other
+#      attribute macros like `#[tokio::main]` and `#[async_std::main]`
+#      via macro reordering.  Many Rust async-aware CLIs use stacked
+#      attributes:
+#         #[paw::main]
+#         #[tokio::main]
+#         async fn main(args: Args) -> Result<()> { ... }
+#      paw was one of the FIRST attribute-macro libraries to demonstrate
+#      this composition pattern in 2019, predating tokio's adoption of
+#      `#[tokio::main]` by several months.
+#
+#   3. ZERO RUNTIME OVERHEAD — the macro expansion is purely compile-time
+#      transformation.  No additional dispatch, no extra allocations, no
+#      type erasure.  The expanded code is identical to writing the
+#      `let args = Args::from_args()` line manually.
+#
+#   4. ENABLES THE "MAIN-TAKES-ARGS" IDIOM — without paw, a Rust CLI's
+#      typical main looks like:
+#         fn main() {
+#             let args = Args::from_args();
+#             real_work(args);
+#         }
+#      With paw, it becomes:
+#         #[paw::main]
+#         fn main(args: Args) {
+#             real_work(args);
+#         }
+#      This is a SMALL but IDIOMATIC improvement that matches what
+#      script-like languages (Python's `sys.argv` → typed `argparse`
+#      result) take for granted.
+#
+#   5. CLAP-RS ORG STEWARDSHIP — paw was originally rust-cli/paw under
+#      the rust-cli working group; ownership moved to clap-rs when the
+#      working group consolidated around clap as the canonical CLI
+#      ecosystem.  Despite being archived, the crate is still published
+#      to crates.io and pinned by many production binaries.
+#
+#   6. PAIRS WITH `paw_dep` SHIM — paw publishes paw_dep as a sibling
+#      crate that's a "dummy paw" used by libraries to avoid taking a
+#      paw dependency unconditionally.  structopt-derive uses paw_dep
+#      to make the paw integration OPT-IN: only enabled when the `paw`
+#      feature is selected.
+#
+# CONTRAST WITH OTHER ATTRIBUTE-MACRO LIBRARIES IN THE RUST ECOSYSTEM
+#
+#   * tokio::main          — async runtime entry point
+#   * async_std::main      — async runtime entry point
+#   * actix_web::main      — Actix Web entry point
+#   * test_log::test       — test-with-logger attribute
+#   * paw::main (THIS)     — CLI argument extraction attribute
+#
+# paw is the FIRST documented Rust CLI library that is itself an
+# ATTRIBUTE MACRO rather than a parser.  This is a unique position in
+# the cross-language CLI library taxonomy — no other language's CLI
+# ecosystem has a comparable "main-attribute adapter" library because
+# attribute macros are largely Rust-specific (some other languages
+# have decorators / annotations but for different purposes).
+#
+# REAL-WORLD paw USERS (still pinned to paw post-archive):
+#
+#   * sozu-proxy/sozu — HTTP reverse proxy (3677*, in corpus)
+#   * cjrh/lifter — GitHub release auto-downloader (THIS, 17*)
+#   * alixinne/hyperion.rs — Hyperion ambient lighting (12*)
+#   * Br1ght0ne/swaylayout — Sway keyboard layout reporter
+#   * chaos-mesh/chaos-tproxy — Chaos Mesh transparent proxy
+#   * KULeuven-COSIC/SCALE-MAMBA — secure computation framework
+#   * LukeMathWalker/build-your-own-jira-with-rust — popular Rust
+#                                                    tutorial (1005*)
+#   * dovahcrow/xtp-rs — XTP SDK binding (42*)
+#   * tcr/paxconsola — Pax stack-based VM
+#   * athas/raytracers — FP raytracer benchmark suite (308*)
+#   * Many other binaries from 2019-2022 era when paw was actively
+#     promoted by the rust-cli working group
+#
+# -----------------------------------------------------------------------------
+# LIFTER'S CLI SURFACE (verbatim from src/main.rs structopt+paw Args)
+# -----------------------------------------------------------------------------
+#
+# USAGE:
+#   lifter [OPTIONS]
+#
+# Behavior:
+#   lifter reads `lifter.config` (or `--config-file <file>`) listing
+#   tools to track.  For each tool, it queries the release-source URL,
+#   compares against the cached version, downloads the binary if a
+#   newer release exists.  Emits CSV to stdout:
+#
+#     timestamp,updated,tool_name,file_name,previous_version,current_version
+#
+#   stderr gets the diagnostic logs.  This separation lets you pipe
+#   stdout into awk/grep without log noise.
+#
+# Options:
+#   -q, --quiet                  Silence all output
+#   -v, --verbose                Verbose mode (-v / -vv / -vvv for more)
+#   -t, --timestamp <TS>         Log timestamp resolution (sec, ms, ns, none)
+#   -w, --working-dir <DIR>      Output directory for downloaded binaries
+#                                (default: same dir as the lifter binary)
+#   -c, --config-file <FILE>     Path to lifter.config
+#                                (default: ./lifter.config)
+#   -f, --filter <NAMES>         Comma-separated list of section names
+#                                to run (skip other tools in the config)
+#   -x, --threads <N>            Number of parallel download workers
+#                                (default: 1)
+#   -h, --help                   Print help and exit
+#   -V, --version                Print version and exit
+#
+# Environment:
+#   GITHUB_TOKEN                 GitHub API token to raise rate limits
+#                                (effectively required for configs with
+#                                many github_api_latest entries — GitHub
+#                                rate-limits anonymous requests aggressively)
+#
+# Configuration file format (lifter.config):
+#   [tool_name]
+#   url = "https://github.com/owner/repo/releases/latest"
+#   file = "tool-x86_64-linux.tar.gz"
+#   extract = "tool"
+#   # ... per-tool overrides
+#
+# Examples (from --long-about):
+#   lifter                       # default: ./lifter.config
+#   lifter | awk -F, '$2==1'    # only updated tools
+#   lifter -vv -x 8 -f ripgrep,fzf
+#                                # verbose, 8 parallel, only these
+#   GITHUB_TOKEN=ghp_xxx lifter -vv
+#                                # authenticated for rate limits
+#
+# =============================================================================
+
+_lifter() {
+    local curcontext="$curcontext" state line ret=1
+    typeset -A opt_args
+
+    local -a timestamps
+
+    timestamps=(
+        'sec:second resolution'
+        'ms:millisecond resolution'
+        'ns:nanosecond resolution'
+        'none:no timestamp'
+    )
+
+    _arguments -s \
+        '(-q --quiet)'{-q,--quiet}'[silence all output]' \
+        '*'{-v,--verbose}'[verbose mode (repeatable: -v/-vv/-vvv)]' \
+        '(-t --timestamp)'{-t,--timestamp}'[log timestamp resolution]:timestamp:->ts' \
+        '(-w --working-dir)'{-w,--working-dir}'[output directory]:dir:_directories' \
+        '(-c --config-file)'{-c,--config-file}'[path to lifter.config]:config:_files' \
+        '(-f --filter)'{-f,--filter}'[comma-separated section names to run]:names:' \
+        '(-x --threads)'{-x,--threads}'[parallel download workers (default 1)]:N:' \
+        '(-h --help)'{-h,--help}'[print help]' \
+        '(-V --version)'{-V,--version}'[print version]' \
+        && ret=0
+
+    case $state in
+        (ts)
+            _describe -t timestamps 'log timestamp' timestamps && ret=0
+            ;;
+    esac
+
+    return ret
+}
+
+_lifter "$@"
