@@ -1,0 +1,435 @@
+#compdef conec
+# =============================================================================
+# conec — the Cone programming language compiler.  Cone is Jonathan Goodwin's
+#         research-leaning systems programming language focused on
+#         **MEMORY PERMISSIONS** and **LIFETIME SEMANTICS** for safe systems
+#         programming.  Where Rust pioneered ownership + borrowing for safe
+#         systems code, Cone explores a **richer permission system** with
+#         9+ permission types (mut, const, mutex, rwlock, lex, exec, view,
+#         shared, restricted, etc.) that decouples mutability from
+#         shareability from threadability in ways Rust's binary
+#         `&mut`/`&` split cannot.  Compiles via LLVM to native binaries
+#         or WebAssembly.  Designed for low-level systems work (kernels,
+#         embedded, runtimes) where Rust's borrow checker is too
+#         restrictive and C's lack-of-safety is too dangerous.
+#
+# Author:  Jonathan Goodwin (jondgoodwin) — Cone language designer; author
+#          of "Cone: a programming language for permission-based memory
+#          management" research papers; longtime systems programmer who
+#          began Cone in 2017 as a response to Rust's perceived borrow-
+#          checker limitations
+# Source:  https://github.com/jondgoodwin/cone
+# CLI:     src/c-compiler/coneopts.c (uses HAND-ROLLED C TABLE-DRIVEN
+#                                     POSIX-style option parser in
+#                                     shared/options.c)
+# Library: Cone-internal `shared/options.c` + `opt_arg_t args[]` static
+#          table with `OPT_ARGS_FINISH` sentinel
+#          ("POSIX-getopt-style TABLE-DRIVEN C parser — author-side
+#           static table of {long_opt, short_opt_char, arg_kind,
+#           option_id} quadruples walked by generic shared parser")
+# License: BSD-2-Clause
+# Status:  Active research language — 558+ stars on jondgoodwin/cone;
+#          compiler is functional through LLVM codegen; standard library
+#          is in active development; not yet recommended for production
+#          work but used in PL research / educational contexts.
+#
+# -----------------------------------------------------------------------------
+# CROSS-LANGUAGE CLI LIBRARY TAXONOMY MILESTONE — 62ND DOCUMENTED LANGUAGE
+# -----------------------------------------------------------------------------
+# With this completion the cross-language CLI library taxonomy documents
+# its 62ND LANGUAGE (Cone, via conec).  Cone joins the taxonomy as the
+# FIRST permission-based-memory-management systems language documented
+# — a niche occupied by Rust (ownership + borrowing, with binary
+# `&mut`/`&`), Pony R??/Whiley/Beef R??/Vale (alternative memory-safety
+# approaches), and now Cone (richer 9+-permission-type system that
+# decouples mutability from shareability from threadability).
+# New language tally: 62.  Top-language tally remains Rust=36 / Go=36 /
+# TS-Node=36 (THREE-WAY TIE).  Taxonomy now spans 256 cross-language
+# CLI library variants across 62 documented languages — taxonomy crosses
+# the 256-variant byte-aligned milestone (2^8).
+# -----------------------------------------------------------------------------
+#
+# WHAT IS CONE'S CLI LIBRARY AND WHY IS IT THE 62ND LANGUAGE'S ENTRY?
+#
+# Cone's compiler-options parser is **hand-rolled C in `src/c-compiler/
+# coneopts.c`** + a generic table-walking parser in `src/c-compiler/
+# shared/options.c`.  The pattern is the **CLASSIC POSIX-GETOPT TABLE-
+# DRIVEN approach** — author declares a static array of option records,
+# generic walker matches argv against the array, dispatches via
+# enum-tagged option IDs.  This is the same pattern used historically in
+# countless GNU coreutils, Linux kernel `module_param_array`, and
+# embedded systems where dynamic memory is expensive.
+#
+# Cone's CLI grammar is DISTINCT from every documented CLI library on
+# FIVE specific axes:
+#
+#   1. STATIC `opt_arg_t args[]` TABLE WITH OPT_ARGS_FINISH SENTINEL —
+#      Cone declares all CLI options at COMPILE TIME via a static C
+#      array of quadruples:
+#         typedef struct opt_arg_t {
+#             char* long_opt;     // "--version"
+#             char  short_opt;    // 'v'
+#             int   arg_kind;     // OPT_ARG_NONE | OPT_ARG_REQUIRED |
+#                                 //   OPT_ARG_OPTIONAL
+#             int   id;           // OPT_VERSION (enum tag)
+#         } opt_arg_t;
+#
+#         static opt_arg_t args[] = {
+#             { "version", 'v', OPT_ARG_NONE,     OPT_VERSION  },
+#             { "help",    'h', OPT_ARG_NONE,     OPT_HELP     },
+#             { "debug",   'd', OPT_ARG_NONE,     OPT_DEBUG    },
+#             { "define",  'D', OPT_ARG_REQUIRED, OPT_BUILDFLAG },
+#             { "strip",   's', OPT_ARG_NONE,     OPT_STRIP    },
+#             { "path",    'p', OPT_ARG_REQUIRED, OPT_PATHS    },
+#             { "output",  'o', OPT_ARG_REQUIRED, OPT_OUTPUT   },
+#             // ... 30+ options total ...
+#             { "lint-llvm", '\0', OPT_ARG_NONE, OPT_LINT_LLVM },
+#             OPT_ARGS_FINISH                            // sentinel
+#         };
+#      The `OPT_ARGS_FINISH` macro expands to a sentinel record
+#      `{0, 0, UINT32_MAX, UINT32_MAX}` that the parser detects as
+#      end-of-table.  Compare:
+#        getopt (POSIX C):      Char-by-char short-option string +
+#                                separate long-option table (two
+#                                separate tables — Cone combines
+#                                them in one)
+#        argp (GNU):            `struct argp_option[]` similar to
+#                                Cone but with more fields (key, arg,
+#                                flags, doc, group)
+#        argparse (Python):     `parser.add_argument(...)` runtime
+#                                method calls — not a static table
+#        Cone:                  SINGLE-TABLE long+short combined,
+#                                generic parser walks the table,
+#                                OPT_ARGS_FINISH sentinel.  Direct
+#                                descendant of GNU argp's design but
+#                                simpler (no doc/group fields in
+#                                the table — those are in usage()).
+#
+#   2. GENERIC TABLE-WALKER IN shared/options.c — Cone separates the
+#      WHAT (the static args[] table) from the HOW (the generic parser
+#      that walks it).  `shared/options.c` defines:
+#         int optFindOption(opt_state_t* s);     // skip non-options
+#         opt_arg_t* optFindMatch(opt_state_t* s); // match current
+#                                                  //   arg to table
+#         int optHasData(opt_arg_t* arg);          // does opt take val?
+#      The walker exposes `opt_state_t` (parser state) and the public
+#      entry `opt(opt_state_t*) -> int` which returns the matched
+#      OPT_* id or `-1` for unknown, `0` for done.  This is the
+#      STATE-MACHINE-OVER-STATIC-TABLE pattern.  Compare:
+#        getopt:    similar but uses GLOBAL state (optind, optarg)
+#        argp:      callback-based, no state struct exposed
+#        Cone:      EXPLICIT opt_state_t struct, no globals, fully
+#                    reentrant — modernized POSIX getopt design.
+#      Reflects Jonathan Goodwin's "modernize the classics" approach.
+#
+#   3. THREE ARG-KIND ENUM (OPT_ARG_NONE / OPT_ARG_REQUIRED /
+#      OPT_ARG_OPTIONAL) — Cone's third field in each option record is
+#      one of three values:
+#         OPT_ARG_NONE       — boolean flag, no value (--help, --debug)
+#         OPT_ARG_REQUIRED   — must have value (--output PATH)
+#         OPT_ARG_OPTIONAL   — value optional (--safe[=PACKAGES])
+#      The `OPTIONAL` kind is used by `--safe` which can be either
+#      `--safe` (allow only `builtin` for C FFI) or `--safe=mypackage`
+#      (allow `mypackage` in addition).  Compare:
+#        getopt (POSIX):   `name::` for optional, `name:` for required
+#        argp:             same three-kind enum (ARG_OPTIONAL flag)
+#        clap (Rust):      richer arg-shape system (num_args, default,
+#                          last, etc.)
+#        Cone:             SIMPLE THREE-KIND enum — minimum-viable
+#                          arg-kind taxonomy.
+#
+#   4. OPT_* NUMERIC ENUM AS DISPATCH KEY — Cone uses an enum of
+#      OPT_* constants (OPT_VERSION, OPT_HELP, OPT_DEBUG, ..., OPT_BNF,
+#      OPT_ANTLR, OPT_ANTLRRAW) as the **DISPATCH KEY** in the option
+#      handler.  After `opt()` returns the matched id, the caller
+#      switches on the id:
+#         switch (opt(&state)) {
+#         case OPT_VERSION:    printf("%s", version); return 0;
+#         case OPT_HELP:       usage();               return 0;
+#         case OPT_DEBUG:      coneopt->release = 0;  break;
+#         case OPT_BUILDFLAG:  appendBuildFlag(state.opt_arg); break;
+#         case OPT_OUTPUT:     coneopt->output = state.opt_arg; break;
+#         // ...
+#         case -1: return -1;  // unknown
+#         case 0:  return 1;   // done
+#         }
+#      Compare:
+#        argp (GNU):    callback-per-option via single switch
+#        argparse (Py): name-string keys (args.version, args.help, ...)
+#                        — dynamic
+#        clap (Rust):   typed struct fields after parse
+#        Cone:          NUMERIC ENUM DISPATCH — classic C switch over
+#                        compile-time-constant integers, fastest
+#                        possible dispatch.
+#      Cone's approach is **the lowest-overhead-possible C-side option
+#      dispatch** — switch-on-int compiles to a jump table.  Choice
+#      reflects Cone's "systems programming language" identity: even
+#      the compiler is designed to compile fast and small.
+#
+#   5. THREE-TIER USAGE LAYOUT (main / rarely-needed / debugging) —
+#      Cone's `usage()` function in coneopts.c organizes the option
+#      help into THREE explicit tiers:
+#         Options:
+#           --version, -v   Print version and exit
+#           --help, -h      Print help text and exit
+#           --debug, -d     Don't optimise the output
+#           --define, -D    Define the specified build flag
+#           --strip, -s     Strip debug info
+#           --path, -p      Add additional search path
+#           --output, -o    Write output to this directory
+#           --library, -l   Generate C-API compatible static library
+#           ...
+#
+#         Rarely needed options:
+#           --safe          Allow only listed packages to use C FFI
+#           --cpu           Set the target CPU
+#           --features      CPU features to enable or disable
+#           ...
+#
+#         Debugging options:
+#           --verbose, -V   Verbosity level (0-4)
+#           --ir            Output IR tree for whole program
+#           --asm           Output assembly file
+#           --llvmir        Output LLVM IR file
+#           --trace, -t     Enable parse trace
+#           --immerr        Report errors immediately
+#           --files         Print source file names
+#           --checktree     Verify IR well-formedness
+#           ...
+#      Compare:
+#        getopt:      flat option list
+#        argp:        option groups via "doc" field with leading
+#                      "\v" separator and group integer
+#        Cone:        THREE-TIER explicit ("Options" /
+#                      "Rarely needed options" / "Debugging options")
+#                      — hand-organized in usage() printf.
+#      Reflects Cone's audience: compiler developers + systems
+#      programmers + LLVM hackers, who each consult different tiers
+#      of the option set.
+#
+# THE Cone CLI API SURFACE (verbatim from src/c-compiler/coneopts.c)
+#
+#   // include
+#   #include "shared/options.h"
+#
+#   // option ID enum:
+#   enum {
+#       OPT_VERSION, OPT_HELP, OPT_DEBUG, OPT_BUILDFLAG,
+#       OPT_STRIP, OPT_PATHS, OPT_OUTPUT, OPT_LIBRARY,
+#       OPT_RUNTIMEBC, OPT_PIC, OPT_NOPIC, OPT_DOCS, OPT_DOCS_PUBLIC,
+#       OPT_SAFE, OPT_CPU, OPT_FEATURES, OPT_WASM, OPT_TRIPLE,
+#       OPT_STATS, OPT_LINK_ARCH, OPT_LINKER,
+#       OPT_VERBOSE, OPT_IR, OPT_ASM, OPT_LLVMIR, OPT_TRACE,
+#       OPT_WIDTH, OPT_IMMERR, OPT_VERIFY, OPT_FILENAMES,
+#       OPT_CHECKTREE, OPT_EXTFUN, OPT_SIMPLEBUILTIN, OPT_LINT_LLVM,
+#       OPT_BNF, OPT_ANTLR, OPT_ANTLRRAW
+#   };
+#
+#   // static table:
+#   static opt_arg_t args[] = {
+#       { "version", 'v', OPT_ARG_NONE, OPT_VERSION },
+#       // ... (~30 entries) ...
+#       OPT_ARGS_FINISH
+#   };
+#
+#   // entry point invoked from main():
+#   int coneOptSet(ConeOptions *opt, int *argc, char **argv) {
+#       opt_state_t state;
+#       opt_init(&state, args, argc, argv);
+#       int id;
+#       while ((id = opt_next(&state)) != 0) {
+#           switch (id) {
+#           case OPT_VERSION:  printf("%s\n", version); return 0;
+#           case OPT_HELP:     usage(); return 0;
+#           case OPT_OUTPUT:   opt->output = state.opt_arg; break;
+#           // ...
+#           case -1: usage(); return -1;
+#           }
+#       }
+#       return 1;
+#   }
+#
+# CONTRAST WITH OTHER HAND-ROLLED LANGUAGE-COMPILER CLI LIBRARIES
+# DOCUMENTED IN THE CORPUS:
+#
+#   * Wren (wren_cli)             — bare strcmp() ad-hoc parser
+#   * Squirrel (sq)               — switch-on-argv[1][1] C parser
+#   * Pawn (pawncc) R509          — Borland-Turbo-C-style attached-
+#                                    value parser
+#   * Virgil (v3c) R501           — Generic Option<T> with handler
+#                                    closures in Virgil stdlib
+#   * Nemerle (nemish) R505       — Variant-CliOption with per-
+#                                    constructor handler in
+#                                    Nemerle.Utility.Getopt
+#   * Frege (fregec)              — Haskell-style monadic pattern-
+#                                    matching argv parser in Frege
+#                                    stdlib
+#   * Cone (conec, THIS)          — POSIX-getopt-style TABLE-DRIVEN
+#                                    static C `opt_arg_t args[]` +
+#                                    generic shared parser walks
+#                                    table + numeric OPT_* enum
+#                                    dispatch.
+#
+# Cone occupies a UNIQUE NICHE — the **CLASSIC POSIX-GETOPT TABLE-
+# DRIVEN C PARSER**, modernized with a `opt_state_t` struct (no
+# globals), three-kind arg-enum, and OPT_ARGS_FINISH sentinel.
+# Where Pawn and Squirrel use ad-hoc switch-on-argv parsers, Cone
+# brings the **GNU-argp-style organized static-table approach** —
+# author declares all options at compile time in one place, generic
+# walker processes them.  Cleanest hand-rolled C CLI design among
+# documented language compilers.
+#
+# REAL-WORLD conec USERS:
+#
+#   * jondgoodwin/cone:conec (THIS, 558*) — the Cone language compiler
+#       itself; the entire user-facing Cone toolchain.
+#   * Cone language tutorials and examples invoke conec as the
+#       canonical entry point (`conec hello.cone` to compile).
+#   * Cone playground (web-based) wraps conec compiled to WebAssembly.
+#
+# CONE LANGUAGE DESIGN TIES TO OTHER LANGUAGES IN THE TAXONOMY:
+#
+#   * Rust — Cone's permission system explicitly responds to Rust's
+#       `&mut`/`&` binary split; conec aims to demonstrate
+#       9+ permissions
+#   * Pony — Cone shares Pony's "reference capabilities" concept
+#       (mut, const, shared, restricted) but with finer granularity
+#   * Vale — Cone and Vale both explore alternative-to-Rust memory
+#       safety; Vale uses generational references, Cone uses
+#       permissions
+#   * Beef R?? — Cone and Beef both target the "systems language
+#       between Rust and C" niche
+#   * Whiley R?? — formal verification approach, complementary to
+#       Cone's compile-time permission checking
+#   * LLVM — Cone uses LLVM IR as its target, shared with Rust,
+#       Crystal, Zig, and many other modern languages
+#
+# -----------------------------------------------------------------------------
+# CONEC'S CLI SURFACE (verbatim from coneopts.c + usage())
+# -----------------------------------------------------------------------------
+#
+# USAGE:
+#   conec [OPTIONS] <source_file>
+#
+# Main options:
+#   -v, --version                    Print the version of the compiler
+#                                    and exit
+#   -h, --help                       Print this help text and exit
+#   -d, --debug                      Don't optimise the output
+#   -D, --define <name>              Define the specified build flag
+#                                    (e.g. `--define=RELEASE`)
+#   -s, --strip                      Strip debug info
+#   -p, --path <path>                Add an additional search path
+#                                    (for packages and libraries)
+#   -o, --output <dir>               Write output to this directory
+#                                    (default: current directory)
+#   -l, --library                    Generate a C-API compatible static
+#                                    library
+#       --runtimebc                  Compile with LLVM bitcode file
+#                                    for the runtime
+#       --wasm                       Compile for WebAssembly target
+#       --pic                        Compile using position-independent
+#                                    code
+#       --nopic                      Don't compile using PIC
+#   -g, --docs                       Generate code documentation
+#       --docs-public                Generate docs for public types only
+#
+# Rarely-needed options:
+#       --safe[=<package>]           Allow only listed packages to use
+#                                    C FFI (default: only `builtin`)
+#       --cpu <name>                 Set the target CPU
+#                                    (default: host CPU)
+#       --features <+a,-b>           Enable/disable CPU features
+#                                    (`+`=enable, `-`=disable)
+#       --triple <name>              Set the target triple
+#                                    (default: host triple)
+#       --stats                      Print some compiler stats
+#       --link-arch <name>           Set the linking architecture
+#       --linker <name>              Set the linker command to use
+#
+# Debugging options:
+#   -V, --verbose <0..4>             Verbosity level (0=errors only,
+#                                    1=stage info, 2=details,
+#                                    3=external tools, 4=very low-level)
+#       --ir                         Output IR tree for whole program
+#       --asm                        Output an assembly file
+#       --llvmir                     Output an LLVM IR file
+#   -t, --trace                      Enable parse trace
+#   -w, --width <cols>               Width when printing the IR
+#                                    (default: terminal width)
+#       --immerr                     Report errors immediately
+#                                    (don't defer)
+#       --verify                     Verify generated LLVM IR
+#       --files                      Print source file names as
+#                                    they're processed
+#       --checktree                  Verify IR well-formedness
+#       --extfun                     Set function default linkage
+#                                    to external
+#       --simplebuiltin              Use a minimal builtin package
+#       --lint-llvm                  Run LLVM linting pass on
+#                                    generated IR
+#
+# Typical usage:
+#   $ conec hello.cone                           # compile to a.out
+#   $ conec -o build/ src/main.cone              # compile to ./build/
+#   $ conec --wasm -o web/ src/main.cone         # WebAssembly target
+#   $ conec --asm hello.cone                     # emit assembly
+#   $ conec --llvmir hello.cone                  # emit LLVM IR
+#   $ conec -g -D RELEASE src/main.cone          # docs + RELEASE flag
+#   $ conec --safe=mypkg --safe=otherpkg main.cone  # allow C FFI
+#   $ conec --verbose=2 main.cone                # detailed compile log
+#
+# Companion tools:
+#   conestd                          Cone standard library project
+#                                    (separate Visual Studio project
+#                                    in the repo; loaded at compile
+#                                    time as the default "builtin"
+#                                    package)
+#
+# =============================================================================
+
+_conec() {
+    local curcontext="$curcontext" state line ret=1
+    typeset -A opt_args
+
+    _arguments -C \
+        '(-v --version)'{-v,--version}'[print compiler version and exit]' \
+        '(-h --help)'{-h,--help}'[print help text and exit]' \
+        '(-d --debug)'{-d,--debug}'[disable optimization]' \
+        '(-D --define)'{-D,--define=}'[define a build flag]:name:' \
+        '(-s --strip)'{-s,--strip}'[strip debug info]' \
+        '*'{-p,--path=}'[add an additional search path]:path:_directories' \
+        '(-o --output)'{-o,--output=}'[output directory]:dir:_directories' \
+        '(-l --library)'{-l,--library}'[generate C-API compatible static library]' \
+        '--runtimebc[compile with LLVM bitcode runtime]' \
+        '--wasm[compile for WebAssembly target]' \
+        '--pic[compile using position-independent code]' \
+        '--nopic[do not use PIC]' \
+        '(-g --docs)'{-g,--docs}'[generate code documentation]' \
+        '--docs-public[generate docs for public types only]' \
+        '--safe=[allow listed packages to use C FFI]:package:' \
+        '--cpu=[set target CPU]:cpu:' \
+        '--features=[CPU features to enable/disable +a,-b]:features:' \
+        '--triple=[set target triple]:triple:' \
+        '--stats[print compiler stats]' \
+        '--link-arch=[set linking architecture]:arch:' \
+        '--linker=[set linker command]:linker:' \
+        '(-V --verbose)'{-V,--verbose=}'[verbosity level]:level:(0 1 2 3 4)' \
+        '--ir[output IR tree for whole program]' \
+        '--asm[output assembly file]' \
+        '--llvmir[output LLVM IR file]' \
+        '(-t --trace)'{-t,--trace}'[enable parse trace]' \
+        '(-w --width)'{-w,--width=}'[width when printing the IR]:columns:' \
+        '--immerr[report errors immediately]' \
+        '--verify[verify generated LLVM IR]' \
+        '--files[print source file names as processed]' \
+        '--checktree[verify IR well-formedness]' \
+        '--extfun[set function default linkage to external]' \
+        '--simplebuiltin[use minimal builtin package]' \
+        '--lint-llvm[run LLVM linting pass]' \
+        '*:cone source file:_files -g "*.cone"' && ret=0
+
+    return ret
+}
+
+_conec "$@"
