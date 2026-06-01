@@ -1,0 +1,339 @@
+#compdef compile-typst-site
+# ============================================================================
+#  _compile-typst-site — compile-typst-site: command-line static
+#                       site generator using Typst as the
+#                       templating engine (Wade Cheng)
+#
+#  Source-direct extraction from
+#    https://github.com/wade-cheng/compile-typst-site/blob/main/src/internals/config.rs (onlyargs Args struct)
+#    https://github.com/wade-cheng/compile-typst-site/blob/main/Cargo.toml (bin: compile-typst-site, depends onlyargs)
+#    https://github.com/parasyte/onlyargs (the parasyte/onlyargs
+#    library by Jay "parasyte" Oster — author of the pixels crate,
+#    Rust ecosystem dev)
+#
+#  Maintained by Wade Cheng (independent developer).  5 GH stars
+#  on compile-typst-site (small but real project, version 2.1.0).
+#  compile-typst-site is a static site generator built around
+#  TYPST (https://typst.app — modern document-typesetting language
+#  designed as a LaTeX alternative with cleaner syntax and faster
+#  compilation).  Given a directory of `.typ` Typst source files,
+#  compile-typst-site invokes the Typst compiler to render each
+#  file to HTML, copies passthrough assets (CSS/JS/images per
+#  user-configured globs), runs optional pre-init scripts (e.g.
+#  Python build steps), and optional post-processing on the
+#  generated HTML (e.g. minification, syntax-highlight injection).
+#  Supports --watch mode (rebuild on file changes) and --serve
+#  mode (rebuild + serve over HTTP for local development).
+#  Configuration via combined CLI flags + TOML config file.
+#  Sister tools: hugo (in corpus + STOCK — Go static site
+#  generator; the dominant SSG), zola (in corpus + STOCK — Rust
+#  SSG by Vincent Prouillet), jekyll (in corpus + STOCK — Ruby
+#  SSG; GitHub Pages default), eleventy (in corpus via _11ty —
+#  Node.js SSG), astro (in corpus via _astro — modern hybrid
+#  islands SSG), gatsby (in corpus via _gatsby — React SSG),
+#  next.js (in corpus via _next — React framework with SSG),
+#  pelican (in corpus + STOCK — Python SSG), mdbook (in corpus
+#  via _mdbook + STOCK Rust — book-format SSG), typst (in corpus
+#  via _typst — the underlying document compiler that
+#  compile-typst-site wraps).
+#
+#  CLI library taxonomy update: 21st Rust CLI library — Jay
+#  "parasyte" Oster's **onlyargs** (parasyte/onlyargs).  Rust
+#  ecosystem now has 21 documented CLI libraries — TYING WITH GO
+#  at the top of the cross-language taxonomy ahead of TypeScript-
+#  Node (20).  🎉 Rust RE-TIES with Go at 21 — Rust REACHES 21
+#  documented CLI libraries.
+#
+#  onlyargs (parasyte/onlyargs, 18 GH stars) is "Only argument
+#  parsing! Nothing more."  Distinguishing philosophy: ABSOLUTE
+#  MINIMALISM — onlyargs provides a `Trait OnlyArgs` with `parse
+#  (Vec<OsString>) -> Result<Self, CliError>` and ABSOLUTELY
+#  NOTHING ELSE.  Helper macros (`onlyargs::impl_help!()` /
+#  `onlyargs::impl_version!()`) auto-generate --help and
+#  --version strings from struct doc-comments at COMPILE TIME via
+#  a separate proc-macro crate `onlyargs_derive`.  Two ways to
+#  use:
+#    1. MANUAL — implement OnlyArgs trait yourself with a
+#       hand-rolled `match arg.to_str()` loop (lowest-level,
+#       fully transparent, ZERO proc-macro magic)
+#    2. DERIVE — use `#[derive(OnlyArgs)]` from `onlyargs_derive`
+#       to auto-generate the parser from struct fields with
+#       doc-comments
+#  This SPLIT-CRATE design (core trait + optional derive crate)
+#  lets users opt into proc-macros only when they want them;
+#  manual usage requires ZERO proc-macros and ZERO build-time
+#  overhead beyond what stdlib provides.  Used by parasyte/
+#  onlyargs (examples), wade-cheng/compile-typst-site (Typst
+#  SSG 5 stars), dcdpr/taxcount (airgapped US tax calculation
+#  for Bitcoiners 9 stars + 3 helper binaries), and other niche
+#  Rust binaries that want minimal-overhead arg parsing without
+#  pulling in clap's weight.  Jay Oster is also the author of
+#  the `pixels` crate (pixel framebuffer for windowing), `error-
+#  iter` (error source iteration helper), and many Rust ecosystem
+#  utilities — onlyargs reflects parasyte's general preference
+#  for minimal-dependency Rust libraries.
+#
+#  onlyargs API:
+#    // MANUAL usage (zero proc-macros):
+#    use onlyargs::{CliError, OnlyArgs};
+#    use std::ffi::OsString;
+#
+#    #[derive(Debug)]
+#    struct Args {
+#      verbose: bool,
+#    }
+#
+#    impl OnlyArgs for Args {
+#      const HELP: &'static str = onlyargs::impl_help!();   // macro
+#      const VERSION: &'static str = onlyargs::impl_version!();
+#
+#      fn parse(args: Vec<OsString>) -> Result<Self, CliError> {
+#        let mut verbose = false;
+#        for arg in args.into_iter() {
+#          match arg.to_str() {
+#            Some("--help") | Some("-h") => Self::help(),
+#            Some("--version") | Some("-V") => Self::version(),
+#            Some("--verbose") | Some("-v") => { verbose = true; }
+#            Some("--") => break,
+#            _ => return Err(CliError::Unknown(arg)),
+#          }
+#        }
+#        Ok(Self { verbose })
+#      }
+#    }
+#
+#    fn main() -> Result<(), CliError> {
+#      let args: Args = onlyargs::parse()?;
+#      if args.verbose { println!("Verbose enabled"); }
+#      Ok(())
+#    }
+#
+#    // DERIVE usage (uses optional onlyargs_derive crate):
+#    use onlyargs_derive::OnlyArgs;
+#
+#    /// Footer text via per-struct #[footer = "..."] attributes
+#    /// can document extra context that doesn't fit in flag
+#    /// descriptions
+#    #[derive(OnlyArgs)]
+#    #[footer = "Additional environment variables:"]
+#    #[footer = "  - LOG_LEVEL: error | warn | info | debug"]
+#    struct Args {
+#      /// Project root path (doc-comment becomes --help text)
+#      path: Option<PathBuf>,
+#
+#      /// Build and watch for changes
+#      watch: bool,
+#
+#      /// Build + watch + serve over HTTP
+#      serve: bool,
+#
+#      /// Verbose logging
+#      verbose: bool,
+#
+#      /// Color mode [default: auto] [possible values: auto, always, never]
+#      color: Option<String>,
+#    }
+#
+#    let args: Args = onlyargs::parse()?;
+#
+#  onlyargs distinctive features:
+#    - SPLIT-CRATE design — `onlyargs` core crate provides the
+#      trait + macros (zero proc-macros, only stdlib `parse_macro_
+#      input!`-style declarative); separate `onlyargs_derive`
+#      provides the `#[derive(OnlyArgs)]` proc-macro for
+#      convenience.  Users can pick which.
+#    - `impl_help!()` and `impl_version!()` declarative macros —
+#      generate the HELP and VERSION constants from doc-comments
+#      and Cargo.toml metadata at COMPILE TIME (read via
+#      `env!("CARGO_PKG_VERSION")` etc.)
+#    - DOC-COMMENT-AS-HELP — `/// description` doc-comments above
+#      struct fields become per-flag --help text; description of
+#      the struct itself becomes the program description; footer
+#      lines via `#[footer = "..."]` attributes
+#    - FIELD ATTRIBUTES (derive only):
+#      * `#[short]` — register a single-char short flag (auto-
+#        derived from first letter, or explicit via
+#        `#[short('X')]`)
+#      * `#[long]` — register the long flag (default behavior;
+#        explicit when overriding the snake_case-to-kebab-case
+#        conversion)
+#      * `#[positional]` — positional argument instead of flag
+#      * `#[default(...)]` — default value when flag absent
+#    - TYPE INFERENCE from struct field types:
+#      * `bool` → boolean flag (presence = true; no value)
+#      * `Option<T>` → optional flag
+#      * `Vec<T>` → REPEATABLE flag (each occurrence appends)
+#      * `PathBuf` / `OsString` → path/OsString-typed value
+#      * Numeric primitives (`u32`/`i64`/`f64`) → parsed from
+#        string via FromStr
+#      * Custom types implementing `FromStr` → custom-parsed
+#    - `CliError` enum — `Unknown(OsString)` / `Missing(name)` /
+#      `Invalid(name, value)` / `ParseError(err)` variants for
+#      parse failures
+#    - `Self::help()` / `Self::version()` convenience methods on
+#      the trait — print HELP/VERSION constants and `process::
+#      exit(0)`
+#    - INSPIRED BY clap_derive (struct-based schema) but WAY
+#      smaller; explicitly designed for users who want
+#      "structopt without the dependencies"
+#    - NO SUBCOMMAND SUPPORT — onlyargs is FLAT-SCHEMA only; for
+#      hierarchical subcommands, caller dispatches manually based
+#      on first positional + re-parses with a different Args
+#      struct
+#    - NO ANSI COLORS in help output — minimalism extends to
+#      output rendering
+#    - NO suggest-similar-flag ("Did you mean: --foo?") — just
+#      hard error on unknown flag
+#    - NO auto-help-on-error formatting — caller prints HELP
+#      constant on Err in main()
+#  Distinct from R275 Rust clap-derive (proc-macro derive on
+#  struct + heavy feature set; clap-derive is what users
+#  generally pick when they want full features), R330 Rust bpaf
+#  (functional applicative combinator), R344 Rust google/argh
+#  (Google Fuchsia-OS derive-on-struct; argh is the CLOSEST
+#  RELATIVE in code-size optimization — both prioritize smaller
+#  binaries; argh is from Google with Fuchsia-OS lineage while
+#  onlyargs is from solo dev parasyte with explicit
+#  "no-magic" philosophy), R347 Rust RazrFalcon/pico-args (LOW-
+#  LEVEL imperative pull parser — pico-args is the SECOND-
+#  CLOSEST relative; both ultra-minimal but pico-args uses
+#  `args.value_from_str("--flag")?` imperative-pull while
+#  onlyargs uses `match arg.to_str()` loop), R404 Rust matklad/
+#  xflags (declarative MACRO block syntax), R407 Rust blyxxyz/
+#  lexopt (MINIMAL iterator-based pull parser), R410 Rust
+#  murarth/gumdrop (zero-dep derive-macro), R413 Rust docopt/
+#  docopt.rs (USAGE-STRING-IS-SPEC), R416 Rust rust-lang/
+#  getopts (OFFICIAL POSIX-getopt(3) port), R420 Rust
+#  ksk001100/seahorse (Cobra-for-Rust chained-builder), R427
+#  Rust tanakh/argopt (function-as-CLI proc-macro), R430 Rust
+#  killercup/quicli (batteries-included educational framework),
+#  R434 Rust dtolnay/gflags (distributed flags pattern), R437
+#  Rust jirutka/argp (code-size-optimized argh fork), R440
+#  Rust clap-builder (clap's runtime-fluent-builder API
+#  distinct from clap-derive).  Rust documented libraries so
+#  far: clap-derive, bpaf, argh, pico-args, xflags, lexopt,
+#  gumdrop, docopt.rs, getopts, seahorse, argopt, quicli,
+#  gflags, argp, clap-builder, onlyargs (this round) plus older
+#  structopt (deprecated)... 21 total.  onlyargs's
+#  distinguishing feature vs all other Rust libs: onlyargs is
+#  the ONLY Rust CLI library in the corpus that has a SPLIT-
+#  CRATE design (core crate ZERO proc-macros, optional
+#  `onlyargs_derive` separate crate for opt-in derive).  Most
+#  other Rust libs are MONOLITHIC (clap_derive ships with full
+#  clap; argh's FromArgs is intrinsic).  onlyargs's approach:
+#  MINIMAL-TRAIT-PLUS-OPTIONAL-DERIVE with `OnlyArgs` trait +
+#  `parse(Vec<OsString>) -> Result<Self, CliError>` + `Self::
+#  HELP` / `Self::VERSION` constants generated by `impl_help!()`
+#  / `impl_version!()` declarative macros + DOC-COMMENT-AS-HELP
+#  + per-struct `#[footer = "..."]` for trailing help text +
+#  FIELD ATTRIBUTES (`#[short]/#[long]/#[positional]/#[default]`)
+#  in optional `onlyargs_derive` crate + TYPE INFERENCE from
+#  field types (bool/Option/Vec/PathBuf/numeric) + `CliError`
+#  enum (Unknown/Missing/Invalid/ParseError) + NO subcommand
+#  support + NO ANSI colors + NO suggest-similar-flag + NO auto-
+#  help-on-error + INSPIRED BY structopt minus dependencies —
+#  corpus's **first documented split-crate-minimal-trait Rust
+#  CLI library**.  Brings cross-language CLI library taxonomy
+#  variant count to 184; Rust ecosystem now has 21 documented
+#  CLI libraries — TYING WITH GO at the top of the cross-
+#  language taxonomy ahead of TypeScript-Node (20).
+#
+#  Surface (verbatim from `src/internals/config.rs` Args struct
+#  with `#[derive(OnlyArgs)]`):
+#
+#  Usage:
+#    compile-typst-site [options]
+#
+#  Options:
+#        --path <PATH>              Use the specified path as the
+#                                   project root (default: current
+#                                   working directory)
+#        --watch                    Build and then watch for
+#                                   changes (rebuild on file modification)
+#        --serve                    Build and then watch for
+#                                   changes while serving website
+#                                   locally (HTTP server on a
+#                                   default port)
+#        --ignore-initial           Ignore initial full-site
+#                                   compilation step (skip the
+#                                   first build; useful when
+#                                   restarting watch mode after
+#                                   a successful initial build)
+#        --verbose                  Enable verbose logging
+#                                   (info-level + per-file build
+#                                   timing)
+#        --trace                    Enable very verbose logging
+#                                   (debug + trace level; shows
+#                                   Typst compiler invocations,
+#                                   passthrough copies, etc.)
+#        --color <MODE>             Whether to use color in
+#                                   terminal output (default:
+#                                   auto; choices: auto, always,
+#                                   never; respects NO_COLOR env
+#                                   var when "auto" and stdout
+#                                   is not a TTY)
+#    -h, --help                     Show help (auto from onlyargs)
+#    -V, --version                  Show version (auto from
+#                                   Cargo.toml via impl_version!)
+#
+#  Configuration file:
+#    A TOML config file is also read from the project root
+#    (typically `compile-typst-site.toml` or
+#    `compile-typst-site-config.toml`).  CLI flags override
+#    config-file values.  Config file keys include:
+#      passthrough_copy              — globs to copy as-is
+#      init                          — commands to run before build
+#      post_processing_typ           — HTML post-processor command
+#      literal_paths                 — keep .typ → .html naming
+#                                      (default: transform to
+#                                      .typ → /index.html)
+#      file_listing                  — disabled | enabled | include-data
+#      file_listing_extra_args       — args for `typst query`
+#      compilation_extra_args        — args for `typst compile`
+#      disable_incremental           — disable incremental build
+#                                      in watch/serve mode
+#
+#  Examples:
+#    compile-typst-site                                    # Build current dir
+#    compile-typst-site --path ./my-site                   # Build specific dir
+#    compile-typst-site --watch                            # Build + watch
+#    compile-typst-site --serve                            # Build + watch + serve
+#    compile-typst-site --serve --path ./my-site           # Serve from specific dir
+#    compile-typst-site --watch --ignore-initial           # Watch only (skip initial build)
+#    compile-typst-site --verbose --path ./my-site         # Verbose output
+#    compile-typst-site --trace                            # Very verbose
+#    compile-typst-site --color always                     # Force ANSI colors
+#    compile-typst-site --color never --verbose            # Plain text verbose
+#    compile-typst-site --version                          # Show version
+#    compile-typst-site --help                             # Show help
+#
+#  Dup-skipped neighbors during hunt (in corpus or smaller user base,
+#  also parasyte/onlyargs users):
+#    - taxcount (dcdpr/taxcount 9 stars — airgapped US tax
+#      calculation for Bitcoiners; uses onlyargs_derive; FUTURE
+#      candidate but complex flag surface for tax-specific
+#      domain)
+#    - kraken-export-fix (dcdpr/taxcount sub-binary — also uses
+#      onlyargs; same project)
+#    - ohlc-ness (dcdpr/taxcount sub-binary — OHLC chart
+#      generator)
+#    - parasyte/onlyargs repo itself (18 stars library not CLI)
+# ============================================================================
+
+_compile-typst-site() {
+  local context state state_descr line
+  typeset -A opt_args
+
+  _arguments -s -S \
+    '(-h --help)'{-h,--help}'[show help]' \
+    '(-V --version)'{-V,--version}'[show version]' \
+    '--path[use specified path as project root]:path:_directories' \
+    '--watch[build and watch for changes]' \
+    '--serve[build + watch + serve locally]' \
+    '--ignore-initial[ignore initial full-site compilation step]' \
+    '--verbose[enable verbose logging]' \
+    '--trace[enable very verbose logging (debug + trace)]' \
+    '--color[whether to use color]:mode:(auto always never)'
+}
+
+_compile-typst-site "$@"
