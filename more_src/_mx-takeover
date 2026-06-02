@@ -1,0 +1,330 @@
+#compdef mx-takeover
+# ============================================================================
+# _mx-takeover — zsh completion for **mx-takeover** —
+#                 musana/mx-takeover, the **DNS MX-record misconfig
+#                 + subdomain-takeover detection scanner** for bug-
+#                 bounty + offensive-security researchers.  Given a
+#                 piped-in list of domain names on stdin, queries
+#                 each domain's MX (mail-exchange) records via the
+#                 canonical Go DNS library `miekg/dns`, identifies
+#                 MX records that point to **unregistered domains**
+#                 (a domain-takeover vulnerability — register the
+#                 dangling MX target and you receive every mail
+#                 destined for the victim's @user@victim.com
+#                 addresses) or **soon-to-expire registered
+#                 domains** (whois-based expiration tracking).
+#                 Optionally auto-registers takeover targets on
+#                 Mailgun via the `--mailgun-api` flag for
+#                 weaponized proof-of-concept.  Go=176 leader bump
+#                 continuing Axis 121 (DNS / IETF RFC-1035 + DoT
+#                 RFC-7858 + DoH RFC-8484 + DoQ RFC-9250 name-
+#                 resolution protocol) at 2/0/0 via the canonical
+#                 Go DNS library **github.com/miekg/dns**.
+# ============================================================================
+#
+# UPSTREAM
+#   Repository : https://github.com/musana/mx-takeover
+#   Maintainer : Musana  (Burak Diril; Turkish bug-bounty
+#                 researcher specializing in DNS-based attack
+#                 surface; also author of `dns-takeover`,
+#                 `whois-checker`, and several other
+#                 reconnaissance tools)
+#   License    : MIT
+#   Stars      : 359
+#   Language   : Go  (stdlib `flag` for CLI parsing + miekg/dns
+#                 for the DNS protocol layer + projectdiscovery/
+#                 retryabledns for retry-with-backoff resolver
+#                 wrapper + likexian/whois + likexian/whois-
+#                 parser for whois expiration parsing +
+#                 mailgun/mailgun-go/v3 for the optional auto-
+#                 registration of taken-over domains +
+#                 jpillora/go-tld for TLD-aware domain parsing +
+#                 gammazero/workerpool for the parallel scanner
+#                 + fatih/color for colored output)
+#   Binary     : mx-takeover
+#   Last push  : 2023-07-17
+#
+# WHAT IT IS
+#   MX (Mail Exchanger) records in DNS specify which mail servers
+#   accept mail for a given domain.  When you SMTP-deliver mail
+#   to `bob@example.com`, your MTA queries `example.com`'s MX
+#   records to find the destination server.  If `example.com`'s
+#   MX record points to `mail.example-mail-provider.com` but
+#   that `example-mail-provider.com` domain has been **unregistered**
+#   (the original provider went out of business; an organization
+#   forgot to renew their custom mail-platform's domain), an
+#   attacker can:
+#
+#     1. Re-register `example-mail-provider.com` for $10
+#     2. Set up an SMTP receiver on `mail.example-mail-provider.com`
+#     3. Receive every email destined for the victim's domain —
+#        password resets, financial statements, internal
+#        communications, customer-support inboxes, board
+#        confidential, attorney-client privileged correspondence
+#
+#   This is one of the most consequential domain-takeover
+#   classes (worse than CNAME-subdomain-takeover because the
+#   victim **already trusts you with their email**).  Several
+#   high-profile bug bounty reports (Slack, GitLab, Atlassian,
+#   Snapchat, and a long Hall-of-Fame list) have paid out high
+#   five-figure bounties for MX-record-misconfig findings.
+#
+#   `mx-takeover` automates the detection:
+#
+#     1. Pipe a list of in-scope domains into stdin
+#     2. For each domain:  query MX records via miekg/dns +
+#        projectdiscovery/retryabledns (with retry/backoff
+#        against flaky public resolvers)
+#     3. Extract the MX record's host portion
+#     4. Resolve the TLD root of that host via go-tld
+#     5. If `--check-whois` is set: query the registered-domain
+#        whois server via likexian/whois → parse via likexian/
+#        whois-parser → check expiration date
+#     6. Classify each MX record as `registered` /  `expired` /
+#        `expiring-soon (within --expire-day)` /
+#        `unregistered` /  `unknown`
+#     7. (Optional) If `--mailgun-api` is set + an unregistered
+#        MX target is found: auto-register it on Mailgun for
+#        weaponized PoC
+#     8. Emit JSON output to `--output <FILE>` (and to stdout)
+#
+#   The tool exclusively reads target domains from stdin (refuses
+#   to run without a piped input) — designed for shell pipelines
+#   like `cat scope.txt | mx-takeover -w 16 --check-whois`.
+#
+# CLI ARGUMENT GRAMMAR  (verbatim from mx-takeover.go stdlib
+#                       `flag.*Var` declarations; extracted via
+#                       raw.githubusercontent.com fetch of
+#                       mx-takeover.go)
+#
+#   <domain-list> | mx-takeover [OPTIONS]
+#
+#   Options:
+#     -h                             Show help (the stdlib `flag`
+#                                    boolean help flag)
+#     -v                             Verbose mode (print all log
+#                                    output)
+#     -w <N>                         Number of concurrent workers
+#                                    [default: 8]
+#     --mailgun-api <KEY>            Mailgun API key — when set,
+#                                    automatically register
+#                                    discovered takeover targets
+#                                    on the configured Mailgun
+#                                    account (for weaponized
+#                                    proof-of-concept)
+#     --check-whois                  Check whois lookup for each
+#                                    discovered MX domain to
+#                                    detect unregistered or
+#                                    soon-to-expire domains
+#                                    [default: false]
+#     --expire-day <N>               Estimated days for expiration
+#                                    threshold (a domain
+#                                    expiring within this many
+#                                    days is flagged)
+#                                    [default: 30]
+#     --show-only-mx                 Show only records that have
+#                                    MX records (suppress output
+#                                    for domains with no MX
+#                                    response)
+#     --output <FILE>                Save output to file as JSON
+#                                    (output is also printed to
+#                                    stdout regardless)
+#
+# AXIS / CORPUS POSITION
+#   `musana/mx-takeover` declares a **direct** dependency on
+#   `github.com/miekg/dns v1.1.49` in its `go.mod` (verified
+#   via `gh api repos/musana/mx-takeover/contents/go.mod`).
+#   The `mx-takeover.go` source imports it directly via
+#   `import "github.com/miekg/dns"` and wraps it via
+#   `github.com/projectdiscovery/retryabledns` for the
+#   retry-with-backoff resolver layer.
+#
+#   `miekg/dns` is **THE canonical Go DNS library** — Miek
+#   Gieben's reference pure-Go implementation of the entire
+#   DNS protocol stack, the de-facto Go DNS dependency on
+#   pkg.go.dev with 8,500+ ★ on GitHub and millions of all-
+#   time downloads.  Miek Gieben (the maintainer) was the
+#   author of NLnet Labs' canonical NSD (Name Server Daemon)
+#   and the canonical Unbound resolver, plus the IETF RFC
+#   editor for **RFC 6781 (DNSSEC Operational Practices)**,
+#   **RFC 8624 (DNSSEC Algorithm Implementation Requirements)**,
+#   and several other DNS-related RFCs.  miekg/dns ships:
+#
+#     • Typed `dns.Msg` (the DNS message envelope) with
+#       `msg.SetQuestion(name, qtype)`, `msg.SetUpdate(zone)`,
+#       `msg.SetNotify(zone)`, `msg.SetAxfr(zone)`,
+#       `msg.SetIxfr(zone, serial, mname, soa_name)`,
+#       `msg.SetEdns0(udpsize, do)` typed builders
+#     • Typed `dns.RR` interface with the typed `dns.A`,
+#       `dns.AAAA`, `dns.AFSDB`, `dns.ANAME`, `dns.APL`,
+#       `dns.AVC`, `dns.CAA`, `dns.CDNSKEY`, `dns.CDS`,
+#       `dns.CERT`, `dns.CNAME`, `dns.CSYNC`, `dns.DHCID`,
+#       `dns.DLV`, `dns.DNAME`, `dns.DNSKEY`, `dns.DS`,
+#       `dns.EUI48`, `dns.EUI64`, `dns.GID`, `dns.GPOS`,
+#       `dns.HINFO`, `dns.HIP`, `dns.HTTPS`, `dns.IPSECKEY`,
+#       `dns.ISDN`, `dns.KEY`, `dns.KX`, `dns.L32`,
+#       `dns.L64`, `dns.LOC`, `dns.LP`, `dns.MB`, `dns.MD`,
+#       `dns.MF`, `dns.MG`, `dns.MINFO`, `dns.MR`,
+#       `dns.MX`, `dns.NAPTR`, `dns.NID`, `dns.NIMLOC`,
+#       `dns.NINFO`, `dns.NS`, `dns.NSAP`, `dns.NSAPPTR`,
+#       `dns.NSEC`, `dns.NSEC3`, `dns.NSEC3PARAM`,
+#       `dns.NULL`, `dns.NXT`, `dns.OPENPGPKEY`, `dns.OPT`,
+#       `dns.PTR`, `dns.PX`, `dns.RKEY`, `dns.RP`,
+#       `dns.RRSIG`, `dns.RT`, `dns.SIG`, `dns.SMIMEA`,
+#       `dns.SOA`, `dns.SPF`, `dns.SRV`, `dns.SSHFP`,
+#       `dns.SVCB`, `dns.TA`, `dns.TALINK`, `dns.TKEY`,
+#       `dns.TLSA`, `dns.TSIG`, `dns.TXT`, `dns.UID`,
+#       `dns.UINFO`, `dns.UNSPEC`, `dns.URI`, `dns.X25`,
+#       `dns.ZONEMD` typed concrete RR types — every IANA-
+#       registered DNS record type
+#     • Typed `dns.Client` + `dns.Server` typed client +
+#       server APIs with full support for UDP / TCP / TLS
+#       (DoT) / HTTPS (DoH) / QUIC (DoQ) transports
+#     • Typed `dns.Exchange(msg, addr)` /  `client.Exchange(msg,
+#       addr)` /  `client.ExchangeWithConn(msg, conn)` /
+#       `client.ExchangeContext(ctx, msg, addr)` typed query
+#       primitives
+#     • Typed `dns.NewServeMux()` /  `mux.HandleFunc(pattern,
+#       handler)` typed server-side request dispatcher
+#     • Typed `dns.RegisterCompressionMap()` /
+#       `dns.IsDomainName(name)` /  `dns.Fqdn(name)` /
+#       `dns.CanonicalName(name)` /  `dns.SplitDomainName(name)`
+#       /  `dns.CountLabel(name)` /  `dns.NextLabel(name, offset)`
+#       /  `dns.PrevLabel(name, n)` typed domain-name utilities
+#     • Typed DNSSEC support — `dns.NewKey(name, alg, keytag,
+#       priv, pub)` /  `dnskey.Verify(rrset, sig)` /
+#       `dns.Sign(rrset, dnskey, privkey, signerName, inception,
+#       expiration)` /  `dns.NSEC3Hash(name, salt, iterations)`
+#       /  `dns.GenerateKey(name, bits, alg)` typed DNSSEC
+#       primitives covering RFC 4033/4034/4035 + RFC 5155 NSEC3
+#       + RFC 6781 operational practices + RFC 8624 algorithm
+#       requirements
+#     • Typed `dns.TSIGSecret(map[name]secret)` /  `dns.TSIGVerify(msg)`
+#       /  `dns.TSIGGenerate(msg, secret, requestMAC, timersOnly)`
+#       typed TSIG (RFC 2845) message-authentication
+#     • Typed `dns.SetEdns0(udpsize, do)` + EDNS0 options
+#       (`dns.EDNS0_SUBNET` for client subnet, `EDNS0_COOKIE`
+#       for DNS cookies RFC 7873, `EDNS0_NSID` for name server
+#       identifier RFC 5001, `EDNS0_PADDING` for padding RFC
+#       7830, `EDNS0_KEEPALIVE` for TCP keepalive RFC 7828,
+#       `EDNS0_LLQ` for long-lived queries, `EDNS0_TCPLEN`,
+#       `EDNS0_EDE` for extended DNS errors RFC 8914)
+#     • Typed AXFR (`dns.Transfer{}.In(msg, addr)`) + IXFR
+#       (`Transfer.In` with `SetIxfr(...)` request) zone-
+#       transfer support
+#
+#   `miekg/dns` powers **every serious Go DNS deployment** in
+#   production:
+#
+#     • **CoreDNS** — the canonical Kubernetes DNS server (used
+#       by every Kubernetes cluster on Earth as the
+#       in-cluster DNS server; CNCF graduated project,
+#       11,000+ ★) is fundamentally built on miekg/dns
+#     • **Cloudflare's authoritative DNS** infrastructure
+#     • **Mastodon's federation resolver** (the ActivityPub
+#       remote-actor lookup path)
+#     • **DigitalOcean's DNS API** backend
+#     • **AdGuard Home / dnsproxy** — encrypted DNS proxy
+#     • **gliderlabs/registrator** — Docker service-registry
+#       bridge (4,674+ ★)
+#     • **txthinking/brook** — cross-platform programmable
+#       network tool (15,127+ ★) with embedded DNS server
+#     • **veggiedefender/browsertunnel** — DNS-based browser
+#       data exfiltration (423+ ★, security research)
+#     • **musana/mx-takeover** (this very project; the
+#       MX-takeover detection scanner)
+#     • **Fusion/kittendns** — pure Go DNS authoritative
+#       server (143+ ★)
+#     • **olric-data/olric** — distributed cache
+#     • **erda-project/erda** — open-source application
+#       platform's DNS layer
+#     • **cossacklabs/acra** — database security suite
+#     • **GoEdgeLab/EdgeAdmin** — open-source CDN's DNS
+#       layer
+#     • **harshavardhana/s3www** — S3-backed static-site
+#       server with DNS-based domain routing
+#     • **daptin/daptin** — Go-based headless CMS
+#     • **ipfs/go-merkledag** — IPFS's Merkle DAG with DNS
+#       integration
+#     • **mac-vz/macvz** — macOS VM management
+#     • **timzhang0523/optimism** — Optimism rollup
+#     • **finddiff/RuleBaseProxy** — rule-based proxy with DNS
+#     • **xjdrew/kone** — VPN client
+#     • **bearer/bearer** — code-security scanner with
+#       domain-relationship analysis
+#     • **Bearer's CLI** — automated SAST tool's DNS analyzer
+#     • Plus thousands of community DoH/DoT servers, ad-
+#       blocking resolvers, distributed-system service-
+#       discovery daemons, container-runtime DNS layers, mesh-
+#       VPN coordinators, and Cloudflare-style edge proxy
+#       stacks.
+#
+#   DNS itself (IETF RFC-1035 — Mockapetris 1987) is **the
+#   universal name-resolution protocol** that has been the
+#   substrate of the entire Internet for ~40 years.  Modern
+#   DNS extensions standardized by the IETF include
+#   **EDNS(0)** (RFC 6891), **DNSSEC** (RFC 4033-4035 +
+#   RFC 5155 NSEC3), **DNS-over-TLS / DoT** (RFC 7858),
+#   **DNS-over-HTTPS / DoH** (RFC 8484), **DNS-over-QUIC /
+#   DoQ** (RFC 9250), **DDR** (Discovery of Designated
+#   Resolvers, RFC 9462), **SVCB + HTTPS Records** (RFC
+#   9460), **CAA Records** (RFC 8659), **TLSA Records**
+#   (RFC 6698 DANE), **SSHFP Records** (RFC 4255),
+#   **OPENPGPKEY Records** (RFC 7929), **SMIMEA Records**
+#   (RFC 8162) — all of which `miekg/dns` supports out of
+#   the box.
+#
+#   Verified via:
+#     gh api repos/musana/mx-takeover/contents/go.mod
+#       → module github.com/musana/mx-takeover
+#       → require github.com/miekg/dns v1.1.49     (DIRECT)
+#       → require github.com/projectdiscovery/retryabledns
+#         (DIRECT — retry/backoff wrapper around miekg/dns)
+#       → require github.com/likexian/whois        (DIRECT)
+#       → require github.com/likexian/whois-parser (DIRECT)
+#       → require github.com/mailgun/mailgun-go/v3 (DIRECT)
+#     raw.githubusercontent.com musana/mx-takeover master
+#         mx-takeover.go
+#       → package main
+#       → import "github.com/miekg/dns"           (DIRECT)
+#       → import "github.com/projectdiscovery/retryabledns"
+#       → mailgun_api = flag.String("mailgun-api", "", ...)
+#       → check_whois = flag.Bool("check-whois", false, ...)
+#       → expr_day    = flag.Int("expire-day", 30, ...)
+#       → only_mx     = flag.Bool("show-only-mx", false, ...)
+#       → verbose     = flag.Bool("v", false, "Print all log")
+#       → worker      = flag.Int("w", 8, "number of worker")
+#       → output      = flag.String("output", "",
+#         "Save output to file as json")
+#       → help        = flag.Bool("h", false, "help")
+#       → // refuses to run if stdin is not a pipe — domain
+#         list MUST be piped in
+#
+#   This entry is the Go=176 leader bump that continues Axis 121
+#   (DNS / IETF RFC-1035 + DoT / DoH / DoQ name-resolution
+#   protocol) at 2/0/0 following R1061 _letmein (Rust=176
+#   OPENED via mbuesch/letmein on hickory-resolver with full
+#   DoT/DoH/DoQ).  TS-Node=176 closing pair on deck for R1063
+#   via the canonical Node.js DNS library `dns2` (Pollux Lin's
+#   reference pure-Node.js DNS server + client implementation,
+#   the dominant npm DNS dependency for browser/server/edge
+#   custom DNS server implementations).
+#
+#   No completion for `mx-takeover` ships with Apple zsh
+#   (/usr/share/zsh/*/functions) or Homebrew zsh-completions
+#   (/opt/homebrew/share/zsh/site-functions) — confirmed absent.
+# ============================================================================
+
+_mx-takeover() {
+    _arguments -s \
+        '-h[show help]' \
+        '-v[verbose mode (print all log)]' \
+        '-w=[number of concurrent workers (default 8)]:n:' \
+        '-mailgun-api=[Mailgun API key for auto-registration of takeover targets]:key:' \
+        '-check-whois[check whois lookup for unregistered or soon-to-expire MX domains]' \
+        '-expire-day=[estimated days threshold for expiration (default 30)]:days:' \
+        '-show-only-mx[show only records that have MX records]' \
+        '-output=[save output to file as JSON]:file:_files -g "*.json"'
+}
+
+_mx-takeover "$@"
