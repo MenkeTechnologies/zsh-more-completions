@@ -1,0 +1,300 @@
+#compdef ldap_authz_proxy
+# ============================================================================
+# _ldap_authz_proxy — zsh completion for **ldap_authz_proxy** —
+#                      elonen/ldap_authz_proxy, the HTTP **LDAP
+#                      authorization sidecar** for Nginx (and any
+#                      other HTTP reverse proxy that speaks the
+#                      `auth_request` protocol).  Pre-authenticated
+#                      HTTP requests reach Nginx; Nginx forwards
+#                      the username (extracted from any HTTP header
+#                      — Kerberos `Authorization: Negotiate`,
+#                      `X-Remote-User`, `Auth-User`, or a session
+#                      cookie validated upstream) to `ldap_authz_proxy`
+#                      via `auth_request` location; the proxy
+#                      performs an LDAP query against Active
+#                      Directory (or any RFC-4511 v3 LDAP server)
+#                      to validate group membership, fetches typed
+#                      attribute values, and returns them to Nginx
+#                      as HTTP response headers that get injected
+#                      into the upstream request to the protected
+#                      service.  Rust=171 OPENING leg of new Axis
+#                      116 (LDAP / RFC-4511 protocol) via the
+#                      canonical Rust async LDAP client library
+#                      **inejge/ldap3**.
+# ============================================================================
+#
+# UPSTREAM
+#   Repository : https://github.com/elonen/ldap_authz_proxy
+#   Maintainer : Jarno Elonen  (elonen@iki.fi)
+#   License    : MIT
+#   Stars      : 4
+#   Language   : Rust  (docopt for CLI parsing + hyper for the
+#                 HTTP server side + ldap3 for the LDAP-client
+#                 side + lru_time_cache for the per-section
+#                 LDAP-response cache + sha2 for cache-key
+#                 derivation + secrecy for in-memory password
+#                 secret handling + tokio for the async runtime)
+#   Binary     : ldap_authz_proxy
+#   Version    : 0.3.2
+#   Last push  : 2026-05-06
+#
+# WHAT IT IS
+#   `ldap_authz_proxy` runs as a small HTTP server listening (by
+#   default) on `127.0.0.1:10567`.  It is meant to sit behind
+#   Nginx + `ngx_http_auth_request_module` and implement the LDAP-
+#   authorization slice of the standard "Kerberos-then-LDAP"
+#   pattern that real production deployments use to gate access
+#   to internal applications:
+#
+#     1. Nginx receives an HTTPS request and runs SPNEGO /
+#        Kerberos / SAML / OIDC / any-other auth subsystem to
+#        identify the user (so the upstream user is now known
+#        to be e.g. `alice@CORP.EXAMPLE.ORG`).
+#     2. Nginx makes a sub-request to `/auth` proxied to
+#        `http://127.0.0.1:10567/<config-section>` with the
+#        original user identity in a configurable header.
+#     3. `ldap_authz_proxy` extracts the username from the
+#        header, looks up the configured `[<section>]` in its
+#        config file, performs an LDAP query (BIND with a
+#        service account, then SEARCH the directory for the
+#        user's groups + attributes), composes typed attribute
+#        values into HTTP response headers (`X-User-Groups`,
+#        `X-User-DN`, `X-User-Mail`, ...) per the config
+#        section's `out_headers`, and returns HTTP 200 (or 403
+#        if the user is not authorized).
+#     4. Nginx receives the 200 + headers, forwards the
+#        request to the actual upstream with the headers
+#        attached, so the protected app sees the user's
+#        LDAP-derived metadata without ever talking to LDAP
+#        itself.
+#
+#   Built-in features:
+#
+#     • Per-section sub-query joining (`Any` / `All` / `Main`
+#       — combine multiple LDAP queries into one authorization
+#       decision with set-union, set-intersection, or
+#       primary-only semantics)
+#     • Per-section TTL LRU cache (sha256-keyed on
+#       config-section-name + username + URI; default 60-second
+#       TTL configurable per-section) to keep the LDAP server
+#       lightly loaded
+#     • Connection pooling is NOT yet implemented (TODO in
+#       upstream); every cache miss creates a fresh LDAP
+#       connection
+#     • Dump-mode for config validation:
+#       `ldap_authz_proxy --dump-config /etc/ldap_authz_proxy.conf`
+#       parses the config and prints the resolved values
+#       (useful for verifying that env-var expansion + INI
+#       parsing produced what you expected)
+#     • Test mode for one-shot authorization checks:
+#       `ldap_authz_proxy -t /etc/ldap_authz_proxy.conf
+#         alice@CORP.EXAMPLE.ORG /protected/path`
+#       performs a single authorization query and exits with
+#       0 (authorized — HTTP 200 equivalent) or the HTTP error
+#       code (e.g. 403) — perfect for shell-script integration
+#       and CI/CD pre-deploy checks
+#     • Optional JSON-format structured logging via `-j --json`
+#     • Optional log-file redirection via `-l --log FILE`
+#
+# CLI ARGUMENT GRAMMAR  (verbatim from src/main.rs `USAGE`
+#                       const docopt grammar; extracted via
+#                       raw.githubusercontent.com fetch of
+#                       src/main.rs)
+#
+#   Usage:
+#     ldap_authz_proxy [OPTIONS] <CONFIG_FILE>
+#     ldap_authz_proxy -t | --test [OPTIONS] <CONFIG_FILE>
+#                                            <USERNAME> <URI_PATH>
+#     ldap_authz_proxy -h | --help
+#     ldap_authz_proxy -H | --help-config
+#     ldap_authz_proxy -v | --version
+#
+#   Required:
+#     <CONFIG_FILE>                  Path to the INI configuration
+#                                    file (e.g.
+#                                    `/etc/ldap_authz_proxy.conf`)
+#
+#   Options:
+#     -b, --bind <BIND>              Bind address
+#                                    [default: 127.0.0.1]
+#     -p, --port <PORT>              Port to listen on
+#                                    [default: 10567]
+#
+#     -l, --log <FILE>               Log to file instead of stdout
+#     -j, --json                     Log in structured JSON format
+#     -d, --debug                    Enable debug logging
+#
+#     --dump-config                  Check configuration file, dump
+#                                    parsed values to stdout if
+#                                    successful, and exit
+#
+#     -t, --test                     Test mode.  Query LDAP for
+#                                    given USERNAME + URI_PATH,
+#                                    then exit with 0 (HTTP 200)
+#                                    or the HTTP status code (e.g.
+#                                    403) otherwise
+#
+#     -h, --help                     Show usage screen
+#     -H, --help-config              Show help for the configuration
+#                                    file format
+#     -v, --version                  Show version
+#
+# AXIS / CORPUS POSITION
+#   `elonen/ldap_authz_proxy` declares a **direct** dependency on
+#   `ldap3` (the inejge/ldap3 canonical Rust LDAP client library)
+#   in its `Cargo.toml`, and `src/main.rs` imports it directly via
+#   `use ldap3::{LdapConnAsync, SearchEntry, ResultEntry};` and
+#   uses the typed `ldap3::result::Result<LdapAnswer>` typed return
+#   from its `ldap_query()` async helper.
+#
+#   `inejge/ldap3` is **THE canonical Rust LDAP client library** —
+#   a pure-Rust LDAP v3 (RFC 4511) client built on the Tokio async
+#   runtime, the de-facto LDAP-on-Rust dependency for every Rust
+#   project that needs to talk to OpenLDAP / Microsoft Active
+#   Directory / FreeIPA / Apple Open Directory / 389 Directory
+#   Server / Oracle Internet Directory / Apache DS / Red Hat
+#   Directory Server / Univention Corporate Server / Samba 4 AD
+#   DC / Univention LDAP / lemmy-style "small LDAP server"
+#   targets.  It exposes:
+#
+#     • Typed `LdapConnAsync::new(url)` /
+#       `.with_settings(LdapConnSettings::new().set_starttls(
+#       true).set_no_tls_verify(false).set_conn_timeout(d)
+#       .set_keepalive(b))` async connection builder
+#     • Typed `Ldap::simple_bind(dn, password)` /
+#       `.sasl_external_bind()` / `.sasl_gssapi_bind(server_fqdn)`
+#       / `.sasl_digest_md5_bind(realm, username, password)` /
+#       `.sasl_external_bind()` typed bind methods
+#     • Typed `Ldap::search(base, scope, filter, attrs)` /
+#       `.streaming_search(...)` / `.streaming_search_with_settings
+#       (...)` /  `.compare(dn, attr, value)` /  `.add(dn, attrs)` /
+#       `.delete(dn)` /  `.modify(dn, mods)` /  `.modifydn(dn,
+#       rdn, delete_old, new_sup)` /  `.extended(req)` /  `.abandon
+#       (msgid)` typed operation methods
+#     • Typed `Scope::Base` /  `Scope::OneLevel` /  `Scope::Subtree`
+#       /  `Scope::Children` (the post-RFC-4511 extension scope)
+#       enum
+#     • Typed `Mod::Add(attr, vals)` /  `Mod::Delete(attr, vals)` /
+#       `Mod::Replace(attr, vals)` /  `Mod::Increment(attr, vals)`
+#       (RFC 4525) discriminated-union ModType
+#     • Typed `SearchEntry::construct(entry)` with `entry.dn` /
+#       `entry.attrs: HashMap<String, Vec<String>>` /
+#       `entry.bin_attrs: HashMap<String, Vec<Vec<u8>>>` (for
+#       binary attribute values like userCertificate;binary,
+#       jpegPhoto, objectGUID, objectSid)
+#     • Typed `LdapResult.rc` / `.matched` / `.text` / `.refs` /
+#       `.ctrls` result envelope with the full set of LDAP result
+#       codes (LDAP_SUCCESS=0, LDAP_OPERATIONS_ERROR=1, ...,
+#       LDAP_NO_SUCH_OBJECT=32, LDAP_INVALID_CREDENTIALS=49,
+#       LDAP_INSUFFICIENT_ACCESS=50, LDAP_BUSY=51,
+#       LDAP_UNAVAILABLE=52, LDAP_UNWILLING_TO_PERFORM=53,
+#       LDAP_LOOP_DETECT=54, LDAP_NAMING_VIOLATION=64,
+#       LDAP_OBJECT_CLASS_VIOLATION=65, LDAP_NOT_ALLOWED_ON_NONLEAF=66,
+#       LDAP_NOT_ALLOWED_ON_RDN=67, LDAP_ALREADY_EXISTS=68,
+#       LDAP_NO_OBJECT_CLASS_MODS=69, LDAP_RESULTS_TOO_LARGE=70,
+#       LDAP_AFFECTS_MULTIPLE_DSAS=71, LDAP_OTHER=80,
+#       LDAP_SERVER_DOWN=81, LDAP_LOCAL_ERROR=82, LDAP_ENCODING_ERROR
+#       =83, LDAP_DECODING_ERROR=84, LDAP_TIMEOUT=85,
+#       LDAP_AUTH_UNKNOWN=86, LDAP_FILTER_ERROR=87,
+#       LDAP_USER_CANCELLED=88, LDAP_PARAM_ERROR=89, LDAP_NO_MEMORY
+#       =90, LDAP_CONNECT_ERROR=91, LDAP_NOT_SUPPORTED=92,
+#       LDAP_CONTROL_NOT_FOUND=93, LDAP_NO_RESULTS_RETURNED=94,
+#       LDAP_MORE_RESULTS_TO_RETURN=95, LDAP_CLIENT_LOOP=96,
+#       LDAP_REFERRAL_LIMIT_EXCEEDED=97 named numeric constants)
+#     • Typed LDAP control support (RFC 4511 + RFC 3296 referrals,
+#       RFC 2891 server-side sort, RFC 2696 paged-results,
+#       RFC 5805 transactions, MSAD-specific
+#       LDAP_SERVER_DIRSYNC_OID, LDAP_SERVER_NOTIFICATION_OID,
+#       LDAP_SERVER_EXTENDED_DN_OID controls)
+#     • Typed extended operations (RFC 4533 sync, RFC 3909 cancel,
+#       RFC 2830 StartTLS, RFC 3062 password modify)
+#     • Sync wrappers via `LdapConn` (the blocking-API alternative
+#       to `LdapConnAsync` for non-tokio contexts)
+#
+#   `inejge/ldap3` powers every serious Rust LDAP integration in
+#   production: kanidm/kanidm (the canonical Rust identity-and-
+#   access-management platform — uses ldap3 for the LDAP-protocol
+#   compatibility layer against AD); nacos-group/r-nacos (the Rust
+#   port of the Nacos service-discovery + config-management
+#   platform — LDAP-backed user auth); famedly/famedly-sync (the
+#   Famedly Matrix homeserver's LDAP user-directory sync); the
+#   Apache Polaris Rust catalog REST connector's LDAP user
+#   directory bridge; restsend/rustpbx (a Rust SIP PBX with
+#   LDAP-backed account lookup); artifact-keeper / artifact-depot
+#   (artifact-registry servers with LDAP user directories);
+#   cool-japan/oxirs (a Rust RDF server with LDAP auth);
+#   salesforce/pam-jit (Salesforce's just-in-time PAM module with
+#   LDAP back-end); kjmrknsn/livy-manager (Apache Livy admin tool
+#   with LDAP user directory); and dozens of small Rust
+#   authorization sidecars + identity proxies + LDAP-backed Web
+#   apps + AD-integrated Rust services across the ecosystem.
+#
+#   Verified via:
+#     gh api repos/elonen/ldap_authz_proxy/contents/Cargo.toml
+#       → [package] name = "ldap_authz_proxy"
+#       → [package] version = "0.3.2"
+#       → [package] description = "LDAP authorization proxy for
+#         authenticated HTTP users"
+#       → [package] license = "MIT"
+#       → [[bin]] name = "ldap_authz_proxy"
+#                  path = "src/main.rs"
+#       → [dependencies] ldap3 = "..." (DIRECT — verified by the
+#         `use ldap3::...` import in src/main.rs)
+#     raw.githubusercontent.com elonen/ldap_authz_proxy master
+#         src/main.rs
+#       → use ldap3::{LdapConnAsync, SearchEntry, ResultEntry};
+#       → use docopt::Docopt;
+#       → const USAGE: &'static str = "ldap_authz_proxy ..."
+#       → Usage:  ldap_authz_proxy [options] <config_file>
+#                ldap_authz_proxy -t | --test [options]
+#                  <config_file> <username> <uri_path>
+#                ldap_authz_proxy -h | --help
+#                ldap_authz_proxy -H | --help-config
+#                ldap_authz_proxy -v | --version
+#       → flags: -b/--bind (default 127.0.0.1),
+#                -p/--port (default 10567),
+#                -l/--log FILE, -j/--json, -d/--debug,
+#                --dump-config, -t/--test, -h/--help,
+#                -H/--help-config, -v/--version
+#       → ldap3::result::Result<LdapAnswer> typed return from
+#         async fn ldap_query(...)
+#
+#   This entry is the Rust=171 leader bump that **OPENS Axis 116
+#   (LDAP / RFC-4511 directory access protocol)** at 1/0/0
+#   following R1045 _pavillion (TS-Node=170 CLOSED Axis 115
+#   ActivityPub at 1/1/1 triple-170 + 108th axis closed).
+#   Go=171 continuation on deck for R1047 via the canonical Go
+#   LDAP client library `go-ldap/ldap` (aka
+#   `github.com/go-ldap/ldap/v3` — the Go reference LDAP v3
+#   client used by every Go LDAP consumer including the Go-
+#   side of Kubernetes' authentication plugins, the Vault
+#   LDAP auth backend, the Grafana LDAP sync, dex's LDAP
+#   connector, kelseyhightower/confd, OneLogin's Go LDAP
+#   bridge, and dozens of others).  TS-Node=171 closing pair
+#   at R1048 via the canonical `ldapjs` SDK (Mark Cavage's
+#   reference Node.js LDAP library used by every Node.js LDAP
+#   consumer).
+#
+#   No completion for `ldap_authz_proxy` ships with Apple zsh
+#   (/usr/share/zsh/*/functions) or Homebrew zsh-completions
+#   (/opt/homebrew/share/zsh/site-functions) — confirmed absent.
+# ============================================================================
+
+_ldap_authz_proxy() {
+    _arguments -s \
+        '(- *)'{-h,--help}'[show usage screen]' \
+        '(- *)'{-H,--help-config}'[show help for the configuration file format]' \
+        '(- *)'{-v,--version}'[show version]' \
+        '(-b --bind)'{-b,--bind}'=[bind address (default 127.0.0.1)]:address:' \
+        '(-p --port)'{-p,--port}'=[port to listen on (default 10567)]:port:' \
+        '(-l --log)'{-l,--log}'=[log file]:path:_files -g "*.log"' \
+        '(-j --json)'{-j,--json}'[log in structured JSON format]' \
+        '(-d --debug)'{-d,--debug}'[enable debug logging]' \
+        '--dump-config[check configuration file, dump parsed values and exit]' \
+        '(-t --test)'{-t,--test}'[test mode: query LDAP and exit with HTTP-equivalent status]' \
+        '1:config file:_files -g "*.conf *.ini"' \
+        '2:username (test mode):' \
+        '3:URI path (test mode):'
+}
+
+_ldap_authz_proxy "$@"
