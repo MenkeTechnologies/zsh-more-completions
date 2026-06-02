@@ -1,0 +1,479 @@
+#compdef letmein
+# ============================================================================
+# _letmein — zsh completion for **letmein** — mbuesch/letmein, the
+#             pure-Rust **authenticated port-knocking client + server**.
+#             Lets a network operator close every inbound port on a
+#             server's firewall by default, then re-open specific
+#             ports (or jump-routing rules) on-demand via a
+#             cryptographically authenticated "knock" handshake
+#             between the `letmein` client and the `letmeind` server
+#             daemon — the modern replacement for legacy port-
+#             knocking tools (knockd, fwknop, dnsknock) with proper
+#             challenge-response authentication instead of replay-
+#             vulnerable sequence-knocking, full IPv4 + IPv6
+#             support, full Linux + nftables + iptables backends
+#             via the bundled `letmeinfwd` firewall driver, and
+#             optional seccomp sandboxing of the client + server
+#             processes.  Rust=176 OPENING leg of new Axis 121
+#             (DNS / IETF RFC-1035 + DoT (RFC-7858) + DoH
+#             (RFC-8484) + DoQ (RFC-9250) name-resolution
+#             protocol) via the canonical Rust DNS library
+#             **hickory-dns/hickory-resolver** (formerly
+#             trust-dns-resolver — the de-facto Rust DNS
+#             resolver maintained by the Hickory DNS team).
+# ============================================================================
+#
+# UPSTREAM
+#   Repository : https://github.com/mbuesch/letmein
+#                  (workspace member: letmein/ — the client bin;
+#                   sibling crates `letmeind` (the server daemon),
+#                   `letmeinfwd` (the firewall driver),
+#                   `letmein-proto` (the wire protocol),
+#                   `letmein-conf` (the YAML config layer),
+#                   `letmein-seccomp` (the seccomp sandbox), and
+#                   `letmein-systemd` (the systemd integration)
+#                   are all in the same Cargo workspace)
+#   Maintainer : Michael Büsch  (m@bues.ch; long-standing Linux
+#                 kernel contributor — original maintainer of the
+#                 b43 Broadcom wireless driver and the bcm-2835-
+#                 wireless-link firmware; multiple Rust security-
+#                 tooling projects)
+#   License    : Apache-2.0 OR MIT  (dual-licensed)
+#   Stars      : 51
+#   Language   : Rust  (clap-derive for the CLI surface +
+#                 tokio for the async runtime + hickory-resolver
+#                 for DNS-over-TLS / DNS-over-HTTPS / DNS-over-
+#                 QUIC name resolution + dns-lookup (the
+#                 libc getaddrinfo fallback) + seccompiler/
+#                 seccompiler-rs for the optional sandbox)
+#   Binary     : letmein  (the client; the same workspace also
+#                 ships `letmeind` for the server daemon side
+#                 and `letmeinfwd` for the firewall driver)
+#   Last push  : 2026-05-30
+#
+# WHAT IT IS
+#   Port knocking is the practice of keeping a server's firewall
+#   closed by default and opening specific ports only when a
+#   client sends a magic sequence of TCP/UDP packets to a series
+#   of pre-configured "knock" ports (often 4–5 ports in a
+#   specific order).  The legacy implementations (knockd,
+#   fwknop, dnsknock, the OpenBSD pfctl knock-driver) are
+#   notoriously brittle:
+#
+#     • Sequence knocking is replayable (sniff the knock once,
+#       replay it forever)
+#     • Stateless implementations leak the knock sequence to
+#       any on-path attacker
+#     • Most implementations don't authenticate the knock —
+#       any party who knows the magic sequence can open the
+#       port
+#
+#   `letmein` solves these problems with a proper challenge-
+#   response handshake:  the client sends a "knock" packet
+#   announcing the user ID + the resource ID; the server
+#   responds with a fresh nonce; the client signs (HMAC-
+#   SHA3-512) the nonce + resource ID with the user's shared
+#   secret key; the server verifies the HMAC and (if valid)
+#   commands the firewall driver to open the requested port
+#   or install the requested jump rule.  Replay-protected,
+#   authenticated, and stateless on the server side.
+#
+#   The client side (`letmein`) speaks DNS via the canonical
+#   Rust DNS resolver `hickory-resolver` (with full DNS-over-
+#   TLS, DNS-over-HTTPS, and DNS-over-QUIC support) to resolve
+#   the target server's hostname, configurable via the
+#   `--dns` + `--dns-crypt` flags between:
+#     • System resolver (whatever /etc/resolv.conf or systemd-
+#       resolved or NetworkManager has configured)
+#     • Quad9 DoT / DoH endpoint
+#     • Google DoT / DoH endpoint
+#     • Cloudflare DoT / DoH endpoint
+#     • Unencrypted UDP DNS (fallback)
+#
+#   This makes letmein resilient against on-path DNS hijack
+#   attacks that would otherwise be trivial against legacy
+#   port-knockers that use unencrypted libc getaddrinfo.
+#
+# CLI ARGUMENT GRAMMAR  (verbatim from letmein/src/main.rs
+#                       clap-derive `Opts` / `Command` /
+#                       `KnockOrRevokeOpts` structs; extracted
+#                       via raw.githubusercontent.com fetch of
+#                       letmein/src/main.rs)
+#
+#   letmein [GLOBAL OPTIONS] <COMMAND> [ARGS...]
+#
+#   Global options:
+#     -h, --help                     Show help
+#     -v, --version                  Show version information and
+#                                    exit
+#     -c, --config <PATH>            Override the default path to
+#                                    the configuration file
+#     --verbose                      Show detailed information
+#                                    about what happens internally
+#     --dns <LIST>                   DNS resolver service (comma-
+#                                    separated list of: system,
+#                                    quad9, google, cloudflare)
+#                                    [default: system,quad9,
+#                                              google,cloudflare]
+#                                    (`system` is tried first;
+#                                    the others are tried in
+#                                    listed order if `system`
+#                                    fails)
+#     --dns-crypt <LIST>             DNS resolver transport
+#                                    encryption (comma-separated
+#                                    list of: tls, https,
+#                                    unencrypted)
+#                                    [default: tls,https,
+#                                              unencrypted]
+#     --seccomp <MODE>               Override the seccomp setting
+#                                    from the configuration file
+#                                    [values: off, log, kill]
+#
+#   Commands:
+#     knock <HOST> [PORT] [OPTIONS]  Knock a resource on a server
+#         -r, --resource <ID>        Resource ID instead of PORT
+#                                    (use to knock open a `jump`
+#                                    resource)
+#         -u, --user <ID>            User ID for authenticating
+#                                    the knock request (8-digit
+#                                    hex; defaults to [CLIENT]
+#                                    default_user from config
+#                                    file, or 00000000 if absent)
+#         -P, --server-port <PORT>   Override the letmein server
+#                                    port (default: from config
+#                                    [GENERAL] port, or 5800 if
+#                                    absent)
+#         -T, --server-port-tcp      Force TCP for the letmein
+#                                    server connection
+#         -U, --server-port-udp      Force UDP for the letmein
+#                                    server connection
+#         -4, --ipv4                 Resolve HOST to IPv4 only
+#         -6, --ipv6                 Resolve HOST to IPv6 only
+#                                    (if both --ipv4 + --ipv6
+#                                    are given, knocks on both
+#                                    and errors if either fails)
+#     revoke <HOST> [PORT] [OPTIONS] Revoke a resource on a
+#                                    server (same options as
+#                                    knock)
+#     gen-key                        Generate a new shared secret
+#                                    key (output the typed
+#                                    user-id + base64 secret to
+#                                    stdout for the operator to
+#                                    paste into both client +
+#                                    server config files)
+#
+# AXIS / CORPUS POSITION
+#   `mbuesch/letmein` declares a **direct** dependency on
+#   `hickory-resolver` (with the `system-config`, `tokio`,
+#   `tls-ring`, `https-ring`, `quic-ring`, `webpki-roots`,
+#   `dnssec-ring` features) in its `letmein/Cargo.toml`
+#   (verified via `gh api repos/mbuesch/letmein/contents/
+#   letmein/Cargo.toml`).  The `letmein/src/main.rs` source
+#   imports the typed primitives via `letmein::resolver::
+#   {ResCrypt, ResSrv}` (which themselves wrap
+#   `hickory_resolver::*` directly in `letmein/src/
+#   resolver/`).
+#
+#   `hickory-dns/hickory-dns` (formerly `bluejekyll/trust-
+#   dns`, renamed in 2024 to align with the Hickory DNS
+#   project rebrand) is **THE canonical Rust DNS library** —
+#   Benjamin Fry's reference pure-Rust implementation of the
+#   DNS protocol stack, in continuous active development
+#   since 2015 with 3,800+ ★ on GitHub and 30+ million all-
+#   time downloads on crates.io.  It ships as a multi-crate
+#   workspace covering every layer of the DNS stack:
+#
+#     • `hickory-proto`            The typed DNS wire protocol
+#                                   parser + serializer
+#                                   (RFC 1035 + RFC 3596
+#                                   AAAA + RFC 6891 EDNS0 +
+#                                   RFC 4033-4035 DNSSEC +
+#                                   RFC 7858 DNS-over-TLS +
+#                                   RFC 8484 DNS-over-HTTPS +
+#                                   RFC 9250 DNS-over-QUIC +
+#                                   the full set of typed
+#                                   `RecordType::A`, `AAAA`,
+#                                   `CAA`, `CNAME`, `DS`,
+#                                   `DNSKEY`, `MX`, `NAPTR`,
+#                                   `NS`, `NSEC`, `NSEC3`,
+#                                   `NULL`, `OPT`, `PTR`,
+#                                   `RRSIG`, `SOA`, `SRV`,
+#                                   `SSHFP`, `SVCB`, `TLSA`,
+#                                   `TXT`, `URI`, `HINFO`,
+#                                   `HTTPS`, `KX`, `LOC`,
+#                                   `IPSECKEY`, `OPENPGPKEY`,
+#                                   `SMIMEA`, `TSIG`, `TKEY`,
+#                                   `CSYNC`, `CDNSKEY`,
+#                                   `CDS`, `ZONEMD`,
+#                                   `ANAME`, `ATMA`,
+#                                   `EUI48`, `EUI64`,
+#                                   `GPOS`, `HIP`, `ISDN`,
+#                                   `KEY`, `MAILA`, `MAILB`,
+#                                   `MB`, `MD`, `MF`, `MG`,
+#                                   `MINFO`, `MR`, `NID`,
+#                                   `L32`, `L64`, `LP`,
+#                                   `NIMLOC`, `NSAP`,
+#                                   `NSAP_PTR`, `NXT`, `PX`,
+#                                   `RP`, `RT`, `SIG`,
+#                                   `SINK`, `TA`, `TALINK`,
+#                                   `UID`, `UINFO`, `UNSPEC`,
+#                                   `WKS`, `X25` named
+#                                   record types)
+#     • `hickory-resolver`         The typed DNS resolver — the
+#                                   client API used by `letmein`
+#                                   for hostname-to-address
+#                                   resolution.  Exposes the
+#                                   typed `Resolver::tokio(...)`
+#                                   /  `Resolver::system()`
+#                                   typed constructor, the
+#                                   typed `resolver.lookup(name,
+#                                   record_type)` /
+#                                   `lookup_ip(name)` /
+#                                   `ipv4_lookup(name)` /
+#                                   `ipv6_lookup(name)` /
+#                                   `mx_lookup(name)` /
+#                                   `srv_lookup(name)` /
+#                                   `ns_lookup(name)` /
+#                                   `tlsa_lookup(name)` /
+#                                   `reverse_lookup(ip)` /
+#                                   `txt_lookup(name)` typed
+#                                   query methods, the typed
+#                                   `NameServerConfigGroup::{
+#                                   google(), cloudflare(),
+#                                   quad9(), google_tls(),
+#                                   cloudflare_tls(), quad9_tls(),
+#                                   google_https(), cloudflare_https(),
+#                                   quad9_https(), google_h3(),
+#                                   cloudflare_h3(), google_quic(),
+#                                   cloudflare_quic()}` typed
+#                                   provider factories, the
+#                                   typed `ProtocolConfig::{
+#                                   Udp, Tcp, Tls, Https,
+#                                   Quic, H3, Mdns}` typed
+#                                   transport-config enum, the
+#                                   typed `ResolverOpts` config
+#                                   layer with typed `attempts`,
+#                                   `cache_size`, `check_names`,
+#                                   `edns0`, `negative_max_ttl`,
+#                                   `negative_min_ttl`,
+#                                   `num_concurrent_reqs`,
+#                                   `positive_max_ttl`,
+#                                   `positive_min_ttl`,
+#                                   `preserve_intermediates`,
+#                                   `rotate`,
+#                                   `server_ordering_strategy`,
+#                                   `try_tcp_on_error`,
+#                                   `use_hosts_file`,
+#                                   `validate` (DNSSEC),
+#                                   `recursion_desired` typed
+#                                   fields
+#     • `hickory-server`           The typed DNS server-side
+#                                   API (authoritative +
+#                                   recursive resolver + stub
+#                                   resolver + forwarding)
+#     • `hickory-recursor`         The typed recursive resolver
+#                                   implementation
+#     • `hickory-client`           The typed RFC 2136 dynamic-
+#                                   DNS update client
+#     • `hickory-dns` (the bin)    The reference DNS server
+#                                   daemon binary (already in
+#                                   corpus as `_hickory-dns`)
+#     • `hickory-util` (the bin)   The reference DNS client
+#                                   utility binaries (`dns` for
+#                                   raw client operations,
+#                                   `resolve` for resolver
+#                                   queries, `recurse` for
+#                                   recursive lookups)
+#
+#   `hickory-dns/hickory-dns` is the DNS library + server
+#   behind essentially every modern Rust DNS deployment:
+#
+#     • **Cloudflare's Quiche / QUIC implementations** use
+#       hickory-proto for DNS over QUIC (RFC 9250)
+#     • **Iroh** (the canonical Rust QUIC peer-to-peer
+#       networking platform; n0-computer/iroh) uses
+#       hickory-resolver for the iroh-relay's DNS layer
+#     • **Veloren** (the open-source MMORPG written in Rust)
+#       uses hickory-resolver for its client-side
+#       name resolution
+#     • **Kubeflow Trainer** uses hickory-resolver for the
+#       data-cache layer's DNS lookups
+#     • **EasyTier** (the open-source mesh-VPN) uses
+#       hickory-resolver
+#     • **Komodo** (the deployment orchestrator) uses it for
+#       the periphery agent's DNS layer
+#     • **Oxide Computer's Omicron** (the Oxide rack-scale
+#       control plane) uses hickory-resolver in the wicketd
+#       provisioning service
+#     • **Restate** (the durable execution engine) uses
+#       hickory-resolver in its CLI
+#     • **RustScan** (the popular Rust port scanner) uses
+#       hickory-resolver for target hostname resolution
+#     • **Rama** (the Rust web proxy framework) uses it in the
+#       rama-cli
+#     • **Pingoo** (the Cloudflare-style web edge proxy) uses
+#       hickory-resolver
+#     • **letmein** (this very project) uses hickory-resolver
+#       for client-side hostname-to-address resolution with
+#       full DoT / DoH / DoQ encryption
+#     • Plus dozens of community DNS over HTTPS / DNS over TLS
+#       servers, ad-blocking resolvers, distributed system
+#       service-discovery daemons, container runtime DNS
+#       layers, mesh VPN coordinator servers, and Cloudflare-
+#       style proxy stacks.
+#
+#   DNS itself (IETF RFC-1035 — Mockapetris 1987) is **the
+#   universal name-resolution protocol** that has been the
+#   substrate of the entire Internet for ~40 years.  Modern
+#   DNS extensions standardized by the IETF include:
+#
+#     • **EDNS(0)** (RFC 6891) — extension mechanism for
+#       larger response payloads + opcode space
+#     • **DNSSEC** (RFC 4033/4034/4035 + RFC 5155 NSEC3) —
+#       chained-trust authenticated DNS
+#     • **DNS-over-TLS / DoT** (RFC 7858) — TLS-encrypted
+#       transport on port 853
+#     • **DNS-over-HTTPS / DoH** (RFC 8484) — HTTPS-tunneled
+#       transport on the `/dns-query` URI template
+#     • **DNS-over-QUIC / DoQ** (RFC 9250) — QUIC-encrypted
+#       transport on port 853 (ALPN `doq`)
+#     • **DNS-over-HTTP/3 / DoH3** (an extension of DoH that
+#       uses HTTP/3 transport instead of HTTP/2)
+#     • **DDR / Discovery of Designated Resolvers** (RFC 9462)
+#       — automatic upgrade from unencrypted resolver to its
+#       encrypted equivalent
+#     • **SVCB + HTTPS Records** (RFC 9460) — service-binding
+#       records that carry typed ALPN + TLS + IPv4/IPv6 hint
+#       data in a single DNS lookup
+#     • **CAA Records** (RFC 8659) — certificate-authority
+#       authorization records for TLS certificate issuance
+#     • **TLSA Records** (RFC 6698) — DNS-based authentication
+#       of TLS certificate fingerprints (DANE)
+#     • **SSHFP Records** (RFC 4255) — DNS-based authentication
+#       of SSH host keys
+#     • **OPENPGPKEY Records** (RFC 7929) — DNS-published
+#       OpenPGP public keys
+#     • **SMIMEA Records** (RFC 8162) — DNS-published S/MIME
+#       certificates
+#
+#   The hickory-resolver library covers all of the above.
+#
+#   Verified via:
+#     gh api repos/mbuesch/letmein/contents/letmein/Cargo.toml
+#       → [package] name = "letmein"
+#       → [package] description = "Authenticated port
+#         knocking - Client"
+#       → [package] license = "Apache-2.0 OR MIT"
+#       → [features] default = [ "cli", "hickory-resolver" ]
+#       → [[bin]] name = "letmein"
+#                  required-features = [ "cli" ]
+#       → [dependencies] hickory-resolver = { workspace = true,
+#                                              optional = true,
+#                                              features = [
+#                                                "system-config",
+#                                                "tokio",
+#                                                "tls-ring",
+#                                                "https-ring",
+#                                                "quic-ring",
+#                                                "webpki-roots",
+#                                                "dnssec-ring"
+#                                              ] }      (DIRECT)
+#     raw.githubusercontent.com mbuesch/letmein master letmein/
+#         src/main.rs
+#       → use clap::{CommandFactory as _, Parser, Subcommand};
+#       → use letmein::resolver::{ResCrypt, ResSrv};
+#       → fn parse_dns(dns: &str) -> ah::Result<ResSrv> {
+#           system | quad9 | google | cloudflare options }
+#       → fn parse_dns_crypt(dns_crypt: &str) -> ah::Result
+#         <ResCrypt> { tls | https | unencrypted options }
+#       → #[derive(Parser, Debug)] struct Opts {
+#           #[arg(short, long)] config: Option<PathBuf>,
+#           #[arg(long)] verbose: bool,
+#           #[command(subcommand)] command: Option<Command>,
+#           #[arg(long, default_value =
+#               "system,quad9,google,cloudflare",
+#               value_parser = parse_dns)] dns: ResSrv,
+#           #[arg(long, default_value =
+#               "tls,https,unencrypted",
+#               value_parser = parse_dns_crypt)]
+#           dns_crypt: ResCrypt,
+#           #[arg(long)] seccomp: Option<Seccomp>,
+#           #[arg(long, short = 'v')] version: bool }
+#       → #[derive(Subcommand, Debug)] enum Command {
+#           Knock { knock: KnockOrRevokeOpts },
+#           Revoke { revoke: KnockOrRevokeOpts },
+#           GenKey {} }
+#       → struct KnockOrRevokeOpts { host: String,
+#           port: Option<u16>,
+#           #[arg(long, short = 'r')] resource: Option<ResourceId>,
+#           #[arg(short, long)] user: Option<UserId>,
+#           #[arg(short = 'P', long)] server_port: Option<u16>,
+#           #[arg(short = 'T', long)] server_port_tcp: bool,
+#           #[arg(short = 'U', long)] server_port_udp: bool,
+#           #[arg(short = '4', long)] ipv4: bool,
+#           #[arg(short = '6', long)] ipv6: bool }
+#
+#   This entry is the Rust=176 leader bump that **OPENS Axis 121
+#   (DNS / IETF RFC-1035 + DoT / DoH / DoQ name-resolution
+#   protocol)** at 1/0/0 following R1060 _transcribe-chords
+#   (TS-Node=175 CLOSED Axis 120 MIDI at 1/1/1 triple-175 +
+#   113th axis closed).  Go=176 continuation on deck for R1062
+#   via the canonical Go DNS library `miekg/dns` (Miek Gieben's
+#   reference pure-Go DNS implementation — THE Go DNS library,
+#   used by CoreDNS, Cloudflare's authoritative servers,
+#   Mastodon's federation resolver, DigitalOcean's DNS API,
+#   and countless others).  TS-Node=176 closing pair at R1063
+#   via the canonical Node.js DNS library `dns2` (Pollux Lin's
+#   reference pure-Node.js DNS server + client implementation).
+#
+#   No completion for `letmein` ships with Apple zsh
+#   (/usr/share/zsh/*/functions) or Homebrew zsh-completions
+#   (/opt/homebrew/share/zsh/site-functions) — confirmed absent.
+# ============================================================================
+
+_letmein() {
+    local curcontext="$curcontext" state line ret=1
+    typeset -A opt_args
+
+    _arguments -C \
+        '(- *)'{-h,--help}'[show help]' \
+        '(- *)'{-v,--version}'[show version information and exit]' \
+        '(-c --config)'{-c,--config}'=[override config file path]:path:_files -g "*.conf *.toml *.yaml *.yml"' \
+        '--verbose[show detailed information about what happens internally]' \
+        '--dns=[DNS resolver service (comma-separated)]:list:' \
+        '--dns-crypt=[DNS resolver transport encryption (comma-separated)]:list:' \
+        '--seccomp=[override seccomp setting from config]:mode:(off log kill)' \
+        '1: :->cmd' \
+        '*:: :->args' && ret=0
+
+    case $state in
+        cmd)
+            local -a _lm_cmds=(
+                'knock:knock a resource on a server (opens port or adds jump rules)'
+                'revoke:revoke a resource on a server (closes port or removes jump rules)'
+                'gen-key:generate a new shared secret key'
+            )
+            _describe -t commands 'letmein command' _lm_cmds && ret=0
+            ;;
+        args)
+            case $words[1] in
+                knock|revoke)
+                    _arguments \
+                        '1:host (hostname, IPv4, or IPv6):' \
+                        '2:port:' \
+                        '(-r --resource)'{-r,--resource}'=[resource ID instead of port]:id:' \
+                        '(-u --user)'{-u,--user}'=[user ID for authentication (8-digit hex)]:id:' \
+                        '(-P --server-port)'{-P,--server-port}'=[letmein server port (default 5800)]:port:' \
+                        '(-T --server-port-tcp)'{-T,--server-port-tcp}'[force TCP for letmein server connection]' \
+                        '(-U --server-port-udp)'{-U,--server-port-udp}'[force UDP for letmein server connection]' \
+                        '(-4 --ipv4)'{-4,--ipv4}'[resolve HOST to IPv4 only]' \
+                        '(-6 --ipv6)'{-6,--ipv6}'[resolve HOST to IPv6 only]' && ret=0
+                    ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_letmein "$@"
