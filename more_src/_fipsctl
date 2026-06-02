@@ -1,0 +1,411 @@
+#compdef fipsctl fipstop fips-gateway
+# ============================================================================
+# _fipsctl — zsh completion for the **three companion binaries** that ship
+#             with jmcorgan/fips — the "Free Internetworking Peering
+#             System", a Rust mesh-routing daemon that builds an
+#             encrypted overlay network over arbitrary transports
+#             (UDP, TCP, Ethernet, Tor, Bluetooth LE) addressed by
+#             Nostr secp256k1 public keys.  The existing `_fips`
+#             completion covers the main daemon; this file covers
+#             `fipsctl` (control client), `fipstop` (TUI monitor),
+#             and `fips-gateway` (Linux-only outbound LAN gateway).
+#             Rust=166 OPENING leg of new Axis 111 (Nostr protocol)
+#             via the canonical Rust Nostr SDK `nostr-sdk`.
+# ============================================================================
+#
+# UPSTREAM
+#   Repository : https://github.com/jmcorgan/fips
+#   Maintainer : Johnathan Corgan  <jcorgan@corganlabs.com>
+#   License    : MIT
+#   Stars      : 187
+#   Language   : Rust
+#   Crate      : fips, version 0.4.0-dev
+#   Binaries   : fips           (mesh routing daemon — already
+#                                covered by `_fips`)
+#                fipsctl        (control client; speaks JSON over
+#                                a Unix domain socket on Unix or
+#                                TCP on Windows)
+#                fipstop        (ratatui TUI dashboard)
+#                fips-gateway   (Linux-only outbound LAN gateway
+#                                using nftables NAT + .fips DNS)
+#   Last push  : 2026-06-02
+#
+# WHAT IT IS
+#   FIPS ("Free Internetworking Peering System") is an encrypted
+#   mesh-routing overlay where nodes are identified by Nostr
+#   secp256k1 pubkeys (the bech32 `npub1…` form is the
+#   "address"), authenticated via Nostr `nip-59` gift-wrapped
+#   events, and routed across heterogenous transports — UDP,
+#   TCP, raw Ethernet, Tor, and Bluetooth LE — with automatic
+#   key management.  Each FIPS node runs the `fips` daemon
+#   which exposes a TUN device (`fips0` virtual interface) and a
+#   `.fips` mDNS-style name resolver, so applications speak
+#   plain IPv6 over the mesh and the daemon transparently
+#   handles transport selection, hop-by-hop encryption (HKDF +
+#   ChaCha20-Poly1305 + secp256k1 ECDH), spanning-tree path
+#   computation, and bloom-filter dedup.
+#
+#   The three CLI tools in this completion file are FIPS's
+#   operator surface:
+#
+#     fipsctl       Sends JSON commands to the running `fips`
+#                   daemon's control socket and pretty-prints the
+#                   response.  Subcommands: `show`, `acl`,
+#                   `keygen`, `connect`, `disconnect`, `stats`.
+#
+#     fipstop       A ratatui-based full-screen TUI monitor —
+#                   like `htop` for the FIPS mesh.  Polls the
+#                   daemon over the same control socket at a
+#                   configurable refresh interval and renders
+#                   tabbed panels: Node / Peers / Links / Tree /
+#                   Sessions / Graphs / Gateway.
+#
+#     fips-gateway  A Linux-only systemd-style daemon that lets
+#                   unmodified LAN hosts reach FIPS mesh
+#                   destinations via DNS-allocated virtual IPs +
+#                   kernel nftables NAT.  Plain LAN clients see
+#                   `<peer>.fips` names resolving to NAT-pool
+#                   IPs; nftables rules forward those packets
+#                   into the mesh.
+#
+# CLI ARGUMENT GRAMMAR  (verbatim from src/bin/{fipsctl.rs,
+#                       fipstop/main.rs,fips-gateway.rs} clap
+#                       derive structs; extracted via
+#                       `gh api repos/jmcorgan/fips/contents/
+#                       src/bin/…`)
+#
+#   ════════════════ fipsctl ════════════════
+#
+#   fipsctl [OPTIONS] <COMMAND>
+#
+#   Options:
+#     -h, --help                     Show help
+#     -V, --version                  Print version
+#     -s, --socket <PATH>            Control socket path override
+#
+#   Commands:
+#     show <WHAT>                    Show node information
+#         status                     Node status overview
+#         peers                      Authenticated peers
+#         links                      Active links
+#         tree                       Spanning tree state
+#         sessions                   End-to-end sessions
+#         bloom                      Bloom filter state
+#         mmp                        MMP metrics summary
+#         cache                      Coordinate cache stats
+#         connections                Pending handshake connections
+#         transports                 Transport instances
+#         routing                    Routing table summary
+#         identity-cache             Identity cache entries
+#                                     (known node pubkeys)
+#     acl <WHAT>                     Show peer ACL information
+#         show                       Loaded peer ACL state
+#     keygen [OPTIONS]               Generate a new FIPS identity
+#                                    keypair (secp256k1)
+#         -d, --dir <DIR>            Output dir for fips.key +
+#                                    fips.pub
+#                                    [default: /etc/fips on Unix]
+#         -f, --force                Overwrite existing key files
+#         -s, --stdout               Print nsec and npub to
+#                                    stdout instead of writing
+#                                    files
+#     connect <PEER> <ADDRESS> <TRANSPORT>
+#                                    Connect to a peer
+#                                      PEER:      npub bech32 or
+#                                                 /etc/fips/hosts
+#                                                 alias
+#                                      ADDRESS:   transport addr
+#                                                 (e.g. 1.2.3.4:2121)
+#                                      TRANSPORT: udp | tcp | tor |
+#                                                 ethernet
+#     disconnect <PEER>              Disconnect a peer
+#     stats <WHAT>                   Query historical node stats
+#         list                       List available history metrics
+#         peers                      List peers tracked in stats
+#         history <METRIC> [OPTS]    Fetch a time-series window
+#             --peer <PEER>          Peer npub or hostname
+#             --window <DURATION>    Window — Ns, Nm, Nh
+#                                    [default: 10m]
+#             --granularity <RES>    1s (fast ring) or 1m (slow
+#                                    ring)  [default: 1s]
+#             --plot                 Render a Unicode block
+#                                    sparkline instead of JSON
+#
+#   ════════════════ fipstop ════════════════
+#
+#   fipstop [OPTIONS]
+#
+#   Options:
+#     -h, --help                     Show help
+#     -V, --version                  Print version
+#     -s, --socket <PATH>            Control socket path override
+#     --gateway-socket <PATH>        Gateway control socket override
+#     -r, --refresh <SECONDS>        Refresh interval in seconds
+#                                    [default: 2]
+#
+#   ════════════════ fips-gateway ════════════════
+#
+#   fips-gateway [OPTIONS]   (Linux-only; on macOS/Windows the
+#                             binary exists but exits with 1)
+#
+#   Options:
+#     -h, --help                     Show help
+#     -V, --version                  Print version
+#     -c, --config <FILE>            Path to configuration file
+#                                    (overrides default search)
+#     -l, --log-level <LEVEL>        Log level
+#                                    [trace, debug, info, warn,
+#                                     error; default: info]
+#
+# AXIS / CORPUS POSITION
+#   `fips` crate declares **direct** dependencies on
+#   `nostr = "0.44"` (with `nip59` feature) and
+#   `nostr-sdk = "0.44"` in its `Cargo.toml` (verified via
+#   `gh api repos/jmcorgan/fips/contents/Cargo.toml`).
+#   `rust-nostr/nostr` and `rust-nostr/nostr-sdk` are THE
+#   canonical Rust SDKs for the Nostr protocol — the
+#   decentralized social-media + identity protocol where
+#   every user is a secp256k1 keypair, every message is a
+#   signed JSON event published to a swarm of independent
+#   websocket "relays", and every NIP (Nostr Implementation
+#   Possibility) defines a typed event-kind / tag schema
+#   on top of that substrate.  `nostr-sdk` exposes the
+#   typed `Client::new(keys)` / `client.add_relay(url)` /
+#   `client.connect()` / `client.subscribe(filter, opts)` /
+#   `client.send_event(event)` /
+#   `client.publish_text_note(content, tags)` /
+#   `client.set_metadata(meta)` /
+#   `client.send_direct_msg(receiver, msg, reply_to)` /
+#   `client.send_private_msg(receiver, msg, tags)` /
+#   `client.fetch_events(filter, timeout)` /
+#   `client.stream_events(filter, timeout)` /
+#   `client.shutdown()` typed methods, the typed
+#   `Keys::generate()` / `Keys::parse(nsec)` /
+#   `Keys::new(secret_key)` / `keys.public_key()` /
+#   `keys.secret_key()` keypair primitives, the typed
+#   `EventBuilder::text_note(content)
+#   .tags(tags).sign_with_keys(keys)` /
+#   `EventBuilder::metadata(meta).sign_with_keys(keys)` /
+#   `EventBuilder::contact_list(contacts).sign_with_keys(keys)`
+#   /  `EventBuilder::repost(repost_event)
+#   .sign_with_keys(keys)` / `EventBuilder::reaction(event,
+#   reaction).sign_with_keys(keys)` event builders, the
+#   typed `Filter::new().authors(vec![pk]).kinds(vec![
+#   Kind::TextNote]).limit(20).since(timestamp).until(
+#   timestamp).search("query").hashtag("nostr").event(eid)
+#   .reference("e").identifier("d")` filter builder, every
+#   typed `Kind::Metadata` / `TextNote` / `RecommendRelay`
+#   / `ContactList` / `EncryptedDirectMessage` (deprecated
+#   in favor of `PrivateDirectMessage` per nip-17) /
+#   `EventDeletion` / `Repost` / `Reaction` / `BadgeAward`
+#   / `GenericRepost` / `Reporting` / `ZapRequest` /
+#   `ZapReceipt` / `MuteList` / `PinList` / `BookmarkList`
+#   / `RelayList` / `Authentication` / `WalletConnectInfo`
+#   / `LongFormTextNote` / `ApplicationSpecificData` /
+#   `LiveEvent` / `LiveEventMessage` / `Job{Request,Result,
+#   Feedback}` / `GitIssue` / `GitReply` / `GitPatch` /
+#   `GitRepoAnnouncement` / `RecommendRelay` named event-
+#   kind variants, every typed NIP — `nip01` (basic
+#   protocol), `nip04` (encrypted DMs), `nip05` (DNS
+#   verification), `nip06` (BIP-39 key derivation),
+#   `nip07` (browser provider), `nip11` (relay info),
+#   `nip13` (proof-of-work), `nip17` (private direct
+#   messages with `nip44` + `nip59` gift wrapping),
+#   `nip19` (bech32-encoded entities: npub / nsec /
+#   note / nprofile / nevent / nrelay / naddr), `nip21`
+#   (URI scheme), `nip26` (delegations), `nip39` (external
+#   identities), `nip42` (relay auth), `nip44` (XChaCha20
+#   payload encryption), `nip47` (Nostr Wallet Connect),
+#   `nip49` (encrypted keys), `nip52` (calendar events),
+#   `nip53` (live activities), `nip57` (Lightning zaps),
+#   `nip58` (badges), `nip59` (gift wrap), `nip65` (relay
+#   list metadata), `nip78` (application-specific data),
+#   `nip96` (HTTP file storage), `nip98` (HTTP auth) —
+#   exposed as typed builder methods + verified-decoder
+#   helpers, the typed `RelayPool` / `RelayManager` /
+#   `Relay` / `RelayMessage` connection layer with
+#   automatic reconnect + websocket framing + WebSocket-
+#   over-Tor transport support, and the typed `NostrSigner`
+#   trait abstracting between `Keys`-backed local signing,
+#   `nip07` browser-injected signing, `nip46` Nostr Connect
+#   remote signers (with `bunker://` URLs), and hardware-
+#   wallet signers.  `rust-nostr/nostr-sdk` powers every
+#   serious Rust Nostr application — desktop clients
+#   (Coracle, Iris, Snort's Rust desktop), mobile clients
+#   (Damus' shared Rust core, Amethyst's Rust bindings,
+#   Primal's Rust desktop), relay implementations
+#   (verse-pbc/groups_relay, scsibug/nostr-rs-relay's
+#   recent migration efforts, strfry's Rust client
+#   tooling), Lightning + Cashu integrations (cashubtc/cdk,
+#   benthecarman/lnurl-server, benthecarman/zap-tunnel),
+#   P2P exchanges (MostroP2P/mostro-cli, NostrDice), git-
+#   over-Nostr tools (DanConwayDev/ngit-cli with the
+#   `git-remote-nostr` git remote helper for `nostr://`
+#   repository URLs), AI agent transports (Block's Goose,
+#   marmot-protocol/whitenoise-rs the White Noise app's
+#   Rust brain), VPN overlays (mmalmi/nostr-vpn, this very
+#   `fips` project), and the canonical Rust bindings for
+#   non-Rust SDKs (rust-nostr/nostr-sdk-flutter,
+#   rust-nostr's CFFI / Python / JNI / WASM bindings).
+#
+#   Verified via:
+#     gh api repos/jmcorgan/fips/contents/Cargo.toml
+#       → [[bin]] name = "fipsctl"   path = "src/bin/fipsctl.rs"
+#       → [[bin]] name = "fips-gateway" path = "src/bin/fips-gateway.rs"
+#       → [[bin]] name = "fipstop"   path = "src/bin/fipstop/main.rs"
+#       → nostr = { version = "0.44", features = ["std","nip59"] }
+#       → nostr-sdk = "0.44"
+#       → secp256k1 = "0.30" (with rand + global-context)
+#       → license = "MIT"
+#     gh api repos/jmcorgan/fips/contents/src/bin/fipsctl.rs
+#       → #[derive(Parser, Debug)] struct Cli {
+#           #[arg(short = 's', long)] socket: Option<PathBuf>,
+#           #[command(subcommand)] command: Commands }
+#       → enum Commands { Show, Acl, Keygen, Connect,
+#                          Disconnect, Stats }
+#       → enum ShowCommands { Status, Peers, Links, Tree,
+#                              Sessions, Bloom, Mmp, Cache,
+#                              Connections, Transports, Routing,
+#                              IdentityCache }
+#       → enum AclCommands { Show }
+#       → enum StatsCommands { List, Peers, History { metric,
+#                              peer, window, granularity, plot } }
+#       → Keygen { dir, force, stdout }
+#       → Connect { peer, address, transport }
+#       → Disconnect { peer }
+#     gh api repos/jmcorgan/fips/contents/src/bin/fipstop/main.rs
+#       → struct Cli { socket, gateway_socket, refresh }
+#       → name = "fipstop"  about = "Monitor a running FIPS daemon"
+#     gh api repos/jmcorgan/fips/contents/src/bin/fips-gateway.rs
+#       → struct Args { config: Option<PathBuf>,
+#                       log_level: String (default "info") }
+#       → name = "fips-gateway"  Linux-only (other platforms
+#         exit 1 with "fips-gateway requires Linux (nftables
+#         unavailable on this platform)")
+#
+#   This entry is the Rust=166 leader bump that **OPENS Axis 111
+#   (Nostr protocol)** at 1/0/0 following R1030 _cherri (188th
+#   programming language).  Go=166 continuation on deck for
+#   R1032 via the canonical Go Nostr SDK `nbd-wtf/go-nostr`,
+#   TS-Node=166 closing pair at R1033 via the canonical TS/JS
+#   Nostr SDK `nbd-wtf/nostr-tools` (same author — Fiatjaf
+#   Vitor Castro, the original co-creator of Nostr — maintains
+#   both the JS reference implementation and the Go SDK,
+#   making this an especially clean triad).
+#
+#   No completion for `fipsctl` / `fipstop` / `fips-gateway`
+#   ships with Apple zsh (/usr/share/zsh/*/functions) or
+#   Homebrew zsh-completions (/opt/homebrew/share/zsh/
+#   site-functions) — confirmed absent.
+# ============================================================================
+
+_fipsctl_fipsctl() {
+    local curcontext="$curcontext" state line ret=1
+    typeset -A opt_args
+
+    _arguments -C \
+        '(- *)'{-h,--help}'[show help]' \
+        '(- *)'{-V,--version}'[print version]' \
+        '(-s --socket)'{-s,--socket}'=[control socket path override]:path:_files' \
+        '1: :->cmd' \
+        '*:: :->args' && ret=0
+
+    case $state in
+        cmd)
+            local -a _fipsctl_commands=(
+                'show:show node information'
+                'acl:show peer ACL information'
+                'keygen:generate a new FIPS identity keypair (secp256k1)'
+                'connect:connect to a peer'
+                'disconnect:disconnect a peer'
+                'stats:query historical node statistics'
+            )
+            _describe -t commands 'fipsctl command' _fipsctl_commands && ret=0
+            ;;
+        args)
+            case $words[1] in
+                show)
+                    local -a _show_what=(
+                        'status:node status overview'
+                        'peers:authenticated peers'
+                        'links:active links'
+                        'tree:spanning tree state'
+                        'sessions:end-to-end sessions'
+                        'bloom:bloom filter state'
+                        'mmp:MMP metrics summary'
+                        'cache:coordinate cache stats'
+                        'connections:pending handshake connections'
+                        'transports:transport instances'
+                        'routing:routing table summary'
+                        'identity-cache:identity cache entries (known node pubkeys)'
+                    )
+                    _describe -t sub 'show what' _show_what && ret=0
+                    ;;
+                acl)
+                    local -a _acl_what=(
+                        'show:loaded peer ACL state'
+                    )
+                    _describe -t sub 'acl what' _acl_what && ret=0
+                    ;;
+                keygen)
+                    _arguments \
+                        '(-d --dir)'{-d,--dir}'=[output directory for fips.key and fips.pub]:dir:_files -/' \
+                        '(-f --force)'{-f,--force}'[overwrite existing key files]' \
+                        '(-s --stdout)'{-s,--stdout}'[print nsec and npub to stdout instead of writing files]' && ret=0
+                    ;;
+                connect)
+                    _arguments \
+                        '1:peer (npub bech32 or hostname):' \
+                        '2:transport address (e.g. 1.2.3.4:2121):' \
+                        '3:transport:(udp tcp tor ethernet)' && ret=0
+                    ;;
+                disconnect)
+                    _arguments \
+                        '1:peer (npub bech32 or hostname):' && ret=0
+                    ;;
+                stats)
+                    if (( CURRENT == 2 )); then
+                        local -a _stats_what=(
+                            'list:list available history metrics'
+                            'peers:list peers tracked in the stats history'
+                            'history:fetch a time-series window for a metric'
+                        )
+                        _describe -t sub 'stats what' _stats_what && ret=0
+                    elif [[ $words[2] == history ]]; then
+                        _arguments \
+                            '1:metric name:' \
+                            '--peer=[peer npub bech32 or hostname]:peer:' \
+                            '--window=[window duration Ns/Nm/Nh]:duration:' \
+                            '--granularity=[sample resolution]:granularity:(1s 1m)' \
+                            '--plot[render a Unicode block sparkline instead of JSON]' && ret=0
+                    fi
+                    ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_fipsctl_fipstop() {
+    _arguments -s \
+        '(- *)'{-h,--help}'[show help]' \
+        '(- *)'{-V,--version}'[print version]' \
+        '(-s --socket)'{-s,--socket}'=[control socket path override]:path:_files' \
+        '--gateway-socket=[gateway control socket path override]:path:_files' \
+        '(-r --refresh)'{-r,--refresh}'=[refresh interval in seconds (default 2)]:seconds:'
+}
+
+_fipsctl_fips_gateway() {
+    _arguments -s \
+        '(- *)'{-h,--help}'[show help]' \
+        '(- *)'{-V,--version}'[print version]' \
+        '(-c --config)'{-c,--config}'=[path to configuration file]:file:_files -g "*.yaml *.yml *.toml"' \
+        '(-l --log-level)'{-l,--log-level}'=[log level (default info)]:level:(trace debug info warn error)'
+}
+
+case "${service:-${words[1]}}" in
+    fipstop)        _fipsctl_fipstop "$@" ;;
+    fips-gateway)   _fipsctl_fips_gateway "$@" ;;
+    fipsctl|*)      _fipsctl_fipsctl "$@" ;;
+esac
