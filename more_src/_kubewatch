@@ -1,0 +1,252 @@
+#compdef kubewatch
+# ============================================================================
+# _kubewatch — zsh completion for Kubewatch, the K8s event → chat notifier
+# ============================================================================
+#
+# UPSTREAM
+#   Repository : https://github.com/robusta-dev/kubewatch
+#                (fork of bitnami-labs/kubewatch — module path
+#                `github.com/bitnami-labs/kubewatch` per go.mod)
+#   Maintainer : robusta.dev  (forked from Skippbox / Bitnami Labs)
+#   License    : Apache-2.0
+#   Stars      : 793
+#   Language   : Go
+#   Module     : github.com/bitnami-labs/kubewatch  (Go 1.26.2)
+#   Binary     : kubewatch  (built from root main.go calling cmd.Execute)
+#   Last push  : 2026-05-04
+#
+# WHAT IT IS
+#   Kubewatch is "a watcher for Kubernetes" — a cluster-resident Go daemon
+#   that watches Kubernetes resource events via `client-go` (pods,
+#   deployments, services, replicasets, namespaces, persistent volumes,
+#   jobs, daemonsets, secrets, configmaps, ingresses, nodes, cluster
+#   roles, role bindings, service accounts, core events) and publishes
+#   notifications to one or more chat / webhook handlers:  Slack,
+#   Slack webhook, HipChat, Mattermost, Flock, generic webhook,
+#   CloudEvent, Microsoft Teams, SMTP email, and Lark.  Configuration
+#   lives in `~/.kubewatch.yaml` and can be authored directly or
+#   manipulated through `kubewatch config add <handler>` /
+#   `kubewatch resource add` subcommands.
+#
+# CLI ARGUMENT GRAMMAR  (verbatim from cmd/{root,config,resource,slack,
+#                       hipchat,mattermost,msteams,lark,cloudevent}.go
+#                       spf13/cobra Command tree)
+#   kubewatch [config | resource | (no subcommand → run daemon)]
+#
+#   Top-level (no subcommand):
+#     Runs the daemon directly:  loads ~/.kubewatch.yaml + env, validates
+#     the resource list, and starts the `client.Run(config)` watch loop.
+#
+#   config              Modify ~/.kubewatch.yaml
+#     add <HANDLER>       Add a webhook handler
+#       slack             Configure Slack handler
+#         -c, --channel <CHANNEL>   Slack channel
+#         -t, --token <TOKEN>       Slack bot token
+#             --title <TITLE>       Message title
+#       slackwebhook      Configure Slack webhook handler
+#       hipchat           Configure HipChat handler
+#       mattermost        Configure Mattermost handler
+#       flock             Configure Flock handler
+#       webhook           Configure generic webhook handler
+#       cloudevent        Configure CloudEvent handler
+#       msteams           Configure Microsoft Teams handler
+#       smtp              Configure SMTP email handler
+#       lark              Configure Lark handler
+#     test              Test handler configs (sends a test event)
+#     sample            Show a sample config file
+#     view              View current ~/.kubewatch.yaml
+#
+#   resource            Manage resources to be watched
+#     add               Add specific resources to be watched
+#     remove            Remove specific resources being watched
+#                       (Both subcommands share these persistent bool
+#                       flags from resourceConfigCmd.PersistentFlags:)
+#       --svc                 watch for services
+#       --deploy              watch for deployments
+#       --po                  watch for pods
+#       --rc                  watch for replication controllers
+#       --rs                  watch for replicasets
+#       --ns                  watch for namespaces
+#       --pv                  watch for persistent volumes
+#       --job                 watch for jobs
+#       --ds                  watch for daemonsets
+#       --secret              watch for plain secrets
+#       --cm                  watch for plain configmaps
+#       --ing                 watch for ingresses
+#       --node                watch for nodes
+#       --clusterrole         watch for cluster roles
+#       --clusterrolebinding  watch for cluster role bindings
+#       --sa                  watch for service accounts
+#       --coreevent           watch for events (old events object)
+#
+#   Environment:
+#     LOG_LEVEL           logrus log level (panic/fatal/error/warn/info/
+#                         debug/trace)
+#     ENABLE_PPROF        if "True", expose pprof on localhost:6060
+#
+# AXIS / CORPUS POSITION
+#   Direct dependency on `github.com/slack-go/slack v0.6.5` declared
+#   in go.mod — the canonical Go Slack client maintained by the
+#   slack-go organization (the fork of nlopes/slack that became the
+#   community-maintained Slack SDK after the original was archived).
+#   The Slack handler in `pkg/handlers/slack/` constructs
+#   `slack.New(token)` and posts messages via `PostMessage` on each
+#   incoming Kubernetes event.  Verified via:
+#     gh api repos/robusta-dev/kubewatch/contents/go.mod
+#       → github.com/slack-go/slack v0.6.5
+#   This entry is the Go=123 leader bump that continues Axis 68
+#   (Slack SDK Library) opened at R861 with Rust=slack-morphism v2
+#   (twitchax/triage-bot).
+#
+#   No completion for `kubewatch` ships with Apple zsh
+#   (/usr/share/zsh/*/functions) or Homebrew zsh-completions
+#   (/opt/homebrew/share/zsh/site-functions) — confirmed absent.
+# ============================================================================
+
+_kubewatch() {
+    local curcontext="$curcontext" state line ret=1
+    typeset -A opt_args
+
+    _arguments -C \
+        '(- *)'{-h,--help}'[show help]' \
+        '1: :_kubewatch_commands' \
+        '*::arg:->args' && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                config)    _kubewatch_config   && ret=0 ;;
+                resource)  _kubewatch_resource && ret=0 ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+(( $+functions[_kubewatch_commands] )) ||
+_kubewatch_commands() {
+    local -a commands
+    commands=(
+        'config:modify kubewatch configuration (~/.kubewatch.yaml)'
+        'resource:manage Kubernetes resources to be watched'
+    )
+    _describe -t commands 'kubewatch command' commands
+}
+
+(( $+functions[_kubewatch_config] )) ||
+_kubewatch_config() {
+    local curcontext="$curcontext" state line ret=1
+    _arguments -C \
+        '1: :_kubewatch_config_commands' \
+        '*::arg:->cargs' && ret=0
+
+    case $state in
+        cargs)
+            case $words[1] in
+                add)      _kubewatch_config_add && ret=0 ;;
+                test|sample|view)
+                    _arguments '(- *)'{-h,--help}'[help]' && ret=0 ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+(( $+functions[_kubewatch_config_commands] )) ||
+_kubewatch_config_commands() {
+    local -a commands
+    commands=(
+        'add:add a webhook handler config'
+        'test:test handler configs by sending test events'
+        'sample:print a sample config file'
+        'view:view current ~/.kubewatch.yaml'
+    )
+    _describe -t commands 'kubewatch config command' commands
+}
+
+(( $+functions[_kubewatch_config_add] )) ||
+_kubewatch_config_add() {
+    local curcontext="$curcontext" state line ret=1
+    _arguments -C \
+        '1: :_kubewatch_handlers' \
+        '*::arg:->hargs' && ret=0
+
+    case $state in
+        hargs)
+            case $words[1] in
+                slack)
+                    _arguments \
+                        '(-c --channel)'{-c+,--channel=}'[Slack channel]:channel:' \
+                        '(-t --token)'{-t+,--token=}'[Slack bot token]:token:' \
+                        '--title=[Slack message title]:title:' \
+                        '(- *)'{-h,--help}'[help]' && ret=0 ;;
+                slackwebhook|hipchat|mattermost|flock|webhook|cloudevent|msteams|smtp|lark)
+                    _arguments \
+                        '--channel=[channel]:channel:' \
+                        '--url=[webhook URL]:url:' \
+                        '--token=[auth token]:token:' \
+                        '(- *)'{-h,--help}'[help]' && ret=0 ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+(( $+functions[_kubewatch_handlers] )) ||
+_kubewatch_handlers() {
+    local -a handlers
+    handlers=(
+        'slack:Slack chat handler (slack-go/slack)'
+        'slackwebhook:Slack incoming-webhook handler'
+        'hipchat:HipChat handler'
+        'mattermost:Mattermost handler'
+        'flock:Flock handler'
+        'webhook:generic HTTP webhook'
+        'cloudevent:CloudEvents handler'
+        'msteams:Microsoft Teams handler'
+        'smtp:SMTP email handler'
+        'lark:Lark handler'
+    )
+    _describe -t handlers 'kubewatch handler' handlers
+}
+
+(( $+functions[_kubewatch_resource] )) ||
+_kubewatch_resource() {
+    local curcontext="$curcontext" state line ret=1
+    _arguments -C \
+        '--svc[watch for services]' \
+        '--deploy[watch for deployments]' \
+        '--po[watch for pods]' \
+        '--rc[watch for replication controllers]' \
+        '--rs[watch for replicasets]' \
+        '--ns[watch for namespaces]' \
+        '--pv[watch for persistent volumes]' \
+        '--job[watch for jobs]' \
+        '--ds[watch for daemonsets]' \
+        '--secret[watch for plain secrets]' \
+        '--cm[watch for plain configmaps]' \
+        '--ing[watch for ingresses]' \
+        '--node[watch for nodes]' \
+        '--clusterrole[watch for cluster roles]' \
+        '--clusterrolebinding[watch for cluster role bindings]' \
+        '--sa[watch for service accounts]' \
+        '--coreevent[watch for core events]' \
+        '1: :_kubewatch_resource_commands' && ret=0
+
+    return ret
+}
+
+(( $+functions[_kubewatch_resource_commands] )) ||
+_kubewatch_resource_commands() {
+    local -a commands
+    commands=(
+        'add:add specific resources to be watched'
+        'remove:remove specific resources being watched'
+    )
+    _describe -t commands 'kubewatch resource command' commands
+}
+
+_kubewatch "$@"
