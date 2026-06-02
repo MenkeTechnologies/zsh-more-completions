@@ -1,0 +1,424 @@
+#compdef weron
+# ============================================================================
+# _weron — zsh completion for weron, WebRTC overlay networks CLI
+# ============================================================================
+#
+# UPSTREAM
+#   Repository : https://github.com/pojntfx/weron
+#   Author     : Felix Pojtinger
+#   License    : AGPL-3.0
+#   Stars      : 2081
+#   Language   : Go
+#   Module     : github.com/pojntfx/weron (Go 1.24)
+#   Last push  : 2025-04-22
+#
+# WHAT IT IS
+#   weron is "Lean, fast & secure overlay networks based on WebRTC" — a Go
+#   cobra CLI that runs a WebRTC signaling server, joins communities of
+#   peers over WebSocket signaling, then negotiates direct peer-to-peer
+#   data channels for layered services:  chat over data channels, latency
+#   and throughput utility probes, full Layer-3 (TUN) and Layer-2 (TAP)
+#   VPN tunnels, and a management API for the signaling server.
+#
+# CLI ARGUMENT GRAMMAR  (verbatim from cmd/weron/cmd/*.go cobra+pflag setup)
+#   weron [persistent flags] <command> [subcommand] [flags]
+#
+#   Persistent flags (apply to every subcommand):
+#     -v, --verbose <int>      verbosity 0-7 (default 5 info; 6 debug; 7 trace)
+#
+#   Commands & aliases (alias list verbatim from each *Cmd.Aliases slice):
+#     signaler (sgl, s)        Start a signaling server
+#     chat (cht, c)            Chat in a community via WebRTC data channels
+#     manager (mgr, m)         Manage communities on the signaling server
+#       create (ctr, c, mk)      Create a new community
+#       delete (del, d, rm)      Delete a community
+#       list (lis, l, ls)        List communities
+#     utility (uti, u, util)   Utility probes over WebRTC
+#       latency (ltc, l)         Measure latency between peers
+#       throughput (thr, t)      Measure throughput between peers
+#     vpn (v)                  Overlay-network VPN modes
+#       ip (i)                   Layer-3 TUN VPN (IPv4/IPv6)
+#       ethernet (eth, e)        Layer-2 TAP VPN (Ethernet frames)
+#
+#   Shared peer-side flags (chat / utility / vpn subcommands):
+#     --raddr <url>            signaler WS URL  (default wss://weron.up.railway.app/)
+#     --timeout <duration>     connection timeout (default 10s)
+#     --community <id>         community to join
+#     --password <pw>          community password
+#     --key <key>              symmetric encryption key
+#     --ice <list>             STUN/TURN comma-list
+#                                (default stun:stun.l.google.com:19302)
+#     --force-relay            force TURN relay
+#
+#   signaler-specific:
+#     --laddr <addr>           listen addr (default :1337; env PORT)
+#     --heartbeat <duration>   heartbeat interval (default 10s)
+#     --postgres-url <url>     DATABASE_URL fallback; empty = in-memory
+#     --redis-url <url>        REDIS_URL fallback; empty = in-process
+#     --cleanup                purge ephemeral communities on start
+#     --ephemeral-communities  allow ephemeral community creation (def true)
+#     --api-username <user>    management API user (default admin)
+#     --api-password <pw>      management API password
+#     --oidc-issuer <url>      OIDC issuer URL
+#     --oidc-client-id <id>    OIDC client id
+#
+#   chat-specific:
+#     --names <list>           desired display-name candidates
+#     --channels <list>        data-channels to join (default chat primary)
+#     --id-channel <ch>        ID-negotiation channel
+#     --kicks <duration>       kick timeout (default 5s)
+#
+#   utility latency-specific:
+#     --server                 act as latency server
+#     --packet-length <int>    bytes per ping packet (default 128)
+#     --pause <duration>       pause between packets (default 1s)
+#
+#   utility throughput-specific:
+#     --server                 act as throughput server
+#     --packet-length <int>    bytes per packet (default 50000)
+#     --packet-count <int>     packets per ack (default 1000)
+#
+#   vpn ip-specific:
+#     --dev <name>             TUN device name (auto; Linux only)
+#     --ips <cidr-list>        claim from these IP networks
+#     --static                 try exact-IP static claim
+#     --parallel <int>         frame-decode threads (default NumCPU)
+#     --id-channel <ch>        ID-negotiation channel
+#     --kicks <duration>       kick timeout (default 5s)
+#     --max-retries <int>      IP-claim retries (default 200)
+#
+#   vpn ethernet-specific:
+#     --dev <name>             TAP device name (auto; Linux/macOS)
+#     --mac <mac>              MAC address (auto; Linux only)
+#     --parallel <int>         frame-decode threads (default NumCPU)
+#
+#   manager create / delete:
+#     --community <id>         community to create or delete
+#     --password <pw>          community password (create only)
+#     + management API flags (--raddr, --api-username, --api-password)
+#
+# AXIS / CORPUS POSITION
+#   Direct dependency on github.com/pion/webrtc/v3 v3.3.5 (the pure-Go
+#   reference WebRTC implementation maintained by the Pion project) declared
+#   in go.mod — the data channel under every weron service runs through
+#   pion/webrtc PeerConnections.  Verified via:
+#     gh api repos/pojntfx/weron/contents/go.mod
+#       → github.com/pion/webrtc/v3 v3.3.5
+#   This entry is the Go=111 leader bump that continues Axis 56
+#   (WebRTC Media Library) opened at R813 with Rust=webrtc-rs (whipinto).
+#
+#   No completion for `weron` ships with Apple zsh
+#   (/usr/share/zsh/*/functions) or Homebrew zsh-completions
+#   (/opt/homebrew/share/zsh/site-functions) — confirmed absent.
+# ============================================================================
+
+_weron() {
+    local curcontext="$curcontext" state line ret=1
+    typeset -A opt_args
+
+    _arguments -C \
+        '(-v --verbose)'{-v+,--verbose=}'[verbosity level (0=disabled..5=info..7=trace)]:level:(0 1 2 3 4 5 6 7)' \
+        '(- *)'{-h,--help}'[help for weron]' \
+        '1: :_weron_commands' \
+        '*::arg:->args' && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                signaler|sgl|s)         _weron_signaler   && ret=0 ;;
+                chat|cht|c)             _weron_chat       && ret=0 ;;
+                manager|mgr|m)          _weron_manager    && ret=0 ;;
+                utility|uti|u|util)     _weron_utility    && ret=0 ;;
+                vpn|v)                  _weron_vpn        && ret=0 ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+(( $+functions[_weron_commands] )) ||
+_weron_commands() {
+    local -a commands
+    commands=(
+        'signaler:start a signaling server'
+        'sgl:start a signaling server'
+        's:start a signaling server'
+        'chat:chat in a community via WebRTC data channels'
+        'cht:chat in a community via WebRTC data channels'
+        'manager:manage communities on the signaling server'
+        'mgr:manage communities on the signaling server'
+        'm:manage communities on the signaling server'
+        'utility:utility probes (latency, throughput) over WebRTC'
+        'uti:utility probes over WebRTC'
+        'util:utility probes over WebRTC'
+        'vpn:overlay-network VPN (ip / ethernet)'
+        'v:overlay-network VPN'
+    )
+    _describe -t commands 'weron command' commands
+}
+
+# Shared peer-side connection flags used by chat / utility / vpn subcmds
+_weron_peer_flags() {
+    _arguments -s \
+        '--raddr=[signaler WebSocket URL]:URL:_urls' \
+        '--timeout=[time to wait for connections]:duration (e.g. 10s, 1m):' \
+        '--community=[ID of community to join]:community id:' \
+        '--password=[password for community]:password:' \
+        '--key=[encryption key for community]:key:' \
+        '--ice=[comma-separated STUN/TURN server list]:ice servers:' \
+        '--force-relay[force usage of TURN servers]' \
+        '(-v --verbose)'{-v+,--verbose=}'[verbosity level]:level:(0 1 2 3 4 5 6 7)' \
+        '(- *)'{-h,--help}'[help]'
+}
+
+# Shared management API flags used by manager subcmds
+_weron_manager_api_flags() {
+    _arguments -s \
+        '--raddr=[signaler management API URL]:URL:_urls' \
+        '--api-username=[management API username (env API_USERNAME)]:user:' \
+        '--api-password=[management API password (env API_PASSWORD)]:password:' \
+        '(-v --verbose)'{-v+,--verbose=}'[verbosity level]:level:(0 1 2 3 4 5 6 7)' \
+        '(- *)'{-h,--help}'[help]'
+}
+
+(( $+functions[_weron_signaler] )) ||
+_weron_signaler() {
+    _arguments \
+        '--laddr=[listening address (env PORT)]:listen addr:' \
+        '--heartbeat=[heartbeat interval]:duration:' \
+        '--postgres-url=[PostgreSQL URL (env DATABASE_URL); empty = in-memory]:postgres url:' \
+        '--redis-url=[Redis URL (env REDIS_URL); empty = in-process broker]:redis url:' \
+        '--cleanup[remove ephemeral communities and reset client counts on start]' \
+        '--ephemeral-communities=[allow ephemeral community creation]:flag:(true false)' \
+        '--api-username=[management API username (env API_USERNAME)]:user:' \
+        '--api-password=[management API password (env API_PASSWORD)]:password:' \
+        '--oidc-issuer=[OIDC issuer URL (env OIDC_ISSUER)]:url:_urls' \
+        '--oidc-client-id=[OIDC client ID (env OIDC_CLIENT_ID)]:client id:' \
+        '(-v --verbose)'{-v+,--verbose=}'[verbosity level]:level:(0 1 2 3 4 5 6 7)' \
+        '(- *)'{-h,--help}'[help for signaler]'
+}
+
+(( $+functions[_weron_chat] )) ||
+_weron_chat() {
+    _arguments \
+        '--raddr=[signaler WebSocket URL]:URL:_urls' \
+        '--timeout=[connection timeout]:duration:' \
+        '--community=[ID of community to join]:community id:' \
+        '--password=[password for community]:password:' \
+        '--key=[encryption key for community]:key:' \
+        '--names=[comma-separated names to try and claim]:names:' \
+        '--channels=[comma-separated channels to join]:channels:' \
+        '--id-channel=[channel used to negotiate names]:channel:' \
+        '--ice=[comma-separated STUN/TURN servers]:ice servers:' \
+        '--force-relay[force TURN relay]' \
+        '--kicks=[time to wait for kicks]:duration:' \
+        '(-v --verbose)'{-v+,--verbose=}'[verbosity level]:level:(0 1 2 3 4 5 6 7)' \
+        '(- *)'{-h,--help}'[help for chat]'
+}
+
+(( $+functions[_weron_manager] )) ||
+_weron_manager() {
+    local curcontext="$curcontext" state line ret=1
+    _arguments -C \
+        '1: :_weron_manager_commands' \
+        '*::arg:->mgrargs' && ret=0
+
+    case $state in
+        mgrargs)
+            case $words[1] in
+                create|ctr|c|mk)        _weron_manager_create && ret=0 ;;
+                delete|del|d|rm)        _weron_manager_delete && ret=0 ;;
+                list|lis|l|ls)          _weron_manager_list   && ret=0 ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+(( $+functions[_weron_manager_commands] )) ||
+_weron_manager_commands() {
+    local -a commands
+    commands=(
+        'create:create a new community'
+        'ctr:create a new community'
+        'mk:create a new community'
+        'delete:delete a community'
+        'del:delete a community'
+        'rm:delete a community'
+        'list:list communities'
+        'lis:list communities'
+        'ls:list communities'
+    )
+    _describe -t commands 'weron manager command' commands
+}
+
+(( $+functions[_weron_manager_create] )) ||
+_weron_manager_create() {
+    _arguments \
+        '--community=[ID of community to create]:community id:' \
+        '--password=[password for community]:password:' \
+        '--raddr=[signaler management API URL]:URL:_urls' \
+        '--api-username=[API user (env API_USERNAME)]:user:' \
+        '--api-password=[API password (env API_PASSWORD)]:password:' \
+        '(-v --verbose)'{-v+,--verbose=}'[verbosity level]:level:(0 1 2 3 4 5 6 7)' \
+        '(- *)'{-h,--help}'[help for create]'
+}
+
+(( $+functions[_weron_manager_delete] )) ||
+_weron_manager_delete() {
+    _arguments \
+        '--community=[ID of community to delete]:community id:' \
+        '--raddr=[signaler management API URL]:URL:_urls' \
+        '--api-username=[API user (env API_USERNAME)]:user:' \
+        '--api-password=[API password (env API_PASSWORD)]:password:' \
+        '(-v --verbose)'{-v+,--verbose=}'[verbosity level]:level:(0 1 2 3 4 5 6 7)' \
+        '(- *)'{-h,--help}'[help for delete]'
+}
+
+(( $+functions[_weron_manager_list] )) ||
+_weron_manager_list() {
+    _arguments \
+        '--raddr=[signaler management API URL]:URL:_urls' \
+        '--api-username=[API user (env API_USERNAME)]:user:' \
+        '--api-password=[API password (env API_PASSWORD)]:password:' \
+        '(-v --verbose)'{-v+,--verbose=}'[verbosity level]:level:(0 1 2 3 4 5 6 7)' \
+        '(- *)'{-h,--help}'[help for list]'
+}
+
+(( $+functions[_weron_utility] )) ||
+_weron_utility() {
+    local curcontext="$curcontext" state line ret=1
+    _arguments -C \
+        '1: :_weron_utility_commands' \
+        '*::arg:->utilargs' && ret=0
+
+    case $state in
+        utilargs)
+            case $words[1] in
+                latency|ltc|l)          _weron_utility_latency    && ret=0 ;;
+                throughput|thr|t)       _weron_utility_throughput && ret=0 ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+(( $+functions[_weron_utility_commands] )) ||
+_weron_utility_commands() {
+    local -a commands
+    commands=(
+        'latency:measure latency between WebRTC peers'
+        'ltc:measure latency between WebRTC peers'
+        'throughput:measure throughput between WebRTC peers'
+        'thr:measure throughput between WebRTC peers'
+    )
+    _describe -t commands 'weron utility command' commands
+}
+
+(( $+functions[_weron_utility_latency] )) ||
+_weron_utility_latency() {
+    _arguments \
+        '--raddr=[signaler WebSocket URL]:URL:_urls' \
+        '--timeout=[connection timeout]:duration:' \
+        '--community=[ID of community to join]:community id:' \
+        '--password=[password for community]:password:' \
+        '--key=[encryption key for community]:key:' \
+        '--ice=[STUN/TURN servers]:ice servers:' \
+        '--force-relay[force TURN relay]' \
+        '--server[act as latency server]' \
+        '--packet-length=[size of ping packet in bytes (default 128)]:bytes:' \
+        '--pause=[time between packets (default 1s)]:duration:' \
+        '(-v --verbose)'{-v+,--verbose=}'[verbosity level]:level:(0 1 2 3 4 5 6 7)' \
+        '(- *)'{-h,--help}'[help for latency]'
+}
+
+(( $+functions[_weron_utility_throughput] )) ||
+_weron_utility_throughput() {
+    _arguments \
+        '--raddr=[signaler WebSocket URL]:URL:_urls' \
+        '--timeout=[connection timeout]:duration:' \
+        '--community=[ID of community to join]:community id:' \
+        '--password=[password for community]:password:' \
+        '--key=[encryption key for community]:key:' \
+        '--ice=[STUN/TURN servers]:ice servers:' \
+        '--force-relay[force TURN relay]' \
+        '--server[act as throughput server]' \
+        '--packet-length=[packet size in bytes (default 50000)]:bytes:' \
+        '--packet-count=[packets per acknowledgement (default 1000)]:count:' \
+        '(-v --verbose)'{-v+,--verbose=}'[verbosity level]:level:(0 1 2 3 4 5 6 7)' \
+        '(- *)'{-h,--help}'[help for throughput]'
+}
+
+(( $+functions[_weron_vpn] )) ||
+_weron_vpn() {
+    local curcontext="$curcontext" state line ret=1
+    _arguments -C \
+        '1: :_weron_vpn_commands' \
+        '*::arg:->vpnargs' && ret=0
+
+    case $state in
+        vpnargs)
+            case $words[1] in
+                ip|i)                   _weron_vpn_ip       && ret=0 ;;
+                ethernet|eth|e)         _weron_vpn_ethernet && ret=0 ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+(( $+functions[_weron_vpn_commands] )) ||
+_weron_vpn_commands() {
+    local -a commands
+    commands=(
+        'ip:Layer-3 TUN VPN (IPv4/IPv6) over WebRTC'
+        'i:Layer-3 TUN VPN over WebRTC'
+        'ethernet:Layer-2 TAP VPN (Ethernet frames) over WebRTC'
+        'eth:Layer-2 TAP VPN over WebRTC'
+    )
+    _describe -t commands 'weron vpn command' commands
+}
+
+(( $+functions[_weron_vpn_ip] )) ||
+_weron_vpn_ip() {
+    _arguments \
+        '--raddr=[signaler WebSocket URL]:URL:_urls' \
+        '--timeout=[connection timeout]:duration:' \
+        '--community=[ID of community to join]:community id:' \
+        '--password=[password for community]:password:' \
+        '--key=[encryption key for community]:key:' \
+        '--ice=[STUN/TURN servers]:ice servers:' \
+        '--force-relay[force TURN relay]' \
+        '--dev=[TUN device name (Linux only)]:device name:' \
+        '--ips=[comma-separated IP networks to claim from]:cidr list:' \
+        '--static[try exact-IP static claim instead of random]' \
+        '--parallel=[frame-decode threads (default NumCPU)]:threads:' \
+        '--id-channel=[ID-negotiation channel]:channel:' \
+        '--kicks=[kick timeout]:duration:' \
+        '--max-retries=[max IP-claim retries (default 200)]:count:' \
+        '(-v --verbose)'{-v+,--verbose=}'[verbosity level]:level:(0 1 2 3 4 5 6 7)' \
+        '(- *)'{-h,--help}'[help for ip]'
+}
+
+(( $+functions[_weron_vpn_ethernet] )) ||
+_weron_vpn_ethernet() {
+    _arguments \
+        '--raddr=[signaler WebSocket URL]:URL:_urls' \
+        '--timeout=[connection timeout]:duration:' \
+        '--community=[ID of community to join]:community id:' \
+        '--password=[password for community]:password:' \
+        '--key=[encryption key for community]:key:' \
+        '--ice=[STUN/TURN servers]:ice servers:' \
+        '--force-relay[force TURN relay]' \
+        '--dev=[TAP device name (Linux/macOS)]:device name:' \
+        '--mac=[MAC address (Linux only)]:mac address:' \
+        '--parallel=[frame-decode threads (default NumCPU)]:threads:' \
+        '(-v --verbose)'{-v+,--verbose=}'[verbosity level]:level:(0 1 2 3 4 5 6 7)' \
+        '(- *)'{-h,--help}'[help for ethernet]'
+}
+
+_weron "$@"
