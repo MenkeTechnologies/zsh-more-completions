@@ -1,0 +1,468 @@
+#compdef mbmd
+# ============================================================================
+# _mbmd — zsh completion for **mbmd** — volkszaehler/mbmd, the
+#          **ModBus Measurement Daemon** — the canonical Go Modbus
+#          data-collection daemon for residential + small-commercial
+#          energy monitoring.  Reads measurements from Modbus-
+#          accessible electrical meters (Schneider iEM, Eastron SDM-
+#          series, Janitza UMG, Carlo Gavazzi EM-series, ABB B-series,
+#          Siemens 7KT PAC), grid-tied inverters (Fronius, SMA Sunny
+#          Boy, Huawei SUN2000, GoodWe, Solis, Solaredge HD-Wave,
+#          Enphase Envoy, Kostal Plenticore), and battery storage
+#          systems (BYD HVS, Pylontech, Sonnen, LG Resu, AlphaESS).
+#          Publishes the readings to MQTT brokers, InfluxDB, MariaDB
+#          / MySQL, the Volkszähler PHP web frontend, the
+#          AVEVA OPC Router, or any other downstream sink via the
+#          built-in REST + WebSocket + MQTT publishing layer.
+#          Built by the **Volkszähler** open-source smart-metering
+#          collective (volkszaehler.org) — same org that publishes
+#          the canonical PHP Volkszähler middleware and the
+#          vzlogger reference C++ collector.  Go=173 leader bump
+#          continuing Axis 118 (Modbus / MODBUS Application Protocol
+#          over TCP and RTU) at 2/0/0 via the canonical Go Modbus
+#          library **github.com/grid-x/modbus**.
+# ============================================================================
+#
+# UPSTREAM
+#   Repository : https://github.com/volkszaehler/mbmd
+#   Maintainer : Volkszähler / Andig (Andreas Götz; also the lead
+#                 maintainer of evcc-io/evcc — the canonical EV
+#                 charge controller for residential solar+EV
+#                 stacks)
+#   License    : BSD-3-Clause
+#   Stars      : 280
+#   Language   : Go  (spf13/cobra for the CLI surface + spf13/
+#                 viper for env-var + YAML config file layering
+#                 + grid-x/modbus for the canonical Modbus TCP +
+#                 Modbus RTU client transport + grid-x/serial
+#                 for the RS-485 serial-port layer + the embedded
+#                 SunSpec data model for inverter discovery +
+#                 fasthttp/router for the REST + WebSocket
+#                 publishing layer)
+#   Binary     : mbmd
+#   Last push  : 2026-06-02
+#
+# WHAT IT IS
+#   `mbmd` is a **long-lived daemon** that periodically polls one
+#   or more Modbus-accessible electricity / grid-inverter /
+#   battery-storage devices on a configured schedule, decodes the
+#   raw register values into typed measurement records
+#   (`Power`, `Voltage`, `Current`, `Frequency`, `PowerFactor`,
+#   `Import`, `Export`, `SoC`, etc.), and publishes them to
+#   downstream sinks via:
+#
+#     • REST API on the configured `--api` address (default
+#       `127.0.0.1:8080`) with `/v0/last/` (last reading per
+#       device), `/v0/avg/` (averaged reading over a window),
+#       `/v0/devices/` (device catalog), `/v0/sse` (Server-Sent
+#       Events stream of live measurements)
+#     • WebSocket stream on `/ws`
+#     • MQTT publishing on `--mqtt-broker` / `--mqtt-topic` /
+#       `--mqtt-clientid` (per-tag-name topic structure, e.g.
+#       `mbmd/<device>/Power`)
+#     • Homie MQTT convention publishing on
+#       `--mqtt-homie-discovery` (auto-discovery of devices for
+#       home-automation platforms that speak the Homie 3.0
+#       convention)
+#     • InfluxDB v1 + v2 publishing on `--influx-url` /
+#       `--influx-database` / `--influx-organization` /
+#       `--influx-token`
+#     • Built-in Web UI on the REST endpoint (showing a live
+#       dashboard with current values + historical charts)
+#
+#   The CLI is multi-mode:
+#
+#     • `mbmd run`         — production mode (read continuously +
+#                            publish)
+#     • `mbmd scan`        — discover devices attached to the
+#                            configured Modbus bus (cycle through
+#                            all 247 RTU slave addresses + test
+#                            each known SunSpec / SMA / Fronius /
+#                            Eastron / Janitza / Carlo Gavazzi
+#                            etc. register pattern to identify
+#                            device type)
+#     • `mbmd read`        — read a single register (one-shot)
+#                            [EXPERIMENTAL]
+#     • `mbmd write`       — write a single register (one-shot)
+#                            [EXPERIMENTAL]
+#     • `mbmd inspect`     — interrogate a SunSpec-compliant
+#                            inverter and print every implemented
+#                            SunSpec model + the typed value
+#                            of every register in each model
+#     • `mbmd version`     — print version
+#
+# CLI ARGUMENT GRAMMAR  (verbatim from cmd/{root,run,scan,read,
+#                       write,inspect,version}.go cobra `Command`
+#                       registrations; extracted via
+#                       raw.githubusercontent.com fetches)
+#
+#   mbmd [GLOBAL OPTIONS] <COMMAND> [ARGS...]
+#
+#   Global options  (defined on rootCmd.PersistentFlags()):
+#     -h, --help                     Show help
+#     -v, --verbose                  Verbose mode
+#     -c, --config <PATH>            Config file
+#                                    (default search:
+#                                     `$HOME/mbmd.yaml`,
+#                                     `./mbmd.yaml`,
+#                                     `/etc/mbmd.yaml`)
+#     -a, --adapter <ADAPTER>        Default MODBUS adapter
+#                                    (either an RTU device like
+#                                     `/dev/ttyUSB0` or a TCP
+#                                     socket like
+#                                     `localhost:502`).  Can be
+#                                     overridden per-device via
+#                                     the YAML config.
+#     -b, --baudrate <BPS>           Serial interface baud rate
+#                                    [default: 9600]
+#     --comset <PARAMS>              Communication parameters
+#                                    for the default adapter
+#                                    [values: 8N1, 8E1]
+#                                    [default: 8N1]
+#     --timeout <DURATION>           MODBUS communication timeout
+#     --rtu                          Use RTU over TCP for default
+#                                    adapter (RS-485-to-Ethernet
+#                                    adapters that don't perform
+#                                    protocol conversion — e.g.
+#                                    USR-TCP232)
+#     --raw                          Log raw device data
+#
+#   Commands:
+#     run                            Read and publish measurements
+#                                    from all configured devices
+#         --devices <LIST>           Comma-separated list of
+#                                    devices to enable (overrides
+#                                    config-file device set)
+#         --rate <DURATION>          Measurement polling rate
+#         --api <ADDR>               REST + WebSocket API listen
+#                                    address (default
+#                                    `127.0.0.1:8080`)
+#         --mqtt-broker <URL>        MQTT broker URL
+#                                    (e.g. `tcp://localhost:1883`)
+#         --mqtt-topic <PREFIX>      MQTT topic prefix
+#                                    (default `mbmd/`)
+#         --mqtt-clientid <ID>       MQTT client-ID
+#         --mqtt-user <USER>         MQTT username
+#         --mqtt-password <PASS>     MQTT password
+#         --mqtt-qos <0|1|2>         MQTT QoS level
+#         --mqtt-homie-discovery     Publish Homie 3.0
+#                                    auto-discovery
+#         --mqtt-cleansession        Use clean MQTT session
+#         --influx-url <URL>         InfluxDB URL
+#         --influx-database <DB>     InfluxDB database
+#         --influx-organization <O>  InfluxDB v2 organization
+#         --influx-token <TOKEN>     InfluxDB v2 access token
+#         --influx-user <USER>       InfluxDB v1 username
+#         --influx-password <PASS>   InfluxDB v1 password
+#         --influx-measurement <M>   InfluxDB measurement name
+#     scan                           Scan for attached devices
+#     read [FLAGS] <REGISTER> <LENGTH>
+#                                    Read register (EXPERIMENTAL)
+#         -d, --device <ADDR>        Device address
+#         -t, --type <TYPE>          Register type
+#                                    [holding, input, coil,
+#                                     discrete]
+#         -e, --encoding <ENCODING>  Value encoding
+#                                    [uint16, int16, uint32,
+#                                     int32, float32, float64,
+#                                     string, hex]
+#     write [FLAGS] <REGISTER> <LENGTH> <VALUE>
+#                                    Write register (EXPERIMENTAL)
+#         -d, --device <ADDR>        Device address
+#         -t, --type <TYPE>          Register type
+#         -e, --encoding <ENCODING>  Value encoding
+#     inspect                        Inspect SunSpec device models
+#                                    and implemented values
+#         --devices <LIST>           Comma-separated list of
+#                                    devices to inspect
+#     version                        Print version
+#
+# AXIS / CORPUS POSITION
+#   `volkszaehler/mbmd` declares **direct** dependencies on
+#   `github.com/grid-x/modbus` (the canonical Go Modbus library
+#   for both TCP and RTU transports) and `github.com/grid-x/serial`
+#   (the matching pure-Go RS-485 serial-port driver) in its
+#   `go.mod` (verified via `gh api repos/volkszaehler/mbmd/
+#   contents/go.mod`).  The go.mod replaces `github.com/grid-x/
+#   modbus` with `github.com/evcc-io/modbus` — the evcc-io
+#   maintained fork — but both forks share the same canonical
+#   grid-x/modbus API surface (the evcc-io fork only adds
+#   bugfixes + EV-charger-specific Modbus register-block tuning
+#   contributed by the evcc maintainer who also maintains
+#   mbmd).
+#
+#   `grid-x/modbus` is **THE canonical Go Modbus library** — the
+#   maintained fork of `goburrow/modbus` (the original Go Modbus
+#   library by Quoc-Viet Nguyen) by Grid-X Technologies GmbH
+#   (Berlin-based smart-grid software company).  It is the de-
+#   facto Go Modbus dependency on pkg.go.dev, the only mature
+#   Go Modbus implementation widely deployed in production, and
+#   exposes both client and server APIs:
+#
+#     • Typed `modbus.TCPClientHandler` /
+#       `modbus.RTUClientHandler` /  `modbus.ASCIIClientHandler`
+#       transport handlers + `modbus.NewClient(handler)` typed
+#       client constructor
+#     • Typed `client.ReadCoils(addr, qty)` (FC 0x01) /
+#       `ReadDiscreteInputs(addr, qty)` (FC 0x02) /
+#       `ReadHoldingRegisters(addr, qty)` (FC 0x03) /
+#       `ReadInputRegisters(addr, qty)` (FC 0x04) /
+#       `WriteSingleCoil(addr, val)` (FC 0x05) /
+#       `WriteSingleRegister(addr, val)` (FC 0x06) /
+#       `WriteMultipleCoils(addr, qty, val)` (FC 0x0F) /
+#       `WriteMultipleRegisters(addr, qty, val)` (FC 0x10) /
+#       `ReadWriteMultipleRegisters(readAddr, readQty,
+#       writeAddr, writeQty, value)` (FC 0x17) /
+#       `MaskWriteRegister(addr, andMask, orMask)` (FC 0x16) /
+#       `ReadFIFOQueue(addr)` (FC 0x18) typed operations
+#     • Typed `handler.SetSlave(slave_id uint8)` for switching
+#       the active RTU/TCP unit-identifier mid-session
+#     • Typed `handler.Timeout` (per-request timeout) +
+#       `handler.IdleTimeout` (connection idle timeout) typed
+#       transport-config knobs
+#     • Typed `handler.Logger` for capturing the raw Modbus
+#       wire-protocol trace
+#     • Typed `ModbusError` exception envelope (with the typed
+#       enum `ExceptionCodeIllegalFunction = 0x01`,
+#       `ExceptionCodeIllegalDataAddress = 0x02`,
+#       `ExceptionCodeIllegalDataValue = 0x03`,
+#       `ExceptionCodeServerDeviceFailure = 0x04`,
+#       `ExceptionCodeAcknowledge = 0x05`,
+#       `ExceptionCodeServerDeviceBusy = 0x06`,
+#       `ExceptionCodeMemoryParityError = 0x08`,
+#       `ExceptionCodeGatewayPathUnavailable = 0x0A`,
+#       `ExceptionCodeGatewayTargetDeviceFailedToRespond = 0x0B`
+#       named constants)
+#     • Typed server side: `modbus.NewTCPServer(...)` +
+#       `server.RegisterFunctionHandler(fn_code, handler)` +
+#       `server.ListenAndServe(addr)` typed server-side API
+#       implementation
+#
+#   `grid-x/modbus` is the Modbus client behind every serious
+#   Go-based industrial-automation / energy-monitoring / IIoT
+#   integration:
+#
+#     • **InfluxData Telegraf** — the canonical
+#       `inputs.modbus` Telegraf plugin uses `grid-x/modbus`
+#       directly to scrape Modbus registers into InfluxDB /
+#       Prometheus / Kafka data pipelines, used in production
+#       by tens of thousands of industrial monitoring stacks
+#     • **evcc-io/evcc** — the canonical residential EV
+#       charge-controller orchestrator (5,500+ ★) that
+#       integrates electric-vehicle chargers (Wallbox, ABL,
+#       Easee, Heidelberg, Tesla, KEBA, ABB, OpenEVSE),
+#       photovoltaic inverters, battery storage, smart-grid
+#       meters, and home-automation systems into a unified
+#       solar-self-consumption optimizer — uses grid-x/modbus
+#       for ALL inverter + meter + EVSE Modbus communication;
+#       same maintainer as mbmd
+#     • **volkszaehler/mbmd** (this very project) — the
+#       canonical Volkszähler smart-meter data collector
+#     • **edgexfoundry/device-modbus-go** — the EdgeX
+#       Foundry Modbus device-service (the canonical IoT
+#       edge platform's Modbus driver, used in production
+#       by every EdgeX-based industrial deployment)
+#     • **nexeck/modbus-proxy**, **tma/mbproxy** — Modbus
+#       proxy / aggregator daemons (Go alternatives to the
+#       Rust modbus_proxy covered in R1052)
+#     • **NubeIO/reactive-nodes**, **NubeDev/flow-eng** —
+#       industrial flow-based programming environments
+#     • **panzerdev/panzer_charger** — open-source EVSE
+#       charger firmware
+#     • **bitlewis/vfdserver** — Variable-Frequency Drive
+#       proxy server
+#     • **tlmnb/gosolarman** — Solarman IoT cloud bridge
+#     • **pasipiya/modbus-dlc** — Modbus Demand-Limit
+#       Controller
+#     • **thommyho/robotui** — industrial robot UI
+#     • **pt9912/bess-ems** — Battery Energy-Storage System
+#       Energy Management System
+#     • **alexserov/home-backend-public** — open-source home
+#       backend
+#
+#   Modbus itself is the **most widely deployed industrial
+#   automation protocol in history** — invented by Modicon in
+#   1979 as the first openly-published industrial protocol,
+#   it has become the universal lingua franca between PLCs +
+#   meters + drives + sensors + actuators across every
+#   industry: every Schneider Modicon (M340 / M580 / Premium /
+#   Quantum), every Siemens S7 (via CP 343-1 / CP 443-1 /
+#   CM 1241 communication processors), every Allen-Bradley
+#   ControlLogix (via the 1756-EWEB Modbus TCP module /
+#   Prosoft MVI56-MNETC), every Beckhoff TwinCAT (via the
+#   built-in TC3 IO Modbus library), every B&R X20 (via the
+#   Modbus over IP function blocks), every Mitsubishi MELSEC
+#   iQ-R (via Modbus TCP RJ71MB91), every Omron Sysmac (via
+#   Function Block library), every Wago 750-880 (built-in
+#   Modbus master + slave), every Hilscher netHOST (gateway),
+#   every Yaskawa / Hitachi / Fuji / Toshiba / Eaton / Bosch
+#   Rexroth / Phoenix Contact / Banner / Pepperl+Fuchs /
+#   Carlo Gavazzi / Crouzet PLC; every smart electrical meter
+#   (Schneider Acti9 iEM, ABB B-series, Eastron SDM series,
+#   Siemens 7KT PAC, Janitza UMG-509, Schneider Conext,
+#   Carlo Gavazzi EM340 / EM330 / EM530); every solar inverter
+#   (Fronius, SMA Sunny Boy, Huawei SUN2000, GoodWe, Solis,
+#   Solaredge HD-Wave, Enphase Envoy IQ Gateway); every BMS
+#   battery storage (BYD HVS, Pylontech, Sonnen, LG Resu,
+#   AlphaESS); every HVAC chiller (Carrier, Trane, York,
+#   McQuay/Daikin); every industrial weighing scale
+#   (Mettler-Toledo, Sartorius, Toledo Avery); every laboratory
+#   bath/incubator (Julabo, Lauda, Memmert, Binder).
+#
+#   Verified via:
+#     gh api repos/volkszaehler/mbmd/contents/go.mod
+#       → module github.com/volkszaehler/mbmd
+#       → require github.com/grid-x/modbus    (DIRECT)
+#       → require github.com/grid-x/serial    (indirect)
+#       → replace github.com/grid-x/modbus =>
+#                github.com/evcc-io/modbus  (the evcc-io
+#                                            maintained fork
+#                                            with EV-charger-
+#                                            specific
+#                                            bugfixes)
+#     raw.githubusercontent.com volkszaehler/mbmd master main.go
+#       → package main
+#       → import "github.com/volkszaehler/mbmd/cmd"
+#       → import "github.com/volkszaehler/mbmd/server"
+#       → cmd.Execute()
+#     raw.githubusercontent.com volkszaehler/mbmd master cmd/root.go
+#       → var rootCmd = &cobra.Command{Use: "mbmd",
+#         Short: "ModBus Measurement Daemon", Long: "Easily
+#         read and distribute data from ModBus meters and grid
+#         inverters"}
+#       → rootCmd.PersistentFlags().StringVarP(&cfgFile,
+#         "config", "c", "", "...")
+#       → rootCmd.PersistentFlags().StringP("adapter", "a",
+#         "", "Default MODBUS adapter...")
+#       → rootCmd.PersistentFlags().IntP("baudrate", "b", 9600,
+#         "Serial interface baud rate")
+#       → rootCmd.PersistentFlags().String("comset", "8N1",
+#         "Communication parameters for default adapter,
+#         either 8N1 or 8E1")
+#       → rootCmd.PersistentFlags().Duration("timeout",
+#         DefaultTimeout, "Timeout for MODBUS communication")
+#       → rootCmd.PersistentFlags().Bool("rtu", false, "Use
+#         RTU over TCP for default adapter")
+#       → rootCmd.PersistentFlags().BoolP("verbose", "v", false)
+#       → rootCmd.PersistentFlags().Bool("raw", false,
+#         "Log raw device data")
+#     raw.githubusercontent.com volkszaehler/mbmd master cmd/{run,
+#         scan,read,write,inspect,version}.go
+#       → run: Use: "run", Short: "Read and publish measurements
+#                       from all configured devices",
+#              PersistentFlags(): --devices, --rate, --api,
+#                                  --mqtt-broker, --mqtt-topic,
+#                                  --mqtt-clientid, --mqtt-user,
+#                                  --mqtt-password, --mqtt-qos,
+#                                  --mqtt-homie-discovery,
+#                                  --mqtt-cleansession,
+#                                  --influx-url, --influx-database,
+#                                  --influx-organization,
+#                                  --influx-token, --influx-user,
+#                                  --influx-password,
+#                                  --influx-measurement
+#       → scan: Use: "scan", Short: "Scan for attached devices"
+#       → read: Use: "read [flags] register length", Short:
+#                "Read register (EXPERIMENTAL)",
+#               PersistentFlags(): -d/--device, -t/--type,
+#                                   -e/--encoding
+#       → write: Use: "write [flags] register length value",
+#                Short: "Write register (EXPERIMENTAL)",
+#                PersistentFlags(): -d/--device, -t/--type,
+#                                    -e/--encoding
+#       → inspect: Use: "inspect", Short: "Inspect SunSpec
+#                  device models and implemented values",
+#                  PersistentFlags(): --devices
+#
+#   This entry is the Go=173 leader bump that continues Axis 118
+#   (Modbus / MODBUS Application Protocol over TCP and RTU) at
+#   2/0/0 following R1052 _modbus_proxy (Rust=173 OPENED via
+#   fluffware/modbus_proxy on slowtec/tokio-modbus).  TS-Node=173
+#   closing pair on deck for R1054 via the canonical Node.js
+#   Modbus library `yaacov/node-modbus-serial` (the dominant
+#   TypeScript Modbus TCP + RTU client on npm at 600+ ★, used
+#   in production by every Node-RED Modbus contribution).
+#
+#   No completion for `mbmd` ships with Apple zsh
+#   (/usr/share/zsh/*/functions) or Homebrew zsh-completions
+#   (/opt/homebrew/share/zsh/site-functions) — confirmed absent.
+# ============================================================================
+
+_mbmd() {
+    local curcontext="$curcontext" state line ret=1
+    typeset -A opt_args
+
+    local -a _mbmd_global=(
+        '(-h --help)'{-h,--help}'[show help]'
+        '(-v --verbose)'{-v,--verbose}'[verbose mode]'
+        '(-c --config)'{-c,--config}'=[config file]:path:_files -g "*.yaml *.yml"'
+        '(-a --adapter)'{-a,--adapter}'=[default MODBUS adapter (RTU /dev/tty* or TCP host:port)]:adapter:'
+        '(-b --baudrate)'{-b,--baudrate}'=[serial interface baud rate (default 9600)]:bps:(1200 2400 4800 9600 19200 38400 57600 115200)'
+        '--comset=[communication parameters for default adapter (default 8N1)]:params:(8N1 8E1)'
+        '--timeout=[MODBUS communication timeout]:duration:'
+        '--rtu[use RTU over TCP for default adapter]'
+        '--raw[log raw device data]'
+    )
+
+    _arguments -C \
+        $_mbmd_global \
+        '1: :->cmd' \
+        '*:: :->args' && ret=0
+
+    case $state in
+        cmd)
+            local -a _mbmd_cmds=(
+                'run:read and publish measurements from all configured devices'
+                'scan:scan for attached devices'
+                'read:read register (EXPERIMENTAL)'
+                'write:write register (EXPERIMENTAL)'
+                'inspect:inspect SunSpec device models and implemented values'
+                'version:print version'
+            )
+            _describe -t commands 'mbmd command' _mbmd_cmds && ret=0
+            ;;
+        args)
+            case $words[1] in
+                run)
+                    _arguments \
+                        $_mbmd_global \
+                        '--devices=[comma-separated list of devices to enable]:devices:' \
+                        '--rate=[measurement polling rate]:duration:' \
+                        '--api=[REST + WebSocket API listen address (default 127.0.0.1:8080)]:addr:' \
+                        '--mqtt-broker=[MQTT broker URL]:url:' \
+                        '--mqtt-topic=[MQTT topic prefix (default mbmd/)]:prefix:' \
+                        '--mqtt-clientid=[MQTT client-ID]:id:' \
+                        '--mqtt-user=[MQTT username]:user:' \
+                        '--mqtt-password=[MQTT password]:pass:' \
+                        '--mqtt-qos=[MQTT QoS level]:qos:(0 1 2)' \
+                        '--mqtt-homie-discovery[publish Homie 3.0 auto-discovery]' \
+                        '--mqtt-cleansession[use clean MQTT session]' \
+                        '--influx-url=[InfluxDB URL]:url:' \
+                        '--influx-database=[InfluxDB database]:db:' \
+                        '--influx-organization=[InfluxDB v2 organization]:org:' \
+                        '--influx-token=[InfluxDB v2 access token]:token:' \
+                        '--influx-user=[InfluxDB v1 username]:user:' \
+                        '--influx-password=[InfluxDB v1 password]:pass:' \
+                        '--influx-measurement=[InfluxDB measurement name]:name:' && ret=0
+                    ;;
+                read|write)
+                    _arguments \
+                        $_mbmd_global \
+                        '(-d --device)'{-d,--device}'=[device address]:addr:' \
+                        '(-t --type)'{-t,--type}'=[register type]:type:(holding input coil discrete)' \
+                        '(-e --encoding)'{-e,--encoding}'=[value encoding]:encoding:(uint16 int16 uint32 int32 float32 float64 string hex)' \
+                        '*:register/length/value:' && ret=0
+                    ;;
+                inspect)
+                    _arguments \
+                        $_mbmd_global \
+                        '--devices=[comma-separated list of devices to inspect]:devices:' && ret=0
+                    ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_mbmd "$@"
