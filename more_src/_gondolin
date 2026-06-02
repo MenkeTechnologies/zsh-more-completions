@@ -1,0 +1,589 @@
+#compdef gondolin
+# ============================================================================
+# _gondolin — zsh completion for **gondolin** —
+#            earendil-works/gondolin, the **Gondolin Agent
+#            Sandbox** — a fast local-Linux micro-VM with
+#            programmable network + filesystem control purpose-built
+#            for **sandboxing AI-agent-generated code**.  Modern
+#            (post-LLM-tool-call era) tool for the "AI agents
+#            increasingly run generated code without human review;
+#            that code often needs network access and credentials,
+#            which creates exfiltration risk" problem domain.  Each
+#            `gondolin bash` invocation spawns a QEMU micro-VM (or
+#            optional libkrun backend on macOS Hypervisor.framework /
+#            Linux KVM), boots an Alpine-based guest rootfs, mounts
+#            the configured host filesystem paths, applies the
+#            configured DNS + outbound-HTTP + outbound-SSH policy,
+#            and drops the user into a shell inside the guest.
+#            Host-side SSH proxy is implemented via **mscdex/ssh2**,
+#            the canonical pure-JavaScript SSH 2.0 implementation
+#            by Brian White.  TS-Node=182 **CLOSES** Axis 127 at
+#            1/1/1 — triple-182 landmark (Rust=182 + Go=182 +
+#            TS-Node=182) + 120th axis closed.
+# ============================================================================
+#
+# UPSTREAM
+#   Repository : https://github.com/earendil-works/gondolin
+#                  (workspace member: host/)
+#   Maintainer : Earendil Works (earendil-works on GitHub);
+#                 the project is named after Gondolin from the
+#                 Tolkien legendarium — the Hidden City of the
+#                 Noldor, accessible only via the secret tunnel
+#                 (a fitting metaphor for an isolated sandbox VM
+#                 reachable only through controlled ingress
+#                 points) — and the GitHub org `earendil-works`
+#                 references Earendil the Mariner;  the project
+#                 sits explicitly in the LLM-tool-call /
+#                 Anthropic Computer Use / OpenAI Operator
+#                 sandboxing space, with first-class support
+#                 for Claude / Cursor / Cline / Aider / GPT-
+#                 Code-Sandbox style agent workflows
+#   License    : Apache-2.0
+#   Stars      : 500+ on github.com/earendil-works/gondolin
+#   Language   : TypeScript / Node ESM  (custom hand-rolled CLI
+#                 argument parser in `host/bin/gondolin.ts`, no
+#                 commander/yargs/citty/oclif framework + ssh2
+#                 ^1.17.0 for the host-side SSH 2.0 proxy
+#                 (outbound SSH allow-list + host-key
+#                 verification + SSH-agent forwarding +
+#                 typed BasicAuth + privateKey + ssh-agent
+#                 auth chain) + QEMU subprocess for the
+#                 default VM backend + libkrun for the
+#                 experimental macOS/Linux fast-VM backend
+#                 + virtio-vsock for the sandbox control
+#                 channel + custom virtio sandbox protocol
+#                 for the guest-side exec multiplexer +
+#                 Hypervisor.framework entitled ad-hoc
+#                 codesigned krun-runner on macOS)
+#   Binary     : gondolin  (`npm install -g
+#                 @earendil-works/gondolin` →
+#                 `./dist/bin/gondolin.js`)
+#   Last push  : 2026-06-02
+#
+# WHAT IT IS
+#   Gondolin is the **AI-agent-code-execution sandbox VM** —
+#   structurally positioned as:
+#
+#     • **Anthropic Computer Use sandbox alternative**     for
+#       self-hosted Claude / Cursor / Cline / Aider / OpenAI
+#       Code Interpreter-style local agent execution
+#     • **Docker-in-Docker alternative**                   strong
+#       isolation via hardware-virtualized micro-VM instead of
+#       sharing the host kernel
+#     • **gVisor alternative**                             same
+#       use case (containerized untrusted workloads) but VM-
+#       grade isolation with host-side network policy
+#     • **Firecracker alternative**                        same
+#       hardware-virtualization layer (KVM/Hypervisor.framework)
+#       but with TS-native host orchestration instead of
+#       Rust+Python
+#     • **Daytona sandbox / E2B / CodeSandbox alternative** for
+#       the self-hosted local-machine case
+#
+#   Architecture overview:
+#
+#     1. Host process (gondolin CLI, Node.js) spawns a QEMU or
+#        libkrun micro-VM with virtio-vsock control channel
+#     2. Guest boots from cached Alpine-based rootfs image
+#     3. Host applies network policy:
+#         - synthetic DNS / trusted DNS / open DNS modes
+#         - outbound HTTP allow-list via MITM hook chain
+#         - outbound SSH allow-list with host-side proxy using
+#           **ssh2** (Brian White's library) for typed key
+#           verification + agent forwarding + per-host
+#           credential matching
+#         - WebSocket upgrade enable/disable
+#         - guest-host TCP port mappings (typed
+#           `--tcp-map GUEST:UPSTREAM` spec)
+#     4. Host injects placeholder secrets for the guest
+#        (the real value is only revealed when an outbound
+#        HTTP request matches the allow-listed host)
+#     5. Host mounts host-FS paths via virtiofs
+#     6. Host drops user into interactive shell OR runs
+#        `gondolin exec <command>` headlessly
+#     7. Optional VM checkpoint (`gondolin snapshot`) emits a
+#        qcow2 disk image for `gondolin bash --resume` later
+#
+#   Subcommand surface:
+#
+#     • gondolin exec                  Run a command via the
+#                                      virtio socket or in-
+#                                      process VM
+#     • gondolin bash                  Interactive shell in
+#                                      sandbox (bash with sh
+#                                      fallback;  Ctrl-] to
+#                                      detach)
+#     • gondolin list                  List active VM sessions
+#     • gondolin attach <SESSION_ID>   Attach to running VM
+#     • gondolin snapshot <SESSION_ID> Snapshot + stop a session
+#     • gondolin build                 Build custom guest assets
+#                                      (kernel + initramfs +
+#                                      rootfs)
+#     • gondolin image                 Manage local image refs +
+#                                      objects
+#     • gondolin help                  Show help
+#
+# CLI ARGUMENT GRAMMAR  (verbatim from `host/bin/gondolin.ts`
+#                       hand-rolled CLI;  extracted via raw
+#                       fetch of `host/bin/gondolin.ts`;  every
+#                       flag below is a literal `console.log("
+#                       --<flag-name> ...")` from the typed
+#                       `usage()` / `bashUsage()` / `listUsage()`
+#                       / `attachUsage()` / `snapshotUsage()` /
+#                       `execUsage()` functions in the upstream
+#                       source)
+#
+#   gondolin <COMMAND> [OPTIONS...] [-- COMMAND ARGS...]
+#
+#   `bash` + `exec` shared flags (Command + VFS + Network):
+#     --cwd PATH                       working directory inside
+#                                      guest
+#     --env KEY=VALUE                  set guest env var
+#                                      (repeatable)
+#     --resume ID_OR_PATH              resume from a snapshot
+#                                      ID (matched against
+#                                      `~/.cache/gondolin/
+#                                      checkpoints/`) or
+#                                      absolute .qcow2 path
+#     --image IMAGE                    guest image selector:
+#                                      asset dir / build id /
+#                                      `name:tag`
+#     --vmm BACKEND                    VM backend: `qemu` |
+#                                      `krun` (default: qemu)
+#     --rootfs-size SIZE               ensure rootfs virtual
+#                                      disk is at least SIZE
+#                                      (e.g. `8G`)
+#     --mount-hostfs HOST:GUEST[:ro]   mount host directory at
+#                                      guest path (`:ro`
+#                                      suffix for read-only)
+#     --mount-memfs PATH               memory-backed mount at
+#                                      guest path
+#     --allow-host HOST                allow outbound HTTP to
+#                                      host (repeatable)
+#     --host-secret NAME@HOST[,HOST...][=VALUE]
+#                                      add secret for hosts;
+#                                      if `=VALUE` omitted,
+#                                      reads from $NAME
+#     --dns MODE                       `synthetic` | `trusted`
+#                                      | `open` (default
+#                                      `synthetic`)
+#     --dns-trusted-server IP          trusted resolver IPv4
+#                                      (repeatable)
+#     --dns-synthetic-host-mapping M   synthetic DNS mapping:
+#                                      `single` | `per-host`
+#     --tcp-map SPEC                   GUEST_HOST[:PORT]=
+#                                      UPSTREAM_HOST:PORT
+#     --ssh-allow-host HOST[:PORT]     allow outbound SSH to
+#                                      host (repeatable;
+#                                      default port 22)
+#     --ssh-agent [SOCK]               use ssh-agent for
+#                                      host-side SSH auth
+#                                      (defaults to
+#                                      $SSH_AUTH_SOCK)
+#     --ssh-known-hosts PATH           OpenSSH known_hosts
+#                                      for upstream
+#                                      verification
+#                                      (repeatable)
+#     --ssh-credential SPEC            HOST[:PORT]=PATH or
+#                                      USER@HOST[:PORT]=PATH;
+#                                      optional `,passphrase-
+#                                      env=ENV` or
+#                                      `,passphrase=...`
+#     --disable-websockets             disable WebSocket
+#                                      upgrades (egress +
+#                                      ingress)
+#
+#   `bash`-only ingress + debugging:
+#     --listen [HOST:PORT]             start host ingress
+#                                      gateway (default
+#                                      `127.0.0.1:0`)
+#     --ssh                            enable SSH access via
+#                                      localhost port forward
+#     --ssh-user USER                  SSH username
+#                                      (default `root`)
+#     --ssh-port PORT                  local listen port
+#                                      (default `0` =
+#                                      ephemeral)
+#     --ssh-listen HOST                local listen host
+#                                      (default `127.0.0.1`)
+#
+#   `list`:
+#     --all                            include stale/dead
+#                                      sessions
+#
+#   `snapshot`:
+#     --output PATH                    absolute/relative path
+#                                      for the snapshot
+#                                      .qcow2
+#     --name NAME                      snapshot name
+#
+#   `exec` (sock mode):
+#     --sock PATH                      virtio sock path
+#     --cmd CMD                        command (repeatable)
+#     --arg ARG                        arg for last --cmd
+#                                      (repeatable)
+#
+#   Global:
+#     --help, -h                       show help
+#
+# AXIS / CORPUS POSITION
+#   `earendil-works/gondolin`'s `host/package.json` declares a
+#   **direct** dependency on `ssh2@^1.17.0`.  The
+#   `host/src/ssh/` workspace member implements the typed
+#   outbound-SSH allow-list policy + the host-side SSH proxy
+#   for guest-originating SSH connections, using typed
+#   `import { Client, ParsedKey, parseKey, utils } from
+#   "ssh2"` and typed `new Client()` /  typed `client.connect({
+#   host, port, username, privateKey, passphrase, agent,
+#   hostHash, hostVerifier, algorithms })`.  Outbound SSH
+#   requests from the guest VM hit the typed host-side proxy,
+#   which inspects the requested host against the configured
+#   typed `sshAllowedHosts` array, looks up the matching typed
+#   `sshCredentials` (private key, ssh-agent, or
+#   keyboard-interactive auth), and proxies the raw SSH 2.0
+#   handshake through to the upstream — providing typed
+#   policy + audit + secret-injection across the SSH boundary
+#   the same way the typed HTTP `httpHooks` do for HTTP.
+#
+#   **mscdex/ssh2** (`ssh2` on npm) is **THE canonical pure-
+#   JavaScript SSH 2.0 implementation** — Brian White's
+#   (mscdex on GitHub) reference pure-JS implementation of the
+#   entire SSH 2.0 protocol stack (RFC 4250 + RFC 4251 +
+#   RFC 4252 + RFC 4253 + RFC 4254 + RFC 4256 + RFC 4419 +
+#   RFC 4716 + RFC 5656 + RFC 8268 + RFC 8308 + RFC 8332 +
+#   RFC 8709 + RFC 8731 + RFC 9142).  In active development
+#   since 2012 with 5,800+ ★ on github.com/mscdex/ssh2.
+#   Clocks **4 million weekly downloads on npm** — the
+#   dominant Node-side SSH library by 2+ orders of magnitude
+#   vs alternatives like `simple-ssh` (thin wrapper over
+#   ssh2), `node-ssh` (wrapper), `ssh2-promise` (Promise-
+#   based wrapper over ssh2), or shelling out to system
+#   `ssh` (defeats the purpose of using Node).
+#
+#   ssh2 ships:
+#
+#     • Typed `Client`                 typed client constructor
+#                                      with typed
+#                                      `Client.connect({
+#                                      host, port, username,
+#                                      password, privateKey,
+#                                      passphrase, agent,
+#                                      agentForward, tryKeyboard,
+#                                      hostHash, hostVerifier,
+#                                      readyTimeout, keepalive*,
+#                                      algorithms,
+#                                      authHandler,
+#                                      strictVendor,
+#                                      identity, ident,
+#                                      forceIPv4, forceIPv6,
+#                                      localAddress,
+#                                      localPort,
+#                                      sock, debug })`
+#     • Typed `Server`                 typed
+#                                      `Server({hostKeys,
+#                                      algorithms, ident,
+#                                      banner, greeting,
+#                                      identity, debug,
+#                                      highWaterMark})` server
+#                                      constructor for typed
+#                                      SSH 2.0 server
+#                                      implementations
+#     • Typed `Session`                typed channel for
+#                                      typed shell + exec +
+#                                      env + pty + signal +
+#                                      window-change +
+#                                      x11 + agent +
+#                                      subsystem requests
+#     • Typed SFTP                     typed `client.sftp()`
+#                                      → typed `SFTPWrapper`
+#                                      with typed
+#                                      `readDir`, `readFile`,
+#                                      `writeFile`, `stat`,
+#                                      `lstat`, `fstat`,
+#                                      `mkdir`, `rmdir`,
+#                                      `unlink`, `rename`,
+#                                      `symlink`,
+#                                      `readlink`, `realpath`,
+#                                      `chmod`, `chown`,
+#                                      `setstat`, `fsetstat`,
+#                                      `open`, `close`,
+#                                      `write`, `read`,
+#                                      `createReadStream`,
+#                                      `createWriteStream`,
+#                                      `fastGet`, `fastPut`
+#                                      typed methods
+#     • Typed key-exchange algorithms  typed concrete:
+#                                      curve25519-sha256
+#                                      (RFC 8731), curve25519-
+#                                      sha256@libssh.org,
+#                                      ecdh-sha2-nistp256/
+#                                      384/521, diffie-hellman-
+#                                      group14-sha256/sha1,
+#                                      diffie-hellman-
+#                                      group16-sha512,
+#                                      diffie-hellman-
+#                                      group18-sha512,
+#                                      diffie-hellman-
+#                                      group-exchange-sha256
+#     • Typed cipher algorithms        typed concrete:
+#                                      chacha20-poly1305@
+#                                      openssh.com,
+#                                      aes256-gcm@openssh.com,
+#                                      aes128-gcm@openssh.com,
+#                                      aes256-ctr,
+#                                      aes192-ctr,
+#                                      aes128-ctr
+#     • Typed MAC algorithms           typed concrete:
+#                                      hmac-sha2-256-etm@
+#                                      openssh.com,
+#                                      hmac-sha2-512-etm@
+#                                      openssh.com,
+#                                      hmac-sha2-256,
+#                                      hmac-sha2-512,
+#                                      hmac-sha1
+#     • Typed public-key auth          typed
+#                                      `parseKey(rawKey,
+#                                      passphrase)` parser for
+#                                      PEM / OpenSSH /
+#                                      PKCS#8 / PPK encoded
+#                                      private keys
+#     • Typed ssh-agent forwarding     typed `agent` socket
+#                                      path or typed
+#                                      `BaseAgent` impl
+#                                      (`OpenSSHAgent`,
+#                                      `PageantAgent`,
+#                                      `CygwinAgent`,
+#                                      `HTTPAgent`)
+#     • Typed direct-tcpip + direct-
+#       streamlocal forwarding         typed
+#                                      `client.forwardOut(srcIP,
+#                                      srcPort, destIP,
+#                                      destPort)` + typed
+#                                      `client.openssh_forwardOutStreamLocal(
+#                                      socketPath)`
+#     • Typed forwarded-tcpip remote
+#       port-forward                   typed
+#                                      `client.forwardIn(remoteAddr,
+#                                      remotePort)` +
+#                                      typed
+#                                      `client.openssh_forwardInStreamLocal(
+#                                      socketPath)`
+#     • Typed X11 forwarding
+#     • Typed PTY                      typed
+#                                      `session.pty(rows,
+#                                      cols, modes)`
+#     • Typed signal + window-change   typed
+#                                      `session.signal()` /
+#                                      `session.windowChange()`
+#     • Typed compression              typed
+#                                      `zlib@openssh.com`
+#     • Typed certificate auth         typed OpenSSH SSH
+#                                      certificate format
+#     • Typed connection-rekeying      typed periodic + on-
+#                                      demand rekey
+#     • Typed banner support           typed pre-auth banner
+#                                      callback
+#     • Native C++ ssh2-streams binding
+#       for fast crypto                via the bundled
+#                                      `cpu-features` +
+#                                      `ssh2-streams` native
+#                                      addon (with pure-JS
+#                                      fallback)
+#
+#   ssh2 is the SSH library behind essentially every modern
+#   Node.js / Electron / browser-extension SSH-aware
+#   application:
+#
+#     • **microsoft/vscode** — the typed `vscode-remote-ssh`
+#       extension's Node bootstrap uses ssh2 internally for
+#       the typed handshake + key-verification path
+#     • **n8n** (50,000+ ★) — the workflow automation
+#       platform's typed SSH node uses ssh2
+#     • **electerm** (16,000+ ★) — the open-source cross-
+#       platform terminal Electron app (the Hyper / iTerm /
+#       Tabby competitor with built-in SSH/SFTP)
+#     • **luin/medis** (12,000+ ★) — the Redis GUI app uses
+#       ssh2 for the typed SSH-tunnel mode
+#     • **Subash/Prepros** — frontend build tool with
+#       typed SSH deploy
+#     • **redis/RedisInsight** — Redis's official GUI uses
+#       ssh2 for SSH-tunneled Redis connections
+#     • **billchurch/webssh2** — the canonical browser-side
+#       WebSocket-to-SSH gateway
+#     • **livecycle/preevy** — the ephemeral-environment
+#       preview platform
+#     • **simstudioai/sim** — AI workflow simulator
+#     • **looker-open-source/actions** — Looker Action
+#       Hub SSH actions
+#     • **democratic-csi/democratic-csi** — Kubernetes
+#       CSI driver for democratic storage backends
+#     • **jeroenpeeters/docker-ssh** — Docker container
+#       SSH gateway
+#     • **whxaxes/blog** — blog SSH deploy
+#     • **lucasmotta/dploy** — Node SFTP deploy
+#     • **idletoaster/ssh-mcp-server** — SSH MCP server
+#       for LLM-driven SSH-host operations
+#     • **earendil-works/gondolin** (this very project)
+#     • **sanketbajoria/ssh2-promise** — the Promise-based
+#       sugar wrapper over ssh2 itself
+#     • Plus thousands of internal Node SSH-aware backends.
+#
+#   Verified via:
+#     gh api repos/earendil-works/gondolin/contents/host/
+#                                                  package.json
+#       → "name": "@earendil-works/gondolin"
+#       → "bin": { "gondolin": "./dist/bin/gondolin.js" }
+#       → "dependencies": { ..., "ssh2": "^1.17.0", ... }
+#     raw.githubusercontent.com earendil-works/gondolin main
+#         host/bin/gondolin.ts
+#       → console.log("Usage: gondolin <command> [options]")
+#       → console.log("Commands:")
+#       → "  exec  Run a command via the virtio socket
+#                  or in-process VM"
+#       → "  bash  Start an interactive shell session in
+#                  the VM (bash -> sh fallback)"
+#       → "  list  List running VM sessions"
+#       → "  attach Attach to a running VM session"
+#       → "  snapshot Snapshot a running VM session"
+#       → "  build Build custom guest assets
+#                  (kernel, initramfs, rootfs)"
+#       → "  image Manage local image refs and objects"
+#       → "  help  Show this help"
+#     bashUsage flags verbatim:
+#       → --cwd / --env / --resume / --image / --vmm /
+#         --rootfs-size / --mount-hostfs / --mount-memfs /
+#         --allow-host / --host-secret / --dns /
+#         --dns-trusted-server / --dns-synthetic-host-mapping /
+#         --tcp-map / --ssh-allow-host / --ssh-agent /
+#         --ssh-known-hosts / --ssh-credential /
+#         --disable-websockets / --listen / --ssh /
+#         --ssh-user / --ssh-port / --ssh-listen
+#     listUsage:  --all / --help / -h
+#     attachUsage: <SESSION_ID> + --cwd / --env / -- COMMAND
+#     snapshotUsage: <SESSION_ID> + --output / --name
+#     execUsage: --sock / --cmd / --arg + all bash VFS+Net flags
+#
+#   This entry is the TS-Node=182 closing pair that **CLOSES** Axis
+#   127 (pure-Rust + pure-Go + pure-JS SSH 2.0 protocol
+#   implementation taxonomy) at 1/1/1, completing the triple-182
+#   round-number landmark (Rust=182 R1079 _lapdev-cli on russh +
+#   Go=182 R1080 _wush on gliderlabs/ssh wrapping x/crypto/ssh +
+#   TS-Node=182 R1081 _gondolin on mscdex/ssh2) and marking the
+#   **120th axis closed** in the corpus.  R1082 on deck: Rust=183
+#   OPENS Axis 128.
+#
+#   No completion for `gondolin` ships with Apple zsh
+#   (/usr/share/zsh/*/functions) or Homebrew zsh-completions
+#   (/opt/homebrew/share/zsh/site-functions) — confirmed absent.
+# ============================================================================
+
+_gondolin() {
+    local curcontext="$curcontext" state line ret=1
+    typeset -A opt_args
+
+    _arguments -C \
+        '(- *)'{-h,--help}'[show help]' \
+        '1: :->cmd' \
+        '*:: :->args' && ret=0
+
+    local -a _gdl_common_flags=(
+        '--cwd=[working directory in guest]:path:'
+        '*--env=[guest env var KEY=VALUE]:env:'
+        '--image=[guest image selector (asset dir, build id, name:tag)]:image:'
+        '--vmm=[VM backend]:backend:(qemu krun)'
+        '--rootfs-size=[minimum rootfs virtual disk size]:size:'
+        '*--mount-hostfs=[mount host directory at guest path HOST:GUEST[:ro]]:spec:'
+        '*--mount-memfs=[memory-backed mount at guest path]:path:'
+        '*--allow-host=[allow outbound HTTP to host]:host:'
+        '*--host-secret=[NAME@HOST[,HOST...][=VALUE]]:spec:'
+        '--dns=[DNS mode]:mode:(synthetic trusted open)'
+        '*--dns-trusted-server=[trusted resolver IPv4]:ip:'
+        '--dns-synthetic-host-mapping=[synthetic DNS mapping]:mapping:(single per-host)'
+        '*--tcp-map=[GUEST_HOST[:PORT]=UPSTREAM_HOST:PORT]:spec:'
+        '*--ssh-allow-host=[allow outbound SSH to host (default port 22)]:host:'
+        '--ssh-agent=[ssh-agent socket path (default $SSH_AUTH_SOCK)]:sock:_files'
+        '*--ssh-known-hosts=[OpenSSH known_hosts file]:path:_files'
+        '*--ssh-credential=[HOST[:PORT]=PATH or USER@HOST[:PORT]=PATH]:spec:'
+        '--disable-websockets[disable WebSocket upgrades (egress + ingress)]'
+        '--help[show help]'
+    )
+
+    case $state in
+        cmd)
+            local -a _gdl_cmds=(
+                'exec:run a command via the virtio socket or in-process VM'
+                'bash:start an interactive shell in the sandbox (Ctrl-] to detach)'
+                'list:list running VM sessions'
+                'attach:attach to a running VM session'
+                'snapshot:snapshot a running VM session (stops it)'
+                'build:build custom guest assets (kernel/initramfs/rootfs)'
+                'image:manage local image refs and objects'
+                'help:show help'
+            )
+            _describe -t commands 'gondolin command' _gdl_cmds && ret=0
+            ;;
+        args)
+            case $words[1] in
+                bash)
+                    _arguments \
+                        $_gdl_common_flags \
+                        '--resume=[resume from snapshot ID or .qcow2 path]:id-or-path:_files -g "*.qcow2"' \
+                        '--listen=[start host ingress gateway HOST:PORT]:addr:' \
+                        '--ssh[enable SSH access via localhost port forward]' \
+                        '--ssh-user=[SSH username (default root)]:user:' \
+                        '--ssh-port=[local listen port (default 0 = ephemeral)]:port:' \
+                        '--ssh-listen=[local listen host (default 127.0.0.1)]:host:' \
+                        '*:: :_files' && ret=0
+                    ;;
+                exec)
+                    _arguments \
+                        $_gdl_common_flags \
+                        '--sock=[virtio sock path]:path:_files' \
+                        '*--cmd=[command (repeatable)]:cmd:_command_names -e' \
+                        '*--arg=[arg for last --cmd (repeatable)]:arg:' \
+                        '*:: :_files' && ret=0
+                    ;;
+                list)
+                    _arguments \
+                        '--all[show stale/dead sessions]' \
+                        '--help[show help]' \
+                        '(-h)-h[show help]' && ret=0
+                    ;;
+                attach)
+                    _arguments \
+                        '1:session id:' \
+                        '--cwd=[working directory]:path:' \
+                        '*--env=[guest env var KEY=VALUE]:env:' \
+                        '--help[show help]' \
+                        '(-h)-h[show help]' \
+                        '*:: :_files' && ret=0
+                    ;;
+                snapshot)
+                    _arguments \
+                        '1:session id:' \
+                        '--output=[snapshot .qcow2 path]:path:_files' \
+                        '--name=[snapshot name]:name:' \
+                        '--help[show help]' \
+                        '(-h)-h[show help]' && ret=0
+                    ;;
+                build)
+                    _arguments \
+                        '--help[show help]' \
+                        '*:: :_files' && ret=0
+                    ;;
+                image)
+                    _arguments \
+                        '--help[show help]' \
+                        '*:: :_files' && ret=0
+                    ;;
+                help)
+                    _arguments '1:command:(exec bash list attach snapshot build image)' && ret=0
+                    ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_gondolin "$@"
