@@ -1,0 +1,309 @@
+#compdef opcua_exporter
+# ============================================================================
+# _opcua_exporter — zsh completion for **opcua_exporter** —
+#                    open-strateos/opcua_exporter, the **Prometheus
+#                    exporter for OPC UA devices**.  Connects to an
+#                    OPC UA server (PLC, industrial gateway, SCADA
+#                    historian, MES adapter, vendor OPC UA daemon),
+#                    creates a long-lived OPC UA subscription
+#                    monitoring a YAML/JSON-configured list of OPC
+#                    UA nodes, and exposes each monitored tag as a
+#                    Prometheus counter / gauge metric on the
+#                    `/metrics` endpoint.  Bridges the industrial
+#                    automation world (OPC UA / IEC 62541) and the
+#                    cloud-native observability world (Prometheus +
+#                    Grafana + Thanos + VictoriaMetrics + Mimir
+#                    long-term storage).  Go=172 leader bump
+#                    continuing Axis 117 (OPC UA / IEC 62541
+#                    industrial automation protocol) at 2/0/0 via
+#                    the canonical Go OPC UA library
+#                    **github.com/gopcua/opcua**.  R1050
+#                    ROUND-NUMBER commit landmark.
+# ============================================================================
+#
+# UPSTREAM
+#   Repository : https://github.com/open-strateos/opcua_exporter
+#   Maintainer : Open Strateos  (the open-source Strateos
+#                 industrial-automation engineering org)
+#   License    : MIT
+#   Stars      : 24
+#   Language   : Go  (stdlib `flag` for CLI parsing +
+#                 prometheus/client_golang for the metrics
+#                 surface + gopcua/opcua for the OPC UA client
+#                 + gopkg.in/yaml.v2 for the YAML config parser)
+#   Binary     : opcua_exporter
+#   Last push  : 2020-12-31
+#
+# WHAT IT IS
+#   `opcua_exporter` solves the canonical "expose OPC UA tags as
+#   Prometheus metrics for Grafana dashboards + AlertManager
+#   alerting" use case in IIoT + cloud-native industrial
+#   monitoring stacks.  Bootstrap is one config file + one binary:
+#
+#     # nodes.yaml
+#     - nodeName: ns=2;s=MyMachine.Temperature
+#       metricName: machine_temperature_celsius
+#     - nodeName: ns=2;s=MyMachine.Pressure
+#       metricName: machine_pressure_bar
+#     - nodeName: ns=2;s=MyMachine.StatusBits
+#       metricName: machine_emergency_stop
+#       extractBit: 0                       # boolean metric from
+#                                            # bit 0 of the status
+#                                            # word
+#
+#     # boot the exporter:
+#     opcua_exporter \
+#       --endpoint opc.tcp://plc.example.org:4840 \
+#       --config nodes.yaml \
+#       --port 9686 \
+#       --prom-prefix factory_a_
+#
+#     # Prometheus scrape config:
+#     - job_name: opcua_factory_a
+#       static_configs:
+#         - targets: [opcua-exporter.factory-a.svc.cluster.local:9686]
+#
+#   The exporter then exposes the OPC UA tags as live Prometheus
+#   counters / gauges with the prefix `factory_a_` plus the
+#   subsystem `opcua_exporter` and the metric names from the
+#   config file.  An `--extractBit <N>` directive lets you slice
+#   individual bits out of an OPC UA `Int32`/`Int64`/`UInt32` status
+#   word and emit them as boolean metrics — perfect for the
+#   emergency-stop / interlock / fault / running / homed / armed
+#   bit-flags that are universal in PLC tag schemas.
+#
+# CLI ARGUMENT GRAMMAR  (verbatim from main.go `flag.*Var`
+#                       declarations; extracted via `gh api repos/
+#                       open-strateos/opcua_exporter/contents/
+#                       main.go`)
+#
+#   opcua_exporter [OPTIONS]
+#
+#   Options:
+#     -h, --help                     Show usage (auto-generated
+#                                    by Go's stdlib `flag`)
+#     -port <PORT>                   Port to publish metrics on
+#                                    [default: 9686]
+#     -endpoint <URL>                OPC UA endpoint to connect to
+#                                    [default: opc.tcp://localhost
+#                                              :4096]
+#     -prom-prefix <PREFIX>          Prefix prepended to emitted
+#                                    Prometheus metrics
+#     -config <PATH>                 Path to a YAML/JSON config
+#                                    file listing the OPC UA
+#                                    nodes to monitor
+#     -config-b64 <B64>              Base64-encoded config JSON
+#                                    (overrides `--config`;
+#                                    useful for Kubernetes
+#                                    ConfigMap injection without
+#                                    a mounted file)
+#     -debug                         Enable debug logging via the
+#                                    `github.com/gopcua/opcua/
+#                                    debug` package
+#     -read-timeout <DURATION>       Timeout when waiting for OPC
+#                                    UA subscription messages
+#                                    [default: 5s]
+#     -max-timeouts <N>              The exporter will quit
+#                                    trying after this many read
+#                                    timeouts in a row
+#                                    [default: 0 — disabled]
+#     -buffer-size <N>               Maximum number of messages
+#                                    in the receive buffer
+#                                    [default: 64]
+#     -summary-interval <DURATION>   How frequently to log an
+#                                    event-count summary line
+#                                    [default: 5m]
+#
+# AXIS / CORPUS POSITION
+#   `open-strateos/opcua_exporter` declares **direct** imports of
+#   `github.com/gopcua/opcua`, `github.com/gopcua/opcua/debug`,
+#   `github.com/gopcua/opcua/monitor`, and `github.com/gopcua/
+#   opcua/ua` in its `main.go` (verified via `gh api repos/
+#   open-strateos/opcua_exporter/contents/main.go`).  The exporter
+#   constructs an OPC UA `*opcua.Client` via
+#   `opcua.NewClient(endpoint, opts...)`, opens a subscription via
+#   the typed `monitor.NodeMonitor` helper, and registers monitored
+#   items with typed `monitor.Item` / `monitor.DataChangeMessage`
+#   callback functions that translate OPC UA `ua.Variant` values
+#   into Prometheus metric updates.
+#
+#   `gopcua/opcua` is **THE canonical Go OPC UA library** — the
+#   native Go implementation of the OPC UA stack at 1,034+ ★ on
+#   GitHub, maintained by Andreas Pohl, magiconair, and a 60+
+#   external contributor base.  It is the **only mature** Go OPC
+#   UA implementation on pkg.go.dev (the older alternatives
+#   `pkg.in/opc.v0`, `github.com/opcfoundation/UA-Go-Stack`, and
+#   `github.com/awcullen/opcua` are unmaintained or proprietary)
+#   and ships:
+#
+#     • Typed `Client.NewClient(endpoint, opts...)` /
+#       `client.Connect(ctx)` /  `client.Close(ctx)` /
+#       `client.Read(ctx, req)` /  `client.Write(ctx, req)` /
+#       `client.Browse(ctx, req)` /  `client.Subscribe(ctx,
+#       params, notifyCh)` /  `client.HistoryReadRawModified(ctx,
+#       nodes, details)` /  `client.HistoryUpdate(ctx, req)` /
+#       `client.Call(ctx, req)` /  `client.NamespaceArray(ctx)` /
+#       `client.FindNamespace(ctx, name)` /
+#       `client.GetEndpoints(ctx)` /  `client.RegisterServer(ctx,
+#       reg)` typed client methods
+#     • Typed `Server.NewServer(opts...)` /  `server.Start(ctx)` /
+#       `server.Stop()` /  `server.AddNamespace(uri)` typed server
+#       API (the server-side implementation is newer + less
+#       complete than the client side but covers the standard
+#       address-space model + read/write/browse/subscribe
+#       services)
+#     • Typed `monitor.NewNodeMonitor(client)` + typed `monitor.
+#       Subscribe(ctx, params, callback)` /  `monitor.SubscribeRange(...)`
+#       /  `monitor.AddNode(...)` /  `monitor.RemoveNode(...)`
+#       higher-level subscription helper
+#     • Full typed UA primitives — every `ua.NodeID` /
+#       `ua.ExpandedNodeID` /  `ua.QualifiedName` /
+#       `ua.LocalizedText` /  `ua.StatusCode` /  `ua.DataValue` /
+#       `ua.Variant` /  `ua.ExtensionObject` /  `ua.ByteString` /
+#       `ua.XMLElement` /  `ua.DiagnosticInfo` /  `ua.GUID` typed
+#       built-in OPC UA scalar type
+#     • Full typed OPC UA structured types under `github.com/
+#       gopcua/opcua/ua` — every service request/response (
+#       `ua.ReadRequest`, `ua.ReadResponse`, `ua.WriteRequest`,
+#       `ua.WriteResponse`, `ua.BrowseRequest`, `ua.BrowseResponse`,
+#       `ua.CreateSubscriptionRequest`,
+#       `ua.CreateMonitoredItemsRequest`, `ua.PublishRequest`,
+#       `ua.PublishResponse`, `ua.RepublishRequest`,
+#       `ua.HistoryReadRequest`, `ua.HistoryUpdateRequest`,
+#       `ua.CallMethodRequest`, `ua.TranslateBrowsePathsToNodeIdsRequest`,
+#       `ua.RegisterNodesRequest`, `ua.UnregisterNodesRequest`,
+#       `ua.QueryFirstRequest`, `ua.QueryNextRequest`)
+#     • Typed `uasc.Channel` (the secure-channel layer
+#       implementation), `uacp.Conn` (the connection-protocol
+#       transport layer), `uapolicy.SecurityPolicy{None,
+#       Basic128Rsa15, Basic256, Basic256Sha256, Aes128Sha256RsaOaep,
+#       Aes256Sha256RsaPss}` security-policy enum
+#     • Typed `MessageSecurityModeNone` / `MessageSecurityModeSign`
+#       / `MessageSecurityModeSignAndEncrypt` enum
+#     • Typed `UserTokenType{Anonymous, UserName, Certificate,
+#       IssuedToken}` enum
+#     • Typed certificate-store helpers + X.509 cert/key file
+#       loading for mutual-auth scenarios
+#     • Typed `id` package with every OPC UA NodeId constant
+#       defined in the IEC 62541-3 NodeIds.csv spec
+#       (e.g. `id.ObjectsFolder`, `id.RootFolder`,
+#       `id.HasComponent`, `id.Organizes`, `id.HasTypeDefinition`,
+#       `id.HasSubtype`, `id.HasProperty`, `id.HasModellingRule`,
+#       and ~6,000 other named NodeId constants spanning the
+#       full standard address space)
+#
+#   `gopcua/opcua` powers every serious Go OPC UA integration in
+#   production:
+#
+#     • **InfluxData Telegraf** — the OPC UA input plugin uses
+#       `gopcua/opcua` directly, making it the canonical OPC UA
+#       collector for InfluxDB / Mimir / TimescaleDB metrics
+#       pipelines
+#     • **AWS CloudWatch Agent** (`amazon-cloudwatch-agent`) —
+#       the OPC UA receiver in the AWS managed agent uses
+#       `gopcua/opcua`
+#     • **Rulego** + **Rulego-server** — the Go rules-engine
+#       platform's OPC UA connector
+#     • **Edgenesis Shifu** — the Kubernetes-native edge IoT
+#       device-orchestration platform's OPC UA driver
+#     • **KubeEdge mappers-go** — KubeEdge's OPC UA device
+#       mapper (the canonical KubeEdge bridge between cloud-
+#       native Kubernetes and edge IoT devices)
+#     • **ClearBlade opc-ua-go-adapter** — ClearBlade's IoT
+#       platform's OPC UA adapter
+#     • **Rightech ric-edge** — Rightech IoT Cloud's edge
+#       runtime's OPC UA driver
+#     • **Circonus Unified Agent** — the Circonus monitoring
+#       agent's OPC UA collector
+#     • **open-strateos/opcua_exporter** (this very project; the
+#       canonical OPC UA → Prometheus bridge)
+#     • **Eclipse Streamsheets** Go OPC UA connector
+#     • Industrial-IoT projects spanning every level of the
+#       stack from edge collectors (ic-edge, telegraf-geoip,
+#       VladislavLowPriority/CS_Packaging_line_316) to
+#       gateways (Max2000s/opc-ua-mqtt-bridge — OPC UA-to-MQTT
+#       bridge for connecting legacy PLCs to MQTT brokers,
+#       CanAydinCs/OPC2NATS2DB) to historians (
+#       artyomkorchagin/opcua-logger-go, inview-team/Owl,
+#       kamallearner123/smart-maintenance-monitor)
+#
+#   OPC UA itself is the **IEC 62541** standard that has, since
+#   ~2010, displaced OPC Classic (DA / HDA / A&E / DCOM-based) as
+#   the universal SCADA-to-controller communication protocol.
+#   Every modern PLC vendor's hardware ships with a built-in OPC
+#   UA server: Siemens S7-1500 PLCs (via the Siemens OPC UA
+#   Server license), Allen-Bradley ControlLogix (via FactoryTalk
+#   Linx Gateway), Beckhoff TwinCAT (via the built-in TC3 OPC UA
+#   Server), B&R X20 (via the AS-bundled OPC UA Server),
+#   Schneider Modicon M580 (via the built-in OPC UA Server),
+#   Mitsubishi MELSEC iQ-R (via the bundled MELSOFT OPC UA
+#   Server), Omron Sysmac NX1P2 (via Sysmac Studio OPC UA
+#   Server), and the open OPC UA implementations span the
+#   canonical Eclipse Milo Java server reference, the canonical
+#   open62541 C/C++ embedded server, the canonical FreeOpcUa
+#   Python asyncio server, this canonical gopcua Go server, the
+#   canonical node-opcua TypeScript server, and the canonical
+#   locka99/opcua + FreeOpcUa/async-opcua Rust servers.
+#
+#   Verified via:
+#     gh api repos/open-strateos/opcua_exporter/contents/main.go
+#       → package main
+#       → import "github.com/gopcua/opcua"           (DIRECT)
+#       → import "github.com/gopcua/opcua/debug"    (DIRECT)
+#       → import "github.com/gopcua/opcua/monitor"  (DIRECT)
+#       → import "github.com/gopcua/opcua/ua"       (DIRECT)
+#       → var port            = flag.Int("port", 9686,
+#                                          "Port to publish metrics on.")
+#       → var endpoint        = flag.String("endpoint",
+#                                            "opc.tcp://localhost:4096",
+#                                            "OPC UA Endpoint to connect to.")
+#       → var promPrefix      = flag.String("prom-prefix", "",
+#                                            "Prefix...")
+#       → var nodeListFile    = flag.String("config", "",
+#                                            "Path to a file...")
+#       → var configB64       = flag.String("config-b64", "",
+#                                            "Base64-encoded config JSON.
+#                                              Overrides -config")
+#       → var debug           = flag.Bool("debug", false,
+#                                          "Enable debug logging")
+#       → var readTimeout     = flag.Duration("read-timeout",
+#                                              5*time.Second, ...)
+#       → var maxTimeouts     = flag.Int("max-timeouts", 0, ...)
+#       → var bufferSize      = flag.Int("buffer-size", 64, ...)
+#       → var summaryInterval = flag.Duration("summary-interval",
+#                                              5*time.Minute, ...)
+#
+#   This entry is the Go=172 leader bump that continues Axis 117
+#   (OPC UA / IEC 62541 industrial automation protocol) at 2/0/0
+#   following R1049 _rplc (Rust=172 OPENED via eva-ics/rplc on
+#   rplc_opcua/locka99/opcua).  **R1050 ROUND-NUMBER commit
+#   landmark.**  TS-Node=172 closing pair on deck for R1051 via
+#   the canonical `node-opcua/node-opcua` SDK (Etienne Rossignon's
+#   reference TypeScript OPC UA implementation, the dominant
+#   TS-stack OPC UA dependency used by every Node-RED OPC UA
+#   contrib node, every Sentry-OPC adapter, every browser-based
+#   HMI tool, and the OPC Foundation's official Node-RED
+#   reference integration).
+#
+#   No completion for `opcua_exporter` ships with Apple zsh
+#   (/usr/share/zsh/*/functions) or Homebrew zsh-completions
+#   (/opt/homebrew/share/zsh/site-functions) — confirmed absent.
+# ============================================================================
+
+_opcua_exporter() {
+    _arguments -s \
+        '-h[show usage]' \
+        '-help[show usage]' \
+        '-port=[port to publish metrics on (default 9686)]:port:' \
+        '-endpoint=[OPC UA endpoint to connect to (default opc.tcp://localhost:4096)]:url:' \
+        '-prom-prefix=[prefix prepended to Prometheus metrics]:prefix:' \
+        '-config=[YAML/JSON config file listing OPC UA nodes to monitor]:path:_files -g "*.yaml *.yml *.json"' \
+        '-config-b64=[base64-encoded config JSON (overrides -config)]:b64:' \
+        '-debug[enable debug logging]' \
+        '-read-timeout=[timeout waiting for OPC UA subscription messages (default 5s)]:duration:' \
+        '-max-timeouts=[quit after N consecutive read timeouts (0 disables; default 0)]:n:' \
+        '-buffer-size=[maximum messages in receive buffer (default 64)]:n:' \
+        '-summary-interval=[event-count summary log interval (default 5m)]:duration:'
+}
+
+_opcua_exporter "$@"
