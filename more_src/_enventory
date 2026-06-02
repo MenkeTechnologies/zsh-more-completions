@@ -1,0 +1,280 @@
+#compdef enventory
+# ============================================================================
+# _enventory — zsh completion for bbkane/enventory, "centrally manage
+#               project environment variables with SQLite" — Go=160 leader
+#               bump continuing Axis 105 OpenTelemetry observability via
+#               the canonical Go OpenTelemetry SDK
+#               go.opentelemetry.io/otel.
+# ============================================================================
+#
+# UPSTREAM
+#   Repository : https://github.com/bbkane/enventory
+#   Maintainer : Benjamin Kane (bbkane)
+#   License    : MIT (LICENSE.md)
+#   Stars      : 23
+#   Language   : Go
+#   Module     : go.bbkane.com/enventory
+#   Binary     : enventory  (built from main.go;
+#                warg.New("enventory", version, ...))
+#   Last push  : 2026-05-31
+#
+# WHAT IT IS
+#   enventory is a CLI for managing project-scoped environment
+#   variables centrally — instead of `.env` files scattered
+#   around per-project repos, enventory persists them in a
+#   single SQLite database, indexed by named "environments"
+#   (e.g. `staging`, `production`, `my-laptop-dev`).  Each
+#   environment has its own typed variables and "variable
+#   references" (vars that point at another environment's
+#   var, for safe cross-env reuse).  Then:
+#     • `enventory shell zsh init` emits the zsh hook that
+#       auto-exports the matching environment when you `cd`
+#       into a project directory
+#     • `enventory shell zsh chdir <DIR>` is the underlying
+#       hook the auto-cd integration calls
+#     • `enventory shell zsh export` / `unexport` flip the
+#       current shell's exports manually
+#     • `enventory exec` runs an arbitrary command with the
+#       environment's vars injected (no shell hook needed)
+#     • `enventory var create / delete / update / show /
+#       ref ...` and `enventory env create / delete / list
+#       / update / show` perform CRUD on the underlying
+#       SQLite-backed store
+#
+#   The tooling is OpenTelemetry-instrumented end-to-end via
+#   `go.opentelemetry.io/otel v1.44.0`, so every shell hook
+#   invocation, SQLite query, and var-lookup span flows out
+#   as OTLP/gRPC or OTLP/HTTP telemetry to a configured
+#   collector — useful for tracking where shell-startup
+#   latency comes from in a fleet of dev workstations.
+#
+# CLI ARGUMENT GRAMMAR  (verbatim from main.go `warg.New(...)`
+#                       declaration + cli/*.go subcommand
+#                       builders; extracted via `gh api repos/
+#                       bbkane/enventory/contents/...`)
+#
+#   enventory <SECTION> [<SUBSECTION>...] <CMD> [args...]
+#
+#   Top-level structure:
+#     completion zsh                 Print zsh completion script
+#                                    (warg's built-in
+#                                    completion-script emitter)
+#
+#     env <CMD>                      Environment commands
+#       create <NAME>                  Create a new environment
+#       delete <NAME>                  Delete an environment
+#       list                           List all environments
+#       update <NAME>                  Update an environment's
+#                                      metadata
+#       show <NAME>                    Show an environment's
+#                                      vars + metadata
+#
+#     shell zsh <CMD>                Zsh-specific shell hooks
+#       chdir <DIR>                    Underlying hook the
+#                                      auto-cd integration
+#                                      calls when the user
+#                                      changes directory
+#       init                           Emit the zsh
+#                                      integration hook (eval
+#                                      this in `.zshrc`)
+#       export <ENV>                   Export the given
+#                                      environment's vars into
+#                                      the current shell
+#       unexport <ENV>                 Unexport the given
+#                                      environment's vars from
+#                                      the current shell
+#
+#     var <CMD>                      Vars owned by a given
+#                                    environment
+#       create <NAME>=<VALUE>          Create a typed env var
+#       delete <NAME>                  Delete a var
+#       show <NAME>                    Show a var's value +
+#                                      metadata
+#       update <NAME>                  Update a var
+#
+#       ref <CMD>                    Variable references
+#                                    (a var that points at
+#                                    another environment's
+#                                    var, for safe cross-env
+#                                    reuse)
+#         create <NAME>                Create a var reference
+#         delete <NAME>                Delete a var reference
+#         show <NAME>                  Show a var reference
+#         update <NAME>                Update a var reference
+#
+#     exec <CMD> [ARGS...]           Run a command with the
+#                                    environment's vars
+#                                    injected (no shell hook
+#                                    needed; ideal for
+#                                    ad-hoc / CI invocations)
+#
+#   Help / version:
+#     --help [--help detailed]       Show help (warg-style:
+#                                    `--help detailed` for the
+#                                    detailed variant)
+#
+# AXIS / CORPUS POSITION
+#   Direct dependency on `go.opentelemetry.io/otel v1.44.0` +
+#   `go.opentelemetry.io/otel/trace v1.44.0` declared in go.mod,
+#   with the OTLP exporters
+#   (`go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.37.0`
+#   + `.../otlptracegrpc v1.37.0` + `.../otlptracehttp v1.37.0`)
+#   and the stdout exporter (`.../stdout/stdouttrace v1.37.0`)
+#   pulled in as transitive direct-usage deps — `opentelemetry-
+#   go` is THE canonical Go implementation of the CNCF
+#   OpenTelemetry specification, maintained by the OpenTelemetry
+#   community at the open-telemetry/opentelemetry-go repository
+#   (5,400+ stars; the predominant typed Go SDK for traces /
+#   metrics / logs that every Go observability pipeline ends
+#   up depending on — used by Bearer, daptin, pydio/cells,
+#   koderover/zadig, go-dev-frame/sponge, thirdweb-dev/insight,
+#   atoms-co/splitter, bbkane/enventory, francknouama/go-
+#   starter, influxdata/flux, integr8ly/integreatly-operator,
+#   koderover/zadig, ritikchawla/k8s-operator-framework,
+#   srdtrk/go-codegen, and dozens of other production Go
+#   applications that emit OTLP telemetry).  opentelemetry-go
+#   exposes the typed `otel.Tracer("module.name")` factory
+#   returning a `trace.Tracer`, the typed
+#   `tracer.Start(ctx, "span.name", trace.WithAttributes(...),
+#   trace.WithSpanKind(trace.SpanKindServer))` constructor
+#   returning `(context.Context, trace.Span)`, the typed
+#   `span.SetAttributes(attribute.String("k", "v"))` /
+#   `span.SetStatus(codes.Error, "message")` /
+#   `span.RecordError(err)` /
+#   `span.AddEvent("event.name", trace.WithAttributes(...))` /
+#   `span.End()` lifecycle, the typed
+#   `trace.SpanContextFromContext(ctx)` extractor, the
+#   `trace.SpanFromContext(ctx)` accessor, the typed
+#   `otel.GetTextMapPropagator()` /
+#   `propagation.TraceContext{}.Inject(ctx, carrier)` /
+#   `Extract(ctx, carrier)` propagation primitives, the
+#   typed `attribute.String / Int / Float64 / Bool / StringSlice
+#   / IntSlice / Float64Slice / BoolSlice / KeyValue / Set`
+#   key-value primitives, the typed `codes.Ok / Error /
+#   Unset` status codes, the typed `metric.Meter` factory with
+#   `meter.Int64Counter("name")` /
+#   `meter.Int64UpDownCounter("name")` /
+#   `meter.Float64Histogram("name")` /
+#   `meter.Int64ObservableGauge("name")` instruments, the
+#   typed `Logger` factory for the logs signal, and the
+#   typed `sdk/...` setup primitives
+#   (`sdktrace.NewTracerProvider(sdktrace.WithBatcher(exporter)
+#   , sdktrace.WithResource(resource))`,
+#   `sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))`,
+#   `sdklog.NewLoggerProvider(sdklog.WithProcessor(processor))`).
+#   `exporters/otlp/otlptrace/otlptracegrpc.New(ctx, ...)` and
+#   `exporters/otlp/otlptrace/otlptracehttp.New(ctx, ...)` are
+#   the OTLP/gRPC and OTLP/HTTP-protocol exporters that
+#   round-trip with any OTLP-receiving collector.  enventory's
+#   `app/...` constructs an `sdktrace.NewTracerProvider` per
+#   process boot, wires it into `otel.SetTracerProvider(...)`,
+#   and uses `otel.Tracer("enventory")` to instrument every
+#   warg-dispatched command at the boundary, the SQLite query
+#   layer, and the zsh-hook entry points.  Verified via:
+#     gh api repos/bbkane/enventory/contents/go.mod
+#       → module go.bbkane.com/enventory
+#       → go.opentelemetry.io/otel v1.44.0
+#       → go.opentelemetry.io/otel/trace v1.44.0
+#       → go.opentelemetry.io/otel/exporters/otlp/otlptrace
+#         v1.37.0
+#       → go.opentelemetry.io/otel/exporters/otlp/otlptrace/
+#         otlptracegrpc v1.37.0
+#       → go.opentelemetry.io/otel/exporters/otlp/otlptrace/
+#         otlptracehttp v1.37.0
+#       → go.opentelemetry.io/otel/exporters/stdout/stdouttrace
+#         v1.37.0
+#       → go.opentelemetry.io/otel/metric v1.44.0
+#       → go.opentelemetry.io/otel/sdk v1.37.0
+#     gh api repos/bbkane/enventory/contents/main.go
+#       → warg.New("enventory", version, warg.NewSection(...))
+#       → top-level sections: completion, env, shell, var,
+#                              exec
+#       → env subcommands: create, delete, list, update, show
+#       → shell zsh subcommands: chdir, init, export, unexport
+#       → var subcommands: create, delete, show, update +
+#                            nested `var ref` subcommands
+#                            (create, delete, show, update)
+#       → exec subcommand: top-level entry
+#   This entry is the Go=160 leader bump that continues Axis
+#   105 (OpenTelemetry observability) at 2/0/0 following R1007
+#   _rundler (Rust=160 OPENED the axis on opentelemetry-rust
+#   v0.28.0 + OTLP/gRPC).  TS-Node=160 closing pair to follow
+#   at R1009 (candidates: @opentelemetry/api +
+#   @opentelemetry/sdk-node consumers).
+#
+#   No completion for `enventory` ships with Apple zsh
+#   (/usr/share/zsh/*/functions) or Homebrew zsh-completions
+#   (/opt/homebrew/share/zsh/site-functions) — confirmed absent.
+# ============================================================================
+
+_enventory() {
+    local curcontext="$curcontext" state line ret=1
+    typeset -A opt_args
+
+    _arguments -C \
+        '--help[show help (--help detailed for detailed variant)]' \
+        '1: :_enventory_sections' \
+        '*::arg:->args' && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                completion)
+                    _arguments '1:shell:(zsh)' && ret=0 ;;
+                env)
+                    _arguments \
+                        '1:env subcommand:(create delete list update show)' \
+                        '*: :' && ret=0 ;;
+                shell)
+                    _arguments \
+                        '1:shell:(zsh)' \
+                        '*::arg:->shell_args'
+                    case $state in
+                        shell_args)
+                            _arguments \
+                                '1:zsh subcommand:(chdir init export unexport)' \
+                                '*: :' && ret=0 ;;
+                    esac
+                    ;;
+                var)
+                    _arguments \
+                        '1:var subcommand:(create delete show update ref)' \
+                        '*::arg:->var_args'
+                    case $state in
+                        var_args)
+                            case $words[1] in
+                                ref)
+                                    _arguments \
+                                        '1:ref subcommand:(create delete show update)' \
+                                        '*: :' && ret=0 ;;
+                                *)
+                                    _arguments '*: :' && ret=0 ;;
+                            esac
+                            ;;
+                    esac
+                    ;;
+                exec)
+                    _arguments \
+                        '1:command:_command_names -e' \
+                        '*::command args:' && ret=0 ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+(( $+functions[_enventory_sections] )) ||
+_enventory_sections() {
+    local -a sections
+    sections=(
+        'completion:print zsh completion script'
+        'env:environment commands (create/delete/list/update/show)'
+        'shell:manipulate the current shell (zsh hooks)'
+        'var:vars owned by a given environment'
+        'exec:run a command with environment vars injected'
+    )
+    _describe -t sections 'enventory section' sections
+}
+
+_enventory "$@"
