@@ -1,0 +1,276 @@
+#compdef tempcol
+# ============================================================================
+# _tempcol — zsh completion for tempcol, the R4DCB08 Modbus CLI driver
+# ============================================================================
+#
+# UPSTREAM
+#   Repository : https://github.com/acpiccolo/R4DCB08-Temperature-Collector
+#   Author     : acpiccolo
+#   License    : MIT OR Apache-2.0
+#   Stars      : 5
+#   Language   : Rust
+#   Crate      : R4DCB08 v0.4.1   (lib name r4dcb08_lib)
+#   Binary     : tempcol  (Cargo.toml [[bin]] name = "tempcol",
+#                          required-features = ["bin-dependencies"])
+#   Last push  : 2026-06-01
+#
+# WHAT IT IS
+#   tempcol is "R4DCB08 protocol and commandline tool" — a Rust CLI that
+#   speaks to R4DCB08 8-channel DS18B20 temperature collector modules
+#   (a popular RS485 / Modbus industrial temperature acquisition board)
+#   over either Modbus RTU (serial / USB-to-RS485) or Modbus TCP.  It
+#   exposes the full module command surface: read temperatures from all
+#   8 channels, read/write per-channel temperature correction offsets
+#   for calibration, read/write the Modbus baud rate (1200..19200) and
+#   device address (1..247), configure the automatic-reporting interval,
+#   trigger a factory reset, scan an RS485 bus for connected devices,
+#   and run in daemon mode publishing readings to stdout or to an MQTT
+#   broker via paho-mqtt.
+#
+# CLI ARGUMENT GRAMMAR  (verbatim from src/commandline.rs clap-derive
+#                       CliArgs + CliConnection + CliCommands + DaemonOutput)
+#   tempcol [GLOBAL] <connection> [conn-opts] <command> [cmd-opts]
+#
+#   Global flags (propagated across all subcommands):
+#     -v..-vvv                  Verbosity (clap-verbosity-flag, WarnLevel
+#                               default — info / debug / trace)
+#     --timeout <duration>      Modbus I/O timeout       [default: 200ms]
+#     --delay <duration>        Minimum delay between commands (RTU/RS485
+#                               TX↔RX switch settle)     [default: 50ms]
+#
+#   Connection subcommands (CliConnection):
+#     tcp <ADDRESS:PORT> <command>
+#                               Modbus TCP — IP address or hostname:port
+#                               (e.g. 192.168.1.100:502)
+#     rtu [OPTIONS] <command>   Modbus RTU (serial)
+#         -d, --device <PATH>   Serial port device name
+#                               (default /dev/ttyUSB0 Linux, COM1 Windows)
+#         --baud-rate <RATE>    1200 | 2400 | 4800 | 9600 | 19200
+#                                                        [default: 9600]
+#         -a, --address <ADDR>  Modbus RTU device address 1..247
+#                                                        [default: 1]
+#     rtu-scan [OPTIONS]        Scan RS485 bus across all supported baud
+#                               rates using the broadcast address
+#         -d, --device <PATH>   Serial port to scan
+#
+#   Device commands (CliCommands — under tcp/rtu):
+#     daemon [OPTIONS] <output>     Continuously poll temperatures
+#         -p, --poll-interval <duration>           [default: 2sec]
+#         output console            Print readings to stdout
+#         output mqtt --config-file <FILE>
+#                                   Publish readings to MQTT broker
+#                                   (config defaults from mqtt::MqttConfig::DEFAULT_CONFIG_FILE)
+#     read                          Read current temperatures (all channels)
+#     read-correction               Read per-channel correction offsets
+#     read-baud-rate                Read configured Modbus baud rate
+#     read-automatic-report         Read auto-reporting interval
+#     read-all                      Read everything (temps, corrections,
+#                                   baud rate, auto-report interval)
+#     query-address                 Broadcast-address query for the
+#                                   currently-configured device address
+#                                   (use with only ONE device on the bus)
+#     set-correction <CHANNEL> <DEGREES_C>
+#                                   Per-channel calibration offset
+#                                   CHANNEL: 0..7 (decimal or 0x0..0x7)
+#                                   DEGREES_C: float, 0.1°C increments
+#                                   (e.g. "1.5" or "-0.3")
+#     set-baud-rate <RATE>          New baud rate (1200|2400|4800|9600|
+#                                   19200);  takes effect after power cycle
+#     set-address <NEW_ADDR>        New Modbus RTU address (1..247),
+#                                   decimal or 0x.. hex
+#     set-automatic-report <SECS>   Auto-report interval (0..255)
+#                                   0 disables, 1..255 enables
+#     factory-reset                 Restore factory defaults (irreversible;
+#                                   power cycle required)
+#
+# AXIS / CORPUS POSITION
+#   Direct dependency on `tokio-modbus = "0.17"` declared in Cargo.toml as
+#   the gateway to all Modbus protocol operations.  The feature flags
+#   `tokio-rtu-sync` / `tokio-rtu` / `tokio-tcp-sync` / `tokio-tcp` map
+#   directly onto tokio-modbus's transport features.  tokio-modbus
+#   (slowtec/tokio-modbus, 539 stars, the canonical Rust tokio-based
+#   Modbus library) is the de-facto Rust Modbus implementation across the
+#   industrial-automation Rust ecosystem.  Verified via:
+#     gh api repos/acpiccolo/R4DCB08-Temperature-Collector/contents/Cargo.toml
+#       → tokio-modbus = "0.17"
+#       → [features] tokio-{rtu,tcp}{-sync,} = ["tokio-modbus/..."]
+#   This entry is the Rust=116 leader bump that OPENS Axis 61 (Modbus
+#   Industrial Fieldbus Library), pairing with future Go=goburrow/modbus
+#   and TS-Node=jsmodbus poles to close the axis at 1/1/1.
+#
+#   No completion for `tempcol` ships with Apple zsh
+#   (/usr/share/zsh/*/functions) or Homebrew zsh-completions
+#   (/opt/homebrew/share/zsh/site-functions) — confirmed absent.
+# ============================================================================
+
+_tempcol() {
+    local curcontext="$curcontext" state line ret=1
+    typeset -A opt_args
+
+    _arguments -C \
+        '*-v[verbosity (-v info, -vv debug, -vvv trace)]' \
+        '--timeout=[Modbus I/O timeout (default 200ms)]:duration:' \
+        '--delay=[minimum delay between commands (default 50ms)]:duration:' \
+        '(- *)'{-h,--help}'[show help]' \
+        '(- *)'{-V,--version}'[show version]' \
+        '1: :_tempcol_connections' \
+        '*::arg:->args' && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                tcp)        _tempcol_tcp       && ret=0 ;;
+                rtu)        _tempcol_rtu       && ret=0 ;;
+                rtu-scan)   _tempcol_rtu_scan  && ret=0 ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+(( $+functions[_tempcol_connections] )) ||
+_tempcol_connections() {
+    local -a connections
+    connections=(
+        'tcp:connect via Modbus TCP'
+        'rtu:connect via Modbus RTU (serial)'
+        'rtu-scan:scan RS485 bus for R4DCB08 devices'
+    )
+    _describe -t connections 'tempcol connection' connections
+}
+
+(( $+functions[_tempcol_tcp] )) ||
+_tempcol_tcp() {
+    local curcontext="$curcontext" state line ret=1
+    _arguments -C \
+        '1:address:port (e.g. 192.168.1.100:502):' \
+        '2: :_tempcol_commands' \
+        '*::arg:->cmdargs' && ret=0
+
+    case $state in
+        cmdargs)
+            _tempcol_dispatch_command && ret=0
+            ;;
+    esac
+
+    return ret
+}
+
+(( $+functions[_tempcol_rtu] )) ||
+_tempcol_rtu() {
+    local curcontext="$curcontext" state line ret=1
+    _arguments -C \
+        '(-d --device)'{-d+,--device=}'[serial port (default /dev/ttyUSB0 or COM1)]:device:_files' \
+        '--baud-rate=[Modbus baud rate (default 9600)]:rate:(1200 2400 4800 9600 19200)' \
+        '(-a --address)'{-a+,--address=}'[Modbus RTU address 1..247 (default 1)]:address:' \
+        '1: :_tempcol_commands' \
+        '*::arg:->cmdargs' && ret=0
+
+    case $state in
+        cmdargs)
+            _tempcol_dispatch_command && ret=0
+            ;;
+    esac
+
+    return ret
+}
+
+(( $+functions[_tempcol_rtu_scan] )) ||
+_tempcol_rtu_scan() {
+    _arguments \
+        '(-d --device)'{-d+,--device=}'[serial port to scan]:device:_files'
+}
+
+(( $+functions[_tempcol_commands] )) ||
+_tempcol_commands() {
+    local -a commands
+    commands=(
+        'daemon:continuously poll temperatures (console or MQTT output)'
+        'read:read current temperatures (all 8 channels)'
+        'read-correction:read per-channel temperature correction offsets'
+        'read-baud-rate:read configured Modbus baud rate'
+        'read-automatic-report:read automatic-reporting interval'
+        'read-all:read everything (temps, corrections, baud rate, auto-report)'
+        'query-address:broadcast-address query for current device address'
+        'set-correction:set per-channel temperature correction (channel 0-7, value °C)'
+        'set-baud-rate:set new baud rate (1200|2400|4800|9600|19200; power-cycle needed)'
+        'set-address:set new Modbus RTU device address (1..247)'
+        'set-automatic-report:configure automatic-report interval (0..255 seconds)'
+        'factory-reset:restore factory defaults (irreversible; power cycle required)'
+    )
+    _describe -t commands 'tempcol device command' commands
+}
+
+(( $+functions[_tempcol_dispatch_command] )) ||
+_tempcol_dispatch_command() {
+    case $words[1] in
+        daemon)              _tempcol_daemon         ;;
+        set-correction)      _tempcol_set_correction ;;
+        set-baud-rate)       _tempcol_set_baud_rate  ;;
+        set-address)         _tempcol_set_address    ;;
+        set-automatic-report) _tempcol_set_auto_rep  ;;
+        *)                   _arguments '(- *)'{-h,--help}'[help]' ;;
+    esac
+}
+
+(( $+functions[_tempcol_daemon] )) ||
+_tempcol_daemon() {
+    local curcontext="$curcontext" state line ret=1
+    _arguments -C \
+        '(-p --poll-interval)'{-p+,--poll-interval=}'[poll interval (default 2sec)]:duration:' \
+        '1: :_tempcol_daemon_outputs' \
+        '*::arg:->daemonargs' && ret=0
+
+    case $state in
+        daemonargs)
+            case $words[1] in
+                mqtt)
+                    _arguments '--config-file=[MQTT broker config file]:config file:_files'
+                    ;;
+                console)
+                    _arguments '(- *)'{-h,--help}'[help]'
+                    ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+(( $+functions[_tempcol_daemon_outputs] )) ||
+_tempcol_daemon_outputs() {
+    local -a outputs
+    outputs=(
+        'console:print readings to standard output'
+        'mqtt:publish readings to MQTT broker'
+    )
+    _describe -t outputs 'daemon output' outputs
+}
+
+(( $+functions[_tempcol_set_correction] )) ||
+_tempcol_set_correction() {
+    _arguments \
+        ':channel (0..7, decimal or hex):' \
+        ':correction value in °C (e.g. 1.5, -0.3):'
+}
+
+(( $+functions[_tempcol_set_baud_rate] )) ||
+_tempcol_set_baud_rate() {
+    _arguments \
+        ':new baud rate:(1200 2400 4800 9600 19200)'
+}
+
+(( $+functions[_tempcol_set_address] )) ||
+_tempcol_set_address() {
+    _arguments \
+        ':new Modbus RTU address (1..247, decimal or 0x01..0xF7):'
+}
+
+(( $+functions[_tempcol_set_auto_rep] )) ||
+_tempcol_set_auto_rep() {
+    _arguments \
+        ':report interval in seconds (0 disables, 1..255 enables):'
+}
+
+_tempcol "$@"
