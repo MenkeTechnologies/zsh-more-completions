@@ -1,0 +1,174 @@
+#compdef paperboy
+# ============================================================================
+# _paperboy — zsh completion for Michael Rykov's paperboy, the Go email
+#              campaign delivery CLI (go-mail SMTP backend)
+# ============================================================================
+#
+# UPSTREAM
+#   Repository : https://github.com/rykov/paperboy
+#   Author     : Michael Rykov  (rykov)
+#   License    : Apache-2.0
+#   Language   : Go
+#   Module     : github.com/rykov/paperboy
+#   Binary     : paperboy  (rootCmd.Use = "paperboy")
+#   Last push  : 2026-02-07
+#
+# WHAT IT IS
+#   paperboy is "an email campaign delivery built with Go, inspired
+#   by GoHugo" — a static-site-generator-style email-campaign tool.
+#   Each campaign is a directory of Markdown content files + YAML
+#   recipient lists + per-campaign layouts and themes, structured
+#   like a Hugo project.  paperboy renders the Markdown bodies +
+#   per-recipient personalization with Go templates, DKIM-signs the
+#   resulting MIME messages, and sends them through a configured
+#   SMTP server via wneessen/go-mail.  A local preview server +
+#   GraphQL API exposes the same render pipeline for visual
+#   verification before launch.
+#
+# CLI ARGUMENT GRAMMAR  (verbatim from cmd/root.go + cmd/{new,
+#                       send,server,version,preview,verify}.go
+#                       spf13/cobra Command tree)
+#   paperboy <SUBCOMMAND> [args...]
+#
+#   Global persistent flag:
+#     --config <FILE>             Config file
+#                                 [default: ./config.yaml]
+#
+#   Subcommands:
+#     new <PATH>                  Create new content for a campaign
+#                                 (Markdown file with subject + date
+#                                 frontmatter, written under the
+#                                 configured content directory).
+#       project [<PATH>]            Bootstrap a new paperboy project
+#                                   (creates assets/, content/,
+#                                    layouts/, lists/, themes/ +
+#                                    config.toml)
+#       list [<PATH>]               Create a new recipient list
+#                                   (YAML file under lists/)
+#
+#     init [<PATH>]               Alias for `new project [<PATH>]`
+#
+#     send <CONTENT> <LIST>       Send a campaign to recipients
+#       --server <URL>              URL of a remote paperboy server
+#                                   (when set, defer rendering and
+#                                   delivery to the remote server
+#                                   instead of running locally)
+#
+#     server                      Launch the local preview API /
+#                                 GraphQL server for visualizing
+#                                 campaigns before delivery
+#
+#     preview <CONTENT> <LIST>    Preview a rendered campaign in
+#                                 the default browser
+#
+#     verify <CONTENT> <LIST>     Verify DKIM signatures in rendered
+#                                 emails (without sending)
+#
+#     version                     Print version
+#
+#   Standard cobra auto-flags:
+#     -h, --help                  Show help
+#
+# AXIS / CORPUS POSITION
+#   Direct dependency on `github.com/wneessen/go-mail v0.7.2` (plus
+#   `github.com/wneessen/go-mail-middleware v0.1.1`) declared in
+#   go.mod — the canonical pure-Go SMTP client maintained by Winni
+#   Neessen (wneessen/go-mail).  go-mail is a drop-in replacement
+#   for `net/smtp` with first-class TLS / STARTTLS / SASL support,
+#   built-in OAuth-Bearer / XOAUTH2 / SCRAM-SHA-256 / LOGIN / PLAIN
+#   / CRAM-MD5 / NOAUTH mechanisms, message-builder helpers, MIME
+#   multipart support, S/MIME signing via go-mail-middleware, and
+#   DKIM signing via the same middleware repository.  paperboy's
+#   `mail/send/sender.go` and `mail/send/queue.go` construct a
+#   `mail.NewClient(host, mail.WithPort(...), mail.WithSMTPAuth(...),
+#                   mail.WithUsername(...), mail.WithPassword(...))`
+#   and dispatch the queued `mail.Msg` per recipient;  `mail/
+#   dkim.go` chains the DKIM signer middleware before send.
+#   Verified via:
+#     gh api repos/rykov/paperboy/contents/go.mod
+#       → github.com/wneessen/go-mail v0.7.2
+#       → github.com/wneessen/go-mail-middleware v0.1.1
+#       → github.com/spf13/cobra v1.10.1
+#     gh api search/code repo:rykov/paperboy go-mail
+#       → mail/send/sender.go, mail/send/queue.go, mail/dkim.go
+#   This entry is the Go=132 leader bump that continues Axis 77
+#   (SMTP / Email Client Library) opened at R897 with Rust=
+#   lettre 0.11 (valeriansaliou/vigil).
+#
+#   No completion for `paperboy` ships with Apple zsh
+#   (/usr/share/zsh/*/functions) or Homebrew zsh-completions
+#   (/opt/homebrew/share/zsh/site-functions) — confirmed absent.
+# ============================================================================
+
+_paperboy() {
+    local curcontext="$curcontext" state line ret=1
+    typeset -A opt_args
+
+    _arguments -C \
+        '--config=[config file (default ./config.yaml)]:config file:_files -g "*.{yaml,yml,toml}"' \
+        '(- *)'{-h,--help}'[show help]' \
+        '1: :_paperboy_commands' \
+        '*::arg:->args' && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                new)
+                    _arguments -C \
+                        '1: :_paperboy_new_commands' \
+                        '*::arg:->nargs' && ret=0
+                    case $state in
+                        nargs)
+                            case $words[1] in
+                                project|list)
+                                    _arguments ':path:_files' && ret=0 ;;
+                                *)  _arguments ':path:_files' && ret=0 ;;
+                            esac ;;
+                    esac
+                    ;;
+                init)
+                    _arguments ':path:_files -/' && ret=0 ;;
+                send)
+                    _arguments \
+                        '--server=[URL of remote paperboy server]:url:' \
+                        ':content:' \
+                        ':list:' && ret=0 ;;
+                preview|verify)
+                    _arguments \
+                        ':content:' \
+                        ':list:' && ret=0 ;;
+                server|version)
+                    _arguments '(- *)'{-h,--help}'[help]' && ret=0 ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+(( $+functions[_paperboy_commands] )) ||
+_paperboy_commands() {
+    local -a commands
+    commands=(
+        'new:create new content for a campaign'
+        'init:initialize a new paperboy project (alias for "new project")'
+        'send:send a campaign to recipients'
+        'server:launch the local preview API/GraphQL server'
+        'preview:preview a rendered campaign in the browser'
+        'verify:verify DKIM signatures in rendered emails'
+        'version:print version'
+    )
+    _describe -t commands 'paperboy command' commands
+}
+
+(( $+functions[_paperboy_new_commands] )) ||
+_paperboy_new_commands() {
+    local -a sub
+    sub=(
+        'project:bootstrap a new paperboy project'
+        'list:create a new recipient list'
+    )
+    _describe -t commands 'new subcommand' sub
+}
+
+_paperboy "$@"
