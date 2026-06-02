@@ -1,0 +1,127 @@
+#compdef chaz
+# ============================================================================
+# _chaz — zsh completion for chaz, AI agent orchestrator for Matrix
+# ============================================================================
+#
+# UPSTREAM
+#   Repository : https://github.com/arcuru/chaz
+#   Author     : Patrick Jackson
+#   License    : AGPL-3.0-or-later
+#   Stars      : 66
+#   Language   : Rust
+#   Crate      : chaz v0.3.0  (not published to crates.io — git-rev-pinned deps)
+#   Binary     : chaz  (Cargo.toml [[bin]] name = "chaz")
+#   Last push  : 2026-06-01
+#
+# WHAT IT IS
+#   chaz is "an AI agent orchestrator for Matrix" — a Rust daemon + TUI + one-
+#   shot CLI that bridges large-language-model agents (OpenAI-compatible APIs
+#   via async-openai 0.36) into the Matrix federated chat protocol.  It runs
+#   as a Matrix bot that receives prompts in rooms, dispatches them to
+#   configured agent backends, and replies in-band;  alternatively, the same
+#   agent stack can be driven from a local terminal via the --tui flag
+#   (ratatui + crossterm rendering) or via the --cli flag (single prompt,
+#   exit on completion).  Sessions can be persisted with a sqlite store
+#   (eidetica) and reused across invocations via --session NAME.  A separate
+#   `usage` subcommand aggregates LLM token-usage and cost roll-ups across
+#   sessions for billing / observability.
+#
+# CLI ARGUMENT GRAMMAR  (verbatim from src/main.rs clap-derive ChazArgs)
+#   chaz -c <CONFIG> [OPTIONS] [PROMPT]
+#   chaz -c <CONFIG> <command> [command options]
+#
+#   Root options:
+#     -c, --config <PATH>       Path to config file  (REQUIRED)
+#     --tui                     Run in TUI mode (stdin/stdout) instead of Matrix
+#     --cli                     Run a single CLI prompt and exit (fresh
+#                               ephemeral session by default; pair with
+#                               --session NAME to reuse a named session)
+#     --session <NAME>          Named session to reuse with --cli (find-or-
+#                               create);  requires --cli
+#     <PROMPT>                  Positional prompt to send  (required when
+#                               --cli is set)
+#     -h, --help                Print help
+#     -V, --version             Print version
+#
+#   Subcommands  (from `#[derive(clap::Subcommand)] enum Subcommand`):
+#     usage                     Aggregate LLM usage and cost across all
+#                               sessions, then exit.  Reads the user-central
+#                               session catalog;  no Matrix gateway is started.
+#       --json                  Emit the rollup as JSON for machine consumption
+#       --gateway <KIND>        Only include sessions originating from this
+#                               gateway:  cli | tui | matrix | spawn | other
+#       --active-only           Skip sessions marked closed
+#
+# AXIS / CORPUS POSITION
+#   Direct dependency on the canonical matrix-sdk crate:
+#     matrix-sdk = { version = "0.16",
+#                    default-features = false,
+#                    features = ["markdown", "rustls-tls"] }
+#   This is the official matrix-org Rust SDK
+#   (https://github.com/matrix-org/matrix-rust-sdk), the same library that
+#   underpins Element X mobile clients.  The chaz `gateway` module uses it
+#   to authenticate as a Matrix bot, subscribe to room events, and post
+#   replies back through the homeserver.  Verified via:
+#     gh api repos/arcuru/chaz/contents/Cargo.toml
+#       → [dependencies] matrix-sdk = { version = "0.16", ... }
+#   This entry is the Rust=113 leader bump that OPENS Axis 58
+#   (Matrix Federated Chat Protocol Library), pairing with future
+#   Go=mautrix-go (mautrix.net/maulogger) and TS-Node=matrix-js-sdk poles
+#   to close the axis at 1/1/1.
+#
+#   No completion for `chaz` ships with Apple zsh
+#   (/usr/share/zsh/*/functions) or Homebrew zsh-completions
+#   (/opt/homebrew/share/zsh/site-functions) — confirmed absent.
+# ============================================================================
+
+_chaz() {
+    local curcontext="$curcontext" state line ret=1
+    typeset -A opt_args
+
+    _arguments -C \
+        '(-c --config)'{-c+,--config=}'[path to config file (REQUIRED)]:config file:_files -g "*.(yaml|yml|toml|json)"' \
+        '--tui[run in TUI mode (stdin/stdout) instead of Matrix]' \
+        '--cli[run a single CLI prompt and exit]' \
+        '--session=[named session to reuse with --cli (find-or-create)]:session name:' \
+        '(- *)'{-h,--help}'[print help]' \
+        '(- *)'{-V,--version}'[print version]' \
+        '1: :_chaz_command_or_prompt' \
+        '*::arg:->args' && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                usage)   _chaz_usage  && ret=0 ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+(( $+functions[_chaz_command_or_prompt] )) ||
+_chaz_command_or_prompt() {
+    _alternative \
+        'subcommands:subcommand:_chaz_commands' \
+        'prompts:prompt text:'
+}
+
+(( $+functions[_chaz_commands] )) ||
+_chaz_commands() {
+    local -a commands
+    commands=(
+        'usage:aggregate LLM usage and cost across all sessions, then exit'
+    )
+    _describe -t commands 'chaz subcommand' commands
+}
+
+(( $+functions[_chaz_usage] )) ||
+_chaz_usage() {
+    _arguments \
+        '--json[emit the rollup as JSON for machine consumption]' \
+        '--gateway=[only include sessions originating from this gateway]:gateway kind:(cli tui matrix spawn other)' \
+        '--active-only[skip sessions marked closed]' \
+        '(- *)'{-h,--help}'[help for usage]'
+}
+
+_chaz "$@"
