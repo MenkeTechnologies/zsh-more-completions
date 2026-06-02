@@ -1,0 +1,321 @@
+#compdef fastedge-build
+# =============================================================================
+# fastedge-build — G-Core/FastEdge-sdk-js's
+#   user-facing Node CLI that builds a
+#   JavaScript / TypeScript SOURCE FILE into a
+#   WebAssembly COMPONENT runnable on G-Core's
+#   FastEdge serverless edge platform.  The
+#   build pipeline is JS → esbuild bundle →
+#   `@bytecodealliance/jco` componentize → `@
+#   bytecodealliance/wizer` snapshot pre-
+#   initialiser → output `.wasm` Component.
+#   Direct dep on `@bytecodealliance/jco
+#   v1.17.6` — the official JavaScript
+#   toolchain for WebAssembly Components
+#   maintained by the BytecodeAlliance and
+#   built on top of `wasmtime`.  TS-Node=104
+#   leader bump CLOSING Axis 49 (WebAssembly
+#   Runtime) at 1/1/1 three-language symmetry.
+#
+# AXIS 49 — WEBASSEMBLY RUNTIME — CLOSES @ R787
+# =============================================
+# Closes the three-language Wasm-runtime axis
+# at 1/1/1 symmetry:
+#   * Rust       (R785): wasmtime 36.0.5
+#                — Cranelift JIT + WASI
+#                  Preview 2 + Component
+#                  Model.  Bundled in
+#                  `wassette` (Microsoft's
+#                  security-oriented WASI-P2
+#                  Component runtime exposed
+#                  via MCP)
+#   * Go         (R786): tetratelabs/wazero
+#                v1.10.1 — pure-Go, zero-cgo,
+#                  embedded optimising
+#                  compiler.  Bundled in
+#                  `grpcfedctl` (mercari/
+#                  grpc-federation's plugin
+#                  pre-compile cache tool)
+#   * TS-Node    (R787, THIS ROUND):
+#                @bytecodealliance/jco
+#                v1.17.6 — JavaScript
+#                  toolchain wrapping
+#                  wasmtime via the
+#                  Component Model.
+#                  Bundled in this round's
+#                  `fastedge-build`
+#                  (G-Core's edge-runtime
+#                  build CLI)
+#
+# jco (JavaScript Component) v1.17 is the
+# BytecodeAlliance's canonical Node toolchain
+# for the Wasm Component Model.  Capabilities:
+#   - `jco componentize`   take a JS module +
+#                          WIT world def and
+#                          emit a Wasm
+#                          Component running
+#                          on the StarlingMonkey
+#                          embedding of
+#                          SpiderMonkey
+#   - `jco transpile`     take a Wasm
+#                          Component and emit
+#                          a JS-host adapter
+#                          (so Components can
+#                          be loaded from
+#                          Node, Bun, Deno,
+#                          browsers)
+#   - `jco run`           single-shot run a
+#                          Component locally
+#                          via the embedded
+#                          wasmtime runtime
+#   - `jco wit2ts`        emit TypeScript
+#                          interface types
+#                          from a WIT world
+#                          definition
+#   - `jco wit`           inspect Component
+#                          WIT exports +
+#                          imports
+#
+# fastedge-build invokes the `componentize` +
+# `wizer` paths under the hood:
+#   1. esbuild bundles the entry-point .js /
+#      .ts into a single CJS-compatible JS
+#      file
+#   2. jco componentize wraps the bundle in
+#     a StarlingMonkey-based Wasm Component
+#     that exports the FastEdge `wasi:http/
+#     incoming-handler` world
+#   3. Wizer pre-initialises the Component
+#     so cold-start avoids re-running
+#     module-level JS.  Equivalent to V8
+#     snapshots in Cloudflare Workers
+#
+# Distinguishing FastEdge from other corpus
+# edge-runtime build tools:
+#   - CLOUDFLARE WORKERS (`_wrangler`):
+#     proprietary V8 isolates, not Wasm.
+#     workerd is the Cloudflare runtime
+#   - FASTLY COMPUTE@EDGE (`_fastly`):
+#     similar Wasm-based model BUT Fastly
+#     uses the older WASI Preview 1 +
+#     custom Compute@Edge platform APIs.
+#     FastEdge is built on the newer
+#     Component Model + standard WASI
+#     Preview 2 worlds (wasi:http,
+#     wasi:io, etc.)
+#   - DENO DEPLOY: V8 isolates again, no
+#     Wasm primary
+#   - VERCEL EDGE: V8 isolates atop Cloudflare
+#     workerd
+#   - SHOPIFY FUNCTIONS (`function-runner`):
+#     Wasm-based but for the Shopify-
+#     internal `function-runner` runtime,
+#     not edge HTTP serving
+#
+# G-Core (Gcore) is a Luxembourg-headquartered
+# CDN + edge-platform operator.  FastEdge is
+# their JavaScript edge runtime — analogous to
+# Cloudflare Workers / Fastly Compute@Edge /
+# Akamai EdgeWorkers — but distinguished by
+# being built on the OFFICIAL BytecodeAlliance
+# WASI Preview 2 + Component Model stack
+# rather than a proprietary or Preview-1
+# foundation.
+#
+# Distinguishing fastedge-build from the other
+# two binaries shipped by the same npm package
+# (`@gcoredev/fastedge-sdk-js`):
+#   - fastedge-init     scaffold a new
+#                       FastEdge project
+#                       (writes index.js +
+#                       package.json + tsconfig +
+#                       .fastedge/build-config.js)
+#   - fastedge-build    THIS one — build the
+#                       JS → .wasm Component
+#   - fastedge-assets   manage static asset
+#                       inclusion in the
+#                       generated Component
+#                       (asset bundling +
+#                       virtual filesystem
+#                       layout)
+#
+# BUILD CONFIG FILE (`.fastedge/build-config.js`
+# by default — overridable via `-c`):
+#
+#   // .fastedge/build-config.js
+#   export default {
+#     // JS / TS entry point
+#     input: './src/index.ts',
+#     // Output Wasm Component path
+#     output: './dist/main.wasm',
+#     // Optional explicit tsconfig
+#     tsconfig: './tsconfig.json',
+#     // esbuild minify (default true in
+#     // production)
+#     minify: true,
+#     // Whether to skip wizer pre-init
+#     // (faster build, slower cold-start)
+#     skipWizer: false,
+#     // Static assets bundled into the
+#     // Component's virtual FS
+#     assets: {
+#       'public/**/*': '/public/'
+#     }
+#   };
+#
+# Two invocation modes supported by
+# fastedge-build (mutually exclusive — pick
+# one OR the other):
+#   (a) FLAG MODE
+#       `fastedge-build -i src/index.ts -o
+#           dist/main.wasm [-t tsconfig.json]`
+#   (b) CONFIG MODE
+#       `fastedge-build [-c
+#           ./.fastedge/build-config.js]`
+#       Multiple `-c` files are supported
+#       (built in order)
+#   (c) POSITIONAL SHORTHAND
+#       `fastedge-build <input> <output>`
+#           equivalent to (a)
+#       `fastedge-build <config-file>`
+#           equivalent to (b)
+#
+# CRITICAL DIRECT DEPENDENCIES (from
+# package.json):
+#   - @bytecodealliance/jco ^1.17.6
+#                              — JS toolchain
+#                                for Wasm
+#                                Components
+#                                (Cranelift +
+#                                wasmtime
+#                                underneath)
+#                                [AXIS 49 LIBRARY]
+#   - @bytecodealliance/wizer ^10.0.0
+#                              — Wasm pre-
+#                                initialiser
+#                                (snapshot
+#                                module state
+#                                for faster
+#                                cold-start)
+#   - acorn ^8.16 + acorn-walk ^8.3
+#                              — JS AST parsing
+#                                (for asset
+#                                discovery +
+#                                import
+#                                graph
+#                                analysis)
+#   - arg ^5.0                 — vercel/arg
+#                                CLI parser
+#   - enquirer ^2.4 +          — interactive
+#     prompts ^2.4               prompts (used
+#                                by fastedge-
+#                                init; pulled
+#                                in transitively
+#                                here too)
+#   - esbuild ^0.28            — JS bundler
+#                                (pre-jco
+#                                stage)
+#   - magic-string ^0.30       — source-map-
+#                                aware string
+#                                editing (for
+#                                AST
+#                                rewriting)
+#   - npm-run-all2 ^8.0        — shell-out
+#                                helper
+#   - regexpu-core ^5.3        — regex
+#                                ES2018-ES2024
+#                                feature
+#                                transpilation
+#
+# Node 22+ MSRV per package.json
+# `engines.node = ">=22"`.  Requires pnpm
+# 10+ for installation in monorepos
+# (npm + yarn also work for single-package
+# installs).
+#
+# UPSTREAM:
+#   * Source             : https://github.com/G-Core/FastEdge-sdk-js
+#   * G-Core docs        : https://docs.gcore.com/docs/edge-cloud/fastedge
+#   * jco (upstream)     : https://github.com/bytecodealliance/jco
+#   * Wizer              : https://github.com/bytecodealliance/wizer
+#   * Component Model    : https://github.com/WebAssembly/component-model
+#   * License            : Apache-2.0
+#   * Maintainer         : G-Core Labs S.A.
+#
+# INSTALL:
+#   # Global npm install — installs all three
+#   # fastedge-* binaries (init / build /
+#   # assets)
+#   npm install -g @gcoredev/fastedge-sdk-js
+#
+#   # pnpm (the recommended install method per
+#   # upstream)
+#   pnpm add -g @gcoredev/fastedge-sdk-js
+#
+#   # Or npx
+#   npx -p @gcoredev/fastedge-sdk-js fastedge-build --help
+#
+# USAGE EXAMPLES:
+#
+#   # Build using explicit input + output paths
+#   fastedge-build -i src/index.ts -o dist/main.wasm
+#   fastedge-build --input src/index.ts \
+#                  --output dist/main.wasm
+#
+#   # Build with explicit tsconfig
+#   fastedge-build -i src/index.ts \
+#                  -o dist/main.wasm \
+#                  -t ./tsconfig.fastedge.json
+#
+#   # Build from default config (.fastedge/
+#   # build-config.js)
+#   fastedge-build -c
+#
+#   # Build from explicit config file
+#   fastedge-build -c ./.fastedge/build-config.js
+#   fastedge-build --config ./build-config.js
+#
+#   # Build from MULTIPLE config files (each
+#   # produces one Wasm Component output)
+#   fastedge-build \
+#       -c configs/api.js \
+#       -c configs/static.js \
+#       -c configs/admin.js
+#
+#   # Positional shorthand (2 args = input,
+#   # output)
+#   fastedge-build src/index.ts dist/main.wasm
+#
+#   # Positional shorthand (1 arg = config
+#   # file)
+#   fastedge-build ./build-config.js
+#
+#   # Print version (@gcoredev/fastedge-sdk-js
+#   # version)
+#   fastedge-build -v
+#   fastedge-build --version
+#
+#   # Print usage help
+#   fastedge-build -h
+#   fastedge-build --help
+#
+# OPTIONS (sourced directly from
+# https://github.com/G-Core/FastEdge-sdk-js/blob/main/src/cli/fastedge-build/build.ts +
+# print-info.ts USAGE_TEXT):
+#
+# -----------------------------------------------------------------------------
+
+local curcontext="$curcontext" state line ret=1
+typeset -A opt_args
+
+_arguments -C \
+    '(- *)'{-h,--help}'[print this help information]' \
+    '(- *)'{-v,--version}'[print the @gcoredev/fastedge-sdk-js version]' \
+    '(-i --input)'{-i+,--input=}'[JS / TS entry-point filepath to build (e.g. ./src/index.ts)]:input:_files -g "*.(js|jsx|mjs|cjs|ts|tsx)"' \
+    '(-o --output)'{-o+,--output=}'[output filepath for the .wasm Component (e.g. ./dist/main.wasm)]:output:_files -g "*.wasm"' \
+    '(-t --tsconfig)'{-t+,--tsconfig=}'[path to a TypeScript config file (default ./tsconfig.json)]:tsconfig:_files -g "*.json"' \
+    '*'{-c+,--config=}'[path to a build config file (default ./.fastedge/build-config.js; repeatable)]:config:_files -g "*.(js|mjs|cjs|ts)"' \
+    '*:input file or config file:_files -g "*.(js|jsx|mjs|cjs|ts|tsx|json|wasm)"' \
+    && ret=0
+
+return ret
