@@ -1,0 +1,457 @@
+#compdef dobi
+# =============================================================================
+# dobi — Daniel Nephin's "A build automation tool for
+#          Docker applications" — a Go-implemented
+#          declarative task runner that orchestrates
+#          Docker-based build workflows by composing
+#          resources (images, mounts, env-files, jobs,
+#          aliases, networks, volumes, computed-config,
+#          composed-actions) declared in `dobi.yaml`
+#          into a DAG of typed-action invocations
+#          (build → image, run → job, attach → mount,
+#          etc.) which the dobi engine dispatches to
+#          the Docker Engine API for execution.
+#          Distinguishing from Make (no native Docker
+#          awareness; reinvents Docker primitives via
+#          shell-out), docker-compose (focused on
+#          long-running multi-container services, not
+#          one-shot build tasks), Bazel (heavyweight
+#          hermetic build system; steep learning
+#          curve), Earthly (Earthfile-based; alternative
+#          syntax; commercial cloud tier), and direct
+#          docker-build shell scripts (no dependency
+#          graph, no caching) by:
+#            - RESOURCE[:ACTION] SYNTAX — invoke a
+#              task as `dobi <resource>[:<action>]`;
+#              e.g. `dobi build` runs the default
+#              action of the `build` resource;
+#              `dobi build:push` runs the explicit
+#              `push` action.  Multiple
+#              RESOURCE:ACTION targets can be passed
+#              and run in dependency order
+#            - DECLARATIVE YAML CONFIG — every project
+#              has a `dobi.yaml` declaring its
+#              resources + their dependencies; users
+#              never write imperative Docker scripts
+#            - GO-DOCKERCLIENT FOUNDATION — uses
+#              fsouza/go-dockerclient v1.6 (this is
+#              the headline CLI library that CONTINUES
+#              Axis 44 on the Go side; see taxonomy
+#              notes below) for all Docker Engine API
+#              operations: image build/pull/push,
+#              container create/start/stop/wait,
+#              volume mount, network create
+#            - TYPED RESOURCE MODEL — each resource
+#              has a type (`image`/`run`/`mount`/`env-
+#              file`/`job`/`alias`/`network`/`volume`/
+#              `compose`/`computed-config`) with type-
+#              specific configuration keys + actions;
+#              dobi typechecks the YAML against
+#              github.com/dnephin/configtf at config-
+#              load time so syntax errors are caught
+#              before execution
+#            - BIND-MOUNT vs LAYER-INJECTION — the
+#              `--no-bind-mount` flag (or
+#              DOBI_NO_BIND_MOUNT env-var) switches
+#              from default bind-mounting of host
+#              directories into containers to BAKING
+#              the mount content as an image layer.
+#              Useful for CI environments where
+#              bind-mounts are unavailable or
+#              undesirable
+#            - TAG-BASED FILTERING — `dobi list -t
+#              <tag1,tag2>` filters task listing to
+#              resources matching the given tag(s);
+#              `dobi list -g` groups them by tag.
+#              Useful for projects with many tasks
+#              + multiple personas (CI, dev,
+#              integration, smoke)
+#            - DOCKER_API_VERSION OVERRIDE — sets via
+#              env-var; defaults to API 1.25 (Docker
+#              1.13+).  Lets dobi connect to older
+#              Docker daemons (e.g. embedded systems
+#              with pinned Docker versions)
+#            - GIT INTEGRATION via gogits/git-module
+#              — dobi can query git metadata
+#              (current branch, commit hash, tag) at
+#              task time + use it in image tags or
+#              environment variables.  Avoids the
+#              "shell out to git for tag" pattern
+#              common in Make-based Dockerfile flows
+#            - CONFIGTF TYPE-CHECKED YAML — uses
+#              Daniel Nephin's own configtf library
+#              (github.com/dnephin/configtf) which
+#              performs Go-struct-tag-based YAML
+#              validation; reports typos in
+#              resource names + invalid action
+#              combinations with line numbers
+#            - LOGRUS LOGGING — uses sirupsen/logrus
+#              v1.4 for structured logging; `-v`
+#              raises level to Debug; `-q` raises
+#              to Warn.  Stderr destination by
+#              default; custom logging.Formatter
+#              produces dobi-styled output
+#            - LIST + AUTOCLEAN SUBCOMMANDS —
+#              `dobi list` enumerates declared
+#              resources + descriptions; `dobi
+#              autoclean` invokes the `remove`
+#              action across every resource that
+#              defines one, recovering disk space
+#              after a build run
+#            - 315+ STARS ON dnephin/dobi — well-
+#              regarded in the Docker tooling
+#              community; backed by Daniel Nephin's
+#              decade-long Docker open-source track
+#              record at Docker Inc (docker-compose
+#              v2 + buildkit maintainer)
+#          Used by: teams running multi-stage Docker-
+#          based build pipelines who want a typed
+#          replacement for Makefile-driven Docker
+#          orchestration, CI/CD environments that
+#          benefit from dobi's caching + dependency
+#          graph + declarative resource model, and
+#          developers who prefer YAML + cobra-CLI
+#          ergonomics over BASH-driven docker-compose
+#          extension dances.
+#
+# Author:  Daniel Nephin (dnephin on GitHub); based
+#          in Toronto.  Long-time Docker contributor
+#          (docker-compose v2 + buildkit maintainer
+#          at Docker Inc).
+# Source:  https://github.com/dnephin/dobi
+#          https://github.com/dnephin/dobi/blob/master/main.go
+#          https://github.com/dnephin/dobi/blob/master/cmd/dobi.go
+#          https://github.com/dnephin/dobi/blob/master/cmd/list.go
+#          https://github.com/dnephin/dobi/blob/master/cmd/autoclean.go
+# Manpage: No traditional manpage; `dobi --help`
+#          shows cobra-generated subcommand list;
+#          `dobi <sub> --help` per-subcommand options.
+#          Full docs in repo docs/.
+# Library: github.com/fsouza/go-dockerclient v1.6.4
+#          (Francisco Souza's "Go client for the
+#          Docker Engine API" — predates the official
+#          docker/docker/client library and remains
+#          popular for its synchronous-ish API +
+#          back-compat with older Docker daemons).
+#          This is the headline dependency for this
+#          completion's axis-44 continuation role;
+#          see taxonomy notes below.  Also github.com/
+#          docker/docker (Docker Engine types, used
+#          transitively for type aliases), spf13/cobra
+#          (Axis 1 argparse), sirupsen/logrus (Axis 9
+#          logging), dnephin/configtf (typed-YAML
+#          config validation; Daniel's own library),
+#          dnephin/go-os-user (cross-platform user
+#          lookup), gogits/git-module (git metadata),
+#          golang/mock (test mocking), google/go-cmp
+#          (test comparison).
+# License: Apache-2.0
+# Status:  315+ stars on dnephin/dobi; maintained
+#          (latest commit 2026-01-12); version 0.15.0;
+#          mature in terms of API stability but not
+#          rapid feature development.
+#
+# -----------------------------------------------------------------------------
+# CROSS-LANGUAGE CLI LIBRARY TAXONOMY — AXIS 44 CONTINUES:
+#   DOCKER CLIENT / CONTAINER ORCHESTRATION (Go side)
+# -----------------------------------------------------------------------------
+# This completion **CONTINUES AXIS 44** in the cross-
+# language CLI library taxonomy.  R765 Rust=99
+# (dockrtui/bollard OPENS Axis 44) → R766 Go=99
+# (dobi/fsouza/go-dockerclient CONTINUES Axis 44
+# THIS ROUND).  Pending: R767 TS-Node=99 with an
+# apocas/dockerode user to close Axis 44 at 1/1/1.
+#
+# WHY fsouza/go-dockerclient IS A DISTINCTIVE AXIS-
+# 44 CONTINUATION:
+#
+#   github.com/fsouza/go-dockerclient by Francisco
+#   Souza is the de-facto third-party Go Docker
+#   Engine API client, predating Docker's own
+#   official Go client (docker/docker/client) and
+#   continuing to be widely used for its smaller
+#   API surface + back-compat with older Docker
+#   daemons.  Distinguishing characteristics:
+#     1. THIRD-PARTY ESTABLISHED BEFORE OFFICIAL —
+#        Francisco Souza started this library in
+#        2013, before Docker Inc shipped their
+#        official Go client.  Many established Go
+#        Docker tools were built against it and
+#        haven't migrated
+#     2. SYNCHRONOUS-ISH API — operations return
+#        results synchronously by default (e.g.
+#        `client.ListContainers()`); streams + log-
+#        tail are async via callback channels.
+#        Simpler than the official docker/docker/
+#        client's pure-async API surface
+#     3. SMALLER DEPENDENCY GRAPH — go-dockerclient
+#        avoids pulling in the entire docker/docker
+#        module (which itself depends on many
+#        runtime/networking pieces).  Smaller go.mod
+#        footprint + faster build
+#     4. BACK-COMPAT — supports older Docker API
+#        versions (down to 1.14) via API-version
+#        negotiation; useful for tools targeting
+#        embedded systems or air-gapped CI
+#     5. STREAMING SUPPORT — `client.Logs()` streams
+#        container logs to an io.Writer;
+#        `client.AttachToContainer()` provides
+#        bidirectional stdin/stdout/stderr streams
+#     6. EVENTS API — `client.AddEventListener()`
+#        receives Docker daemon events (container
+#        create/start/stop/die, image pull/push,
+#        network connect/disconnect, volume mount)
+#        on a channel.  Powers tools like docker-
+#        gen + logspout
+#     7. ~4,000+ STARS ON fsouza/go-dockerclient
+#     8. ECOSYSTEM-DOMINANT for THIRD-PARTY TOOLS —
+#        used by ctop (top-like container metrics;
+#        already in corpus), logspout (log routing;
+#        in corpus), ofelia (cron for Docker; in
+#        corpus), docker-gen (nginx-proxy file
+#        generation; in corpus), kompose (k8s
+#        manifest generator; in corpus), dexec (in
+#        this same Axis 44 candidate list), dobi
+#        (this completion), and many other early-
+#        2010s-era Go Docker tools
+#
+# Maintained under github.com/fsouza/go-dockerclient.
+# License: BSD-2-Clause.
+#
+# Cross-language CLI library taxonomy after R766:
+#   * 123 languages
+#   * 476 total CLI library variants (Rust 99 / Go 99 /
+#     TS-Node 98)
+#   * Axis 9 / Logging: 6/6/6 three-language symmetric
+#   * Axes 10 + 13 + 14: 2/2/2 three-language symmetric
+#   * 36 axes at 1/1/1 three-language symmetric
+#   * Axis 44 continues with Rust=bollard +
+#     Go=fsouza/go-dockerclient; pending TS-Node
+#     companion
+#
+# Comparison to other Axis 44 candidates (Go):
+#   * dobi (R766 THIS) — Daniel Nephin's build
+#     automation; 315 stars; clean fsouza/go-
+#     dockerclient direct dep
+#   * dexec — code-in-many-languages-via-Docker CLI;
+#     332 stars; also uses fsouza/go-dockerclient
+#     directly but is itself older + less actively
+#     maintained
+#   * ctop (bcicen) — top-like container metrics;
+#     already in corpus as _ctop
+#   * logspout (gliderlabs) — already in corpus
+#   * ofelia (mcuadros) — already in corpus
+#   * docker-gen (nginx-proxy) — already in corpus
+#   * diun (crazy-max) — already in corpus
+#   * inngest — already in corpus
+#   * The official moby/moby/client is used by
+#     huge tools (cadvisor, vault, fabric, minikube)
+#     all of which are already in corpus
+#
+# dobi is the chosen Axis 44 Go-side continuation
+# because:
+#   - It uses fsouza/go-dockerclient v1.6.4 as a
+#     DIRECT dependency in go.mod (not transitively)
+#   - The "declarative Docker build orchestration"
+#     use case exercises the full go-dockerclient
+#     surface: image build/pull, container run/
+#     wait, volume mount, event-driven cleanup
+#   - Daniel Nephin's standing in the Docker
+#     ecosystem (docker-compose v2 + buildkit
+#     maintainer at Docker Inc) lends serious
+#     provenance to the choice
+#   - Apache 2.0 + active maintenance + clean
+#     cobra-based CLI architecture make it a
+#     stable taxonomy choice
+#   - The 100-library-per-language landmark is
+#     visible on the horizon: Rust=99 (R765),
+#     Go=99 (R766 THIS).  The next Rust + Go bumps
+#     (R769 + R770) will each cross the 100-
+#     library milestone, mirroring the previous
+#     Rust + Go 90-library milestones at R729-R731
+#
+# Pending companion pick for Axis 44:
+#   - TS-Node=99: a Node.js CLI tool prominently
+#            using apocas/dockerode (the dominant
+#            Node Docker client; ~4,500 stars) as
+#            the headline Docker library
+#
+# -----------------------------------------------------------------------------
+#
+# THE dobi CLI
+#
+# dobi is a multi-subcommand cobra-based CLI.
+# Invocation:
+#   dobi [flags] RESOURCE[:ACTION] [RESOURCE[:ACTION]...]
+#   dobi <subcommand> [args]
+#
+# Top-level flags:
+#   -f, --filename <PATH>             config file path
+#                                     (default
+#                                     "dobi.yaml")
+#   -v, --verbose                     verbose (Debug
+#                                     level logging)
+#   -q, --quiet                       quiet (Warn
+#                                     level logging)
+#       --no-bind-mount               use image-layer
+#                                     mount instead
+#                                     of bind-mount
+#                                     (env
+#                                     DOBI_NO_BIND_MOUNT)
+#       --version                     print version
+#                                     and exit
+#   -h, --help                        show help
+#
+# Positional (run mode):
+#   RESOURCE[:ACTION] ...             one or more
+#                                     resource:action
+#                                     pairs.  If no
+#                                     :action is
+#                                     given, the
+#                                     resource's
+#                                     default action
+#                                     runs
+#
+# Subcommands:
+#   list                              list declared
+#                                     resources
+#   autoclean                         run the remove
+#                                     action for all
+#                                     resources
+#
+# list flags:
+#   -a, --all                         include
+#                                     resources
+#                                     without
+#                                     descriptions
+#   -g, --grouped                     group by tag
+#   -t, --tags <list>                 only list tasks
+#                                     matching these
+#                                     tags
+#
+# Environment variables:
+#   DOCKER_API_VERSION                Docker API
+#                                     version to use
+#                                     (default 1.25)
+#   DOBI_NO_BIND_MOUNT                default for
+#                                     --no-bind-mount
+#
+# Common invocations:
+#   # Run the default action of a resource
+#   dobi build
+#
+#   # Run a specific action of a resource
+#   dobi build:push
+#
+#   # Run multiple resources in sequence
+#   dobi build test integration:run
+#
+#   # Use a non-default config file
+#   dobi -f ci-dobi.yaml build
+#   dobi --filename ci-dobi.yaml build
+#
+#   # Verbose / Quiet
+#   dobi -v build
+#   dobi -q build
+#
+#   # CI mode: layer-baked mounts (no bind-mount)
+#   DOBI_NO_BIND_MOUNT=true dobi build
+#   dobi --no-bind-mount build
+#
+#   # List all declared resources
+#   dobi list
+#   dobi list -a                    # include those without descriptions
+#   dobi list -g                    # group by tag
+#   dobi list -t ci,test            # only matching tags
+#
+#   # Run autoclean to invoke `remove` actions
+#   dobi autoclean
+#
+#   # Print version
+#   dobi --version
+#
+# Sample dobi.yaml structure:
+#   ```yaml
+#   image=build-image:
+#       image: myapp-builder
+#       dockerfile: Dockerfile
+#       context: .
+#       tags: [dev, build]
+#
+#   mount=src:
+#       bind: ./src
+#       path: /app/src
+#       read-only: false
+#
+#   job=test:
+#       use: build-image
+#       mounts: [src]
+#       command: pytest tests/
+#       tags: [test]
+#
+#   alias=ci:
+#       tasks: [build-image, test]
+#       tags: [ci]
+#   ```
+#
+# OPTIONS (sourced directly from
+# https://github.com/dnephin/dobi/blob/master/cmd/dobi.go +
+# https://github.com/dnephin/dobi/blob/master/cmd/list.go +
+# https://github.com/dnephin/dobi/blob/master/cmd/autoclean.go):
+#
+# (See subcommand documentation above for the complete
+# flag set.)
+#
+# -----------------------------------------------------------------------------
+
+local curcontext="$curcontext" state line ret=1
+typeset -A opt_args
+
+local -a _dobi_subcommands
+_dobi_subcommands=(
+    'list:list declared resources'
+    'autoclean:run the remove action for all resources'
+)
+
+local -a _dobi_global_flags
+_dobi_global_flags=(
+    '(-f --filename)'{-f,--filename}'=[config file path (default dobi.yaml)]:config:_files -g "*.(yaml|yml)"'
+    '(-v --verbose)'{-v,--verbose}'[verbose Debug-level logging]'
+    '(-q --quiet)'{-q,--quiet}'[quiet Warn-level logging]'
+    '--no-bind-mount[use image-layer mount instead of bind-mount]'
+)
+
+_arguments -C \
+    "${_dobi_global_flags[@]}" \
+    '(- *)'{-h,--help}'[show help]' \
+    '(- *)--version[print version and exit]' \
+    '1:subcommand or RESOURCE[:ACTION]:->subcmd' \
+    '*::arg:->args' \
+    && ret=0
+
+case $state in
+    subcmd)
+        _describe -t subcmds 'dobi subcommand (or RESOURCE[:ACTION])' _dobi_subcommands && ret=0
+        ;;
+    args)
+        case $words[1] in
+            list)
+                _arguments \
+                    "${_dobi_global_flags[@]}" \
+                    '(-a --all)'{-a,--all}'[include resources without descriptions]' \
+                    '(-g --grouped)'{-g,--grouped}'[group resources by tag]' \
+                    '(-t --tags)'{-t,--tags}'=[only list tasks matching these tags]:tags: ' \
+                    && ret=0
+                ;;
+            autoclean)
+                _arguments "${_dobi_global_flags[@]}" && ret=0
+                ;;
+            *)
+                # Positional resource[:action] continuation
+                _arguments "${_dobi_global_flags[@]}" && ret=0
+                ;;
+        esac
+        ;;
+esac
+
+return ret
