@@ -1,0 +1,361 @@
+#compdef kafka-delta-ingest
+# =============================================================================
+# kafka-delta-ingest — delta-io's Rust DAEMON for
+#   streaming JSON / Avro / Schema-Registry-Avro
+#   messages from an APACHE KAFKA topic into an
+#   APACHE-DELTA-LAKE table on local FS / S3 / Azure
+#   blob storage / Google Cloud Storage.  Built on
+#   top of the `rdkafka` librdkafka-FFI Rust crate
+#   (the canonical Rust Kafka client) for the
+#   consume side, and `deltalake-core` /
+#   `deltalake-aws` / `deltalake-azure` for the
+#   Delta protocol implementation.  Applies
+#   JMESPath transforms to each message before
+#   write, routes unprocessable messages to a Dead
+#   Letter Queue Delta table, optionally writes
+#   Delta log checkpoints every 10th commit, and
+#   forwards librdkafka properties verbatim via
+#   `-K key=value` for TLS / SASL / etc.  Rust=102
+#   leader bump opening Axis 47.
+#
+# AXIS 47 — APACHE KAFKA CLIENT — OPENS @ R777
+# ============================================
+# Establishes a new three-language axis covering
+# CLI tools written in language X that ship a
+# DIRECT (not via subprocess) library binding to
+# Apache Kafka.  The standard implementations per
+# language are:
+#   * Rust       : rdkafka (this entry)
+#                  — FFI wrapper around librdkafka
+#                  — fully async, futures-based,
+#                    `tokio` integration
+#                  — supports SSL/SASL/Kerberos
+#                  — version 0.37 used here
+#                  — direct dep at
+#                    `delta-io/kafka-delta-ingest`
+#                    Cargo.toml line: `rdkafka =
+#                    { version = "0.37",
+#                    features = ["ssl"] }`
+#   * Go         : segmentio/kafka-go or
+#                  IBM/sarama (Shopify's was
+#                  renamed to IBM/sarama).  Rust
+#                  cmp: same Kafka protocol surface
+#                  but pure-Go re-impl instead of
+#                  FFI shim.  R778 will close the
+#                  Go side
+#   * TS-Node    : kafkajs (tulios/kafkajs) —
+#                  pure-JS Kafka protocol with
+#                  TypeScript types.  R779 will
+#                  close the TS-Node side
+#
+# Distinguishing kafka-delta-ingest from other
+# rdkafka-using Rust tools (e.g. fede1024/
+# kafka-view web UI, fede1024/kafka-benchmark
+# load generator, ArroyoSystems/arroyo stream
+# processor, SeaQL/sea-streamer) by:
+#   - PRIMARY-TARGET — kafka-delta-ingest's
+#     entire purpose is Kafka → Delta Lake.
+#     Not a generic Kafka client, not a UI, not
+#     a benchmark.  The CLI surface is the
+#     thinnest possible wrapper around the
+#     Kafka-to-Delta pipeline
+#   - DELTA-LAKE INTEGRATION — uses deltalake-
+#     core v0.26 (the Rust port of Databricks's
+#     Delta) with optional `s3` and `azure`
+#     features that enable deltalake-aws v0.9
+#     (with dynamodb_lock for S3 concurrent-
+#     writer safety) and deltalake-azure v0.9
+#   - SCHEMA REGISTRY — supports Confluent
+#     Schema Registry resolution via the
+#     `schema_registry_converter` crate (with
+#     `easy`, `json`, `avro` features).  Three
+#     mutually-exclusive format flags resolve
+#     into a single ArgGroup: `--json`,
+#     `--avro`, `--soe-avro` (single-object-
+#     encoded local-file avro)
+#   - JMESPATH TRANSFORMS — message-level
+#     transforms expressed as JMESPath
+#     queries plus a few "well-known Kafka
+#     metadata" projections (kafka.offset,
+#     kafka.partition, kafka.topic, kafka.
+#     timestamp).  Transform syntax:
+#     `PROPERTY: SOURCE` with `-t` flag,
+#     repeatable
+#   - DEAD-LETTER QUEUE — `--dlq_table_location`
+#     points at a separate Delta table; any
+#     message that fails parse/transform/
+#     schema-validate gets written there with
+#     its own `--dlq_transform`-applied
+#     projections.  Critical for stream
+#     reliability (don't drop bad messages,
+#     route them)
+#   - SEEK-OFFSETS — `--seek_offsets` takes a
+#     JSON {"partition": offset} map for
+#     replay-from-offset semantics.  Only
+#     applies when offsets are not already
+#     stored in the Delta table — the table
+#     itself is the source of truth for
+#     consumed offsets, so restarts resume
+#     where the previous run committed
+#   - PASSTHROUGH librdkafka SETTINGS — `-K
+#     key=value` repeatable forwards arbitrary
+#     librdkafka config to the rdkafka client
+#     unchanged.  Use for TLS / SASL / SSL
+#     certificate paths / etc.  Full list of
+#     supported keys at https://github.com/
+#     edenhill/librdkafka/blob/master/
+#     CONFIGURATION.md
+#   - DELTA CHECKPOINTS — `--checkpoints` /
+#     `-c` flag enables Delta log checkpoint
+#     writes every 10 commits.  Checkpoints
+#     are Parquet-encoded snapshots of the
+#     transaction log that let new readers
+#     bypass replaying the full _delta_log
+#     directory.  Off by default
+#   - STATSD METRICS — `--statsd_endpoint` /
+#     `-s` (default `localhost:8125`) sends
+#     metrics via the `dipstick` crate to a
+#     statsd collector.  Metrics include
+#     batch sizes, latency, errors,
+#     checkpoint count
+#   - ALLOWED-LATENCY + BATCH-SIZE +
+#     MIN-BYTES-PER-FILE TRIO — the three
+#     knobs that control Delta file emission:
+#       * `-l N` (default 300s): max time a
+#         message may sit in the in-memory
+#         buffer before forcing a write
+#       * `-m N` (default 5000): max rows
+#         per Parquet batch
+#       * `-b N` (default 134217728 =
+#         128MiB): target min file size.
+#         Files may end up smaller if `-l`
+#         elapses before this is reached
+#   - END-AT-LAST-OFFSETS — `-e` /
+#     `--ends_at_latest_offsets` makes the
+#     daemon exit cleanly when it reaches
+#     the current high-water mark for each
+#     partition.  Useful for backfill jobs
+#     that should be one-shot rather than
+#     long-running
+#   - GZIP DECOMPRESSION — `--decompress_gzip`
+#     flag handles gzip-compressed Kafka
+#     payloads transparently before applying
+#     transforms
+#   - ENV-VAR ALIASES FOR EVERY FLAG — every
+#     CLI flag has a matching environment
+#     variable for container-friendly config
+#     (KAFKA_TOPIC, TABLE_LOCATION,
+#     KAFKA_BROKERS, KAFKA_CONSUMER_GROUP,
+#     APP_ID, KAFKA_SEEK_OFFSETS, KAFKA_AUTO_
+#     OFFSET_RESET, ALLOWED_LATENCY, MAX_
+#     MESSAGES_PER_BATCH, MIN_BYTES_PER_FILE,
+#     TRANSFORMS, DLQ_TABLE_LOCATION, DLQ_
+#     TRANSFORMS, WRITE_CHECKPOINTS, STATSD_
+#     ENDPOINT, JSON_REGISTRY, AVRO_REGISTRY,
+#     ENDS_AT_LATEST_OFFSETS, DECOMPRESS_
+#     GZIP)
+#   - OPTIONAL SENTRY ERROR-REPORTING — if
+#     compiled with `--features sentry-ext`
+#     and `SENTRY_DSN` env var set, errors
+#     are forwarded to a Sentry endpoint via
+#     `sentry = "0.23"`
+#
+# CRITICAL DEPENDENCIES (from Cargo.toml):
+#   - rdkafka 0.37             — librdkafka FFI
+#                                Rust binding
+#   - deltalake-core 0.26      — Delta Lake
+#                                protocol +
+#                                Parquet writer
+#   - deltalake-aws 0.9        — S3 storage
+#                                backend
+#                                (optional, `s3`
+#                                feature)
+#   - deltalake-azure 0.9      — Azure Blob
+#                                storage backend
+#                                (optional,
+#                                `azure` feature)
+#   - dynamodb_lock 0.6        — DynamoDB-backed
+#                                lock for safe
+#                                concurrent S3
+#                                writers
+#                                (optional, `s3`
+#                                feature)
+#   - schema_registry_converter 3.1
+#                              — Confluent Schema
+#                                Registry client
+#   - jmespatch 0.3            — JMESPath query
+#                                engine for
+#                                transforms
+#   - apache-avro 0.17         — Avro
+#                                serialisation
+#   - tokio 1.x (full)         — async runtime
+#   - clap 4 (color + env)     — CLI parsing
+#   - sentry 0.23 (optional)   — error reporting
+#   - dipstick 0.9             — statsd metrics
+#                                client
+#
+# RUST 1.81+ MSRV per Cargo.toml `rust-version =
+# "1.81"`.
+#
+# UPSTREAM:
+#   * Source             : https://github.com/delta-io/kafka-delta-ingest
+#   * Delta Lake project : https://delta.io
+#   * librdkafka config  : https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md
+#   * JMESPath spec      : https://jmespath.org/specification.html
+#   * License            : Apache-2.0
+#   * Maintainers        : R. Tyler Croy <rtyler@brokenco.de>, Christian Williams <christianw@scribd.com>
+#
+# INSTALL:
+#   # From source with default features (no cloud storage)
+#   cargo install --git https://github.com/delta-io/kafka-delta-ingest
+#
+#   # With S3 + Azure Delta backends + Sentry
+#   cargo install --git https://github.com/delta-io/kafka-delta-ingest \
+#       --features s3,azure,sentry-ext
+#
+#   # Dynamic librdkafka link (use system .so/.dylib instead of vendored)
+#   cargo install --git https://github.com/delta-io/kafka-delta-ingest \
+#       --features dynamic-linking
+#
+# USAGE EXAMPLES:
+#
+#   # Minimal ingest from `events` topic into a local Delta table
+#   kafka-delta-ingest ingest events /tmp/delta/events
+#
+#   # Ingest from MSK-style brokers into S3-backed Delta table
+#   kafka-delta-ingest ingest my-topic s3://my-bucket/my-table \
+#       -k broker1:9094,broker2:9094 \
+#       -g my-consumer-group \
+#       -a my-app
+#
+#   # With TLS via passthrough librdkafka settings
+#   kafka-delta-ingest ingest secure-topic s3://b/t \
+#       -k broker:9094 \
+#       -K security.protocol=SSL \
+#       -K ssl.certificate.location=/etc/kafka/cert.pem \
+#       -K ssl.key.location=/etc/kafka/key.pem \
+#       -K ssl.ca.location=/etc/kafka/ca.pem
+#
+#   # With JMESPath transforms + dead-letter queue
+#   kafka-delta-ingest ingest events /tmp/delta/events \
+#       -t 'date: substr(timestamp,`0`,`10`)' \
+#       -t 'offset: kafka.offset' \
+#       --dlq_table_location /tmp/delta/events_dlq \
+#       --dlq_transform 'kafka_partition: kafka.partition'
+#
+#   # Replay from explicit per-partition offsets
+#   kafka-delta-ingest ingest events /tmp/delta/events \
+#       --seek_offsets '{"0":1000,"1":2000}'
+#
+#   # Confluent Schema Registry with Avro
+#   kafka-delta-ingest ingest events /tmp/delta/events \
+#       --avro http://schema-registry:8081
+#
+#   # JSON Schema Registry
+#   kafka-delta-ingest ingest events /tmp/delta/events \
+#       --json http://schema-registry:8081
+#
+#   # Single-Object-Encoded Avro with local schema dir
+#   kafka-delta-ingest ingest events /tmp/delta/events \
+#       --soe-avro /etc/schemas/
+#
+#   # Backfill that exits when caught up
+#   kafka-delta-ingest ingest events /tmp/delta/events \
+#       -e \
+#       --auto_offset_reset earliest
+#
+#   # Tuning batch + latency knobs for low-latency writes
+#   kafka-delta-ingest ingest events /tmp/delta/events \
+#       -l 60 \
+#       -m 1000 \
+#       -b 16777216
+#
+#   # Gzipped payloads + checkpoints + statsd
+#   kafka-delta-ingest ingest events /tmp/delta/events \
+#       --decompress_gzip \
+#       --checkpoints \
+#       --statsd_endpoint metrics.local:8125
+#
+#   # Container-friendly env-var-only configuration
+#   KAFKA_TOPIC=events \
+#   TABLE_LOCATION=s3://my-bucket/my-table \
+#   KAFKA_BROKERS=broker:9094 \
+#   APP_ID=ingester \
+#   WRITE_CHECKPOINTS=true \
+#       kafka-delta-ingest ingest
+#
+# OPTIONS (sourced directly from
+# https://github.com/delta-io/kafka-delta-ingest/blob/main/src/main.rs):
+#
+# -----------------------------------------------------------------------------
+
+local curcontext="$curcontext" state line ret=1
+typeset -A opt_args
+
+local -a _kdi_commands
+_kdi_commands=(
+    'ingest:Stream messages from a Kafka topic into a Delta Lake table'
+    'help:Print help for a subcommand'
+)
+
+local -a _kdi_offset_reset
+_kdi_offset_reset=(
+    'earliest:Reset to earliest available offset when no committed offset exists'
+    'latest:Reset to latest (high-water-mark) offset when no committed offset exists'
+)
+
+_arguments -C \
+    '(- *)'{-h,--help}'[show help]' \
+    '(- *)'{-V,--version}'[show version]' \
+    '(-): :->command' \
+    '(-)*:: :->args' \
+    && ret=0
+
+case $state in
+    command)
+        _describe -t commands 'kafka-delta-ingest command' _kdi_commands && ret=0
+        ;;
+    args)
+        case $line[1] in
+            ingest)
+                _arguments -C \
+                    '(- *)'{-h,--help}'[show help for ingest]' \
+                    '(-k --kafka)'{-k+,--kafka=}'[Kafka broker connection string (env KAFKA_BROKERS, default localhost:9092)]:brokers: ' \
+                    '(-g --consumer_group)'{-g+,--consumer_group=}'[consumer group when subscribing (env KAFKA_CONSUMER_GROUP, default kafka_delta_ingest)]:group: ' \
+                    '(-a --app_id)'{-a+,--app_id=}'[app id used when writing to Delta (env APP_ID, default kafka_delta_ingest)]:app id: ' \
+                    '--seek_offsets=[JSON {"partition":offset} map for seeking before first ingest (env KAFKA_SEEK_OFFSETS)]:JSON: ' \
+                    '(-o --auto_offset_reset)'{-o+,--auto_offset_reset=}'[default offset reset policy when no offset exists (env KAFKA_AUTO_OFFSET_RESET)]:policy:->offset_reset' \
+                    '(-l --allowed_latency)'{-l+,--allowed_latency=}'[max latency in seconds before forcing a Delta write (env ALLOWED_LATENCY, default 300)]:seconds: ' \
+                    '(-m --max_messages_per_batch)'{-m+,--max_messages_per_batch=}'[max rows per Parquet batch (env MAX_MESSAGES_PER_BATCH, default 5000)]:rows: ' \
+                    '(-b --min_bytes_per_file)'{-b+,--min_bytes_per_file=}'[target min file size in bytes (env MIN_BYTES_PER_FILE, default 134217728)]:bytes: ' \
+                    '*'{-t+,--transform=}'[transform expressed as "PROPERTY: SOURCE" (JMESPath or kafka.{offset,partition,topic,timestamp}); repeatable (env TRANSFORMS)]:transform: ' \
+                    '--dlq_table_location=[Delta table for dead-letter messages (env DLQ_TABLE_LOCATION)]:location: ' \
+                    '*--dlq_transform=[transform to apply to dead-letter messages before writing; repeatable (env DLQ_TRANSFORMS)]:transform: ' \
+                    '(-c --checkpoints)'{-c,--checkpoints}'[write a Delta log checkpoint every 10 commits (env WRITE_CHECKPOINTS)]' \
+                    '*'{-K+,--kafka_setting=}'[additional librdkafka setting as key=value; repeatable (TLS/SASL/etc.)]:key=value: ' \
+                    '(-s --statsd_endpoint)'{-s+,--statsd_endpoint=}'[statsd metrics endpoint (env STATSD_ENDPOINT, default localhost:8125)]:host:port: ' \
+                    '(--avro --soe-avro)--json=[JSON schema registry endpoint, local path, or empty string (env JSON_REGISTRY)]:source: ' \
+                    '(--json --soe-avro)--avro=[Avro schema registry endpoint, local path, or empty string (env AVRO_REGISTRY)]:source: ' \
+                    '(--json --avro)--soe-avro=[local path to single .avsc file or directory of .avsc files for single-object-encoded Avro]:path:_files' \
+                    '(-e --ends_at_latest_offsets)'{-e,--ends_at_latest_offsets}'[exit when each partition reaches its latest offset (env ENDS_AT_LATEST_OFFSETS)]' \
+                    '--decompress_gzip[gzip-decompress incoming messages before applying transforms (env DECOMPRESS_GZIP)]' \
+                    '1:topic (env KAFKA_TOPIC):' \
+                    '2:table_location (env TABLE_LOCATION):_files -/' \
+                    && ret=0
+                ;;
+            help)
+                _arguments \
+                    '1:subcommand:(ingest)' \
+                    && ret=0
+                ;;
+        esac
+        ;;
+esac
+
+case $state in
+    offset_reset)
+        _describe -t reset 'auto offset reset policy' _kdi_offset_reset && ret=0
+        ;;
+esac
+
+return ret
