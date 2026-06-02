@@ -1,0 +1,174 @@
+#compdef hash-cli
+# =============================================================================
+# hash-cli — btleffler's "Easily hash files from the command
+#            line" — a tiny Node.js CLI wrapper over Node's
+#            built-in `crypto.createHash()` that hashes one
+#            or more files (or every file in a directory)
+#            using any algorithm supported by the host's
+#            OpenSSL build.  Exposes the full algorithm set
+#            of `crypto.getHashes()` (typically ~50 entries:
+#            sha1 / sha224 / sha256 / sha384 / sha512 /
+#            sha3-* / md5 / md4 / ripemd160 / blake2b512 /
+#            blake2s256 / shake128 / shake256 / sm3 / etc.,
+#            depending on the OpenSSL build).
+#
+#            Distinguishing from coreutils-style {sha1,
+#            sha256,sha512,md5}sum (one algorithm per
+#            binary; produce output in a fixed text format),
+#            `openssl dgst` (algorithm passed as a flag;
+#            OpenSSL CLI; binary output via -binary; rich
+#            HMAC + signing modes), `rhash` (Russian
+#            Aleksey Kravchenko's multi-hash tool with
+#            CRC32 / TTH / ED2K / AICH support), `b3sum`
+#            (BLAKE3-only Rust binary), and `shasum` (Perl
+#            wrapper around Digest::SHA) by:
+#              - PURE NODE — single hash-cli.js dispatched
+#                through a `#!/usr/bin/env node` shebang;
+#                installs via `npm install -g node-hash-cli`
+#              - COMMANDER + GRACEFUL-FS — uses tj/commander
+#                (Axis-1 argparse) for option parsing and
+#                isaacs/graceful-fs for retry-on-EMFILE
+#                file descriptor handling
+#              - ASYNC.SERIES — uses caolan/async to serialise
+#                the prepare-files → hash-files → write-
+#                output-files pipeline
+#              - DIRECTORY MODE — `-d DIR` walks all files
+#                in a single directory (one level, not
+#                recursive) when `-f` is omitted
+#              - MULTI-FILE MODE — `-f a,b,c` accepts a
+#                comma-separated list of files relative
+#                to the (`-d` or `cwd`) directory
+#              - SIDECAR HASH FILES — `--createOutputFiles`
+#                (auto-enabled when no `-f` list is given)
+#                writes the hex digest to
+#                `FILENAME.EXT.ALGORITHM` next to each input
+#              - ALGORITHM LISTING — `--list` prints all
+#                hash names accepted by the host's
+#                `crypto.getHashes()` so you can confirm
+#                BLAKE2b / SHA-3 / SM3 / SHAKE availability
+#                before relying on them
+#              - DEFAULT sha1 — when no `-a` is given
+#                defaults to sha1; explicitly set `-a
+#                sha256` (or stronger) for modern integrity
+#                use
+#              - DEBUG MODE — `--debug` prints prepared file
+#                paths + a stack trace on hash errors
+#                instead of swallowing them
+#
+# Author:   Bryan T. Leffler (btleffler on GitHub).
+# Source:   https://github.com/btleffler/node-hash-cli
+#           https://github.com/btleffler/node-hash-cli/blob/master/hash-cli.js
+#           https://github.com/btleffler/node-hash-cli/blob/master/package.json
+# Install:  npm install -g node-hash-cli
+#           (package name is `node-hash-cli`; bin is
+#           `hash-cli`)
+# License:  MIT
+# Status:   small utility; stable.
+# Reference accessed: 2026-06-01
+#
+# -----------------------------------------------------------------------------
+#
+# THE hash-cli CLI
+#
+# hash-cli is invoked as:
+#   hash-cli [OPTIONS]
+#
+# Options (from hash-cli.js / commander definitions):
+#
+#   -a, --algorithm [algo]         Algorithm to hash with
+#                                  (default: sha1).  Any
+#                                  name returned by
+#                                  `crypto.getHashes()` is
+#                                  accepted: sha1 sha224
+#                                  sha256 sha384 sha512
+#                                  sha3-256 sha3-512 md5
+#                                  ripemd160 blake2b512
+#                                  blake2s256 shake128
+#                                  shake256 sm3 …
+#                                  (set depends on OpenSSL).
+#   -d, --directory [dir]          Directory to hash
+#                                  (defaults to cwd).
+#   -f, --files [file[,file[,…]]]  Comma-separated list of
+#                                  files (relative to -d
+#                                  or cwd) to hash.  When
+#                                  omitted, every file in
+#                                  the directory is hashed
+#                                  + sidecar files are
+#                                  written.
+#   --createOutputFiles            Write each hex digest
+#                                  to a sidecar named
+#                                  `FILENAME.EXT.ALGORITHM`
+#                                  alongside the input.
+#                                  Implicitly enabled when
+#                                  no `-f` list is given.
+#   --list                         Print available
+#                                  algorithm names from
+#                                  `crypto.getHashes()` and
+#                                  exit.
+#   --debug                        Print prepared file
+#                                  paths + propagate error
+#                                  stack traces.
+#   -h, --help                     Show help message (from
+#                                  commander).
+#   -V, --version                  Print version + exit
+#                                  (from commander).
+#
+# Common invocations:
+#   # Hash a single file with sha256
+#   hash-cli -a sha256 -f release.tar.gz
+#
+#   # Hash every file in ~/Downloads with sha512 + write
+#   # sidecar checksum files
+#   hash-cli -a sha512 -d ~/Downloads --createOutputFiles
+#
+#   # Hash a list of files (comma-separated)
+#   hash-cli -a sha256 -d build -f bin,manifest.json,VERSION
+#
+#   # List algorithms (depends on OpenSSL build)
+#   hash-cli --list
+#
+#   # Quick BLAKE2 on a single file
+#   hash-cli -a blake2b512 -f input.bin
+#
+# -----------------------------------------------------------------------------
+
+local curcontext="$curcontext" state line ret=1
+typeset -A opt_args
+
+local -a _hc_algos
+_hc_algos=(
+    'sha1:160-bit SHA-1 (default; not for security)'
+    'sha224:224-bit SHA-2'
+    'sha256:256-bit SHA-2 (recommended general purpose)'
+    'sha384:384-bit SHA-2'
+    'sha512:512-bit SHA-2'
+    'sha3-224:224-bit SHA-3 (Keccak)'
+    'sha3-256:256-bit SHA-3 (Keccak)'
+    'sha3-384:384-bit SHA-3 (Keccak)'
+    'sha3-512:512-bit SHA-3 (Keccak)'
+    'md5:128-bit MD5 (broken; legacy only)'
+    'md4:128-bit MD4 (broken; legacy only)'
+    'ripemd160:160-bit RIPEMD-160'
+    'blake2b512:512-bit BLAKE2b'
+    'blake2s256:256-bit BLAKE2s'
+    'shake128:SHA-3 extendable-output function'
+    'shake256:SHA-3 extendable-output function'
+    'sm3:Chinese GM/T 0004-2012 SM3 256-bit'
+)
+
+_arguments -s -S \
+    '(-a --algorithm)'{-a+,--algorithm=}'[hashing algorithm (default sha1)]:algorithm:->algo' \
+    '(-d --directory)'{-d+,--directory=}'[directory to hash]:dir:_files -/' \
+    '(-f --files)'{-f+,--files=}'[comma-separated list of files relative to directory]:files:_default' \
+    '--createOutputFiles[write hex digest sidecar FILENAME.EXT.ALG]' \
+    '(- *)--list[list available algorithms from crypto.getHashes()]' \
+    '--debug[show prepared file paths + propagate error stack traces]' \
+    '(- *)'{-h,--help}'[show help message]' \
+    '(- *)'{-V,--version}'[show version]' \
+    && ret=0
+
+case $state in
+    algo) _describe -t algos 'hash algorithm' _hc_algos && ret=0 ;;
+esac
+
+return ret
