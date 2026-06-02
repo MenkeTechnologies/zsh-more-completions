@@ -1,0 +1,217 @@
+#compdef wrpc-wasmtime
+# ============================================================================
+# _wrpc-wasmtime — zsh completion for Bytecode Alliance's wRPC wasmtime
+#                  runner (Wasm component-native RPC over NATS / TCP)
+# ============================================================================
+#
+# UPSTREAM
+#   Repository : https://github.com/bytecodealliance/wrpc
+#   Author     : Roman Volosatovs  <rvolosatovs@riseup.net>
+#                (Bytecode Alliance)
+#   License    : Apache-2.0 WITH LLVM-exception
+#   Language   : Rust
+#   Crate      : wrpc v0.17.0  (workspace root crate)
+#   Binary     : wrpc-wasmtime  (Cargo.toml [[bin]] name = "wrpc-wasmtime",
+#                                required-features = ["bin-wasmtime"];
+#                                built from src/bin/wrpc-wasmtime.rs which
+#                                delegates to wrpc-wasmtime-cli::run)
+#   Last push  : 2026-06-02
+#
+# WHAT IT IS
+#   wRPC is "a Wasm component-native RPC framework based on WIT".  It
+#   takes a Wasm component compiled against the WebAssembly Component
+#   Model and exposes its imports/exports over a network transport
+#   (NATS.io subject-based pub/sub or raw TCP) so that components can
+#   call each other across process and host boundaries without
+#   sharing a runtime.  `wrpc-wasmtime` is the reference runner: it
+#   loads a `.wasm` component (from a local path or a URL), instantiates
+#   it under wasmtime + WASI Preview 1 + WASI HTTP, and either runs it
+#   once as a command component (`run`) or serves it as a long-lived
+#   reactor component (`serve`).
+#
+#   Companion binary `wit-bindgen-wrpc` (separate `[[bin]]`) generates
+#   Rust or Go bindings from WIT package files.
+#
+# CLI ARGUMENT GRAMMAR  (verbatim from crates/wasmtime-cli/src/{lib,
+#                       nats,tcp}.rs clap-derive Command enums)
+#   wrpc-wasmtime <TRANSPORT> <ACTION> [OPTIONS] <WORKLOAD>
+#
+#   Transports:
+#     nats <run | serve>      NATS.io subject-based transport
+#     tcp  <run | serve>      Raw TCP transport
+#
+#   Actions (per transport):
+#     run    Run a command component once and exit
+#     serve  Serve a reactor component (long-lived, accepts inbound
+#            invocations on the configured export prefix/address)
+#
+#   `nats run` flags:
+#     -n, --nats <ADDR>       NATS server URL
+#                             [default: nats://localhost:4222]
+#         --timeout <DUR>     Invocation timeout (humantime)
+#                             [default: 10s]
+#         --import <PREFIX>   Subject prefix to send import
+#                             invocations to              [default: ""]
+#     <WORKLOAD>              Path or URL to the Wasm component
+#
+#   `nats serve` flags:
+#     -n, --nats <ADDR>       NATS server URL    [default as above]
+#         --timeout <DUR>     Invocation timeout [default: 10s]
+#     -g, --group <NAME>      NATS queue group (load-balance inbound
+#                             invocations across replicas)
+#         --import <PREFIX>   Subject prefix for outbound imports
+#         --export <PREFIX>   Subject prefix to listen for exports
+#     <WORKLOAD>              Path or URL to the Wasm component
+#
+#   `tcp run` flags:
+#         --timeout <DUR>     Invocation timeout [default: 10s]
+#         --import <ADDR>     Address to send import invocations to
+#                             [default: [::1]:7761]
+#     <WORKLOAD>              Path or URL to the Wasm component
+#
+#   `tcp serve` flags:
+#         --timeout <DUR>     Invocation timeout [default: 10s]
+#         --import <ADDR>     Address to send import invocations to
+#                             [default: [::1]:7761]
+#         --export <ADDR>     Address to listen for export invocations
+#                             on [default: [::1]:7761]
+#     <WORKLOAD>              Path or URL to the Wasm component
+#
+#   Standard clap auto-flags:
+#     -h, --help              Show help
+#     -V, --version           Show version
+#
+# AXIS / CORPUS POSITION
+#   Direct dependency on `async-nats = "0.49"` declared in the wrpc
+#   workspace Cargo.toml — the canonical Rust NATS.io client maintained
+#   by Synadia / nats.io (nats-io/nats.rs).  async-nats is the
+#   async-first Rust port of the Go reference client, supporting Core
+#   NATS pub/sub, JetStream persistence, Object Store, Key-Value
+#   buckets, and Service-API request/reply.  wRPC's
+#   `crates/transport-nats/` wraps `async_nats::Client` to map WIT
+#   imports/exports onto NATS subjects via the configured
+#   `wrpc_transport_nats::Client` prefix.  The `nats` cargo feature
+#   (enabled by default) wires `dep:async-nats`, `dep:wrpc-transport-nats`,
+#   and `wrpc-cli/nats` into the binary.  Verified via:
+#     gh api repos/bytecodealliance/wrpc/contents/Cargo.toml
+#       → async-nats = { version = "0.49", default-features = false }
+#       → default = ["bin", "nats", "net", "quic", "wasmtime",
+#                    "web-transport"]
+#     gh api repos/bytecodealliance/wrpc/contents/crates/wasmtime-cli/src/nats.rs
+#       → wrpc_cli::nats::connect(nats) +
+#         wrpc_transport_nats::Client::new(nats, import, None)
+#   This entry is the Rust=125 leader bump that OPENS Axis 70
+#   (NATS.io Client Library), pairing with future Go=nats-io/nats.go
+#   and TS-Node=nats.io/nats.js poles to close the axis at 1/1/1.
+#
+#   No completion for `wrpc-wasmtime` ships with Apple zsh
+#   (/usr/share/zsh/*/functions) or Homebrew zsh-completions
+#   (/opt/homebrew/share/zsh/site-functions) — confirmed absent.
+# ============================================================================
+
+_wrpc-wasmtime() {
+    local curcontext="$curcontext" state line ret=1
+    typeset -A opt_args
+
+    _arguments -C \
+        '(- *)'{-h,--help}'[show help]' \
+        '(- *)'{-V,--version}'[show version]' \
+        '1: :_wrpc-wasmtime_transports' \
+        '*::arg:->args' && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                nats)  _wrpc-wasmtime_nats && ret=0 ;;
+                tcp)   _wrpc-wasmtime_tcp  && ret=0 ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+(( $+functions[_wrpc-wasmtime_transports] )) ||
+_wrpc-wasmtime_transports() {
+    local -a transports
+    transports=(
+        'nats:NATS.io subject-based transport'
+        'tcp:raw TCP transport'
+    )
+    _describe -t transports 'wrpc-wasmtime transport' transports
+}
+
+(( $+functions[_wrpc-wasmtime_nats] )) ||
+_wrpc-wasmtime_nats() {
+    local curcontext="$curcontext" state line ret=1
+    _arguments -C \
+        '1: :_wrpc-wasmtime_actions' \
+        '*::arg:->nargs' && ret=0
+
+    case $state in
+        nargs)
+            case $words[1] in
+                run)
+                    _arguments \
+                        '(-n --nats)'{-n+,--nats=}'[NATS server URL (default nats\://localhost\:4222)]:url:' \
+                        '--timeout=[invocation timeout (humantime, default 10s)]:duration:' \
+                        '--import=[NATS subject prefix for outbound imports]:prefix:' \
+                        '(- *)'{-h,--help}'[help]' \
+                        ':workload (Wasm component path or URL):_files -g "*.wasm"' && ret=0 ;;
+                serve)
+                    _arguments \
+                        '(-n --nats)'{-n+,--nats=}'[NATS server URL (default nats\://localhost\:4222)]:url:' \
+                        '--timeout=[invocation timeout (humantime, default 10s)]:duration:' \
+                        '(-g --group)'{-g+,--group=}'[NATS queue group for load balancing]:queue group:' \
+                        '--import=[NATS subject prefix for outbound imports]:prefix:' \
+                        '--export=[NATS subject prefix to listen for exports]:prefix:' \
+                        '(- *)'{-h,--help}'[help]' \
+                        ':workload (Wasm component path or URL):_files -g "*.wasm"' && ret=0 ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+(( $+functions[_wrpc-wasmtime_tcp] )) ||
+_wrpc-wasmtime_tcp() {
+    local curcontext="$curcontext" state line ret=1
+    _arguments -C \
+        '1: :_wrpc-wasmtime_actions' \
+        '*::arg:->targs' && ret=0
+
+    case $state in
+        targs)
+            case $words[1] in
+                run)
+                    _arguments \
+                        '--timeout=[invocation timeout (humantime, default 10s)]:duration:' \
+                        '--import=[address for outbound imports (default [\:\:1]\:7761)]:address:' \
+                        '(- *)'{-h,--help}'[help]' \
+                        ':workload (Wasm component path or URL):_files -g "*.wasm"' && ret=0 ;;
+                serve)
+                    _arguments \
+                        '--timeout=[invocation timeout (humantime, default 10s)]:duration:' \
+                        '--import=[address for outbound imports (default [\:\:1]\:7761)]:address:' \
+                        '--export=[address to listen for exports (default [\:\:1]\:7761)]:address:' \
+                        '(- *)'{-h,--help}'[help]' \
+                        ':workload (Wasm component path or URL):_files -g "*.wasm"' && ret=0 ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+(( $+functions[_wrpc-wasmtime_actions] )) ||
+_wrpc-wasmtime_actions() {
+    local -a actions
+    actions=(
+        'run:run a Wasm command component once and exit'
+        'serve:serve a Wasm reactor component long-lived'
+    )
+    _describe -t actions 'wrpc-wasmtime action' actions
+}
+
+_wrpc-wasmtime "$@"
