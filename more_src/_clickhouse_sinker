@@ -1,0 +1,428 @@
+#compdef clickhouse_sinker
+# =============================================================================
+# clickhouse_sinker — housepower/clickhouse_
+#   sinker's Go daemon that PULLS messages
+#   from Kafka topics, optionally TRANSFORMS
+#   them (JSON / Protobuf / raw / fastjson)
+#   into ClickHouse-row format, and BULK-
+#   INSERTS them into a ClickHouse target
+#   table via batched native-protocol
+#   inserts.  Built on direct
+#   `ClickHouse/clickhouse-go/v2 v2.21.0`
+#   (the OFFICIAL ClickHouse Go driver from
+#   ClickHouse Inc).  Schema-on-config:
+#   table layout + field mappings are
+#   described in an HJSON config file (more
+#   forgiving than JSON for comments +
+#   trailing commas).  Optional runtime
+#   reconfiguration via NACOS (Alibaba's
+#   service-discovery + config-management
+#   platform).  Go=108 leader bump continuing
+#   Axis 53 (ClickHouse Client Library) at
+#   the Go pole, opened by R801 `_dozer`
+#   (Rust=108, clickhouse-rs).
+#
+# AXIS 53 — CLICKHOUSE CLIENT LIBRARY — GO POLE
+# ==============================================
+# `github.com/ClickHouse/clickhouse-go` is
+# the OFFICIAL Go driver maintained by
+# ClickHouse Inc.  ~3.3k stars.  Apache-2.0.
+# Speaks the native TCP protocol with binary
+# block transmission AND the HTTP+JSON
+# interface; the v2 variant is the modern
+# rewrite (this round uses v2).  Used by:
+#   - ClickHouse's own `clickhouse-client`   the
+#                                            reference
+#                                            CLI is
+#                                            actually
+#                                            C++,
+#                                            but the
+#                                            Go driver
+#                                            powers
+#                                            most
+#                                            third-
+#                                            party
+#                                            tools
+#   - housepower/clickhouse_sinker (this    Kafka →
+#     round)                                 ClickHouse
+#                                            sink
+#                                            daemon
+#   - clickvisual/clickvisual              log-analytic
+#                                            platform
+#                                            on
+#                                            ClickHouse
+#   - slingdata-io/sling-cli               universal
+#                                            data
+#                                            mover with
+#                                            ClickHouse
+#                                            target
+#   - xo/usql                              universal
+#                                            CLI for
+#                                            SQL DBs
+#                                            including
+#                                            ClickHouse
+#   - amacneil/dbmate                      DB
+#                                            migration
+#                                            tool with
+#                                            ClickHouse
+#                                            driver
+#
+# Other Axis 53 implementations across the
+# corpus:
+#   * Rust       (R801): clickhouse-rs (via
+#                getdozer fork) — bundled in
+#                `dozer` (real-time data
+#                movement engine)
+#   * Go         (R802, THIS ROUND):
+#                ClickHouse/clickhouse-go/v2
+#                v2.21.0 — bundled in
+#                `clickhouse_sinker` (Kafka →
+#                ClickHouse sink daemon)
+#   * TS-Node    (R803 will close):
+#                @clickhouse/client —
+#                official JS/TS driver
+#
+# Distinguishing clickhouse_sinker from
+# sibling Kafka-to-DB sink tooling:
+#   - DOZER (R801, Rust): general-purpose
+#     CDC + multi-sink with ClickHouse as
+#     ONE of many sinks.  clickhouse_sinker
+#     is verticalised — ClickHouse is the
+#     ONLY supported sink
+#   - VECTOR (`_vector`): observability-
+#     focused multi-sink that supports
+#     ClickHouse.  Wider scope, more
+#     transform power
+#   - KAFKA-CONNECT (JVM): the canonical
+#     JVM-hosted Kafka-to-X sink platform
+#     with ClickHouse Sink plugin.
+#     Operationally heavier than the
+#     single Go binary
+#   - BENTHOS / BENTO / REDPANDA-CONNECT:
+#     general stream processors with
+#     ClickHouse output.  Wider scope
+#   - KAFKA-DELTA-INGEST (R777, Rust):
+#     specifically Kafka → Delta Lake,
+#     not ClickHouse.  Same vertical
+#     niche, different sink
+#   - WAL-LISTENER (R778, Go): PostgreSQL
+#     WAL → Kafka/NATS/RabbitMQ.  Source
+#     side, not sink side
+#   - CLICKHOUSE_SINKER is the VERTICALISED
+#     option: minimum config to wire Kafka
+#     topics to ClickHouse tables, with
+#     production-grade batching, retry
+#     logic, Prometheus metrics, and Nacos
+#     runtime reconfiguration
+#
+# KEY CLICKHOUSE_SINKER FEATURES:
+#   - NATIVE-PROTOCOL INSERTS — uses
+#     clickhouse-go v2's native protocol
+#     (not HTTP).  Binary column-batch
+#     transmission for max throughput
+#   - HJSON CONFIG — Human JSON (`.hjson`)
+#     extension of JSON with comments,
+#     trailing commas, multi-line strings.
+#     Default config path
+#     `/etc/clickhouse_sinker.hjson`
+#   - NACOS RUNTIME RECONFIG — every CLI
+#     flag has a `--nacos-*` counterpart.
+#     When `--nacos-dataid` is set, the
+#     daemon subscribes to a Nacos config
+#     stream and HOT-RELOADS its config
+#     without restart.  Useful for fleet-
+#     wide config rollouts.  No Nacos =
+#     ignore those flags + use local
+#     config file
+#   - PROMETHEUS PUSH GATEWAY — `--metric-
+#     push-gateway-addrs <ADDRS>` pushes
+#     metrics every `--push-interval`
+#     seconds.  Useful when scraping
+#     isn't feasible (short-lived workers)
+#   - HTTP PULL ENDPOINT — `--http-host
+#     :--http-port` exposes `/metrics`
+#     (Prometheus) + `/health` + `/pprof`
+#     (Go runtime profiling).  Replaces
+#     the push-gateway path for scrapable
+#     deployments
+#   - PASSWORD ENCRYPTION — `-e <password>`
+#     prints an encrypted version of a
+#     password that can be stored in the
+#     config file.  Uses the `gsypt`
+#     internal helper for transparent
+#     decryption at runtime.  Run-once
+#     utility
+#   - ENV VAR FALLBACK — every CLI flag
+#     reads from the corresponding
+#     `CLICKHOUSE_SINKER_<UPPER>` env var
+#     when the flag isn't given.  Useful
+#     for container deployments where
+#     secrets come from a secret store
+#   - DUAL KAFKA AUTH — supports both
+#     SASL/PLAIN (`--kafka-username` /
+#     `--kafka-password`) and SASL/GSSAPI
+#     i.e. Kerberos (`--kafka-gssapi-
+#     username` / `--kafka-gssapi-password`)
+#   - LOG ROTATION — `--log-paths
+#     stdout,clickhouse_sinker.log,
+#     /var/log/clickhouse_sinker.log` —
+#     comma-separated paths.  `stdout` is
+#     a magic value for the console
+#   - SISTER BINARIES — the package ships
+#     four additional binaries used for
+#     load generation + Nacos
+#     bootstrapping:
+#       * `kafka_gen_log`     produce fake
+#                             log messages
+#                             to Kafka for
+#                             testing
+#       * `kafka_gen_metric`  produce fake
+#                             metric
+#                             messages
+#       * `kafka_gen_prom`    produce fake
+#                             Prometheus
+#                             remote-write
+#                             messages
+#       * `nacos_publish_config`
+#                             one-shot
+#                             utility to
+#                             push a config
+#                             file to a
+#                             Nacos server
+#     This completion covers ONLY the
+#     primary `clickhouse_sinker` daemon
+#
+# CONFIG FILE FORMAT (HJSON):
+# Each task in the config describes one
+# Kafka-topic → ClickHouse-table pipeline.
+# Top-level keys:
+#   * `clickhouse`       broker addresses,
+#                        db, max-batch,
+#                        retry-times
+#   * `kafka`            broker addresses,
+#                        consumer-group,
+#                        offset-reset
+#   * `task`             topic name, table
+#                        name, parser
+#                        (json|gjson|
+#                        fastjson|csv),
+#                        dims (column
+#                        mappings),
+#                        metrics
+#
+# CRITICAL DIRECT DEPENDENCIES (from
+# go.mod):
+#   - github.com/ClickHouse/clickhouse-go/v2 v2.21.0
+#                              — official Go
+#                                ClickHouse
+#                                driver
+#                                [AXIS 53 LIBRARY]
+#   - github.com/YenchangChan/franz-go/pkg/sasl/kerberos
+#                              — Kerberos
+#                                auth for
+#                                Kafka
+#                                consumer
+#   - github.com/jcmturner/gokrb5/v8 v8.4.4
+#                              — Pure-Go
+#                                Kerberos 5
+#                                implementation
+#   - github.com/nacos-group/nacos-sdk-go 1.1.4
+#                              — Nacos
+#                                config /
+#                                service-
+#                                discovery
+#                                client
+#   - github.com/prometheus/client_golang v1.18.0
+#                              — Prometheus
+#                                metrics
+#   - github.com/hjson/hjson-go/v4 v4.4.0
+#                              — HJSON
+#                                parser
+#   - github.com/RoaringBitmap/roaring v1.7.0
+#                              — bitmap
+#                                data
+#                                structure
+#                                (used for
+#                                offset
+#                                tracking)
+#   - github.com/avast/retry-go/v4 v4.5.1
+#                              — retry
+#                                helpers
+#                                for
+#                                transient
+#                                ClickHouse
+#                                errors
+#   - github.com/bytedance/sonic v1.14.2
+#                              — fast JSON
+#                                codec
+#                                (Go-asm-
+#                                accelerated)
+#   - github.com/cespare/xxhash/v2 v2.2.0
+#                              — xxhash for
+#                                shard
+#                                routing
+#   - github.com/hashicorp/golang-lru/v2 v2.0.7
+#                              — LRU cache
+#                                for config
+#                                lookups
+#   - github.com/jinzhu/copier v0.4.0
+#                              — deep struct
+#                                copy
+#   - github.com/shopspring/decimal v1.3.1
+#                              — fixed-
+#                                point
+#                                decimal
+#                                arithmetic
+#                                (matches
+#                                ClickHouse
+#                                Decimal
+#                                types)
+#   - go.uber.org/zap          — structured
+#                                logging
+#   - github.com/google/gops v0.3.28
+#                              — runtime
+#                                process
+#                                introspection
+#   - github.com/google/uuid v1.6.0
+#                              — UUID
+#                                generation
+#
+# Go 1.24.0+ MSRV per go.mod.
+#
+# UPSTREAM:
+#   * Source             : https://github.com/housepower/clickhouse_sinker
+#   * clickhouse-go      : https://github.com/ClickHouse/clickhouse-go
+#   * HJSON spec         : https://hjson.github.io
+#   * Nacos              : https://nacos.io
+#   * License            : Apache-2.0
+#   * Maintainer         : housepower (Yandex / Altinity-adjacent)
+#
+# INSTALL:
+#   # From source
+#   go install github.com/housepower/clickhouse_sinker/cmd/clickhouse_sinker@latest
+#
+#   # Pre-built binary (goreleaser)
+#   # https://github.com/housepower/clickhouse_sinker/releases
+#
+#   # Docker
+#   docker pull quay.io/housepower/clickhouse_sinker
+#
+# USAGE EXAMPLES:
+#
+#   # Run with the default config
+#   # (/etc/clickhouse_sinker.hjson)
+#   clickhouse_sinker
+#
+#   # Run with a custom config file
+#   clickhouse_sinker -local-cfg-file ./my-config.hjson
+#
+#   # Show version and exit
+#   clickhouse_sinker -v
+#
+#   # Encrypt a password (one-shot helper)
+#   clickhouse_sinker -e 's3cr3t!'
+#
+#   # Verbose debug logging
+#   clickhouse_sinker -log-level debug \
+#       -local-cfg-file ./my-config.hjson
+#
+#   # Log to multiple destinations (stdout +
+#   # file)
+#   clickhouse_sinker \
+#       -log-paths 'stdout,clickhouse_sinker.log,/var/log/sinker.log' \
+#       -local-cfg-file ./my-config.hjson
+#
+#   # Expose Prometheus + pprof endpoints
+#   clickhouse_sinker \
+#       -http-host 0.0.0.0 \
+#       -http-port 9090 \
+#       -local-cfg-file ./my-config.hjson
+#
+#   # Push metrics to a Prometheus push
+#   # gateway every 30s
+#   clickhouse_sinker \
+#       -metric-push-gateway-addrs http://pushgw:9091 \
+#       -push-interval 30 \
+#       -local-cfg-file ./my-config.hjson
+#
+#   # Override ClickHouse credentials from CLI
+#   # (env-friendly for K8s deployments)
+#   clickhouse_sinker \
+#       -clickhouse-username sinker \
+#       -clickhouse-password 'enc:xxx' \
+#       -local-cfg-file ./my-config.hjson
+#
+#   # Kafka SASL/PLAIN auth
+#   clickhouse_sinker \
+#       -kafka-username kafkauser \
+#       -kafka-password 'enc:xxx' \
+#       -local-cfg-file ./my-config.hjson
+#
+#   # Kafka SASL/GSSAPI (Kerberos) auth
+#   clickhouse_sinker \
+#       -kafka-gssapi-username sinker@EXAMPLE.COM \
+#       -kafka-gssapi-password 'enc:xxx' \
+#       -local-cfg-file ./my-config.hjson
+#
+#   # Pull config from Nacos at runtime
+#   clickhouse_sinker \
+#       -nacos-addr nacos1:8848,nacos2:8848 \
+#       -nacos-username nacos \
+#       -nacos-password 'enc:xxx' \
+#       -nacos-namespace-id prod \
+#       -nacos-group SINKER_GROUP \
+#       -nacos-dataid my-sinker-config \
+#       -nacos-service-name clickhouse_sinker
+#
+# OPTIONS (sourced directly from
+# https://github.com/housepower/clickhouse_sinker/blob/master/cmd/clickhouse_sinker/main.go initCmdOptions):
+#
+# -----------------------------------------------------------------------------
+
+local curcontext="$curcontext" state line ret=1
+typeset -A opt_args
+
+local -a _chs_log_levels
+_chs_log_levels=(
+    'debug:Most verbose'
+    'info:Informational (default)'
+    'warn:Warnings only'
+    'error:Errors only'
+    'dpanic:Panics in development mode'
+    'panic:Panic on log'
+    'fatal:Fatal errors'
+)
+
+_arguments -C \
+    '-v[show build version and quit]' \
+    '-e+[encrypt a password (one-shot helper; prints encrypted form)]:password: ' \
+    '-log-level=[zap log level]:level:->level' \
+    '-log-paths=[comma-separated log file paths (stdout is magic; default stdout,clickhouse_sinker.log)]:paths: ' \
+    '-http-port=[HTTP listen port for /metrics + /health + /pprof]:port: ' \
+    '-http-host=[HTTP host to bind to]:host: ' \
+    '-metric-push-gateway-addrs=[comma-separated Prometheus push-gateway addresses]:addrs: ' \
+    '-push-interval=[push-gateway push interval in seconds (default 10)]:seconds: ' \
+    '-local-cfg-file=[HJSON config file path (default /etc/clickhouse_sinker.hjson)]:file:_files -g "*.(hjson|json)"' \
+    '-nacos-addr=[comma-separated Nacos server addresses (default 127.0.0.1:8848)]:addrs: ' \
+    '-nacos-username=[Nacos username (default nacos)]:user: ' \
+    '-nacos-password=[Nacos password (default nacos)]:password: ' \
+    '-nacos-namespace-id=[Nacos namespace ID (empty string for "public" default namespace)]:ns: ' \
+    '-nacos-group=[Nacos group name (default DEFAULT_GROUP; empty does not work)]:group: ' \
+    '-nacos-dataid=[Nacos config data ID to subscribe to for hot-reload]:dataid: ' \
+    '-nacos-service-name=[Nacos service name for service discovery]:svc: ' \
+    '-clickhouse-username=[ClickHouse username (overrides config file)]:user: ' \
+    '-clickhouse-password=[ClickHouse password (overrides config file; accepts enc:...)]:pass: ' \
+    '-kafka-username=[Kafka SASL/PLAIN username]:user: ' \
+    '-kafka-password=[Kafka SASL/PLAIN password]:pass: ' \
+    '-kafka-gssapi-username=[Kafka SASL/GSSAPI (Kerberos) username]:user: ' \
+    '-kafka-gssapi-password=[Kafka SASL/GSSAPI (Kerberos) password]:pass: ' \
+    '(- *)-h[show help]' \
+    '(- *)--help[show help]' \
+    && ret=0
+
+case $state in
+    level)
+        _describe -t levels 'zap log level' _chs_log_levels && ret=0 ;;
+esac
+
+return ret
