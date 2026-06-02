@@ -1,0 +1,248 @@
+#compdef thermagate
+# ============================================================================
+# _thermagate — zsh completion for bikeshedder/thermagate, "Gateway
+#                compatible with ROTEX based DAIKIN Altherma 3 heat pump"
+#                — Rust=163 leader bump OPENING Axis 108 MQTT via the
+#                canonical Rust MQTT client rumqttc.
+# ============================================================================
+#
+# UPSTREAM
+#   Repository : https://github.com/bikeshedder/thermagate
+#   Maintainer : Michael P. Jung (bikeshedder@terreon.de)
+#   License    : GPL-3.0
+#   Stars      : 8
+#   Language   : Rust (edition 2024, rust-version 1.90)
+#   Crate      : thermagate  (Cargo.toml [package] name =
+#                "thermagate", version = "0.2.2")
+#   Binary     : thermagate
+#   Last push  : 2026-05-25
+#
+# WHAT IT IS
+#   thermagate is a CAN-bus-to-MQTT gateway for ROTEX /
+#   DAIKIN Altherma 3 heat pumps.  Plug a USB-CAN interface
+#   into the Linux box that runs the gateway, point it at
+#   your heat pump's internal CAN bus, and thermagate
+#   continuously decodes the heat-pump's typed parameters
+#   (flow temperature, return temperature, compressor RPM,
+#   defrost cycle status, outdoor sensor, room sensor,
+#   modulation setpoint, pump-A/pump-B speeds, COP estimate,
+#   etc.) and publishes them as MQTT topics — with Home
+#   Assistant auto-discovery wired through the
+#   `nrg-hass` crate so HA picks up every parameter as a
+#   typed sensor without manual `configuration.yaml` edits.
+#
+#   The gateway also accepts MQTT commands going the other
+#   way:  `set-param` translates "operator says set room
+#   target to 21 °C" into the matching CAN-bus frame.
+#
+# CLI ARGUMENT GRAMMAR  (verbatim from src/main.rs clap-derive
+#                       `Cli` struct + `Command` enum + src/
+#                       commands/set_param.rs `Args` struct;
+#                       extracted via `gh api repos/
+#                       bikeshedder/thermagate/contents/src/
+#                       ...`)
+#
+#   thermagate [CONFIG-FILE] <SUBCOMMAND> [args...]
+#
+#   Positional:
+#     <CONFIG-FILE>                  Path to TOML config file
+#                                    [default: config.toml]
+#                                    (parsed by figment;
+#                                    schema includes
+#                                    [can.interface],
+#                                    [mqtt.*], [hass.*],
+#                                    [log.level], [query.*],
+#                                    [http.*])
+#
+#   Subcommands:
+#     can-monitor                    Continuously decode every
+#                                    CAN frame on the bus and
+#                                    print it to the terminal
+#                                    (debugging aid for
+#                                    reverse-engineering new
+#                                    parameter IDs)
+#
+#     default-config                 Print the default TOML
+#                                    config to stdout (so the
+#                                    user can capture it via
+#                                    redirection:
+#                                    `thermagate default-config
+#                                    > config.toml`)
+#
+#     check-config                   Validate the config file
+#                                    against the schema without
+#                                    starting the gateway
+#                                    (catches typos / missing
+#                                    sections / invalid CAN
+#                                    interface names before
+#                                    deployment)
+#
+#     gateway                        Run the full gateway:
+#                                    open the CAN bus, subscribe
+#                                    to the configured MQTT
+#                                    broker, publish decoded
+#                                    parameters with
+#                                    Home-Assistant auto-
+#                                    discovery, accept inbound
+#                                    `set-param` MQTT commands
+#
+#     set-param <DEVICE> <PARAM> <VALUE> [--sender <DEVICE>]
+#                                    One-shot CAN write: send
+#                                    a CAN frame to set a typed
+#                                    heat-pump parameter
+#                                    (e.g. `thermagate set-param
+#                                    HeatPump RoomTargetTemp
+#                                    21.0 --sender Remote`)
+#       --sender <DEVICE>              Spoof the sender CAN
+#                                    device ID (defaults to
+#                                    thermagate's own configured
+#                                    device)
+#
+#   Standard clap auto-flags:
+#     -h, --help                     Show help (root + each
+#                                    subcommand)
+#     -V, --version                  Show version (0.2.2)
+#
+# AXIS / CORPUS POSITION
+#   Direct dependency on `rumqttc = "0.25"` declared in
+#   Cargo.toml — `rumqttc` is THE canonical Rust MQTT (v3
+#   and v5) client, maintained by ByteBeam at the bytebeamio/
+#   rumqtt repository (1,200+ stars; the predominant async
+#   tokio-native Rust MQTT 3.1.1 + MQTT 5.0 client used by
+#   every major Rust MQTT-touching project — aannoo/hcom,
+#   airalab/robonomics, bikeshedder/thermagate, bytebeamio/
+#   mqttwrk, cartesiancs/vessel, chirpstack/chirpstack,
+#   EdJoPaTo/mqttui, EventInfra/Cthulhu, evilsocket/legba,
+#   FruitieX/homectl, momentobooth/cups2mqtt, NVIDIA/infra-
+#   controller, rhoopr/bambutop, RightNow-AI/openfang,
+#   robustmq/robustmq, and dozens of other production Rust
+#   IoT / event-streaming applications).  rumqttc exposes
+#   the typed `MqttOptions::new(client_id, host, port)
+#   .set_credentials(user, pass)
+#   .set_keep_alive(Duration::from_secs(30))
+#   .set_clean_session(true)
+#   .set_max_packet_size(10 * 1024, 10 * 1024)
+#   .set_inflight(100)
+#   .set_request_channel_capacity(100)
+#   .set_pending_throttle(Duration::from_millis(5))
+#   .set_transport(Transport::Tls(tls_config))
+#   .set_last_will(LastWill::new(topic, payload, QoS::AtLeast
+#   Once, retain))
+#   .set_manual_acks(false)` builder, the typed
+#   `AsyncClient` constructor with
+#   `AsyncClient::new(options, cap)` returning
+#   `(AsyncClient, EventLoop)`, the typed `client.publish(
+#   topic, qos, retain, payload).await?` /
+#   `client.publish_bytes(topic, qos, retain, bytes).await?` /
+#   `client.subscribe(topic, qos).await?` /
+#   `client.subscribe_many(topics).await?` /
+#   `client.unsubscribe(topic).await?` /
+#   `client.disconnect().await?` /
+#   `client.ack(&publish).await?` /
+#   `client.try_publish(...)` (non-async overflow-error
+#   variant) request surface, the typed
+#   `eventloop.poll().await? -> Event` polling primitive
+#   returning typed `Event::Incoming(Packet::ConnAck(...))`
+#   `Event::Incoming(Packet::Publish(Publish{topic, payload,
+#   qos, retain, pkid}))` / `Event::Incoming(Packet::PubAck/
+#   PubRec/PubRel/PubComp/SubAck/UnsubAck/PingReq/PingResp/
+#   Disconnect))` / `Event::Outgoing(...)` variants, the
+#   typed `QoS::AtMostOnce / AtLeastOnce / ExactlyOnce`
+#   enum, the typed `LastWill` /  `Publish` /  `Subscribe`
+#   / `SubscribeFilter` /  `Unsubscribe` /  `ConnAck` /
+#   `ConnectReturnCode` /  `Disconnect` /  `DisconnectReason`
+#   /  `ConnectionError` /  `MqttState` /  `Outgoing` /
+#   `Incoming` /  `Request` schemas, optional MQTT 5
+#   support via the `v5` Cargo feature (`rumqttc::v5::*`
+#   parallel namespace with same shape + v5-specific
+#   `Properties::*` / `ReasonCode` / `RetainHandling`
+#   primitives), TLS via the `use-rustls` / `use-native-tls`
+#   features (with `Transport::Tls(TlsConfiguration::
+#   Simple)` / `TlsConfiguration::Rustls(ClientConfig)` /
+#   `TlsConfiguration::NativeTls`), and WebSocket transport
+#   via `Transport::Wss(...)`.  thermagate's `src/...` wraps
+#   `AsyncClient::new` with TLS via the nrg-mqtt helper
+#   crate, subscribes to inbound command topics
+#   (`{base}/set-param/{device}/{param}/set`), publishes
+#   decoded CAN payloads to per-parameter topics
+#   (`{base}/{device}/{param}/state`), and hands the
+#   event-loop poll() loop off to a Tokio task spawned at
+#   gateway boot.  Verified via:
+#     gh api repos/bikeshedder/thermagate/contents/Cargo.toml
+#       → rumqttc = "0.25"
+#       → clap = { version = "4.3.4", features = ["derive"] }
+#       → [package] name = "thermagate", version = "0.2.2",
+#                    edition = "2024"
+#     gh api repos/bikeshedder/thermagate/contents/src/main.rs
+#       → #[derive(Parser)] struct Cli { config_file
+#                                          (default
+#                                          "config.toml"),
+#                                          command }
+#       → #[derive(Subcommand)] enum Command { CanMonitor,
+#                                                DefaultConfig,
+#                                                CheckConfig,
+#                                                Gateway,
+#                                                SetParam(
+#                                                set_param::
+#                                                Args) }
+#     gh api repos/bikeshedder/thermagate/contents/src/
+#         commands/set_param.rs
+#       → #[derive(Parser)] struct Args { device: Device,
+#                                          param: String,
+#                                          value: String,
+#                                          sender: Option<
+#                                          Device> }
+#   This entry is the Rust=163 leader bump that OPENS Axis 108
+#   (MQTT protocol via rumqttc) at 1/0/0.  Pairing Go and
+#   TS-Node bumps will follow at R1020 and R1021 (Go=163
+#   candidates eclipse/paho.mqtt.golang consumers;
+#   TS-Node=163 candidates mqttjs/MQTT.js users).
+#
+#   No completion for `thermagate` ships with Apple zsh
+#   (/usr/share/zsh/*/functions) or Homebrew zsh-completions
+#   (/opt/homebrew/share/zsh/site-functions) — confirmed absent.
+# ============================================================================
+
+_thermagate() {
+    local curcontext="$curcontext" state line ret=1
+    typeset -A opt_args
+
+    _arguments -C \
+        '(- *)'{-h,--help}'[show help]' \
+        '(- *)'{-V,--version}'[show version]' \
+        '1:config file (default config.toml):_files -g "*.toml"' \
+        '2: :_thermagate_commands' \
+        '*::arg:->args' && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                set-param)
+                    _arguments \
+                        '--sender=[spoof sender CAN device]:device:' \
+                        '1:CAN device:' \
+                        '2:parameter name:' \
+                        '3:value:' && ret=0 ;;
+                can-monitor|default-config|check-config|gateway)
+                    _arguments '*: :' && ret=0 ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+(( $+functions[_thermagate_commands] )) ||
+_thermagate_commands() {
+    local -a commands
+    commands=(
+        'can-monitor:continuously decode and print every CAN frame on the bus'
+        'default-config:print the default TOML config to stdout'
+        'check-config:validate the config file against the schema'
+        'gateway:run the full CAN-bus to MQTT/HASS gateway'
+        'set-param:one-shot CAN write to set a heat-pump parameter'
+    )
+    _describe -t commands 'thermagate command' commands
+}
+
+_thermagate "$@"
