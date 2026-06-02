@@ -1,0 +1,339 @@
+#compdef signmykey
+# ============================================================================
+# _signmykey — zsh completion for **signmykey** — signmykeyio/signmykey,
+#               an **automated SSH Certificate Authority** that issues
+#               short-lived OpenSSH user certificates against pluggable
+#               authenticator + principals + signer backends (local
+#               htpasswd / OIDC ROPC / **LDAP** authenticator; local /
+#               LDAP / OIDC / user principals; local file-based or
+#               HashiCorp Vault SSH-CA signer).  Drops into existing
+#               OpenSSH server fleets by configuring `sshd`'s
+#               `TrustedUserCAKeys` to the signmykey CA pubkey, then
+#               clients run `signmykey` once at terminal-session start
+#               to receive a freshly signed `-cert.pub` good for the
+#               configured TTL (default 24h).  Go=171 leader bump
+#               continuing Axis 116 (LDAP / RFC-4511 directory access
+#               protocol) at 2/0/0 via the canonical Go LDAP client
+#               library **github.com/go-ldap/ldap/v3**.
+# ============================================================================
+#
+# UPSTREAM
+#   Repository : https://github.com/signmykeyio/signmykey
+#   Maintainer : signmykey.io / Cyril Mougel  (signmykey.io is the
+#                 maintainer entity; lead developer Cyril Mougel
+#                 maintains it alongside several other Go security-
+#                 tooling projects in the signmykeyio org)
+#   License    : MIT
+#   Stars      : 71
+#   Language   : Go  (spf13/cobra for the CLI surface + spf13/viper
+#                 for YAML config loading + sirupsen/logrus for
+#                 structured logging + the pluggable
+#                 authenticator/principals/signer backend interfaces
+#                 under `builtin/`; ldap auth driver uses the typed
+#                 `go-ldap/ldap/v3` client; the signer talks to
+#                 either a local SSH-CA private key file or an
+#                 upstream HashiCorp Vault SSH-CA-mounted backend
+#                 via the Vault Go client)
+#   Binary     : signmykey
+#   Version    : (rolling release; check `signmykey version`)
+#   Last push  : 2026-05-25
+#
+# WHAT IT IS
+#   `signmykey` is a **two-mode binary**:
+#
+#     • Client mode  (default, no subcommand) — invoked at the
+#       start of a terminal session.  Reads `~/.signmykey.yml`
+#       for the server address + per-user defaults, prompts for
+#       password (or reads the `--password` flag / `SMK_PASSWORD`
+#       env var), optionally reads a one-time TOTP code via
+#       `-o/--otp`, POSTs the user's `~/.ssh/id_*.pub` keys to
+#       the server, and writes the returned signed certificate(s)
+#       back next to each pubkey as `id_*-cert.pub`.  The
+#       `-e/--expired` flag short-circuits the request when an
+#       existing cert is still valid, making `signmykey` safe to
+#       call from a shell init file unconditionally.
+#
+#     • Server mode  (`signmykey server`) — runs as a daemon that
+#       exposes `POST /v1/sign` accepting an `Authorization:
+#       Bearer …` token or a JSON body with username + password
+#       + pubkey, runs the configured authenticator
+#       (local-htpasswd / LDAP-bind / OIDC ROPC), resolves
+#       principals from the configured principals backend
+#       (local / LDAP-group-mapped / OIDC-group-claim-mapped /
+#       user-substring), signs the pubkey via the configured
+#       signer (local SSH-CA private key file / HashiCorp Vault
+#       SSH-CA secret engine), and returns the resulting
+#       certificate.  Configuration via `/etc/signmykey/server.yml`
+#       (overridable with `-c/--cfg`).
+#
+#   The `hash` subcommand is a one-shot helper that prompts for a
+#   plaintext password and prints the bcrypt hash + (optionally)
+#   a TOTP seed + QR-code suitable for pasting into the local
+#   authenticator's htpasswd-style backing file.
+#
+# CLI ARGUMENT GRAMMAR  (verbatim from cmd/{root,server,hash,
+#                       version}.go cobra `Command` registrations
+#                       + `Flags()` / `PersistentFlags()` calls;
+#                       extracted via raw.githubusercontent.com
+#                       fetch of cmd/*.go)
+#
+#   signmykey [SUBCOMMAND] [OPTIONS]
+#
+#   Root command  (client mode — sign your local SSH pubkeys):
+#     -h, --help                     Show help
+#     -c, --cfg <PATH>               Config file
+#                                    [default: ~/.signmykey.yml]
+#     -a, --addr <URL>               Server address
+#                                    [default: http://127.0.0.1:9600/]
+#     -u, --user <USER>              Login user (defaults to the
+#                                    current OS user)
+#     -p, --password <PASS>          Login password (prompted if
+#                                    omitted)
+#     -k, --key <PATH>...            Path(s) to public key(s) to
+#                                    sign (StringSlice, can repeat)
+#                                    [default: ~/.ssh/id_*.pub
+#                                              auto-detected]
+#     -e, --expired                  Sign only if the existing
+#                                    certificate has already
+#                                    expired
+#     -o, --otp <CODE>               One-time TOTP password
+#
+#   Subcommands:
+#     server                         Start the signmykey server
+#                                    daemon
+#         -c, --cfg <PATH>           Server config file
+#                                    [default: /etc/signmykey/
+#                                              server.yml]
+#         -l, --log-format <FMT>     Log format
+#                                    [json, text]
+#                                    [default: json]
+#     hash                           Hash a password for use with
+#                                    the local authenticator
+#                                    (optionally generates a TOTP
+#                                     seed + QR code)
+#     version                        Print version
+#
+# AXIS / CORPUS POSITION
+#   `signmykeyio/signmykey` declares a **direct** dependency on
+#   `github.com/go-ldap/ldap/v3 v3.4.13` in its `go.mod` (verified
+#   via `gh api repos/signmykeyio/signmykey/contents/go.mod`).
+#   The LDAP authenticator at `builtin/authenticator/ldap/` and the
+#   LDAP principals provider at `builtin/principals/ldap/` both
+#   import the typed `*ldap.Conn` /  `ldap.NewSearchRequest(...)` /
+#   `ldap.DialURL(...)` /  `conn.Bind(bindDN, password)` /
+#   `conn.Search(searchRequest)` primitives directly.
+#
+#   `go-ldap/ldap/v3` (`github.com/go-ldap/ldap/v3`) is **THE
+#   canonical Go LDAP client library** — a maintained fork of the
+#   original `gopkg.in/asn1-ber.v1` ASN.1 BER + `gopkg.in/ldap.v3`
+#   that has become the de-facto Go LDAP dependency on
+#   pkg.go.dev.  It exposes:
+#
+#     • Typed `ldap.DialURL(url, opts...)` /  `ldap.Dial(network,
+#       address)` /  `ldap.DialTLS(network, address, config)` typed
+#       connection builders
+#     • Typed `conn.Start()` /  `conn.StartTLS(config)` /
+#       `conn.Close()` connection lifecycle
+#     • Typed bind methods:  `conn.Bind(username, password)` /
+#       `conn.SimpleBind(simpleBindRequest)` /
+#       `conn.UnauthenticatedBind(username)` /  `conn.MD5Bind(...)` /
+#       `conn.DigestMD5Bind(...)` /  `conn.NTLMBind(domain,
+#       username, password)` /  `conn.NTLMChallengeBind(...)` /
+#       `conn.ExternalBind()` /  `conn.GSSAPIBind(...)` /
+#       `conn.SaslBind(...)`
+#     • Typed `ldap.NewSearchRequest(baseDN, scope,
+#       derefAliases, sizeLimit, timeLimit, typesOnly, filter,
+#       attributes, controls)` /
+#       `conn.Search(searchRequest)` /
+#       `conn.SearchWithPaging(searchRequest, pageSize)` /
+#       `conn.SearchAsync(searchRequest, bufferSize)` /
+#       `conn.WhoAmI(controls)` /
+#       `conn.PasswordModify(passwordModifyRequest)` typed
+#       operations
+#     • Typed `ldap.NewAddRequest(dn, controls)` + `.Attribute(t,
+#       vals)` /  `ldap.NewDelRequest(dn, controls)` /
+#       `ldap.NewModifyRequest(dn, controls)` + `.Add(t, vals)` /
+#       `.Replace(t, vals)` /  `.Delete(t, vals)` /  `.Increment(t,
+#       vals)` /  `ldap.NewModifyDNRequest(dn, newRDN, deleteOldRDN,
+#       newSuperior)` /  `conn.Compare(dn, attr, value)` typed
+#       mutation operations
+#     • Typed `ldap.ScopeBaseObject` / `ScopeSingleLevel` /
+#       `ScopeWholeSubtree` / `ScopeChildren` enum
+#     • Typed `ldap.DerefAliasesNever` / `DerefInSearching` /
+#       `DerefFindingBaseObj` / `DerefAlways` enum
+#     • Typed `SearchResult.Entries[].GetAttributeValue(name)` /
+#       `.GetAttributeValues(name)` / `.GetRawAttributeValue(name)`
+#       /  `.GetRawAttributeValues(name)` typed-extraction
+#       helpers
+#     • Typed control support — RFC 2696 Simple Paged Results,
+#       RFC 2891 Server-Side Sort, RFC 4533 Sync, RFC 5805
+#       Transactions, MSAD-specific
+#       `ControlMicrosoftNotification`,
+#       `ControlMicrosoftShowDeleted`,
+#       `ControlMicrosoftServerLinkTTL`,
+#       `ControlDirSync` controls + the typed `ControlBeheraPasswordPolicy`
+#       /  `ControlVChuPasswordMustChange` /  `ControlVChuPasswordWarning`
+#       password-policy controls
+#     • Typed `ldap.Error{ResultCode, Err, Packet}` (the typed
+#       LDAP-result-code envelope wrapping every numeric LDAP
+#       result code with named constants ranging from
+#       `LDAPResultSuccess = 0` through
+#       `LDAPResultStrongAuthRequired = 8` to
+#       `LDAPResultNoSuchObject = 32` to
+#       `LDAPResultInvalidCredentials = 49` to
+#       `LDAPResultSizeLimitExceeded = 4` to
+#       `LDAPResultReferralLimitExceeded = 97`)
+#     • DN parsing + escaping primitives — `ldap.ParseDN(str)` /
+#       `ldap.EscapeFilter(str)` /  `ldap.EscapeDN(str)` /
+#       `ldap.AttributeTypeAndValueToString(atv)` /
+#       `ldap.CompactDN(dn)`
+#
+#   `go-ldap/ldap/v3` is the LDAP client behind essentially
+#   **every Go application that authenticates against an LDAP /
+#   Active Directory directory** in production:
+#
+#     • Authentication platforms — `goauthentik/authentik` (the
+#       SSO portal's Go LDAP outpost), `authelia/authelia` (the
+#       SSO portal's LDAP provider), `gravitational/teleport`
+#       (the identity-aware access proxy's LDAP-AD discoverer for
+#       Windows desktop access), `cert-manager/cert-manager`
+#       (the Kubernetes cert manager's LDAP-backed cluster-issuer
+#       webhook auth), `cloudflare/origin-ca-issuer`,
+#       `1Panel-dev/KubePi`, `koderover/zadig` (the CI/CD
+#       platform's user auth)
+#
+#     • Identity-mgmt servers — `goauthentik/authentik` (the
+#       LDAP outpost provider), `majewsky/portunus` (the self-
+#       contained LDAP-fronted IDM, this very axis's R1047
+#       sibling), `dexidp/dex` (the OIDC federation gateway's
+#       LDAP connector), `Kerberos.io/kerberos-vault` (the
+#       Kerberos-Vault gateway's LDAP back-end)
+#
+#     • Self-hosted Go services with LDAP user directories —
+#       `go-gitea/gitea` (Gitea LDAP authentication), `gravitl/
+#       netmaker` (the WireGuard mesh management UI's LDAP
+#       auth), `grafana/grafana` (the LDAP auth backend),
+#       `kubernetes-sigs/secrets-store-csi-driver` (the
+#       LDAP-backed cluster secret-provider), `pingcap/tidb`
+#       (the TiDB LDAP plugin auth), `nocalhost/nocalhost`
+#       (cloud-native dev platform), `convos-chat/convos`,
+#       `seaweedfs/seaweedfs` (the SeaweedFS user auth),
+#       `Janusec/janusec`, `documize/community`,
+#       `koderover/zadig`, `cookieY/Yearning`,
+#       `mindoc-org/mindoc`, `phachon/mm-wiki`, `iwannay/
+#       jiacrontab`, `dalibo/ldap2pg` (the Postgres LDAP role
+#       sync), `cesanta/docker_auth`, `square/certigo`,
+#       `signmykeyio/signmykey` (this very project; the
+#       automated SSH-CA we're completing), `greenpau/caddy-
+#       security` (the Caddy plugin's LDAP auth)
+#
+#     • Penetration-testing + security-research tools —
+#       `ropnop/go-windapsearch` (the Go port of the famous
+#       Python `windapsearch` Active Directory recon tool),
+#       `nodauf/GoMapEnum` (the multi-protocol user enum + AD
+#       attack tool), `p0dalirius/ExtractBitlockerKeys`
+#       (BitLocker recovery key extraction), `p0dalirius/
+#       ShareHound` (SMB share access-rights mapping for
+#       BloodHound), `Qihoo360/WatchAD2.0`
+#
+#   Verified via:
+#     gh api repos/signmykeyio/signmykey/contents/go.mod
+#       → module github.com/signmykeyio/signmykey
+#       → require github.com/go-ldap/ldap/v3 v3.4.13   (DIRECT)
+#       → require github.com/spf13/cobra ...           (DIRECT)
+#       → require github.com/spf13/viper ...           (DIRECT)
+#     raw.githubusercontent.com signmykeyio/signmykey master
+#         cmd/root.go
+#       → var rootCmd = &cobra.Command{Use: "signmykey",
+#         Short: "A client-server to sign ssh keys"}
+#       → rootCmd.Flags().StringVarP(&clientCfgFile, "cfg", "c",
+#         "~/.signmykey.yml", "config file")
+#       → rootCmd.Flags().StringP("addr", "a",
+#         "http://127.0.0.1:9600/", ...)
+#       → rootCmd.Flags().StringP("user", "u", ...)
+#       → rootCmd.Flags().StringP("password", "p", ...)
+#       → rootCmd.Flags().StringSliceP("key", "k",
+#         client.DefaultSSHKeys, "Path of public key to sign")
+#       → rootCmd.Flags().BoolP("expired", "e", false,
+#         "Sign only if existing key already expired")
+#       → rootCmd.Flags().StringP("otp", "o", "",
+#         "One time password")
+#     raw.githubusercontent.com signmykeyio/signmykey master
+#         cmd/server.go
+#       → import ldapAuth "github.com/signmykeyio/signmykey/
+#         builtin/authenticator/ldap"
+#       → import ldapPrinc "github.com/signmykeyio/signmykey/
+#         builtin/principals/ldap"
+#       → serverCmd.Flags().StringVarP(&serverCfgFile, "cfg", "c",
+#         "/etc/signmykey/server.yml", "config file")
+#       → serverCmd.Flags().StringVarP(&serverLogFormat,
+#         "log-format", "l", "json", "logging format (json/text)")
+#       → authType map: local / ldap / oidcropc authenticator
+#         backends
+#       → principalsType map: local / ldap / oidcropc / user
+#         principal backends
+#       → signerType map: local / vault signer backends
+#     raw.githubusercontent.com signmykeyio/signmykey master
+#         cmd/hash.go
+#       → var hashCmd = &cobra.Command{Use: "hash",
+#         Short: "Hash password to use with local authenticator"}
+#       → bcrypt.GenerateFromPassword(password,
+#         bcrypt.DefaultCost)
+#       → mdp/qrterminal/v3 QR-code TOTP-seed printing
+#
+#   This entry is the Go=171 leader bump that continues Axis 116
+#   (LDAP / RFC-4511 directory access protocol) at 2/0/0
+#   following R1046 _ldap_authz_proxy (Rust=171 OPENED via
+#   elonen/ldap_authz_proxy on inejge/ldap3).  TS-Node=171
+#   closing pair on deck for R1048 via the canonical
+#   `ldapjs` SDK (Mark Cavage's reference Node.js LDAP library
+#   used by every Node.js LDAP consumer including the
+#   passport-ldapauth Passport.js strategy, NPM's
+#   internal LDAP auth, GitLab's Node tooling, and the
+#   `ldap-server-mock` testing harness).
+#
+#   No completion for `signmykey` ships with Apple zsh
+#   (/usr/share/zsh/*/functions) or Homebrew zsh-completions
+#   (/opt/homebrew/share/zsh/site-functions) — confirmed absent.
+# ============================================================================
+
+_signmykey() {
+    local curcontext="$curcontext" state line ret=1
+    typeset -A opt_args
+
+    _arguments -C \
+        '(- *)'{-h,--help}'[show help]' \
+        '(-c --cfg)'{-c,--cfg}'=[client config file (default ~/.signmykey.yml)]:path:_files -g "*.yml *.yaml"' \
+        '(-a --addr)'{-a,--addr}'=[server address (default http://127.0.0.1:9600/)]:url:' \
+        '(-u --user)'{-u,--user}'=[login user (defaults to current OS user)]:user:_users' \
+        '(-p --password)'{-p,--password}'=[login password]:password:' \
+        '*'{-k,--key}'=[path to public key to sign (repeatable)]:path:_files -g "*.pub"' \
+        '(-e --expired)'{-e,--expired}'[sign only if existing key already expired]' \
+        '(-o --otp)'{-o,--otp}'=[one-time TOTP password]:code:' \
+        '1: :->cmd' \
+        '*:: :->args' && ret=0
+
+    case $state in
+        cmd)
+            local -a _smk_cmds=(
+                'server:start the signmykey server daemon'
+                'hash:hash a password for use with the local authenticator'
+                'version:print version'
+            )
+            _describe -t commands 'signmykey command' _smk_cmds && ret=0
+            ;;
+        args)
+            case $words[1] in
+                server)
+                    _arguments \
+                        '(-c --cfg)'{-c,--cfg}'=[server config file (default /etc/signmykey/server.yml)]:path:_files -g "*.yml *.yaml"' \
+                        '(-l --log-format)'{-l,--log-format}'=[log format (default json)]:fmt:(json text)' && ret=0
+                    ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_signmykey "$@"
