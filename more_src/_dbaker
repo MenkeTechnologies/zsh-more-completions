@@ -1,0 +1,142 @@
+#compdef dbaker
+# ============================================================================
+# _dbaker — zsh completion for lofim/dbaker, a Go automatic database
+#            seeder for PostgreSQL (jackc/pgx v5)
+# ============================================================================
+#
+# UPSTREAM
+#   Repository : https://github.com/lofim/dbaker
+#   Author     : lofim
+#   Language   : Go
+#   Module     : dbaker  (built from cmd/dbaker/main.go calling
+#                cobraCommand.Execute)
+#   Binary     : dbaker
+#   Last push  : 2025-08-03
+#
+# WHAT IT IS
+#   dbaker is "an automatic database seeder" — lofim's tool that
+#   inspects a live PostgreSQL instance, builds an intermediate
+#   representation of its table schema (column types, nullability,
+#   PK / FK / UNIQUE constraints), then generates faker-style fake
+#   data and inserts it directly back into the same database.  The
+#   workflow is two-step:  `dbaker introspect` produces the per-
+#   table IR, `dbaker generate` writes N rows of fake data per
+#   table back to the instance.
+#
+# CLI ARGUMENT GRAMMAR  (verbatim from cmd/dbaker/{main,introspect,
+#                       generate}.go spf13/cobra Command tree)
+#   dbaker <SUBCOMMAND> [args...]
+#
+#   Subcommands (with aliases):
+#     introspect | i        Introspect a database for data gen.
+#                           Connects to the live instance and
+#                           writes an intermediate-representation
+#                           file describing each selected table.
+#       -H, --host <HOST>     [REQUIRED] DB host
+#       -P, --port <PORT>     DB port              [default: 5432]
+#       -d, --database <DB>   [REQUIRED] Database name
+#       -u, --username <USER> [REQUIRED] DB user
+#       -p, --password <PASS> [REQUIRED] DB password
+#       -t, --tables <T>...   [REQUIRED] Tables to include in the
+#                             introspection (repeatable / array)
+#
+#     generate   | g        Generate fake data
+#                           Reads the intermediate representation
+#                           and writes the requested number of
+#                           rows straight back into the live
+#                           database.
+#       -H, --host <HOST>     [REQUIRED] DB host
+#       -P, --port <PORT>     DB port              [default: 5432]
+#       -d, --database <DB>   [REQUIRED] Database name
+#       -u, --username <USER> [REQUIRED] DB user
+#       -p, --password <PASS> [REQUIRED] DB password
+#       -s, --size <N>        [REQUIRED] Dataset size — number of
+#                             rows to generate per table
+#       -i, --iterFrom <N>    Iteration index from which to start
+#                             generating unique values (so that a
+#                             second run continues numbering from
+#                             where the first stopped)
+#
+#   Standard cobra auto-flags:
+#     -h, --help            Show help
+#
+# AXIS / CORPUS POSITION
+#   Direct dependency on `github.com/jackc/pgx/v5 v5.7.2` declared
+#   in go.mod — the canonical Go PostgreSQL driver maintained by
+#   Jack Christensen (jackc/pgx).  pgx is the reference Go Postgres
+#   client:  typed `pgx.Conn` / `pgxpool.Pool`, copy protocol via
+#   `Conn.CopyFrom`, prepared-statement cache, LISTEN/NOTIFY,
+#   replication-protocol API, every PostgreSQL type (including
+#   arrays, ranges, composite, hstore, JSON/JSONB) with custom
+#   `Encoder`/`Decoder` implementations, GSSAPI/SCRAM-SHA-256
+#   authentication, and a stdlib-`database/sql` adapter
+#   (`stdlib.OpenDB`) for legacy code paths.  dbaker's
+#   `pkg/adapter/postgresql.go` constructs `pgx.Connect(ctx, dsn)`
+#   from the CLI flags and uses it for both the catalog
+#   introspection (querying `information_schema.columns` +
+#   `pg_constraint`) and the bulk `COPY FROM` write path that
+#   streams generated rows.  Verified via:
+#     gh api repos/lofim/dbaker/contents/go.mod
+#       → github.com/jackc/pgx/v5 v5.7.2
+#       → github.com/spf13/cobra v1.9.1
+#     gh api repos/lofim/dbaker/contents/cmd/dbaker/main.go
+#       → dbakerCommand.AddCommand(newIntrospecCommand(),
+#                                  newGenerateCommand())
+#   This entry is the Go=136 leader bump that continues Axis 81
+#   (PostgreSQL Driver Library) opened at R913 with Rust=
+#   tokio-postgres 0.7 (NikolayS/rpg).
+#
+#   No completion for `dbaker` ships with Apple zsh
+#   (/usr/share/zsh/*/functions) or Homebrew zsh-completions
+#   (/opt/homebrew/share/zsh/site-functions) — confirmed absent.
+# ============================================================================
+
+_dbaker() {
+    local curcontext="$curcontext" state line ret=1
+    typeset -A opt_args
+
+    _arguments -C \
+        '(- *)'{-h,--help}'[show help]' \
+        '1: :_dbaker_commands' \
+        '*::arg:->args' && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                introspect|i)
+                    _arguments \
+                        '(-H --host)'{-H+,--host=}'[DB host (required)]:host:_hosts' \
+                        '(-P --port)'{-P+,--port=}'[DB port (default 5432)]:port:' \
+                        '(-d --database)'{-d+,--database=}'[database name (required)]:database:' \
+                        '(-u --username)'{-u+,--username=}'[DB user (required)]:user:_users' \
+                        '(-p --password)'{-p+,--password=}'[DB password (required)]:password:' \
+                        '*'{-t+,--tables=}'[tables to include (repeatable, required)]:table:' && ret=0 ;;
+                generate|g)
+                    _arguments \
+                        '(-H --host)'{-H+,--host=}'[DB host (required)]:host:_hosts' \
+                        '(-P --port)'{-P+,--port=}'[DB port (default 5432)]:port:' \
+                        '(-d --database)'{-d+,--database=}'[database name (required)]:database:' \
+                        '(-u --username)'{-u+,--username=}'[DB user (required)]:user:_users' \
+                        '(-p --password)'{-p+,--password=}'[DB password (required)]:password:' \
+                        '(-s --size)'{-s+,--size=}'[dataset size, rows to generate (required)]:n:' \
+                        '(-i --iterFrom)'{-i+,--iterFrom=}'[iteration index to start unique values]:n:' && ret=0 ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+(( $+functions[_dbaker_commands] )) ||
+_dbaker_commands() {
+    local -a commands
+    commands=(
+        'introspect:introspect a database for data gen'
+        'i:introspect (alias)'
+        'generate:generate fake data'
+        'g:generate (alias)'
+    )
+    _describe -t commands 'dbaker command' commands
+}
+
+_dbaker "$@"
