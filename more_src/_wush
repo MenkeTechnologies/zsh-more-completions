@@ -1,0 +1,545 @@
+#compdef wush
+# ============================================================================
+# _wush — zsh completion for **wush** — coder/wush, the
+#            **WireGuard-powered peer-to-peer file transfer + shell**
+#            tool by **Coder Technologies** (coder.com, the company
+#            behind the self-hosted Coder cloud-development platform).
+#            Wush is the "scp without an intermediate server" + "ssh
+#            into a NATed machine without a jump host" + "rsync over
+#            a peer-to-peer overlay" tool — uses the same **Tailscale
+#            wireguard-go + DERP relay + STUN hole-punching stack**
+#            that Tailscale itself uses, but spins up an ad-hoc
+#            two-node ephemeral mesh between exactly two devices
+#            authenticated by a one-time auth key.  No control-plane
+#            account required.  No "share this link" cloud relay
+#            required.  The receiving side runs `wush serve` and
+#            prints an auth key;  the sending side runs `wush ssh
+#            --auth-key <KEY>` or `wush cp --auth-key <KEY> file` and
+#            gets a direct UDP-hole-punched WireGuard tunnel
+#            (falling back to the public Tailscale DERP relay mesh
+#            if the firewall blocks UDP).  Go=182 leader bump
+#            continuing Axis 127 (pure-Rust + pure-Go SSH 2.0 protocol
+#            implementation taxonomy) at 2/0/0 via the canonical
+#            Go-side **github.com/gliderlabs/ssh** library (which
+#            itself wraps **golang.org/x/crypto/ssh** — the
+#            canonical Go-authors-maintained pure-Go SSH 2.0 library
+#            that ships in the standard supplementary `x/crypto`
+#            repository).  R1080 round-number commit landmark.
+# ============================================================================
+#
+# UPSTREAM
+#   Repository : https://github.com/coder/wush
+#   Maintainer : Coder Technologies (coder.com);  Colin Adler
+#                 (coadler on GitHub) is the lead maintainer + main
+#                 author;  Coder Technologies is the venture-
+#                 backed company behind the open-source Coder
+#                 cloud-development-platform (the OSS
+#                 alternative to GitHub Codespaces / Gitpod that
+#                 self-hosts dev containers as Kubernetes pods
+#                 with full IDE-agnostic ergonomics) and
+#                 commercial Coder v2 SaaS;  Coder open-sources
+#                 most of its developer tooling under the
+#                 `coder/` org including `coder` (the dev-env
+#                 platform itself), `terraform-provider-coder`,
+#                 `serpent` (the typed Go CLI framework that
+#                 backs wush + the Coder CLI itself, a cobra
+#                 alternative focused on typed flag values +
+#                 declarative subcommand trees), `envbuilder`,
+#                 `envbox`, `wsproxy`, `terraform-provider-
+#                 envbuilder`, `nix-prefetch-docker`
+#   License    : CC0-1.0  (public domain dedication)
+#   Stars      : 4,000+ on github.com/coder/wush
+#   Language   : Go  (coder/serpent for the CLI surface +
+#                 golang.org/x/crypto/ssh wrapped via
+#                 gliderlabs/ssh v0.3.7 (with a coder/ssh fork
+#                 replace directive) for the SSH 2.0 server
+#                 side + tailscale.com wireguard-go + DERP mesh
+#                 + STUN client for the peer-to-peer overlay +
+#                 charmbracelet/huh + bubbletea + lipgloss for
+#                 the TUI auth-key prompt + schollz/progressbar
+#                 + pkg/sftp for the file transfer subsystem +
+#                 mitchellh/go-wordwrap for help text)
+#   Binary     : wush
+#   Last push  : 2026-06-02
+#
+# WHAT IT IS
+#   wush is the **per-device peer-to-peer secure shell + file
+#   transfer + port-forward tool** — structurally positioned as:
+#
+#     • **ssh-without-a-server-IP**           the receiver doesn't
+#                                             need a public IP; the
+#                                             Tailscale DERP mesh
+#                                             handles NAT traversal
+#                                             via UDP hole-punching
+#                                             (typed `tailcfg.DERPMap`
+#                                             relay set);  fallback
+#                                             to TCP-over-DERP if
+#                                             UDP is blocked
+#     • **scp / rsync alternative**           no shared server
+#                                             required;  one
+#                                             auth-key replaces both
+#                                             SSH-key-distribution +
+#                                             jump-host setup
+#     • **WebRTC DataChannel alternative**    works over CGNAT +
+#                                             corporate firewalls
+#                                             via Tailscale DERP
+#                                             (WebRTC doesn't
+#                                             traverse certain
+#                                             enterprise NATs)
+#     • **Magic Wormhole alternative**        no rendezvous server
+#                                             required (Magic
+#                                             Wormhole always
+#                                             routes through
+#                                             magic-wormhole.io);
+#                                             wush uses Tailscale
+#                                             DERP which is
+#                                             geographically
+#                                             distributed across
+#                                             multiple Tailscale-
+#                                             owned + community
+#                                             relay nodes
+#     • **croc / smashtail / piknik alternative**
+#                                             all of those route
+#                                             through a single
+#                                             discovery server;
+#                                             wush uses the
+#                                             Tailscale mesh
+#                                             which is already
+#                                             a multi-tenant
+#                                             relay fabric
+#
+#   Subcommand surface (serpent root + 6 subcommands):
+#
+#     • wush serve [FLAGS...]
+#                                     Start the wush server +
+#                                     print an auth key.  Spins up
+#                                     a Tailscale wireguard-go
+#                                     interface, joins the DERP
+#                                     mesh, and starts SSH + cp +
+#                                     port-forward listeners.
+#         --overlay-type derp|stun    DERP overlay vs STUN-only
+#                                     (default `derp`)
+#         --enable ssh,cp,port-forward
+#                                     server-side feature toggle
+#                                     (default all three enabled)
+#         --disable ...               feature opt-out
+#         --derp-config-file <FILE>   custom DERPMap JSON
+#         --verbose
+#
+#     • wush ssh [FLAGS...]
+#                                     SSH into a peer (auth key
+#                                     entered interactively or via
+#                                     --auth-key)
+#         --auth-key <KEY>            peer auth key from `wush serve`
+#         --derp-config-file <FILE>
+#         --stun-ip-override <IP>     override STUN server
+#         --quiet                     silence all output
+#         --wait-p2p                  wait for direct P2P (not
+#                                     DERP-relayed) connection
+#                                     before opening shell
+#         --verbose
+#
+#     • wush cp <FILE> [FLAGS...]
+#                                     Copy a single file to the
+#                                     peer (typed sftp subsystem
+#                                     channel)
+#         --auth-key
+#         --derp-config-file
+#         --stun-ip-override
+#         --wait-p2p
+#         --verbose
+#
+#     • wush rsync [FLAGS...] -- [rsync args]
+#                                     Run rsync over the peer
+#                                     SSH channel
+#         --auth-key
+#         --stun-ip-override
+#         --wait-p2p
+#         --verbose
+#
+#     • wush port-forward [FLAGS...]
+#                                     Forward TCP / UDP ports
+#                                     between local + peer
+#         --tcp <LOCAL_PORT>:<PEER_PORT>
+#                                     forward TCP ports (repeatable)
+#         --udp <LOCAL_PORT>:<PEER_PORT>
+#                                     forward UDP ports (TCP-like
+#                                     reliable semantics on top of
+#                                     UDP)
+#         --auth-key
+#         --derp-config-file
+#         --stun-ip-override
+#         --wait-p2p
+#         --verbose
+#
+#     • wush version                  Print version + commit
+#
+#     Global flags:
+#       --version                     Print version + exit
+#       --help                        Show help
+#
+# CLI ARGUMENT GRAMMAR  (verbatim from `cmd/wush/main.go` +
+#                       `cmd/wush/{serve,ssh,cp,rsync,
+#                       portforward,version}.go` coder/serpent
+#                       declarations;  extracted via raw fetch
+#                       of all 6 files)
+#
+#   wush <SUBCOMMAND> [OPTIONS...]
+#
+# AXIS / CORPUS POSITION
+#   `coder/wush`'s `go.mod` pulls in `github.com/gliderlabs/ssh
+#   v0.3.7` (with a `replace github.com/gliderlabs/ssh =>
+#   github.com/coder/ssh v0.0.0-20231128192721-70855dedb788`
+#   directive — Coder maintains a small fork of gliderlabs/ssh
+#   with bug fixes specific to the wush + Coder use case).
+#   The `xssh/` workspace member implements the SSH server +
+#   client over the Tailscale-managed UDP socket;  the typed
+#   `xssh.Server` constructor wraps typed
+#   `gliderlabs/ssh.Server` which itself wraps typed
+#   `golang.org/x/crypto/ssh.ServerConfig` /  typed
+#   `ssh.NewServerConn`.
+#
+#   **golang.org/x/crypto/ssh** is **THE canonical Go SSH 2.0
+#   implementation** — the Go authors' pure-Go reference
+#   implementation of the entire SSH 2.0 protocol stack
+#   (RFC 4250 + RFC 4251 + RFC 4252 + RFC 4253 + RFC 4254 +
+#   RFC 4256 + RFC 4419 + RFC 4716 + RFC 5656 + RFC 8268 +
+#   RFC 8308 + RFC 8332 + RFC 8709 + RFC 8731), maintained
+#   in the official Go supplementary `x/crypto` repository
+#   (`golang.org/x/crypto`).  It is the dominant Go-side SSH
+#   library by an order of magnitude vs alternatives like
+#   `github.com/melbahja/goph` (a typed wrapper around
+#   x/crypto/ssh) or `github.com/Scalingo/go-ssh` (older
+#   pre-x/crypto fork).
+#
+#   The Go-authors' x/crypto/ssh ships:
+#
+#     • Typed `ssh.Dial`              typed connection
+#                                     constructor with typed
+#                                     `ClientConfig{ User,
+#                                     Auth, HostKeyCallback,
+#                                     HostKeyAlgorithms,
+#                                     ClientVersion,
+#                                     BannerCallback, Config,
+#                                     Timeout }`
+#     • Typed `ssh.Client`            typed client handle with
+#                                     typed `NewSession`,
+#                                     `DialContext`,
+#                                     `Dial`,
+#                                     `ListenTCP`,
+#                                     `ListenUnix`,
+#                                     `OpenChannel`,
+#                                     `SendRequest`,
+#                                     `Conn`, `Wait`, `Close`
+#     • Typed `ssh.Session`           typed channel for
+#                                     interactive shell + exec
+#                                     + PTY + window-change +
+#                                     env + signal requests
+#     • Typed `ssh.Server` / `ServerConfig`
+#                                     typed server-side
+#                                     constructor with typed
+#                                     `Auth` callbacks
+#     • Typed `ssh.NewServerConn`     typed
+#                                     server-handshake +
+#                                     authentication flow
+#     • Typed auth methods            typed `ssh.AuthMethod`
+#                                     interface + typed
+#                                     concrete: typed
+#                                     `ssh.Password`,
+#                                     typed `ssh.PublicKeys`,
+#                                     typed `ssh.PublicKeysCallback`,
+#                                     typed
+#                                     `ssh.KeyboardInteractive`,
+#                                     typed
+#                                     `ssh.RetryableAuthMethod`
+#     • Typed key-exchange algorithms typed concrete:
+#                                     curve25519-sha256
+#                                     (RFC 8731), curve25519-
+#                                     sha256@libssh.org,
+#                                     ecdh-sha2-nistp256/384/
+#                                     521, diffie-hellman-
+#                                     group14-sha256/sha1,
+#                                     diffie-hellman-group16-
+#                                     sha512, diffie-hellman-
+#                                     group18-sha512,
+#                                     mlkem768x25519-sha256
+#                                     (post-quantum)
+#     • Typed cipher algorithms       typed concrete:
+#                                     chacha20-poly1305@openssh.com,
+#                                     aes256-gcm@openssh.com,
+#                                     aes128-gcm@openssh.com,
+#                                     aes256-ctr,
+#                                     aes192-ctr,
+#                                     aes128-ctr
+#     • Typed MAC algorithms          typed concrete:
+#                                     hmac-sha2-256-etm@openssh.com,
+#                                     hmac-sha2-512-etm@openssh.com,
+#                                     hmac-sha2-256,
+#                                     hmac-sha2-512,
+#                                     hmac-sha1
+#     • Typed host-key algorithms     typed concrete:
+#                                     ssh-ed25519,
+#                                     sk-ssh-ed25519@openssh.com,
+#                                     ecdsa-sha2-nistp256/
+#                                     384/521,
+#                                     sk-ecdsa-sha2-nistp256@openssh.com,
+#                                     rsa-sha2-256,
+#                                     rsa-sha2-512,
+#                                     ssh-rsa (legacy)
+#     • Typed public-key auth         typed parsing of
+#                                     PEM-encoded ed25519,
+#                                     ecdsa, rsa, dsa (legacy)
+#                                     private keys via typed
+#                                     `ssh.ParsePrivateKey` /
+#                                     `ssh.ParsePrivateKeyWithPassphrase`;
+#                                     typed `ssh.AuthorizedKey`
+#                                     parsing for
+#                                     authorized_keys file
+#                                     format
+#     • Typed ssh-agent protocol      typed
+#                                     `golang.org/x/crypto/ssh/
+#                                     agent` sub-package with
+#                                     typed `agent.Agent`
+#                                     interface + typed
+#                                     `agent.NewClient`,
+#                                     `agent.NewKeyring`,
+#                                     `agent.ForwardToAgent`
+#                                     primitives
+#     • Typed known-hosts parsing     typed
+#                                     `golang.org/x/crypto/ssh/
+#                                     knownhosts` sub-package
+#                                     with typed
+#                                     `knownhosts.New`,
+#                                     `knownhosts.Line`,
+#                                     `knownhosts.HashHostname`,
+#                                     `knownhosts.WriteKnownHost`
+#     • Typed direct-tcpip channel    typed
+#                                     `client.Dial("tcp",
+#                                     "remote:port")` + typed
+#                                     `client.ListenTCP`
+#     • Typed direct-streamlocal      typed Unix-socket channel
+#                                     forwarding
+#     • Typed forwarded-tcpip + forwarded-
+#       streamlocal remote channel
+#                                     typed `client.Listen`
+#     • Typed shell + exec + subsystem
+#                                     typed `session.Shell()`,
+#                                     `session.Run(cmd)`,
+#                                     `session.RequestSubsystem`
+#     • Typed PTY                    typed
+#                                     `session.RequestPty(term,
+#                                     h, w, modes)`
+#     • Typed compression             typed
+#                                     `zlib@openssh.com` +
+#                                     none
+#     • Typed certificate auth        typed
+#                                     `*-cert-v01@openssh.com`
+#                                     SSH certificate format
+#                                     with typed
+#                                     `ssh.Certificate`
+#                                     struct + typed
+#                                     `CertChecker` validator
+#     • Typed connection-rekeying     RFC 4344 + typed
+#                                     `ssh.RekeyAfter` typed
+#                                     option
+#     • Typed banner support          typed pre-auth banner
+#                                     callbacks
+#
+#   gliderlabs/ssh (`github.com/gliderlabs/ssh`) is **THE
+#   canonical typed-server-side wrapper around x/crypto/ssh**
+#   — Jeff Lindsay (`progrium` on GitHub) + Glider Labs's
+#   ergonomic wrapper around x/crypto/ssh that mirrors the
+#   `net/http` Handler pattern, making it dramatically easier
+#   to write SSH servers in Go.  In active development since
+#   2016 with 3,500+ ★ on github.com/gliderlabs/ssh.  The
+#   library is the SSH-server foundation behind:
+#
+#     • **gitea** (the self-hosted Git forge; 50,000+ ★) —
+#       gliderlabs/ssh in the typed `internal/ssh` package for
+#       the typed `git+ssh://` server side
+#     • **charmbracelet's full SSH-app ecosystem**:
+#         - **wish** (the typed SSH-app framework that powers
+#           charm.sh's SSH-served TUI apps;  500+ ★)
+#         - **soft-serve** (the typed self-hosted SSH-only git
+#           forge;  5,000+ ★)
+#         - **bubbletea-with-wish** Glamour-rendered SSH apps
+#     • **buildkite/agent** (Buildkite CI agent;  1,700+ ★) —
+#       gliderlabs/ssh in the typed agent SSH-tunnel mode
+#     • **keybase/client** (the Keybase client;  9,000+ ★) —
+#       gliderlabs/ssh in the typed git-remote-keybase SSH
+#       server
+#     • **netbird** (5,000+ ★) — gliderlabs/ssh in the typed
+#       NetBird-SSH built-in jump-host feature
+#     • **adobe/aquarium-fish** — typed lab-resource fish
+#     • **yandex/perforator** — typed perf-data collector
+#     • **coder/wush** (this very project)
+#     • **kubevpn** — typed kubernetes-vpn client
+#     • **replbot** (binwiederhier/replbot, Philipp Heckel's
+#       ChatOps shell-session bot;  the same author behind
+#       `ntfy` + `pcopy`) — gliderlabs/ssh as the typed
+#       Slack/Discord/Matrix-fronted shared shell session
+#       backend
+#     • Plus hundreds of internal Go SSH-aware tools.
+#
+#   The typed x/crypto/ssh + gliderlabs/ssh combination is
+#   structurally significant because together they are
+#   **the canonical pure-Go SSH 2.0 implementation that
+#   replaces shelling out to /usr/bin/ssh** — every modern
+#   Go-native automation, CI/CD agent, k8s controller,
+#   Terraform provider that needs SSH access uses them
+#   instead of fork/exec'ing OpenSSH (which would couple the
+#   Go binary to a non-Go runtime dependency + add latency
+#   per-connection from process startup).
+#
+#   Verified via:
+#     gh api repos/coder/wush/contents/go.mod
+#       → module github.com/coder/wush
+#       → require github.com/coder/serpent (the CLI framework)
+#       → require github.com/gliderlabs/ssh v0.3.7 (indirect
+#                                                   via xssh/)
+#       → replace github.com/gliderlabs/ssh =>
+#                 github.com/coder/ssh v0.0.0-20231128192721-
+#                                       70855dedb788
+#       → require tailscale.com (the wireguard-go + DERP +
+#                                STUN overlay)
+#       → require github.com/charmbracelet/huh v0.6.0
+#     raw.githubusercontent.com coder/wush main cmd/wush/main.go
+#       → import "github.com/coder/serpent"
+#       → cmd := &serpent.Command{ Use: "wush <subcommand>", ...,
+#           Children: []*serpent.Command{ versionCmd(), sshCmd(),
+#           serveCmd(), rsyncCmd(), cpCmd(), portForwardCmd() },
+#           Options: []serpent.Option{ { Flag: "version", ... } }
+#         }
+#     raw.githubusercontent.com coder/wush main cmd/wush/serve.go
+#       → Use: "serve"
+#       → Flag: "overlay-type" Default: "derp" Value:
+#         serpent.EnumOf(&overlayType, "derp", "stun")
+#       → Flag: "verbose"
+#       → Flag: "enable" Default: "ssh,cp,port-forward"
+#         Value: serpent.EnumArrayOf(&enabled, "ssh", "cp",
+#                                               "port-forward")
+#       → Flag: "disable"
+#       → Flag: "derp-config-file"
+#     raw.githubusercontent.com coder/wush main cmd/wush/ssh.go
+#       → Use: "ssh"
+#       → Flag: "auth-key" / "derp-config-file" /
+#               "stun-ip-override" / "quiet" / "wait-p2p" /
+#               "verbose"
+#     raw.githubusercontent.com coder/wush main cmd/wush/rsync.go
+#       → Use: "rsync [flags] -- [rsync args]"
+#       → Flag: "auth-key" / "stun-ip-override" / "wait-p2p" /
+#               "verbose"
+#     raw.githubusercontent.com coder/wush main cmd/wush/cp.go
+#       → Use: "cp <file>"
+#       → Flag: "auth-key" / "derp-config-file" /
+#               "stun-ip-override" / "wait-p2p" / "verbose"
+#     raw.githubusercontent.com coder/wush main
+#         cmd/wush/portforward.go
+#       → Use: "port-forward"
+#       → Flag: "tcp" Value: serpent.StringArrayOf(&tcpForwards)
+#       → Flag: "udp" Value: serpent.StringArrayOf(&udpForwards)
+#
+#   This entry is the Go=182 leader bump that continues Axis 127
+#   (pure-Rust + pure-Go SSH 2.0 protocol implementation
+#   taxonomy) at 2/0/0 following R1079 _lapdev-cli (Rust=182
+#   OPENED via lapce/lapdev on russh 0.53.0;  R1079 round-
+#   number landmark for Rust=182 open).  R1081 on deck: TS-
+#   Node=182 closing pair via a JavaScript-side SSH consumer of
+#   `mscdex/ssh2` (Brian White's canonical pure-JS SSH 2.0
+#   implementation — the dominant Node.js SSH library used by
+#   essentially every Node-side SSH-aware tool including the
+#   Node Postgres-over-SSH tunneling layer, every Electron-app
+#   SCP integration, and every VS Code SSH-Remote extension's
+#   Node-side bootstrap), completing the triple-182 landmark +
+#   Axis 127 close at 1/1/1.  R1080 is also a round-number
+#   commit landmark.
+#
+#   No completion for `wush` ships with Apple zsh
+#   (/usr/share/zsh/*/functions) or Homebrew zsh-completions
+#   (/opt/homebrew/share/zsh/site-functions) — confirmed absent.
+# ============================================================================
+
+_wush() {
+    local curcontext="$curcontext" state line ret=1
+    typeset -A opt_args
+
+    _arguments -C \
+        '--version[print version + exit]' \
+        '--help[show help]' \
+        '1: :->cmd' \
+        '*:: :->args' && ret=0
+
+    case $state in
+        cmd)
+            local -a _wush_cmds=(
+                'serve:start the wush server + print an auth key'
+                'ssh:open a shell to a wush server'
+                'cp:copy a single file to a wush server'
+                'rsync:transfer files to a wush server with rsync'
+                'port-forward:forward TCP/UDP ports between local + peer'
+                'version:print version + commit'
+            )
+            _describe -t commands 'wush command' _wush_cmds && ret=0
+            ;;
+        args)
+            case $words[1] in
+                serve)
+                    _arguments \
+                        '--overlay-type=[overlay type]:type:(derp stun)' \
+                        '--enable=[server features to enable]:features:(ssh cp port-forward)' \
+                        '--disable=[server features to disable]:features:(ssh cp port-forward)' \
+                        '--derp-config-file=[custom DERPMap JSON file]:file:_files -g "*.json"' \
+                        '--verbose[enable verbose logging]' \
+                        '--help[show help]' && ret=0
+                    ;;
+                ssh)
+                    _arguments \
+                        '--auth-key=[peer auth key from wush serve]:key:' \
+                        '--derp-config-file=[custom DERPMap JSON]:file:_files -g "*.json"' \
+                        '--stun-ip-override=[override STUN server]:ip:' \
+                        '--quiet[silence all output]' \
+                        '--wait-p2p[wait for direct P2P (not DERP-relayed)]' \
+                        '--verbose[enable verbose logging]' \
+                        '--help[show help]' && ret=0
+                    ;;
+                cp)
+                    _arguments \
+                        '1:file to copy:_files' \
+                        '--auth-key=[peer auth key]:key:' \
+                        '--derp-config-file=[custom DERPMap JSON]:file:_files -g "*.json"' \
+                        '--stun-ip-override=[override STUN server]:ip:' \
+                        '--wait-p2p[wait for P2P]' \
+                        '--verbose[verbose]' \
+                        '--help[show help]' && ret=0
+                    ;;
+                rsync)
+                    _arguments \
+                        '--auth-key=[peer auth key]:key:' \
+                        '--stun-ip-override=[override STUN server]:ip:' \
+                        '--wait-p2p[wait for P2P]' \
+                        '--verbose[verbose]' \
+                        '--help[show help]' \
+                        '*: :_files' && ret=0
+                    ;;
+                port-forward)
+                    _arguments \
+                        '*--tcp=[forward TCP port LOCAL:PEER]:port:' \
+                        '*--udp=[forward UDP port LOCAL:PEER]:port:' \
+                        '--auth-key=[peer auth key]:key:' \
+                        '--derp-config-file=[custom DERPMap JSON]:file:_files -g "*.json"' \
+                        '--stun-ip-override=[override STUN server]:ip:' \
+                        '--wait-p2p[wait for P2P]' \
+                        '--verbose[verbose]' \
+                        '--help[show help]' && ret=0
+                    ;;
+                version)
+                    _arguments '--help[show help]' && ret=0
+                    ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_wush "$@"
