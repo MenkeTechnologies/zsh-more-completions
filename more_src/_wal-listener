@@ -1,0 +1,301 @@
+#compdef wal-listener
+# =============================================================================
+# wal-listener — ihippik's PostgreSQL Write-Ahead-
+#   Log streamer that subscribes to a Postgres
+#   LOGICAL REPLICATION SLOT (via the standard
+#   `pgoutput` logical-decoding plugin) and
+#   re-publishes the resulting per-row INSERT /
+#   UPDATE / DELETE events to a configurable
+#   downstream MESSAGE BROKER.  Implements the
+#   TRANSACTIONAL OUTBOX pattern at the database
+#   layer: every event is published exactly when
+#   (and in the same logical order as) the
+#   underlying transaction commits in Postgres,
+#   without requiring application code to write
+#   to an outbox table.  Go=102 leader bump
+#   continuing Axis 47 (Apache Kafka Client) at
+#   the Go pole, opened by R777
+#   `_kafka-delta-ingest` (Rust=102, rdkafka).
+#
+# AXIS 47 — APACHE KAFKA CLIENT — GO POLE
+# ========================================
+# wal-listener's Kafka publisher backend uses the
+# canonical pure-Go Kafka client `IBM/sarama`
+# (was `Shopify/sarama` before the LinkedIn ->
+# IBM transition in 2023; IBM now maintains the
+# library after Shopify donated it):
+#   - go.mod direct dep            : github.com/IBM/sarama v1.45.2
+#   - publisher driver path         : internal/publisher/kafka.go
+#   - publisher type config key     : `publisher.type: kafka`
+#   - TLS knobs                     : `enable_tls`, `client_cert`,
+#                                     `client_key`, `ca_cert`
+# Other Axis 47 implementations across the corpus:
+#   - Rust       : rdkafka (R777, kafka-delta-
+#                  ingest) — FFI shim over
+#                  librdkafka, fully async
+#   - Go         : IBM/sarama (THIS ROUND, wal-
+#                  listener) — pure-Go Kafka
+#                  protocol implementation
+#   - TS-Node    : kafkajs (R779 will close) —
+#                  pure-JS Kafka protocol
+#
+# Sarama (IBM/sarama, 12,487 stars on GitHub)
+# implements the Kafka wire protocol verbatim in
+# Go without librdkafka FFI.  Distinguishes from
+# `confluent-kafka-go` (librdkafka cgo wrapper),
+# `segmentio/kafka-go` (alternative pure-Go), and
+# `twmb/franz-go` (newer pure-Go covering 0.8.0
+# through 4.2+).  Sarama is the oldest and most
+# entrenched pure-Go Kafka client.
+#
+# Distinguishing wal-listener from other corpus
+# tools that publish change-data-capture events
+# (e.g. Nextdoor/pg-bifrost streams PG WAL to
+# Kinesis/S3/RabbitMQ; cloud-native CDC like
+# Debezium streams to multiple brokers; AWS DMS
+# streams to Kinesis/MSK; pgsync streams to
+# Elasticsearch) by:
+#   - PURE-GO LOGICAL DECODING — speaks the
+#     Postgres logical replication protocol
+#     directly via `jackc/pgx` v3.6.2+; no
+#     server-side decoder plugin install
+#     required beyond `pgoutput` (shipped with
+#     Postgres 10+)
+#   - MULTI-BROKER FROM A SINGLE BINARY — same
+#     binary publishes to KAFKA / NATS
+#     JetStream / RabbitMQ / Google Pub/Sub
+#     via `publisher.type:` switch.  No build-
+#     time flag, no per-broker variant.
+#     Direct deps:
+#       * IBM/sarama v1.45.2          (Kafka)
+#       * nats-io/nats.go v1.51.0     (NATS)
+#       * rabbitmq/amqp091-go v1.10.0 (RabbitMQ)
+#       * cloud.google.com/go/pubsub  (Pub/Sub)
+#   - EVENT SCHEMA FIXED — every published
+#     event has the shape:
+#       {
+#         ID:        uuid.UUID
+#         Schema:    string
+#         Table:     string
+#         Action:    "insert"|"update"|"delete"
+#         Data:      map[string]any  (new row)
+#         DataOld:   map[string]any  (old row)
+#         EventTime: time.Time       (commit ts)
+#       }
+#     No application-level schema customisation
+#     surface; downstream consumers see uniform
+#     JSON events keyed by `schema_table`
+#   - AT-LEAST-ONCE SEMANTICS — messages are
+#     published at least once.  Downstream
+#     consumers must dedupe on `ID` if exactly-
+#     once is required
+#   - PARTITION KEY FROM TABLE COLUMN — Kafka-
+#     only `messageKeyFrom` config selects which
+#     row column to use as the Kafka message key
+#     (and therefore as the partition selector).
+#     Defaults to the table name (single-
+#     partition per table)
+#   - TOPIC MAPPING — `topicsMap:` in config
+#     remaps default `prefix + schema_table`
+#     topic names to user-specified targets.
+#     Useful for routing multi-schema databases
+#     into a flatter topic taxonomy
+#   - FILTER BY TABLE + ACTION — `filter.tables`
+#     limits replication to specific tables and
+#     specific actions (insert/update/delete) per
+#     table.  Reduces broker load when only a
+#     subset of write traffic is interesting
+#   - SLOT-NAMED CONSUMER STATE — `listener.
+#     slotName` names the Postgres replication
+#     slot.  Slot state persists across restarts
+#     so the listener resumes from the last
+#     committed LSN.  Postgres will retain WAL
+#     for any active slot, so an abandoned slot
+#     can fill the disk — operators must drop
+#     unused slots with `pg_drop_replication_
+#     slot()`
+#   - HEARTBEAT + REFRESH-CONNECTION — `listener.
+#     heartbeatInterval` (10s default) sends
+#     periodic standby status updates so
+#     Postgres knows the slot is alive.
+#     `listener.refreshConnection` (30s default)
+#     forces a connection-recycle cadence to
+#     avoid stale TCP sessions
+#   - SENTRY + PROMETHEUS BUILT-IN — `monitoring.
+#     sentryDSN` (optional, ENV-overridable)
+#     forwards panics + slog errors to Sentry.
+#     `monitoring.promAddr` (default `:2112`)
+#     exposes Prometheus metrics endpoint with
+#     event counts, slot LSN, broker publish
+#     latency
+#   - SLOG-STRUCTURED LOGS — `logger.level` /
+#     `logger.fmt` (json|text) configure
+#     structured logging via Go 1.21+ stdlib
+#     `log/slog`
+#   - TLS TO POSTGRES + TO KAFKA — `database.
+#     enableTLS` + `database.sslMode` (require|
+#     verify-ca|verify-full) for the upstream
+#     side; `publisher.enable_tls` + `client_
+#     cert` + `client_key` + `ca_cert` for the
+#     Kafka side
+#   - K8S READINESS — `listener.serverPort`
+#     (optional, often `80`) exposes liveness /
+#     readiness HTTP endpoints for Kubernetes
+#     probe integration
+#   - URFAVE/CLI FRAMEWORK — the CLI surface is
+#     intentionally minimal (one flag,
+#     `--config`).  All operational tuning
+#     happens in the YAML config file —
+#     consistent with Kubernetes-style
+#     deployment where the binary is
+#     immutable and config is mounted as a
+#     ConfigMap
+#
+# CRITICAL DIRECT DEPENDENCIES (from go.mod):
+#   - github.com/IBM/sarama v1.45.2
+#                              — pure-Go Kafka
+#                                client
+#                                [THIS IS THE
+#                                 AXIS 47 KAFKA
+#                                 LIBRARY]
+#   - github.com/nats-io/nats.go v1.51.0
+#                              — NATS client
+#                                (alternative
+#                                publisher)
+#   - github.com/rabbitmq/amqp091-go v1.10.0
+#                              — RabbitMQ AMQP
+#                                0.9.1 client
+#   - cloud.google.com/go/pubsub v1.50.2
+#                              — GCP Pub/Sub
+#                                client
+#   - github.com/jackc/pgx v3.6.2+incompatible
+#                              — PostgreSQL
+#                                driver
+#                                (logical
+#                                replication
+#                                support)
+#   - github.com/urfave/cli/v2 v2.27.7
+#                              — CLI framework
+#   - github.com/spf13/viper v1.21.0
+#                              — config loader
+#                                (YAML + env)
+#   - github.com/asaskevich/govalidator
+#                              — config
+#                                validation
+#   - github.com/prometheus/client_golang
+#                v1.23.2       — metrics
+#                                exporter
+#   - github.com/goccy/go-json v0.10.6
+#                              — fast JSON
+#                                encoder
+#                                (event
+#                                serialisation)
+#
+# Go 1.26.2+ MSRV per go.mod `go 1.26.2`.
+#
+# UPSTREAM:
+#   * Source             : https://github.com/ihippik/wal-listener
+#   * Sarama (Kafka)     : https://github.com/IBM/sarama
+#   * pgoutput plugin    : https://www.postgresql.org/docs/current/protocol-logical-replication.html
+#   * License            : Apache-2.0
+#   * Maintainer         : ihippik
+#
+# INSTALL:
+#   # From source
+#   go install github.com/ihippik/wal-listener/v2/cmd/wal-listener@latest
+#
+#   # Docker
+#   docker pull ihippik/wal-listener:latest
+#
+# USAGE EXAMPLES:
+#
+#   # Run with default config.yml
+#   wal-listener
+#
+#   # Run with explicit config path
+#   wal-listener --config /etc/wal-listener/config.yml
+#
+#   # Short form
+#   wal-listener -c /etc/wal-listener/config.yml
+#
+#   # Print version and exit
+#   wal-listener --version
+#
+#   # Help
+#   wal-listener --help
+#
+# MINIMAL CONFIG (Kafka publisher):
+#
+#   # /etc/wal-listener/config.yml
+#   listener:
+#     serverPort: 80
+#     slotName: events_slot
+#     refreshConnection: 30s
+#     heartbeatInterval: 10s
+#     filter:
+#       tables:
+#         orders:
+#           - insert
+#           - update
+#         users:
+#           - insert
+#     topicsMap:
+#       public_orders: "events.orders"
+#       public_users:  "events.users"
+#   logger:
+#     level: info
+#     fmt: json
+#   database:
+#     host: pg.local
+#     port: 5432
+#     name: app_db
+#     user: replication_user
+#     password: ${DB_PASSWORD}
+#     debug: false
+#     enableTLS: true
+#     sslMode: "verify-full"
+#   publisher:
+#     type: kafka                       # <- Axis 47 / sarama backend
+#     address: broker:9094
+#     messageKeyFrom: order_id
+#     enable_tls: true
+#     client_cert: "/etc/kafka/cert.pem"
+#     client_key:  "/etc/kafka/key.pem"
+#     ca_cert:     "/etc/kafka/ca.pem"
+#     topic: "wal_listener"
+#     topicPrefix: "cdc."
+#   monitoring:
+#     sentryDSN: ""
+#     promAddr: ":2112"
+#
+# POSTGRES PREREQUISITES:
+#
+#   # In postgresql.conf:
+#   wal_level = logical
+#   max_replication_slots = 10
+#   max_wal_senders = 10
+#
+#   # In pg_hba.conf: allow replication
+#   host    replication     replication_user        0.0.0.0/0       scram-sha-256
+#
+#   # Create slot (or let wal-listener auto-create on first run)
+#   SELECT pg_create_logical_replication_slot('events_slot', 'pgoutput');
+#
+#   # Create publication that wal-listener subscribes to
+#   CREATE PUBLICATION events FOR TABLE orders, users;
+#
+# OPTIONS (sourced directly from
+# https://github.com/ihippik/wal-listener/blob/master/cmd/wal-listener/main.go):
+#
+# -----------------------------------------------------------------------------
+
+local curcontext="$curcontext" state line ret=1
+typeset -A opt_args
+
+_arguments -C \
+    '(- *)'{-h,--help}'[show help]' \
+    '(- *)'{-v,--version}'[print only the version]' \
+    '(-c --config)'{-c+,--config=}'[path to YAML config file (default config.yml)]:config:_files -g "*.(yml|yaml)"' \
+    && ret=0
+
+return ret
