@@ -1,0 +1,139 @@
+#compdef shoveljs
+# ============================================================================
+# _shoveljs — zsh completion for Lucas Hanke's shoveljs RabbitMQ
+#             queue-to-queue message mover (amqplib)
+# ============================================================================
+#
+# UPSTREAM
+#   Repository : https://github.com/lucashanke/shoveljs
+#   Author     : Lucas Hanke
+#   License    : MIT
+#   Language   : JavaScript (Node)
+#   Package    : @lucashanke/shoveljs  (npm)
+#   Binary     : shoveljs  (package.json bin: bin/cli.js)
+#   Last push  : 2023-03-22
+#
+# WHAT IT IS
+#   shoveljs is "a CLI to help moving messages from one rabbitmq
+#   queue to another" — a focused operational utility for the
+#   common ops task of draining a quarantine / DLX / parking-lot
+#   queue back into the original processing queue.  It opens a single
+#   AMQP connection, switches the channel into publisher-confirm
+#   mode, walks the origin queue one message at a time via
+#   `channel.get(...)`, re-publishes each to the destination queue
+#   with the original `msg.properties` preserved, acks the source,
+#   and supports an optional per-message delay (back-pressure) and a
+#   message-count limit (partial drains).
+#
+# CLI ARGUMENT GRAMMAR  (verbatim from bin/cli.js yargs builder)
+#   shoveljs move <originQueue> <destinationQueue> [OPTIONS]
+#
+#   Positional arguments:
+#     <originQueue>             Queue to get messages from
+#     <destinationQueue>        Queue the messages should be
+#                               published to
+#
+#   Options:
+#         --ssl                 RabbitMQ connection over SSL
+#                                 [boolean, default: true]
+#                               (set `--no-ssl` for a plain `amqp://`
+#                                connection)
+#     -h, --host <HOST>         RabbitMQ host       [default: localhost]
+#     -P, --port <PORT>         RabbitMQ port       [default: 5672]
+#     -u, --user <USER>         RabbitMQ user       [REQUIRED]
+#     -p, --password <PASS>     RabbitMQ password   [REQUIRED]
+#     -d, --delay <MS>          Delay interval between messages, in
+#                               milliseconds  (optional — when set the
+#                               shovel pauses for <MS> between each
+#                               re-publish, useful for not bursting
+#                               into a small consumer pool)
+#     -l, --limit <N>           Limit of messages to be processed
+#                               (optional — when set the shovel
+#                               stops after <N> messages even if the
+#                               source queue still has more)
+#
+#   Standard yargs auto-flags:
+#         --help                Show help
+#         --version             Show version
+#
+#   Behavior detail:  the connection URL is built as
+#   `amqp${ssl ? 's' : ''}://${user}:${password}@${host}:${port}` —
+#   so `--ssl` flips between `amqps://` and `amqp://`.  When the
+#   message-count reaches `messageCount` (the value reported by the
+#   initial `channel.checkQueue(originQueue)`) or `--limit`, the
+#   shovel resolves and closes the connection.
+#
+# AXIS / CORPUS POSITION
+#   Direct dependency on `amqplib ^0.10.0` declared in package.json —
+#   the canonical Node.js AMQP 0-9-1 client maintained by Michael
+#   Bridgen / squaremo (amqp-node/amqplib), the original
+#   Node.js RabbitMQ client.  amqplib exposes typed Connection,
+#   Channel, ConfirmChannel, exchange/queue declarations, consumer
+#   streams, publisher confirms, and the message-flow primitives
+#   `Channel.get`, `Channel.sendToQueue`, `Channel.ack`, etc.
+#   shoveljs's `bin/cli.js` imports `amqplib` directly, calls
+#   `amqplib.connect(url)`, then `conn.createConfirmChannel()`, and
+#   uses `channel.checkQueue`, `channel.get`, `channel.ack`, and
+#   `channel.sendToQueue` for the move loop.  Verified via:
+#     gh api repos/lucashanke/shoveljs/contents/package.json
+#       → "amqplib": "^0.10.0"
+#     gh api repos/lucashanke/shoveljs/contents/bin/cli.js
+#       → const amqplib = require('amqplib');
+#         amqplib.connect(`amqp${ssl ? 's' : ''}://${user}:...`)
+#         channel.checkQueue(destinationQueue);
+#         channel.sendToQueue(destinationQueue, msg.content,
+#                             msg.properties, callback);
+#   This entry is the TS-Node=126 leader bump that CLOSES Axis 71
+#   (AMQP 0-9-1 / RabbitMQ Client Library) at 1/1/1 three-language
+#   symmetry — pairing Rust=lapin 2.5 (R873 _lazycelery), Go=
+#   rabbitmq/amqp091-go v1.8.1 (R874 _ari-proxy), and TS-Node=
+#   amqplib ^0.10.0 (this entry).  Triple-126 landmark on commit.
+#
+#   No completion for `shoveljs` ships with Apple zsh
+#   (/usr/share/zsh/*/functions) or Homebrew zsh-completions
+#   (/opt/homebrew/share/zsh/site-functions) — confirmed absent.
+# ============================================================================
+
+_shoveljs() {
+    local curcontext="$curcontext" state line ret=1
+    typeset -A opt_args
+
+    _arguments -C \
+        '(- *)--help[show help]' \
+        '(- *)--version[show version]' \
+        '1: :_shoveljs_commands' \
+        '*::arg:->args' && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                move)
+                    _arguments \
+                        ':origin queue:' \
+                        ':destination queue:' \
+                        '--ssl[RabbitMQ connection over SSL (default true)]' \
+                        '--no-ssl[disable SSL (use plain amqp\://)]' \
+                        '(-h --host)'{-h+,--host=}'[RabbitMQ host (default localhost)]:host:_hosts' \
+                        '(-P --port)'{-P+,--port=}'[RabbitMQ port (default 5672)]:port:' \
+                        '(-u --user)'{-u+,--user=}'[RabbitMQ user (REQUIRED)]:user:_users' \
+                        '(-p --password)'{-p+,--password=}'[RabbitMQ password (REQUIRED)]:password:' \
+                        '(-d --delay)'{-d+,--delay=}'[delay interval between messages (ms)]:delay ms:' \
+                        '(-l --limit)'{-l+,--limit=}'[max messages to process]:limit:' \
+                        '(- *)--help[help]' && ret=0 ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+(( $+functions[_shoveljs_commands] )) ||
+_shoveljs_commands() {
+    local -a commands
+    commands=(
+        'move:move messages from one RabbitMQ queue to another'
+    )
+    _describe -t commands 'shoveljs command' commands
+}
+
+_shoveljs "$@"
