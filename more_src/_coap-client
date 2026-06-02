@@ -1,0 +1,154 @@
+#compdef coap-client
+# ============================================================================
+# _coap-client — zsh completion for ryankurte's async Rust CoAP CLI
+# ============================================================================
+#
+# UPSTREAM
+#   Repository : https://github.com/ryankurte/rust-coap-client
+#   Author     : Ryan Kurte (ryan@kurte.nz)
+#   License    : MPL-2.0
+#   Stars      : 7
+#   Language   : Rust
+#   Crate      : coap-client v0.3.1
+#   Binary     : coap-client  (Cargo.toml [[bin]] name, gated on `util` feature)
+#   Last push  : 2024-01-31
+#
+# WHAT IT IS
+#   coap-client is "an(other) async Rust CoAP client" — a tokio-based
+#   command-line utility for interacting with CoAP (Constrained Application
+#   Protocol, RFC 7252) servers.  CoAP is the IoT-focused REST-style
+#   application protocol designed to run over UDP (and DTLS) on resource-
+#   constrained microcontrollers, supporting GET / PUT / POST requests and
+#   the OBSERVE option for push-style subscriptions to resource changes.
+#   ryankurte's client connects to a target like coap://device.local:5683/
+#   /temperature, exercises the full request lifecycle including message
+#   confirmable / non-confirmable modes, exponential-backoff retries, and
+#   DTLS with optional client-cert authentication, then either prints the
+#   payload (`get`/`put`/`post`) or streams notifications (`observe`).
+#
+# CLI ARGUMENT GRAMMAR  (verbatim from src/util.rs structopt Options +
+#                       src/lib.rs ClientOptions / RequestOptions structs)
+#   coap-client [OPTIONS] <TARGET> <command> [command-options]
+#
+#   Positional:
+#     <TARGET>                       transport://hostname:port/resource URL
+#                                    (parsed by HostOptions::try_from)
+#                                    e.g. coap://localhost:5683/.well-known/core
+#
+#   Request options (flattened from RequestOptions):
+#     --non-confirmable              disable message acknowledgement
+#     --retries <N>                  retries for acknowledged messages [3]
+#     --timeout <duration>           request → response timeout       [2s]
+#     --backoff <duration>           base period for exponential backoff [500ms]
+#
+#   Client options (flattened from ClientOptions):
+#     --connect-timeout <duration>   client / connection timeout      [500ms]
+#     --tls-ca <FILE>                CA certificate for TLS/DTLS modes
+#     --tls-cert <FILE>              client certificate (TLS client-auth)
+#     --tls-key <FILE>               client key (TLS client-auth)
+#     --tls-skip-verify              skip verifying peer certificate
+#
+#   Global options:
+#     --repeat <N>                   repeat command N times           [1]
+#     --log-level <LEVEL>            warn | info | debug | trace      [info]
+#     -h, --help                     show help
+#     -V, --version                  show version
+#
+#   Subcommands  (`#[derive(StructOpt)] enum Command`):
+#     get                            perform a CoAP GET request
+#     put                            perform a CoAP PUT request
+#                                      Data (one of, structopt group "d"):
+#                                        --file <FILE>     file to read/write
+#                                        --string <STR>    UTF-8 string data
+#                                        --hex <HEX>       hex-encoded data
+#     post                           perform a CoAP POST request
+#                                      Data: same --file / --string / --hex
+#     observe                        register an observer on the topic
+#                                    (stream notifications via CoAP OBSERVE)
+#
+# AXIS / CORPUS POSITION
+#   Direct dependency on `coap-lite = "0.4.0"` declared in Cargo.toml — the
+#   canonical Rust CoAP message-codec library (Covertness/coap-lite, the
+#   no_std-friendly CoAP packet parser/serializer used across the Rust
+#   IoT ecosystem).  coap-client adds the async client wrapper, DTLS via
+#   tokio-openssl, and the structopt CLI on top of coap-lite.  Verified via:
+#     gh api repos/ryankurte/rust-coap-client/contents/Cargo.toml
+#       → coap-lite = "0.4.0"
+#   This entry is the Rust=115 leader bump that OPENS Axis 60 (CoAP IoT
+#   Protocol Library) — the THREE-SCORE AXIS LANDMARK in this corpus —
+#   pairing with future Go=plgd-dev/go-coap and TS-Node=mcollina/node-coap
+#   poles to close the axis at 1/1/1.
+#
+#   No completion for `coap-client` ships with Apple zsh
+#   (/usr/share/zsh/*/functions) or Homebrew zsh-completions
+#   (/opt/homebrew/share/zsh/site-functions) — confirmed absent.
+# ============================================================================
+
+_coap-client() {
+    local curcontext="$curcontext" state line ret=1
+    typeset -A opt_args
+
+    _arguments -C \
+        '--non-confirmable[disable message acknowledgement]' \
+        '--retries=[retries for acknowledged messages (default 3)]:N:' \
+        '--timeout=[request->response timeout (default 2s)]:duration:' \
+        '--backoff=[base period for exponential backoff (default 500ms)]:duration:' \
+        '--connect-timeout=[client/connection timeout (default 500ms)]:duration:' \
+        '--tls-ca=[CA certificate for TLS/DTLS modes]:CA file:_files -g "*.(pem|crt|cer)"' \
+        '--tls-cert=[client certificate (TLS client-auth)]:cert file:_files -g "*.(pem|crt|cer)"' \
+        '--tls-key=[client key (TLS client-auth)]:key file:_files -g "*.(pem|key)"' \
+        '--tls-skip-verify[skip verifying peer certificate]' \
+        '--repeat=[repeat command N times (default 1)]:N:' \
+        '--log-level=[log level (default info)]:level:(warn info debug trace)' \
+        '(- *)'{-h,--help}'[show help]' \
+        '(- *)'{-V,--version}'[show version]' \
+        '1:CoAP target URL (transport://host:port/resource):_coap_client_targets' \
+        '2: :_coap-client_commands' \
+        '*::arg:->args' && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                get)        _arguments '(- *)'{-h,--help}'[help for get]'  && ret=0 ;;
+                put)        _coap-client_data_args                       && ret=0 ;;
+                post)       _coap-client_data_args                       && ret=0 ;;
+                observe)    _arguments '(- *)'{-h,--help}'[help for observe]' && ret=0 ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+(( $+functions[_coap-client_commands] )) ||
+_coap-client_commands() {
+    local -a commands
+    commands=(
+        'get:perform a CoAP GET request'
+        'put:perform a CoAP PUT request (with --file/--string/--hex data)'
+        'post:perform a CoAP POST request (with --file/--string/--hex data)'
+        'observe:register an observer (stream notifications via CoAP OBSERVE)'
+    )
+    _describe -t commands 'coap-client subcommand' commands
+}
+
+(( $+functions[_coap-client_data_args] )) ||
+_coap-client_data_args() {
+    _arguments \
+        '(--string --hex)--file=[file to read/write (data group)]:data file:_files' \
+        '(--file --hex)--string=[UTF-8 string data (data group)]:text:' \
+        '(--file --string)--hex=[hex-encoded data (data group)]:hex bytes:' \
+        '(- *)'{-h,--help}'[help]'
+}
+
+(( $+functions[_coap_client_targets] )) ||
+_coap_client_targets() {
+    if [[ -prefix coap:// || -prefix coaps:// || -prefix coap+tcp:// || -prefix coap+ws:// ]]; then
+        _message 'CoAP target URL'
+    else
+        _alternative \
+            'examples:CoAP target:(coap://localhost:5683/.well-known/core coaps://localhost:5684/ coap://device.local:5683/temperature)'
+    fi
+}
+
+_coap-client "$@"
