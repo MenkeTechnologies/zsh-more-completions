@@ -1,0 +1,132 @@
+#compdef webfs
+# ============================================================================
+# _webfs — zsh completion for WebFS, a Blobcache-backed Web filesystem
+# ============================================================================
+#
+# UPSTREAM
+#   Repository : https://github.com/brendoncarroll/webfs
+#   Author     : Brendon Carroll
+#   License    : GPL-3.0
+#   Stars      : 340
+#   Language   : Go
+#   Module     : github.com/brendoncarroll/webfs
+#   Binary     : webfs  (built from cmd/webfs/main.go)
+#   Last push  : 2026-05-19
+#
+# WHAT IT IS
+#   WebFS is "a filesystem built on top of the web" — Brendon Carroll's
+#   experimental FUSE filesystem layered over the Blobcache content-
+#   addressable storage system (blobcache.io).  WebFS stores filesystem
+#   metadata + content as Cap'n Proto-encoded blobs in Blobcache volumes,
+#   speaks Cap'n Proto RPC to the local `blobcached` service to read /
+#   write those blobs, and uses `hanwen/go-fuse` to surface the resulting
+#   tree as a regular POSIX filesystem mount point.  Common use cases:
+#   sharing a small encrypted filesystem across hosts via a Blobcache
+#   peer-to-peer network without running a traditional NAS/SMB stack.
+#
+# CLI ARGUMENT GRAMMAR  (verbatim from src/wfscmd/rootcmd.go `star` framework
+#                       Command tree)
+#   webfs <subcommand> [flags] [positionals]
+#
+#   Subcommands (from `star.NewDir` map):
+#     mount <MOUNT_DIR>          Mount a webfs filesystem
+#                                  --root <CFG>   path to root volume
+#                                                 configuration (REQUIRED)
+#     init                       Initialize a webfs filesystem inside a
+#                                Blobcache volume
+#                                  --root <CFG>   path to root volume
+#                                                 configuration (REQUIRED)
+#     mkcfg <VOLUME>             Generate a new config and write it to
+#                                stdout.  <VOLUME> is a Blobcache
+#                                ObjectExpr (e.g. an OID or volume name).
+#     exec <EXEC_PATH>           Mount the webfs filesystem to a temp
+#                                directory, set it as PWD, run the
+#                                executable, then unmount and exit
+#                                  --root <CFG>   path to root volume
+#                                                 configuration (REQUIRED)
+#
+# AXIS / CORPUS POSITION
+#   Direct dependency on `capnproto.org/go/capnp/v3 v3.1.0-alpha.2`
+#   declared in go.mod — the canonical Go Cap'n Proto library maintained
+#   by the capnproto organization (the official Go binding for Kenton
+#   Varda's Cap'n Proto RPC).  Used both for Blobcache message
+#   serialization (volumes / OIDs / blob references all flow as Cap'n
+#   Proto-encoded payloads) and for the wire-level RPC channel between
+#   webfs and the local Blobcache service.  Verified via:
+#     gh api repos/brendoncarroll/webfs/contents/go.mod
+#       → capnproto.org/go/capnp/v3 v3.1.0-alpha.2
+#   This entry is the Go=121 leader bump that continues Axis 66
+#   (Cap'n Proto RPC Library) opened at R853 with Rust=capnp+capnp-rpc
+#   (pactus-project/tanour).
+#
+#   No completion for `webfs` ships with Apple zsh
+#   (/usr/share/zsh/*/functions) or Homebrew zsh-completions
+#   (/opt/homebrew/share/zsh/site-functions) — confirmed absent.
+# ============================================================================
+
+_webfs() {
+    local curcontext="$curcontext" state line ret=1
+    typeset -A opt_args
+
+    _arguments -C \
+        '(- *)'{-h,--help}'[show help]' \
+        '1: :_webfs_commands' \
+        '*::arg:->args' && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                mount)    _webfs_mount    && ret=0 ;;
+                init)     _webfs_init     && ret=0 ;;
+                mkcfg)    _webfs_mkcfg    && ret=0 ;;
+                exec)     _webfs_exec     && ret=0 ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+(( $+functions[_webfs_commands] )) ||
+_webfs_commands() {
+    local -a commands
+    commands=(
+        'mount:mount a webfs filesystem at a directory'
+        'init:initialize a webfs filesystem inside a Blobcache volume'
+        'mkcfg:generate new root config (writes JSON to stdout)'
+        'exec:mount to tempdir, run an executable with the volume as PWD, then unmount'
+    )
+    _describe -t commands 'webfs command' commands
+}
+
+(( $+functions[_webfs_mount] )) ||
+_webfs_mount() {
+    _arguments \
+        '--root=[path to root volume configuration (REQUIRED)]:config file:_files -g "*.json"' \
+        '(- *)'{-h,--help}'[help for mount]' \
+        ':mount directory:_files -/'
+}
+
+(( $+functions[_webfs_init] )) ||
+_webfs_init() {
+    _arguments \
+        '--root=[path to root volume configuration (REQUIRED)]:config file:_files -g "*.json"' \
+        '(- *)'{-h,--help}'[help for init]'
+}
+
+(( $+functions[_webfs_mkcfg] )) ||
+_webfs_mkcfg() {
+    _arguments \
+        '(- *)'{-h,--help}'[help for mkcfg]' \
+        ':volume (Blobcache ObjectExpr, e.g. OID or name):'
+}
+
+(( $+functions[_webfs_exec] )) ||
+_webfs_exec() {
+    _arguments \
+        '--root=[path to root volume configuration (REQUIRED)]:config file:_files -g "*.json"' \
+        '(- *)'{-h,--help}'[help for exec]' \
+        ':executable path:_command_names -e'
+}
+
+_webfs "$@"
