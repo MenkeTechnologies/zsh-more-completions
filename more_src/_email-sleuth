@@ -1,0 +1,434 @@
+#compdef email-sleuth
+# =============================================================================
+# email-sleuth — Kerim Buyukakyuz's "A tool to find and
+#          verify email addresses associated with contacts
+#          and company websites" — a Rust async CLI that
+#          combines (1) per-domain HTML SCRAPING for
+#          publicly-listed contact emails, (2) PATTERN
+#          GENERATION for common corporate email formats
+#          ({first}.{last}@, {f}{last}@, etc.), and (3)
+#          multi-modal VERIFICATION via SMTP probing +
+#          Office365 API lookups + headless-browser
+#          challenges to determine which generated
+#          candidates actually exist, all without sending
+#          any actual email.
+#          Distinguishing from Hunter.io (commercial
+#          email-finder SaaS), Snov.io (commercial), Lusha
+#          (commercial), Apollo.io (commercial),
+#          findemails.com (commercial), and ContactOut
+#          (commercial) by:
+#            - SELF-HOSTED + OFFLINE-FIRST — no API key,
+#              no third-party service, no SaaS dependency;
+#              all verification logic runs locally;
+#              suitable for compliance-restricted contexts
+#              (GDPR data residency, on-prem deployment)
+#            - SCRAPER-BASED WEBSITE HARVESTING — uses
+#              causal-agent/scraper v0.19 (the dominant
+#              Rust HTML parsing + CSS-selector crate;
+#              this is the headline CLI library that OPENS
+#              Axis 41 on the Rust side; see taxonomy
+#              notes below) backed by reqwest + rustls
+#              to fetch and parse target-domain pages,
+#              extracting any `mailto:` links, contact-
+#              page emails in plain text, and email-shaped
+#              regex matches from rendered HTML
+#            - SMTP VERIFICATION via lettre — uses lettre
+#              v0.11 to perform the "Recipient probe"
+#              (HELO/EHLO + MAIL FROM + RCPT TO without
+#              DATA) which most SMTP servers respond to
+#              with a clear ACCEPT/REJECT before any
+#              actual email payload is sent.  Hardened
+#              with rustls + tokio-rustls + rustls-native-
+#              certs for TLS connections
+#            - O365 API CHECKS — `--enable-api-checks`
+#              activates the Office365 GetCredentialType
+#              endpoint probe that returns IfExistsResult
+#              (0/1/2/5/6) indicating whether the
+#              candidate email is a known Microsoft 365
+#              identity.  Faster + more reliable than
+#              SMTP for M365-hosted domains
+#            - HEADLESS BROWSER CHECKS via fantoccini —
+#              `--enable-headless-checks` activates
+#              browser-driver-based verification (e.g.
+#              Yahoo's "Forgot password?" flow reveals
+#              account existence).  Uses fantoccini
+#              (WebDriver client) → ChromeDriver +
+#              Selenium.  Requires `--chromedriver-path`
+#              or `--webdriver-url`
+#            - THREE VERIFICATION MODES — `--mode basic`
+#              (SMTP only) / `--mode enhanced` (SMTP +
+#              API) / `--mode comprehensive` (SMTP + API
+#              + headless).  Tradeoff: more methods =
+#              slower but higher confidence; basic mode
+#              completes in seconds per contact while
+#              comprehensive can take 30+ seconds
+#            - BATCH MODE via `--input <contacts.json>`
+#              — process hundreds/thousands of contacts
+#              from a single JSON file with `--concurrency
+#              <N>` worker pool; emits results to
+#              `--output <results.json>`
+#            - SINGLE-CONTACT MODE via `--name "John
+#              Doe" --domain example.com` — interactive
+#              single-record lookup; emit to file or
+#              `--stdout`
+#            - DNS RESOLVER TUNING — `--dns-servers
+#              "1.1.1.1,8.8.8.8"` + `--dns-timeout
+#              <secs>` control which resolvers are used
+#              for MX-record lookups (every domain's MX
+#              records determine which SMTP server to
+#              probe)
+#            - CHROMEDRIVER SERVICE MANAGEMENT via
+#              `--service start|stop|restart|status|logs`
+#              — bundled service manager spawns +
+#              monitors a local ChromeDriver process for
+#              the headless-checks pipeline; no need to
+#              start it manually
+#            - TOML CONFIGURATION — `--config-file
+#              <path>` loads settings from TOML; CLI
+#              flags override file settings
+#            - EARLY TERMINATION — `--early-termination-
+#              threshold <0..100>` short-circuits the
+#              verification loop when confidence exceeds
+#              the threshold, avoiding unnecessary slow
+#              checks (headless browser probes)
+#            - 409+ STARS ON tokenizer-decode/email-
+#              sleuth — actively maintained
+#          Used by: cold-outreach sales teams seeking
+#          self-hosted alternatives to Hunter.io,
+#          security researchers performing OSINT email
+#          enumeration for permitted penetration testing
+#          engagements, recruiters cross-referencing
+#          contact lists against domains, and privacy-
+#          conscious deployments where transmitting
+#          contact data to a SaaS email-finder is
+#          prohibited.
+#
+# SECURITY + AUTHORIZATION NOTE: email-sleuth performs
+# active probes against third-party SMTP servers + web
+# services.  Use ONLY against domains where you have
+# authorization (your own company, explicit pentest
+# engagement scope, public records research where the
+# target's terms of service permit it).  Rate limits and
+# abuse-detection systems may flag aggressive probing.
+#
+# Author:  Kerim Buyukakyuz <kerim@trylon.ai>
+#          (tokenizer-decode on GitHub).
+# Source:  https://github.com/buyukakyuz/email-sleuth
+#          https://github.com/buyukakyuz/email-sleuth/blob/main/src/main.rs
+#          https://github.com/buyukakyuz/email-sleuth/blob/main/Cargo.toml
+# Manpage: No traditional manpage; `email-sleuth --help`
+#          shows the option list (clap 4.x derive macro
+#          generated).  Full docs in repo README.md.
+# Library: scraper v0.19 (causal-agent/scraper — the
+#          dominant Rust HTML parsing + CSS-selector
+#          crate, built on top of servo's html5ever + ego-
+#          tree).  This is the headline dependency for
+#          this completion's axis-opening role; see
+#          taxonomy notes below.  Also clap 4.4 (Axis 1
+#          argparse with `derive` + `env` features for
+#          env-var-backed flags), reqwest 0.12 (HTTP
+#          client with rustls-tls + json + stream
+#          features), rustls 0.21 + tokio-rustls 0.24 +
+#          rustls-native-certs 0.6 (TLS stack), lettre
+#          0.11 (SMTP client with smtp-transport +
+#          tokio1-rustls + ring), fantoccini 0.19
+#          (WebDriver client for headless-browser
+#          checks), trust-dns-resolver 0.23 (custom DNS
+#          resolution for MX-record lookups), indicatif
+#          0.17 (progress bars), tracing + tracing-
+#          subscriber (Axis 9 logging), serde +
+#          serde_json + toml (config + I/O), regex 1.10
+#          (email-pattern recognition), parking_lot 0.12
+#          (sync primitives), openssl-sys 0.9 (vendored
+#          for some legacy deps).
+# License: MIT
+# Status:  409+ stars on buyukakyuz/email-sleuth;
+#          active development (latest commit 2026-06-01).
+#
+# -----------------------------------------------------------------------------
+# CROSS-LANGUAGE CLI LIBRARY TAXONOMY — AXIS 41 OPENS:
+#   HTML PARSING / WEB SCRAPING
+# -----------------------------------------------------------------------------
+# This completion **OPENS AXIS 41** in the cross-language
+# CLI library taxonomy: HTML Parsing / Web Scraping
+# (libraries that parse HTML into a queryable DOM-like
+# tree + provide CSS-selector or XPath query APIs — as
+# distinct from Axis 26 Web Frameworks which SERVE
+# HTML rather than parse it, or Axis 38 OpenAPI which
+# parses API specs not generic HTML).
+#
+# Pattern: R752 120th language (Hazel) closes the prior
+# 3+1 cycle → R753 Rust=96 (email-sleuth/scraper →
+# Axis 41 OPENS THIS) is the first leader bump in the
+# new cycle.  Pending: R754 Go=96 with a PuerkitoBio/
+# goquery user; R755 TS-Node=96 with a cheeriojs/
+# cheerio user; R756 121st language.
+#
+# WHY scraper IS A DISTINCTIVE AXIS-41 OPENER:
+#
+#   causal-agent/scraper is the canonical Rust HTML
+#   parsing + CSS-selector crate.  Distinguishing
+#   characteristics:
+#     1. HTML5EVER FOUNDATION — built on top of
+#        servo/html5ever (the Servo browser project's
+#        HTML5-compliant streaming parser), giving it
+#        SPEC-COMPLIANT WHATWG HTML5 parsing including
+#        all the messy real-world recovery rules
+#        (orphaned tags, broken attribute quoting,
+#        non-conforming markup that browsers tolerate)
+#     2. CSS SELECTOR QUERIES — uses servo's selectors
+#        crate (the same selectors implementation used
+#        by Servo's renderer) for jQuery-compatible
+#        CSS selector matching: `Selector::parse("div.
+#        contact-list > a.email").unwrap()`
+#     3. EGO_TREE TREE STORAGE — backs the DOM with
+#        the ego_tree crate (typed indices into a flat
+#        Vec rather than Rc/Arc-pointer-spaghetti);
+#        cache-friendly + zero-allocation tree
+#        traversal
+#     4. STREAMING + ZERO-COPY where possible — text
+#        nodes and attributes can be borrowed as
+#        &str slices into the original input buffer,
+#        avoiding allocations for read-only scraping
+#     5. ~2,800+ STARS ON causal-agent/scraper
+#     6. ECOSYSTEM-DOMINANT — used by countless Rust
+#        web-scraping CLIs: email-sleuth (this
+#        completion), trieve (RAG platform),
+#        languagetool-rust, nushell's HTTP plugin, the
+#        xan CSV utility, mdBook, Internet Computer's
+#        DFINITY tooling, etc.
+#     7. SISTER CRATES — pairs with reqwest (HTTP
+#        client), tokio (async runtime), and url for a
+#        complete HTML-fetching-and-querying pipeline
+#
+# Maintained under github.com/causal-agent/scraper.
+# License: ISC.
+#
+# Cross-language CLI library taxonomy after R753:
+#   * 120 languages
+#   * 466 total CLI library variants (Rust 96 / Go 95 /
+#     TS-Node 95)
+#   * Axis 9 / Logging: 6/6/6 three-language symmetric
+#   * Axes 10 + 13 + 14: 2/2/2 three-language symmetric
+#   * Axes 7 + 8 + 11 + 12 + 15 + 16 + 17 + 18 + 19 +
+#     20 + 21 + 22 + 23 + 24 + 25 + 26 + 27 + 28 + 29
+#     + 30 + 31 + 32 + 33 + 34 + 35 + 36 + 37 + 38 +
+#     39 + 40 at 1/1/1 three-language symmetric (33
+#     axes three-language symmetric)
+#   * Axis 41 opens with Rust=scraper (this round);
+#     pending Go + TS-Node companions
+#
+# Comparison to other Axis 41 candidates (Rust):
+#   * scraper (R753 THIS) — causal-agent's CSS-selector
+#     HTML5ever-based scraper; ~2,800 stars
+#   * html5ever directly — Servo's tokenizer; lower-
+#     level than scraper; used by mdBook + html5gum
+#   * select.rs — older alternative; less maintained
+#   * htmlsax — SAX-style streaming parser; niche
+#   * spider — Rust web crawler that USES scraper for
+#     parsing; could be the headline crate but scraper
+#     is the underlying parser everyone reuses
+#
+# scraper is the chosen Axis 41 opener because:
+#   - It is the upstream Rust HTML-parsing crate that
+#     EVERY downstream Rust web-scraping CLI depends
+#     on
+#   - email-sleuth uses scraper v0.19 as a DIRECT
+#     dependency for its target-domain-page email-
+#     extraction workflow
+#   - It is the closest functional analog to Go's
+#     PuerkitoBio/goquery (jQuery-like CSS-selector
+#     querying on top of golang.org/x/net/html) and
+#     TS-Node's cheeriojs/cheerio (jQuery-API HTML
+#     parsing for Node)
+#   - Demonstrates the html5-spec-compliant + CSS-
+#     selector + tree-DOM pattern that all three
+#     languages converge on for HTML parsing
+#
+# Pending companion picks for Axis 41:
+#   - Go=96: a Go CLI tool prominently using
+#            PuerkitoBio/goquery (the dominant Go HTML
+#            parsing + CSS-selector library, jQuery-
+#            inspired API) for HTML scraping
+#   - TS-Node=96: a Node.js CLI tool prominently using
+#            cheeriojs/cheerio (the dominant Node HTML
+#            parsing + CSS-selector library; ~29k
+#            stars) for HTML scraping
+#
+# -----------------------------------------------------------------------------
+#
+# THE email-sleuth CLI
+#
+# email-sleuth is a single-command CLI (no subcommands)
+# built on clap v4.x with the `derive` macro.
+# Invocation:
+#   email-sleuth [options]
+#
+# Two operating modes selected by argument presence:
+#
+#   1. SINGLE-CONTACT MODE
+#      Triggered by both --name + --domain:
+#        email-sleuth --name "Jane Doe" --domain example.com
+#
+#   2. BATCH (FILE) MODE
+#      Triggered by --input (default "input.json"):
+#        email-sleuth --input contacts.json --output results.json
+#
+# All flags have EMAIL_SLEUTH_* environment-variable
+# counterparts (clap's env feature).
+#
+# Required flags (one set):
+#   -i, --input <PATH>                input JSON file
+#                                     (default "input.json";
+#                                     env EMAIL_SLEUTH_INPUT)
+#   --name <NAME>                     single-contact name
+#                                     (env EMAIL_SLEUTH_NAME)
+#   --domain <DOMAIN>                 single-contact domain
+#                                     (env EMAIL_SLEUTH_DOMAIN)
+#
+# Output:
+#   -o, --output <PATH>               output JSON file
+#                                     (default "results.json";
+#                                     env EMAIL_SLEUTH_OUTPUT)
+#   --stdout                          emit single-contact
+#                                     result to stdout
+#                                     (env EMAIL_SLEUTH_STDOUT)
+#
+# Verification mode:
+#   -m, --mode <MODE>                 basic | enhanced |
+#                                     comprehensive
+#                                     (default basic)
+#
+# Behavior tuning:
+#   -c, --concurrency <N>             max concurrent tasks
+#                                     (env EMAIL_SLEUTH_CONCURRENCY)
+#   --config-file <PATH>              TOML config file
+#                                     (env EMAIL_SLEUTH_CONFIG)
+#   --smtp-sender <EMAIL>             sender for SMTP probes
+#                                     (env EMAIL_SLEUTH_SMTP_SENDER)
+#   --user-agent <UA>                 HTTP User-Agent string
+#                                     (env EMAIL_SLEUTH_USER_AGENT)
+#   --smtp-timeout <SECS>             SMTP timeout
+#                                     (env EMAIL_SLEUTH_SMTP_TIMEOUT)
+#   --request-timeout <SECS>          HTTP timeout
+#                                     (env EMAIL_SLEUTH_REQUEST_TIMEOUT)
+#   --dns-timeout <SECS>              DNS timeout
+#                                     (env EMAIL_SLEUTH_DNS_TIMEOUT)
+#   --dns-servers <SVR,...>           comma-separated DNS servers
+#                                     (env EMAIL_SLEUTH_DNS_SERVERS)
+#   --early-termination-threshold <0..100>
+#                                     stop verification
+#                                     when confidence >= N
+#                                     (env EMAIL_SLEUTH_EARLY_TERM_THRESHOLD)
+#
+# Advanced verification:
+#   --enable-api-checks               turn on M365 API checks
+#                                     (env EMAIL_SLEUTH_ENABLE_API_CHECKS)
+#   --enable-headless-checks          turn on browser checks
+#                                     (env EMAIL_SLEUTH_ENABLE_HEADLESS_CHECKS)
+#   --webdriver-url <URL>             WebDriver instance URL
+#                                     (env EMAIL_SLEUTH_WEBDRIVER_URL)
+#   --chromedriver-path <PATH>        ChromeDriver binary path
+#                                     (env EMAIL_SLEUTH_CHROMEDRIVER_PATH)
+#
+# Service management (ChromeDriver):
+#   --service <CMD>                   start|stop|restart|status|logs
+#   --log-lines <N>                   lines for `--service logs`
+#                                     (default 20)
+#
+# Common invocations:
+#   # Single contact lookup
+#   email-sleuth --name "Jane Doe" --domain example.com \
+#     --mode comprehensive --stdout
+#
+#   # Batch from input.json → results.json (basic mode)
+#   email-sleuth -i contacts.json -o results.json
+#
+#   # Batch with custom concurrency + tighter timeouts
+#   email-sleuth -i contacts.json -c 10 \
+#     --smtp-timeout 10 --request-timeout 8 \
+#     --dns-timeout 5
+#
+#   # Enhanced mode (SMTP + M365 API)
+#   email-sleuth -i contacts.json -m enhanced
+#
+#   # Comprehensive mode (SMTP + API + headless browser)
+#   email-sleuth -i contacts.json -m comprehensive \
+#     --webdriver-url http://localhost:4444
+#
+#   # Use Cloudflare + Google DNS instead of system resolver
+#   email-sleuth -i contacts.json \
+#     --dns-servers 1.1.1.1,8.8.8.8
+#
+#   # ChromeDriver service management
+#   email-sleuth --service start
+#   email-sleuth --service status
+#   email-sleuth --service logs --log-lines 50
+#   email-sleuth --service stop
+#
+#   # Load defaults from TOML, override mode via flag
+#   email-sleuth --config-file ./sleuth.toml -m enhanced
+#
+# OPTIONS (sourced directly from
+# https://github.com/buyukakyuz/email-sleuth/blob/main/src/main.rs):
+#
+# All long flags also accept EMAIL_SLEUTH_<UPPER_NAME>
+# environment variables.
+#
+# -----------------------------------------------------------------------------
+
+local curcontext="$curcontext" state line ret=1
+typeset -A opt_args
+
+local -a _es_modes
+_es_modes=(
+    'basic:SMTP verification only (default; fastest)'
+    'enhanced:SMTP + M365 API checks'
+    'comprehensive:SMTP + API + headless browser checks (slowest, most thorough)'
+)
+
+local -a _es_service_cmds
+_es_service_cmds=(
+    'start:start ChromeDriver service'
+    'stop:stop ChromeDriver service'
+    'restart:restart ChromeDriver service'
+    'status:show ChromeDriver service status'
+    'logs:show ChromeDriver service logs'
+)
+
+_arguments -C \
+    '(- *)'{-h,--help}'[show help]' \
+    '(- *)'{-V,--version}'[show version]' \
+    '(-i --input)'{-i,--input}'=[input JSON file (default input.json)]:input file:_files -g "*.json"' \
+    '(-o --output)'{-o,--output}'=[output JSON file (default results.json)]:output file:_files -g "*.json"' \
+    '--name=[single-contact name (requires --domain)]:name: ' \
+    '--domain=[single-contact domain or URL (requires --name)]:domain: ' \
+    '--stdout[emit single-contact result to stdout]' \
+    '--config-file=[TOML configuration file]:config file:_files -g "*.(toml|TOML)"' \
+    '(-c --concurrency)'{-c,--concurrency}'=[max concurrent tasks]:n: ' \
+    '--smtp-sender=[sender email for SMTP probes]:email: ' \
+    '--user-agent=[HTTP User-Agent string]:user-agent: ' \
+    '--smtp-timeout=[SMTP connection/command timeout in seconds]:seconds: ' \
+    '--request-timeout=[HTTP request timeout in seconds]:seconds: ' \
+    '--dns-timeout=[DNS resolution timeout in seconds]:seconds: ' \
+    '--dns-servers=[comma-separated DNS server list]:dns servers: ' \
+    '--enable-api-checks[enable M365 API verification checks]' \
+    '--enable-headless-checks[enable headless browser verification (requires WebDriver)]' \
+    '--early-termination-threshold=[stop verification when confidence >= N (0..100)]:threshold: ' \
+    '--webdriver-url=[WebDriver instance URL (e.g. http://localhost:4444)]:url: ' \
+    '--chromedriver-path=[ChromeDriver executable path]:chromedriver:_files' \
+    '(-m --mode)'{-m,--mode}'=[verification mode]:mode:->mode' \
+    '--service=[manage ChromeDriver service]:service command:->servicecmd' \
+    '--log-lines=[lines to show for --service logs (default 20)]:lines: ' \
+    && ret=0
+
+case $state in
+    mode)
+        _describe -t modes 'verification mode' _es_modes && ret=0
+        ;;
+    servicecmd)
+        _describe -t servicecmds 'service command' _es_service_cmds && ret=0
+        ;;
+esac
+
+return ret
