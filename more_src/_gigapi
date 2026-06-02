@@ -1,0 +1,458 @@
+#compdef gigapi
+# =============================================================================
+# gigapi — gigapi/gigapi's "GigAPI" — a Go
+#   TIMESERIES LAKEHOUSE that ingests
+#   InfluxDB Line Protocol or Parquet data,
+#   stores it as hive-partitioned PARQUET
+#   files on local FS / S3 / MinIO / GCS,
+#   and serves QUERIES through both an HTTP
+#   `/query` endpoint (DuckDB SQL) and a
+#   FlightSQL gRPC server.  Built on direct
+#   `apache/arrow-go/v18 v18.3.0` — the
+#   CANONICAL Apache Arrow Go implementation
+#   from the Apache Software Foundation
+#   (formerly nested at apache/arrow,
+#   extracted to a standalone module
+#   apache/arrow-go since Arrow 18).  Go=109
+#   leader bump continuing Axis 54 (Apache
+#   Arrow Columnar Format) at the Go pole,
+#   opened by R805 `_csv2arrow` (Rust=109,
+#   arrow 58.1).
+#
+# AXIS 54 — APACHE ARROW COLUMNAR FORMAT — GO POLE
+# =================================================
+# `apache/arrow-go` is the OFFICIAL Apache
+# Software Foundation Go implementation of
+# the Apache Arrow columnar in-memory data
+# format + IPC protocol + Flight RPC.
+# Maintained under the Apache Arrow
+# governance umbrella.  ~10.6k stars across
+# the parent `apache/arrow` repo (~3.5k for
+# the extracted `apache/arrow-go` module).
+# Apache 2.0.  Provides:
+#   - `arrow`            columnar in-memory
+#                        type system +
+#                        record batches
+#   - `arrow/ipc`        IPC reader/writer
+#                        (File + Stream
+#                        variants)
+#   - `arrow/flight`     Apache Arrow Flight
+#                        gRPC over HTTP/2
+#                        for streaming
+#                        column batches
+#   - `arrow/flightsql`  FlightSQL — Arrow
+#                        Flight + a SQL
+#                        sublanguage for
+#                        OLAP query
+#                        execution
+#   - `arrow/csv`        CSV reader to
+#                        Arrow record
+#                        batches
+#   - `arrow/parquet`    Parquet reader/
+#                        writer
+#                        integration
+#
+# Other Axis 54 implementations across the
+# corpus:
+#   * Rust       (R805): arrow 58.1
+#                — bundled in `csv2arrow`
+#                  (CSV → Arrow IPC
+#                  converter)
+#   * Go         (R806, THIS ROUND):
+#                apache/arrow-go/v18 v18.3.0
+#                — bundled in this round's
+#                `gigapi` (timeseries
+#                lakehouse exposing
+#                FlightSQL + DuckDB SQL
+#                over HTTP)
+#   * TS-Node    (R807 will close):
+#                apache-arrow npm — JS/TS
+#                impl
+#
+# Distinguishing gigapi from sibling
+# timeseries / lakehouse tooling:
+#   - INFLUXDB v3 (`_influx`, in corpus):
+#     closed-core (InfluxDB Cloud is the
+#     hosted product).  gigapi is 100%
+#     open-source, no opencore gimmicks
+#     per upstream README
+#   - VICTORIAMETRICS (`_vmctl`,
+#     `_vmagent`, in corpus): operational
+#     timeseries DB.  gigapi is a
+#     lakehouse that uses Parquet as the
+#     storage substrate (vs custom binary
+#     format) for cheaper cold storage
+#   - CLICKHOUSE (`_clickhouse-client`,
+#     `_dozer` R801, `_clickhouse_sinker`
+#     R802, `_hdx` R803, in corpus):
+#     full OLAP database.  gigapi is the
+#     specifically-timeseries-shaped
+#     query-on-Parquet variant
+#   - DUCKDB (`_duckdb`, in corpus):
+#     embedded analytical SQL engine.
+#     gigapi USES DuckDB internally as
+#     the query engine but adds:
+#       (a) HTTP `/query` server +
+#           FlightSQL gRPC server
+#       (b) InfluxDB Line Protocol
+#           ingestion
+#       (c) Hive-partitioned auto-
+#           compaction
+#       (d) S3 / MinIO / GCS object-
+#           storage backend
+#       (e) Hot-reload metadata
+#           catalog (JSON or Redis)
+#   - APACHE ICEBERG / DELTA LAKE /
+#     APACHE HUDI: same data-lakehouse
+#     concept but heavier (REST catalog,
+#     metastore service, etc.).  gigapi
+#     is the LIGHT timeseries-shaped
+#     alternative
+#
+# KEY GIGAPI FEATURES:
+#   - DUCKDB SQL + PARQUET STORAGE —
+#     queries run on DuckDB's column-
+#     oriented execution engine over
+#     local + remote Parquet files.
+#     Sub-second queries on TB-scale
+#     timeseries
+#   - FLIGHTSQL gRPC — clients in any
+#     language with a FlightSQL driver
+#     (Python flightsql-dbapi, JDBC
+#     flightsql, etc.) can query gigapi
+#     with native Arrow batches (no
+#     CSV/JSON serialisation overhead)
+#   - INFLUXDB LINE PROTOCOL INGESTION
+#     — `POST /write?db=mydb` accepts
+#     Line Protocol bytes.  Drop-in
+#     replacement for InfluxDB write
+#     paths from Telegraf, InfluxDB
+#     SDKs, etc.
+#   - HIVE PARTITIONING — data written
+#     as `/{db}/{table}/date=YYYY-MM-
+#     DD/hour=HH/{uuid}.{level}.
+#     parquet` with `metadata.json`
+#     sidecar.  Compatible with any
+#     Parquet reader (Polars, PyArrow,
+#     Spark)
+#   - PROGRESSIVE COMPACTION — files are
+#     promoted through merge levels
+#     (`.1` → `.2` → `.3` → `.3`-stay)
+#     at increasing frequencies (10s,
+#     100s, 1000s) up to a 4 GB
+#     ceiling.  Newer / hotter data
+#     stays in smaller files for
+#     faster ingest; older data
+#     compacted into bigger files for
+#     faster scans
+#   - DATA LAYER MODEL — multiple
+#     `GIGAPI_LAYER_<N>_*` envs let you
+#     define tiered storage: hot data
+#     on local SSD, warm on regional
+#     S3, cold on Glacier.  TTL per
+#     layer auto-rotates data
+#   - SCHEMA-ON-WRITE — new columns
+#     materialize automatically per
+#     row.  Readers reconcile across
+#     schema versions transparently
+#   - EXECUTION MODES — `GIGAPI_MODE`
+#     env selects:
+#       * `aio` (DEFAULT) — all roles
+#         in one process
+#       * `readonly` — query-only node
+#       * `writeonly` — ingest-only
+#         node
+#       * `compaction` — merge-only
+#         worker
+#     Scale horizontally by running
+#     specialised workers
+#   - METADATA TYPES —
+#     `GIGAPI_METADATA_TYPE=json`
+#     stores catalog in local JSON
+#     files (single-node setup).
+#     `=redis` shares catalog across
+#     a cluster of GigAPI nodes via
+#     a Redis connection at
+#     `GIGAPI_METADATA_URL=redis://
+#     redis:6379/0`
+#   - EMBEDDED UI — `GIGAPI_UI=true`
+#     (default) serves an embedded
+#     web SQL workbench at the same
+#     HTTP port
+#
+# ENVIRONMENT-DRIVEN CLI — gigapi is
+# configured PURELY via environment
+# variables.  The binary takes an optional
+# positional argument for an INI/YAML
+# config path; otherwise reads from env.
+# This makes it deployment-platform-
+# friendly (Docker / Kubernetes /
+# systemd) but the local CLI flag
+# surface is minimal
+#
+# ENVIRONMENT VARIABLES (per upstream
+# README table):
+#   * `GIGAPI_ROOT`              root data
+#                                directory
+#   * `GIGAPI_MERGE_TIMEOUT_S`   base merge
+#                                interval
+#                                (default
+#                                10)
+#   * `GIGAPI_SAVE_TIMEOUT_S`    disk-flush
+#                                interval
+#                                (default
+#                                1)
+#   * `GIGAPI_NO_MERGES`         disable
+#                                compaction
+#   * `GIGAPI_UI`                enable
+#                                embedded
+#                                web UI
+#                                (default
+#                                true)
+#   * `GIGAPI_MODE`              `aio` /
+#                                `readonly` /
+#                                `writeonly` /
+#                                `compaction`
+#   * `GIGAPI_METADATA_TYPE`     `json` /
+#                                `redis`
+#   * `GIGAPI_METADATA_URL`      Redis URL
+#                                when type
+#                                is redis
+#   * `HTTP_PORT`                HTTP port
+#                                (default
+#                                7971)
+#   * `HTTP_HOST`                HTTP bind
+#                                (default
+#                                0.0.0.0)
+#   * `HTTP_BASIC_AUTH_USERNAME` basic auth
+#                                user
+#   * `HTTP_BASIC_AUTH_PASSWORD` basic auth
+#                                password
+#   * `FLIGHTSQL_PORT`           FlightSQL
+#                                gRPC port
+#                                (default
+#                                8082)
+#   * `FLIGHTSQL_ENABLE`         enable
+#                                FlightSQL
+#                                gRPC server
+#                                (default
+#                                true)
+#   * `LOGLEVEL`                 debug /
+#                                info /
+#                                warn /
+#                                error /
+#                                fatal
+#   * `DUCKDB_MEM_LIMIT`         DuckDB
+#                                memory limit
+#                                (default
+#                                "1GB")
+#   * `DUCKDB_THREAD_LIMIT`      DuckDB
+#                                threads
+#                                (default 1)
+#   * `GIGAPI_LAYER_<N>_NAME`    per-layer
+#                                unique name
+#   * `GIGAPI_LAYER_<N>_TYPE`    `fs` or
+#                                `s3`
+#   * `GIGAPI_LAYER_<N>_GLOBAL`  cluster-
+#                                wide
+#                                accessible
+#   * `GIGAPI_LAYER_<N>_URL`     path or
+#                                S3 URL
+#   * `GIGAPI_LAYER_<N>_TTL`     TTL before
+#                                rotation
+#                                (default 0
+#                                = no
+#                                rotation)
+#
+# CRITICAL DIRECT DEPENDENCIES (from
+# go.mod):
+#   - github.com/apache/arrow-go/v18 v18.3.0
+#                              — Apache Arrow
+#                                Go impl
+#                                [AXIS 54
+#                                LIBRARY]
+#   - github.com/marcboeker/go-duckdb/v2 v2.2.0
+#                              — DuckDB Go
+#                                bindings
+#                                (query
+#                                engine)
+#   - github.com/influxdata/influxdb v1.12.0
+#                              — InfluxDB
+#                                Line Protocol
+#                                parser
+#   - github.com/minio/minio-go/v7 v7.0.91
+#                              — S3-
+#                                compatible
+#                                object
+#                                storage
+#                                client
+#   - github.com/gigapi/gigapi-config v0.0.9
+#                              — env-var
+#                                config
+#                                loader
+#                                (sibling
+#                                project)
+#   - github.com/gigapi/gigapi-querier v0.0.27
+#                              — DuckDB
+#                                query
+#                                planner
+#                                (sibling
+#                                project)
+#   - github.com/gigapi/metadata v0.0.6
+#                              — metadata
+#                                catalog
+#                                (JSON +
+#                                Redis
+#                                backends)
+#   - github.com/expr-lang/expr v1.17.2
+#                              — expression
+#                                eval (for
+#                                config
+#                                templating)
+#   - github.com/go-faster/city v1.0.1
+#                              — CityHash
+#                                for
+#                                Parquet
+#                                row-group
+#                                IDs
+#   - github.com/go-faster/jx v1.1.0
+#                              — fast JSON
+#                                encoder/
+#                                decoder
+#   - github.com/gorilla/mux v1.8.1
+#                              — HTTP
+#                                router
+#   - github.com/google/uuid v1.6.0
+#                              — UUID for
+#                                Parquet
+#                                file names
+#   - github.com/spf13/afero v1.12.0
+#                              — virtual
+#                                filesystem
+#                                abstraction
+#
+# Go 1.24.2+ MSRV per go.mod `go 1.24.2`.
+#
+# UPSTREAM:
+#   * Source             : https://github.com/gigapi/gigapi
+#   * Site               : https://gigapi.io
+#   * Architecture doc   : https://github.com/gigapi/gigapi/blob/main/ARCHITECTURE.md
+#   * Benchmarks         : https://github.com/gigapi/gigapi/blob/main/BENCHMARK.md
+#   * apache/arrow-go    : https://github.com/apache/arrow-go
+#   * License            : MIT
+#   * Maintainer         : gigapi org
+#
+# INSTALL:
+#   # From source
+#   git clone https://github.com/gigapi/gigapi
+#   cd gigapi
+#   go build -o gigapi .
+#
+#   # Docker (the recommended deployment)
+#   docker pull ghcr.io/gigapi/gigapi:latest
+#
+#   # Docker Compose (per upstream README)
+#   #   services:
+#   #     gigapi:
+#   #       image: ghcr.io/gigapi/gigapi:latest
+#   #       ports: ["7971:7971"]
+#   #       environment:
+#   #         - GIGAPI_ROOT=/data
+#   #         - GIGAPI_LAYER_0_NAME=default
+#   #         - GIGAPI_LAYER_0_TYPE=fs
+#   #         - GIGAPI_LAYER_0_URL=file:///data
+#
+# USAGE EXAMPLES:
+#
+#   # Run with env-var-only config (most
+#   # common deployment)
+#   GIGAPI_ROOT=/data \
+#   GIGAPI_LAYER_0_NAME=default \
+#   GIGAPI_LAYER_0_TYPE=fs \
+#   GIGAPI_LAYER_0_URL=file:///data \
+#       gigapi
+#
+#   # Run with custom HTTP port + DuckDB
+#   # memory budget
+#   HTTP_PORT=9090 \
+#   DUCKDB_MEM_LIMIT=8GB \
+#   DUCKDB_THREAD_LIMIT=8 \
+#       gigapi
+#
+#   # Run in read-only mode (query-only node
+#   # for horizontal scale-out)
+#   GIGAPI_MODE=readonly \
+#       gigapi
+#
+#   # Run in compaction-only mode (background
+#   # merge worker, no HTTP/Flight serving)
+#   GIGAPI_MODE=compaction \
+#       gigapi
+#
+#   # Distributed metadata catalog via Redis
+#   GIGAPI_METADATA_TYPE=redis \
+#   GIGAPI_METADATA_URL=redis://redis:6379/0 \
+#       gigapi
+#
+#   # S3 storage layer
+#   GIGAPI_LAYER_0_TYPE=s3 \
+#   GIGAPI_LAYER_0_URL='s3://bucket-name/prefix?region=us-west-2&access_key=AKIA...&secret_key=...' \
+#       gigapi
+#
+#   # Two-tier hot/cold storage with TTL
+#   # rotation
+#   GIGAPI_LAYER_0_NAME=hot \
+#   GIGAPI_LAYER_0_TYPE=fs \
+#   GIGAPI_LAYER_0_URL=file:///mnt/ssd \
+#   GIGAPI_LAYER_0_TTL=3600 \
+#   GIGAPI_LAYER_1_NAME=cold \
+#   GIGAPI_LAYER_1_TYPE=s3 \
+#   GIGAPI_LAYER_1_URL='s3://bucket/archive' \
+#       gigapi
+#
+#   # Disable embedded UI (smaller binary
+#   # footprint in production)
+#   GIGAPI_UI=false gigapi
+#
+#   # Verbose logging
+#   LOGLEVEL=debug gigapi
+#
+# CLIENT USAGE (after gigapi is running):
+#
+#   # Write data via InfluxDB Line Protocol
+#   cat <<EOF | curl -X POST \
+#       'http://localhost:7971/write?db=mydb' \
+#       --data-binary @/dev/stdin
+#   weather,location=us-midwest,season=summer temperature=82
+#   weather,location=us-east,season=summer temperature=80
+#   weather,location=us-west,season=summer temperature=99
+#   EOF
+#
+#   # Query via HTTP DuckDB SQL
+#   curl -X POST 'http://localhost:7971/query?db=mydb' \
+#       -H 'Content-Type: application/json' \
+#       -d '{"query":"SELECT count(*), avg(temperature) FROM weather"}'
+#
+#   # Query via FlightSQL (Python)
+#   from flightsql import connect, FlightSQLClient
+#   client = FlightSQLClient(host='localhost', port=8082,
+#                            insecure=True)
+#   conn = connect(client)
+#   cursor = conn.cursor()
+#   cursor.execute('SELECT count(*), avg(temperature) FROM weather')
+#   print([r for r in cursor])
+#
+# OPTIONS (sourced directly from
+# https://github.com/gigapi/gigapi/blob/main/main.go + README env-var table):
+#
+# -----------------------------------------------------------------------------
+
+local curcontext="$curcontext" state line ret=1
+typeset -A opt_args
+
+_arguments -C \
+    '(- *)'{-h,--help}'[show help]' \
+    '1::config file:_files -g "*.(yaml|yml|ini|toml|conf)"' \
+    && ret=0
+
+return ret
