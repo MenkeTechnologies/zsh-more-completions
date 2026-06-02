@@ -1,0 +1,141 @@
+#compdef burst
+# ============================================================================
+# _burst — zsh completion for fzdwx's burst, a Go ngrok-style reverse
+#           tunnel built on gorilla/websocket
+# ============================================================================
+#
+# UPSTREAM
+#   Repository : https://github.com/fzdwx/burst
+#   Author     : fzdwx
+#   License    : Apache-2.0
+#   Language   : Go
+#   Module     : github.com/fzdwx/burst
+#   Binary     : burst  (rootCmd.Use = "burst" in cmd/root.go;
+#                         built from root main.go calling
+#                         cmd.Execute)
+#   Last push  : 2024-11-06
+#
+# WHAT IT IS
+#   burst is "expose ports to the server quickly" — fzdwx's
+#   self-hostable ngrok-style reverse-tunnel.  A `burst serve`
+#   process runs on a publicly-reachable host;  one or more
+#   `burst client` processes on private hosts open an outbound
+#   WebSocket connection to the public server (auth'd with a
+#   shared access token), and the server multiplexes inbound
+#   public-facing HTTP requests through the tunnel to a local
+#   port on each connected client.  The WebSocket transport runs
+#   on gorilla/websocket;  the HTTP REST surface uses
+#   zeromicro/go-zero.
+#
+# CLI ARGUMENT GRAMMAR  (verbatim from cmd/{root,serve,client}.go
+#                       spf13/cobra Command tree)
+#   burst [GLOBAL_FLAGS] <SUBCOMMAND> [args...]
+#
+#   Global persistent flags (inherited by every subcommand):
+#     -l, --log <PATH>          Log file path (e.g. ./server.log)
+#                               — when empty, logs are written
+#                               with `zerolog.ConsoleWriter` to
+#                               stdout
+#     -v, --level <LEVEL>       Log level
+#                               [default: debug]
+#                               Allowed: debug, info, warn, error,
+#                                        fatal, panic
+#
+#   Subcommands:
+#     serve                     Start the burst server (public
+#                               side of the tunnel).  Listens on
+#                               port 9999 for the REST API and
+#                               on port 39939 for the alone HTTP
+#                               server (routed via the `Host`
+#                               and `:authority` request headers).
+#
+#     client [<COMMAND>...]     Connect a client (private side of
+#                               the tunnel) to a burst server
+#       -t, --token <TOKEN>       Access token (when empty, the
+#                                 client calls the server's
+#                                 `/user/auth` endpoint to mint
+#                                 a fresh token)
+#       -p, --port  <PORT>        Server REST port  [default: 9999]
+#       -s, --host  <HOST>        Server host        [default: 0.0.0.0]
+#       -i, --interactive         Interactive mode — drop into a
+#                                 REPL that dispatches `command.
+#                                 Dispatch` against the connected
+#                                 server, with command-line tab
+#                                 completion via `command.
+#                                 Autocomplete`
+#
+#       Trailing positional arguments are joined with spaces into
+#       a single user-command string (`strings.Join(args, " ")`)
+#       and dispatched once before the process blocks on `select {}`.
+#       Use `--interactive` for a long-lived REPL session instead.
+#
+#   Standard cobra auto-flags:
+#     -h, --help                Show help
+#
+# AXIS / CORPUS POSITION
+#   Direct dependency on `github.com/gorilla/websocket v1.5.0`
+#   declared in go.mod — the canonical Go WebSocket library
+#   maintained by the gorilla web toolkit project (gorilla/
+#   websocket).  gorilla/websocket implements RFC 6455 framing,
+#   control-frame ping/pong, close handshakes, fragmentation,
+#   text + binary message types, compression extension, and TLS,
+#   exposing a `Dialer` for clients and an `Upgrader` for HTTP
+#   handlers.  burst's `internal/wsx/` wraps both sides of the
+#   gorilla/websocket API:  `Upgrader.Upgrade(w, r, ...)` on the
+#   server end (`internal/server/api/`) and `Dialer.Dial(url,
+#   header)` on the client end, then mounts a typed binary-frame
+#   dispatcher per session.  Verified via:
+#     gh api repos/fzdwx/burst/contents/go.mod
+#       → github.com/gorilla/websocket v1.5.0
+#       → github.com/spf13/cobra v1.7.0
+#   This entry is the Go=133 leader bump that continues Axis 78
+#   (WebSocket Protocol Library) opened at R901 with Rust=
+#   tungstenite 0.18.0 (blakejakopovic/nostcat).
+#
+#   No completion for `burst` ships with Apple zsh
+#   (/usr/share/zsh/*/functions) or Homebrew zsh-completions
+#   (/opt/homebrew/share/zsh/site-functions) — confirmed absent.
+# ============================================================================
+
+_burst() {
+    local curcontext="$curcontext" state line ret=1
+    typeset -A opt_args
+
+    _arguments -C \
+        '(-l --log)'{-l+,--log=}'[log file path]:log file:_files' \
+        '(-v --level)'{-v+,--level=}'[log level (default debug)]:level:(debug info warn error fatal panic)' \
+        '(- *)'{-h,--help}'[show help]' \
+        '1: :_burst_commands' \
+        '*::arg:->args' && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                serve)
+                    _arguments '(- *)'{-h,--help}'[help]' && ret=0 ;;
+                client)
+                    _arguments \
+                        '(-t --token)'{-t+,--token=}'[access token (auto-generated if absent)]:token:' \
+                        '(-p --port)'{-p+,--port=}'[server REST port (default 9999)]:port:' \
+                        '(-s --host)'{-s+,--host=}'[server host (default 0.0.0.0)]:host:_hosts' \
+                        '(-i --interactive)'{-i,--interactive}'[interactive mode (REPL)]' \
+                        '*:user-command argument:' \
+                        '(- *)'{-h,--help}'[help]' && ret=0 ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+(( $+functions[_burst_commands] )) ||
+_burst_commands() {
+    local -a commands
+    commands=(
+        'serve:start the burst server (public side of the tunnel)'
+        'client:connect a client to a burst server (private side)'
+    )
+    _describe -t commands 'burst command' commands
+}
+
+_burst "$@"
