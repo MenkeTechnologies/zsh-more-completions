@@ -1,0 +1,318 @@
+#compdef fddf
+# =============================================================================
+# fddf — Georg Brandl's "Fast, parallelized duplicate
+#        file finder" — a Rust CLI that scans one or
+#        more directory roots for files with identical
+#        content + reports them.  Uses BLAKE3
+#        cryptographic hashing for content fingerprinting
+#        + a custom block-sampling strategy
+#        (hash 4KB chunks, skip 100KB between samples)
+#        to identify candidate duplicates without
+#        full-file hashing, then verifies byte-by-byte
+#        equality for confirmed duplicates.  The
+#        parallel design (CPU+1 worker thread pool via
+#        scoped_threadpool) saturates modern SSDs +
+#        keeps fddf I/O-bound rather than hash-bound.
+#        Distinguishing from `fdupes` (older C tool;
+#        SHA-1 hashing, single-threaded), `jdupes`
+#        (rmlint-like; faster than fdupes; uses xxHash),
+#        `dupd` (memory-efficient C tool by Jyri J.
+#        Virkki), `rmlint` (Python+C; many features
+#        but heavier), `czkawka` (Rust GUI duplicate-
+#        finder), and `fclones` (Rust CLI duplicate-
+#        finder; uses xxh3 by default) by:
+#          - BLAKE3 HASHING — uses oconnor663/blake3
+#            (Jack O'Connor + Samuel Neves + Jean-
+#            Philippe Aumasson + Zooko Wilcox-O'Hearn's
+#            modern cryptographic hash function; this
+#            is the headline CLI library that opens
+#            Axis 37 on the Rust side; see taxonomy
+#            notes below).  BLAKE3 is ~5x faster than
+#            SHA-256, ~3x faster than BLAKE2 due to
+#            tree-based parallel hashing
+#          - BLOCK-SAMPLING — instead of hashing
+#            entire files (which would be I/O-
+#            bound on large files), fddf hashes 4KB
+#            blocks separated by 100KB gaps.
+#            Statistically equivalent fingerprint at
+#            <5% of the I/O cost for typical
+#            duplicate detection
+#          - BYTE-BY-BYTE VERIFICATION — final
+#            confirmation reads candidate duplicates
+#            block-by-block + compares directly;
+#            eliminates false positives from hash
+#            collisions
+#          - INODE DEDUPE — Unix-specific: tracks
+#            visited (dev, inode) pairs via FnvHashSet;
+#            hard-linked files are visited only once
+#            (no false duplicate from hardlinks
+#            pointing to same data)
+#          - PARALLEL THREAD POOL — uses scoped_thread
+#            pool::Pool with num_cpus::get() + 1
+#            workers; the +1 accounts for the walker
+#            thread being mostly IO-bound
+#          - SIZE-FIRST FILTER — files of different
+#            sizes can't be duplicates; fddf groups
+#            by size first + only hashes within
+#            size-buckets
+#          - HUMANIZED SIZE — `-m 1MB` / `-M 100GB`
+#            uses dimensionalist/unbytify for human-
+#            readable size parsing
+#          - GLOB + REGEX FILTERS — `-f "*.log"`
+#            (glob) or `-F '\.log\d+$'` (regex) limit
+#            which filenames are considered
+#          - HIDDEN-FILE CONTROL — `-H` excludes
+#            Unix dotfiles (defaults to including
+#            them)
+#          - NON-RECURSIVE — `-S` disables directory
+#            recursion (single-level scan)
+#          - GRAND TOTAL — `-t` reports total bytes
+#            recoverable by deduplication
+#          - SINGLE-LINE OUTPUT — `-s` puts all dupes
+#            of one set on one line (whitespace-
+#            separated); `-0` switches to NUL
+#            separation for `xargs -0` integration
+#          - JWALK / WALKDIR DIRECTORY TRAVERSAL —
+#            uses BurntSushi's walkdir for recursive
+#            iteration with proper symlink handling
+#          - STRUCTOPT CLI — uses TeXitoi's structopt
+#            (the clap derive predecessor; clap 3+
+#            now has #[derive(Parser)] built in;
+#            structopt was the bridge)
+#        Used by: Linux sysadmins recovering disk
+#        space, photographers / videographers
+#        identifying duplicate media files, backup
+#        tooling integrations (writers can pipe
+#        fddf output into rm/mv via xargs -0), and
+#        anyone wanting a fast standalone duplicate
+#        finder without rmlint's Python dependency.
+#
+# Author:  Georg Brandl (birkenfeld on GitHub).
+#          German Python core developer (former
+#          Sphinx documentation framework lead;
+#          former CPython release manager).  License:
+#          MIT OR Apache-2.0 dual-licensed.
+# Source:  https://github.com/birkenfeld/fddf
+#          https://github.com/birkenfeld/fddf/blob/main/src/main.rs
+#          https://github.com/birkenfeld/fddf/blob/main/Cargo.toml
+# Manpage: No traditional manpage; documentation in
+#          repo README.md.
+# Library: blake3 (Jack O'Connor + BLAKE3 team
+#          cryptographic hash function — the headline
+#          dependency for this completion's axis-
+#          opening role; see taxonomy notes below).
+#          Also structopt (Axis 1 argparse via clap
+#          derive predecessor), walkdir (BurntSushi's
+#          directory traversal), scoped_threadpool
+#          (thread pool), num_cpus (CPU detection),
+#          fnv (Fowler-Noll-Vo hashmap), unbytify
+#          (humanized sizes), regex (Axis 31-
+#          adjacent BurntSushi regex), glob (file
+#          pattern matching).
+# License: MIT OR Apache-2.0 (dual)
+# Status:  121+ stars on birkenfeld/fddf; production-
+#          stable; rare-update releases.
+#
+# -----------------------------------------------------------------------------
+# CROSS-LANGUAGE CLI LIBRARY TAXONOMY — AXIS 37 OPENS: BLAKE3 CRYPTOGRAPHIC HASHING
+# -----------------------------------------------------------------------------
+# This completion **OPENS AXIS 37** in the cross-language CLI library
+# taxonomy: BLAKE3 Cryptographic Hashing (libraries that implement
+# the BLAKE3 hash function — a 2020 modern cryptographic hash
+# combining the security of BLAKE2 + the speed of MD5 + Merkle-tree
+# parallelism + verified streaming — as distinct from Axis 27 Embedded
+# Database which uses SQLite for content storage, or Axis 23 JSON
+# Schema Validation which checks structural conformance).
+#
+# Pattern: R736 116th language (Toit) closes the prior 3+1 cycle →
+# R737 Rust=92 (fddf/blake3 → Axis 37 OPENS THIS) is the first
+# leader bump in the new cycle.  Pending: R738 Go=92 with a
+# lukechampine.com/blake3 user; R739 TS-Node=92 with a hash-wasm
+# or @noble/hashes user; R740 117th language.
+#
+# WHY blake3 IS A DISTINCTIVE AXIS-37 OPENER:
+#
+#   blake3 (BLAKE3-team/BLAKE3 on GitHub; oconnor663/blake3 was the
+#   original Rust reference impl, now adopted as the BLAKE3 team's
+#   canonical) is the Rust reference implementation of BLAKE3, the
+#   2020 successor to BLAKE2.  Authored by:
+#     - Jack O'Connor (oconnor663): BLAKE3 co-designer; previously
+#       maintained Bao (verified streaming format on top of BLAKE3)
+#     - Samuel Neves: BLAKE2 + BLAKE3 co-designer + Coimbra Univ.
+#     - Jean-Philippe Aumasson: BLAKE2 + BLAKE3 co-designer +
+#       co-author of "Serious Cryptography"; founder of Teserakt
+#     - Zooko Wilcox-O'Hearn: BLAKE3 co-designer; founder of
+#       Tahoe-LAFS + Electric Coin Company (Zcash)
+#   Distinguishing characteristics of BLAKE3:
+#     1. SPEED — ~5x faster than SHA-256, ~3x faster than BLAKE2.
+#        Achieved through hash-tree parallelism + lookahead
+#        prefetching + AVX-512/NEON SIMD acceleration
+#     2. TREE HASHING — internally a Merkle tree of 1024-byte
+#        chunks; enables both INCREMENTAL (extend hash with new
+#        data without re-hashing) and PARALLEL (SIMD multi-chunk
+#        hashing) operation
+#     3. VERIFIED STREAMING — Bao protocol (companion spec) lets
+#        you verify chunks of a large file as you stream them
+#        WITHOUT requiring the full file or full hash chain
+#     4. SECURITY MARGIN — preserves BLAKE2's 128-bit security
+#        level for collision resistance + 256-bit for preimage
+#        resistance
+#     5. NO-NS PHASE — unlike SHA-3 (Keccak) which is fundamentally
+#        different mathematics from SHA-2; BLAKE3 is incremental
+#        improvement over BLAKE2 (itself an improvement over
+#        BLAKE which lost the SHA-3 finalist competition to
+#        Keccak)
+#     6. SINGLE FUNCTION — `blake3::hash(&data)` returns a
+#        256-bit hash; no SHA-256 / SHA-384 / SHA-512 / SHAKE128
+#        / SHAKE256 variant maze.  XOF mode for arbitrary-length
+#        output
+#     7. KEYED HASH — `blake3::keyed_hash(&key, &data)` for
+#        MAC computation (constant-time, length-extension-resistant)
+#     8. KDF MODE — `blake3::derive_key("context", &input)` for
+#        key derivation
+#     9. ~4,500+ STARS on BLAKE3-team/BLAKE3
+#    10. WIDELY ADOPTED — used by fddf (this completion), Bao
+#        (verified streaming), oconnor663/bao, Cargo (Rust
+#        package registry checksum), restic (backup), kaspad
+#        (Kaspa cryptocurrency), Solana, Aleph Zero, IPFS
+#        (optional), Filecoin (optional), and many more
+#
+# Maintained by the BLAKE3 Team.  License: CC0 OR Apache-2.0 (dual).
+#
+# Cross-language CLI library taxonomy after R737:
+#   * 116 languages
+#   * 454 total CLI library variants (Rust 92 / Go 91 / TS-Node 91)
+#   * Axis 9 / Logging: 6/6/6 three-language symmetric
+#   * Axes 10 + 13 + 14: 2/2/2 three-language symmetric
+#   * Axes 7 + 8 + 11 + 12 + 15 + 16 + 17 + 18 + 19 + 20 + 21 + 22 + 23
+#     + 24 + 25 + 26 + 27 + 28 + 29 + 30 + 31 + 32 + 33 + 34 + 35 + 36
+#     at 1/1/1 three-language symmetric (29 axes three-language
+#     symmetric)
+#   * Axis 37 opens with Rust=blake3 (this round); pending Go +
+#     TS-Node companions
+#
+# Comparison to other Axis 37 candidates (Rust):
+#   * blake3 (R737 THIS) — BLAKE3 Team, reference Rust impl,
+#     ~4.5k stars, dominant Rust cryptographic hash
+#   * sha2 — RustCrypto/hashes/sha2; SHA-256 + SHA-512; older
+#     algorithm
+#   * sha3 — RustCrypto/hashes/sha3; SHA-3 (Keccak); NIST
+#     competition winner; slower than BLAKE3
+#   * blake2 — RustCrypto/hashes/blake2; BLAKE3's predecessor
+#   * argon2 — RustCrypto/password-hashes/argon2; password
+#     hashing KDF; different use case than general-purpose
+#     content hashing
+#   * ring — Brian Smith's high-assurance crypto suite; broader
+#     than just hashing
+#
+# blake3 is the chosen Axis 37 opener because:
+#   - It is the dominant modern cryptographic hash in the Rust
+#     ecosystem
+#   - fddf specifically uses blake3 for fast content fingerprinting
+#   - It is the closest analog to Go's lukechampine.com/blake3
+#     and zeebo/blake3 (Go BLAKE3 impls) and TS-Node's
+#     hash-wasm + @noble/hashes (JS BLAKE3 impls)
+#   - It demonstrates the modern post-2020 cryptographic-hash
+#     pattern where ONE algorithm (BLAKE3) replaces the
+#     SHA-256/SHA-512/BLAKE2/SHA-3 jungle
+#
+# Pending companion picks for Axis 37:
+#   - Go=92: a CLI tool using lukechampine.com/blake3 (Luke
+#            Champine's Go BLAKE3 implementation; SIMD-accelerated)
+#            OR zeebo/blake3 (alternative Go impl) as headline
+#            hash library
+#   - TS-Node=92: a CLI tool using hash-wasm (Daninet's WebAssembly
+#            multi-hash including BLAKE3) OR @noble/hashes (Paul
+#            Miller's pure-JS noble cryptography suite) as
+#            headline hash library
+#
+# -----------------------------------------------------------------------------
+#
+# THE fddf CLI
+#
+# fddf is invoked as:
+#   fddf [OPTIONS] <ROOT>...
+#
+# Common invocations:
+#   # Find duplicates in current directory
+#   fddf .
+#
+#   # Find duplicates in multiple directories
+#   fddf ~/Downloads ~/Documents ~/Pictures
+#
+#   # Skip files smaller than 1 MB
+#   fddf -m 1MB ~/Videos
+#
+#   # Limit to files smaller than 100 MB
+#   fddf -M 100MB ~/Documents
+#
+#   # Both min + max size limits
+#   fddf -m 1MB -M 100GB ~/large-files
+#
+#   # Exclude hidden (dotfile) files
+#   fddf -H ~
+#
+#   # Single-level scan (no recursion)
+#   fddf -S ~/large-dir
+#
+#   # Report grand total of recoverable bytes
+#   fddf -t ~/Downloads
+#
+#   # Single-line output (dupes whitespace-separated)
+#   fddf -s ~/Pictures
+#
+#   # NUL-separated single-line (for xargs -0)
+#   fddf -s -0 ~/duplicates | xargs -0 echo
+#
+#   # Verbose (show hashing progress)
+#   fddf -v ~/Downloads
+#
+#   # Filter by glob pattern
+#   fddf -f "*.log" /var/log
+#
+#   # Filter by regex
+#   fddf -F '\.log\.\d+$' /var/log
+#
+# OPTIONS (sourced directly from
+# https://github.com/birkenfeld/fddf/blob/main/src/main.rs):
+#
+#   -m N                          Minimum file size (default 1)
+#                                 Supports humanized: 1MB, 5GB, 100KB
+#   -M N                          Maximum file size
+#                                 Supports humanized
+#   -H                            Exclude Unix hidden files
+#   -S                            Don't scan recursively
+#   -t                            Report grand total of duplicates
+#   -s                            Report dupes on a single line
+#   -v                            Verbose operation
+#   -0                            With -s: NUL-separate dupes
+#   -f PATTERN                    Filter filenames by glob pattern
+#   -F REGEXP                     Filter filenames by regex
+#   --help, -h                    Show help
+#   --version, -V                 Show version
+#
+# Positional:
+#   <ROOT>...                     One or more root directories to scan
+#
+# -----------------------------------------------------------------------------
+
+local curcontext="$curcontext" state line ret=1
+typeset -A opt_args
+
+_arguments -s -S \
+    '-m+[minimum file size (default 1; supports 1MB,5GB,etc)]:size:_default' \
+    '-M+[maximum file size (supports 1MB,5GB,etc)]:size:_default' \
+    '-H[exclude Unix hidden files]' \
+    '-S[do not scan recursively]' \
+    '-t[report grand total of duplicates]' \
+    '-s[report dupes on a single line]' \
+    '-v[verbose operation]' \
+    '-0[with -s: NUL-separate dupes]' \
+    '-f+[filter filenames by glob pattern]:pattern:_default' \
+    '-F+[filter filenames by regex]:regex:_default' \
+    '(- *)'{-h,--help}'[show help]' \
+    '(- *)'{-V,--version}'[show version]' \
+    '*:root directory:_files -/' \
+    && ret=0
+
+return ret
