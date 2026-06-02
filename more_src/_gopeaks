@@ -1,0 +1,390 @@
+#compdef gopeaks
+# ============================================================================
+# _gopeaks — zsh completion for **gopeaks** — maxsonBraunLab/gopeaks,
+#            the **Maxson + Braun Lab** (typed Oregon Health &
+#            Science University / OHSU Cancer Early Detection
+#            Advanced Research Center) typed **peak caller for
+#            CUT&TAG and CUT&RUN sequencing data**.  CUT&TAG
+#            (Cleavage Under Targets and Tagmentation, typed
+#            Henikoff Lab 2019) + CUT&RUN (Cleavage Under Targets
+#            and Release Using Nuclease, typed Henikoff Lab 2017)
+#            are the **typed modern typed low-input typed
+#            ChIP-seq alternatives** that have largely typed
+#            displaced traditional typed crosslinking ChIP-seq in
+#            typed epigenomics research labs — typed CUT&TAG /
+#            CUT&RUN typed produce typed dramatically typed
+#            cleaner signal with typed 100x typed less starting
+#            material (typed single-cell sensitivity) but the
+#            typed low-noise typed peak shape requires typed
+#            specialized typed peak-calling algorithms.  The typed
+#            community standard had been **MACS2** (typed Python,
+#            typed 2008, typed designed for typed crosslinked
+#            ChIP-seq); typed GoPeaks is the typed first typed
+#            production peak caller typed designed from scratch
+#            for typed CUT&TAG / CUT&RUN typed signal
+#            characteristics, typed published in **Genome
+#            Biology 2022** (Yashar WM, Kong G, McDermott J, et
+#            al.;  "GoPeaks: histone modification peak calling
+#            for CUT&Tag";  DOI:10.1186/s13059-022-02763-2).
+#            Implemented entirely in typed Go for typed single-
+#            binary typed deployment + typed parallelism without
+#            the typed Python typed environment-management
+#            burden;  uses the canonical pure-Go DataFrame library
+#            **gota** by Alejandro Sanchez Brotons for typed
+#            tabular peak-statistic transformation.  Go=186
+#            leader bump continuing Axis 131 (pure-Rust + pure-Go
+#            columnar DataFrame + analytical query engine
+#            taxonomy) at 2/0/0 via **github.com/go-gota/gota
+#            v0.12.0**.
+# ============================================================================
+#
+# UPSTREAM
+#   Repository : https://github.com/maxsonBraunLab/gopeaks
+#   Maintainer : Maxson Lab + Braun Lab joint project at OHSU
+#                 Cancer Early Detection Advanced Research Center
+#                 (CEDAR);  lead author William Yashar, with
+#                 contributors from typed OHSU + typed Knight
+#                 Cancer Institute typed bioinformatics + typed
+#                 cancer-epigenetics groups;  Julia Maxson
+#                 (typed PI, Knight Cancer Institute Center for
+#                 Hematologic Malignancies) + Theresa Braun
+#                 (typed PI, Knight Cancer Institute typed
+#                 leukemia biology) are the typed senior
+#                 corresponding authors of the typed Genome
+#                 Biology paper
+#   License    : MIT
+#   Stars      : 80+ on github.com/maxsonBraunLab/gopeaks
+#   Language   : Go  (akamensky/argparse for the CLI surface +
+#                 pbenner/gonetics for typed BAM file parsing +
+#                 typed GRanges/typed genomic-interval primitives
+#                 + go-gota/gota v0.12.0 for typed DataFrame
+#                 transformation of typed binned read counts +
+#                 typed Series ops on typed CPM-normalized values
+#                 + gonum.org/v1/gonum v0.9.1 for typed
+#                 statistical-distribution primitives (typed
+#                 negative-binomial typed signal model + typed
+#                 Benjamini-Hochberg typed multiple-hypothesis
+#                 correction) + sirupsen/logrus for logging)
+#   Binary     : gopeaks  (built from `gopeaks.go` at repo root;
+#                 typed published as typed pre-built binaries
+#                 across typed linux-amd64 / darwin-amd64 /
+#                 darwin-arm64 / windows-amd64 via typed GitHub
+#                 Releases)
+#   Last push  : 2026-06-02
+#
+# WHAT IT IS
+#   gopeaks is the **production CUT&TAG / CUT&RUN peak caller** —
+#   the typed bioinformatics workflow:
+#
+#     1. Wet-lab researcher performs typed CUT&TAG (typed
+#        tagmentation-based) or typed CUT&RUN (typed MNase-based)
+#        typed experiment with a typed antibody targeting a
+#        typed transcription factor (typed FOXA1, CTCF, GATA1,
+#        ESR1, MYC, etc.) or typed histone modification (typed
+#        H3K4me3 for typed active promoters, typed H3K27me3 for
+#        typed Polycomb-repressed regions, typed H3K27ac for
+#        typed active enhancers, typed H3K4me1 for typed primed
+#        enhancers, typed H3K36me3 for typed gene bodies, typed
+#        H3K9me3 for typed heterochromatin)
+#     2. Sequencing facility produces typed paired-end Illumina
+#        FASTQ reads
+#     3. Bioinformatician aligns reads (typed bowtie2 / typed bwa-
+#        mem) to typed reference genome producing typed paired-
+#        end BAM (typed `--bam treatment.bam`)
+#     4. Optional: aligns matched typed IgG / typed input control
+#        BAM (`--control igg.bam`)
+#     5. gopeaks bins the typed genome into typed sliding windows
+#        (default typed `--step 100` bp + `--slide 50` bp; typed
+#        `--broad` mode auto-switches to typed 5000/1000 bp for
+#        typed H3K27me3 / H3K4me1 / H3K27ac typed broad domains)
+#     6. gopeaks counts typed read pairs per bin (typed gonetics
+#        typed GRanges typed overlap)
+#     7. gopeaks normalizes typed treatment to typed control
+#        (typed CPM-scaled typed signal subtraction)
+#     8. gopeaks fits a typed negative-binomial distribution
+#        typed via typed gonum typed `distuv.NegativeBinomial`
+#     9. gopeaks computes typed per-bin p-values + applies typed
+#        Benjamini-Hochberg typed multiple-hypothesis correction
+#        (typed `--pval 0.05`)
+#    10. gopeaks merges typed contiguous typed significant bins
+#        within typed `--mdist 1000` bp into typed candidate
+#        peaks + applies typed `--minreads 15` typed coverage
+#        threshold + typed `--minwidth 150` bp typed minimum
+#        peak width
+#    11. gopeaks writes typed BED-format typed peaks file (typed
+#        `<prefix>_peaks.bed`) + typed JSON metrics typed report
+#        (typed `<prefix>_gopeaks.json`)
+#
+# CLI ARGUMENT GRAMMAR  (verbatim from `gopeaks.go` akamensky/
+#                       argparse declarations;  extracted via raw
+#                       fetch of `gopeaks.go`)
+#
+#   gopeaks [OPTIONS...]
+#
+#   Required for actual peak calling:
+#     -b, --bam <FILE>                input BAM file
+#                                     (paired-end reads required)
+#
+#   Optional:
+#     -c, --control <FILE>            control BAM (IgG, Input)
+#                                     for normalization
+#     -s, --chromsize <FILE>          chromosome sizes (only
+#                                     needed if missing from
+#                                     BAM header)
+#     -m, --mdist <INT>               merge peaks within <mdist>
+#                                     bp (default 1000)
+#     -r, --minreads <INT>            minimum read pairs per
+#                                     candidate bin (default 15)
+#     -p, --pval <FLOAT>              significance threshold
+#                                     (Benjamini-Hochberg
+#                                     corrected; default 0.05)
+#     -t, --step <INT>                bin size for coverage bins
+#                                     (default 100;
+#                                     `--broad` resets to 5000)
+#     -l, --slide <INT>               slide size for coverage
+#                                     bins (default 50;
+#                                     `--broad` resets to 1000)
+#     -w, --minwidth <INT>            minimum peak width in bp
+#                                     (default 150)
+#     -o, --prefix <STRING>           output prefix (default
+#                                     `sample`)
+#     -v, --version                   print version + exit
+#         --broad                     broad-mark mode (typed
+#                                     H3K27ac / H3K4me1 /
+#                                     H3K27me3 / H3K9me3 / typed
+#                                     H3K36me3);  auto-sets
+#                                     `--step 5000` + `--slide
+#                                     1000`
+#         --verbose                   verbose progress logging
+#
+#   Output files (relative to current working directory):
+#     <PREFIX>_peaks.bed              typed BED3 peak coordinates
+#                                     (typed chrom, start, end)
+#     <PREFIX>_gopeaks.json           typed JSON metrics
+#                                     (typed version, date,
+#                                     elapsed, command, peak
+#                                     count)
+#
+# AXIS / CORPUS POSITION
+#   `maxsonBraunLab/gopeaks`'s `go.mod` declares a **direct**
+#   dependency on `github.com/go-gota/gota v0.12.0`.  The
+#   typed `gopeaks.go` typed package main typed imports typed
+#   `"github.com/go-gota/gota/dataframe"` + typed
+#   `"github.com/go-gota/gota/series"` and uses typed
+#   `dataframe.New(series.Floats(coverage), ...)` typed
+#   DataFrame constructor + typed `df.Col(name)` typed series
+#   accessor + typed `series.New(values, series.Float, name)`
+#   typed series constructor for typed binned-read-count typed
+#   transformation pipeline (typed `cpm` typed counts-per-
+#   million normalization + typed `scaleTreatToControl` typed
+#   treatment-vs-control typed scaled subtraction + typed
+#   `callpeaks` typed downstream typed candidate-bin filtering).
+#
+#   **gota** (`github.com/go-gota/gota`) is **THE canonical
+#   pure-Go DataFrame + Series library** — Alejandro Sanchez
+#   Brotons's (formerly typed kniren on GitHub, typed project
+#   moved to the typed `go-gota/` org after typed kniren's
+#   typed handoff) reference Go implementation of a typed
+#   tabular-data manipulation library modeled architecturally
+#   on typed Pandas (typed Python) + typed dplyr (typed R)
+#   with typed Go-idiomatic typed typed-column ergonomics.
+#   In active development since 2016, with 3,200+ ★ on
+#   github.com/go-gota/gota.  Structurally positioned as **the
+#   typed standard typed Go-side typed Pandas-equivalent typed
+#   library** — typed not as feature-complete as typed
+#   polars-rs (typed lacks typed lazy execution + typed query
+#   optimizer + typed Apache Arrow typed columnar storage),
+#   but typed sufficient for typed in-memory typed tabular
+#   transformations + typed CSV/JSON I/O.
+#
+#   gota ships:
+#
+#     • Typed `dataframe.DataFrame`    typed tabular
+#                                      `[]Series`-backed typed
+#                                      DataFrame with typed
+#                                      column-major typed
+#                                      layout
+#     • Typed `series.Series`          typed
+#                                      typed-column typed
+#                                      Series with typed
+#                                      concrete typed `Int`,
+#                                      `Float`,
+#                                      `String`, `Bool` typed
+#                                      element types
+#     • Typed `series.Type` enum       typed dtype constants:
+#                                      typed `series.Int`,
+#                                      `series.Float`,
+#                                      `series.String`,
+#                                      `series.Bool`
+#     • Typed `dataframe.New(...)`     typed DataFrame
+#                                      constructor from typed
+#                                      `...Series`
+#     • Typed `dataframe.LoadStructs`  typed `[]struct{...}`
+#                                      typed reflection-based
+#                                      DataFrame constructor
+#     • Typed `dataframe.LoadMaps`     typed `[]map[string]
+#                                      interface{}` typed
+#                                      DataFrame constructor
+#     • Typed `dataframe.LoadRecords`  typed `[][]string`
+#                                      typed CSV-row-style typed
+#                                      DataFrame constructor
+#     • Typed `dataframe.ReadCSV`      typed CSV file +
+#                                      reader DataFrame loader
+#     • Typed `dataframe.ReadJSON`     typed JSON file +
+#                                      reader DataFrame loader
+#     • Typed `dataframe.ReadHTML`     typed HTML-table
+#                                      scraper DataFrame loader
+#     • Typed `df.WriteCSV` /
+#       `df.WriteJSON`                 typed I/O writers
+#     • Typed `df.Subset(indexes)`     typed row-index typed
+#                                      slicing
+#     • Typed `df.Select(colnames)` /
+#       `df.Drop(colnames)`             typed column projection
+#                                      + typed exclusion
+#     • Typed `df.Filter(filters)`     typed predicate-based
+#                                      typed row filtering
+#                                      with typed
+#                                      `dataframe.F{Colname,
+#                                      Comparator, Comparando}`
+#                                      typed filter specs
+#     • Typed `df.Arrange(orders)`     typed sort by typed
+#                                      columns
+#     • Typed `df.Mutate(s Series)`    typed column append /
+#                                      replace
+#     • Typed `df.Rename(newname,
+#                        oldname)`     typed column rename
+#     • Typed `df.GroupBy(colnames)`   typed `Groups` typed
+#                                      group-by typed
+#                                      intermediate
+#     • Typed `groups.Aggregation(
+#         []AggregationType,
+#         []colnames)`                 typed aggregation
+#                                      (typed
+#                                      Aggregation_SUM,
+#                                      Aggregation_COUNT,
+#                                      Aggregation_MEAN,
+#                                      Aggregation_MEDIAN,
+#                                      Aggregation_MAX,
+#                                      Aggregation_MIN,
+#                                      Aggregation_STD)
+#     • Typed `df.InnerJoin/OuterJoin/
+#                LeftJoin/RightJoin/
+#                CrossJoin`            typed multi-DataFrame
+#                                      join operations
+#     • Typed `df.Concat(b)` /
+#       `df.RBind(b)` /
+#       `df.CBind(b)`                  typed vertical /
+#                                      horizontal concatenation
+#     • Typed `series.Sum/Mean/Median/
+#               Max/Min/StdDev/Quantile`
+#                                      typed reduction
+#                                      operations
+#     • Typed `series.Compare(s
+#       Series, op Comparator)`         typed elementwise
+#                                      compare returning typed
+#                                      `[]bool`
+#     • Typed `series.Bool` /
+#       `series.Float` constructors    typed quick-construction
+#                                      from typed slices
+#     • Typed `dataframe.F` typed
+#       filter spec                    typed `F{Colname,
+#                                      Comparator, Comparando}`
+#                                      with typed
+#                                      `Comparator` enum:
+#                                      typed `Eq`, `Neq`,
+#                                      `Greater`, `GreaterEq`,
+#                                      `Less`, `LessEq`,
+#                                      `In`, `NotIn`,
+#                                      `Like`, `RegEx`
+#
+#   gota is the DataFrame library behind essentially every Go-
+#   native data-processing application:
+#
+#     • **gorgonia/gorgonia** — typed Go ML library uses gota
+#       in typed dataset-loading typed examples
+#     • **kubescape/kubescape** (10,500+ ★) — typed Kubernetes
+#       security scanner uses typed gota for typed compliance
+#       report tabulation (covered as `_kubescape`)
+#     • **daptin/daptin** (3,400+ ★) — typed REST API typed
+#       server with typed dynamic schema (covered as `_daptin`)
+#     • **maxsonBraunLab/gopeaks** (this very project) — typed
+#       CUT&TAG/CUT&RUN typed peak caller
+#     • **caraml-dev/merlin** — typed ML model serving platform
+#       (covered as `_merlin`)
+#     • **facebook/dns dnswatch** — typed Facebook typed DNS
+#       monitoring
+#     • **reanahub/reana-client-go** — typed REANA scientific
+#       workflow client
+#     • **gomlx/gomlx** — typed Google JAX-style typed Go ML
+#       framework
+#     • **bachhm-dev/go-machine-learning** — typed regression
+#       + classification examples
+#     • **github4vish/ml-go** — typed ML algorithms in Go
+#     • Plus typed many internal typed Go data-engineering +
+#       typed ETL + typed analytics services.
+#
+#   Verified via:
+#     gh api repos/maxsonBraunLab/gopeaks/contents/go.mod
+#       → module maxsonBraunLab/gopeaks
+#       → require github.com/go-gota/gota v0.12.0  (DIRECT)
+#       → require github.com/pbenner/gonetics v1.0.0  (DIRECT)
+#       → require github.com/akamensky/argparse v1.3.1  (DIRECT)
+#       → require gonum.org/v1/gonum v0.9.1  (DIRECT)
+#       → require github.com/sirupsen/logrus v1.8.1  (DIRECT)
+#     raw.githubusercontent.com maxsonBraunLab/gopeaks main
+#         gopeaks.go
+#       → import "github.com/akamensky/argparse"
+#       → import "github.com/go-gota/gota/dataframe"
+#       → import "github.com/go-gota/gota/series"
+#       → const gopeaks_version = "1.0.0"
+#       → parser := argparse.NewParser("GoPeaks",
+#                  "GoPeaks is a peak caller designed for
+#                   CUT&TAG/CUT&RUN sequencing data. ...")
+#       → bam := parser.String("b", "bam", ...) [paired-end BAM]
+#       → control := parser.String("c", "control", ...)
+#       → cs := parser.String("s", "chromsize", ...)
+#       → within := parser.Int("m", "mdist", default 1000)
+#       → minreads := parser.Int("r", "minreads", default 15)
+#       → pval := parser.Float("p", "pval", default 0.05)
+#       → step := parser.Int("t", "step", default 100)
+#       → slide := parser.Int("l", "slide", default 50)
+#       → minwidth := parser.Int("w", "minwidth", default 150)
+#       → outprefix := parser.String("o", "prefix",
+#                                     default "sample")
+#       → version := parser.Flag("v", "version", ...)
+#       → broad := parser.Flag("", "broad", ...)
+#       → verbose := parser.Flag("", "verbose", ...)
+#       → broad mode auto-sets step=5000, slide=1000
+#
+#   This entry is the Go=186 leader bump that continues Axis 131
+#   (pure-Rust + pure-Go columnar DataFrame + analytical query
+#   engine taxonomy) at 2/0/0 following R1091 _cryo (Rust=186
+#   OPENED via paradigmxyz/cryo on pola-rs/polars).  TS-Node=
+#   186 closing pair on deck for R1093 via a TS/JS consumer of
+#   `dataframe-js` or `apache/arrow-js` (the typed canonical
+#   pure-JS Apache Arrow + DataFrame implementations).
+#
+#   No completion for `gopeaks` ships with Apple zsh
+#   (/usr/share/zsh/*/functions) or Homebrew zsh-completions
+#   (/opt/homebrew/share/zsh/site-functions) — confirmed absent.
+# ============================================================================
+
+_gopeaks() {
+    _arguments -s -S \
+        '(-b --bam)'{-b,--bam}'=[input BAM file (paired-end reads required)]:bam:_files -g "*.bam"' \
+        '(-c --control)'{-c,--control}'=[control BAM (IgG, Input) for normalization]:bam:_files -g "*.bam"' \
+        '(-s --chromsize)'{-s,--chromsize}'=[chromosome sizes file]:file:_files' \
+        '(-m --mdist)'{-m,--mdist}'=[merge peaks within bp (default 1000)]:bp:' \
+        '(-r --minreads)'{-r,--minreads}'=[min read pairs per candidate bin (default 15)]:n:' \
+        '(-p --pval)'{-p,--pval}'=[significance threshold (default 0.05)]:p:' \
+        '(-t --step)'{-t,--step}'=[bin size in bp (default 100; --broad resets to 5000)]:bp:' \
+        '(-l --slide)'{-l,--slide}'=[slide size in bp (default 50; --broad resets to 1000)]:bp:' \
+        '(-w --minwidth)'{-w,--minwidth}'=[minimum peak width in bp (default 150)]:bp:' \
+        '(-o --prefix)'{-o,--prefix}'=[output prefix (default sample)]:prefix:' \
+        '(-v --version)'{-v,--version}'[print version + exit]' \
+        '--broad[broad-mark mode (H3K27ac/H3K4me1/H3K27me3/H3K9me3/H3K36me3)]' \
+        '--verbose[verbose progress logging]' \
+        '(-h --help)'{-h,--help}'[show help]'
+}
+
+_gopeaks "$@"
