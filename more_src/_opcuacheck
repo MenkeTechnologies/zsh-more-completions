@@ -1,0 +1,178 @@
+#compdef opcuacheck
+# ============================================================================
+# _opcuacheck — zsh completion for opcuacheck, simple OPC UA CLI
+# ============================================================================
+#
+# UPSTREAM
+#   Repository : https://github.com/obowersa/opcuacheck
+#   Author     : obowersa
+#   License    : MIT
+#   Stars      : 0
+#   Language   : Go
+#   Module     : github.com/obowersa/opcuacheck (Go 1.20)
+#   Last push  : 2023-05-06
+#
+# WHAT IT IS
+#   opcuacheck is "Simple CLI for checking basic OPCUA info" — a Go cobra +
+#   viper CLI that connects to an OPC Unified Architecture (OPC UA, IEC 62541)
+#   server endpoint, optionally reads a YAML config file mapping named
+#   variable groups to OPC UA node identifiers, and exposes two probe
+#   workflows:  read named variables out of a running server, and report on
+#   raw connection status.  Output can be switched to JSON for ingestion by
+#   alerting / monitoring pipelines.
+#
+# CLI ARGUMENT GRAMMAR  (verbatim from internal/commands/*.go cobra setup)
+#   opcuacheck <command> [subcommand] [flags]
+#
+#   Commands:
+#     get                Commands which get information (no modification)
+#       variables [GROUP]    Query variables on the OPC UA endpoint.
+#                            GROUP optional positional — refers to a key in
+#                            the `baseVariables` block of the config file
+#                            (e.g. `dummy_plc_1`).
+#                            -v, --variables <node-id-list>
+#                                comma-separated list of OPC UA node ids
+#                                like "ns=4;s=PLC_PLC_One_Dummy_Var_1"
+#       connection           Connection-related commands
+#         status               Attempt connection to --endpoint and report
+#                              success / failure
+#
+#   Persistent flags (apply to every `get *` subcommand via addEndpointFlags):
+#     -c, --config <path>      path to config file
+#                                (default ./configs/config.yaml)
+#     -o, --output <fmt>       output format, e.g. `json`
+#     -e, --endpoint <url>     OPC UA endpoint URL  (REQUIRED)
+#                                format: opc.tcp://<addr>:<port>
+#     -t, --timeout <seconds>  connection timeout in seconds (default 3)
+#
+#   Environment:
+#     OPCUA_CHECK_*            viper auto-binds env vars with this prefix
+#                              (dashes mapped to underscores, e.g.
+#                               OPCUA_CHECK_ENDPOINT, OPCUA_CHECK_TIMEOUT)
+#
+# AXIS / CORPUS POSITION
+#   Direct dependency on github.com/gopcua/opcua v0.3.1 (the canonical
+#   Native Go OPC-UA library), declared in go.mod `require` block.  The
+#   opcua client surface is wrapped in pkg/opcua/ as `NewOpcua(endpoint)`
+#   and used in connection.go and variables.go to call `CheckConnection`
+#   and `GetVariables`.  Verified via:
+#     gh api repos/obowersa/opcuacheck/contents/go.mod
+#       → github.com/gopcua/opcua v0.3.1
+#   This entry is the Go=112 leader bump that continues Axis 57
+#   (OPC-UA Industrial Automation Library) opened at R817 with
+#   Rust=opcua 0.12 (jkrivoru/tuiopcclient `opcua-client`).
+#
+#   No completion for `opcuacheck` ships with Apple zsh
+#   (/usr/share/zsh/*/functions) or Homebrew zsh-completions
+#   (/opt/homebrew/share/zsh/site-functions) — confirmed absent.
+# ============================================================================
+
+_opcuacheck() {
+    local curcontext="$curcontext" state line ret=1
+    typeset -A opt_args
+
+    _arguments -C \
+        '(- *)'{-h,--help}'[help for opcuacheck]' \
+        '1: :_opcuacheck_commands' \
+        '*::arg:->args' && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                get)   _opcuacheck_get  && ret=0 ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+(( $+functions[_opcuacheck_commands] )) ||
+_opcuacheck_commands() {
+    local -a commands
+    commands=(
+        'get:get information from an OPC UA endpoint (no modification)'
+    )
+    _describe -t commands 'opcuacheck command' commands
+}
+
+(( $+functions[_opcuacheck_get] )) ||
+_opcuacheck_get() {
+    local curcontext="$curcontext" state line ret=1
+    _arguments -C \
+        '1: :_opcuacheck_get_commands' \
+        '*::arg:->getargs' && ret=0
+
+    case $state in
+        getargs)
+            case $words[1] in
+                variables)   _opcuacheck_get_variables  && ret=0 ;;
+                connection)  _opcuacheck_get_connection && ret=0 ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+(( $+functions[_opcuacheck_get_commands] )) ||
+_opcuacheck_get_commands() {
+    local -a commands
+    commands=(
+        'variables:query variables on the OPC UA endpoint (named group from config or --variables list)'
+        'connection:check OPC UA connection information'
+    )
+    _describe -t commands 'opcuacheck get command' commands
+}
+
+(( $+functions[_opcuacheck_endpoint_flags] )) ||
+_opcuacheck_endpoint_flags() {
+    print -- \
+        '(-c --config)'{-c+,--config=}'[path to config file (default ./configs/config.yaml)]:config file:_files -g "*.(yaml|yml|json|toml)"' \
+        '(-o --output)'{-o+,--output=}'[output format (e.g. json)]:format:(json text)' \
+        '(-e --endpoint)'{-e+,--endpoint=}'[OPC UA endpoint URL (REQUIRED, opc.tcp://addr:port)]:endpoint url:' \
+        '(-t --timeout)'{-t+,--timeout=}'[connection timeout in seconds (default 3)]:seconds:'
+}
+
+(( $+functions[_opcuacheck_get_variables] )) ||
+_opcuacheck_get_variables() {
+    _arguments \
+        $(_opcuacheck_endpoint_flags) \
+        '(-v --variables)'{-v+,--variables=}'[comma-separated OPC UA node id list (e.g. "ns=4;s=PLC_Var_1,ns=4;s=Var_2")]:node id list:' \
+        '(- *)'{-h,--help}'[help for variables]' \
+        ':variable group (config key):'
+}
+
+(( $+functions[_opcuacheck_get_connection] )) ||
+_opcuacheck_get_connection() {
+    local curcontext="$curcontext" state line ret=1
+    _arguments -C \
+        $(_opcuacheck_endpoint_flags) \
+        '1: :_opcuacheck_get_connection_commands' \
+        '*::arg:->connargs' && ret=0
+
+    case $state in
+        connargs)
+            case $words[1] in
+                status)
+                    _arguments \
+                        $(_opcuacheck_endpoint_flags) \
+                        '(- *)'{-h,--help}'[help for status]' && ret=0
+                    ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+(( $+functions[_opcuacheck_get_connection_commands] )) ||
+_opcuacheck_get_connection_commands() {
+    local -a commands
+    commands=(
+        'status:attempt connection to --endpoint and report success/failure'
+    )
+    _describe -t commands 'opcuacheck get connection command' commands
+}
+
+_opcuacheck "$@"
