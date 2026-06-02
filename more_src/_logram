@@ -1,0 +1,117 @@
+#compdef logram
+# ============================================================================
+# _logram — zsh completion for Max Eliseev's logram, a Rust utility
+#            that forwards arbitrary log streams to Telegram via teloxide
+# ============================================================================
+#
+# UPSTREAM
+#   Repository : https://github.com/mxseev/logram
+#   Author     : Max Eliseev  <seevmx@gmail.com>
+#   License    : MIT
+#   Language   : Rust
+#   Crate      : logram v2.0.0
+#   Binary     : logram  (Cargo.toml [[bin]] name = "logram",
+#                         required-features = ["bin_core"])
+#   Last push  : 2022-01-26
+#
+# WHAT IT IS
+#   logram is "a utility that takes logs from anywhere and sends them
+#   to Telegram" — a single-binary log-ingester / log-forwarder with
+#   pluggable input sources (counter, filesystem watcher,
+#   `systemd-journald` reader, Docker container log stream) and a
+#   teloxide-backed Telegram delivery channel.  Configuration —
+#   per-source filters, per-target chat IDs, formatting templates —
+#   lives in a YAML file passed via `--config`.  A helper `echo_id`
+#   subcommand connects with a bot token, prints the chat ID of any
+#   incoming message, and exits, so the operator can populate the
+#   YAML without leaving the CLI.
+#
+# CLI ARGUMENT GRAMMAR  (verbatim from src/args.rs clap App builder
+#                       with `SubcommandsNegateReqs` +
+#                       `ArgsNegateSubcommands`)
+#   logram -c <FILE>
+#   logram echo_id -t <TOKEN> [-p <URL>]
+#
+#   Top-level flag (required when no subcommand is given):
+#     -c, --config <FILE>      Path to YAML config file
+#
+#   Subcommand:
+#     echo_id                  Run in EchoID mode — connect to
+#                              Telegram with the supplied bot token,
+#                              print the chat ID of any incoming
+#                              message, and exit.  Used to discover
+#                              chat IDs for the YAML config.
+#       -t, --token <TOKEN>      Telegram bot token       [REQUIRED]
+#       -p, --proxy <URL>        Proxy for outbound requests
+#                                (HTTP / SOCKS5)
+#
+#   Standard clap auto-flags:
+#     -h, --help               Show help
+#     -V, --version            Show version
+#
+# AXIS / CORPUS POSITION
+#   Direct dependency on `teloxide = "0.3"` declared as an optional
+#   dependency activated by the default `bin_core` feature in
+#   Cargo.toml — the canonical async Rust Telegram Bot API client
+#   maintained by the teloxide community (teloxide/teloxide).
+#   teloxide provides typed Bot API bindings, a dispatcher with
+#   typed handler trees, finite-state-machine dialogue support,
+#   inline-keyboard / callback-query helpers, and an async
+#   reqwest-backed transport with optional SOCKS5 / HTTP proxies.
+#   logram's `src/telegram/mod.rs` and `src/telegram/utils.rs`
+#   construct a `teloxide::Bot::new(token)`, wrap it in
+#   `teloxide::dispatching::Dispatcher` for `echo_id`, and use
+#   `Bot::send_message(chat_id, text)` for the log-forwarding path.
+#   Verified via:
+#     gh api repos/mxseev/logram/contents/Cargo.toml
+#       → teloxide = { version = "0.3", optional = true }
+#       → bin_core = ["clap", "serde_yaml", "teloxide", ...]
+#     gh api search/code repo:mxseev/logram teloxide
+#       → src/telegram/mod.rs, src/telegram/utils.rs
+#   This entry is the Rust=130 leader bump that OPENS Axis 75
+#   (Telegram Bot API Client Library), pairing with future Go=
+#   go-telegram-bot-api/telegram-bot-api and TS-Node=telegraf
+#   (or grammyjs/grammy) poles to close the axis at 1/1/1.
+#   Round-number Rust=130 landmark on commit.
+#
+#   No completion for `logram` ships with Apple zsh
+#   (/usr/share/zsh/*/functions) or Homebrew zsh-completions
+#   (/opt/homebrew/share/zsh/site-functions) — confirmed absent.
+# ============================================================================
+
+_logram() {
+    local curcontext="$curcontext" state line ret=1
+    typeset -A opt_args
+
+    _arguments -C \
+        '(-c --config)'{-c+,--config=}'[YAML config file path]:config file:_files -g "*.{yaml,yml}"' \
+        '(- *)'{-h,--help}'[show help]' \
+        '(- *)'{-V,--version}'[show version]' \
+        '1: :_logram_commands' \
+        '*::arg:->args' && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                echo_id)
+                    _arguments \
+                        '(-t --token)'{-t+,--token=}'[Telegram bot token (required)]:token:' \
+                        '(-p --proxy)'{-p+,--proxy=}'[proxy URL for outbound requests]:proxy url:' \
+                        '(- *)'{-h,--help}'[help]' && ret=0 ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+(( $+functions[_logram_commands] )) ||
+_logram_commands() {
+    local -a commands
+    commands=(
+        'echo_id:discover chat ID by echoing incoming Telegram messages'
+    )
+    _describe -t commands 'logram command' commands
+}
+
+_logram "$@"
