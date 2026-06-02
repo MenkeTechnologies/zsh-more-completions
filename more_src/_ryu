@@ -1,0 +1,515 @@
+#compdef ryu
+# =============================================================================
+# ryu — Dillon Mulroy's "Stacked PRs for Jujutsu with
+#          GitHub/GitLab support" — a Rust CLI that
+#          translates Jujutsu's (jj's) bookmark stacks
+#          into chained GitHub or GitLab pull requests,
+#          enabling the stacked-PR workflow popularized
+#          by Graphite/Phabricator + Reviewable + Sapling
+#          inside the Jujutsu version control system
+#          rather than git directly.  Each bookmark in
+#          the user's stack maps to a single PR whose
+#          base branch is the previous bookmark's PR,
+#          producing a chain that reviewers can land
+#          incrementally.
+#          Distinguishing from `gh pr create` (single-PR
+#          creation only; no stack semantics), Graphite
+#          CLI (`gt` — commercial SaaS tier required for
+#          full feature set; git-only not jj), Sapling
+#          (Meta's git-incompatible VCS with built-in
+#          stacked diff support — its own ecosystem,
+#          not GitHub/GitLab native), spr (ejoffe/spr —
+#          older Go-based stacked-PR tool for git not
+#          jj), and ghstack (Edward Yang's Python tool
+#          used by PyTorch project — git-only) by:
+#            - JUJUTSU-NATIVE — built around Martin von
+#              Zweigbergk's Jujutsu (jj) VCS rather than
+#              git directly; treats jj BOOKMARKS as the
+#              unit of PR (jj bookmarks are jj's
+#              equivalent of git branches, but mutable
+#              + reassignable without checkout).  Uses
+#              jj-lib v0.37 for direct in-process
+#              integration with jj's data structures
+#            - GITOXIDE / GIX FOUNDATION — uses
+#              GitoxideLabs/gitoxide's `gix` crate v0.77
+#              (this is the headline CLI library that
+#              OPENS Axis 43 on the Rust side; see
+#              taxonomy notes below) for the git wire-
+#              protocol push operations + branch-ref
+#              manipulation; pure-Rust git replacement
+#              of libgit2 (Sebastian Thiel's project,
+#              independent of git2-rs which wraps the
+#              C libgit2).  No CGo, no libgit2 .dylib/
+#              .so dependency
+#            - GITHUB + GITLAB PARITY — same workflow
+#              maps to either platform; `ryu auth
+#              github` or `ryu auth gitlab` configures
+#              the appropriate credentials; ryu emits
+#              PRs/MRs via octocrab v0.47 (GitHub) +
+#              its own GitLab client.  Reviewers on
+#              both platforms see chained PRs / MRs
+#              just like they would with single
+#              submissions
+#            - STACK SCOPE CONTROL — `ryu submit
+#              --upto <bm>` / `--only` / `--stack`
+#              (mutually-exclusive clap arg groups)
+#              control which subset of the bookmark
+#              stack to push.  `--only` requires
+#              the parent bookmark already has a PR;
+#              `--stack` includes all descendants
+#            - DRY-RUN + INTERACTIVE PLAN PREVIEW —
+#              `--dry-run` shows what would be done
+#              without making changes; `-c, --confirm`
+#              previews the execution plan and prompts
+#              for confirmation before pushing/PR-
+#              creating; `-i, --select` interactively
+#              picks which bookmarks to include via
+#              dialoguer prompts
+#            - DRAFT + PUBLISH WORKFLOW — `--draft`
+#              creates new PRs as drafts; `--publish`
+#              converts any existing draft PRs to
+#              published; pairs nicely with continuous-
+#              integration gating workflows
+#            - UPDATE-ONLY MODE — `--update-only` skips
+#              PR creation; only updates the head of
+#              existing PRs (useful when you've
+#              rebased the stack but don't want to
+#              create new PRs for newly-added
+#              bookmarks)
+#            - BOOKMARK TRACKING via TOML state —
+#              `ryu track <bm>` / `ryu untrack <bm>`
+#              maintain per-bookmark state in a TOML
+#              file under the user's config directory
+#              (via dirs v6) indicating which
+#              bookmarks ryu manages; allows users to
+#              opt-in/opt-out specific bookmarks from
+#              ryu's automation
+#            - SYNC SUBCOMMAND — `ryu sync` updates
+#              the local stack against remote PR state
+#              (e.g. picks up review-merged ancestor
+#              bookmarks); pairs with `--dry-run` for
+#              risk-free preview
+#            - DEFAULT INTERACTIVE ANALYZE — invoking
+#              `ryu` with no subcommand drops into an
+#              interactive analyze loop that shows the
+#              current bookmark stack + PR mapping;
+#              useful for orienting yourself before
+#              deciding which submit/sync invocation
+#              to use
+#            - AUTH SUBCOMMAND with SETUP +TEST —
+#              `ryu auth github setup` shows
+#              instructions for generating + storing
+#              a GitHub personal access token; `ryu
+#              auth github test` verifies the token
+#              works; mirror commands exist for
+#              GitLab
+#            - RUSTLS-ONLY HTTP STACK — uses reqwest
+#              + octocrab with `rustls-tls` features
+#              for zero-CGo cross-platform builds;
+#              compiles cleanly on musl Linux + Apple
+#              Silicon + Windows without OpenSSL
+#              system dependencies
+#            - OWO-COLORS STYLING — uses owo-colors
+#              v4 with `supports-colors` feature for
+#              terminal-aware output coloring
+#            - 162+ STARS ON dmmulroy/jj-ryu —
+#              early-stage but actively developed by
+#              Dillon Mulroy (Cloudflare); under
+#              alpha versioning (current 0.0.1-alpha.x)
+#          Used by: Jujutsu adopters wanting the
+#          stacked-PR workflow without migrating off
+#          GitHub/GitLab to Sapling, teams already
+#          using stacked-PRs in git via Graphite/spr/
+#          ghstack who are evaluating jj as a
+#          replacement, and individual developers
+#          comfortable working on the frontier of
+#          jj's still-evolving ecosystem.
+#
+# Author:  Dillon Mulroy (dmmulroy on GitHub;
+#          https://dillonis.online); software engineer
+#          at Cloudflare; based in Raleigh, NC.
+# Source:  https://github.com/dmmulroy/jj-ryu
+#          https://github.com/dmmulroy/jj-ryu/blob/main/src/main.rs
+#          https://github.com/dmmulroy/jj-ryu/blob/main/Cargo.toml
+# Manpage: No traditional manpage; `ryu --help` shows
+#          subcommand list; `ryu <sub> --help` per-
+#          subcommand options.  Full docs in repo
+#          README.md.
+# Library: gix v0.77 (GitoxideLabs/gitoxide —
+#          Sebastian Thiel's "An idiomatic, lean,
+#          fast & safe pure Rust implementation of
+#          Git" via the `gix` crate).  This is the
+#          headline dependency for this completion's
+#          axis-opening role; see taxonomy notes
+#          below.  Also jj-lib v0.37 (Jujutsu library;
+#          Martin von Zweigbergk's git-compatible
+#          VCS), clap 4.5 (Axis 1 argparse with
+#          `derive` feature), tokio 1 with `full`
+#          (async runtime), reqwest 0.12 + octocrab
+#          0.47 (HTTP + GitHub API with rustls-tls),
+#          serde + serde_json + toml (config + state),
+#          thiserror 2.0 + anyhow (Axis 6 errors),
+#          dialoguer 0.11 (interactive prompts),
+#          tracing 0.1 (Axis 9 logging), owo-colors
+#          4 (terminal styling), chrono + base64 +
+#          dirs 6 + url + urlencoding + regex.
+# License: MIT
+# Status:  162+ stars on dmmulroy/jj-ryu; active
+#          alpha development (current 0.0.1-alpha.11;
+#          latest commit 2026-05-30).  Edition 2024 +
+#          rustc 1.89+ required.
+#
+# -----------------------------------------------------------------------------
+# CROSS-LANGUAGE CLI LIBRARY TAXONOMY — AXIS 43 OPENS:
+#   GIT LIBRARY / VCS INTEGRATION
+# -----------------------------------------------------------------------------
+# This completion **OPENS AXIS 43** in the cross-
+# language CLI library taxonomy: Git Library / VCS
+# Integration (libraries that wrap or replace
+# libgit2's git-protocol + repository-data-structure
+# functionality in their language's native ecosystem,
+# enabling CLI tools to perform git operations without
+# shelling out to `git` — as distinct from Axis 26 Web
+# Frameworks which serve HTTP, Axis 41 HTML Parsing
+# which parses HTML, or generic process-spawning
+# wrappers around the `git` binary).
+#
+# Pattern: R760 122nd language (Verona) closes the
+# prior 3+1 cycle → R761 Rust=98 (ryu/gix → Axis 43
+# OPENS THIS) is the first leader bump in the new
+# cycle.  Pending: R762 Go=98 with a go-git/go-git
+# user; R763 TS-Node=98 with an isomorphic-git/
+# isomorphic-git or nodegit user; R764 123rd
+# language.
+#
+# WHY gix IS A DISTINCTIVE AXIS-43 OPENER:
+#
+#   GitoxideLabs/gitoxide (gix crate) by Sebastian
+#   Thiel is a pure-Rust reimplementation of git
+#   from scratch — NOT a wrapper around the C
+#   libgit2 library (that's the git2-rs crate, also
+#   popular but architecturally different).
+#   Distinguishing characteristics:
+#     1. PURE RUST — zero CGo, zero libgit2 dynamic
+#        library, zero system git binary dependency
+#        at runtime.  Cross-compiles to any GOOS/
+#        GOARCH Rust supports without C toolchain
+#        setup
+#     2. ASYNC + SYNC BOTH SUPPORTED — `gix` exposes
+#        both blocking-network-client + async-
+#        network-client variants via feature flags;
+#        users pick the model that fits their async
+#        runtime situation (ryu uses blocking-
+#        network-client + tokio for the rest)
+#     3. PERFORMANCE-FOCUSED — designed from scratch
+#        for speed; benchmarks show gix outperforms
+#        libgit2 on many common operations (object
+#        traversal, packfile reading, refname
+#        lookup); especially fast on large monorepos
+#     4. MODULAR CRATE GRAPH — gix is a meta-crate
+#        that re-exports from a dependency graph of
+#        ~30 focused sub-crates (gix-object, gix-
+#        refs, gix-pack, gix-traverse, gix-features,
+#        gix-protocol, ...); users with strict size
+#        budgets can depend directly on just the
+#        sub-crates they need
+#     5. WHATWG-COMPATIBLE — gix implements the
+#        same git semantics that git core defines,
+#        including all the edge cases (case-
+#        insensitive filesystems, sparse checkout,
+#        partial clone, multi-pack-index, reftable,
+#        commit-graph, etc.)
+#     6. INDEPENDENT OF GIT2-RS — completely
+#        different codebase from rust-lang/git2-rs
+#        (which IS a libgit2 binding); gix is the
+#        cleaner-room reimplementation
+#     7. ~9,000+ STARS ON GitoxideLabs/gitoxide
+#     8. ECOSYSTEM-DOMINANT for NEW PROJECTS —
+#        used by jj (Jujutsu VCS itself), ryu (this
+#        completion), gitbutlerapp/gitbutler, jdx/
+#        mise, dmmulroy/jj-ryu, blackportal-ai/
+#        nebula, foriequal0/git-trim, GhuntLey/loom,
+#        espressif/idf-im-ui, crablang/crabgo, and
+#        many other modern Rust git-CLI projects
+#
+# Maintained under github.com/GitoxideLabs/gitoxide
+# (formerly Byron/gitoxide; renamed to community
+# org).  License: MIT OR Apache-2.0 (dual).
+#
+# Cross-language CLI library taxonomy after R761:
+#   * 122 languages
+#   * 472 total CLI library variants (Rust 98 / Go 97 /
+#     TS-Node 97)
+#   * Axis 9 / Logging: 6/6/6 three-language symmetric
+#   * Axes 10 + 13 + 14: 2/2/2 three-language symmetric
+#   * 35 axes at 1/1/1 three-language symmetric
+#   * Axis 43 opens with Rust=gix (this round);
+#     pending Go + TS-Node companions
+#
+# Comparison to other Axis 43 candidates (Rust):
+#   * gix (R761 THIS) — Sebastian Thiel's pure-Rust
+#     git reimplementation; ~9,000 stars; the modern
+#     choice for new projects
+#   * git2 (rust-lang/git2-rs) — libgit2 C binding;
+#     ~1,300 stars; older + heavier (libgit2 .dylib
+#     required at runtime) but battle-tested
+#   * gix is clearly the axis-opener: it's the
+#     architectural successor + the modern choice;
+#     git2's libgit2 dependency makes it less
+#     suitable for static binaries + Lambda + Termux
+#
+# gix is the chosen Axis 43 opener because:
+#   - It is the modern pure-Rust git library that
+#     EVERY new Rust git-CLI uses (jj, gitbutler,
+#     mise, crabgo, ryu, gitoxide's own gix CLI,
+#     loom, ...)
+#   - ryu uses gix v0.77 as a DIRECT dependency in
+#     Cargo.toml with the `blocking-network-client`
+#     feature explicitly enabled (no
+#     default-features) for its git push operations
+#   - It is the closest functional analog to Go's
+#     go-git/go-git (the dominant pure-Go git
+#     reimplementation by Maximiliano García + the
+#     src-d / now go-git org) and TS-Node's
+#     isomorphic-git (William Hilton's pure-JS git
+#     implementation that runs in Node + browser
+#     identically)
+#   - Demonstrates the pure-language-reimplementation
+#     pattern (vs CGo libgit2 binding) that all
+#     three languages converge on for modern git
+#     CLI tooling
+#
+# Pending companion picks for Axis 43:
+#   - Go=98: a Go CLI tool prominently using
+#            go-git/go-git (the dominant pure-Go git
+#            library; ~6,200 stars) as the headline
+#            git library
+#   - TS-Node=98: a Node.js CLI tool prominently
+#            using isomorphic-git/isomorphic-git
+#            (William Hilton's pure-JS git library;
+#            ~7,400 stars) as the headline git library
+#
+# -----------------------------------------------------------------------------
+#
+# THE ryu CLI
+#
+# ryu is a multi-subcommand CLI built on clap v4.5
+# with the `derive` macro.  Invocation:
+#   ryu [--path <repo>] [<subcommand>] [args]
+#
+# When invoked with no subcommand, ryu drops into an
+# interactive analyze mode showing the bookmark stack
+# + current PR mapping.
+#
+# Global flags:
+#   -p, --path <PATH>                 path to jj repo
+#                                     (default: cwd)
+#   -h, --help                        show help
+#   -V, --version                     show version
+#
+# Subcommands:
+#   submit [bookmark] [options]       submit stack as PRs
+#   sync [options]                    sync stack with remote
+#   auth <platform> <action>          authentication mgmt
+#   track [bookmarks...] [options]    track bookmarks
+#   untrack [bookmarks...] [options]  stop tracking bookmarks
+#
+# submit options:
+#   bookmark                          target bookmark
+#                                     (default: leaf)
+#   --dry-run                         show plan, don't execute
+#   -c, --confirm                     preview + confirm
+#   --upto <BOOKMARK>                 submit only up to (scope)
+#   --only                            submit only this (scope)
+#   --update-only                     only update existing PRs
+#   -s, --stack                       include all descendants (scope)
+#   --draft                           create new PRs as drafts
+#   --publish                         publish draft PRs
+#   -i, --select                      interactive bookmark picker
+#   --remote <NAME>                   git remote to push to
+#   -a, --all                         all bookmarks in trunk()..@
+#
+# sync options:
+#   --dry-run                         show plan, don't execute
+#   -c, --confirm                     preview + confirm
+#   --remote <NAME>                   git remote to sync with
+#   -a, --all                         all bookmarks in trunk()..@
+#
+# auth subcommands:
+#   github <test|setup>               GitHub auth
+#   gitlab <test|setup>               GitLab auth
+#
+# track options:
+#   bookmarks...                      bookmark names
+#                                     (omit: show available)
+#   -a, --all                         track all in trunk()..@
+#   -f, --force                       re-track already-tracked
+#   -r, --remote <NAME>               associate with remote
+#
+# untrack options:
+#   bookmarks...                      bookmark names
+#                                     (omit: show tracked)
+#   -a, --all                         untrack all tracked
+#
+# Common invocations:
+#   # Interactive analyze (no subcommand)
+#   ryu
+#
+#   # Submit current stack as chained PRs
+#   ryu submit
+#
+#   # Submit up to a specific bookmark
+#   ryu submit --upto feature-end
+#
+#   # Submit only one bookmark (parent must have PR)
+#   ryu submit my-bookmark --only
+#
+#   # Submit including all descendants
+#   ryu submit -s
+#
+#   # Dry-run + confirm before pushing
+#   ryu submit --dry-run
+#   ryu submit -c
+#
+#   # Create new PRs as drafts
+#   ryu submit --draft
+#
+#   # Publish all existing drafts
+#   ryu submit --publish --update-only
+#
+#   # Interactive bookmark selection
+#   ryu submit -i
+#
+#   # Push to a specific remote (not "origin")
+#   ryu submit --remote upstream
+#
+#   # Submit all stack bookmarks (override tracking)
+#   ryu submit -a
+#
+#   # Sync local stack with remote PR state
+#   ryu sync --dry-run
+#   ryu sync
+#
+#   # Auth setup
+#   ryu auth github setup
+#   ryu auth github test
+#   ryu auth gitlab setup
+#   ryu auth gitlab test
+#
+#   # Track bookmarks
+#   ryu track feature-a feature-b
+#   ryu track -a                          # track all
+#   ryu track -r upstream feature-x
+#
+#   # Untrack bookmarks
+#   ryu untrack feature-a
+#   ryu untrack -a                        # untrack all
+#
+#   # Use a non-cwd repo path
+#   ryu -p ~/work/myrepo submit -c
+#
+# OPTIONS (sourced directly from
+# https://github.com/dmmulroy/jj-ryu/blob/main/src/main.rs):
+#
+# (See subcommand documentation above for the complete
+# flag set.)
+#
+# -----------------------------------------------------------------------------
+
+local curcontext="$curcontext" state line ret=1
+typeset -A opt_args
+
+local -a _ryu_subcommands
+_ryu_subcommands=(
+    'submit:submit current stack as chained PRs/MRs'
+    'sync:sync current stack with remote PR/MR state'
+    'auth:authentication management (GitHub, GitLab)'
+    'track:track bookmarks for submission'
+    'untrack:stop tracking bookmarks'
+)
+
+local -a _ryu_auth_platforms
+_ryu_auth_platforms=(
+    'github:GitHub authentication'
+    'gitlab:GitLab authentication'
+)
+
+local -a _ryu_auth_actions
+_ryu_auth_actions=(
+    'test:test authentication credentials'
+    'setup:show authentication setup instructions'
+)
+
+local -a _ryu_global_flags
+_ryu_global_flags=(
+    '(-p --path)'{-p,--path}'=[path to jj repository]:repo:_directories'
+)
+
+_arguments -C \
+    "${_ryu_global_flags[@]}" \
+    '(- *)'{-h,--help}'[show help]' \
+    '(- *)'{-V,--version}'[show version]' \
+    '1:subcommand:->subcmd' \
+    '*::arg:->args' \
+    && ret=0
+
+case $state in
+    subcmd)
+        _describe -t subcmds 'ryu subcommand' _ryu_subcommands && ret=0
+        ;;
+    args)
+        case $words[1] in
+            submit)
+                _arguments \
+                    "${_ryu_global_flags[@]}" \
+                    '--dry-run[show plan without executing]' \
+                    '(-c --confirm)'{-c,--confirm}'[preview plan and prompt for confirmation]' \
+                    '--upto=[submit only up to (and including) this bookmark]:bookmark: ' \
+                    '--only[submit only this bookmark (parent must have PR)]' \
+                    '--update-only[only update existing PRs, do not create new ones]' \
+                    '(-s --stack)'{-s,--stack}'[include all descendants in submission]' \
+                    '--draft[create new PRs as drafts]' \
+                    '--publish[publish any draft PRs]' \
+                    '(-i --select)'{-i,--select}'[interactively pick bookmarks]' \
+                    '--remote=[git remote to push to]:remote: ' \
+                    '(-a --all)'{-a,--all}'[all bookmarks in trunk()..@ (ignore tracking)]' \
+                    '1:bookmark: ' \
+                    && ret=0
+                ;;
+            sync)
+                _arguments \
+                    "${_ryu_global_flags[@]}" \
+                    '--dry-run[show plan without executing]' \
+                    '(-c --confirm)'{-c,--confirm}'[preview plan and prompt for confirmation]' \
+                    '--remote=[git remote to sync with]:remote: ' \
+                    '(-a --all)'{-a,--all}'[all bookmarks in trunk()..@]' \
+                    && ret=0
+                ;;
+            auth)
+                if (( CURRENT == 2 )); then
+                    _describe -t platforms 'auth platform' _ryu_auth_platforms && ret=0
+                elif (( CURRENT == 3 )); then
+                    _describe -t actions 'auth action' _ryu_auth_actions && ret=0
+                fi
+                ;;
+            track)
+                _arguments \
+                    "${_ryu_global_flags[@]}" \
+                    '(-a --all)'{-a,--all}'[track all bookmarks in trunk()..@]' \
+                    '(-f --force)'{-f,--force}'[re-track already-tracked bookmarks]' \
+                    '(-r --remote)'{-r,--remote}'=[associate with specific remote]:remote: ' \
+                    '*:bookmark: ' \
+                    && ret=0
+                ;;
+            untrack)
+                _arguments \
+                    "${_ryu_global_flags[@]}" \
+                    '(-a --all)'{-a,--all}'[untrack all tracked bookmarks]' \
+                    '*:bookmark: ' \
+                    && ret=0
+                ;;
+        esac
+        ;;
+esac
+
+return ret
