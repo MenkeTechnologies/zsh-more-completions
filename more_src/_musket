@@ -1,0 +1,135 @@
+#compdef musket
+# ============================================================================
+# _musket — zsh completion for isfegu's musket, the "send a URL to several
+#            destinations" Fediverse / LinkedIn / Turso fanout CLI
+# ============================================================================
+#
+# UPSTREAM
+#   Repository : https://github.com/isfegu/musket
+#   Author     : isfegu  (Israel Fernández García)
+#   License    : MIT
+#   Language   : Rust
+#   Crate      : musket v0.23.0
+#   Binary     : musket  (Cargo.toml [[bin]] name = "musket",
+#                         path = "src/bin.rs")
+#   Last push  : 2025-05-17
+#
+# WHAT IT IS
+#   musket is "a command line interface to send a URL to several
+#   destinations" — a fan-out poster that takes a single URL (or a
+#   list of bookmarks pulled from a source like Instapaper) and
+#   posts it to one or more destination targets in parallel:
+#   Mastodon (via `megalodon`), Bluesky (via `bsky-sdk`), LinkedIn
+#   (OAuth-1 via `oauth1`), and Turso (libSQL-backed personal link
+#   archive).  Configuration (per-destination credentials, default
+#   tags, default language) lives in `~/.config/musket/config.toml`
+#   and is bootstrapped by `musket init`.
+#
+# CLI ARGUMENT GRAMMAR  (verbatim from src/cli.rs clap-derive
+#                       Cli/Command enum + src/destinations/mod.rs
+#                       Destinations enum + src/sources/mod.rs
+#                       Sources enum)
+#   musket <SUBCOMMAND> [args...]
+#
+#   Subcommands:
+#     init                        Create the configuration file in the
+#                                 user's home directory
+#       -f, --force                 Force overwrite if the config file
+#                                   already exists
+#
+#     fire                        Send a URL to one or more destinations
+#       -u, --url <URL>             URL to send.  Mandatory if --from
+#                                   is not provided.
+#       -f, --from <SOURCE>         Source to fetch links from instead
+#                                   of a single --url.  Mandatory if
+#                                   --url is not provided.
+#                                   Accepted: instapaper
+#       -d, --destination <D,D,...> Destinations to post to (comma-
+#                                   separated, repeatable).  At least
+#                                   one required.  Accepted:
+#                                     all, bluesky, linkedin,
+#                                     mastodon, turso
+#       -t, --tags <T,T,...>        Tags to attach to the posts
+#                                   (comma-separated, optional)
+#       -c, --commentary <TEXT>     Commentary text to publish along
+#                                   with the URL (optional, only
+#                                   destinations that allow it)
+#       -l, --language <LANG>       Language to use in the
+#                                   destination (optional)
+#
+#   Standard clap auto-flags:
+#     -h, --help                  Show help
+#     -V, --version               Show version
+#
+# AXIS / CORPUS POSITION
+#   Direct dependency on `megalodon = "1.0.0"` declared in
+#   Cargo.toml — the canonical async Rust Fediverse client
+#   maintained by h3poteto (h3poteto/megalodon-rs).  megalodon is a
+#   "use one interface, talk to every Fediverse server" client:  it
+#   normalizes the Mastodon, Pleroma, Friendica, Gotosocial, and
+#   Firefish APIs behind a single trait, automatically detecting the
+#   target server's flavour from `nodeinfo`.  musket's
+#   `src/destinations/mastodon.rs` constructs a megalodon
+#   `Mastodon::new(...)` client per configured account and posts the
+#   URL + commentary via `post_status`.  (Bluesky uses `bsky-sdk`,
+#   LinkedIn uses raw OAuth-1 via `oauth1`, Turso uses `libsql` —
+#   the megalodon dep is what binds this entry to the Fediverse-
+#   client axis.)  Verified via:
+#     gh api repos/isfegu/musket/contents/Cargo.toml
+#       → megalodon = "1.0.0"
+#     gh api repos/isfegu/musket/contents/src/destinations/mod.rs
+#       → pub mod mastodon;
+#   This entry is the Rust=129 leader bump that OPENS Axis 74
+#   (Mastodon / Fediverse Client Library), pairing with future Go=
+#   mattn/go-mastodon and TS-Node=masto.js (or h3poteto/megalodon)
+#   poles to close the axis at 1/1/1.
+#
+#   No completion for `musket` ships with Apple zsh
+#   (/usr/share/zsh/*/functions) or Homebrew zsh-completions
+#   (/opt/homebrew/share/zsh/site-functions) — confirmed absent.
+# ============================================================================
+
+_musket() {
+    local curcontext="$curcontext" state line ret=1
+    typeset -A opt_args
+
+    _arguments -C \
+        '(- *)'{-h,--help}'[show help]' \
+        '(- *)'{-V,--version}'[show version]' \
+        '1: :_musket_commands' \
+        '*::arg:->args' && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                init)
+                    _arguments \
+                        '(-f --force)'{-f,--force}'[force overwrite if config exists]' \
+                        '(- *)'{-h,--help}'[help]' && ret=0 ;;
+                fire)
+                    _arguments \
+                        '(-u --url)'{-u+,--url=}'[URL to send (mandatory if --from absent)]:url:' \
+                        '(-f --from)'{-f+,--from=}'[fetch links from this source instead of a single URL]:source:(instapaper)' \
+                        '(-d --destination)'{-d+,--destination=}'[destinations (comma-separated): all/bluesky/linkedin/mastodon/turso]:destinations:_values -s , destination all bluesky linkedin mastodon turso' \
+                        '(-t --tags)'{-t+,--tags=}'[tags (comma-separated)]:tags:' \
+                        '(-c --commentary)'{-c+,--commentary=}'[commentary text]:commentary:' \
+                        '(-l --language)'{-l+,--language=}'[language code]:language:' \
+                        '(- *)'{-h,--help}'[help]' && ret=0 ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+(( $+functions[_musket_commands] )) ||
+_musket_commands() {
+    local -a commands
+    commands=(
+        'init:create the configuration file in user home'
+        'fire:send a URL to one or more destinations'
+    )
+    _describe -t commands 'musket command' commands
+}
+
+_musket "$@"
