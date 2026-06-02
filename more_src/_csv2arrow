@@ -1,0 +1,346 @@
+#compdef csv2arrow
+# =============================================================================
+# csv2arrow — domoritz/arrow-tools's CSV-to-
+#   APACHE-ARROW-IPC converter — a focused
+#   single-purpose Rust CLI that reads a CSV
+#   (optionally gzipped, optionally with
+#   user-supplied JSON schema) and writes the
+#   data as an Apache Arrow IPC (a.k.a.
+#   Feather / Arrow Streaming) binary file.
+#   Built on direct `arrow 58.1` — the
+#   CANONICAL pure-Rust Apache Arrow library
+#   maintained by the Apache Software
+#   Foundation under the `arrow-rs` umbrella.
+#   Performs automatic SCHEMA INFERENCE by
+#   sampling the first N rows, or accepts an
+#   explicit `--schema-file` JSON spec.
+#   Rust=109 leader bump opening Axis 54.
+#
+# AXIS 54 — APACHE ARROW COLUMNAR FORMAT — OPENS @ R805
+# ======================================================
+# Establishes the 54th three-language axis in
+# the corpus.  This axis covers CLI tools
+# written in language X that ship a DIRECT
+# library binding to APACHE ARROW — the
+# columnar in-memory data format + IPC
+# protocol used by DataFusion, DuckDB,
+# Polars, PySpark, Pandas (via PyArrow), and
+# basically every modern analytical query
+# engine.  Canonical implementations per
+# language:
+#   * Rust       : arrow (this entry)
+#                  — apache/arrow-rs/arrow.
+#                    ~3.2k stars (workspace
+#                    aggregate).  The
+#                    REFERENCE pure-Rust
+#                    implementation of the
+#                    Arrow columnar format +
+#                    IPC + Flight RPC + CSV/
+#                    JSON/Parquet reader-
+#                    writer integrations.
+#                    Apache 2.0
+#                  — version 58.1 used here
+#                  — direct dep at
+#                    `domoritz/arrow-tools`
+#                    crates/csv2arrow/
+#                    Cargo.toml line:
+#                    `arrow = "58.1"`
+#   * Go         : apache/arrow-go — Apache's
+#                  Go implementation
+#                  (formerly nested inside
+#                  apache/arrow; now a
+#                  standalone module at
+#                  apache/arrow-go/v18 since
+#                  Arrow 18).  R806 will
+#                  close the Go side
+#   * TS-Node    : apache-arrow — Apache's
+#                  JS/TS implementation,
+#                  published as the
+#                  `apache-arrow` npm
+#                  package.  R807 will
+#                  close the TS-Node side
+#
+# Apache Arrow standardises a LANGUAGE-
+# INDEPENDENT COLUMNAR FORMAT for in-memory
+# analytical data.  Buffers are
+# canonicalised so that the same memory
+# layout works across all 11 host languages
+# (C++, Rust, Go, Java, Python, R, C#,
+# JavaScript, Julia, MATLAB, Ruby).  Arrow
+# Flight is an Arrow-native gRPC protocol
+# for streaming Arrow record batches
+# between systems.  Used as the wire format
+# of:
+#   - DuckDB → Pandas / Polars            zero-copy
+#                                          interchange
+#   - Apache Spark ↔ PyArrow              Pandas-on-Spark
+#   - DataFusion (Rust) ↔ Polars (Rust)   zero-copy
+#                                          batches
+#   - dremio Arrow Flight protocol        OLAP
+#                                          streaming
+#   - BigQuery Storage API (BSA)          column-stream
+#                                          read
+#
+# Distinguishing csv2arrow from sibling
+# corpus tools:
+#   - csv2parquet (`_csv2parquet`, in
+#     corpus): SAME maintainer (Dominik
+#     Moritz), SAME workspace; converts to
+#     Parquet (on-disk columnar) instead
+#     of Arrow IPC (in-memory streaming).
+#     Both use the `arrow-rs` ecosystem
+#   - json2arrow (`_json2arrow`, free —
+#     not yet in corpus): SAME maintainer,
+#     SAME workspace; reads JSON instead
+#     of CSV
+#   - json2parquet (`_json2parquet`, in
+#     corpus): SAME maintainer; JSON → Parquet
+#   - DuckDB `duckdb` (`_duckdb` in corpus):
+#     can also do `COPY ... TO 'out.arrow'`,
+#     but is a full SQL engine.  csv2arrow
+#     is the focused single-purpose
+#     converter
+#   - q (sql-on-csv, in corpus): different
+#     scope — SQL over CSV without
+#     materialising Arrow
+#   - mlr (`_mlr`, miller, in corpus): CSV/
+#     TSV/JSON record-stream processor.
+#     No Arrow output
+#
+# WHEN TO USE CSV2ARROW vs CSV2PARQUET:
+#   - Use CSV2ARROW when downstream consumers
+#     speak Arrow IPC (PyArrow / Polars /
+#     DuckDB streaming read / Arrow Flight
+#     server).  Arrow IPC is OPTIMISED FOR
+#     IN-MEMORY STREAMING — no compression
+#     by default, fast random access via
+#     dictionary indexes, mmap-friendly
+#   - Use CSV2PARQUET when downstream
+#     consumers need ON-DISK COMPRESSED
+#     STORAGE — Parquet adds page
+#     compression (Snappy/Zstd/Brotli),
+#     dictionary encoding per-column, row-
+#     group statistics for predicate
+#     pushdown, schema-evolution support
+#
+# KEY CSV2ARROW FEATURES:
+#   - STREAMING WRITE — the binary uses
+#     `arrow::ipc::writer::FileWriter` which
+#     emits Arrow IPC frames as records
+#     arrive.  Memory footprint is bounded
+#     by the record batch size, not the
+#     input file size.  Gigabyte-scale CSVs
+#     convert without OOM
+#   - SCHEMA INFERENCE — by default,
+#     samples the first N rows
+#     (configurable via `--max-read-records`)
+#     to infer column types.  Setting
+#     `--max-read-records 0` skips inference
+#     and types every column as String
+#   - EXPLICIT SCHEMA OVERRIDE — `-s/
+#     --schema-file <PATH>` loads an Arrow
+#     schema in JSON format (same JSON
+#     dialect that `arrow-rs` uses for its
+#     `Schema::from_json` deserialisation).
+#     Skips inference entirely.  Critical
+#     for reproducible CI pipelines where
+#     type-stability matters
+#   - CSV DIALECT CONTROL — `--delimiter`
+#     (single char, default `,`),
+#     `--escape`, `--quote`, `--comment`
+#     all settable.  Matches Python's csv
+#     module API
+#   - NULL REGEX — `--null-regex <PATTERN>`
+#     treats any field matching the regex
+#     as NULL.  Common patterns:
+#     `--null-regex '^(NA|NULL|N/A|-)$'`
+#   - GZIP TRANSPARENT READ — input files
+#     ending in `.gz` are decompressed in-
+#     stream via `flate2/MultiGzDecoder`.
+#     No manual `gunzip` step needed
+#   - STDOUT FALLBACK — if no `<ARROW>`
+#     output argument is given, writes
+#     Arrow IPC bytes to stdout.  Pipeable
+#     into PyArrow / Polars / DuckDB
+#     streaming readers
+#   - DRY-RUN — `-n/--dry` prints only the
+#     INFERRED SCHEMA (to stderr) and
+#     exits.  Useful for confirming type
+#     inference before committing to a
+#     conversion
+#   - PRINT-SCHEMA — `-p/--print-schema`
+#     prints the schema to stderr in
+#     ADDITION to producing the Arrow
+#     output.  Combine with `--dry` for
+#     schema-only mode
+#
+# ARROW IPC vs FEATHER V2:
+# `arrow::ipc::writer::FileWriter` emits the
+# "File" variant of Arrow IPC (also marketed
+# as "Feather v2").  The "Stream" variant is
+# similar but lacks the trailing footer.
+# This binary always produces the File
+# variant — readable by `pyarrow.feather.
+# read_feather()`, `polars.read_ipc()`,
+# `duckdb.read_arrow()`, and arrow-rs's
+# `arrow::ipc::reader::FileReader`
+#
+# CRITICAL DIRECT DEPENDENCIES (from
+# crates/csv2arrow/Cargo.toml):
+#   - arrow 58.1               — Apache Arrow
+#                                Rust impl
+#                                [AXIS 54 LIBRARY]
+#                                provides
+#                                CSV reader,
+#                                IPC writer,
+#                                schema
+#                                types
+#   - arrow-schema 58.1 (serde)
+#                              — Arrow
+#                                schema JSON
+#                                deserialisation
+#   - serde_json 1.0           — JSON parse
+#                                for schema
+#                                file
+#   - clap 4.5 (derive)        — CLI parser
+#   - regex 1.12               — null-regex
+#                                pattern
+#                                matching
+#   - flate2 1.1 (zlib-ng)     — transparent
+#                                gzip
+#                                decompression
+#                                for .gz
+#                                input
+#   - libz-ng-sys              — zlib-ng
+#                                C bindings
+#   - arrow-tools 0.26 (path)  — shared
+#                                workspace
+#                                utility
+#                                crate
+#                                (provides
+#                                SeekableReader
+#                                for stdin/
+#                                non-seekable
+#                                inputs)
+#
+# Rust 2021 edition.  Tested with stable
+# Rust 1.85+.  Cross-platform: builds on
+# Linux + macOS + Windows.  Single-file
+# binary; no external runtime deps in the
+# emitted executable
+#
+# UPSTREAM:
+#   * Source             : https://github.com/domoritz/arrow-tools/tree/main/crates/csv2arrow
+#   * Workspace          : https://github.com/domoritz/arrow-tools
+#   * Apache Arrow Rust  : https://github.com/apache/arrow-rs
+#   * Arrow IPC spec     : https://arrow.apache.org/docs/format/Columnar.html
+#   * Feather v2 docs    : https://arrow.apache.org/docs/python/feather.html
+#   * License            : MIT OR Apache-2.0
+#   * Maintainer         : Dominik Moritz (domoritz)
+#
+# INSTALL:
+#   # Cargo
+#   cargo install csv2arrow
+#
+#   # Cargo + the whole arrow-tools workspace
+#   git clone https://github.com/domoritz/arrow-tools
+#   cd arrow-tools
+#   cargo install --path crates/csv2arrow
+#
+# USAGE EXAMPLES:
+#
+#   # Convert a CSV to Arrow IPC (output file
+#   # required as 2nd positional)
+#   csv2arrow input.csv output.arrow
+#
+#   # Write to stdout (no 2nd positional)
+#   csv2arrow input.csv > output.arrow
+#
+#   # Sample only the first 1000 rows for
+#   # schema inference
+#   csv2arrow -m 1000 input.csv output.arrow
+#
+#   # Force every column to String (skip
+#   # inference)
+#   csv2arrow -m 0 input.csv output.arrow
+#
+#   # Use an explicit Arrow schema (JSON)
+#   csv2arrow -s schema.json input.csv output.arrow
+#
+#   # Headerless CSV
+#   csv2arrow --header false input.csv output.arrow
+#
+#   # Tab-separated values
+#   csv2arrow --delimiter $'\t' input.tsv output.arrow
+#
+#   # Pipe-separated values with a quote char
+#   csv2arrow --delimiter '|' --quote '"' \
+#       input.psv output.arrow
+#
+#   # Treat "NA", "NULL", "N/A", "-" as nulls
+#   csv2arrow --null-regex '^(NA|NULL|N/A|-)$' \
+#       input.csv output.arrow
+#
+#   # Ignore comment lines starting with #
+#   csv2arrow --comment '#' input.csv output.arrow
+#
+#   # Gzipped input (decompressed in-stream)
+#   csv2arrow input.csv.gz output.arrow
+#
+#   # Print the inferred schema to stderr +
+#   # produce output as usual
+#   csv2arrow -p input.csv output.arrow
+#
+#   # Dry-run — print schema only, no Arrow
+#   # output
+#   csv2arrow -n input.csv
+#
+#   # Help / version (clap defaults)
+#   csv2arrow --help
+#   csv2arrow -h
+#   csv2arrow --version
+#   csv2arrow -V
+#
+# DOWNSTREAM CONSUMPTION:
+#
+#   # PyArrow / pandas
+#   import pyarrow.feather as f
+#   table = f.read_feather('output.arrow')
+#
+#   # Polars
+#   import polars as pl
+#   df = pl.read_ipc('output.arrow')
+#
+#   # DuckDB
+#   SELECT * FROM 'output.arrow';
+#
+#   # arrow-rs (Rust)
+#   let file = File::open("output.arrow")?;
+#   let reader = arrow::ipc::reader::FileReader::try_new(file, None)?;
+#
+# OPTIONS (sourced directly from
+# https://github.com/domoritz/arrow-tools/blob/main/crates/csv2arrow/src/main.rs Opts struct):
+#
+# -----------------------------------------------------------------------------
+
+local curcontext="$curcontext" state line ret=1
+typeset -A opt_args
+
+_arguments -C \
+    '(- *)'{-h,--help}'[show help]' \
+    '(- *)'{-V,--version}'[show version]' \
+    '(-s --schema-file)'{-s+,--schema-file=}'[file with Arrow schema in JSON format (skips inference)]:schema:_files -g "*.json"' \
+    '(-m --max-read-records)'{-m+,--max-read-records=}'[records to sample for schema inference (0 = all-String)]:n: ' \
+    '--header=[CSV has headers (default true)]:bool:(true false)' \
+    '--delimiter=[CSV column delimiter (single char)]:char: ' \
+    '--escape=[CSV escape character]:char: ' \
+    '--quote=[CSV quote character]:char: ' \
+    '--comment=[CSV comment character (lines starting with this are ignored)]:char: ' \
+    '--null-regex=[regex matching NULL field values]:pattern: ' \
+    '(-p --print-schema)'{-p,--print-schema}'[print inferred schema to stderr]' \
+    '(-n --dry)'{-n,--dry}'[only print the schema (no Arrow output)]' \
+    '1:input CSV file (or - for stdin):_files -g "*.(csv|tsv|csv.gz|tsv.gz)"' \
+    '2:output Arrow IPC file (stdout if omitted):_files -g "*.(arrow|feather|ipc)"' \
+    && ret=0
+
+return ret
