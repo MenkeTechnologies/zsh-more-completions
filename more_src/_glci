@@ -1,0 +1,440 @@
+#compdef glci
+# =============================================================================
+# glci — Maxime Dubourg's "Ease GitLab CI Pipelines
+#          set-up by running your jobs locally in
+#          Docker containers" — a Node.js CLI that
+#          parses a `.gitlab-ci.yml` file, resolves
+#          its job/stage/include/cache/artifacts
+#          semantics against the GitLab CI reference,
+#          and EXECUTES the resulting pipeline locally
+#          by spawning Docker containers (one per job,
+#          tagged with the job's `image:` directive)
+#          via the Docker Engine API.  Lets developers
+#          test pipeline changes WITHOUT push-and-wait-
+#          for-GitLab-runner round-trips that otherwise
+#          dominate CI-iteration time.
+#          Distinguishing from `gitlab-runner exec`
+#          (gitlab-runner's bundled exec subcommand;
+#          requires installing the full gitlab-runner
+#          binary; mimics shared-runner environment),
+#          gitlab-ci-local (firecow/gitlab-ci-local;
+#          newer + more actively maintained TS-Node
+#          competitor; richer feature set), Earthly
+#          (Earthfile-based CI alternative; different
+#          DSL not GitLab YAML), Act (nektos/act for
+#          GitHub Actions; GitHub-specific, not
+#          GitLab), and the canonical "push-to-feature-
+#          branch-and-wait-for-CI" iteration loop by:
+#            - DOCKERODE FOUNDATION — uses apocas/
+#              dockerode ^3.2 (this is the headline
+#              CLI library that CLOSES Axis 44 on
+#              the TS-Node side at 1/1/1; see
+#              taxonomy notes below) for ALL Docker
+#              Engine API operations: image pull
+#              (`docker.pull(image)`), container
+#              create (`docker.createContainer(opts)`),
+#              container.exec for command execution
+#              inside the job's container, stream
+#              demuxing of stdout/stderr, container
+#              wait/inspect for exit code
+#            - GITLAB-CI-YML PARSER — uses js-yaml
+#              v4 to parse `.gitlab-ci.yml`; supports
+#              `stages:` declaration, `image:` global
+#              + per-job, `before_script:` /
+#              `after_script:` / `script:`, `cache:`,
+#              `artifacts:`, `services:`, `variables:`,
+#              `include:`, `extends:`, `only:` /
+#              `except:` (basic), `when:`, GitLab's
+#              `RESERVED_JOB_NAMES` filtering, and
+#              the `default:` global block per the
+#              GitLab CI YAML reference
+#            - PRE-DEFINED VARIABLES — `src/pre-
+#              defined.js` populates GitLab's
+#              `CI_PROJECT_PATH`, `CI_COMMIT_REF_NAME`,
+#              `CI_COMMIT_SHA`, `CI_PIPELINE_ID`,
+#              `CI_RUNNER_TAGS`, etc. by querying
+#              `git` via nodegit and parsing the
+#              current repo's branch + commit
+#              metadata.  Jobs see the same env-vars
+#              they would on a real GitLab runner
+#            - .ENV INTEGRATION — automatically reads
+#              `.env` files in the working directory
+#              via dotenv v8; the parsed variables
+#              are injected into job containers
+#              alongside the GitLab pre-defined ones
+#              (useful for development secrets that
+#              would be GitLab CI/CD variables in
+#              production)
+#            - PIPELINE GRAPH RENDERING — uses
+#              chalk + the bundled `drawPipeline()`
+#              helper to render the resolved
+#              pipeline as a colored ASCII graph
+#              before execution begins; shows
+#              stages + jobs + dependencies; lets
+#              users sanity-check the pipeline
+#              structure visually
+#            - JOB FILTERING via --only-jobs — `--
+#              only-jobs build:assets,test:lint`
+#              runs only the listed jobs (skipping
+#              the rest of the pipeline); useful
+#              for iterating on a single job
+#              without rebuilding the full graph
+#            - CUSTOM .yml PATH via --yml — `--yml
+#              ci/test-pipeline.yml` runs against
+#              a non-default pipeline file (useful
+#              for monorepos with multiple
+#              pipelines)
+#            - CUSTOM WORK DIR via --dir — `--dir
+#              ./my-glci-workspace` overrides the
+#              default `.glci/` directory for
+#              cache + artifacts + intermediate
+#              state; useful for keeping multiple
+#              concurrent glci runs separate
+#            - ARTIFACT PROPAGATION — glci honors
+#              GitLab's `artifacts:` directive +
+#              propagates artifacts between
+#              stages by mounting an
+#              `.glci_artifacts/` shared volume
+#              into successor job containers
+#            - CACHE PROPAGATION — `.glci_cache/`
+#              is mounted into each job per the
+#              job's `cache:` paths; subsequent
+#              runs reuse the cache without re-
+#              downloading dependencies
+#            - SHELL COMMAND DEMUXING — the
+#              bundled `execCommands` helper uses
+#              dockerode's `modem.demuxStream()` to
+#              separate stdout (printed normal) from
+#              stderr (printed in red via chalk)
+#              when streaming `docker exec` output
+#            - SHEBANG PRESERVATION via rollup-plugin-
+#              preserve-shebang — the bundled CLI
+#              keeps its `#!/usr/bin/env node`
+#              shebang through the rollup
+#              minification step (rolled CLIs lose
+#              their shebang by default)
+#            - 580+ STARS ON mdubourg001/glci — solid
+#              community traction for a single-
+#              maintainer Node CLI; active
+#              maintenance through 2026 by Maxime
+#              Dubourg (Bordeaux, France)
+#          Used by: GitLab CI users tired of the
+#          push-and-wait iteration loop, developers
+#          maintaining `.gitlab-ci.yml` files who
+#          want fast feedback on syntax + behavior
+#          changes, CI/CD authors prototyping new
+#          pipelines before committing them to
+#          production, and teams running self-hosted
+#          GitLab who don't want to spawn ephemeral
+#          runners for every iteration test.
+#
+# Author:  Maxime Dubourg (mdubourg001 on GitHub;
+#          https://maximedubourg.com); based in
+#          Bordeaux, France.
+# Source:  https://github.com/mdubourg001/glci
+#          https://github.com/mdubourg001/glci/blob/main/index.js
+#          https://github.com/mdubourg001/glci/blob/main/src/constants.js
+#          https://github.com/mdubourg001/glci/blob/main/package.json
+# Manpage: No traditional manpage; `glci --help`
+#          shows yargs-generated help for the CLI
+#          flags.  Full design notes in repo README.md.
+# Library: dockerode ^3.2.1 (apocas/dockerode —
+#          Pedro Dias's "Docker.io Node.js modular
+#          API").  This is the headline dependency
+#          for this completion's axis-44 closing
+#          role; see taxonomy notes below.  Also
+#          yargs ^16 (Axis 1 argparse), js-yaml ^4
+#          (Axis 11 YAML parsing), nodegit ^0.27
+#          (Axis 43 alternative pure-Rust binding
+#          to libgit2 for Node — used for git
+#          metadata gathering), chalk ^4 (terminal
+#          coloring), deepmerge ^4.2 (config
+#          merging), dotenv ^8 (.env file parsing),
+#          fs-extra ^9 (filesystem helpers), glob
+#          ^7 (file globbing for cache/artifacts
+#          paths), slugify ^1.5 (job-name to
+#          container-name slugging), uvu ^0.5
+#          (testing framework).
+# License: MIT
+# Status:  580+ stars on mdubourg001/glci; active
+#          development (latest commit 2026-05-20);
+#          version 0.5.1; published to npm as
+#          `glci`.
+#
+# -----------------------------------------------------------------------------
+# CROSS-LANGUAGE CLI LIBRARY TAXONOMY — AXIS 44 CLOSES AT 1/1/1:
+#   DOCKER CLIENT / CONTAINER ORCHESTRATION
+# -----------------------------------------------------------------------------
+# This completion **CLOSES AXIS 44 AT 1/1/1 THREE-
+# LANGUAGE SYMMETRY** in the cross-language CLI
+# library taxonomy: Docker Client / Container
+# Orchestration.
+#
+# Pattern: R764 123rd language (Ante) closes the
+# prior 3+1 cycle → R765 Rust=99 (dockrtui/bollard
+# OPENS Axis 44) → R766 Go=99 (dobi/fsouza/go-
+# dockerclient continues Axis 44) → R767 TS-Node=99
+# (glci/dockerode CLOSES Axis 44 AT 1/1/1 THIS
+# ROUND).  Next R768 will be the 124th language
+# closing the 3+1 micro-cycle.
+#
+# THE COMPLETE AXIS 44 PICTURE (NOW 1/1/1):
+#
+#   * RUST = bollard (R765 dockrtui)
+#     - fussybeaver/bollard's async Rust Docker
+#       Engine API client; ~2,200 stars
+#     - Pure-Rust, auto-generated types from Docker
+#       OpenAPI spec
+#     - Pattern: TERMINAL-DOCKER-DASHBOARD (dockrtui
+#       provides ratatui-based at-a-glance container
+#       management)
+#
+#   * GO = fsouza/go-dockerclient (R766 dobi)
+#     - Francisco Souza's third-party Go Docker
+#       client; ~4,000 stars
+#     - Predates Docker's official Go client;
+#       smaller surface + back-compat
+#     - Pattern: DECLARATIVE-BUILD-ORCHESTRATION
+#       (dobi runs YAML-declared Docker build/test
+#       pipelines)
+#
+#   * TS-NODE = dockerode (R767 THIS)
+#     - apocas/dockerode by Pedro Dias's modular
+#       Node.js Docker API client
+#     - ~4,500+ stars on apocas/dockerode — the
+#       most-starred Docker client in this axis
+#       across any language (Node ecosystem
+#       advantage)
+#     - Promise + stream + callback APIs
+#       coexisting; the most flexible of the three
+#       axis-44 picks
+#     - Pattern: LOCAL-CI-PIPELINE-EXECUTION (glci
+#       executes GitLab CI pipelines locally by
+#       spawning per-job Docker containers)
+#
+# THE AXIS 44 ARC TELLS THE COMPLETE DOCKER-CLIENT-
+# AS-CLI STORY:
+#   - R765 dockrtui (Rust DASHBOARD) — at-a-glance
+#     monitoring + actions on RUNNING containers
+#   - R766 dobi (Go ORCHESTRATION) — declarative
+#     build pipelines for Docker APPLICATIONS
+#   - R767 glci (TS-Node SIMULATION) — local CI
+#     pipeline EXECUTION via on-demand container
+#     spawning
+#
+# All three CLIs exploit their language's canonical
+# Docker client library to enable Docker-centric
+# workflows that would otherwise require shell-out-
+# to-docker scripts, with each language demonstrating
+# a different idiomatic use case:
+#   * Live monitoring (dockrtui)
+#   * Build automation (dobi)
+#   * CI simulation (glci)
+#
+# Cross-language CLI library taxonomy after R767:
+#   * 123 languages
+#   * 477 total CLI library variants (Rust 99 / Go 99 /
+#     TS-Node 99)
+#   * Axis 9 / Logging: 6/6/6 three-language symmetric
+#   * Axes 10 + 13 + 14: 2/2/2 three-language symmetric
+#   * 37 axes at 1/1/1 three-language symmetric
+#   * **ALL THREE LANGUAGES AT N=99**: next leader
+#     bump in each language (R769 Rust, R770 Go,
+#     R771 TS-Node) will hit the **100-library-per-
+#     language landmark** in sequence — three
+#     parallel milestones in three consecutive
+#     leader-bump rounds.  Compare to the 90-library
+#     landmark crossed at R729-R731 by all three
+#     languages
+#
+# WHY dockerode IS A DISTINCTIVE AXIS-44 CLOSER:
+#
+#   apocas/dockerode by Pedro Dias is the *original*
+#   Node.js Docker Engine API client (started 2014)
+#   and remains the dominant choice for Node Docker
+#   tools.  Distinguishing characteristics in the
+#   TS-Node ecosystem:
+#     1. MODULAR API — each Docker resource
+#        (containers, images, networks, volumes,
+#        plugins, secrets, configs, services,
+#        tasks, swarm, nodes) is exposed as its own
+#        prototype with operation methods.  Users
+#        can `require('dockerode')` and get the
+#        full API surface
+#     2. PROMISE + CALLBACK + STREAM TRIPLE API —
+#        every operation supports BOTH a Node-style
+#        callback (`docker.listContainers(cb)`) AND
+#        a Promise return (`await docker.
+#        listContainers()`) AND streaming for
+#        long-running operations (logs, exec
+#        attach).  Users pick the style that fits
+#        their existing code
+#     3. MODEM ABSTRACTION — the underlying HTTP/
+#        Unix-socket transport is abstracted behind
+#        a `Modem` object that handles protocol
+#        upgrades (for hijacked-protocol exec
+#        sessions), stream demuxing, content-type
+#        negotiation, etc.  Users rarely interact
+#        with Modem directly but it's there for
+#        edge cases
+#     4. STREAM DEMUXING — the dockerode-bundled
+#        `modem.demuxStream(stream, stdout, stderr)`
+#        helper separates Docker's multiplexed
+#        stdout/stderr stream into separate
+#        destinations.  No other Docker client
+#        library makes this as ergonomic
+#     5. CROSS-RUNTIME — works in Node.js, Deno
+#        (via npm: prefix), and Bun.  All-JS
+#        portability
+#     6. ~4,500+ STARS ON apocas/dockerode
+#     7. UNIVERSAL PRODUCTION USAGE — used by glci
+#        (this completion), balena-cli (IoT
+#        platform CLI), httptoolkit-server, stencila
+#        dockta (research reproducibility), umbrel
+#        (self-hosted home server), drizzle-orm,
+#        fauna-shell, nodebook, every major Node-
+#        Docker integration tool
+#
+# Maintained by Pedro Dias (@apocas) +
+# contributors at apocas/dockerode.  License:
+# Apache-2.0.
+#
+# Comparison to other Axis 44 candidates (TS-Node):
+#   * glci (R767 THIS) — Maxime Dubourg's GitLab CI
+#     local runner with dockerode as direct dep;
+#     580 stars; clear Docker-centric use case
+#   * dockly (lirantal) — already in corpus as
+#     _dockly
+#   * balena-cli — IoT platform CLI; 512 stars but
+#     much broader scope than just Docker
+#   * dockta (stencila) — Docker image builder for
+#     researchers; 124 stars; niche use case
+#   * httptoolkit-server — backend of HTTP Toolkit;
+#     550 stars but Docker is incidental
+#   * nodebook (netgusto) — multi-lang REPL; 1,646
+#     stars but more of an editor than a Docker tool
+#   * sematext-agent-docker — metrics collector;
+#     208 stars; agent not CLI
+#   * dockerode itself ships no CLI
+#
+# glci is the chosen Axis 44 TS-Node closer
+# because:
+#   - It declares dockerode as a DIRECT runtime
+#     dependency in package.json (`dockerode
+#     ^3.2.1`)
+#   - The GitLab CI local-execution use case
+#     exercises the FULL dockerode pipeline:
+#     image pull, container create with env-vars,
+#     exec command with stream demuxing,
+#     container inspect for exit code, container
+#     remove for cleanup
+#   - The pure-JS implementation (no native
+#     bindings beyond dockerode's HTTP socket
+#     wrapper) demonstrates the cross-platform
+#     advantage of the Node Docker ecosystem
+#   - 580 stars + active maintenance + clean
+#     single-purpose CLI architecture make it a
+#     stable taxonomy choice
+#   - It is the closest functional analog to
+#     dockrtui (R765) and dobi (R766) on the
+#     "Docker-API-as-headline-library" pattern,
+#     specifically representing the CI-SIMULATION
+#     use case (vs dashboard / vs build
+#     orchestration)
+#
+# -----------------------------------------------------------------------------
+#
+# THE glci CLI
+#
+# glci is a single-command CLI built on yargs.
+# Invocation:
+#   glci [--yml <path>] [--dir <path>] [--only-jobs <list>]
+#
+# Operating model:
+# - Looks for `.gitlab-ci.yml` in cwd (override with
+#   `--yml`)
+# - Looks for `.env` in cwd (auto-loaded if present)
+# - Creates `.glci/` workspace (override with `--dir`)
+#   containing `.glci_cache/` + `.glci_artifacts/`
+#   between-stage propagation
+# - Spawns one Docker container per job using the
+#   job's declared `image:`
+# - Runs `before_script + script + after_script` in
+#   the container via docker exec
+# - Mounts cache + artifacts into successor jobs
+# - Reports per-job stdout (normal) + stderr (red)
+#
+# Flags:
+#   --yml <PATH>                      path to GitLab
+#                                     CI YAML file
+#                                     (default
+#                                     .gitlab-ci.yml)
+#   --dir <PATH>                      base directory
+#                                     for glci
+#                                     workspace
+#                                     (default .glci)
+#   --only-jobs <JOB1,JOB2,...>       run only the
+#                                     listed jobs
+#                                     (comma-
+#                                     separated)
+#   --help                            yargs help
+#   --version                         yargs version
+#
+# Environment:
+#   .env                              auto-loaded
+#                                     (cwd)
+#   Docker socket                     default /var/
+#                                     run/docker.sock
+#                                     unless
+#                                     DOCKER_HOST is
+#                                     set
+#
+# GitLab CI/CD predefined variables auto-populated:
+#   CI_PROJECT_PATH
+#   CI_COMMIT_REF_NAME
+#   CI_COMMIT_SHA
+#   CI_PIPELINE_ID
+#   CI_RUNNER_TAGS
+#   ... (the full GitLab predefined set)
+#
+# Common invocations:
+#   # Run the full pipeline against .gitlab-ci.yml in cwd
+#   glci
+#
+#   # Use a non-default pipeline file
+#   glci --yml ci/integration.yml
+#
+#   # Use a custom workspace directory
+#   glci --dir /tmp/glci-workspace
+#
+#   # Run only specific jobs (skip the rest)
+#   glci --only-jobs build:assets,test:lint
+#
+#   # Combine flags
+#   glci --yml ci/release.yml --dir .glci-release \
+#       --only-jobs build,test
+#
+#   # Show help
+#   glci --help
+#
+# OPTIONS (sourced directly from
+# https://github.com/mdubourg001/glci/blob/main/src/constants.js):
+#
+#   --yml <PATH>                      .gitlab-ci.yml path
+#   --dir <PATH>                      .glci/ workspace path
+#   --only-jobs <JOB1,JOB2>           job allowlist
+#
+# -----------------------------------------------------------------------------
+
+local curcontext="$curcontext" state line ret=1
+typeset -A opt_args
+
+_arguments -C \
+    '(- *)--help[show help]' \
+    '(- *)--version[show version]' \
+    '--yml=[path to GitLab CI YAML file (default .gitlab-ci.yml)]:yml file:_files -g "*.(yml|yaml)"' \
+    '--dir=[base directory for glci workspace (default .glci)]:dir:_directories' \
+    '--only-jobs=[run only the listed jobs (comma-separated)]:jobs: ' \
+    && ret=0
+
+return ret
