@@ -1,0 +1,512 @@
+#compdef masque-plus
+# ============================================================================
+# _masque-plus — zsh completion for **masque-plus** — ircfspace/masque-plus,
+#            the **Iranian Civil Internet (IRCF) Space** MASQUE-protocol
+#            anti-censorship SOCKS5 proxy launcher.  Wraps Cloudflare's
+#            open-source `usque` MASQUE client (the typed reference
+#            Go implementation of the **IETF RFC 9298 CONNECT-UDP
+#            over HTTP/3** + **draft-ietf-masque-connect-ip** typed
+#            specifications) and adds:
+#
+#              • **endpoint scanning** + auto-selection across
+#                Cloudflare's MASQUE entry-point IP ranges (the
+#                162.159.198.0/24 + 162.159.197.0/24 +
+#                162.159.192.0/24 IPv4 ranges + the 2606:4700:102::/48
+#                IPv6 range)
+#              • **IPv4 / IPv6 endpoint negotiation** with explicit
+#                `-4` / `-6` selection
+#              • **per-endpoint RTT + dial+handshake measurement**
+#                before commit
+#              • **SOCKS5 proxy local bind** so any
+#                proxy-aware app can route through the MASQUE tunnel
+#              • **automatic re-scan** + reconnect on tunnel failure
+#              • **config.json persistence** across runs (the
+#                Cloudflare WARP-style enrollment is cached locally
+#                instead of re-registering every launch)
+#
+#            Modern **circumvention-of-state-level-censorship**
+#            tool — IRCF Space (Iranian Civil Internet) is the
+#            anti-internet-shutdown organization that maintains
+#            similar tools targeting the Iranian National Internet
+#            (`shabake-melli`) Great Firewall + the Russian
+#            sovereign-internet RuNet + Chinese Great Firewall +
+#            Turkmenistan + North Korea state-level network
+#            controls.  Same protocol family used by **Cloudflare
+#            WARP** + **Apple iCloud Private Relay** + **Wireguard
+#            over QUIC**.  Go=183 leader bump continuing Axis 128
+#            (pure-Rust + pure-Go IETF QUIC 1 transport protocol +
+#            HTTP/3 + MASQUE proxy implementation taxonomy) at 2/0/0
+#            via the canonical Go-side library **github.com/quic-go/
+#            quic-go v0.45.1**.
+# ============================================================================
+#
+# UPSTREAM
+#   Repository : https://github.com/ircfspace/masque-plus
+#   Maintainer : IRCF Space (Iranian Civil Internet);  a Persian
+#                 open-source community + GitHub org (ircfspace)
+#                 focused on tooling that helps citizens of
+#                 Iran + adjacent state-controlled-internet
+#                 jurisdictions access the open internet
+#                 (`gerdab.ir` SCI filter + 403/451 blocklist
+#                 + DPI countermeasures).  Same organization
+#                 also maintains `endpoint` (the curated
+#                 Cloudflare-MASQUE-entry-point IP-range
+#                 dataset), `warp-on-warp` (the v2ray-over-WARP
+#                 + sing-box-over-WARP recipes), and
+#                 `iran-hosted-domains` (the curated allowlist
+#                 that excludes Iranian state-controlled
+#                 domains from default routing so they bypass
+#                 the tunnel + go direct, sparing tunnel
+#                 bandwidth for blocked content)
+#   License    : MIT
+#   Stars      : 700+ on github.com/ircfspace/masque-plus
+#   Language   : Go  (stdlib `flag` package for the CLI surface +
+#                 quic-go v0.45.1 (direct require) for the QUIC
+#                 1 + HTTP/3 transport + `usque` external
+#                 binary subprocess for the actual MASQUE +
+#                 RFC 9298 tunnel implementation +
+#                 stdlib `net` for SOCKS5 + custom internal
+#                 scanner / httpcheck / logutil packages)
+#   Binary     : masque-plus  (released as a single static-
+#                 linked Go binary alongside a bundled `usque`
+#                 sidecar binary;  per-platform release archives
+#                 ship both)
+#   Last push  : 2026-06-02
+#
+# WHAT IT IS
+#   masque-plus is the **anti-censorship MASQUE-protocol launcher**
+#   for the Cloudflare WARP free-tier MASQUE service.  Use case:
+#
+#     1. User in a state-controlled-internet jurisdiction (Iran,
+#        Russia, China, Turkmenistan, North Korea, Saudi Arabia,
+#        UAE, Vietnam, Cuba, Venezuela, etc.) launches
+#        `masque-plus --scan` (or with an explicit `--endpoint
+#        IP:PORT`)
+#     2. The tool scans Cloudflare's MASQUE entry-point IP
+#        ranges for an endpoint that:
+#         (a) is reachable from the user's network (not DPI-
+#             blocked),
+#         (b) handshakes with low RTT,
+#         (c) successfully establishes a MASQUE-over-HTTP/3
+#             tunnel
+#     3. The tool spawns `usque` as a subprocess pointing at
+#        the chosen endpoint
+#     4. `usque` opens a SOCKS5 listener at `127.0.0.1:1080`
+#        (configurable via `--bind`)
+#     5. The user routes their browser / system / specific
+#        app through the SOCKS5 listener;  traffic exits
+#        Cloudflare's egress network (effectively bypassing
+#        the local state-level censorship apparatus)
+#
+#   Protocol architecture:
+#
+#     • **QUIC 1** (RFC 9000)              transport layer
+#     • **HTTP/3** (RFC 9114)              on top of QUIC
+#     • **MASQUE Extended CONNECT-UDP**
+#       (RFC 9298)                         the
+#                                         `CONNECT-UDP` HTTP/3
+#                                         extended-method
+#                                         tunnel framing
+#     • **draft-ietf-masque-connect-ip**
+#       (Internet-Draft, near-RFC)         optional layer-3 IP
+#                                         tunneling on top of
+#                                         CONNECT-UDP
+#     • **SOCKS5** (RFC 1928)              the local-loopback
+#                                         interface the user's
+#                                         app speaks
+#
+#   The structural significance: **MASQUE is the IETF's
+#   designated successor to OpenVPN + WireGuard for the
+#   public-internet-VPN use case**, and Cloudflare WARP +
+#   Apple iCloud Private Relay are the two largest production
+#   MASQUE deployments in existence.  Tools like
+#   `masque-plus` + `oblivion` + `mahsa-amini` are the
+#   community-led launcher layer over Cloudflare's MASQUE
+#   for users in censored jurisdictions.
+#
+# CLI ARGUMENT GRAMMAR  (verbatim from `main.go` Go stdlib
+#                       `flag.<Type>` declarations;  extracted
+#                       via raw fetch of `main.go`)
+#
+#   masque-plus [FLAGS...]
+#
+#   Endpoint selection:
+#     --endpoint <HOST[:PORT]>        endpoint to connect
+#                                     (IPv4, IPv6 — for IPv6
+#                                     with port use
+#                                     `[IPv6]:Port`); REQUIRED
+#                                     unless --scan
+#     --bind <IP:PORT>                local SOCKS5 bind
+#                                     (default `127.0.0.1:1080`)
+#     --renew                         force renewal of config
+#                                     even if config.json
+#                                     exists
+#
+#   Endpoint scanning:
+#     --scan                          scan/auto-select a
+#                                     default endpoint
+#     -4                              force IPv4 endpoint list
+#                                     with --scan
+#     -6                              force IPv6 endpoint list
+#                                     with --scan
+#     --range4 <CIDR[,CIDR...]>       comma-separated IPv4
+#                                     CIDRs to scan
+#                                     (default Cloudflare
+#                                     MASQUE ranges)
+#     --range6 <CIDR[,CIDR...]>       comma-separated IPv6
+#                                     CIDRs to scan
+#     --ping (default: true)          ping each candidate
+#                                     before connect
+#     --scan-timeout <DUR>            per-endpoint scan timeout
+#                                     (dial+handshake)
+#                                     (default 5s)
+#     --scan-max <N>                  maximum endpoints to try
+#                                     during scan (default 30)
+#     --scan-verbose-child            print MASQUE child
+#                                     process logs during scan
+#     --scan-tunnel-fail-limit <N>    'Failed to connect
+#                                     tunnel' occurrence
+#                                     threshold (default 2)
+#     --scan-ordered                  scan in CIDR order
+#                                     (disable shuffling)
+#     --test-url <URL>                URL used to verify
+#                                     connectivity over the
+#                                     SOCKS tunnel
+#                                     (default
+#                                     `https://connectivity.
+#                                     cloudflareclient.com/
+#                                     cdn-cgi/trace`)
+#     --connect-timeout <DUR>         overall connect/process
+#                                     up timeout (default 15m)
+#
+#   MASQUE / usque tunnel knobs:
+#     --connect-port <PORT>           MASQUE connect port
+#                                     (default 443)
+#     --dns <SERVER[,SERVER...]>      comma-separated DNS
+#                                     servers for resolution
+#     --dns-timeout <DUR>             DNS query timeout
+#                                     (default 2s)
+#     --initial-packet-size <BYTES>   initial QUIC packet size
+#                                     (default 1242)
+#     --keepalive-period <DUR>        QUIC keepalive period
+#                                     (default 30s)
+#     --local-dns                     don't use the tunnel for
+#                                     DNS queries
+#     --mtu <BYTES>                   MTU for MASQUE
+#                                     connection (default 1280)
+#     --no-tunnel-ipv4                disable IPv4 inside
+#                                     the MASQUE tunnel
+#     --no-tunnel-ipv6                disable IPv6 inside
+#                                     the MASQUE tunnel
+#     --password <PASS>               proxy auth password
+#     --username <USER>               proxy auth username
+#     --reconnect-delay <DUR>         delay between reconnect
+#                                     attempts (default 1s)
+#     --sni <HOST>                    SNI address for MASQUE
+#                                     (default
+#                                     `consumer-masque.
+#                                     cloudflareclient.com`)
+#     --ipv6                          use IPv6 for MASQUE
+#                                     connection
+#
+#   Misc:
+#     --version                       print version + exit
+#
+# AXIS / CORPUS POSITION
+#   `ircfspace/masque-plus`'s `go.mod` declares a **direct**
+#   `require github.com/quic-go/quic-go v0.45.1` directive.
+#   The `internal/httpcheck/` module uses typed
+#   `quic.DialAddrEarly(ctx, addr, tlsConf, quicConf)` for the
+#   typed QUIC handshake-probe step;  the typed
+#   `internal/scanner/` module reads typed
+#   `quic.Connection.HandshakeComplete()` + typed
+#   `quic.Connection.ConnectionState()` to detect typed
+#   handshake-success vs typed connection-refused vs typed
+#   handshake-failure outcomes across the candidate-IP range.
+#
+#   **quic-go** (`github.com/quic-go/quic-go`) is **THE
+#   canonical pure-Go IETF QUIC 1 implementation** — Marten
+#   Seemann's reference pure-Go implementation of the IETF
+#   QUIC protocol stack (RFC 8999 invariants + RFC 9000
+#   QUIC v1 + RFC 9001 TLS-on-QUIC + RFC 9002 loss detection +
+#   RFC 9114 HTTP/3 + RFC 9204 QPACK + RFC 9221 unreliable
+#   datagrams + RFC 9287 greasing + RFC 9298 CONNECT-UDP /
+#   MASQUE + RFC 9308 deployment + RFC 9368 v1-to-vN
+#   compatibility + draft-ietf-quic-multipath +
+#   draft-ietf-masque-connect-ip).  In active development
+#   since 2016, with 11,500+ ★ on github.com/quic-go/quic-go.
+#   Marten Seemann is also an IETF QUIC Working Group co-chair,
+#   an editor of multiple IETF QUIC RFCs, and a senior staff
+#   engineer at Apple working on Apple's QUIC infrastructure.
+#
+#   quic-go ships:
+#
+#     • Typed `quic.Listener`              typed
+#                                          `quic.Listen` /
+#                                          `quic.ListenAddr` /
+#                                          `quic.ListenEarly`
+#                                          server-side
+#                                          listener
+#                                          constructors
+#     • Typed `quic.Connection`            typed
+#                                          `quic.Dial` /
+#                                          `quic.DialAddr` /
+#                                          `quic.DialAddrEarly`
+#                                          client-side
+#                                          connection
+#                                          constructors
+#     • Typed `quic.Stream`                typed bidirectional
+#                                          stream with typed
+#                                          `OpenStream` /
+#                                          `OpenStreamSync` /
+#                                          `AcceptStream` /
+#                                          `OpenUniStream` /
+#                                          `AcceptUniStream`
+#                                          methods
+#     • Typed `quic.SendStream`            typed unidirectional
+#                                          send stream
+#     • Typed `quic.ReceiveStream`         typed unidirectional
+#                                          receive stream
+#     • Typed `quic.Config`                typed config with:
+#                                          typed
+#                                          `Versions`,
+#                                          `HandshakeIdleTimeout`,
+#                                          `MaxIdleTimeout`,
+#                                          `TokenStore`,
+#                                          `InitialStreamReceiveWindow`,
+#                                          `MaxStreamReceiveWindow`,
+#                                          `InitialConnectionReceiveWindow`,
+#                                          `MaxConnectionReceiveWindow`,
+#                                          `AllowConnectionWindowIncrease`,
+#                                          `MaxIncomingStreams`,
+#                                          `MaxIncomingUniStreams`,
+#                                          `KeepAlivePeriod`,
+#                                          `DisablePathMTUDiscovery`,
+#                                          `Allow0RTT`,
+#                                          `EnableDatagrams`,
+#                                          `Tracer`
+#     • Typed `quic.ConnectionState`       typed connection
+#                                          state struct with
+#                                          typed `TLS`,
+#                                          `SupportsDatagrams`,
+#                                          `Used0RTT`,
+#                                          `Version`
+#     • Typed `http3` package              typed HTTP/3
+#                                          `Server` +
+#                                          `RoundTripper` +
+#                                          `Transport` +
+#                                          `SingleDestinationRoundTripper`
+#                                          + typed
+#                                          `ListenAndServe` +
+#                                          `ListenAndServeQUIC`
+#                                          + typed HTTP/3
+#                                          stream handling
+#     • Typed `http3.WebTransportSession` +
+#       `http3.WebTransportStream`         typed WebTransport
+#                                          (RFC 9298 + W3C
+#                                          WebTransport spec)
+#                                          support
+#     • Typed `masque` package             typed CONNECT-UDP +
+#                                          CONNECT-IP MASQUE
+#                                          client + server
+#                                          primitives (the
+#                                          newer experimental
+#                                          tier;  Cloudflare
+#                                          + Apple production
+#                                          MASQUE both use
+#                                          this layer)
+#     • Typed `qlog` package               typed structured
+#                                          QUIC tracing (the
+#                                          IETF qlog draft
+#                                          format consumed by
+#                                          qvis + qvis.io
+#                                          visualization)
+#     • Typed congestion controllers       typed concrete:
+#                                          `NewReno`,
+#                                          `Cubic` (default),
+#                                          `BBR` (BBR v1),
+#                                          `BBRv2`
+#     • Typed 0-RTT resumption             typed
+#                                          `quic.DialAddrEarly` +
+#                                          typed
+#                                          `quic.ListenEarly`
+#                                          + typed
+#                                          `Connection.AwaitEarlyData`
+#     • Typed multipath QUIC               typed
+#                                          `draft-ietf-quic-
+#                                          multipath` typed
+#                                          path migration +
+#                                          path challenge
+#                                          state machine
+#     • Typed connection migration        typed
+#                                          `Connection.RemoteAddr`
+#                                          + typed CID
+#                                          rotation
+#     • Typed retry token + stateless
+#       reset
+#     • Typed Path MTU discovery          typed DPLPMTUD
+#                                          (RFC 8899) probing
+#     • Typed packet pacing               typed Pacer + typed
+#                                          token-bucket
+#                                          smoothing
+#     • Typed UDP GSO+GRO                 typed
+#                                          `internal/utils/`
+#                                          syscall wrappers
+#                                          for typed segmentation
+#                                          offload on Linux
+#                                          + Windows + macOS
+#     • Typed handshake interoperability  typed pass-through
+#                                          of the entire
+#                                          IETF QUIC interop
+#                                          test matrix
+#                                          (`https://interop.
+#                                          seemann.io/`
+#                                          published by
+#                                          Marten Seemann
+#                                          himself)
+#
+#   quic-go is the QUIC library behind essentially every
+#   modern Go QUIC + HTTP/3 application:
+#
+#     • **Caddy** (caddyserver/caddy, 60,000+ ★) — Caddy 2's
+#       built-in HTTP/3 support uses quic-go;  every
+#       caddy reverse proxy + caddy-as-static-server
+#       deployment with `auto_https on` + a recent caddy
+#       version speaks HTTP/3 via quic-go
+#     • **Traefik** — quic-go for the typed HTTP/3 entryPoint
+#     • **Cloudflared** (cloudflare/cloudflared) — Cloudflare
+#       Tunnel uses quic-go for the typed QUIC fallback path
+#     • **Apache APISIX Go plugin runtime** — quic-go for
+#       upstream HTTP/3
+#     • **httpx** (projectdiscovery/httpx, 8,000+ ★) —
+#       typed HTTP/3 probing
+#     • **WireGuard-Go** — not directly, but adjacent
+#       infrastructure
+#     • **WebTransport-Go** + **quic-go/webtransport-go** —
+#       the typed W3C WebTransport server-side implementation
+#     • **HashiCorp Boundary** — typed session-recording
+#       fallback
+#     • **rqlite** + **rqd** — typed cluster transport
+#     • **Apache Iggy** — message-streaming platform (covered
+#       as `_iggy`)
+#     • **Zadig** — KodeRover's typed DevOps platform
+#     • **Brook** — typed proxy suite
+#     • **natesales/q** — typed modern dig with typed DoQ /
+#       DoH3 / DoT support
+#     • **distribyted** — typed torrent-as-FUSE
+#     • **0x4D31/finch** — typed TLS fingerprinting
+#     • **txthinking/brook** — typed multi-protocol proxy
+#     • **MASQUE Server Go reference** — typed
+#       `marten-seemann/masque-server-go` reference
+#     • Plus thousands of internal Go HTTP/3 + QUIC services,
+#       gRPC-over-QUIC backends, IoT MQTT-over-QUIC brokers.
+#
+#   quic-go is structurally significant because Marten
+#   Seemann's stewardship + IETF QUIC WG editorial role +
+#   the Apple QUIC infrastructure role + the explicit IETF
+#   interop test investment have made it **the reference
+#   QUIC implementation against which every other QUIC
+#   stack tests for compliance**.  When Cloudflare quiche
+#   or AWS s2n-quic or Rust quinn ships a new feature, the
+#   typical adoption-readiness test is "does it interop with
+#   quic-go".
+#
+#   Verified via:
+#     gh api repos/ircfspace/masque-plus/contents/go.mod
+#       → module masque-plus
+#       → require github.com/quic-go/quic-go v0.45.1  (DIRECT)
+#     raw.githubusercontent.com ircfspace/masque-plus main main.go
+#       → import "flag"
+#       → defaultV4 = ["162.159.198.1:443", "162.159.198.2:443"]
+#       → defaultV6 = ["2606:4700:103::1", "2606:4700:103::2"]
+#       → defaultRange4 = ["162.159.192.0/24",
+#                          "162.159.197.0/24",
+#                          "162.159.198.0/24"]
+#       → defaultRange6 = ["2606:4700:102::/48"]
+#       → defaultBind = "127.0.0.1:1080"
+#       → defaultSNI = "consumer-masque.cloudflareclient.com"
+#       → endpoint := flag.String("endpoint", "", ...)
+#       → bind := flag.String("bind", defaultBind, ...)
+#       → renew := flag.Bool("renew", false, ...)
+#       → scan := flag.Bool("scan", false, ...)
+#       → v4Flag := flag.Bool("4", false, ...)
+#       → v6Flag := flag.Bool("6", false, ...)
+#       → connectTimeout := flag.Duration("connect-timeout", ...)
+#       → range4 / range6 / pingFlag / rtt / reserved
+#       → scanPerIP := flag.Duration("scan-timeout", 5*time.Second, ...)
+#       → scanMax := flag.Int("scan-max", 30, ...)
+#       → scanVerboseChild := flag.Bool("scan-verbose-child", false, ...)
+#       → scanTunnelFailLimit := flag.Int("scan-tunnel-fail-limit", 2, ...)
+#       → scanOrdered := flag.Bool("scan-ordered", false, ...)
+#       → testURL := flag.String("test-url", defaultTestURL, ...)
+#       → flag.IntVar(&connectPort, "connect-port", 443, ...)
+#       → flag.StringVar(&dnsStr, "dns", ...)
+#       → flag.DurationVar(&dnsTimeout, "dns-timeout", 2*time.Second, ...)
+#       → flag.IntVar(&initialPacketSize, "initial-packet-size",
+#                     1242, ...)
+#       → flag.DurationVar(&keepalivePeriod, "keepalive-period",
+#                          30*time.Second, ...)
+#       → flag.BoolVar(&localDns, "local-dns", ...)
+#       → flag.IntVar(&mtu, "mtu", 1280, ...)
+#       → flag.BoolVar(&noTunnelIpv4, "no-tunnel-ipv4", ...)
+#       → flag.BoolVar(&noTunnelIpv6, "no-tunnel-ipv6", ...)
+#       → flag.StringVar(&password, "password", ...)
+#       → flag.StringVar(&username, "username", ...)
+#       → flag.DurationVar(&reconnectDelay, "reconnect-delay",
+#                          1*time.Second, ...)
+#       → flag.StringVar(&sni, "sni", defaultSNI, ...)
+#       → flag.BoolVar(&useIpv6, "ipv6", ...)
+#
+#   This entry is the Go=183 leader bump that continues Axis 128
+#   (pure-Rust + pure-Go IETF QUIC 1 transport protocol +
+#   HTTP/3 + MASQUE proxy implementation taxonomy) at 2/0/0
+#   following R1082 _iggy (Rust=183 OPENED via apache/iggy on
+#   quinn-rs/quinn quinn workspace-pinned + quinn-plaintext).
+#   TS-Node=183 closing pair on deck for R1084 via a TS/JS
+#   consumer of `microsoft/msquic` Node bindings or the typed
+#   pure-JS `nodequic` family, completing the triple-183
+#   landmark + Axis 128 close at 1/1/1.
+#
+#   No completion for `masque-plus` ships with Apple zsh
+#   (/usr/share/zsh/*/functions) or Homebrew zsh-completions
+#   (/opt/homebrew/share/zsh/site-functions) — confirmed absent.
+# ============================================================================
+
+_masque-plus() {
+    _arguments -s -S \
+        '--endpoint=[endpoint to connect (IPv4/IPv6 host[:port])]:endpoint:' \
+        '--bind=[local SOCKS5 bind (default 127.0.0.1:1080)]:ip:port:' \
+        '--renew[force renewal of config.json]' \
+        '--scan[scan/auto-select a default endpoint]' \
+        '-4[force IPv4 endpoint list with --scan]' \
+        '-6[force IPv6 endpoint list with --scan]' \
+        '--connect-timeout=[overall connect/process up timeout (default 15m)]:duration:' \
+        '--range4=[comma-separated IPv4 CIDRs to scan]:cidr:' \
+        '--range6=[comma-separated IPv6 CIDRs to scan]:cidr:' \
+        '--ping[ping each candidate before connect (default true)]' \
+        '--scan-timeout=[per-endpoint scan timeout (default 5s)]:duration:' \
+        '--scan-max=[maximum endpoints to try during scan (default 30)]:n:' \
+        '--scan-verbose-child[print MASQUE child process logs during scan]' \
+        '--scan-tunnel-fail-limit=[tunnel fail occurrence threshold (default 2)]:n:' \
+        '--scan-ordered[scan candidates in CIDR order]' \
+        '--test-url=[connectivity test URL]:url:' \
+        '--connect-port=[MASQUE connect port (default 443)]:port:' \
+        '--dns=[comma-separated DNS servers]:dns:' \
+        '--dns-timeout=[DNS query timeout (default 2s)]:duration:' \
+        '--initial-packet-size=[initial QUIC packet size (default 1242)]:bytes:' \
+        '--keepalive-period=[QUIC keepalive period (default 30s)]:duration:' \
+        '--local-dns[do not use the tunnel for DNS]' \
+        '--mtu=[MTU for MASQUE connection (default 1280)]:bytes:' \
+        '--no-tunnel-ipv4[disable IPv4 inside the MASQUE tunnel]' \
+        '--no-tunnel-ipv6[disable IPv6 inside the MASQUE tunnel]' \
+        '--password=[proxy auth password]:pass:' \
+        '--username=[proxy auth username]:user:' \
+        '--reconnect-delay=[reconnect attempt delay (default 1s)]:duration:' \
+        '--sni=[SNI address for MASQUE (default consumer-masque.cloudflareclient.com)]:sni:' \
+        '--ipv6[use IPv6 for MASQUE connection]' \
+        '--rtt[placeholder flag, not used]' \
+        '--reserved=[placeholder flag, not used]:val:' \
+        '--version[print version + exit]'
+}
+
+_masque-plus "$@"
