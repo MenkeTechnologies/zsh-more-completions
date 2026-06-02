@@ -1,0 +1,271 @@
+#compdef xf
+# ============================================================================
+# _xf — zsh completion for Dicklesworthstone/xf, "search your X/Twitter
+#        data archive from the command line with sub-millisecond full-text
+#        queries" — Rust=147 leader bump OPENING Axis 92 (Tantivy /
+#        full-text search engine library)
+# ============================================================================
+#
+# UPSTREAM
+#   Repository : https://github.com/Dicklesworthstone/xf
+#   Maintainer : Jeffrey Emanuel
+#   License    : MIT (with OpenAI/Anthropic rider)
+#   Stars      : 94
+#   Language   : Rust
+#   Crate      : xf  (Cargo.toml [package] name = "xf";
+#                      [[bin]] name = "xf")
+#   Binary     : xf  (also called `x_find` in long-about)
+#   Last push  : 2026-04-28
+#
+# WHAT IT IS
+#   xf is "ultra-fast CLI for searching X data archives" — a
+#   blazing-fast indexer + searcher for the zip-format archives
+#   you download from `x.com/settings/download_your_data`.  It
+#   extracts the archive, builds a Tantivy full-text BM25 index
+#   on every tweet / DM / like / bookmark / Grok chat, persists
+#   metadata to SQLite for typed queries, and (optionally)
+#   generates semantic embeddings (MiniLM ~80MB) for true
+#   "happy"-matches-"joyful" semantic search.  Two-tier hybrid
+#   search blends a hash-based fast tier with a quality MiniLM
+#   tier;  a background daemon keeps models warm for sub-ms
+#   query latency.  Output is JSON or human-readable text;
+#   shell completions are generated for bash / zsh / fish /
+#   PowerShell / elvish via the bundled completion generator.
+#
+# CLI ARGUMENT GRAMMAR  (verbatim from src/cli.rs — clap derive
+#                       with `#[command(...)]`, `#[derive(Args,
+#                       Parser, Subcommand, ValueEnum)]`)
+#   xf [GLOBAL OPTIONS] <SUBCOMMAND> [args...]
+#
+#   Global options (apply to every subcommand):
+#     --db <PATH>                    Database file path
+#                                    [env: XF_DB]
+#     --index <PATH>                 Search index directory
+#                                    [env: XF_INDEX]
+#     -f, --format <FORMAT>          Output format
+#                                    [env: XF_OUTPUT_FORMAT,
+#                                          TOON_DEFAULT_FORMAT —
+#                                    default: text]
+#     -v, --verbose                  Increase verbosity
+#                                    (-v verbose, -vv debug,
+#                                     -vvv trace)
+#     -q, --quiet                    Suppress non-error output
+#     --no-color                     Disable colored output
+#                                    [env: NO_COLOR]
+#
+#   Subcommands:
+#     import <ZIP_FILE>              Import + index an X data
+#                                    archive zip
+#       -o, --output <DIR>             Extract destination
+#                                      [default: ~/my_x_history]
+#       --no-index                     Extract only, do not index
+#       -F, --force                    Overwrite existing
+#                                      extraction
+#
+#     index [<ARCHIVE_PATH>]         Index an X data archive
+#       -F, --force                    Force full re-index
+#       --only <TYPES>                 CSV of types to index
+#                                      (tweet|like|dm|grok|
+#                                      bookmark)
+#       --skip <TYPES>                 CSV of types to skip
+#       -j, --jobs <N>                 Parallel workers
+#                                      [default: 0 = auto]
+#       -s, --semantic                 Enable semantic embeddings
+#                                      (MiniLM, ~80MB download
+#                                       on first use)
+#       --two-tier                     Build both fast (hash) and
+#                                      quality (MiniLM) indexes
+#       --no-embeddings                Skip embedding generation
+#       --sync-embeddings              Wait for embeddings
+#                                      (default: background via
+#                                      daemon)
+#
+#     search <QUERY>                 Search the indexed archive
+#       --types <TYPES>                CSV of doc types
+#                                      (tweet|like|dm|grok|
+#                                      bookmark)
+#       --mode <MODE>                  Search mode
+#                                      (lexical|semantic|hybrid|
+#                                      two-tier)
+#       --limit <N>                    Max results
+#       --since <DATE> / --until <DATE>
+#                                      Date filters
+#
+#     stats                          Show archive statistics
+#     tweet <ID>                     Show a specific tweet
+#       --thread                       Show full conversation
+#                                      thread
+#     list <KIND>                    List available data
+#                                    (tweets|likes|dms|...)
+#     export <KIND>                  Export data
+#       --format <FMT>                 csv|json|jsonl|ndjson
+#     config                         Show / manage configuration
+#     update                         Update xf to latest version
+#     completions <SHELL>            Generate shell completions
+#                                    (bash|zsh|fish|powershell|
+#                                     elvish)
+#     doctor                         Check archive / DB / index
+#                                    health
+#     shell                          Launch interactive REPL
+#     benchmark                      Run embedding / reranker
+#                                    benchmarks
+#     robot-docs                     Machine-readable CLI docs
+#                                    (JSON)
+#     models                         Manage embedding + reranker
+#                                    models
+#     daemon                         Manage the warm-model
+#                                    daemon
+#
+#   Standard clap auto-flags:
+#     -h, --help                     Show help
+#     -V, --version                  Show version
+#
+# AXIS / CORPUS POSITION
+#   Direct dependency on `tantivy = "0.26"` declared in
+#   Cargo.toml — `tantivy` is THE canonical Rust full-text
+#   search-engine library maintained by Quickwit and Paul
+#   Masurel (quickwit-oss/tantivy, 15K+ stars, the Apache
+#   Lucene-inspired Rust counterpart consumed by Quickwit,
+#   Spyglass, lnx, Summa, Datafusion, and every major Rust
+#   full-text search tool).  tantivy exposes
+#   `tantivy::schema::Schema` builders with typed `TextField`,
+#   `IntField`, `DateField`, `FacetField`,
+#   `BytesField`, `JsonObjectField`;  the
+#   `tantivy::Index` with `IndexWriter` / `IndexReader`
+#   handles, lock-free segment-based indexing, the
+#   `tantivy::query::Query` AST + `QueryParser`, BM25 / TF-IDF
+#   / TopDocs collectors, faceted search via the
+#   `tantivy::aggregation` module, custom tokenizers
+#   (`tantivy::tokenizer::TokenizerManager`), the
+#   `tantivy::DateTime` typed timestamp, and the BMP /
+#   sparse-vector hybrid search planner shipping in 0.26.
+#   xf's `src/lib.rs` constructs a Tantivy `Index` per
+#   on-disk location, registers a custom tokenizer pipeline
+#   (lowercase, ASCII fold, simple whitespace), and runs
+#   queries through `QueryParser::for_index(&index,
+#   text_fields)` + `searcher.search(&query, &TopDocs::
+#   with_limit(N))`.  Verified via:
+#     gh api repos/Dicklesworthstone/xf/contents/Cargo.toml
+#       → tantivy = "0.26"
+#       → name = "xf"
+#       → [[bin]] name = "xf"
+#       → keywords = ["twitter", "x", "search", "cli",
+#                     "archive", "tantivy"]
+#     gh api repos/Dicklesworthstone/xf/contents/src/cli.rs
+#       → #[derive(Parser)] struct Cli { db, index, format,
+#                                          verbose, quiet,
+#                                          no_color, command }
+#       → enum Commands { Import|Index|Search|Stats|Tweet|
+#                          List|Export|Config|Update|
+#                          Completions|Doctor|Shell|
+#                          Benchmark|RobotDocs|Models|Daemon }
+#   This entry is the Rust=147 leader bump that OPENS Axis 92
+#   (Tantivy / full-text search engine library) at 1/0/0.
+#   Pairing Go and TS-Node bumps will follow at R958 and R959
+#   (Go=147 candidates blevesearch/bleve users; TS-Node=147
+#   candidates flexsearch / lunr / minisearch users).
+#
+#   No completion for `xf` ships with Apple zsh
+#   (/usr/share/zsh/*/functions) or Homebrew zsh-completions
+#   (/opt/homebrew/share/zsh/site-functions) — confirmed absent.
+# ============================================================================
+
+_xf() {
+    local curcontext="$curcontext" state line ret=1
+    typeset -A opt_args
+
+    _arguments -C \
+        '(- *)'{-h,--help}'[show help]' \
+        '(- *)'{-V,--version}'[show version]' \
+        '--db=[database file path]:path:_files' \
+        '--index=[search index directory]:dir:_files -/' \
+        '(-f --format)'{-f,--format}'=[output format]:format:(text json jsonl ndjson csv toon)' \
+        '*'{-v,--verbose}'[increase verbosity (repeatable)]' \
+        '(-q --quiet)'{-q,--quiet}'[suppress non-error output]' \
+        '--no-color[disable colored output]' \
+        '1: :_xf_commands' \
+        '*::arg:->args' && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                import)
+                    _arguments \
+                        '(-o --output)'{-o,--output}'=[extract destination]:dir:_files -/' \
+                        '--no-index[extract only, do not index]' \
+                        '(-F --force)'{-F,--force}'[overwrite existing extraction]' \
+                        ':zip file:_files -g "*.zip"' && ret=0 ;;
+                index)
+                    _arguments \
+                        '(-F --force)'{-F,--force}'[force full re-index]' \
+                        '--only=[CSV of types to index]:types:_xf_types' \
+                        '--skip=[CSV of types to skip]:types:_xf_types' \
+                        '(-j --jobs)'{-j,--jobs}'=[parallel workers (0=auto)]:n:' \
+                        '(-s --semantic)'{-s,--semantic}'[enable semantic embeddings (MiniLM)]' \
+                        '--two-tier[build fast + quality indexes]' \
+                        '--no-embeddings[skip embedding generation]' \
+                        '--sync-embeddings[wait for embeddings (no background)]' \
+                        '::archive path:_files -/' && ret=0 ;;
+                search)
+                    _arguments \
+                        '--types=[CSV of doc types]:types:_xf_types' \
+                        '--mode=[search mode]:mode:(lexical semantic hybrid two-tier)' \
+                        '--limit=[max results]:n:' \
+                        '--since=[date filter (since)]:date:' \
+                        '--until=[date filter (until)]:date:' \
+                        ':query:' && ret=0 ;;
+                tweet)
+                    _arguments \
+                        '--thread[show full conversation thread]' \
+                        ':tweet id:' && ret=0 ;;
+                completions)
+                    _arguments \
+                        ':shell:(bash zsh fish powershell elvish)' && ret=0 ;;
+                export)
+                    _arguments \
+                        '--format=[output format]:format:(csv json jsonl ndjson)' \
+                        ':kind:(tweets likes dms grok bookmarks)' && ret=0 ;;
+                list)
+                    _arguments \
+                        ':kind:(tweets likes dms grok bookmarks tables)' && ret=0 ;;
+                stats|config|update|doctor|shell|benchmark|robot-docs|models|daemon)
+                    _arguments '*: :' && ret=0 ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+(( $+functions[_xf_commands] )) ||
+_xf_commands() {
+    local -a commands
+    commands=(
+        'import:import + index an X data archive zip'
+        'index:index an X data archive'
+        'search:search the indexed archive'
+        'stats:show archive statistics'
+        'tweet:show information about a specific tweet'
+        'list:list available data'
+        'export:export data (csv/json/jsonl/ndjson)'
+        'config:show / manage configuration'
+        'update:update xf to latest version'
+        'completions:generate shell completions'
+        'doctor:check archive/DB/index health'
+        'shell:launch interactive REPL'
+        'benchmark:run embedding/reranker benchmarks'
+        'robot-docs:machine-readable CLI docs (JSON)'
+        'models:manage embedding + reranker models'
+        'daemon:manage the warm-model daemon'
+    )
+    _describe -t commands 'xf command' commands
+}
+
+(( $+functions[_xf_types] )) ||
+_xf_types() {
+    local -a types
+    types=(tweet like dm grok bookmark)
+    _describe -t types 'data type' types
+}
+
+_xf "$@"
