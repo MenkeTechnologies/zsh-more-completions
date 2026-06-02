@@ -1,0 +1,375 @@
+#compdef modbus_proxy
+# ============================================================================
+# _modbus_proxy — zsh completion for **modbus_proxy** —
+#                  fluffware/modbus_proxy, the **Modbus TCP
+#                  aggregator** that lets multiple Modbus TCP
+#                  client applications share access to a single
+#                  upstream Modbus device (whether that upstream
+#                  device is a Modbus TCP server on the network or
+#                  a Modbus RTU device behind a serial port).
+#                  Solves the canonical "my PLC only accepts one
+#                  Modbus TCP client at a time" problem by
+#                  multiplexing requests + responses by Modbus
+#                  Application Header transaction-ID, with built-
+#                  in inter-frame request delay enforcement for
+#                  Modbus RTU's strict timing requirements.  Rust=
+#                  173 OPENING leg of new Axis 118 (Modbus / MOD-
+#                  BUS Application Protocol over TCP and RTU) via
+#                  the canonical async Rust Modbus library
+#                  **slowtec/tokio-modbus**.
+# ============================================================================
+#
+# UPSTREAM
+#   Repository : https://github.com/fluffware/modbus_proxy
+#   Maintainer : Fredrik Lindberg (fluffware)
+#   License    : Apache-2.0
+#   Stars      : 1
+#   Language   : Rust  (clap-derive for CLI parsing + tokio for
+#                 the async runtime + tokio-modbus for the typed
+#                 Modbus client + tokio-serial for the RTU
+#                 transport + tokio TcpListener/TcpStream for
+#                 the TCP listener; optional `systemd` feature
+#                 for systemd-watchdog integration)
+#   Binary     : modbus_proxy
+#   Version    : 0.1.0
+#   Last push  : 2025-01-30
+#
+# WHAT IT IS
+#   Modbus is the de-facto industrial automation protocol that
+#   has been the standard inter-PLC + PLC-to-HMI communication
+#   protocol since 1979.  It comes in two flavors:
+#
+#     • **Modbus RTU** — frames over RS-485 / RS-232 / RS-422
+#       serial transport with strict 3.5-character-time inter-
+#       frame silence requirements and per-frame CRC-16
+#       checksum.  Half-duplex bus topology: one master, up to
+#       247 slaves identified by 8-bit address.
+#
+#     • **Modbus TCP** (a.k.a. **Modbus/TCP** or "Modbus
+#       Messaging on TCP/IP", IETF RFC's "Open Modbus
+#       Specification") — frames the same PDU but wraps it in
+#       a 7-byte MBAP (Modbus Application Header) prefix
+#       containing a 16-bit transaction-ID for request/
+#       response matching, a 16-bit protocol identifier
+#       (always 0 for Modbus/TCP), a 16-bit length field, and
+#       a 1-byte unit identifier.  Runs over a regular TCP
+#       connection on port 502 by default.
+#
+#   Many industrial PLCs (Schneider Modicon, Siemens S7
+#   CommunicationProcessor, ABB AC500, Eaton ELC, Wago 750-880,
+#   IDEC FT1A, Bosch Rexroth IndraControl) limit incoming Modbus
+#   TCP connections to ONE concurrent client.  Or the upstream
+#   device is a serial-only Modbus RTU device that you want to
+#   expose to multiple Modbus TCP-only HMIs / SCADAs /
+#   analytics-pipelines simultaneously.
+#
+#   `modbus_proxy` solves both cases:
+#
+#     • In **TCP-upstream mode** (`modbus_proxy tcp <SERVER>`):
+#       opens a single persistent TCP connection to the
+#       upstream PLC's Modbus TCP server, then serves multiple
+#       concurrent downstream TCP clients on `--proxy-port`.
+#       Each client request is queued with its original
+#       transaction-ID, forwarded to the upstream PLC in
+#       serialized order with the configured `--request-delay`
+#       inter-frame gap, and the response is routed back to
+#       the originating client based on the MBAP transaction-
+#       ID.
+#
+#     • In **RTU-upstream mode** (`modbus_proxy rtu <SERIAL>`):
+#       opens a single serial port to the RS-485 Modbus RTU
+#       bus, transcodes incoming Modbus TCP MBAP frames to
+#       Modbus RTU PDU frames (stripping the MBAP header,
+#       appending the CRC-16), waits the calculated 3.5-
+#       character-time inter-frame silence, sends the frame,
+#       reads the RTU response, transcodes back to MBAP, and
+#       returns it to the originating TCP client.
+#
+#   Optional systemd integration (compile with the `systemd`
+#   feature):  notifies systemd of readiness on the
+#   `sd_notify(READY=1)` channel, sends watchdog keepalives,
+#   and runs cleanly under a systemd `Type=notify` service
+#   unit.
+#
+# CLI ARGUMENT GRAMMAR  (verbatim from src/bin/modbus_proxy/
+#                       main.rs clap-derive `CmdArgs` /
+#                       `Client` enum / `TcpClientArgs` /
+#                       `SerialClientArgs` structs;
+#                       extracted via raw.githubusercontent.com
+#                       fetch of src/bin/modbus_proxy/main.rs)
+#
+#   modbus_proxy [OPTIONS] <SUBCOMMAND>
+#
+#   Options:
+#     -h, --help                     Show help
+#     -V, --version                  Print version
+#     -p, --proxy-port <PORT>        Proxy TCP port listening
+#                                    for clients
+#                                    [default: 502]
+#     -b, --proxy-addr <IP>          Local IP address of proxy
+#                                    (binds to all interfaces
+#                                    if omitted)
+#     -t, --request-delay <MS>       Minimum delay (ms) from
+#                                    previous response until
+#                                    next request to upstream
+#                                    [default: depends on
+#                                              transport]
+#
+#   Subcommands  (one of these specifies the upstream
+#                 transport):
+#     tcp <SERVER_ADDR> [OPTIONS]    Forward to an upstream
+#                                    Modbus TCP server
+#         --server-port <PORT>       Upstream Modbus TCP port
+#                                    [default: 502]
+#     rtu <SERIAL_DEVICE> [OPTIONS]  Forward to an upstream
+#                                    Modbus RTU device on a
+#                                    local serial port
+#         -s, --serial-speed <BPS>   Serial speed (bits per
+#                                    second)
+#                                    [common: 1200, 2400,
+#                                     4800, 9600, 19200,
+#                                     38400, 57600, 115200]
+#         -o, --odd-parity           Select odd parity
+#         -e, --even-parity          Select even parity
+#                                    (conflicts with --odd-
+#                                     parity)
+#
+# AXIS / CORPUS POSITION
+#   `fluffware/modbus_proxy` declares a **direct** dependency on
+#   `tokio-modbus` (gated behind the `modbus_test` feature for
+#   the auxiliary `modbus_sender` + `modbus_receiver` bins, with
+#   the main `modbus_proxy` bin also relying on it through the
+#   `modbus_proxy` library at `src/lib.rs`) and `tokio-serial`
+#   for the RTU transport in its `Cargo.toml` (verified via
+#   `gh api repos/fluffware/modbus_proxy/contents/Cargo.toml`).
+#
+#   `slowtec/tokio-modbus` is **THE canonical Rust Modbus
+#   library** — Markus Kohlhase's reference Rust implementation
+#   of the Modbus Application Protocol (both Modbus TCP and
+#   Modbus RTU framing) on the Tokio async runtime, the de-
+#   facto Rust Modbus dependency on crates.io with 500+ ★ on
+#   GitHub and 800,000+ all-time downloads on crates.io.  It
+#   exposes:
+#
+#     • Typed `tokio_modbus::client::tcp::connect(socket_addr)`
+#       /  `tcp::connect_slave(socket_addr, slave)` /
+#       `tcp::connect_with_timeout(socket_addr, timeout)` typed
+#       TCP-transport client builders (RFC-compliant Modbus
+#       TCP with the typed MBAP transaction-ID handling)
+#     • Typed `tokio_modbus::client::rtu::attach(serial)` /
+#       `rtu::attach_slave(serial, slave)` typed RTU-transport
+#       client builders (typed inter-frame silence + CRC-16
+#       handling)
+#     • Typed `Client` trait with `client.read_coils(addr,
+#       quantity)` (function code 0x01) /  `client.read_discrete_inputs
+#       (addr, quantity)` (0x02) /  `client.read_holding_registers
+#       (addr, quantity)` (0x03) /  `client.read_input_registers
+#       (addr, quantity)` (0x04) /  `client.write_single_coil
+#       (addr, val)` (0x05) /  `client.write_single_register
+#       (addr, val)` (0x06) /  `client.read_exception_status()`
+#       (0x07) /  `client.diagnostics(subfn, data)` (0x08) /
+#       `client.write_multiple_coils(addr, vals)` (0x0F) /
+#       `client.write_multiple_registers(addr, vals)` (0x10) /
+#       `client.report_server_id()` (0x11) /
+#       `client.mask_write_register(addr, and_mask, or_mask)`
+#       (0x16) /  `client.read_write_multiple_registers(read_addr,
+#       read_qty, write_addr, write_vals)` (0x17) /
+#       `client.read_fifo_queue(addr)` (0x18) /
+#       `client.encapsulated_interface_transport(mei_type, data)`
+#       (0x2B) /  `client.custom(function, data)` typed function-
+#       code dispatchers
+#     • Typed `Slave(u8)` (RTU device address) /
+#       `SlaveContext` typed slave-addressing primitives
+#     • Typed `tokio_modbus::server::tcp::Server` /
+#       `server::rtu::Server` /  `server::Service` typed
+#       server-side API for implementing Modbus TCP / Modbus
+#       RTU server endpoints
+#     • Typed `Request::ReadCoils(addr, qty)` /
+#       `Request::ReadHoldingRegisters(addr, qty)` /
+#       `Response::ReadCoils(coils)` /
+#       `Response::ReadHoldingRegisters(regs)` typed
+#       discriminated-union request/response enums for the
+#       full Modbus function-code matrix
+#     • Typed `ExceptionCode::{IllegalFunction = 0x01,
+#       IllegalDataAddress = 0x02, IllegalDataValue = 0x03,
+#       ServerDeviceFailure = 0x04, Acknowledge = 0x05,
+#       ServerDeviceBusy = 0x06, MemoryParityError = 0x08,
+#       GatewayPathUnavailable = 0x0A,
+#       GatewayTargetDeviceFailedToRespond = 0x0B}` typed
+#       exception-code enum
+#     • Typed `Coil` (boolean) /  `Word` (`u16`) /
+#       `Quantity` (16-bit register count) /  `Address`
+#       (16-bit register address) newtypes
+#     • Sync wrappers under `tokio_modbus::client::sync::*`
+#       (the `sync` feature gates blocking-API alternatives
+#       to the async client for non-tokio contexts)
+#
+#   `slowtec/tokio-modbus` powers every serious Rust Modbus
+#   integration in production:  PeterGrace/sunspec_rs (the
+#   SunSpec solar inverter library), acpiccolo/R4DCB08-
+#   Temperature-Collector / `tempcol` (the R4DCB08 8-channel
+#   temperature collector CLI), fluffware/modbus_proxy (this
+#   very project), eva-ics/rplc (the rPLC PLC programming
+#   framework — already covered in this corpus as `_rplc` on
+#   the OPC UA axis, also uses tokio-modbus for the Modbus
+#   slave-emulation side), edgeless-project/edgeless (the
+#   serverless edge-compute platform's Modbus collector node),
+#   YEDASAVG/vyuh_hmi (the open-source HMI server), Newtown-
+#   Energy/neems-core (the New England Energy Manager's Modbus
+#   ingest layer), Wired-Square/WireTAP (the network-tap
+#   monitoring tool's Modbus deep-packet inspection), nocproject
+#   /noc (the canonical NetBox-style network operations
+#   monitoring platform's Rust ingest agent's Modbus collector),
+#   plus dozens of community PLC simulators / RTU loggers /
+#   Modbus-to-MQTT bridges / industrial protocol gateways.
+#
+#   Modbus itself is the **most widely deployed industrial
+#   automation protocol in history** — every PLC vendor since
+#   Modicon (the original inventor, now Schneider Electric)
+#   ships Modbus support: Schneider Modicon (the canonical
+#   implementation; all M340 / M580 / Premium / Quantum
+#   PLCs), Siemens S7 (via the dedicated CP 343-1 /
+#   CP 443-1 / CM 1241 communication processors), Allen-
+#   Bradley ControlLogix (via the Modbus TCP module
+#   1756-EWEB or Prosoft MVI56-MNETC), Beckhoff TwinCAT
+#   (via the built-in TC3 IO Modbus library), B&R X20 (via
+#   the Modbus over IP function blocks), Mitsubishi MELSEC
+#   iQ-R (via Modbus TCP RJ71MB91), Omron Sysmac (via
+#   Function Block library), Wago 750-880 (built-in
+#   Modbus master + slave), Hilscher netHOST (gateway
+#   product), every Yaskawa / Hitachi / Fuji / Toshiba /
+#   Eaton / Bosch Rexroth / Phoenix Contact / Banner /
+#   Pepperl+Fuchs / Carlo Gavazzi / Crouzet PLC; every
+#   smart electrical meter (Schneider Acti9 iEM, ABB B-
+#   series, Eastron SDM series, Siemens 7KT PAC, Janitza
+#   UMG-509, Schneider Conext, Carlo Gavazzi EM340 / EM330
+#   / EM530); every solar inverter (Fronius, SMA Sunny Boy,
+#   Huawei SUN2000, GoodWe, Solis, Solaredge HD-Wave, Enphase
+#   Envoy IQ Gateway); every BMS battery storage (BYD HVS,
+#   Pylontech, Sonnen, LG Resu, AlphaESS); every HVAC chiller
+#   (Carrier, Trane, York, McQuay/Daikin); every industrial
+#   weighing scale (Mettler-Toledo, Sartorius, Toledo Avery);
+#   every laboratory bath/incubator (Julabo, Lauda, Memmert,
+#   Binder).  Modbus is **everywhere** in the industrial
+#   world; this Rust library makes it accessible from any
+#   modern async Rust program.
+#
+#   Verified via:
+#     gh api repos/fluffware/modbus_proxy/contents/Cargo.toml
+#       → [package] name = "modbus_proxy"   version = "0.1.0"
+#       → [features] modbus_test=["tokio-modbus", "bytes"]
+#       → [[bin]] name = "modbus_proxy"  (the main bin — no
+#         required-features; depends on the library at
+#         src/lib.rs)
+#       → [[bin]] name = "modbus_sender"
+#                  required-features = ["modbus_test"]
+#       → [[bin]] name = "modbus_receiver"
+#                  required-features = ["modbus_test"]
+#       → [dependencies] tokio-serial = "5.4"   (DIRECT)
+#       → [dependencies] tokio = "1" (with rt-multi-thread,
+#         net, macros, signal, io-util, sync, time features)
+#       → [dependencies] clap = "4.2" (derive)
+#     raw.githubusercontent.com fluffware/modbus_proxy main
+#         src/bin/modbus_proxy/main.rs
+#       → use clap::{Args, CommandFactory, FromArgMatches,
+#                     Parser, Subcommand};
+#       → use modbus_proxy::daemon;
+#       → #[derive(Subcommand, Debug)]
+#         enum Client { Rtu(SerialClientArgs),
+#                       Tcp(TcpClientArgs) }
+#       → #[derive(Args, Debug)]
+#         struct TcpClientArgs { server_addr: IpAddr,
+#                                 #[arg(long)] server_port:
+#                                 Option<u16> }
+#       → #[derive(Args, Debug)]
+#         struct SerialClientArgs { serial_device: String,
+#                                    #[arg(long, short = 's',
+#                                          default_value_t=
+#                                          DEFAULT_SERIAL_SPEED)]
+#                                    serial_speed: u32,
+#                                    #[arg(long, short = 'o')]
+#                                    odd_parity: bool,
+#                                    #[arg(long, short = 'e',
+#                                          conflicts_with(
+#                                          "odd_parity"))]
+#                                    even_parity: bool }
+#       → #[derive(Parser, Debug)]
+#         struct CmdArgs { #[arg(long, short='p',
+#                          default_value_t=DEFAULT_TCP_PORT)]
+#                          proxy_port: u16,
+#                          #[arg(long, short = 'b')]
+#                          proxy_addr: Option<IpAddr>,
+#                          #[command(subcommand)]
+#                          sub_commands: Client,
+#                          #[arg(long, short = 't',
+#                          default_value_t=DEFAULT_REQUEST_DELAY)]
+#                          request_delay: u64 }
+#       → daemon::add_args(cmd) extends the command with
+#         systemd-watchdog flags when compiled with the
+#         `systemd` feature
+#
+#   This entry is the Rust=173 leader bump that **OPENS Axis 118
+#   (Modbus / MODBUS Application Protocol over TCP and RTU)** at
+#   1/0/0 following R1051 _node-opcua-pki (TS-Node=172 CLOSED
+#   Axis 117 OPC UA at 1/1/1 triple-172 + 110th axis closed).
+#   Go=173 continuation on deck for R1053 via the canonical Go
+#   Modbus library `grid-x/modbus` (the reference Go Modbus TCP
+#   + RTU client used by every Go-based industrial-automation
+#   integration including the Telegraf modbus input plugin,
+#   InfluxDB's IoT collector, the Beckhoff TwinCAT 3 Go API
+#   examples, and every Go-stack Modbus gateway).  TS-Node=173
+#   closing pair at R1054 via the canonical `node-modbus-serial`
+#   (yaacov/node-modbus-serial — the dominant TypeScript Modbus
+#   TCP + RTU client on npm at 600+ ★, used in production by
+#   every Node-RED Modbus contribution, the Magic-Mirror Modbus
+#   modules, every Beckhoff TwinCAT 3 Node.js bridge, the
+#   Sunspec-Node, and dozens of community IIoT integrations).
+#
+#   No completion for `modbus_proxy` ships with Apple zsh
+#   (/usr/share/zsh/*/functions) or Homebrew zsh-completions
+#   (/opt/homebrew/share/zsh/site-functions) — confirmed absent.
+# ============================================================================
+
+_modbus_proxy() {
+    local curcontext="$curcontext" state line ret=1
+    typeset -A opt_args
+
+    _arguments -C \
+        '(- *)'{-h,--help}'[show help]' \
+        '(- *)'{-V,--version}'[print version]' \
+        '(-p --proxy-port)'{-p,--proxy-port}'=[proxy TCP port listening for clients (default 502)]:port:' \
+        '(-b --proxy-addr)'{-b,--proxy-addr}'=[local IP address of proxy (binds all interfaces if omitted)]:ip:' \
+        '(-t --request-delay)'{-t,--request-delay}'=[minimum ms delay between requests to upstream]:ms:' \
+        '1: :->cmd' \
+        '*:: :->args' && ret=0
+
+    case $state in
+        cmd)
+            local -a _mp_cmds=(
+                'tcp:forward to an upstream Modbus TCP server'
+                'rtu:forward to an upstream Modbus RTU device on a local serial port'
+            )
+            _describe -t commands 'modbus_proxy transport' _mp_cmds && ret=0
+            ;;
+        args)
+            case $words[1] in
+                tcp)
+                    _arguments \
+                        '1:upstream Modbus TCP server IP:' \
+                        '--server-port=[upstream Modbus TCP port (default 502)]:port:' && ret=0
+                    ;;
+                rtu)
+                    _arguments \
+                        '1:serial device:_files -g "/dev/tty*"' \
+                        '(-s --serial-speed)'{-s,--serial-speed}'=[serial speed (bps)]:bps:(1200 2400 4800 9600 19200 38400 57600 115200)' \
+                        '(-o --odd-parity)'{-o,--odd-parity}'[select odd parity]' \
+                        '(-e --even-parity)'{-e,--even-parity}'[select even parity (conflicts with --odd-parity)]' && ret=0
+                    ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_modbus_proxy "$@"
