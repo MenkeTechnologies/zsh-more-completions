@@ -1,0 +1,265 @@
+#compdef pmtiles
+# =============================================================================
+# pmtiles — Brandon Liu / Protomaps's "single-file utility
+#           for creating and working with PMTiles archives"
+#           — the official Go CLI for the PMTiles open
+#           specification, a cloud-native single-file
+#           container format for map tiles that replaces
+#           MBTiles (SQLite) + tile-server stacks with a
+#           static range-request-served archive on S3 /
+#           GCS / Azure Blob / local disk.
+#
+#           Distinguishing from MBTiles (Mapbox's SQLite-
+#           backed tile archive; requires a tile server to
+#           serve), TileBSON, OGC Tiles (HTTP tile API
+#           specs), tippecanoe (Felt's vector tile builder
+#           that EMITS PMTiles + MBTiles), tilemaker
+#           (Richard Fairhurst's OSM-PBF → vector tile
+#           pipeline), and martin (vector tile server
+#           in Rust) by:
+#             - SINGLE-FILE ARCHIVE — one .pmtiles file
+#               instead of an MBTiles SQLite + indexes;
+#               directly servable from any HTTP server
+#               that supports byte-range requests
+#               (S3, GCS, Azure Blob, nginx, CloudFront,
+#               GitHub Releases, ...)
+#             - RANGE-REQUEST SERVED — the archive header
+#               + directory + tile data are organized so a
+#               browser client (protomaps.js) can fetch
+#               only the tiles + dir pages it needs via
+#               HTTP Range requests; no server-side tile
+#               extraction
+#             - GOCLOUD.DEV BLOB BACKENDS — the CLI links
+#               in the s3blob / gcsblob / azureblob /
+#               fileblob drivers transparently; the same
+#               `pmtiles show s3://bucket/file.pmtiles`
+#               works against any blob provider
+#             - KONG CLI — uses alecthomas/kong (the
+#               struct-tag-driven Go arg parser; kebab-
+#               case auto-derived from struct field names)
+#             - SUBCOMMAND SET — show, tile, cluster,
+#               edit, extract, merge, convert, verify,
+#               serve, upload, version (plus hidden
+#               makesync / sync for incremental remote-
+#               local sync)
+#             - EXTRACT WITH OVERFETCH — `pmtiles extract`
+#               builds a smaller PMTiles from a larger
+#               source by zoom / bbox / GeoJSON region.
+#               The `--overfetch 0.05` knob trades extra
+#               downloaded bytes for fewer HTTP requests
+#               (default 5% overhead)
+#             - SERVE WITH METRICS — `pmtiles serve` runs
+#               an HTTP server backed by any blob source;
+#               `--admin-port` exposes Prometheus
+#               /metrics via promhttp
+#             - DEDUPLICATION ON CONVERT/CLUSTER —
+#               identical tiles are coalesced to one
+#               on-disk copy by hash; opt out via
+#               `--no-deduplication`
+#             - CONVERT FROM MBTILES — `pmtiles convert
+#               in.mbtiles out.pmtiles` migrates existing
+#               MBTiles libraries to PMTiles
+#             - GEOGRAPHIC EXTRACT — `--bbox lon,lat,lon,
+#               lat` or `--region poly.geojson` cuts
+#               regional sub-archives
+#
+# Author:   Brandon Liu (bdon on GitHub) + Protomaps
+#           contributors.
+# Source:   https://github.com/protomaps/go-pmtiles
+#           https://github.com/protomaps/go-pmtiles/blob/main/main.go
+# Docs:     https://docs.protomaps.com/pmtiles/cli
+# Homepage: https://protomaps.com
+# License:  BSD-3-Clause
+# Reference accessed: 2026-06-01
+#
+# -----------------------------------------------------------------------------
+#
+# THE pmtiles CLI
+#
+# pmtiles is invoked as:
+#   pmtiles [GLOBAL] <command> [args...] [options...]
+#
+# Global:
+#   -q, --quiet               Silence logging + progress output
+#       --help                Show help (kong-generated)
+#
+# Commands (kong-derived):
+#   show <PATH>               Inspect a local or remote archive
+#     --bucket=<URI>          Remote bucket
+#     --metadata              Output only the full JSON metadata
+#     --header-json           Print a JSON header summary
+#     --tilejson              Print the TileJSON
+#     --public-url=<URL>      Public base URL of tile endpoint
+#
+#   tile <PATH> <Z> <X> <Y>   Fetch one tile to stdout
+#     --bucket=<URI>          Remote bucket
+#
+#   cluster <INPUT>           Cluster an unclustered archive
+#     --no-deduplication      Skip dedupe
+#
+#   edit <INPUT>              Edit JSON metadata / header
+#     --header-json=<FILE>    Input header JSON
+#     --metadata=<FILE>       Input metadata JSON
+#
+#   extract <INPUT> <OUTPUT>  Build a subset PMTiles from
+#                             a zoom range / bbox / region
+#     --bucket=<URI>          Remote bucket of input archive
+#     --region=<FILE>         Local GeoJSON Polygon /
+#                             MultiPolygon
+#     --bbox=<LON,LAT,LON,LAT>  Bounding box
+#     --minzoom=<N>           Min zoom inclusive
+#     --maxzoom=<N>           Max zoom inclusive
+#     --download-threads=<N>  Download thread pool (4)
+#     --dry-run               Plan only, don't download
+#     --overfetch=<RATIO>     Extra data ratio (0.05)
+#
+#   merge <INPUTS...> <OUT>   Merge disjoint archives
+#
+#   convert <INPUT> <OUTPUT>  MBTiles → PMTiles
+#     --force                 Force removal of output
+#     --no-deduplication      Skip dedupe
+#     --tmpdir=<DIR>          Temp file folder
+#
+#   verify <INPUT>            Verify archive structure
+#
+#   serve <PATH>              Run HTTP Z/X/Y tile server
+#     --interface=<HOST>      Listen interface (0.0.0.0)
+#     --port=<N>              Listen port (8080)
+#     --admin-port=<N>        Prometheus /metrics port
+#     --cors=<ORIGINS>        Comma-separated CORS origins
+#     --cache-size=<MB>       Cache size in MB (64)
+#     --bucket=<URI>          Remote bucket
+#     --public-url=<URL>      Public base URL
+#
+#   upload <LOCAL> <REMOTE>   Upload archive to remote storage
+#     --max-concurrency=<N>   Upload threads (2)
+#     --bucket=<URI>          Required: target bucket
+#
+#   version                   Show program version
+#
+# -----------------------------------------------------------------------------
+
+local curcontext="$curcontext" state line ret=1
+typeset -A opt_args
+
+local -a _pmt_cmds
+_pmt_cmds=(
+    'show:inspect a local or remote archive'
+    'tile:fetch one Z/X/Y tile to stdout'
+    'cluster:cluster an unclustered local archive'
+    'edit:edit JSON metadata or parts of the header'
+    'extract:build a subset archive by zoom / bbox / region'
+    'merge:merge multiple disjoint archives into one'
+    'convert:convert an MBTiles database to PMTiles'
+    'verify:verify the correctness of an archive structure'
+    'serve:run an HTTP proxy server for Z/X/Y tiles'
+    'upload:upload a local archive to remote storage'
+    'version:show the program version'
+)
+
+_arguments -C \
+    '(-q --quiet)'{-q,--quiet}'[silence logging and progress output]' \
+    '--help[show help]' \
+    '(-): :->command' \
+    '(-)*:: :->args' \
+    && ret=0
+
+case $state in
+    command)
+        _describe -t commands 'pmtiles command' _pmt_cmds && ret=0
+        ;;
+    args)
+        case $line[1] in
+            show)
+                _arguments -s -S \
+                    '--bucket=[remote bucket]:bucket:_default' \
+                    '--metadata[output only the full JSON metadata]' \
+                    '--header-json[print JSON of header information]' \
+                    '--tilejson[print the TileJSON]' \
+                    '--public-url=[public base URL of tile endpoint]:url:_default' \
+                    '1:archive:_files -g "*.pmtiles"' \
+                    && ret=0
+                ;;
+            tile)
+                _arguments -s -S \
+                    '--bucket=[remote bucket]:bucket:_default' \
+                    '1:archive:_files -g "*.pmtiles"' \
+                    '2:z (zoom):_default' \
+                    '3:x:_default' \
+                    '4:y:_default' \
+                    && ret=0
+                ;;
+            cluster)
+                _arguments -s -S \
+                    '--no-deduplication[do not deduplicate tiles]' \
+                    '1:input archive:_files -g "*.pmtiles"' \
+                    && ret=0
+                ;;
+            edit)
+                _arguments -s -S \
+                    '--header-json=[input header JSON file]:file:_files -g "*.json"' \
+                    '--metadata=[input metadata JSON file]:file:_files -g "*.json"' \
+                    '1:input archive:_files -g "*.pmtiles"' \
+                    && ret=0
+                ;;
+            extract)
+                _arguments -s -S \
+                    '--bucket=[remote bucket of input archive]:bucket:_default' \
+                    '--region=[GeoJSON Polygon/MultiPolygon file]:file:_files -g "*.(geojson|json)"' \
+                    '--bbox=[min_lon,min_lat,max_lon,max_lat]:bbox:_default' \
+                    '--minzoom=[minimum zoom inclusive]:n:_default' \
+                    '--maxzoom=[maximum zoom inclusive]:n:_default' \
+                    '--download-threads=[number of download threads (default 4)]:n:_default' \
+                    '--dry-run[calculate tiles to extract, do not download]' \
+                    '--overfetch=[ratio of extra data to download (default 0.05)]:ratio:_default' \
+                    '1:input archive:_default' \
+                    '2:output archive:_files' \
+                    && ret=0
+                ;;
+            merge)
+                _arguments -s -S \
+                    '*:archives (inputs then output):_files -g "*.pmtiles"' \
+                    && ret=0
+                ;;
+            convert)
+                _arguments -s -S \
+                    '--force[force removal of output file]' \
+                    '--no-deduplication[do not deduplicate tiles]' \
+                    '--tmpdir=[optional folder for temporary files]:dir:_files -/' \
+                    '1:input archive (MBTiles):_files -g "*.mbtiles"' \
+                    '2:output archive:_files' \
+                    && ret=0
+                ;;
+            verify)
+                _arguments -s -S \
+                    '1:input archive:_files -g "*.pmtiles"' \
+                    && ret=0
+                ;;
+            serve)
+                _arguments -s -S \
+                    '--interface=[listen interface (default 0.0.0.0)]:addr:_default' \
+                    '--port=[listen port (default 8080)]:port:_default' \
+                    '--admin-port=[Prometheus /metrics port]:port:_default' \
+                    '--cors=[comma-separated allowed CORS origins]:origins:_default' \
+                    '--cache-size=[cache size in MB (default 64)]:mb:_default' \
+                    '--bucket=[remote bucket]:bucket:_default' \
+                    '--public-url=[public base URL of tile endpoint]:url:_default' \
+                    '1:local path or bucket prefix:_default' \
+                    && ret=0
+                ;;
+            upload)
+                _arguments -s -S \
+                    '--max-concurrency=[# of upload threads (default 2)]:n:_default' \
+                    '--bucket=[bucket to upload to (required)]:bucket:_default' \
+                    '1:local PMTiles file:_files -g "*.pmtiles"' \
+                    '2:remote PMTiles name:_default' \
+                    && ret=0
+                ;;
+            version)
+                ret=0
+                ;;
+        esac
+        ;;
+esac
+
+return ret
