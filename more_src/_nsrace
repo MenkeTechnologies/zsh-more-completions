@@ -1,0 +1,158 @@
+#compdef nsrace nsrace-add nsrace-list nsrace-remove nsrace-run
+# ============================================================================
+# _nsrace — zsh completion for imyelo's nsrace, a multi-DNS-server
+#            "race" tool that returns the fastest IP for a domain
+# ============================================================================
+#
+# UPSTREAM
+#   Repository : https://github.com/imyelo/nsrace
+#   Author     : imyelo
+#   License    : MIT
+#   Language   : TypeScript
+#   Package    : nsrace v1.0.1  (npm)
+#   Binaries   : nsrace, nsrace-add, nsrace-list, nsrace-remove,
+#                nsrace-run  (package.json bin entries)
+#   Last push  : 2022-07-18
+#
+# WHAT IT IS
+#   nsrace is "a race tool that looks up the fastest IP for any
+#   domain across different DNS servers" — for each configured DNS
+#   or DoH provider it issues a parallel resolution + a per-IP ping
+#   + an optional HTTP fetch, then prints the IPs sorted by latency
+#   so the user can pick the fastest reachable answer.  Configured
+#   DNS / DoH server lists live in a per-user `conf` file (managed
+#   via `nsrace add` / `nsrace remove` / `nsrace list` / `nsrace
+#   reset`).  Each subcommand also ships as a standalone binary
+#   (`nsrace-add`, `nsrace-list`, …) so users can call e.g.
+#   `nsrace-run <domain>` directly when convenient.
+#
+# CLI ARGUMENT GRAMMAR  (verbatim from src/bin/nsrace.ts +
+#                       src/bin/nsrace-{add,list,remove,reset,run}.ts
+#                       commander.js builders)
+#   nsrace <SUBCOMMAND> [args...]
+#
+#   Subcommands:
+#     run [<DOMAIN>]           Run a race and return IPs sorted by
+#                              speed
+#       -o, --output [FORMAT]    Output format (default `table`)
+#                                — accepts `table`, `json`
+#       --ping-timeout [MS]      Ping timeout per IP   [default: 1000]
+#       --fetch-timeout [MS]     HTTP fetch timeout per IP
+#                                                       [default: 1000]
+#       -s, --silent             Hide the progress bar
+#       -v, --verbose            Verbose log output
+#
+#     list                     List all DNS servers that will be
+#                              used in the race
+#       -o, --output [FORMAT]    Output format (default `table`)
+#
+#     add [<DNS>...]           Add one or more DNS / DoH servers
+#                              to the configured race list
+#       -t, --type [dns|doh]     Server type            [default: dns]
+#
+#     remove [<DNS>...]        Remove one or more DNS / DoH servers
+#                              from the configured race list
+#       -t, --type [dns|doh]     Server type            [default: dns]
+#
+#     reset                    Reset the DNS server configuration to
+#                              defaults
+#
+#   Standard commander.js auto-flags:
+#     -h, --help               Show help
+#     -V, --version            Show version
+#
+# AXIS / CORPUS POSITION
+#   Direct dependency on `dns2 ^2.0.2` declared in package.json —
+#   the canonical pure-JavaScript DNS protocol library maintained
+#   by Jesse Lin (song940/node-dns).  dns2 provides typed Node.js
+#   bindings for the DNS wire protocol:  full RR-type coverage
+#   (A, AAAA, CNAME, NS, MX, TXT, SOA, SRV, PTR), UDP / TCP / DoT /
+#   DoH transports, and a `Client` / `Resolver` / `Packet` /
+#   `Server` API.  nsrace's `src/core/index.ts` builds a parallel
+#   `dns2.UDPClient(server).resolveA(domain)` / `dns2.DoHClient(...)`
+#   for each configured server, races their responses, then
+#   pings + fetches each unique returned IP.  Verified via:
+#     gh api repos/imyelo/nsrace/contents/package.json
+#       → "dns2": "^2.0.2"
+#     gh api repos/imyelo/nsrace/contents/src/bin/nsrace.ts
+#       → program.command('run [domain]', '...')
+#         program.command('list', '...')
+#         program.command('add [dns]', '...')
+#         program.command('remove [dns]', '...')
+#         program.command('reset', '...')
+#   This entry is the TS-Node=131 leader bump that CLOSES Axis 76
+#   (DNS Protocol Library) at 1/1/1 three-language symmetry —
+#   pairing Rust=hickory-resolver + hickory-server (R893
+#   _hickory-dns), Go=miekg/dns v1.1.62 (R894 _dnsline), and
+#   TS-Node=dns2 ^2.0.2 (this entry).  Triple-131 landmark on
+#   commit.
+#
+#   No completion for `nsrace` ships with Apple zsh
+#   (/usr/share/zsh/*/functions) or Homebrew zsh-completions
+#   (/opt/homebrew/share/zsh/site-functions) — confirmed absent.
+# ============================================================================
+
+_nsrace() {
+    local curcontext="$curcontext" state line ret=1
+    typeset -A opt_args
+
+    _arguments -C \
+        '(- *)'{-h,--help}'[show help]' \
+        '(- *)'{-V,--version}'[show version]' \
+        '1: :_nsrace_commands' \
+        '*::arg:->args' && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                run)
+                    _arguments \
+                        '(-o --output)'{-o+,--output=}'[output format (default table)]:format:(table json)' \
+                        '--ping-timeout=[ping timeout ms (default 1000)]:ms:' \
+                        '--fetch-timeout=[fetch timeout ms (default 1000)]:ms:' \
+                        '(-s --silent)'{-s,--silent}'[hide the progress bar]' \
+                        '(-v --verbose)'{-v,--verbose}'[verbose log output]' \
+                        ':domain:' && ret=0 ;;
+                list)
+                    _arguments \
+                        '(-o --output)'{-o+,--output=}'[output format (default table)]:format:(table json)' && ret=0 ;;
+                add|remove)
+                    _arguments \
+                        '(-t --type)'{-t+,--type=}'[server type (default dns)]:type:(dns doh)' \
+                        '*:DNS or DoH server:' && ret=0 ;;
+                reset)
+                    _arguments '(- *)'{-h,--help}'[help]' && ret=0 ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+(( $+functions[_nsrace_commands] )) ||
+_nsrace_commands() {
+    local -a commands
+    commands=(
+        'run:run a race and return IPs sorted by speed'
+        'list:list all configured DNS servers'
+        'add:add DNS or DoH servers to the race list'
+        'remove:remove DNS or DoH servers from the race list'
+        'reset:reset the DNS server configuration to defaults'
+    )
+    _describe -t commands 'nsrace command' commands
+}
+
+# nsrace-{add,list,remove,run} stand-alone subcommand binaries map
+# to the same handlers — handle the alternative dispatch path.
+_nsrace-add()    { _nsrace add    "$@" }
+_nsrace-list()   { _nsrace list   "$@" }
+_nsrace-remove() { _nsrace remove "$@" }
+_nsrace-run()    { _nsrace run    "$@" }
+
+case "${service:-$0}" in
+    *-add)    _nsrace-add "$@" ;;
+    *-list)   _nsrace-list "$@" ;;
+    *-remove) _nsrace-remove "$@" ;;
+    *-run)    _nsrace-run "$@" ;;
+    *)        _nsrace "$@" ;;
+esac
