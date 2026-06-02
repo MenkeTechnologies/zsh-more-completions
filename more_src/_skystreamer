@@ -1,0 +1,331 @@
+#compdef skystreamer
+# ============================================================================
+# _skystreamer — zsh completion for **skystreamer** —
+#                 FyraLabs/skystreamer, the **AT Protocol firehose
+#                 collector** that subscribes to the Bluesky relay
+#                 `bsky.network` (or any other AT Protocol relay
+#                 implementing the `com.atproto.sync.subscribeRepos`
+#                 websocket endpoint), parses every repo-commit
+#                 event into typed `app.bsky.feed.Post` records,
+#                 and streams the result to one of four
+#                 configurable exporters:  SurrealDB (default),
+#                 JSONL append-only file, CSV append-only file, or
+#                 a dry-run logger.  Used as the data-ingest leg of
+#                 analytics pipelines that operate on the full
+#                 firehose at the ~600 events/sec sustained rate
+#                 the Bluesky network produces.  Rust=168 OPENING
+#                 leg of new Axis 113 (AT Protocol / ATProto /
+#                 Bluesky) via the canonical Rust AT Protocol SDK
+#                 **atrium-api** + **atrium-xrpc-client**.
+# ============================================================================
+#
+# UPSTREAM
+#   Repository : https://github.com/FyraLabs/skystreamer
+#   Maintainer : Cappy Ishihara  (Fyra Labs; same author also
+#                 ships the `skystreamer` library crate that this
+#                 binary builds on, plus the `gbif` Rust client +
+#                 several other small Rust libraries)
+#   License    : MIT
+#   Stars      : 3
+#   Language   : Rust  (workspace member `skystreamer-bin/`;
+#                 clap-derive for argument parsing + SurrealDB
+#                 client for default exporter + tokio-tungstenite
+#                 for AT Protocol websocket subscription + atrium
+#                 stack for record decoding)
+#   Binary     : skystreamer
+#   Version    : 0.2.0
+#   Last push  : 2024-12-06
+#
+# WHAT IT IS
+#   Bluesky's AT Protocol exposes a `com.atproto.sync.subscribeRepos`
+#   websocket endpoint at `wss://bsky.network` (and at every other
+#   relay / mirror in the federated AT Protocol network) that
+#   streams the **complete firehose of repo-commit events** for
+#   every user on the network.  Each event is a CBOR-encoded
+#   commit frame containing one or more DAG-CBOR record ops
+#   (`com.atproto.repo.applyWrites`-style creates, updates, deletes)
+#   plus the IPLD blocks referenced by those ops, packaged in a
+#   CAR (Content-Addressable aRchive) blob.
+#
+#   `skystreamer` connects to this firehose, dispatches each frame
+#   to a tokio task that decodes the CAR + extracts every
+#   `app.bsky.feed.post` typed record (via atrium-api's typed
+#   lexicon bindings), and hands the parsed `Post` to a swappable
+#   exporter trait.  Built-in exporters:
+#
+#     • surrealdb    Write each post + author profile into a
+#                    SurrealDB instance (`ws://localhost:8000` by
+#                    default; authentication via Token / Root /
+#                    Namespace credential modes; configurable
+#                    `--namespace` + `--database`).  This is the
+#                    default — drop into a SurrealDB query shell
+#                    and run SurrealQL over the live firehose.
+#     • jsonl        Append each post as a single line of JSON
+#                    to `--file-path <PATH>`.  Pipeline-friendly
+#                    for jq / fx / dasel / yq consumers.
+#     • csv          Append each post as a CSV row to
+#                    `--file-path <PATH>`.
+#     • dry-run      Log to stdout, write nothing.  Useful for
+#                    measuring the sustained ingest rate of the
+#                    target relay or for sanity-checking that
+#                    the subscription is working.
+#
+# CLI ARGUMENT GRAMMAR  (verbatim from skystreamer-bin/src/config.rs
+#                       `Config` struct + flattened
+#                       `SurrealDbConn` + `FileExporterOptions`
+#                       structs; extracted via
+#                       raw.githubusercontent.com fetch of
+#                       skystreamer-bin/src/config.rs)
+#
+#   skystreamer [OPTIONS]
+#
+#   Options:
+#     -h, --help                     Show help
+#     -V, --version                  Print version
+#
+#     -R, --atproto-relay <HOST>     AT Protocol relay to subscribe
+#                                    to (just the bare hostname;
+#                                    `wss://` prefix added
+#                                    automatically)
+#                                    [default: bsky.network]
+#                                    [env: ATPROTO_RELAY]
+#
+#     -E, --exporter <TYPE>          Exporter backend
+#                                    [default: surrealdb]
+#                                    [values: jsonl, csv,
+#                                     surrealdb, dry-run]
+#                                    [env: EXPORTER]
+#
+#     -o, --file-path <PATH>         Path to the output file (for
+#                                    jsonl / csv exporters)
+#                                    [required if exporter is
+#                                     jsonl or csv]
+#                                    [env: FILE_EXPORT_PATH]
+#
+#   SurrealDB exporter options:
+#     -e, --surreal-endpoint <URL>   SurrealDB endpoint
+#                                    [default: ws://localhost:8000]
+#                                    [required if exporter is
+#                                     surrealdb]
+#                                    [env: SURREAL_ENDPOINT]
+#     -a, --auth-type <TYPE>         Authentication type
+#                                    [values: token, root,
+#                                     namespace]
+#                                    [env: SURREAL_AUTH_TYPE]
+#     -k, --token <TOKEN>            Token for authentication
+#                                    [required if auth-type is
+#                                     token]
+#                                    [env: SURREAL_TOKEN]
+#     -u, --username <USER>          Username for authentication
+#                                    [required if auth-type is
+#                                     root or namespace]
+#                                    [env: SURREAL_USER]
+#     -p, --password <PASS>          Password for authentication
+#                                    [required if auth-type is
+#                                     root or namespace]
+#                                    [env: SURREAL_PASS]
+#     -n, --namespace <NS>           SurrealDB namespace
+#                                    [default: bsky.network]
+#                                    [env: SURREAL_NAMESPACE]
+#     -d, --database <DB>            SurrealDB database
+#                                    [default: bsky]
+#                                    [env: SURREAL_DATABASE]
+#     -f, --fetch-user-data <BOOL>   Fetch user-profile data from
+#                                    ATProto on each post
+#                                    [default: true]
+#                                    [env: FETCH_USER_DATA]
+#
+# AXIS / CORPUS POSITION
+#   `skystreamer-bin` declares **direct** dependencies on
+#   `atrium-api = "0.24.8"` (with the `tokio` feature) and
+#   `atrium-xrpc-client` (with the `reqwest` feature) in its
+#   `Cargo.toml` (verified via `gh api repos/FyraLabs/skystreamer/
+#   contents/skystreamer-bin/Cargo.toml`).
+#
+#   `sugyan/atrium` is **THE canonical Rust AT Protocol SDK** —
+#   the Rust counterpart to `bluesky-social/indigo` (Go) and
+#   `bluesky-social/atproto` `@atproto/api` (TS/JS) — and ships
+#   as a multi-crate workspace:
+#
+#     • `atrium-api`         (the typed lexicon-derived Rust
+#                            bindings — every typed `app.bsky.*`,
+#                            `com.atproto.*`, `tools.ozone.*`,
+#                            `chat.bsky.*` record, query, and
+#                            procedure as a Rust type with
+#                            full serde round-trip;  produced by
+#                            the `atrium-codegen` build step from
+#                            the canonical lexicon JSON specs in
+#                            `bluesky-social/atproto/lexicons/`)
+#     • `atrium-xrpc`        (the typed XRPC wire-format protocol
+#                            client trait with typed `Method`,
+#                            typed request/response framing)
+#     • `atrium-xrpc-client` (the concrete reqwest-backed XRPC
+#                            transport)
+#     • `atrium-common`      (shared traits — `Store`, `Cache`,
+#                            etc.)
+#     • `atrium-identity`    (DID + handle resolver — typed
+#                            `did:plc:*` and `did:web:*`
+#                            resolution against the canonical
+#                            PLC directory at plc.directory)
+#     • `atrium-oauth`       (the AT Protocol OAuth 2.0 client
+#                            implementation with DPoP support
+#                            for the AT Protocol's "lambda
+#                            consumer with PKCE + DPoP-bound
+#                            access token" flow)
+#     • `atrium-ipld`        (DAG-CBOR + CID typed wrappers,
+#                            re-exporting `ipld-core` for
+#                            compatibility)
+#
+#   `atrium-api` exposes the typed lexicon model — every Bluesky
+#   record kind has a typed Rust struct + a typed agent method
+#   path that mirrors the lexicon's namespaced ID:
+#
+#     • `agent.api.app.bsky.feed.get_timeline(params)` →
+#       `OutputData { feed: Vec<FeedViewPost>, cursor }`
+#     • `agent.api.app.bsky.feed.get_author_feed(params)` →
+#       `OutputData { feed, cursor }`
+#     • `agent.api.app.bsky.feed.get_post_thread(params)` →
+#       `OutputData { thread: PostThreadView }`
+#     • `agent.api.app.bsky.actor.get_profile(params)` →
+#       `OutputData { ProfileViewDetailed }`
+#     • `agent.api.app.bsky.actor.search_actors(params)` →
+#       `OutputData { actors: Vec<ProfileView>, cursor }`
+#     • `agent.api.app.bsky.notification.list_notifications(...)`
+#     • `agent.api.com.atproto.identity.resolve_handle(...)`
+#     • `agent.api.com.atproto.repo.create_record(...)` /
+#       `.put_record` / `.delete_record` / `.list_records` /
+#       `.get_record` / `.apply_writes` / `.upload_blob`
+#     • `agent.api.com.atproto.sync.subscribe_repos(params)` —
+#       the firehose endpoint that `skystreamer` subscribes to
+#     • `agent.api.com.atproto.sync.get_blob(...)` /
+#       `.list_blobs(...)` / `.get_repo(...)` (CAR archive
+#       download for full-repo backfills) /
+#       `.list_repos(...)` (relay-wide repo enumeration)
+#     • `agent.api.com.atproto.moderation.create_report(...)`
+#     • `agent.api.com.atproto.label.query_labels(...)` /
+#       `.subscribe_labels(...)`
+#     • `agent.api.tools.ozone.moderation.emit_event(...)` /
+#       `.query_events(...)` / `.query_statuses(...)` /
+#       `.get_record(...)` / `.get_repo(...)` (the Ozone
+#       moderation back-office API used by Bluesky's internal
+#       moderation team + every third-party labeler such as
+#       blacksky-algorithms/rsky-labeler)
+#     • `agent.api.chat.bsky.convo.send_message(...)` /
+#       `.get_convo(...)` / `.list_convos(...)` (the typed
+#       DMs surface introduced in Bluesky's 2024 chat rollout)
+#     • Every `app.bsky.feed.post::Record`,
+#       `app.bsky.feed.like::Record`,
+#       `app.bsky.feed.repost::Record`,
+#       `app.bsky.graph.follow::Record`,
+#       `app.bsky.graph.block::Record`,
+#       `app.bsky.graph.list::Record`,
+#       `app.bsky.graph.listitem::Record`,
+#       `app.bsky.graph.listblock::Record`,
+#       `app.bsky.actor.profile::Record`,
+#       `app.bsky.feed.generator::Record` (custom feeds),
+#       `app.bsky.feed.threadgate::Record`,
+#       `app.bsky.labeler.service::Record`,
+#       `app.bsky.feed.postgate::Record`,
+#       `app.bsky.notification.declaration::Record`, and
+#       `chat.bsky.actor.declaration::Record` Record-discriminated-
+#       union variant with typed inner fields
+#     • Typed `string::Did`, `string::Handle`, `string::AtUri`,
+#       `string::Cid`, `string::Datetime`, `string::Nsid`
+#       NewType wrappers with format validation enforced at
+#       deserialize time
+#
+#   `sugyan/atrium` ecosystem powers every serious Rust AT
+#   Protocol application in production: rsky (the Black Sky
+#   Algorithms ATProto stack at 669+ ★ — rsky-pds the PDS
+#   implementation, rsky-relay the relay, rsky-labeler the
+#   moderation labeler, rsky-feedgen the feed generator
+#   framework, rsky-firehose the firehose subscriber, rsky-pds
+#   the personal data server, rsky-jetstream-subscriber the
+#   jetstream consumer), pattern (the agent-builder framework
+#   at 78+ ★), bsky-thread-and-blog-feed (long-form readers),
+#   observ-ing/core (the decentralized biodiversity observation
+#   platform on AT Protocol, 13+ ★), pfp.blue (automated
+#   profile-picture rotation), bridgy_followers (the
+#   fediverse↔Bluesky bridging tool), bridgy (the cross-platform
+#   federation bridge), and dozens of feed generators, labelers,
+#   and analytics pipelines that operate on the firehose at the
+#   sustained ~600 events/sec rate the Bluesky network produces.
+#
+#   Verified via:
+#     gh api repos/FyraLabs/skystreamer/contents/skystreamer-bin/
+#         Cargo.toml
+#       → [package] name = "skystreamer-bin"
+#       → [package] description = "AT Firehose collector for
+#         Bluesky"
+#       → [package] keywords = ["bluesky","firehose","atproto",
+#         "bluesky-social"]
+#       → [[bin]] name = "skystreamer"
+#                  path = "src/main.rs"
+#       → [dependencies] atrium-api = { version = "0.24.8",
+#         features = ["tokio"] }   (DIRECT)
+#       → [dependencies] atrium-xrpc-client = { version = "*",
+#         default-features = false, features = ["reqwest"] }
+#         (DIRECT)
+#       → [dependencies] tokio-tungstenite = { version = "0.24",
+#         features = ["native-tls","url"] }
+#       → [dependencies] surrealdb = { version = "2.1.2",
+#         features = ["http","protocol-http"] }
+#       → [dependencies] rs-car = "0.4.1"  (CAR archive parser
+#         for the DAG-CBOR commit frames)
+#     raw.githubusercontent.com FyraLabs/skystreamer main
+#         skystreamer-bin/src/main.rs
+#       → use clap::Parser;
+#       → use skystreamer::{stream::EventStream,
+#                            RepoSubscription};
+#     raw.githubusercontent.com FyraLabs/skystreamer main
+#         skystreamer-bin/src/config.rs
+#       → #[derive(Parser, Debug)] pub struct Config { … }
+#       → #[clap(name = "skystreamer", about =
+#         "A tool for streaming data to SurrealDB")]
+#       → enum ExporterType { Jsonl, Csv, Surrealdb (default),
+#         DryRun }
+#       → enum SurrealAuthType { Token, Root, Namespace }
+#       → flattened SurrealDbConn { surreal-endpoint, auth-type,
+#         token, username, password, namespace, database,
+#         fetch-user-data }
+#       → flattened FileExporterOptions { file-path }
+#       → top-level: exporter, atproto-relay
+#
+#   This entry is the Rust=168 leader bump that **OPENS Axis 113
+#   (AT Protocol / ATProto / Bluesky)** at 1/0/0 following R1036
+#   _emailengine (TS-Node=167 CLOSED Axis 112 WebAuthn at 1/1/1
+#   triple-167 + 105th axis closed).  Go=168 continuation on deck
+#   for R1038 via the canonical Go AT Protocol SDK
+#   `bluesky-social/indigo` (the official Bluesky Go reference
+#   implementation maintained by the Bluesky PBC engineering
+#   team, which powers `bsky.app` infrastructure, the PLC
+#   directory at plc.directory, and bgs.bsky-sandbox).  TS-Node=
+#   168 closing pair at R1039 via the canonical
+#   `@atproto/api` SDK (the Bluesky-authored reference TS/JS
+#   implementation used by every browser-based AT Protocol
+#   client including `bsky.app` itself, every Lexicon-derived
+#   third-party client, and every Node.js AT Protocol tool).
+#
+#   No completion for `skystreamer` ships with Apple zsh
+#   (/usr/share/zsh/*/functions) or Homebrew zsh-completions
+#   (/opt/homebrew/share/zsh/site-functions) — confirmed absent.
+# ============================================================================
+
+_skystreamer() {
+    _arguments -s \
+        '(- *)'{-h,--help}'[show help]' \
+        '(- *)'{-V,--version}'[print version]' \
+        '(-R --atproto-relay)'{-R,--atproto-relay}'=[AT Protocol relay hostname (default bsky.network)]:host:' \
+        '(-E --exporter)'{-E,--exporter}'=[exporter backend (default surrealdb)]:type:(jsonl csv surrealdb dry-run)' \
+        '(-o --file-path)'{-o,--file-path}'=[output file (required for jsonl/csv exporters)]:path:_files' \
+        '(-e --surreal-endpoint)'{-e,--surreal-endpoint}'=[SurrealDB endpoint (default ws://localhost:8000)]:url:' \
+        '(-a --auth-type)'{-a,--auth-type}'=[SurrealDB auth type]:type:(token root namespace)' \
+        '(-k --token)'{-k,--token}'=[token for authentication]:token:' \
+        '(-u --username)'{-u,--username}'=[username for authentication]:user:' \
+        '(-p --password)'{-p,--password}'=[password for authentication]:pass:' \
+        '(-n --namespace)'{-n,--namespace}'=[SurrealDB namespace (default bsky.network)]:ns:' \
+        '(-d --database)'{-d,--database}'=[SurrealDB database (default bsky)]:db:' \
+        '(-f --fetch-user-data)'{-f,--fetch-user-data}'=[fetch user-profile data from ATProto (default true)]:bool:(true false)'
+}
+
+_skystreamer "$@"
