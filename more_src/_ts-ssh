@@ -1,0 +1,297 @@
+#compdef ts-ssh
+# =============================================================================
+# ts-ssh — derekg/ts-ssh's "Tailscale SSH" — a
+#   Go-based SSH + SCP client that uses
+#   USERSPACE TAILSCALE (`tsnet`) to reach
+#   hosts inside a Tailscale tailnet WITHOUT
+#   running a separate `tailscaled` system
+#   daemon.  Embeds Tailscale's WireGuard
+#   data plane directly in the process, so
+#   `ts-ssh hostname` opens an SSH session
+#   over the tailnet using the user's
+#   existing Tailscale identity (auth cached
+#   under `--tsnet-dir`).  Built on direct
+#   `golang.org/x/crypto/ssh` (the canonical
+#   Go SSH library, part of the Go standard
+#   crypto extended module) and
+#   `bramvdbogaerde/go-scp` for the file-
+#   transfer half.  Go=107 leader bump
+#   continuing Axis 52 (SSH Client / Server
+#   Library) at the Go pole, opened by R797
+#   `_termirs` (Rust=107, russh 0.57.0).
+#
+# AXIS 52 — SSH CLIENT/SERVER LIBRARY — GO POLE
+# ==============================================
+# `golang.org/x/crypto/ssh` is the canonical
+# Go SSH-2 client+server library.  Part of
+# the official Go extended-crypto module
+# under `golang.org/x/crypto`.  Maintained by
+# the Go team.  Used by basically every Go
+# SSH tool: OpenShift's `oc`, HashiCorp's
+# `terraform-provider-oci`, GitHub CLI's `gh`
+# remote-machine pulls, Drone, Concourse,
+# Argo, etc.  Distinguishes from sibling Go
+# SSH libs:
+#   - `gliderlabs/ssh`         (wrapper +
+#                              high-level
+#                              server API
+#                              built on
+#                              x/crypto/ssh)
+#   - `pkg/sftp`               (SFTP client+
+#                              server built
+#                              on top of
+#                              x/crypto/ssh)
+#   - `mikesmitty/edkey`       (Ed25519 key-
+#                              generation +
+#                              parsing
+#                              helpers)
+#
+# Other Axis 52 implementations across the
+# corpus:
+#   * Rust       (R797): russh 0.57.0
+#                — bundled in `termirs`
+#                  (modern async SSH+SFTP
+#                  TUI client)
+#   * Go         (R798, THIS ROUND):
+#                golang.org/x/crypto v0.36.0
+#                — bundled in this round's
+#                `ts-ssh` (Tailscale-
+#                integrated SSH+SCP client)
+#   * TS-Node    (R799 will close): ssh2 —
+#                Brian Whites's pure-JS
+#                SSH-2 client+server
+#
+# Distinguishing ts-ssh from other corpus
+# SSH tooling:
+#   - OPENSSH `ssh` (`_ssh`, `_ssh_config`):
+#     classic C reference implementation.
+#     Talks to ANY SSH server; needs no
+#     Tailscale.  ts-ssh requires the
+#     remote to be inside the user's
+#     tailnet
+#   - MOSH (`_mosh`): different protocol
+#     for high-latency mobile links
+#   - ASSH (`_assh`): SSH config wrapper /
+#     pre-processor by Manfred Touron.
+#     Adds includes + templating to
+#     ~/.ssh/config
+#   - TSSH (`_tssh`, trzsz-ssh): drop-in
+#     ssh client + trzsz built-in (a Zmodem
+#     successor for trz/tsz file transfer
+#     inside an interactive session)
+#   - SSHW (`_sshw`, yinheli): interactive
+#     ssh client wrapper for stored host
+#     lists with auto-login
+#   - AUTOSSH (`_autossh`): SSH connection
+#     auto-reconnect supervisor
+#   - DISTANT (`_distant`): Rust remote
+#     file-system protocol with SSH
+#     transport.  Different scope
+#   - TS-SSH is the ZERO-DAEMON tailnet-
+#     aware client.  Drop-in for `ssh
+#     hostname` syntax but with built-in
+#     Tailscale userspace networking +
+#     built-in SCP mode + built-in SOCKS5
+#     forwarder.  Useful when you want
+#     SSH access to your tailnet without
+#     installing the system tailscaled
+#     (e.g. ephemeral CI runners, jump
+#     boxes, restricted users without
+#     root)
+#
+# KEY TS-SSH FEATURES:
+#   - USERSPACE TAILSCALE — `tailscale.com/
+#     tsnet` is Tailscale's library form
+#     of the daemon.  ts-ssh embeds it
+#     in-process, so a single Go binary
+#     authenticates against Tailscale
+#     control + opens WireGuard tunnels +
+#     resolves `*.ts.net` MagicDNS names
+#     without any system service
+#   - PER-USER STATE DIRECTORY — `--tsnet-
+#     dir` (default `~/.ts-ssh`) stores
+#     the device key + node identity
+#     across runs.  No re-auth on every
+#     invocation.  Each Unix user has
+#     their own tailnet identity in their
+#     own home directory
+#   - CUSTOM CONTROL URL — `--control-url`
+#     points at a self-hosted Headscale /
+#     Ionscale / other Tailscale-protocol-
+#     compatible control plane instead of
+#     the default Tailscale.com control
+#   - DUAL MODE: SSH + SCP — `ts-ssh
+#     [user@]host[:port] [cmd...]` for
+#     interactive or one-shot SSH; `ts-ssh
+#     -scp source dest` for file transfer
+#     (exactly one of source/dest must be
+#     `host:path` form).  Built on
+#     `bramvdbogaerde/go-scp` for the SCP
+#     wire protocol
+#   - SOCKS5 DYNAMIC FORWARDING — `-D
+#     [addr:]port` opens a local SOCKS5
+#     proxy that tunnels TCP through the
+#     SSH connection.  Same flag spelling
+#     as OpenSSH for muscle-memory
+#     compatibility
+#   - PTY CONTROL — `-T` disables PTY
+#     allocation (matches OpenSSH `-T`
+#     semantics) — useful when
+#     non-interactively piping commands
+#   - INSECURE FLAG — `-insecure` skips
+#     host-key verification.  ts-ssh
+#     prefers this over silently appending
+#     to known_hosts; verbal opt-in
+#     required.  Logged via security
+#     audit module
+#   - SECURITY AUDIT LOGGING — every
+#     connection logs `host`, `user`,
+#     `port`, `insecure-flag`, `tsnet-dir`
+#     to a security audit log file
+#     (configurable via `security.
+#     InitSecurityLogger()` in `internal/
+#     security`).  Useful for compliance
+#     environments
+#   - INPUT VALIDATION — `security.
+#     ValidateSSHUser` / `ValidateHostname`
+#     / `ValidatePort` reject malformed
+#     inputs before opening any socket.
+#     Prevents command-injection vectors
+#     in scripts that build `ts-ssh ...`
+#     command lines from user input
+#
+# CLI ARGUMENT PARSER — Go stdlib `flag`
+# package.  Single-dash long form
+# (`-tsnet-dir`); GNU double-dash also
+# accepted by the parser.  No subcommands —
+# `-scp` flag pivots the binary into SCP
+# mode
+#
+# CRITICAL DIRECT DEPENDENCIES (from go.mod):
+#   - golang.org/x/crypto v0.36.0
+#                              — SSH protocol
+#                                client +
+#                                server
+#                                [AXIS 52 LIBRARY]
+#   - tailscale.com v1.82.0    — userspace
+#                                Tailscale
+#                                via tsnet
+#   - github.com/bramvdbogaerde/go-scp v1.5.0
+#                              — SCP client
+#                                built on
+#                                x/crypto/ssh
+#   - golang.org/x/term v0.30.0
+#                              — terminal
+#                                resize +
+#                                raw-mode
+#                                handling
+#                                for
+#                                interactive
+#                                PTY mode
+#   - golang.org/x/text v0.24  — Unicode
+#                                handling
+#                                helpers
+#
+# Go 1.24.1+ MSRV per go.mod `go 1.24.1`.
+#
+# UPSTREAM:
+#   * Source             : https://github.com/derekg/ts-ssh
+#   * Tailscale tsnet    : https://pkg.go.dev/tailscale.com/tsnet
+#   * x/crypto/ssh       : https://pkg.go.dev/golang.org/x/crypto/ssh
+#   * License            : MIT
+#   * Maintainer         : Derek Garcia (derekg)
+#
+# INSTALL:
+#   # From source
+#   go install github.com/derekg/ts-ssh@latest
+#
+#   # From release binary (Linux/macOS/Windows)
+#   # https://github.com/derekg/ts-ssh/releases
+#
+# USAGE EXAMPLES:
+#
+#   # Interactive SSH to a tailnet hostname
+#   ts-ssh my-server.tailnet.ts.net
+#
+#   # Specify user + port inline (same syntax
+#   # as OpenSSH)
+#   ts-ssh alice@my-server.tailnet.ts.net:2222
+#
+#   # Override user / port / key via flags
+#   ts-ssh -l alice -p 2222 -i ~/.ssh/id_ed25519 \
+#       my-server.tailnet.ts.net
+#
+#   # One-shot remote command (no PTY)
+#   ts-ssh my-server.tailnet.ts.net uptime
+#   ts-ssh -T my-server.tailnet.ts.net 'tar -czf - /etc' > etc.tgz
+#
+#   # SCP upload local → remote
+#   ts-ssh -scp ./localfile.txt \
+#       my-server.tailnet.ts.net:/tmp/
+#
+#   # SCP download remote → local
+#   ts-ssh -scp \
+#       my-server.tailnet.ts.net:/var/log/syslog \
+#       ./
+#
+#   # SOCKS5 dynamic forwarding (like ssh -D)
+#   ts-ssh -D 1080 my-server.tailnet.ts.net
+#
+#   # SOCKS5 on a custom bind address
+#   ts-ssh -D 127.0.0.1:9090 my-server.tailnet.ts.net
+#
+#   # Disable PTY (for non-interactive
+#   # command piping)
+#   ts-ssh -T my-server.tailnet.ts.net 'tar -czf - /etc' \
+#       | tar -tzf -
+#
+#   # Skip host-key verification (use with
+#   # caution; logs an audit event)
+#   ts-ssh -insecure my-server.tailnet.ts.net
+#
+#   # Verbose mode (log to stderr)
+#   ts-ssh -v my-server.tailnet.ts.net
+#
+#   # Custom tsnet state directory (useful
+#   # for ephemeral CI runners)
+#   ts-ssh -tsnet-dir /tmp/ts-ssh-state \
+#       my-server.tailnet.ts.net
+#
+#   # Self-hosted Headscale / Ionscale
+#   # control plane
+#   ts-ssh -control-url https://headscale.example.com \
+#       my-server.tailnet.ts.net
+#
+#   # Version
+#   ts-ssh -version
+#
+#   # Help (Go stdlib flag default)
+#   ts-ssh -h
+#
+# OPTIONS (sourced directly from
+# https://github.com/derekg/ts-ssh/blob/main/main.go):
+#
+# -----------------------------------------------------------------------------
+
+local curcontext="$curcontext" state line ret=1
+typeset -A opt_args
+
+_arguments -C \
+    '(- *)-h[show help]' \
+    '(- *)-help[show help]' \
+    '(- *)--help[show help]' \
+    '(- *)-version[show version]' \
+    '-l+[SSH username (default $USER)]:user:_users' \
+    '-p+[SSH port (default 22)]:port: ' \
+    '-i+[SSH private key path (default ~/.ssh/id_rsa)]:keyfile:_files' \
+    '-tsnet-dir=[Tailscale state directory (default ~/.ts-ssh)]:dir:_files -/' \
+    '-control-url=[Tailscale control server URL (for self-hosted Headscale/Ionscale)]:url: ' \
+    '-v[verbose output to stderr]' \
+    '-insecure[skip host-key verification (logged in security audit)]' \
+    '-scp[SCP file-transfer mode (requires two positional args: source dest, one must be host:path)]' \
+    '-T[disable pseudo-terminal allocation (matches OpenSSH -T)]' \
+    '-D+[SOCKS5 dynamic port forwarding on [bind_address:]port]:addr:port: ' \
+    '*:target [user@]host[:port] or command:' \
+    && ret=0
+
+return ret
