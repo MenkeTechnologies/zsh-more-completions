@@ -1,0 +1,546 @@
+#compdef tms
+# ============================================================================
+# _tms — zsh completion for **tms** — `jrmoulton/tmux-sessionizer`, the
+#            Rust port of ThePrimeagen's bash `tmux-sessionizer` script
+#            (the iconic ~30-line bash script that scans `~/personal`
+#            + `~/work` for git repos, pipes them through `fzf`, and
+#            opens the selected directory as a tmux session).  The
+#            Rust rewrite adds:
+#
+#              • config file with multiple search paths + depth limits
+#              • clone-repo / init-repo workflows
+#              • bookmarks (non-git directories worth tracking)
+#              • marks (indexed quick-jump slots)
+#              • a built-in ratatui picker (so `fzf` is no longer
+#                required)
+#              • git-aware submodule traversal via the canonical
+#                pure-Rust Git implementation **gitoxide** (`gix`
+#                crate; the only mature non-libgit2 Rust git library)
+#
+#            Rust=180 **OPENS** Axis 125 (pure-Rust Git implementation
+#            / **gitoxide** ecosystem / `gix` + `gix-object` +
+#            `gix-pack` + `gix-odb` + `gix-ref` + `gix-config` +
+#            `gix-traverse` + `gix-diff` + `gix-status` + `gix-revision`
+#            + `gix-protocol` + `gix-transport` + `gix-worktree` +
+#            `gix-attributes` + `gix-glob` + ~50 other crates) at
+#            1/0/0.  R1073 round-number commit landmark.
+# ============================================================================
+#
+# UPSTREAM
+#   Repository : https://github.com/jrmoulton/tmux-sessionizer
+#   Maintainer : Jared Moulton (jrmoulton on GitHub);  embedded-Rust
+#                 developer at Hudson River Trading;  also the author
+#                 of `floem` (the Rust GUI framework that powers
+#                 Lapce editor) and active contributor to the
+#                 Lapce / Floem ecosystem
+#   License    : MIT
+#   Stars      : 1,000+ on github.com/jrmoulton/tmux-sessionizer
+#   Language   : Rust  (clap-derive for the CLI surface + gix for
+#                 pure-Rust Git repo detection / submodule traversal +
+#                 ratatui for the built-in picker UI + crossterm
+#                 terminal backend + serde + toml for config +
+#                 error-stack for typed error chains + shellexpand
+#                 for `~` expansion + git2 NOT used — this is the
+#                 entire point;  gitoxide replaces libgit2 throughout)
+#   Binary     : tms  (cargo install tmux-sessionizer, brew install
+#                 tmux-sessionizer)
+#   Last push  : 2026-06-02
+#
+# WHAT IT IS
+#   `tms` is the Rust port + extension of ThePrimeagen's iconic
+#   bash `tmux-sessionizer` (~30-line shell script from his
+#   dotfiles repo, seen in his tmux/Neovim YouTube tutorials,
+#   the script that single-handedly popularized the "fzf into a
+#   tmux session" workflow among ~Neovim developers).  Workflow:
+#
+#     1. tms scans configured search paths recursively for git
+#        repositories (and bookmarks)
+#     2. it presents them in a fuzzy picker (either fzf-delegated
+#        or the built-in ratatui picker)
+#     3. on selection, it opens-or-attaches a tmux session named
+#        after the directory's basename
+#
+#   Bind `tms` to a tmux key (`bind-key -r f run-shell "tmux
+#   neww tms switch"` in `~/.tmux.conf`) and you have one-keystroke
+#   project switching.  Bind `tms windows` to switch tmux windows
+#   inside the current session.
+#
+#   Subcommand surface:
+#
+#     • tms                          default = open the project
+#                                    picker
+#     • tms switch                   display OTHER sessions in a
+#                                    fuzzy picker with preview
+#                                    pane
+#     • tms windows                  display CURRENT session's
+#                                    windows in a fuzzy picker
+#                                    with preview pane
+#     • tms sessions                 print running tmux sessions
+#                                    (current marked with `*`)
+#     • tms start                    initialize tmux with the
+#                                    default sessions configured
+#                                    in tms config
+#     • tms kill                     kill the current tmux session
+#                                    and jump to the default
+#                                    session
+#     • tms rename <name>            rename the active session +
+#                                    the working directory
+#     • tms refresh [name]           create new worktree windows
+#                                    for selected session
+#                                    (git-worktree-aware)
+#     • tms clone-repo <url>         git clone + create new
+#                                    session for the cloned repo
+#         --path <dir>               clone-into directory
+#         --name <name>              cloned dir name
+#     • tms init-repo <name>         `git init` a fresh repo +
+#                                    open a session for it
+#     • tms bookmark [path]          bookmark a non-git directory
+#                                    so it appears in the picker
+#         -d, --delete               remove a bookmark
+#     • tms open-session <name>      open a specific session by
+#                                    name (with dynamic completion
+#                                    of available session names)
+#     • tms marks                    indexed quick-jump slots
+#         list                       list current marks
+#         set [index] [-p <path>]    set a mark at index (path
+#                                    defaults to cwd)
+#         open <index>               open the mark at index
+#         delete <index> | --all     delete a mark or all marks
+#     • tms config                   manage tms config (all
+#                                    fields settable via flags)
+#         list [-d, --defaults]      print current config
+#         [-p, --paths <paths...>]   search paths
+#         [-s, --session <name>]     default-session name
+#         [--excluded <dirs...>]     exclude-directory list
+#         [--remove <dirs...>]       remove from exclude list
+#         [--full-path <bool>]       show full paths in picker
+#         [--search-submodules <bool>]
+#                                    traverse submodules
+#         [--recursive-submodules <bool>]
+#                                    traverse submodules-of-
+#                                    submodules
+#         [--switch-filter-unknown <bool>]
+#                                    only show configured paths
+#                                    in switch picker
+#         [-d, --max-depths <n>]     per-search-path traversal
+#                                    depth caps
+#         [--picker-highlight-color #rrggbb]
+#         [--picker-highlight-text-color #rrggbb]
+#         [--picker-border-color #rrggbb]
+#         [--picker-info-color #rrggbb]
+#         [--picker-prompt-color #rrggbb]
+#                                    ratatui picker theming
+#         [--session-sort-order Alphabetical|LastAttached]
+#         [--clone-repo-switch Always|Never|Foreground]
+#                                    post-clone session behavior
+#
+# CLI ARGUMENT GRAMMAR  (verbatim from `src/cli.rs` clap-derive
+#                       declarations;  extracted via
+#                       raw.githubusercontent.com fetch of
+#                       src/cli.rs + src/marks.rs;  every option
+#                       below is a literal `#[arg(...)]` or
+#                       `#[command(...)]` macro from the upstream
+#                       source)
+#
+#   tms [SUBCOMMAND] [OPTIONS...]
+#
+#   Global options:
+#     -h, --help                     Show help
+#     -V, --version                  Show version
+#
+#   Subcommands (Subcommand enum CliCommand):
+#     config [config-subcommand]     Configure tms defaults
+#     start                          Initialize tmux with default
+#                                    sessions
+#     switch                         Switch to another session
+#     windows                        Switch windows in current
+#                                    session
+#     kill                           Kill current session
+#     sessions                       Print running sessions
+#     rename <name>                  Rename current session + cwd
+#     refresh [name]                 Refresh worktree windows
+#     clone-repo <repo> [--path] [--name]
+#                                    Clone + open session
+#     init-repo <name>               git init + open session
+#     bookmark [-d/--delete] [path]
+#                                    Add/remove bookmark
+#     open-session <session>         Open session by name
+#     marks [<index> | marks-subcommand]
+#                                    Manage indexed marks
+#
+# AXIS / CORPUS POSITION
+#   `jrmoulton/tmux-sessionizer`'s `Cargo.toml` declares a **direct**
+#   dependency on `gix = { version = "0.78.0", features =
+#   ["attributes"] }`.  The repository-traversal logic at
+#   `src/repos.rs` uses typed `gix::open(path)` to discover git
+#   repos + typed `repo.submodules()?` to enumerate submodules
+#   for the recursive-submodule search mode.  When the user
+#   configures `recursive_submodules = true`, tms walks the
+#   submodule tree using typed gix primitives instead of forking
+#   `git` subprocesses (the entire point of the migration to gix
+#   over libgit2: zero subprocess overhead, zero unsafe C FFI,
+#   native async I/O).
+#
+#   **gitoxide** (`gix` crate + the ~50 sub-crates that compose
+#   it) is **THE canonical pure-Rust Git implementation** —
+#   Sebastian Thiel's (Byron on GitHub) reference implementation
+#   of the entire Git protocol stack + on-disk format, written
+#   from scratch in idiomatic safe Rust with the explicit goal
+#   of replacing libgit2 (the dominant C Git library) for Rust
+#   consumers.  In active development since 2020, with 8,800+ ★
+#   on github.com/GitoxideLabs/gitoxide.  The project is partly
+#   funded by GitHub Sponsors (Sebastian Thiel is a GitHub
+#   Sponsors Featured Maintainer) and structured as a federation
+#   of ~50 small focused crates instead of one monolithic
+#   library.
+#
+#   The gix crate ecosystem covers:
+#
+#     • `gix-object`                 typed Git object model
+#                                    (Blob / Tree / Commit / Tag)
+#                                    with typed entry / OID /
+#                                    actor / signature parsing
+#     • `gix-hash`                   typed SHA-1 + SHA-256 OID
+#                                    primitives with typed
+#                                    Kind / ObjectId / oid types
+#     • `gix-pack`                   typed packfile reader +
+#                                    writer with delta resolution,
+#                                    multi-index (midx) support,
+#                                    reverse-index, and bitmap
+#                                    index
+#     • `gix-odb`                    typed Object Database (loose
+#                                    + packed) with typed
+#                                    Cache / Handle / Store
+#                                    primitives + alternate-
+#                                    object-database support
+#     • `gix-ref`                    typed reference store (loose
+#                                    + packed-refs + reflog) with
+#                                    typed Target / Reference /
+#                                    FullName / Namespace types
+#     • `gix-config`                 typed gitconfig parser +
+#                                    writer with typed include /
+#                                    includeIf / conditional
+#                                    blocks + typed boolean +
+#                                    integer + color value
+#                                    parsers
+#     • `gix-traverse`               typed commit-graph
+#                                    traversal (Commits /
+#                                    Topological / Ancestors)
+#                                    + tree traversal (depth-
+#                                    first / breadth-first /
+#                                    follow-symlinks)
+#     • `gix-diff`                   typed diff engine
+#                                    (Myers / Patience / Histogram
+#                                    algorithms) with typed
+#                                    rename detection
+#     • `gix-status`                 typed working-tree status
+#                                    (the `git status` equivalent)
+#     • `gix-revision`               typed `gitrevisions(7)` parser
+#                                    (HEAD~5, master..feature,
+#                                    @{upstream}, refs/heads/main^,
+#                                    :/regex)
+#     • `gix-protocol`               typed Git wire-protocol v0 +
+#                                    v1 + v2 implementation
+#                                    (clone / fetch / push)
+#     • `gix-transport`              typed transport layer
+#                                    (https / ssh / git:// / file)
+#     • `gix-credentials`            typed credential helper
+#                                    invocation (the `git
+#                                    credential` protocol)
+#     • `gix-worktree`               typed working-tree
+#                                    representation + linked-
+#                                    worktree support
+#     • `gix-worktree-state`         typed worktree checkout /
+#                                    refresh logic
+#     • `gix-attributes`             typed `.gitattributes` parser
+#                                    (the feature used by tms)
+#     • `gix-ignore`                 typed `.gitignore` parser +
+#                                    matcher
+#     • `gix-glob`                   typed Git glob pattern
+#                                    matcher (the
+#                                    fnmatch-extended variant)
+#     • `gix-index`                  typed index/cache file
+#                                    reader + writer
+#     • `gix-mailmap`                typed `.mailmap` parser
+#     • `gix-fsck`                   typed fsck object verifier
+#     • `gix-merge`                  typed merge engine
+#     • `gix-rebase`                 typed rebase engine
+#     • `gix-revwalk`                typed reachability walker
+#                                    (the algorithm behind `git
+#                                    log` + `git rev-list`)
+#     • `gix-blame`                  typed file blame engine
+#     • `gix-archive`                typed `git archive` writer
+#     • `gix-pathspec`               typed pathspec matcher
+#     • `gix-prompt`                 typed credential prompt
+#     • `gix-quote`                  typed Git shell-style
+#                                    quoter
+#     • `gix-actor`                  typed Git Actor (name +
+#                                    email + time) parser
+#     • `gix-date`                   typed Git-style date
+#                                    parser
+#     • `gix-validate`               typed Git refname /
+#                                    branchname validator
+#     • `gix-bitmap`                 typed ewah-compressed
+#                                    bitmap reader (the
+#                                    `bitmap-index` reachability
+#                                    bitmaps)
+#     • `gix-chunk`                  typed chunk-file format
+#                                    reader (commit-graph,
+#                                    midx)
+#     • `gix-commitgraph`            typed commit-graph file
+#                                    reader (the `git
+#                                    commit-graph` cache)
+#     • `gix-discover`               typed `.git`-directory
+#                                    discovery (`git rev-parse
+#                                    --show-toplevel`)
+#     • `gix-features`               typed feature-flag
+#                                    abstractions (parallel /
+#                                    progress / hash algorithm
+#                                    selection)
+#     • `gix-fs`                     typed filesystem
+#                                    abstraction (case-insensitive
+#                                    detection, symlink handling,
+#                                    inode tracking)
+#     • `gix-hashtable`              typed hash-stable map
+#                                    optimized for git object IDs
+#     • `gix-lock`                   typed file-lock primitives
+#                                    (the `.lock` files git
+#                                    creates atomically)
+#     • `gix-macros`                 typed proc-macro helpers
+#     • `gix-negotiate`              typed clone/fetch
+#                                    negotiation algorithm
+#     • `gix-note`                   typed git-notes reader
+#     • `gix-packetline`             typed pkt-line wire format
+#                                    parser (the smart-protocol
+#                                    framing)
+#     • `gix-path`                   typed Git path handling
+#                                    (POSIX / Windows / case-
+#                                    folding)
+#     • `gix-refspec`                typed refspec parser
+#                                    (`+refs/heads/*:refs/remotes/
+#                                    origin/*`)
+#     • `gix-sec`                    typed security policy
+#                                    (the `safe.directory`
+#                                    gitconfig hardening)
+#     • `gix-shallow`                typed `.git/shallow` file
+#                                    handling (shallow clones)
+#     • `gix-submodule`              typed `.gitmodules` parser
+#                                    + submodule operations
+#     • `gix-tempfile`               typed signal-safe tempfile
+#                                    (the atomic-rename pattern
+#                                    git uses for every write)
+#     • `gix-tix`                    typed exchange-format
+#                                    primitives
+#     • `gix-trace`                  typed tracing + span
+#                                    primitives
+#     • `gix-tui`                    typed TUI helper crate
+#     • `gix-url`                    typed Git URL parser
+#                                    (ssh://, https://, git@,
+#                                    scp-style `user@host:path`)
+#     • `gix-utils`                  typed assorted utilities
+#                                    (str / btoi / regex / nul-
+#                                    terminated string)
+#
+#   gitoxide is the Git library behind essentially every modern
+#   Rust application that needs git operations without forking
+#   the `git` binary:
+#
+#     • **Cargo** (the Rust package manager) — gitoxide replaced
+#       `git2-rs` (the libgit2 wrapper) as the registry-protocol
+#       implementation in 2024;  this is the **highest-profile
+#       gitoxide adoption in existence**, since every `cargo
+#       install` / `cargo build` / `cargo update` invocation in
+#       the world now goes through gix
+#     • **jj** (jj-vcs / Jujutsu) — Google's
+#       Mercurial-inspired-but-Git-compatible VCS by Martin von
+#       Zweigbergk;  Cargo.toml declares direct gix dep;  jj
+#       uses gix for the Git backend (`jj git fetch`, `jj git
+#       push`, etc. all go through gix instead of libgit2)
+#     • **Starship** (the shell prompt) — uses gix for the
+#       git-segment to avoid forking `git status` on every
+#       prompt render (the difference between a 10ms prompt and
+#       a 200ms prompt)
+#     • **mise** (jdx/mise; formerly rtx) — the polyglot version
+#       manager;  uses gix for git operations on plugin repos
+#     • **rustsec** — the RustSec security advisory database
+#       toolchain;  uses gix for advisory-repo synchronization
+#     • **gitbutler** — the next-generation virtual-branch git
+#       client;  uses gix throughout the desktop app
+#     • **stgit** (Stacked Git) — patch-stack VCS;  uses gix for
+#       Git operations
+#     • **dbt-core** Rust port (dbt-labs/dbt-core) — uses gix
+#       for project-discovery git operations
+#     • **OpenAI Codex Rust** — the codex-rs workspace
+#     • **probe** — the AI-grep tool's LSP daemon
+#     • **tmux-sessionizer** (this very binary)
+#     • **koji** — conventional commits CLI
+#     • Plus thousands of internal Rust tools that need git
+#       operations without the libgit2 unsafe C FFI surface.
+#
+#   The gitoxide project is structurally significant because it
+#   removed Rust's last major dependency on **libgit2** (the C
+#   library that every other Git binding had to wrap).  Pre-
+#   gitoxide, every Rust Git tool either:
+#     (a) forked the `git` binary as a subprocess (slow,
+#         brittle, dependent on a non-Rust system binary), or
+#     (b) wrapped libgit2 via `git2-rs` (unsafe FFI surface,
+#         compile-time dependency on system libgit2, no async,
+#         memory-safety burden).
+#   gitoxide is the first pure-safe-Rust mature alternative to
+#   either of those paths.
+#
+#   Verified via:
+#     gh api repos/jrmoulton/tmux-sessionizer/contents/Cargo.toml
+#       → name = "tmux-sessionizer"
+#       → [[bin]] name = "tms" path = "src/main.rs"
+#       → gix = { version = "0.78.0", features = ["attributes"] }  (DIRECT)
+#       → ratatui = "..." crossterm = "..."
+#     raw.githubusercontent.com jrmoulton/tmux-sessionizer main
+#         src/cli.rs
+#       → #[derive(Debug, Parser)]
+#       → #[command(author, version)]
+#       → pub struct Cli { command: Option<CliCommand> }
+#       → #[derive(Debug, Subcommand)] pub enum CliCommand {
+#         Config(Box<ConfigCommand>), Start, Switch, Windows,
+#         Kill, Sessions, Rename(RenameCommand),
+#         Refresh(RefreshCommand), CloneRepo(CloneRepoCommand),
+#         InitRepo(InitRepoCommand), Bookmark(BookmarkCommand),
+#         OpenSession(OpenSessionCommand), Marks(MarksCommand) }
+#       → ConfigArgs every #[arg(long)] field listed verbatim
+#         above
+#     raw.githubusercontent.com jrmoulton/tmux-sessionizer main
+#         src/marks.rs
+#       → #[derive(Debug, Subcommand)] pub enum MarksSubCommand {
+#         List, Set(MarksSetCommand), Open(MarksOpenCommand),
+#         Delete(MarksDeleteCommand) }
+#
+#   This entry is the Rust=180 leader bump that **OPENS** Axis 125
+#   (pure-Rust Git implementation / gitoxide / `gix` crate) at
+#   1/0/0 following R1072 _lightdash (TS-Node=179 CLOSED Axis 124
+#   OAuth2/OIDC at 1/1/1 with triple-179 landmark + 117th axis
+#   closed).  R1073 is also a round-number commit landmark.  R1074
+#   on deck: Go=180 continues Axis 125 via a Go consumer of a Go
+#   Git library (`go-git/go-git`, the canonical pure-Go Git
+#   implementation — the structural parallel to gitoxide on the
+#   Go side).  R1075 closes the triple-180 via a TS-Node consumer
+#   of `isomorphic-git` (the canonical pure-JS Git
+#   implementation).
+#
+#   No completion for `tms` ships with Apple zsh
+#   (/usr/share/zsh/*/functions) or Homebrew zsh-completions
+#   (/opt/homebrew/share/zsh/site-functions) — confirmed absent.
+# ============================================================================
+
+_tms() {
+    local curcontext="$curcontext" state line ret=1
+    typeset -A opt_args
+
+    _arguments -C \
+        '(- *)'{-h,--help}'[show help]' \
+        '(- *)'{-V,--version}'[show version]' \
+        '1: :->cmd' \
+        '*:: :->args' && ret=0
+
+    case $state in
+        cmd)
+            local -a _tms_cmds=(
+                'config:configure tms defaults'
+                'start:initialize tmux with default sessions'
+                'switch:switch to another session (fuzzy picker)'
+                'windows:switch windows in current session (fuzzy picker)'
+                'kill:kill current session and jump to default'
+                'sessions:print running tmux sessions'
+                'rename:rename active session and working directory'
+                'refresh:create worktree windows for selected session'
+                'clone-repo:clone repository + create new session'
+                'init-repo:git init + create new session'
+                'bookmark:add or remove a directory bookmark'
+                'open-session:open a specific session by name'
+                'marks:manage indexed quick-jump marks'
+            )
+            _describe -t commands 'tms command' _tms_cmds && ret=0
+            ;;
+        args)
+            case $words[1] in
+                config)
+                    if (( CURRENT == 2 )) && [[ $words[2] != -* ]]; then
+                        _alternative \
+                            'sub:config sub-command:((list\:"list current config"))' \
+                            'flags:config flag:( -p --paths -s --session --excluded --remove --full-path --search-submodules --recursive-submodules --switch-filter-unknown -d --max-depths --picker-highlight-color --picker-highlight-text-color --picker-border-color --picker-info-color --picker-prompt-color --session-sort-order --clone-repo-switch )' && ret=0
+                    elif [[ $words[2] == list ]]; then
+                        _arguments \
+                            '(-d --defaults)'{-d,--defaults}'[show only default values]' && ret=0
+                    else
+                        _arguments \
+                            '(-p --paths)*'{-p,--paths}'=[search paths]:paths:_files -/' \
+                            '(-s --session)'{-s,--session}'=[default session name]:name:' \
+                            '*--excluded=[directories to exclude]:dirs:' \
+                            '*--remove=[directories to remove from exclude list]:dirs:' \
+                            '--full-path=[show full path in picker]:bool:(true false)' \
+                            '--search-submodules=[traverse submodules]:bool:(true false)' \
+                            '--recursive-submodules=[recursive submodule traversal]:bool:(true false)' \
+                            '--switch-filter-unknown=[only show configured paths]:bool:(true false)' \
+                            '(-d --max-depths)*'{-d,--max-depths}'=[max depth per search path]:n:' \
+                            '--picker-highlight-color=[#rrggbb]:color:' \
+                            '--picker-highlight-text-color=[#rrggbb]:color:' \
+                            '--picker-border-color=[#rrggbb]:color:' \
+                            '--picker-info-color=[#rrggbb]:color:' \
+                            '--picker-prompt-color=[#rrggbb]:color:' \
+                            '--session-sort-order=[session sort order]:order:(Alphabetical LastAttached)' \
+                            '--clone-repo-switch=[post-clone switch behavior]:behavior:(Always Never Foreground)' && ret=0
+                    fi
+                    ;;
+                rename)
+                    _arguments '1:new session name:' && ret=0
+                    ;;
+                refresh)
+                    _arguments '1:session name:' && ret=0
+                    ;;
+                clone-repo)
+                    _arguments \
+                        '1:repository URL:' \
+                        '--path=[directory to clone into]:dir:_files -/' \
+                        '--name=[cloned repo directory name]:name:' && ret=0
+                    ;;
+                init-repo)
+                    _arguments '1:repository name:' && ret=0
+                    ;;
+                bookmark)
+                    _arguments \
+                        '(-d --delete)'{-d,--delete}'[delete instead of add]' \
+                        '1:path:_files -/' && ret=0
+                    ;;
+                open-session)
+                    _arguments '1:session name:' && ret=0
+                    ;;
+                marks)
+                    if (( CURRENT == 2 )); then
+                        _alternative \
+                            'sub:marks sub-command:((list\:"list all marks" set\:"add a session mark" open\:"open the session at index" delete\:"delete marks"))' \
+                            'idx:mark index:' && ret=0
+                    else
+                        case $words[2] in
+                            set)
+                                _arguments \
+                                    '1:mark index:' \
+                                    '(-p --path)'{-p,--path}'=[path to mark]:path:_files -/' && ret=0
+                                ;;
+                            open)
+                                _arguments '1:mark index:' && ret=0
+                                ;;
+                            delete)
+                                _arguments \
+                                    '(-a --all)'{-a,--all}'[delete all marks]' \
+                                    '1:mark index:' && ret=0
+                                ;;
+                        esac
+                    fi
+                    ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_tms "$@"
