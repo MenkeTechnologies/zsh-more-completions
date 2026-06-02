@@ -1,0 +1,119 @@
+#compdef soketi
+# ============================================================================
+# _soketi — zsh completion for soketi, the Pusher-compatible WebSocket
+#           server (multi-driver adapter incl. NATS via nats.js)
+# ============================================================================
+#
+# UPSTREAM
+#   Repository : https://github.com/soketi/soketi
+#   Author     : Renoki Co.  (originally Alex Renoki, now soketi org)
+#   License    : AGPL-3.0
+#   Language   : TypeScript
+#   Package    : @soketi/soketi  (npm)
+#   Binary     : soketi  (package.json bin: bin/server.js — sets
+#                process.title = "soketi-server" and delegates to
+#                dist/cli)
+#   Last push  : 2025-03-03
+#
+# WHAT IT IS
+#   soketi is "a next-gen, Pusher-compatible, open-source WebSockets
+#   server" — a drop-in protocol replacement for Pusher Channels.  It
+#   speaks the Pusher Channels wire protocol (handshakes, channels,
+#   presence, client events, encrypted channels, webhooks) and lets
+#   applications point their `pusher-js` client at a self-hosted
+#   server instead of pusher.com.  Horizontal scale is handled by a
+#   pluggable adapter (local, Redis, NATS, cluster) that fans channel
+#   broadcasts across replicas;  apps can live in-memory, in JSON, in
+#   MySQL/Postgres/DynamoDB, or behind a custom App Manager driver;
+#   rate-limiting plugs into Redis or local;  webhooks dispatch via
+#   the queue driver (sync, Redis, or AWS SQS);  metrics expose
+#   Prometheus.  A companion `soketi-pm2` binary boots the same
+#   server under PM2 for process supervision.
+#
+# CLI ARGUMENT GRAMMAR  (verbatim from src/cli/index.ts yargs builder
+#                       + src/cli/cli.ts Cli.start)
+#   soketi <COMMAND> [OPTIONS]
+#
+#   Commands:
+#     start                          Start the server
+#       --config <PATH>                Path for the config JSON file
+#                                      (optional;  loaded before env
+#                                      vars are applied)
+#
+#   Standard yargs auto-flags:
+#     -h, --help                     Show help
+#
+#   Environment variables (loaded via dotenv from `.env` and applied
+#   AFTER `--config`):  Every option is also settable as
+#   `SOKETI_<UPPER_SNAKE>` — e.g. `SOKETI_PORT`, `SOKETI_HOST`,
+#   `SOKETI_DEFAULT_APP_ID`, `SOKETI_DEFAULT_APP_KEY`,
+#   `SOKETI_DEFAULT_APP_SECRET`, `SOKETI_ADAPTER_DRIVER`
+#   (local / redis / nats / cluster), `SOKETI_ADAPTER_NATS_SERVERS`,
+#   `SOKETI_ADAPTER_NATS_USER`, `SOKETI_ADAPTER_NATS_PASSWORD`,
+#   `SOKETI_ADAPTER_NATS_TOKEN`, `SOKETI_APP_MANAGER_DRIVER`
+#   (array / mysql / postgres / dynamodb), `SOKETI_DEBUG`,
+#   `SOKETI_MODE`, `SOKETI_SSL_CERT`, `SOKETI_SSL_KEY`,
+#   `SOKETI_METRICS_ENABLED`, `SOKETI_METRICS_DRIVER`,
+#   `SOKETI_QUEUE_DRIVER` (sync / redis / sqs), and so on for ~120
+#   total environment overrides (see src/cli/cli.ts `envVariables`).
+#
+# AXIS / CORPUS POSITION
+#   Direct dependency on `nats ^2.7.1` declared in package.json — the
+#   official Node.js NATS.io client maintained by Synadia / nats-io
+#   (nats-io/nats.js), the canonical npm package literally named
+#   `nats` (not `nats.js`).  When `SOKETI_ADAPTER_DRIVER=nats` (or
+#   the equivalent `adapter.driver: nats` in the config JSON),
+#   soketi's `src/adapters/nats-adapter.ts` builds an
+#   `nats.connect({ servers, user, pass, token, timeout })` client
+#   and uses NATS subjects under `adapter.nats.prefix` to broadcast
+#   channel events to every soketi replica in the cluster.
+#   Verified via:
+#     gh api repos/soketi/soketi/contents/package.json
+#       → "nats": "^2.7.1"
+#     gh api repos/soketi/soketi/contents/src/cli/cli.ts
+#       → ADAPTER_NATS_SERVERS / ADAPTER_NATS_USER /
+#         ADAPTER_NATS_PASSWORD / ADAPTER_NATS_TOKEN env-var map
+#   This entry is the TS-Node=125 leader bump that CLOSES Axis 70
+#   (NATS.io Client Library) at 1/1/1 three-language symmetry —
+#   pairing Rust=async-nats 0.49 (R869 _wrpc-wasmtime), Go=nats.go
+#   v1.41.2 (R870 _remoteAudio), and TS-Node=nats.js ^2.7.1 (this
+#   entry).  Triple-125 landmark on commit.
+#
+#   No completion for `soketi` ships with Apple zsh
+#   (/usr/share/zsh/*/functions) or Homebrew zsh-completions
+#   (/opt/homebrew/share/zsh/site-functions) — confirmed absent.
+# ============================================================================
+
+_soketi() {
+    local curcontext="$curcontext" state line ret=1
+    typeset -A opt_args
+
+    _arguments -C \
+        '(- *)'{-h,--help}'[show help]' \
+        '1: :_soketi_commands' \
+        '*::arg:->args' && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                start)
+                    _arguments \
+                        '--config=[path for the config JSON file (optional)]:config file:_files -g "*.json"' \
+                        '(- *)'{-h,--help}'[help]' && ret=0 ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+(( $+functions[_soketi_commands] )) ||
+_soketi_commands() {
+    local -a commands
+    commands=(
+        'start:start the Pusher-compatible WebSocket server'
+    )
+    _describe -t commands 'soketi command' commands
+}
+
+_soketi "$@"
