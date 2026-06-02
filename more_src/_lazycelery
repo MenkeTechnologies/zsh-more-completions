@@ -1,0 +1,148 @@
+#compdef lazycelery
+# ============================================================================
+# _lazycelery — zsh completion for lazycelery, the Celery-worker TUI
+#                (Redis OR RabbitMQ broker, lazygit-style interface)
+# ============================================================================
+#
+# UPSTREAM
+#   Repository : https://github.com/Fguedes90/lazycelery
+#   Author     : Francisco Guedes
+#   License    : MIT
+#   Language   : Rust
+#   Crate      : lazycelery v0.8.3
+#   Binary     : lazycelery  (Cargo.toml [[bin]] name = "lazycelery",
+#                             path = "src/main.rs")
+#   Last push  : 2026-05-25
+#
+# WHAT IT IS
+#   lazycelery is "a terminal UI for monitoring and managing Celery
+#   workers and tasks, inspired by lazydocker/lazygit".  It connects
+#   to a running Celery deployment by way of the configured Celery
+#   broker — either Redis (`redis://…` URLs, via the `redis` crate)
+#   or RabbitMQ (`amqp://…` URLs, via the `lapin` crate) — and
+#   subscribes to the `celeryev` event stream plus the per-worker
+#   inspection RPCs to render live worker state, registered tasks,
+#   queue depth, in-flight/scheduled/reserved task lists, task
+#   results, and history in a ratatui + crossterm split-pane TUI.
+#   Operators can drill into individual tasks, replay failed ones,
+#   revoke pending tasks, and purge queues without leaving the
+#   terminal.  Optional `--result-backend` URL gives access to task
+#   return values stored in the result backend.
+#
+# CLI ARGUMENT GRAMMAR  (verbatim from src/main.rs clap-derive
+#                       Cli + Commands enum)
+#   lazycelery [GLOBAL_FLAGS] [<SUBCOMMAND>]
+#
+#   Global flags (inherited by every subcommand):
+#     -b, --broker <URL>          Broker URL
+#                                   (e.g. redis://localhost:6379/0
+#                                    or  amqp://guest:guest@localhost:5672/)
+#         --result-backend <URL>  Celery result-backend URL
+#                                   (redis:// / db+postgresql:// / etc.)
+#     -c, --config <PATH>         Configuration file path
+#                                   (default $XDG_CONFIG_HOME/lazycelery/
+#                                            config.toml or platform
+#                                            equivalent via `dirs`)
+#
+#   Subcommands:
+#     (no subcommand)             Launch the interactive TUI
+#                                 (default mode — uses CLI overrides
+#                                 then the config file then env vars)
+#     init                        Initialize configuration with
+#                                 interactive setup prompts (broker
+#                                 URL, result backend URL, refresh
+#                                 interval)
+#     config                      Show the currently resolved
+#                                 configuration (file path + parsed
+#                                 fields) and exit
+#     set-broker <URL>            Persist a broker URL into the
+#                                 configuration file
+#     set-refresh <MS>            Persist the UI refresh interval
+#                                 (in milliseconds) into the
+#                                 configuration file
+#
+#   Standard clap auto-flags:
+#     -h, --help                  Show help
+#     -V, --version               Show version
+#
+# AXIS / CORPUS POSITION
+#   Direct dependency on `lapin = "2.5"` declared in Cargo.toml — the
+#   canonical async Rust AMQP 0-9-1 client maintained by
+#   amqp-rs/lapin under the CleverCloud GitHub organization.  lapin
+#   provides typed AMQP method handling, async-trait-based channel
+#   operations, publisher confirms, consumer streams, and rustls /
+#   native-tls TLS over `tokio` or `async-std`.  lazycelery's
+#   `src/broker/amqp/mod.rs` constructs a
+#   `lapin::Connection::connect(url, ConnectionProperties::default())`
+#   and opens a channel, declares the `celeryev` topic exchange,
+#   binds queues with `*` wildcard routing keys to consume Celery
+#   worker / task events, and uses
+#   `Channel::basic_consume(...).await?.next()` to stream events into
+#   the TUI render loop.  Queue purge / publish for replay use
+#   `BasicPublishOptions` + `QueuePurgeOptions`.  Verified via:
+#     gh api repos/Fguedes90/lazycelery/contents/Cargo.toml
+#       → lapin = "2.5"
+#     gh api repos/Fguedes90/lazycelery/contents/src/broker/amqp/mod.rs
+#       → use lapin::{options::{BasicAckOptions,...},
+#                     BasicProperties, Channel, Connection,
+#                     ConnectionProperties, Consumer};
+#   This entry is the Rust=126 leader bump that OPENS Axis 71
+#   (AMQP 0-9-1 / RabbitMQ Client Library), pairing with future
+#   Go=rabbitmq/amqp091-go and TS-Node=amqp-node/amqplib poles to
+#   close the axis at 1/1/1.
+#
+#   No completion for `lazycelery` ships with Apple zsh
+#   (/usr/share/zsh/*/functions) or Homebrew zsh-completions
+#   (/opt/homebrew/share/zsh/site-functions) — confirmed absent.
+# ============================================================================
+
+_lazycelery() {
+    local curcontext="$curcontext" state line ret=1
+    typeset -A opt_args
+
+    _arguments -C \
+        '(-b --broker)'{-b+,--broker=}'[Celery broker URL (redis\:// or amqp\://)]:broker URL:' \
+        '--result-backend=[Celery result-backend URL]:url:' \
+        '(-c --config)'{-c+,--config=}'[configuration file path]:config file:_files -g "*.{toml,yaml,yml}"' \
+        '(- *)'{-h,--help}'[show help]' \
+        '(- *)'{-V,--version}'[show version]' \
+        '1: :_lazycelery_commands' \
+        '*::arg:->args' && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                init|config)
+                    _arguments \
+                        '(-b --broker)'{-b+,--broker=}'[broker URL]:broker URL:' \
+                        '--result-backend=[result-backend URL]:url:' \
+                        '(-c --config)'{-c+,--config=}'[configuration file path]:config file:_files' \
+                        '(- *)'{-h,--help}'[help]' && ret=0 ;;
+                set-broker)
+                    _arguments \
+                        ':broker URL (redis\:// or amqp\://):' \
+                        '(- *)'{-h,--help}'[help]' && ret=0 ;;
+                set-refresh)
+                    _arguments \
+                        ':refresh interval (milliseconds):' \
+                        '(- *)'{-h,--help}'[help]' && ret=0 ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+(( $+functions[_lazycelery_commands] )) ||
+_lazycelery_commands() {
+    local -a commands
+    commands=(
+        'init:initialize configuration with interactive setup prompts'
+        'config:show the currently resolved configuration and exit'
+        'set-broker:persist a broker URL into the configuration file'
+        'set-refresh:persist UI refresh interval (ms) into config file'
+    )
+    _describe -t commands 'lazycelery command' commands
+}
+
+_lazycelery "$@"
