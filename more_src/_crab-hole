@@ -1,0 +1,351 @@
+#compdef crab-hole
+# =============================================================================
+# crab-hole — LuckyTurtleDev/crab-hole's pure-
+#   Rust Pi-Hole CLONE — a network-level
+#   advertisement + tracker + malware blocker
+#   that runs as a DNS server on the local
+#   network.  Subscribes to one or more
+#   blocklist URLs (hosts-file format or
+#   adblock-rule format), compiles them into an
+#   in-memory qp-trie at startup, then
+#   intercepts every DNS query against the
+#   configured upstream resolvers.  Returns
+#   NXDOMAIN / 0.0.0.0 / configurable sink IP
+#   for blocked domains; forwards all other
+#   queries upstream over DoT / DoH / DoH3 /
+#   DoQ / plain UDP / plain TCP.  Built on
+#   direct `hickory-server 0.26.1` +
+#   `hickory-resolver 0.26.1` +
+#   `hickory-proto 0.26.1` (the canonical Rust
+#   DNS library, formerly known as trust-dns,
+#   now governed under the Hickory DNS Project
+#   in the Rust Foundation umbrella).  Rust=106
+#   leader bump opening Axis 51.
+#
+# AXIS 51 — DNS SERVER / RESOLVER LIBRARY — OPENS @ R793
+# =====================================================
+# Establishes the 51st three-language axis in
+# the corpus — the first post-half-century
+# axis.  This axis covers CLI tools written
+# in language X that ship a DIRECT library
+# binding to a full DNS-protocol implementation
+# (server + resolver + zone-handler).  Canonical
+# implementations per language:
+#   * Rust       : hickory-dns (this entry)
+#                  — hickory-dns/hickory-dns.
+#                    Multi-crate workspace:
+#                    `hickory-proto` (wire-
+#                    protocol codec), `hickory-
+#                    resolver` (stub +
+#                    recursive resolver),
+#                    `hickory-server` (zone-
+#                    serving + forwarder),
+#                    `hickory-client` (raw
+#                    query client), `hickory-
+#                    util` (CLI helpers).
+#                    ~5.3k stars.  Renamed
+#                    from `trust-dns` in 2024;
+#                    the maintainer-led
+#                    rename happened to avoid
+#                    trademark concerns with
+#                    "Trust" + DNS combinations
+#                  — version 0.26.1 used here
+#                  — direct dep at
+#                    `LuckyTurtleDev/crab-
+#                    hole` Cargo.toml lines:
+#                      `hickory-proto = "0.26.1"`
+#                      `hickory-server = "0.26.1"`
+#                      `hickory-resolver = "0.26.1"`
+#   * Go         : miekg/dns — the canonical
+#                  Go DNS library.  ~8.4k
+#                  stars.  Used by CoreDNS,
+#                  TraefikDNS, Caddy's DNS-01
+#                  challenge handlers, etc.
+#                  R794 will close the Go side
+#   * TS-Node    : dns2 or native-dns or
+#                  `dns-packet` — JS-native
+#                  DNS protocol implementations.
+#                  R795 will close the TS-
+#                  Node side
+#
+# Distinguishing crab-hole from other corpus
+# DNS / ad-blocker tooling:
+#   - pi-hole (the original, C + PHP web UI):
+#     classic, runs only on Linux.  Heavy
+#     install footprint (dnsmasq + lighttpd +
+#     PHP).  Configuration via web GUI
+#   - adguard-home (`_adguardhome`): Go
+#     re-implementation of Pi-Hole's
+#     architecture.  Single-binary, cross-
+#     platform.  More polished web UI than
+#     Pi-Hole.  miekg/dns under the hood
+#   - blocky (`_blocky`): another Go re-impl
+#     by 0xERR0R.  Lightweight, YAML config,
+#     no web UI by default
+#   - smartdns / smartdns-rs (`_smartdns`):
+#     primarily a SPEED-OPTIMISING DNS proxy
+#     (multi-upstream parallel resolution
+#     with latency-based selection), not an
+#     ad blocker.  Different target use-case
+#   - dnsmasq (`_dnsmasq`): the classic local
+#     DHCP + DNS resolver.  Doesn't include
+#     a blocklist subsystem; users have to
+#     bolt on hosts-file overrides manually
+#   - aardvark-dns (`_aardvark-dns`): Podman's
+#     container-DNS, scoped to a single
+#     CRI bridge network.  Different scope
+#   - crab-hole is the PURE-RUST entry in
+#     this design space.  Single static
+#     binary, AGPL-3.0, hickory-dns under
+#     the hood, blocklist trie compiled to
+#     `qp-trie` for O(log n) lookup
+#
+# UPSTREAM PROTOCOLS SUPPORTED (toggled at
+# build-time + at runtime via config.toml):
+#   * DoT     DNS-over-TLS (RFC 7858)
+#             port 853 by default
+#   * DoH     DNS-over-HTTPS (RFC 8484)
+#             over HTTPS/1 + HTTPS/2
+#   * DoH3    DNS-over-HTTPS-over-HTTP/3
+#             draft (over QUIC + h3)
+#   * DoQ     DNS-over-QUIC (RFC 9250)
+#   * Plain   UDP + TCP (the original RFC
+#             1035 transports)
+#   * mDNS    multicast DNS for local-link
+#             name resolution (RFC 6762),
+#             gated behind the `mdns`
+#             feature
+#   * DNSSEC  signature validation, gated
+#             behind the `dnssec` feature
+#
+# CONFIG FILE LOOKUP ORDER (verbatim from
+# `src/main.rs` CONFIG_PATH lazy):
+#   1. `$CRAB_HOLE_DIR/config.toml`
+#      (env var override; the dir-name is
+#      derived from `CARGO_PKG_NAME` with
+#      hyphens replaced by underscores +
+#      upper-cased, so the env var is
+#      literally `CRAB_HOLE_DIR`)
+#   2. `<ProjectDirs::config_dir()>/config.toml`
+#      Linux:   `~/.config/crab-hole/config.toml`
+#      macOS:   `~/Library/Application Support/dev.luckyturtle.crab-hole/config.toml`
+#      Windows: `%APPDATA%/luckyturtle/crab-hole/config/config.toml`
+#   3. `/etc/crab-hole.toml`
+#      (Unix system-wide fallback if the
+#      ProjectDirs config doesn't exist)
+#
+# CONFIG SCHEMA (TOML):
+#
+#   # 53 = standard DNS port, 5353 for
+#   # rootless development
+#   [server]
+#   bind = ["0.0.0.0:53", "[::]:53"]
+#
+#   # Upstream resolvers — query all of these
+#   # in parallel; first response wins
+#   [[upstream]]
+#   name = "cloudflare"
+#   addr = "1.1.1.1"
+#   protocol = "DoH"
+#
+#   [[upstream]]
+#   name = "quad9"
+#   addr = "9.9.9.9"
+#   protocol = "DoT"
+#
+#   # Blocklist subscriptions
+#   [[blocklist]]
+#   format = "hosts"          # | "adblock" | "domains"
+#   url = "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts"
+#
+#   [[blocklist]]
+#   format = "domains"
+#   url = "file:///etc/crab-hole/custom.txt"
+#
+#   # Allowlist overrides (always-permit
+#   # patterns that would otherwise match
+#   # the blocklist)
+#   [[allowlist]]
+#   pattern = "*.example.com"
+#
+#   # HTTP admin API (poem-openapi powered)
+#   [api]
+#   bind = "127.0.0.1:8080"
+#   ui = "redoc"               # | "swagger-ui"
+#
+# CLI SURFACE:
+# `crab-hole` has only TWO subcommands plus
+# the default mode (no subcommand = run the
+# DNS server in the foreground).  The
+# subcommands exist for config-validation /
+# blocklist-validation in CI pipelines so
+# operators can sanity-check a deploy before
+# restarting the daemon.
+#
+# CRITICAL DIRECT DEPENDENCIES (from
+# Cargo.toml):
+#   - hickory-proto 0.26.1     — DNS wire
+#                                protocol codec
+#                                [AXIS 51 LIBRARY]
+#   - hickory-server 0.26.1    — server-side
+#                                zone handler
+#                                + forwarder
+#   - hickory-resolver 0.26.1  — upstream
+#                                resolver
+#                                client
+#   - clap 4.5.49 (derive)     — CLI parser
+#   - poem 3.1.12              — HTTP server
+#                                for the admin
+#                                API
+#   - poem-openapi 5.1.16      — OpenAPI 3.0
+#                                schema
+#                                generation +
+#                                Redoc / Swagger-
+#                                UI rendering
+#   - reqwest 0.12.24          — HTTP client
+#                                for fetching
+#                                blocklists
+#                                from URLs
+#   - rustls 0.23 + rustls-    — TLS for DoT
+#     pemfile 2.2                + DoH + DoQ +
+#                                DoH3 upstream
+#                                connections
+#   - tokio 1.48 (fs +         — async runtime
+#     rt-multi-thread)
+#   - qp-trie 0.8              — qp-trie data
+#                                structure for
+#                                blocklist
+#                                domain lookup
+#                                (O(log n)
+#                                worst-case
+#                                radix tree)
+#   - chumsky 0.12 + ariadne 0.6
+#                              — parser
+#                                combinators
+#                                + pretty
+#                                error reports
+#                                for blocklist
+#                                format parsing
+#   - basic-toml 0.1           — minimal TOML
+#                                parser
+#   - directories 6.0          — XDG / Known
+#                                Folders /
+#                                Application
+#                                Support dir
+#                                resolution
+#   - bit-vec 0.8              — bitset for
+#                                allowlist
+#                                fast-path
+#   - regex 1.12               — pattern
+#                                matching for
+#                                allowlist
+#                                wildcards
+#   - serde 1.0 (derive)       — config
+#                                deserialisation
+#
+# Rust 2021 edition.  TLS provider choice
+# selected at build time via `--features
+# ring` (default) vs `--features aws-lc-rs`
+# (FIPS-flavoured alternative).  HTTPS-cert
+# root trust selectable via `--features
+# native-roots` (default; reads OS cert
+# store) vs `--features webpki-roots`
+# (bundles the Mozilla webpki cert set).
+#
+# UPSTREAM:
+#   * Source             : https://github.com/LuckyTurtleDev/crab-hole
+#   * hickory-dns        : https://github.com/hickory-dns/hickory-dns
+#   * License            : AGPL-3.0-or-later
+#   * Maintainer         : LuckyTurtleDev
+#
+# INSTALL:
+#   # From crates.io
+#   cargo install crab-hole
+#
+#   # From source
+#   git clone https://github.com/LuckyTurtleDev/crab-hole
+#   cd crab-hole
+#   cargo build --release
+#   sudo install -m 0755 target/release/crab-hole /usr/local/bin/
+#
+#   # Build with aws-lc-rs FIPS-flavoured
+#   # TLS provider (alternative to default
+#   # ring)
+#   cargo install crab-hole \
+#       --no-default-features \
+#       --features aws-lc-rs,native-roots,common
+#
+# USAGE EXAMPLES:
+#
+#   # Run the DNS server using the default
+#   # config (looks up via the precedence
+#   # chain above)
+#   sudo crab-hole
+#
+#   # Run from an explicit config dir
+#   CRAB_HOLE_DIR=/etc/crab-hole sudo crab-hole
+#
+#   # Validate the config without starting
+#   # the server (CI gate)
+#   crab-hole validate-config
+#
+#   # Validate that all blocklist URLs are
+#   # reachable + parseable (CI gate)
+#   crab-hole validate-lists
+#
+#   # Help (clap default)
+#   crab-hole --help
+#   crab-hole -h
+#
+#   # Help for a specific subcommand
+#   crab-hole validate-config --help
+#   crab-hole validate-lists --help
+#
+#   # Version
+#   crab-hole --version
+#   crab-hole -V
+#
+# OPTIONS (sourced directly from
+# https://github.com/LuckyTurtleDev/crab-hole/blob/main/src/main.rs Cli + Commands enum):
+#
+# -----------------------------------------------------------------------------
+
+local curcontext="$curcontext" state line ret=1
+typeset -A opt_args
+
+local -a _crab_hole_commands
+_crab_hole_commands=(
+    'validate-config:Validate the config.toml file without starting the DNS server'
+    'validate-lists:Validate that all configured blocklist URLs are reachable and parseable'
+    'help:Print help for a subcommand'
+)
+
+_arguments -C \
+    '(- *)'{-h,--help}'[show help]' \
+    '(- *)'{-V,--version}'[show version]' \
+    '(-): :->command' \
+    '(-)*:: :->args' \
+    && ret=0
+
+case $state in
+    command)
+        _describe -t commands 'crab-hole command' _crab_hole_commands && ret=0
+        ;;
+    args)
+        case $line[1] in
+            validate-config|validate-lists)
+                _arguments \
+                    '(- *)'{-h,--help}'[show help for this subcommand]' \
+                    '(- *)'{-V,--version}'[show version]' \
+                    && ret=0
+                ;;
+            help)
+                _arguments \
+                    '1:subcommand:(validate-config validate-lists)' \
+                    && ret=0
+                ;;
+        esac
+        ;;
+esac
+
+return ret
