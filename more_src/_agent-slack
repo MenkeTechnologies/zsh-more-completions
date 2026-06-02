@@ -1,0 +1,511 @@
+#compdef agent-slack
+# ============================================================================
+# _agent-slack — zsh completion for stably.ai's Slack automation CLI for
+#                AI agents (commander.js + @slack/web-api)
+# ============================================================================
+#
+# UPSTREAM
+#   Repository : https://github.com/stablyai/agent-slack
+#   Author     : Stably AI Inc. (stably.ai)
+#   License    : MIT
+#   Stars      : 426
+#   Language   : TypeScript
+#   Package    : agent-slack v0.9.3  (npm: agent-slack)
+#   Binary     : agent-slack  (package.json bin: ./bin/agent-slack.js)
+#   Last push  : 2026-06-01
+#
+# WHAT IT IS
+#   agent-slack is a token-efficient Slack automation CLI built for AI
+#   agents.  It exposes channel-, message-, canvas-, search-, later-,
+#   unreads-, user-, workflow-, and authentication-related subcommands
+#   against a Slack workspace using either standard bot/user tokens
+#   (xoxb/xoxp) or browser-imported tokens (xoxc + xoxd cookie).  Every
+#   response is rendered as compact JSON optimized to fit inside agent
+#   context windows.  The browser-token import flows (import-chrome,
+#   import-brave, import-firefox, import-desktop, parse-curl) lift
+#   xoxc/xoxd from a logged-in Slack session so the CLI can operate as
+#   the user without OAuth scopes.
+#
+# CLI ARGUMENT GRAMMAR  (verbatim from src/index.ts + src/cli/*.ts
+#                       commander.js Command tree)
+#   agent-slack <command> [args...]
+#
+#   auth                     Authentication & workspace management
+#     whoami                   Show configured workspaces and token sources
+#     test                     Verify credentials (calls Slack auth.test)
+#     import-chrome            Import xoxc/xoxd from Chrome Slack tab (macOS)
+#     import-brave             Import xoxc/xoxd from Brave Slack tab
+#     import-firefox           Import xoxc/xoxd from Firefox profile storage
+#     parse-curl               Parse a Slack API cURL → extract xoxc/xoxd
+#     import-desktop           Import from Slack desktop application
+#     add                      Add credentials
+#       --token <token>          Standard Slack token (xoxb/xoxp)
+#       --xoxc <token>           Browser token (xoxc-...)
+#       --xoxd <cookie>          Browser cookie d (xoxd-...)
+#     set-default <workspace>  Set the default workspace URL
+#     remove <workspace>       Remove a workspace from local config
+#
+#   message                  Read/write Slack messages (token-efficient JSON)
+#     get [target]             Fetch a single Slack message + thread summary
+#                              (default subcommand if none given)
+#     list <target>            List recent channel messages / full thread
+#     edit <target> <text>     Edit a message
+#     delete <target>          Delete a message
+#     send <target> [text]     Send or schedule a message
+#     draft <target> [text]    Open a rich Slack-like editor draft
+#     react add <target> <emoji>     Add a reaction to a message
+#     react remove <target> <emoji>  Remove a reaction from a message
+#
+#   canvas                   Slack Canvas tools
+#     get <canvas>             Fetch a Slack canvas → Markdown
+#
+#   search <query>           Search Slack messages and files
+#     --channel <ch...>        Channel filter (repeatable)
+#     --user <user>            User filter (@name / U...)
+#     --after <date>           Only results after YYYY-MM-DD
+#     --before <date>          Only results before YYYY-MM-DD
+#     --limit <n>              Max results (default 20)
+#     --resolve-users          Resolve user IDs to user profiles
+#
+#   later                    Manage saved-for-later messages
+#     list                     List saved-for-later (default subcommand)
+#     complete <target>        Mark a saved message as completed
+#     archive <target>         Archive a saved message
+#     reopen <target>          Move a saved message back to in-progress
+#     save <target>            Save a message for later
+#     remove <target>          Remove a message from Later entirely
+#     remind <target>          Set a reminder for a saved message
+#
+#   unreads                  Show all unread messages across the workspace
+#     --workspace <url>        Workspace URL
+#     --counts-only            Only show counts
+#     --max-messages <n>       Max unread messages per channel (default 10)
+#     --include-system         Include system messages
+#
+#   user                     Workspace user lookup
+#     list                     List users in the workspace
+#     get <user>               Get a single user by ID or @handle
+#     dm-open <users...>       Open / fetch a DM with one or more users
+#
+#   channel                  Channel listing, creation, and invites
+#     list                     List conversations for a user
+#     new                      Create a new channel
+#     invite                   Invite users to a channel
+#     mark <target>            Mark a channel/DM as read up to a message
+#
+#   workflow                 Slack workflow discovery and triggering
+#     list <channel>           List workflows bookmarked / featured
+#     preview <trigger-id>     Get workflow metadata from a trigger ID
+#     get <id>                 Get workflow definition (Ft… or Wf…)
+#     run <trigger-id>         Trip a workflow trigger
+#
+#   update                   Update agent-slack to the latest version
+#     --check                  Only check for updates (don't install)
+#
+# AXIS / CORPUS POSITION
+#   Direct dependency on `@slack/web-api ^7.13.0` declared in
+#   package.json — the official Slack Web API client maintained by the
+#   Slack Platform team under @SlackAPI/node-slack-sdk.  Every CLI
+#   subcommand routes through a WebClient instance constructed in
+#   `src/slack/` against the chosen workspace's token, hitting the
+#   relevant Web API method (chat.postMessage, conversations.history,
+#   search.messages, reactions.add, canvases.access.get, etc.).
+#   Verified via:
+#     gh api repos/stablyai/agent-slack/contents/package.json
+#       → "@slack/web-api": "^7.13.0"
+#     gh api repos/stablyai/agent-slack/contents/src/index.ts
+#       → registers 10 subcommand groups under a `Command` named
+#         "agent-slack"
+#   This entry is the TS-Node=123 leader bump that CLOSES Axis 68
+#   (Slack SDK Library) at 1/1/1 three-language symmetry — pairing
+#   Rust=slack-morphism v2 (R861 _triage-bot), Go=slack-go/slack
+#   (R862 _kubewatch), and TS-Node=@slack/web-api (this entry).
+#   Triple-123 landmark on commit.
+#
+#   No completion for `agent-slack` ships with Apple zsh
+#   (/usr/share/zsh/*/functions) or Homebrew zsh-completions
+#   (/opt/homebrew/share/zsh/site-functions) — confirmed absent.
+# ============================================================================
+
+_agent-slack() {
+    local curcontext="$curcontext" state line ret=1
+    typeset -A opt_args
+
+    _arguments -C \
+        '(- *)'{-V,--version}'[show version]' \
+        '(- *)'{-h,--help}'[show help]' \
+        '1: :_agent-slack_commands' \
+        '*::arg:->args' && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                auth)      _agent-slack_auth     && ret=0 ;;
+                message)   _agent-slack_message  && ret=0 ;;
+                canvas)    _agent-slack_canvas   && ret=0 ;;
+                search)    _agent-slack_search   && ret=0 ;;
+                later)     _agent-slack_later    && ret=0 ;;
+                unreads)   _agent-slack_unreads  && ret=0 ;;
+                user)      _agent-slack_user     && ret=0 ;;
+                channel)   _agent-slack_channel  && ret=0 ;;
+                workflow)  _agent-slack_workflow && ret=0 ;;
+                update)    _agent-slack_update   && ret=0 ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+(( $+functions[_agent-slack_commands] )) ||
+_agent-slack_commands() {
+    local -a commands
+    commands=(
+        'auth:authentication and workspace management'
+        'message:read/write Slack messages (token-efficient JSON)'
+        'canvas:fetch and convert Slack canvases'
+        'search:search Slack messages and files'
+        'later:manage saved-for-later messages (Slack Later tab)'
+        'unreads:show all unread messages across the workspace'
+        'user:workspace user lookup and DM open'
+        'channel:list conversations, create channels, manage invites'
+        'workflow:discover and interact with Slack workflows'
+        'update:update agent-slack to the latest version'
+    )
+    _describe -t commands 'agent-slack command' commands
+}
+
+(( $+functions[_agent-slack_auth] )) ||
+_agent-slack_auth() {
+    local curcontext="$curcontext" state line ret=1
+    _arguments -C \
+        '1: :_agent-slack_auth_commands' \
+        '*::arg:->aargs' && ret=0
+
+    case $state in
+        aargs)
+            case $words[1] in
+                add)
+                    _arguments \
+                        '--token=[standard Slack token (xoxb/xoxp)]:token:' \
+                        '--xoxc=[browser token (xoxc-...)]:token:' \
+                        '--xoxd=[browser cookie d (xoxd-...)]:cookie:' \
+                        '(- *)'{-h,--help}'[help]' && ret=0 ;;
+                set-default|remove)
+                    _arguments \
+                        ':workspace URL:' \
+                        '(- *)'{-h,--help}'[help]' && ret=0 ;;
+                *)  _arguments '(- *)'{-h,--help}'[help]' && ret=0 ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+(( $+functions[_agent-slack_auth_commands] )) ||
+_agent-slack_auth_commands() {
+    local -a commands
+    commands=(
+        'whoami:show configured workspaces and token sources'
+        'test:verify credentials (calls Slack auth.test)'
+        'import-chrome:import xoxc/xoxd from Chrome Slack tab (macOS)'
+        'import-brave:import xoxc/xoxd from Brave Slack tab'
+        'import-firefox:import xoxc/xoxd from Firefox profile storage'
+        'parse-curl:parse a Slack API cURL request, extract xoxc/xoxd'
+        'import-desktop:import xoxc/xoxd from the Slack desktop app'
+        'add:add credentials (standard token or browser xoxc/xoxd)'
+        'set-default:set the default workspace URL'
+        'remove:remove a workspace from local config'
+    )
+    _describe -t commands 'auth subcommand' commands
+}
+
+(( $+functions[_agent-slack_message] )) ||
+_agent-slack_message() {
+    local curcontext="$curcontext" state line ret=1
+    _arguments -C \
+        '1: :_agent-slack_message_commands' \
+        '*::arg:->margs' && ret=0
+
+    case $state in
+        margs)
+            case $words[1] in
+                get|delete)
+                    _arguments \
+                        ':target (URL/#channel/id):' \
+                        '--workspace=[workspace URL]:url:' \
+                        '--ts=[message ts]:ts:' \
+                        '--thread-ts=[thread root ts]:ts:' \
+                        '--include-reactions[include reactions]' \
+                        '--resolve-users[resolve user IDs to profiles]' \
+                        '(- *)'{-h,--help}'[help]' && ret=0 ;;
+                list)
+                    _arguments \
+                        ':target (URL/#channel/id):' \
+                        '--workspace=[workspace URL]:url:' \
+                        '--thread-ts=[thread root ts (lists thread replies)]:ts:' \
+                        '--ts=[message ts (resolve to thread)]:ts:' \
+                        '--limit=[max messages (default 25, max 200)]:n:' \
+                        '--oldest=[only messages after this ts]:ts:' \
+                        '--latest=[only messages before this ts]:ts:' \
+                        '--include-reactions[include reactions]' \
+                        '--resolve-users[resolve user IDs to profiles]' \
+                        '(- *)'{-h,--help}'[help]' && ret=0 ;;
+                edit)
+                    _arguments \
+                        ':target:' \
+                        ':new message text:' \
+                        '--workspace=[workspace URL]:url:' \
+                        '--ts=[message ts]:ts:' \
+                        '(- *)'{-h,--help}'[help]' && ret=0 ;;
+                send|draft)
+                    _arguments \
+                        ':target (URL/#name/id):' \
+                        ':message text (optional with --attach):' \
+                        '--workspace=[workspace URL]:url:' \
+                        '--thread-ts=[thread root ts]:ts:' \
+                        '*--attach=[attach a local file path (repeatable)]:file:_files' \
+                        '(- *)'{-h,--help}'[help]' && ret=0 ;;
+                react)
+                    _arguments \
+                        '1:react subcommand:(add remove)' \
+                        '*: :_files' && ret=0 ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+(( $+functions[_agent-slack_message_commands] )) ||
+_agent-slack_message_commands() {
+    local -a commands
+    commands=(
+        'get:fetch a single Slack message (default subcommand)'
+        'list:list recent channel messages or fetch a full thread'
+        'edit:edit a message'
+        'delete:delete a message'
+        'send:send or schedule a message'
+        'draft:open a rich Slack-like editor draft'
+        'react:add or remove a reaction to/from a message'
+    )
+    _describe -t commands 'message subcommand' commands
+}
+
+(( $+functions[_agent-slack_canvas] )) ||
+_agent-slack_canvas() {
+    _arguments \
+        '1:subcommand:(get)' \
+        ':canvas URL or id (F…):' \
+        '(- *)'{-h,--help}'[help]'
+}
+
+(( $+functions[_agent-slack_search] )) ||
+_agent-slack_search() {
+    _arguments \
+        ':search query:' \
+        '*--channel=[channel filter (repeatable)]:channel:' \
+        '--user=[user filter (@name or U...)]:user:' \
+        '--after=[only results after YYYY-MM-DD]:date:' \
+        '--before=[only results before YYYY-MM-DD]:date:' \
+        '--limit=[max results (default 20)]:n:' \
+        '--resolve-users[resolve user IDs to profiles]' \
+        '(- *)'{-h,--help}'[help]'
+}
+
+(( $+functions[_agent-slack_later] )) ||
+_agent-slack_later() {
+    local curcontext="$curcontext" state line ret=1
+    _arguments -C \
+        '1: :_agent-slack_later_commands' \
+        '*::arg:->largs' && ret=0
+
+    case $state in
+        largs)
+            case $words[1] in
+                list)
+                    _arguments \
+                        '--workspace=[workspace URL]:url:' \
+                        '--limit=[max items (default 20)]:n:' \
+                        '--counts-only[only show counts per state]' \
+                        '(- *)'{-h,--help}'[help]' && ret=0 ;;
+                complete|archive|reopen|save|remove|remind)
+                    _arguments \
+                        ':target (URL or channel ID):' \
+                        '--workspace=[workspace URL]:url:' \
+                        '--ts=[message ts]:ts:' \
+                        '(- *)'{-h,--help}'[help]' && ret=0 ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+(( $+functions[_agent-slack_later_commands] )) ||
+_agent-slack_later_commands() {
+    local -a commands
+    commands=(
+        'list:list saved-for-later messages (default subcommand)'
+        'complete:mark a saved message as completed'
+        'archive:archive a saved message'
+        'reopen:move a saved message back to in-progress'
+        'save:save a message for later'
+        'remove:remove a message from Later entirely'
+        'remind:set a reminder for a saved message'
+    )
+    _describe -t commands 'later subcommand' commands
+}
+
+(( $+functions[_agent-slack_unreads] )) ||
+_agent-slack_unreads() {
+    _arguments \
+        '--workspace=[workspace URL]:url:' \
+        '--counts-only[only show unread counts]' \
+        '--max-messages=[max unread messages per channel (default 10)]:n:' \
+        '--include-system[include system messages]' \
+        '(- *)'{-h,--help}'[help]'
+}
+
+(( $+functions[_agent-slack_user] )) ||
+_agent-slack_user() {
+    local curcontext="$curcontext" state line ret=1
+    _arguments -C \
+        '1: :_agent-slack_user_commands' \
+        '*::arg:->uargs' && ret=0
+
+    case $state in
+        uargs)
+            case $words[1] in
+                list)
+                    _arguments \
+                        '--limit=[max users (default 200)]:n:' \
+                        '--cursor=[pagination cursor]:cursor:' \
+                        '--include-bots[include bot users]' \
+                        '(- *)'{-h,--help}'[help]' && ret=0 ;;
+                get)
+                    _arguments \
+                        ':user (U… or @handle):' \
+                        '(- *)'{-h,--help}'[help]' && ret=0 ;;
+                dm-open)
+                    _arguments \
+                        ':users (space-separated):' \
+                        '--workspace=[workspace URL]:url:' \
+                        '(- *)'{-h,--help}'[help]' && ret=0 ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+(( $+functions[_agent-slack_user_commands] )) ||
+_agent-slack_user_commands() {
+    local -a commands
+    commands=(
+        'list:list users in the workspace'
+        'get:get a single user by id (U…) or @handle'
+        'dm-open:open or fetch a DM with one or more users'
+    )
+    _describe -t commands 'user subcommand' commands
+}
+
+(( $+functions[_agent-slack_channel] )) ||
+_agent-slack_channel() {
+    local curcontext="$curcontext" state line ret=1
+    _arguments -C \
+        '1: :_agent-slack_channel_commands' \
+        '*::arg:->cargs' && ret=0
+
+    case $state in
+        cargs)
+            case $words[1] in
+                list)
+                    _arguments \
+                        '--user=[user id (U…) or @handle]:user:' \
+                        '--all[list all conversations (incompatible with --user)]' \
+                        '--limit=[max conversations (default 100)]:n:' \
+                        '--cursor=[pagination cursor]:cursor:' \
+                        '(- *)'{-h,--help}'[help]' && ret=0 ;;
+                new)
+                    _arguments \
+                        '--private[create as a private channel]' \
+                        '(- *)'{-h,--help}'[help]' && ret=0 ;;
+                invite)
+                    _arguments \
+                        '--external[send Slack Connect external invites]' \
+                        '(- *)'{-h,--help}'[help]' && ret=0 ;;
+                mark)
+                    _arguments \
+                        ':target (URL/#channel/id):' \
+                        '--ts=[message ts]:ts:' \
+                        '(- *)'{-h,--help}'[help]' && ret=0 ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+(( $+functions[_agent-slack_channel_commands] )) ||
+_agent-slack_channel_commands() {
+    local -a commands
+    commands=(
+        'list:list conversations for a user (or current user)'
+        'new:create a new channel'
+        'invite:invite users to a channel'
+        'mark:mark a channel/DM as read up to a given message'
+    )
+    _describe -t commands 'channel subcommand' commands
+}
+
+(( $+functions[_agent-slack_workflow] )) ||
+_agent-slack_workflow() {
+    local curcontext="$curcontext" state line ret=1
+    _arguments -C \
+        '1: :_agent-slack_workflow_commands' \
+        '*::arg:->wargs' && ret=0
+
+    case $state in
+        wargs)
+            case $words[1] in
+                list)
+                    _arguments \
+                        ':channel id or name (#channel/C…):' \
+                        '(- *)'{-h,--help}'[help]' && ret=0 ;;
+                preview|run)
+                    _arguments \
+                        ':trigger ID (Ft…):' \
+                        '(- *)'{-h,--help}'[help]' && ret=0 ;;
+                get)
+                    _arguments \
+                        ':trigger or workflow id (Ft…/Wf…):' \
+                        '(- *)'{-h,--help}'[help]' && ret=0 ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+(( $+functions[_agent-slack_workflow_commands] )) ||
+_agent-slack_workflow_commands() {
+    local -a commands
+    commands=(
+        'list:list workflows bookmarked or featured in a channel'
+        'preview:get workflow metadata from a trigger ID'
+        'get:get workflow definition (form fields and steps)'
+        'run:trip a workflow trigger'
+    )
+    _describe -t commands 'workflow subcommand' commands
+}
+
+(( $+functions[_agent-slack_update] )) ||
+_agent-slack_update() {
+    _arguments \
+        '--check[only check for updates (do not install)]' \
+        '(- *)'{-h,--help}'[help]'
+}
+
+_agent-slack "$@"
