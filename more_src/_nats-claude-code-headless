@@ -1,0 +1,343 @@
+#compdef nats-claude-code-headless
+# =============================================================================
+# nats-claude-code-headless — synadia-ai/synadia-
+#   agents's reference HEADLESS NATS AGENT HOST
+#   that wraps `@anthropic-ai/claude-agent-sdk`
+#   sessions in the SYNADIA AGENT PROTOCOL FOR
+#   NATS v0.3.  Each spawned Claude Code session
+#   registers itself as a NATS micro-service at
+#   `agents.prompt.cc-headless.<owner>.<session_id>`
+#   responding to `prompt`, `status`, and `hb`
+#   verbs over the standard agent wire format.
+#   A small controller service co-runs at
+#   `agents.{spawn,stop,list}.cc-headless.
+#   <owner>.<control_name>` exposing session
+#   lifecycle endpoints.  Built on the OFFICIAL
+#   `@nats-io/transport-node v3.4.0` JavaScript
+#   NATS client (the canonical nats.js Node
+#   transport).  TS-Node=103 leader bump
+#   CLOSING Axis 48 (NATS Messaging Client) at
+#   1/1/1 three-language symmetry.
+#
+# AXIS 48 — NATS MESSAGING CLIENT — CLOSES @ R783
+# ===============================================
+# Closes the three-language NATS-client axis at
+# 1/1/1 symmetry:
+#   * Rust       (R781): async-nats v0.46
+#                — tokio-async, nats-io/nats.rs
+#                  official client.  Bundled in
+#                  `arkflow` (Rust stream
+#                  processing engine)
+#   * Go         (R782): nats-io/nats.go v1.52.0
+#                — pure-Go, official client.
+#                  Bundled in `choria` (NATS-
+#                  backed orchestration
+#                  framework)
+#   * TS-Node    (R783, THIS ROUND):
+#                @nats-io/transport-node v3.4.0
+#                — modular successor to the
+#                  monolithic `nats` npm
+#                  package (which is now also
+#                  re-exported by nats-io/
+#                  nats.js v3+).  Bundled in
+#                  this round's
+#                  `nats-claude-code-headless`
+#                  (Synadia-protocol NATS host
+#                  for Claude Code sessions)
+#
+# nats.js v3 module split (relevant npm pkgs):
+#   - @nats-io/nats-core           protocol-
+#                                  agnostic NATS
+#                                  core (wire
+#                                  framing,
+#                                  subjects,
+#                                  permissions)
+#   - @nats-io/transport-node      Node.js TCP
+#                                  transport
+#                                  (THIS DEP)
+#   - @nats-io/transport-deno      Deno transport
+#   - @nats-io/services            micro-services
+#                                  framework
+#                                  (THIS DEP)
+#   - @nats-io/jetstream           JetStream
+#                                  persistence
+#                                  client
+#   - @nats-io/kv                  JetStream KV
+#                                  store
+#   - @nats-io/obj                 JetStream
+#                                  Object Store
+#
+# Distinguishing nats-claude-code-headless from
+# other corpus NATS / agent tools:
+#   - SYNADIA AGENT PROTOCOL HOST — implements
+#     the v0.3 wire format for agent prompt /
+#     hb / status RPCs.  Subject pattern:
+#       agents.{verb}.{token}.{owner}.{session}
+#     where {verb} is one of:
+#       prompt   request-reply / streaming
+#                response to a user message
+#       status   non-blocking introspection of
+#                current session state
+#       hb       heartbeat (presence beacon
+#                for liveness detection)
+#     The CONTROLLER mode adds three lifecycle
+#     verbs at the same subject prefix:
+#       spawn   create a new cc-headless
+#                session
+#       stop    terminate an existing
+#                session by id
+#       list    enumerate session ids owned
+#                by this controller
+#   - PER-SESSION + CONTROLLER COMPOSITE —
+#     ONE instance of this binary hosts a
+#     ClaudeSessionManager (the long-lived
+#     pool of in-flight Claude Code sessions)
+#     plus a Controller (the spawn/stop/list
+#     micro-service).  Multiple instances on
+#     the same NATS bus auto-namespace their
+#     controllers as `control`, `control-2`,
+#     `control-3`, ... so operators can fan
+#     out by simply running more processes
+#   - CLAUDE-AGENT-SDK INTEGRATION — uses
+#     `@anthropic-ai/claude-agent-sdk` to
+#     drive an isolated Claude Code session
+#     PER PROMPT REQUEST.  Default model is
+#     `claude-sonnet-4-6`; default permission
+#     mode is `dontAsk` (no prompts, deny
+#     non-allowlisted tools); default tool
+#     allowlist is `Read,Glob,Grep` (read-
+#     only).  Per-spawn overrides arrive
+#     via the agents.spawn payload.  Sessions
+#     terminate after `defaultMaxTurns` turns
+#     or `defaultMaxLifetimeS` seconds
+#     (whichever comes first)
+#   - NATS CONTEXT FALLBACK CHAIN — connects
+#     in this precedence order:
+#       1. `--context <name>`     CLI flag
+#       2. `--url / --nats-url`   CLI flag
+#       3. `NATS_CONTEXT` env     standard NATS
+#                                 CLI context
+#                                 (resolved
+#                                 via
+#                                 @synadia-ai/
+#                                 agents
+#                                 loadContext
+#                                 Options)
+#       4. `NATS_URL` env         raw URL
+#                                 (parsed via
+#                                 @synadia-ai/
+#                                 agents
+#                                 parseNatsUrl,
+#                                 which
+#                                 preserves
+#                                 `nats://
+#                                 TOKEN@host:
+#                                 port` userinfo
+#                                 — important
+#                                 because the
+#                                 stock URL
+#                                 parser drops
+#                                 the token)
+#   - CONFIG FILE — overrides also load from
+#     `~/.claude-code-headless/config.json`
+#     (a JSON object with name / context /
+#     defaultModel / defaultPermissionMode /
+#     defaultAllowedTools / defaultMaxTurns /
+#     defaultMaxLifetimeS / claudeCodePath
+#     keys).  Precedence is CLI > env > file
+#     > built-in defaults
+#   - SUBJECT-TOKEN VALIDATION at startup —
+#     `owner` and `name` are validated against
+#     `[a-z0-9_-]{1,63}` (subject-safe).
+#     `$USER` values containing dots (e.g.
+#     `alice.b`) fail boot with a readable
+#     error, since dots are subject
+#     separators and would silently corrupt
+#     the routing schema otherwise
+#   - WHICH-BASED CLAUDE BINARY RESOLUTION —
+#     if `--claude-code-path` / `--claude-
+#     path` / `CLAUDE_CODE_HEADLESS_CLAUDE_
+#     PATH` is unset, walks `$PATH` manually
+#     (runtime-portable across Node + Bun)
+#     to find a `claude` executable.  Falls
+#     back to the SDK's bundled native binary
+#     when nothing is on PATH — which can
+#     fail on musl/glibc mismatch, so the
+#     binary logs a warning at startup if
+#     this fallback is in effect
+#   - GRACEFUL SHUTDOWN — SIGINT / SIGTERM
+#     trigger Controller.stop() then Manager.
+#     stop() then `nc.drain()` to settle
+#     pending JetStream / micro-services
+#     work.  A 5-second force-exit timer
+#     guards against NATS close hangs
+#
+# Distinguishing from other corpus agent-bridge
+# tools:
+#   - `claude` / `claude-code` (the CLI itself):
+#     a STANDALONE TERMINAL agent.  This binary
+#     EXPOSES claude-code-via-SDK as a NATS-
+#     reachable micro-service host
+#   - `mcp-*` (Model Context Protocol servers):
+#     MCP runs over stdio / HTTP / SSE.
+#     nats-claude-code-headless runs over NATS
+#     subjects, with the Synadia Agent Protocol
+#     for NATS wire format on top.  Different
+#     transport, different protocol
+#   - `claude-channel-nats` (sibling repo):
+#     ALSO a Synadia-protocol NATS host for
+#     Claude Code BUT acts as a Bun-runtime
+#     MCP server embedded INSIDE a running
+#     Claude Code TUI session (so each TUI
+#     becomes its own agent).  This binary
+#     is the HEADLESS / spawner mode (no
+#     TUI; spawns sessions on demand from
+#     prompts)
+#
+# CRITICAL DIRECT DEPENDENCIES (from package.json):
+#   - @nats-io/transport-node ^3.4.0
+#                              — Node.js TCP
+#                                transport for
+#                                nats.js v3
+#                                [AXIS 48
+#                                LIBRARY]
+#   - @nats-io/services ^3.4.0
+#                              — micro-services
+#                                framework over
+#                                NATS
+#                                request/reply +
+#                                subject
+#                                permissions
+#   - @anthropic-ai/claude-agent-sdk
+#                              — Claude Code
+#                                programmatic
+#                                SDK
+#                                (the spawn-
+#                                claude-code-
+#                                session
+#                                primitive)
+#   - @synadia-ai/agents       — Synadia Agent
+#                                Protocol caller
+#                                SDK (re-used
+#                                here for
+#                                loadContext
+#                                Options +
+#                                parseNatsUrl
+#                                helpers)
+#   - @synadia-ai/agent-service
+#                              — Synadia Agent
+#                                Protocol host
+#                                SDK (the
+#                                subscriber /
+#                                responder
+#                                helpers)
+#
+# Node 20+ MSRV per package.json
+# `engines.node = ">=20"`.  Built with esbuild
+# bundled to `dist/index.js` with a
+# `#!/usr/bin/env node` shebang.
+#
+# UPSTREAM:
+#   * Source             : https://github.com/synadia-ai/synadia-agents/tree/main/examples/claude-code-headless
+#   * Synadia Agent Protocol for NATS docs:
+#                          https://github.com/synadia-ai/synadia-agent-sdk-docs
+#   * nats.js (transport-node lives here):
+#                          https://github.com/nats-io/nats.js
+#   * License            : Apache-2.0
+#   * Maintainer         : Synadia Communications
+#
+# INSTALL:
+#   # Global npm install
+#   npm install -g @synadia-ai/nats-claude-code-headless
+#
+#   # Or npx
+#   npx -p @synadia-ai/nats-claude-code-headless nats-claude-code-headless --help
+#
+#   # Or bun (the repo's primary runtime)
+#   bun install @synadia-ai/nats-claude-code-headless
+#
+# PREREQUISITES:
+#   * ANTHROPIC_API_KEY env var (or alternative
+#     auth setup per @anthropic-ai/claude-agent-
+#     sdk README)
+#   * Reachable `claude` binary on PATH (or
+#     pass `--claude-code-path` explicitly)
+#   * Reachable NATS server (Core NATS is
+#     sufficient — JetStream not required for
+#     the agent protocol verbs)
+#
+# USAGE EXAMPLES:
+#
+#   # Connect via NATS CLI context (preferred)
+#   nats-claude-code-headless --context production
+#
+#   # Connect via explicit URL
+#   nats-claude-code-headless --url nats://localhost:4222
+#
+#   # Connect with embedded token
+#   nats-claude-code-headless \
+#       --url 'nats://s3cr3t@nats.example.com:4222'
+#
+#   # Override owner + controller name
+#   nats-claude-code-headless \
+#       --context prod \
+#       --owner team-platform \
+#       --name claude-pool-1
+#
+#   # Point to a specific claude binary (e.g.
+#   # a prebuilt static binary)
+#   nats-claude-code-headless \
+#       --context prod \
+#       --claude-code-path /opt/claude/bin/claude
+#
+#   # Short alias for the binary flag
+#   nats-claude-code-headless \
+#       --context prod \
+#       --claude-path /opt/claude/bin/claude
+#
+#   # Pure-env-var config (Kubernetes-friendly)
+#   NATS_URL=nats://nats:4222 \
+#   CLAUDE_CODE_HEADLESS_OWNER=k8s-platform \
+#   CLAUDE_CODE_HEADLESS_NAME=cc-worker-7 \
+#   CLAUDE_CODE_HEADLESS_DEFAULT_MODEL=claude-sonnet-4-6 \
+#   CLAUDE_CODE_HEADLESS_DEFAULT_PERMISSION_MODE=dontAsk \
+#   CLAUDE_CODE_HEADLESS_DEFAULT_ALLOWED_TOOLS=Read,Glob,Grep,Bash \
+#   CLAUDE_CODE_HEADLESS_DEFAULT_MAX_TURNS=100 \
+#   CLAUDE_CODE_HEADLESS_DEFAULT_MAX_LIFETIME=3600 \
+#   ANTHROPIC_API_KEY=sk-ant-... \
+#       nats-claude-code-headless
+#
+# CONFIG FILE (~/.claude-code-headless/config.json):
+#
+#   {
+#     "context"               : "production",
+#     "name"                  : "control",
+#     "defaultModel"          : "claude-sonnet-4-6",
+#     "defaultPermissionMode" : "dontAsk",
+#     "defaultAllowedTools"   : ["Read", "Glob", "Grep"],
+#     "defaultMaxTurns"       : 50,
+#     "defaultMaxLifetimeS"   : 1800,
+#     "claudeCodePath"        : "/opt/claude/bin/claude"
+#   }
+#
+# OPTIONS (sourced directly from
+# https://github.com/synadia-ai/synadia-agents/blob/main/examples/claude-code-headless/src/config.ts):
+#
+# -----------------------------------------------------------------------------
+
+local curcontext="$curcontext" state line ret=1
+typeset -A opt_args
+
+_arguments -C \
+    '(- *)--help[show help]' \
+    '(- *)--version[show version]' \
+    '--context=[NATS CLI context name (resolved via @synadia-ai/agents loadContextOptions; env NATS_CONTEXT)]:context: ' \
+    '(--url --nats-url)--url=[explicit NATS URL (env NATS_URL)]:url: ' \
+    '(--url --nats-url)--nats-url=[alias for --url]:url: ' \
+    '--owner=[owner segment of the agent subject (default $USER; env CLAUDE_CODE_HEADLESS_OWNER)]:owner: ' \
+    '--name=[controller instance name (default control; auto-suffixes -2/-3/... if taken; env CLAUDE_CODE_HEADLESS_NAME)]:name: ' \
+    '(--claude-code-path --claude-path)--claude-code-path=[absolute path to the claude binary (env CLAUDE_CODE_HEADLESS_CLAUDE_PATH)]:path:_files' \
+    '(--claude-code-path --claude-path)--claude-path=[alias for --claude-code-path]:path:_files' \
+    && ret=0
+
+return ret
