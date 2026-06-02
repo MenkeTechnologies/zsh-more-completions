@@ -1,0 +1,217 @@
+#compdef mongobar
+# ============================================================================
+# _mongobar — zsh completion for Lydanne / WumaCoder's mongobar, a
+#              Rust MongoDB stress-testing + oplog-replay tool
+# ============================================================================
+#
+# UPSTREAM
+#   Repository : https://github.com/Lydanne/mongobar
+#   Author     : WumaCoder  <wumacoder@gmail.com>
+#   License    : MIT
+#   Language   : Rust
+#   Crate      : mongobar v0.2.5
+#   Binary     : mongobar  (Cargo.toml [[bin]] name = "mongobar",
+#                            path = "src/main.rs")
+#   Last push  : 2024-09-02
+#
+# WHAT IT IS
+#   mongobar is "a MongoDB stress-testing utility" — WumaCoder's
+#   record-and-replay tool for MongoDB performance work.  It can
+#   record live MongoDB profiler / audit-log traffic into a portable
+#   oplog file, replay that oplog against a target cluster either
+#   in-order (replay) or with shuffled bursty load (stress), tee
+#   live read/write queue stats into a ratatui TUI, diff and
+#   migrate indexes between clusters, and pre-/post-stress
+#   resume/revert state so a repeated stress run starts from a
+#   known baseline.  Aliyun audit-log analysis + conversion to the
+#   mongobar oplog format is exposed under `mongobar tool`.
+#
+# CLI ARGUMENT GRAMMAR  (verbatim from src/commands.rs clap-derive
+#                       Cli + Commands enum + per-subcommand structs)
+#   mongobar <SUBCOMMAND> [args...]
+#
+#   Subcommands (clap-derive renames PascalCase → kebab-case):
+#     op-record <TARGET>             Record mongo profile data and
+#                                    emit an oplog file
+#       -f, --force                    Force-clean before recording
+#
+#     op-pull <TARGET>               Pull oplogs from MongoDB
+#       -t, --time-range <RANGE>       Time range
+#                                      (e.g. "2024-07-08T00:00:00.837Z
+#                                       2024-07-09T00:00:00.838Z")
+#       -f, --force                    Force-clean before pulling
+#
+#     op-stress <TARGET>             Replay oplogs as shuffled stress
+#         --update <BOOL>              Force update of stored config
+#       -f, --filter <REGEX>           Filter oplog by regex
+#       -u, --uri <URI>                Override configured MongoDB URI
+#       -l, --loop-count <N>           Loop count
+#       -t, --thread-count <N>         Worker thread count
+#         --readonly                   Run only read operations
+#       -i, --ignore-field <FIELD>...  Strip these fields on insert
+#                                      (repeatable)
+#
+#     op-replay  <TARGET>            Ordered oplog replay
+#     op-revert  <TARGET>            Pre-replay state reset
+#     op-resume  <TARGET>            Post-stress state restore
+#     op-build-resume <TARGET>       Build the resume-oplog set
+#     op-export  <TARGET>            Export oplogs to an `.op` file
+#         (all five share the OPReplay struct flags below)
+#         --update <BOOL>
+#       -r, --rebuild <BOOL>           Force-rebuild resume oplogs
+#       -u, --uri <URI>
+#       -t, --thread-count <N>
+#
+#     op-import <TARGET> <URI>       Import an `.op` file into a target
+#       -r, --rebuild <BOOL>
+#
+#     save-as <TARGET> <OUTDIR>      Save as a portable oplog tarball
+#       -f, --force                    Overwrite existing
+#
+#     stats        [<URI>] [<DB>]    Show MongoDB queue/throughput stats
+#     index-status [<URI>] [<DB>]    Show index usage
+#       -c, --coll <COLLECTION>        Restrict to a single collection
+#
+#     index-migrate <INDEX_PATH>     Diff & migrate indexes
+#                                    (background, idempotent)
+#       -u, --uri <URI>                Target DB URI
+#
+#     tool                           Auxiliary utilities
+#       ana <TARGET>                   Analyze Aliyun audit log
+#         -f, --filter <REGEX>
+#       cov <TARGET>                   Convert Aliyun audit log to
+#                                      mongobar oplogs.op
+#       filter <TARGET>                Regex-filter lines from a file
+#
+#     ui <TARGET>                    Launch the ratatui TUI front-end
+#                                    (same flag set as op-stress)
+#
+#   Standard clap auto-flags:
+#     -h, --help                     Show help
+#     -V, --version                  Show version
+#
+# AXIS / CORPUS POSITION
+#   Direct dependency on `mongodb = "3.0.0"` declared in Cargo.toml —
+#   the canonical async Rust MongoDB driver maintained by MongoDB
+#   Inc (mongodb/mongo-rust-driver).  The `mongodb` crate provides
+#   typed `Client` / `Collection` / `Database` constructors over
+#   the official wire protocol (OP_MSG, OP_COMPRESSED), connection-
+#   string parsing (`mongodb::options::ClientOptions::parse(uri)`),
+#   full BSON document support via the sibling `bson` crate, change
+#   streams, transactions, GridFS, retryable reads/writes, SDAM
+#   discovery, and async-first cursors via `futures::Stream`.
+#   mongobar uses the driver directly in `src/mongobar/` and
+#   `src/mongo_stats/` for both the recording and replay paths,
+#   tee-ing live `serverStatus` / `currentOp` output into the
+#   ratatui indicator pane.  Verified via:
+#     gh api repos/Lydanne/mongobar/contents/Cargo.toml
+#       → mongodb = "3.0.0"
+#       → bson = "2.11.0"
+#     gh api repos/Lydanne/mongobar/contents/src/main.rs
+#       → use mongobar::Mongobar;
+#         mongobar::Mongobar::new(&args.target).init().op_record().await?
+#   This entry is the Rust=135 leader bump that OPENS Axis 80
+#   (MongoDB Driver Library) — round-number Rust=135 and four-score
+#   axis-80 commit landmark — pairing with future Go=
+#   go.mongodb.org/mongo-driver and TS-Node=mongodb (the official
+#   Node.js driver) poles to close the axis at 1/1/1.
+#
+#   No completion for `mongobar` ships with Apple zsh
+#   (/usr/share/zsh/*/functions) or Homebrew zsh-completions
+#   (/opt/homebrew/share/zsh/site-functions) — confirmed absent.
+# ============================================================================
+
+_mongobar() {
+    local curcontext="$curcontext" state line ret=1
+    typeset -A opt_args
+
+    _arguments -C \
+        '(- *)'{-h,--help}'[show help]' \
+        '(- *)'{-V,--version}'[show version]' \
+        '1: :_mongobar_commands' \
+        '*::arg:->args' && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                op-record)
+                    _arguments \
+                        ':target:' \
+                        '(-f --force)'{-f,--force}'[force clean before recording]' && ret=0 ;;
+                op-pull)
+                    _arguments \
+                        ':target:' \
+                        '(-t --time-range)'{-t+,--time-range=}'[time range (start end)]:range:' \
+                        '(-f --force)'{-f,--force}'[force clean before pulling]' && ret=0 ;;
+                op-stress|ui)
+                    _arguments \
+                        ':target:' \
+                        '--update=[force update of stored config]:bool:(true false)' \
+                        '(-f --filter)'{-f+,--filter=}'[regex filter for oplog]:regex:' \
+                        '(-u --uri)'{-u+,--uri=}'[override configured MongoDB URI]:URI:' \
+                        '(-l --loop-count)'{-l+,--loop-count=}'[loop count]:n:' \
+                        '(-t --thread-count)'{-t+,--thread-count=}'[worker thread count]:n:' \
+                        '--readonly[run only read operations]' \
+                        '*'{-i+,--ignore-field=}'[strip these fields on insert (repeatable)]:field:' \
+                        '(-r --rebuild)'{-r+,--rebuild=}'[force rebuild of resume oplogs]:bool:(true false)' && ret=0 ;;
+                op-replay|op-revert|op-resume|op-build-resume|op-export)
+                    _arguments \
+                        ':target:' \
+                        '--update=[force update of stored config]:bool:(true false)' \
+                        '(-r --rebuild)'{-r+,--rebuild=}'[force rebuild of resume oplogs]:bool:(true false)' \
+                        '(-u --uri)'{-u+,--uri=}'[override configured MongoDB URI]:URI:' \
+                        '(-t --thread-count)'{-t+,--thread-count=}'[worker thread count]:n:' && ret=0 ;;
+                op-import)
+                    _arguments \
+                        ':target:' \
+                        ':MongoDB URI:' \
+                        '(-r --rebuild)'{-r+,--rebuild=}'[force rebuild]:bool:(true false)' && ret=0 ;;
+                save-as)
+                    _arguments \
+                        ':target:' \
+                        ':output directory:_files -/' \
+                        '(-f --force)'{-f,--force}'[overwrite existing]' && ret=0 ;;
+                stats|index-status)
+                    _arguments \
+                        ':MongoDB URI:' \
+                        ':database:' \
+                        '(-c --coll)'{-c+,--coll=}'[restrict to collection]:collection:' && ret=0 ;;
+                index-migrate)
+                    _arguments \
+                        ':index file path:_files' \
+                        '(-u --uri)'{-u+,--uri=}'[target DB URI]:URI:' && ret=0 ;;
+                tool)
+                    _arguments \
+                        '1:tool subcommand:(ana cov filter)' \
+                        '*: :_files' && ret=0 ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+(( $+functions[_mongobar_commands] )) ||
+_mongobar_commands() {
+    local -a commands
+    commands=(
+        'op-record:record mongo profile data and emit an oplog file'
+        'op-pull:pull oplogs from MongoDB in a time range'
+        'op-stress:replay oplogs as shuffled stress'
+        'op-replay:ordered oplog replay'
+        'op-revert:pre-replay state reset'
+        'op-resume:post-stress state restore'
+        'op-build-resume:build the resume-oplog set'
+        'op-export:export oplogs to an .op file'
+        'op-import:import an .op file into a target'
+        'save-as:save as a portable oplog tarball'
+        'stats:show MongoDB queue and throughput stats'
+        'index-status:show index usage stats'
+        'index-migrate:diff and migrate indexes between clusters'
+        'tool:auxiliary utilities (ana / cov / filter)'
+        'ui:launch the ratatui TUI front-end'
+    )
+    _describe -t commands 'mongobar command' commands
+}
+
+_mongobar "$@"
