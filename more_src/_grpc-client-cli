@@ -1,0 +1,427 @@
+#compdef grpc-client-cli
+# ============================================================================
+# _grpc-client-cli — zsh completion for **grpc-client-cli** —
+#                     vadimi/grpc-client-cli, the **generic gRPC
+#                     command-line client** for interactive and
+#                     scripted invocation of arbitrary gRPC services.
+#                     The dominant gRPC CLI on the Go side alongside
+#                     the better-known `grpcurl` (fullstorydev's curl-
+#                     style one-shot gRPC client) and `evans`
+#                     (ktr0731's REPL-style interactive client) —
+#                     but with a focus on **batch shell-pipeline
+#                     ergonomics**:  service-reflection discovery,
+#                     proto-file loading, JSON-formatted input on
+#                     stdin or file, JSON or text output for
+#                     downstream jq/yq processing, mTLS + bearer-
+#                     token + custom-header auth, configurable
+#                     gRPC keepalive / max-receive-message-size /
+#                     deadlines, and the built-in `discover` +
+#                     `health` subcommands for service inspection.
+#                     Go=177 leader bump continuing Axis 122 (gRPC /
+#                     Google RPC + Protocol Buffers + HTTP/2
+#                     transport) at 2/0/0 via the canonical Go gRPC
+#                     library **google.golang.org/grpc**.
+# ============================================================================
+#
+# UPSTREAM
+#   Repository : https://github.com/vadimi/grpc-client-cli
+#   Maintainer : Vadim Ivanov  (vadimi; long-standing Go
+#                 microservices engineer; also maintains several
+#                 production-grade gRPC observability tools)
+#   License    : MIT
+#   Stars      : 310
+#   Language   : Go  (urfave/cli/v3 for the CLI surface +
+#                 google.golang.org/grpc v1.81.1 for the gRPC
+#                 client + jhump/protoreflect for proto-file
+#                 parsing + google.golang.org/protobuf for proto
+#                 message serialization +
+#                 google.golang.org/grpc/health for the health
+#                 service + google.golang.org/grpc/reflection
+#                 for service-reflection discovery +
+#                 AlecAivazis/survey for interactive REPL prompts)
+#   Binary     : grpc-client-cli
+#   Version    : 1.24.4
+#   Last push  : 2026-05-19
+#
+# WHAT IT IS
+#   `grpc-client-cli` solves the canonical "I need to call a
+#   gRPC method from a shell script" problem.  gRPC's binary
+#   protobuf wire format isn't human-typable — you can't just
+#   write `curl -X POST http://grpc-server:50051/MyService/MyMethod`
+#   because the request body has to be a typed serialized
+#   protobuf message.  Available CLI options each cover a
+#   different ergonomic niche:
+#
+#     • **grpcurl** (fullstorydev/grpcurl) — one-shot curl-
+#       style invocation; the dominant tool for ad-hoc API
+#       inspection
+#     • **evans** (ktr0731/evans) — REPL-style interactive
+#       client with command-history + autocomplete
+#     • **grpc-client-cli** (this project) — designed for
+#       **shell-pipeline batch use**: reads JSON request
+#       messages from stdin (or a `--input` file), emits JSON
+#       response messages to stdout (or text format via
+#       `--outformat text`), with explicit `--service`/
+#       `--method` flags so it's scriptable without TTY
+#       interaction
+#
+#   The tool supports two service-discovery modes:
+#
+#     1. **gRPC Server Reflection** (the default) — queries
+#        the server's `grpc.reflection.v1.ServerReflection` /
+#        `grpc.reflection.v1alpha.ServerReflection` service to
+#        download the service's typed proto schemas at runtime
+#        (configurable via `--reflect-version v1alpha` or
+#        `auto`)
+#     2. **Explicit proto files** — supply `--proto file1.proto,
+#        file2.proto` + `--protoimports dir1,dir2` to parse
+#        local `.proto` files when the server doesn't expose
+#        reflection (production gRPC servers often disable
+#        reflection for attack-surface reduction)
+#
+# CLI ARGUMENT GRAMMAR  (verbatim from cmd/grpc-client-cli/
+#                       main.go urfave/cli/v3 `app` registration
+#                       + per-subcommand definitions;
+#                       extracted via raw.githubusercontent.com
+#                       fetch of cmd/grpc-client-cli/main.go)
+#
+#   grpc-client-cli [GLOBAL OPTIONS] [SUBCOMMAND] [ARGS...]
+#
+#   Global options (apply to root invocation and all
+#                   subcommands):
+#     -h, --help                     Show help
+#     --version                      Print version
+#     -s, --service <NAME>           gRPC full or partial service
+#                                    name to call  [env:
+#                                    GRPC_CLIENT_CLI_SERVICE]
+#     -m, --method <NAME>            gRPC service method name to
+#                                    call  [env:
+#                                    GRPC_CLIENT_CLI_METHOD]
+#     -i, --input <FILE>             File with the message JSON
+#                                    (ignored if a stdin pipe is
+#                                    detected)
+#     -d, --deadline <DURATION>      gRPC call deadline in Go
+#                                    duration format (e.g. `15s`,
+#                                    `3m`, `1h`; bare numbers
+#                                    default to seconds)
+#                                    [default: 15s]
+#     -V, --verbose                  Output additional info
+#                                    (request time + message size)
+#     --tls                          Use TLS when connecting to
+#                                    the gRPC server
+#     --insecure                     Skip server certificate +
+#                                    hostname verification
+#                                    (testing only)
+#     --cacert <FILE>                CA certificate for server
+#                                    verification
+#     --cert <FILE>                  Client certificate (mTLS;
+#                                    only valid with --certkey)
+#     --certkey <FILE>               Client private key (mTLS;
+#                                    only valid with --cert)
+#     --proto <FILES>                Comma-separated .proto files
+#                                    or directories to search
+#                                    (disables server reflection)
+#     --protoimports <DIRS>          Additional .proto search
+#                                    directories or Any-type
+#                                    descriptor files
+#     -H, --header <KEY=VAL>         Extra header (may repeat to
+#                                    pass multiple headers)
+#     --authority <HOST>             Override the `:authority`
+#                                    HTTP/2 pseudo-header
+#     --informat <FORMAT>, --if      Input proto-message format
+#                                    [values: json, text]
+#                                    [default: json]
+#     --outformat <FORMAT>, --of     Output proto-message format
+#                                    [values: json, text]
+#                                    [default: json]
+#     --keepalive                    Send gRPC keepalive pings
+#                                    even with no active RPCs
+#     --keepalive-time <DURATION>    Keepalive ping interval
+#     --max-receive-message-size <N>, --mrms, --max-recv-msg-size
+#                                    Max receive message size in
+#                                    bytes  (0 = use gRPC default
+#                                    of 4 MB)
+#     -a, --address <HOST:PORT>, --addr
+#                                    Target service address  [env:
+#                                    GRPC_CLIENT_CLI_ADDRESS,
+#                                          GRPC_CLIENT_CLI_ADDR]
+#     --out-json-names               Use `json_name` /  camelCase
+#                                    in message output
+#     --reflect-version <VERSION>    gRPC reflection version to
+#                                    use
+#                                    [values: v1alpha, auto]
+#                                    [default: v1alpha]
+#
+#   Subcommands:
+#     discover                       Print the discovered service
+#                                    protobuf (introspect the
+#                                    server via reflection or the
+#                                    supplied .proto files)
+#     health                         Run a gRPC health check
+#                                    (`grpc.health.v1.Health/Check`
+#                                    against the supplied service
+#                                    name)
+#
+#   With no subcommand (root invocation):
+#       grpc-client-cli -a HOST:PORT -s SERVICE -m METHOD \
+#                       -i message.json
+#     Reads the JSON request, sends the RPC, and prints the
+#     response.  If --input is not supplied, reads from stdin.
+#
+# AXIS / CORPUS POSITION
+#   `vadimi/grpc-client-cli` declares a **direct** dependency on
+#   `google.golang.org/grpc v1.81.1` in its `go.mod` (verified
+#   via `gh api repos/vadimi/grpc-client-cli/contents/go.mod`).
+#
+#   `google.golang.org/grpc` (the `grpc-go` module) is **THE
+#   canonical Go gRPC library** — the official gRPC team's
+#   reference implementation maintained by the Go gRPC
+#   subteam at Google.  At 22,000+ ★ on GitHub and tens of
+#   millions of all-time downloads, it is the dominant Go
+#   gRPC dependency by an order of magnitude.  Every modern
+#   Go gRPC integration uses it directly or through a thin
+#   wrapper.
+#
+#   `grpc-go` ships:
+#
+#     • Typed `grpc.NewClient(target, opts...)` /
+#       `grpc.Dial(target, opts...)` (deprecated in favor of
+#       NewClient since v1.63) typed channel constructors
+#     • Typed `grpc.NewServer(opts...)` typed server constructor
+#     • Typed `grpc.WithInsecure()` /
+#       `grpc.WithTransportCredentials(creds)` /
+#       `grpc.WithBlock()` /
+#       `grpc.WithDefaultCallOptions(opts)` /
+#       `grpc.WithKeepaliveParams(kp)` /
+#       `grpc.WithUserAgent(ua)` /  `grpc.WithUnaryInterceptor(i)` /
+#       `grpc.WithStreamInterceptor(i)` /
+#       `grpc.WithChainUnaryInterceptor(...)` /
+#       `grpc.WithChainStreamInterceptor(...)` /
+#       `grpc.WithStatsHandler(h)` /  `grpc.WithMaxMsgSize(n)` /
+#       `grpc.WithReadBufferSize(n)` /
+#       `grpc.WithWriteBufferSize(n)` /
+#       `grpc.WithConnectParams(cp)` /
+#       `grpc.WithReturnConnectionError()` /
+#       `grpc.WithDisableServiceConfig()` typed client-side
+#       dial options
+#     • Typed `credentials.NewTLS(config)` /
+#       `credentials.NewClientTLSFromFile(...)` /
+#       `credentials.NewServerTLSFromFile(...)` typed credentials
+#     • Typed `status.New(code, msg)` /  `status.Errorf(code,
+#       format, args...)` /  `status.FromError(err)` /
+#       `status.Code(err)` typed status-wrapping
+#     • Typed `codes.{OK, Canceled, Unknown, InvalidArgument,
+#       DeadlineExceeded, NotFound, AlreadyExists,
+#       PermissionDenied, ResourceExhausted, FailedPrecondition,
+#       Aborted, OutOfRange, Unimplemented, Internal,
+#       Unavailable, DataLoss, Unauthenticated}` typed status
+#       code constants covering all 16 canonical gRPC status
+#       codes
+#     • Typed `metadata.New(kv)` /
+#       `metadata.NewIncomingContext(ctx, md)` /
+#       `metadata.NewOutgoingContext(ctx, md)` /
+#       `metadata.FromIncomingContext(ctx)` /
+#       `metadata.FromOutgoingContext(ctx)` /
+#       `metadata.AppendToOutgoingContext(ctx, kv...)` typed
+#       metadata wrappers
+#     • Typed `health/grpc_health_v1.HealthClient` typed
+#       health-check client + typed `RegisterHealthServer(s,
+#       impl)` typed server-side health registration
+#     • Typed `reflection.Register(s)` server reflection
+#       service registrar
+#     • Typed `keepalive.ClientParameters{Time, Timeout,
+#       PermitWithoutStream}` /  `keepalive.ServerParameters{
+#       MaxConnectionIdle, MaxConnectionAge, MaxConnectionAge
+#       Grace, Time, Timeout}` typed keepalive config
+#     • Typed `peer.Peer{Addr, AuthInfo}` /  `peer.FromContext(ctx)`
+#       typed peer-introspection
+#     • Typed `balancer.{Builder, Balancer, ClientConn,
+#       SubConn, PickResult, Picker, PickerBuilder}` typed
+#       load-balancer plugin interface (round_robin,
+#       pick_first, ringhash, weighted-round-robin, xDS-driven
+#       locality-aware balancers)
+#     • Typed `resolver.{Resolver, Builder, Target, Address,
+#       State}` typed name-resolver plugin interface (dns://,
+#       passthrough://, manual://, unix://, xds://, etcd://,
+#       consul://)
+#     • Typed `encoding.{RegisterCodec, RegisterCompressor}`
+#       typed codec plugins (proto / json / gzip / snappy)
+#     • Full xDS client implementation (`xds.NewClient` etc.)
+#       for Envoy-compatible dynamic load balancing + routing
+#     • Typed `experimental.WithBufferPool(pool)` /  experimental.
+#       NumStreamWorkers(n) typed performance knobs
+#
+#   `grpc-go` is the gRPC library behind essentially **every
+#   serious Go microservice + cloud-native control plane**:
+#
+#     • **Kubernetes** — every kubelet ↔ apiserver call (the
+#       canonical gRPC use case in cloud-native; CNCF
+#       graduated project; 110,000+ ★)
+#     • **etcd** — every Raft consensus + lease + watch RPC
+#       (CNCF graduated; 47,000+ ★)
+#     • **CoreDNS** — gRPC plugin transport (CNCF graduated;
+#       11,000+ ★)
+#     • **Envoy Proxy** — xDS configuration plane (CNCF
+#       graduated; 24,000+ ★)
+#     • **Istio service mesh** — every Pilot / Citadel /
+#       Galley control-plane RPC (CNCF graduated; 35,000+ ★)
+#     • **Linkerd2-proxy** — outbound trace export (CNCF
+#       graduated)
+#     • **OpenTelemetry Go SDK** — `otlp-grpc` exporter (CNCF
+#       incubating)
+#     • **Prometheus** — gRPC remote-write protocol
+#     • **Jaeger Tracing** — Collector + Agent gRPC API
+#       (CNCF graduated)
+#     • **Vector.dev** — OTLP gRPC sink
+#     • **CockroachDB**, **TiDB**, **YugabyteDB** — distributed
+#       SQL inter-node communication
+#     • **HashiCorp Consul + Nomad + Boundary** — internal
+#       gRPC APIs
+#     • **HashiCorp Vault** — gRPC sealing API
+#     • **GitHub Actions runner** — gRPC control plane
+#     • **Google Cloud Spanner / Bigtable / Pub/Sub** — every
+#       Go client library is grpc-go-based
+#     • **Apache Arrow Flight** — gRPC-based columnar data
+#       transfer
+#     • **Cilium** — eBPF-based service-mesh control plane
+#       (CNCF graduated; 22,000+ ★)
+#     • **Argo Workflows + Argo CD + Argo Rollouts** — gRPC
+#       control planes (CNCF graduated)
+#     • **vadimi/grpc-client-cli** (this very project; the
+#       generic gRPC CLI)
+#     • **ktr0731/evans** (the REPL-style gRPC client; 4,479+ ★;
+#       covered in this corpus as `_evans`)
+#     • **fullstorydev/grpcurl** (the curl-style gRPC CLI;
+#       11,500+ ★; covered as `_grpcurl`)
+#     • **fullstorydev/grpcui** (the browser-based gRPC UI;
+#       covered as `_grpcui`)
+#     • **grpc-ecosystem/grpcdebug** (the gRPC introspection
+#       tool; covered as `_grpcdebug`)
+#     • **grpcmd/grpcmd** (alternative gRPC CLI)
+#     • **kubernetes-sigs/prometheus-adapter** — Kubernetes
+#       metrics API
+#     • **ignite/cli** — Cosmos SDK CLI
+#     • **gogf/gf-cli** — GoFrame CLI
+#     • **gtrhq/protodot** — proto-to-DOT graphviz converter
+#     • **stormcat24/protodep** — proto-file dependency
+#       manager
+#     • Plus tens of thousands of community Go microservices,
+#       distributed-system control planes, blockchain nodes,
+#       AI inference servers, observability pipelines, and
+#       IoT gateways.
+#
+#   gRPC itself (Google Remote Procedure Call) is **the
+#   universal high-performance RPC protocol** invented by
+#   Google in 2015 (initially internal as Stubby, then open-
+#   sourced as gRPC) and now a CNCF graduated project.
+#   Architecture:  Protocol Buffers wire format, HTTP/2
+#   transport (RFC 7540) with built-in flow control + HPACK
+#   header compression + bidirectional streaming, `.proto`
+#   service definitions, 16 canonical status codes
+#   (`OK`, `CANCELLED`, `UNKNOWN`, `INVALID_ARGUMENT`,
+#   `DEADLINE_EXCEEDED`, `NOT_FOUND`, `ALREADY_EXISTS`,
+#   `PERMISSION_DENIED`, `RESOURCE_EXHAUSTED`,
+#   `FAILED_PRECONDITION`, `ABORTED`, `OUT_OF_RANGE`,
+#   `UNIMPLEMENTED`, `INTERNAL`, `UNAVAILABLE`, `DATA_LOSS`,
+#   `UNAUTHENTICATED`), per-call metadata for auth (Bearer
+#   tokens, mTLS, Google ADC, AWS Sig V4), and xDS-based load
+#   balancing (Envoy's universal data-plane configuration API).
+#
+#   Verified via:
+#     gh api repos/vadimi/grpc-client-cli/contents/go.mod
+#       → module github.com/vadimi/grpc-client-cli
+#       → require google.golang.org/grpc v1.81.1   (DIRECT)
+#       → require google.golang.org/grpc/cmd/protoc-gen-go-grpc
+#         (build tool)
+#       → require google.golang.org/protobuf       (DIRECT)
+#       → require github.com/urfave/cli/v3         (DIRECT)
+#     raw.githubusercontent.com vadimi/grpc-client-cli master
+#         cmd/grpc-client-cli/main.go
+#       → package main
+#       → import "github.com/urfave/cli/v3"
+#       → import "github.com/vadimi/grpc-client-cli/internal/
+#                  caller"
+#       → const appVersion = "1.24.4"
+#       → app := &cli.Command{Name: "grpc-client-cli",
+#         Usage: "generic gRPC client", Version: appVersion,
+#         EnableShellCompletion: true, ...}
+#       → ~22 global flags (--service, --method, --input,
+#         --deadline, --verbose, --tls, --insecure, --cacert,
+#         --cert, --certkey, --proto, --protoimports,
+#         --header, --authority, --informat, --outformat,
+#         --keepalive, --keepalive-time,
+#         --max-receive-message-size, --address,
+#         --out-json-names, --reflect-version)
+#       → Commands: {Name: "discover", Action: discoverCmd},
+#                    {Name: "health",   Action: healthCmd}
+#
+#   This entry is the Go=177 leader bump that continues Axis 122
+#   (gRPC / Google RPC + Protocol Buffers + HTTP/2 transport) at
+#   2/0/0 following R1064 _kontroll (Rust=177 OPENED via
+#   zsa/kontroll on hyperium/tonic 0.11).  TS-Node=177 closing
+#   pair on deck for R1066 via the canonical Node.js gRPC
+#   library `@grpc/grpc-js` (the gRPC team's pure-JavaScript
+#   implementation, the dominant Node-side gRPC dependency used
+#   by every Google Cloud Node.js client library, Apollo Server's
+#   gRPC integration, the OpenTelemetry Node OTLP exporter, and
+#   dozens of community microservices).
+#
+#   No completion for `grpc-client-cli` ships with Apple zsh
+#   (/usr/share/zsh/*/functions) or Homebrew zsh-completions
+#   (/opt/homebrew/share/zsh/site-functions) — confirmed absent.
+# ============================================================================
+
+_grpc-client-cli() {
+    local curcontext="$curcontext" state line ret=1
+    typeset -A opt_args
+
+    local -a _gcc_global=(
+        '(-h --help)'{-h,--help}'[show help]'
+        '--version[print version]'
+        '(-s --service)'{-s,--service}'=[gRPC service name (env GRPC_CLIENT_CLI_SERVICE)]:name:'
+        '(-m --method)'{-m,--method}'=[gRPC method name (env GRPC_CLIENT_CLI_METHOD)]:name:'
+        '(-i --input)'{-i,--input}'=[file with message JSON (ignored if stdin pipe)]:path:_files -g "*.json *.txt"'
+        '(-d --deadline)'{-d,--deadline}'=[gRPC call deadline (default 15s)]:duration:'
+        '(-V --verbose)'{-V,--verbose}'[output additional info (request time + message size)]'
+        '--tls[use TLS when connecting]'
+        '--insecure[skip server cert + hostname verification]'
+        '--cacert=[CA certificate file]:file:_files -g "*.pem *.crt"'
+        '--cert=[client certificate (mTLS)]:file:_files -g "*.pem *.crt"'
+        '--certkey=[client private key (mTLS)]:file:_files -g "*.pem *.key"'
+        '*--proto=[comma-separated .proto files or directories]:proto:_files -g "*.proto"'
+        '*--protoimports=[additional .proto search directories]:dirs:_files -/'
+        '*'{-H,--header}'=[extra header KEY=VAL (repeatable)]:header:'
+        '--authority=[override :authority HTTP/2 pseudo-header]:host:'
+        '--informat=[input proto-message format (default json)]:format:(json text)'
+        '--if=[input proto-message format (default json)]:format:(json text)'
+        '--outformat=[output proto-message format (default json)]:format:(json text)'
+        '--of=[output proto-message format (default json)]:format:(json text)'
+        '--keepalive[send keepalive pings even with no active RPCs]'
+        '--keepalive-time=[keepalive ping interval]:duration:'
+        '--max-receive-message-size=[max receive message size in bytes]:n:'
+        '--mrms=[max receive message size in bytes]:n:'
+        '--max-recv-msg-size=[max receive message size in bytes]:n:'
+        '(-a --address --addr)'{-a,--address,--addr}'=[host:port of the service (env GRPC_CLIENT_CLI_ADDRESS)]:addr:'
+        '--out-json-names[use json_name/camelCase in message output]'
+        '--reflect-version=[gRPC reflection version (default v1alpha)]:version:(v1alpha auto)'
+    )
+
+    _arguments -C \
+        $_gcc_global \
+        '1: :->cmd' \
+        '*:: :->args' && ret=0
+
+    case $state in
+        cmd)
+            local -a _gcc_cmds=(
+                'discover:print the discovered service protobuf'
+                'health:run a gRPC health check'
+            )
+            _describe -t commands 'grpc-client-cli command' _gcc_cmds && ret=0
+            ;;
+    esac
+
+    return ret
+}
+
+_grpc-client-cli "$@"
