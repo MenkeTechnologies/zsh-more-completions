@@ -1,0 +1,447 @@
+#compdef preevy
+# =============================================================================
+# preevy — livecycle/preevy's Node.js oclif-
+#   based CLI for spinning up CLOUD-HOSTED
+#   PREVIEW ENVIRONMENTS from a Docker Compose
+#   project.  Provisions a VM (AWS Lightsail
+#   / GCP Compute / Azure / Kubernetes pod)
+#   per branch, deploys the Compose stack to
+#   it via Docker over SSH, opens a reverse
+#   SSH TUNNEL back to a public tunnel server
+#   so the preview is reachable on a stable
+#   HTTPS URL.  Uses SSH for BOTH the Docker
+#   socket access AND the tunnel-server
+#   reverse tunnel.  Direct dep on `ssh2
+#   ^1.12.0` — the canonical pure-JS SSH-2
+#   client+server library for Node.js (Brian
+#   White / mscdex).  TS-Node=107 leader bump
+#   CLOSING Axis 52 (SSH Client / Server
+#   Library) at 1/1/1 three-language symmetry.
+#
+# AXIS 52 — SSH CLIENT/SERVER LIBRARY — CLOSES @ R799
+# ====================================================
+# Closes the three-language SSH-protocol-
+# library axis at 1/1/1 symmetry:
+#   * Rust       (R797): russh 0.57.0
+#                — bundled in `termirs`
+#                  (modern async SSH+SFTP TUI)
+#   * Go         (R798): golang.org/x/crypto/
+#                ssh v0.36.0 — bundled in
+#                  `ts-ssh` (Tailscale-tsnet-
+#                  integrated SSH+SCP client)
+#   * TS-Node    (R799, THIS ROUND): ssh2
+#                ^1.12.0 — bundled in this
+#                  round's `preevy` (cloud
+#                  preview-environment
+#                  deployment CLI)
+#
+# `ssh2` (mscdex/ssh2, 5.6k+ stars, MIT) is
+# the canonical pure-JS SSH-2 client+server
+# library for Node.js.  Used by:
+#   - heroku/cli                            — Heroku's
+#                                              official
+#                                              CLI for
+#                                              `heroku ps:
+#                                              exec` /
+#                                              SSH-into-
+#                                              dyno
+#                                              flows
+#   - beekeeper-studio/beekeeper-studio    — desktop DB
+#                                              client's
+#                                              SSH-tunnel
+#                                              feature
+#   - billchurch/webssh2                   — browser-
+#                                              based SSH
+#                                              client over
+#                                              WebSockets
+#   - livecycle/preevy (this round)        — preview-
+#                                              environment
+#                                              deployment
+#                                              over SSH
+#   - tessel/t2-cli                        — Tessel 2
+#                                              hardware
+#                                              flashing
+#                                              over SSH
+#   - zodern/meteor-up                     — Meteor
+#                                              deployment
+#                                              over SSH
+#   - pstadler/flightplan                  — sequential
+#                                              shell over
+#                                              SSH
+#   - infisical/infisical (backend)        — secret-
+#                                              management
+#                                              SSH ops
+#
+# Distinguishing preevy from sibling
+# preview-environment tooling:
+#   - Vercel preview deployments: same
+#     concept (per-PR preview URL) BUT
+#     runs in Vercel's infrastructure +
+#     limited to Next.js / similar JS
+#     frameworks.  preevy runs in YOUR
+#     cloud account + accepts ANY
+#     docker-compose.yml
+#   - Render preview environments:
+#     similar UX to Vercel, also vendor-
+#     locked.  preevy is multi-cloud
+#   - Coder / Gitpod / GitHub Codespaces:
+#     dev-environment-in-a-VM tools.
+#     Optimised for INTERACTIVE coding,
+#     not stack preview
+#   - Heroku review apps: vendor-locked
+#   - preevy is multi-cloud (Lightsail /
+#     GCP / Azure / k8s) + open-source +
+#     uses YOUR existing Compose files
+#     unchanged
+#
+# KEY PREEVY ARCHITECTURE:
+#   1. PROFILE          a "profile" stores
+#                       credentials, default
+#                       region, default
+#                       driver settings.
+#                       `preevy profile
+#                       create`, `preevy
+#                       profile use`, etc.
+#                       Profiles live in a
+#                       cloud-backed bucket
+#                       (S3/GCS/Azure Blob)
+#                       so the same profile
+#                       is sharable across a
+#                       team
+#   2. DRIVER           selects the
+#                       provisioning backend.
+#                       Bundled drivers:
+#                         - lightsail (AWS)
+#                         - gce (GCP Compute)
+#                         - azure
+#                         - kube-pod
+#                           (Kubernetes pod)
+#                       Each driver is a
+#                       separate npm
+#                       sub-package
+#                       (`@preevy/driver-*`)
+#   3. ENV ID           computed from the
+#                       Compose project +
+#                       branch.  Stable
+#                       across `up` /
+#                       `down` cycles
+#   4. UP               provision + deploy
+#                       (`preevy up`).  Spins
+#                       up the VM, mounts
+#                       the local Docker
+#                       Compose file, runs
+#                       `docker compose up`
+#                       remotely, opens the
+#                       tunnel server SSH
+#                       channel, prints the
+#                       resulting service
+#                       URLs
+#   5. TUNNEL SERVER    a separate ssh2-
+#                       based reverse-tunnel
+#                       server in `tunnel-
+#                       server/`.  Operators
+#                       can self-host it or
+#                       use Livecycle's
+#                       hosted one
+#   6. COMPOSE-TUNNEL-AGENT  small Node
+#                       service running
+#                       INSIDE the preview
+#                       environment that
+#                       connects out to the
+#                       tunnel server
+#   7. DOWN             tear down
+#                       (`preevy down`)
+#
+# TOP-LEVEL SUBCOMMANDS (verbatim from
+# `packages/cli/src/commands/`):
+#   * up               provision + deploy a
+#                      preview environment
+#   * down             destroy a preview
+#                      environment
+#   * shell            open an interactive
+#                      SSH shell to the
+#                      environment's VM
+#   * urls             print the public URLs
+#                      of services
+#   * logs             tail container logs
+#                      via ssh2
+#   * ls               list environments in
+#                      the current profile
+#   * env-id           print the
+#                      deterministic env-id
+#                      that `up` would use
+#   * env              env-management
+#                      sub-tree (metadata)
+#   * init             scaffold a preevy
+#                      config in the current
+#                      project
+#   * login            authenticate against
+#                      Livecycle's hosted
+#                      services
+#   * purge            scorched-earth
+#                      cleanup of orphaned
+#                      cloud resources
+#   * profile          profile management
+#                      sub-tree (config/cp/
+#                      create/current/import/
+#                      key/link/ls/rm/use)
+#   * proxy            tunnel-server-proxy
+#                      management sub-tree
+#                      (connect/disconnect/
+#                      urls)
+#   * help             print help
+#   * version          print version
+#
+# CRITICAL DIRECT DEPENDENCIES (from
+# packages/cli/package.json):
+#   - @oclif/core ^3.15        — oclif CLI
+#                                framework
+#                                (subcommands,
+#                                flag parsing,
+#                                help text)
+#   - @oclif/plugin-help ^5    — `preevy help
+#                                <cmd>` plugin
+#   - @inquirer/prompts ^3.3   — interactive
+#                                prompts for
+#                                `init` /
+#                                `profile
+#                                create`
+#   - @inquirer/confirm ^2.0   — y/n prompts
+#   - @preevy/cli-common 0.0.67
+#                              — shared CLI
+#                                flags +
+#                                helpers
+#   - @preevy/common 0.0.67    — shared types
+#                                + protocol
+#                                helpers
+#   - @preevy/core 0.0.67      — orchestrator
+#                                core
+#                                (contains
+#                                the ssh2
+#                                ^1.12.0 dep)
+#                                [AXIS 52 LIBRARY]
+#   - @preevy/compose-tunnel-agent 0.0.67
+#                              — agent that
+#                                runs INSIDE
+#                                the preview
+#                                VM
+#   - @preevy/driver-azure |   — cloud
+#     driver-gce | driver-       drivers (one
+#     kube-pod | driver-         per backend)
+#     lightsail 0.0.67
+#   - @preevy/plugin-github 0.0.67
+#                              — GitHub
+#                                deployments
+#                                + PR
+#                                comment
+#                                integration
+#   - disposablestack 1.1      — TC39
+#                                Disposable
+#                                Stack proposal
+#                                polyfill
+#                                (used for
+#                                cleanup
+#                                ordering on
+#                                tunnel
+#                                teardown)
+#   - inquirer-autocomplete-   — autocomplete
+#     standalone 0.8             prompts
+#   - iter-tools-es 7.5        — iterator
+#                                combinators
+#   - lodash-es 4.17           — utility
+#   - shell-escape 0.2         — safe shell
+#                                arg quoting
+#                                for remote
+#                                command
+#                                execution
+#   - yaml 2.3                 — Compose file
+#                                parsing
+#
+# Node 18+ MSRV per package.json
+# `devDependencies.@types/node = "18"`.
+#
+# UPSTREAM:
+#   * Source             : https://github.com/livecycle/preevy
+#   * Site               : https://preevy.dev
+#   * Docs               : https://preevy.dev/docs
+#   * Tunnel server      : https://github.com/livecycle/preevy/tree/main/tunnel-server
+#   * ssh2 (npm)         : https://github.com/mscdex/ssh2
+#   * License            : Apache-2.0
+#   * Maintainer         : Livecycle.io
+#
+# INSTALL:
+#   # Global npm install
+#   npm install -g preevy
+#
+#   # Or npx (no install)
+#   npx preevy [COMMAND]
+#
+#   # Or yarn global
+#   yarn global add preevy
+#
+# USAGE EXAMPLES:
+#
+#   # Init in a Docker Compose project
+#   cd ~/myproject
+#   preevy init
+#
+#   # Provision + deploy a preview environment
+#   preevy up
+#
+#   # List environments in the current profile
+#   preevy ls
+#
+#   # Print the public URLs of services in
+#   # the current env
+#   preevy urls
+#
+#   # Tail logs from a specific service
+#   preevy logs web
+#
+#   # SSH shell into the preview VM
+#   preevy shell
+#
+#   # Compute the deterministic env-id
+#   # (useful for CI scripting)
+#   preevy env-id
+#
+#   # Tear down
+#   preevy down
+#
+#   # Profile management
+#   preevy profile create my-profile
+#   preevy profile ls
+#   preevy profile current
+#   preevy profile use my-profile
+#   preevy profile cp my-profile new-name
+#   preevy profile rm old-profile
+#   preevy profile import s3://my-bucket/profile.json
+#   preevy profile link
+#   preevy profile key
+#   preevy profile config
+#
+#   # Proxy management
+#   preevy proxy connect
+#   preevy proxy disconnect
+#   preevy proxy urls
+#
+#   # Login to Livecycle hosted services
+#   preevy login
+#
+#   # Scorched-earth resource purge
+#   preevy purge
+#
+#   # Help + version
+#   preevy --help
+#   preevy help
+#   preevy help up
+#   preevy --version
+#   preevy version
+#
+# OPTIONS (sourced directly from
+# https://github.com/livecycle/preevy/tree/main/packages/cli/src/commands):
+#
+# -----------------------------------------------------------------------------
+
+local curcontext="$curcontext" state line ret=1
+typeset -A opt_args
+
+local -a _preevy_commands
+_preevy_commands=(
+    'up:Bring up a preview environment'
+    'down:Destroy a preview environment'
+    'shell:Open an interactive SSH shell to the environment VM'
+    'urls:Print the public URLs of services'
+    'logs:Tail container logs via ssh2'
+    'ls:List environments in the current profile'
+    'env-id:Print the deterministic env-id'
+    'env:Env-management sub-tree (metadata)'
+    'init:Scaffold a preevy config in the current project'
+    'login:Authenticate against Livecycle hosted services'
+    'purge:Scorched-earth cleanup of orphaned cloud resources'
+    'profile:Profile management sub-tree'
+    'proxy:Tunnel-server proxy management sub-tree'
+    'help:Print help for a command'
+    'version:Print preevy version'
+)
+
+local -a _preevy_profile_actions
+_preevy_profile_actions=(
+    'config:Manage profile configuration'
+    'cp:Copy a profile to a new name'
+    'create:Create a new profile'
+    'current:Show the current active profile'
+    'import:Import a profile from a remote URL (s3://, gs://, etc.)'
+    'key:Manage profile encryption key'
+    'link:Link the current project to a profile'
+    'ls:List local + linked profiles'
+    'rm:Delete a profile'
+    'use:Switch the active profile'
+)
+
+local -a _preevy_env_actions
+_preevy_env_actions=(
+    'metadata:Show / edit environment metadata'
+)
+
+local -a _preevy_proxy_actions
+_preevy_proxy_actions=(
+    'connect:Connect to the tunnel-server proxy'
+    'disconnect:Disconnect from the tunnel-server proxy'
+    'urls:Print the proxy URLs of services'
+)
+
+_arguments -C \
+    '(- *)'{-h,--help}'[show help]' \
+    '(- *)--version[show version]' \
+    '(-): :->command' \
+    '(-)*:: :->args' \
+    && ret=0
+
+case $state in
+    command)
+        _describe -t commands 'preevy command' _preevy_commands && ret=0
+        ;;
+    args)
+        case $line[1] in
+            profile)
+                _arguments -C \
+                    '1:action:->paction' \
+                    && ret=0
+                case $state in
+                    paction)
+                        _describe -t actions 'profile action' _preevy_profile_actions && ret=0 ;;
+                esac
+                ;;
+            env)
+                _arguments -C \
+                    '1:action:->eaction' \
+                    && ret=0
+                case $state in
+                    eaction)
+                        _describe -t actions 'env action' _preevy_env_actions && ret=0 ;;
+                esac
+                ;;
+            proxy)
+                _arguments -C \
+                    '1:action:->praction' \
+                    && ret=0
+                case $state in
+                    praction)
+                        _describe -t actions 'proxy action' _preevy_proxy_actions && ret=0 ;;
+                esac
+                ;;
+            help)
+                _arguments \
+                    '1:command:->helpcmd' \
+                    && ret=0
+                case $state in
+                    helpcmd)
+                        _describe -t commands 'preevy command' _preevy_commands && ret=0 ;;
+                esac
+                ;;
+        esac
+        ;;
+esac
+
+return ret
