@@ -1,0 +1,461 @@
+#compdef git-proxy
+# =============================================================================
+# git-proxy — FINOS's "Deploy custom push protections
+#          and policies on top of Git" — a Node.js
+#          git-protocol proxy server developed under
+#          the Fintech Open Source Foundation (FINOS)
+#          that intercepts `git push` operations from
+#          developer machines, applies a configurable
+#          pipeline of inspection + approval + policy-
+#          enforcement plugins (e.g. secret scanning,
+#          file-type allow-lists, mandatory code-owner
+#          review, dual-control approval workflows
+#          required in regulated industries), then
+#          forwards approved pushes to the actual
+#          upstream git remote (GitHub Enterprise,
+#          GitLab Self-Managed, Azure DevOps, Bitbucket
+#          Data Center).
+#          Distinguishing from server-side git hooks
+#          (run AFTER push is accepted, can't block
+#          fast-forward; bypassed by force-push;
+#          require admin control of upstream), branch
+#          protection rules (GitHub-specific; coarse
+#          granularity; no audit trail of pre-push
+#          context), pre-commit / pre-push client-side
+#          hooks (can be bypassed with --no-verify;
+#          no central enforcement), git-crypt
+#          (encrypt-then-push pattern; doesn't catch
+#          accidental secret exposure), and TruffleHog
+#          / GitLeaks scanners (operate on existing
+#          history; not push-time gating) by:
+#            - PRE-PUSH GATING — sits in the network
+#              path BETWEEN developer + git remote,
+#              receiving the proposed push pack BEFORE
+#              it lands upstream.  Can REJECT, MODIFY,
+#              or QUEUE-FOR-REVIEW any push based on
+#              policy
+#            - ISOMORPHIC-GIT FOUNDATION — uses
+#              isomorphic-git/isomorphic-git v1.36
+#              (this is the headline CLI library that
+#              CLOSES Axis 43 on the TS-Node side at
+#              1/1/1; see taxonomy notes below) for ALL
+#              git object-graph parsing + packfile
+#              decoding + commit-tree traversal.  Pure-
+#              JavaScript, runs in Node.js + browser
+#              identically; the only major language
+#              with a fully pure-language git
+#              implementation that ALSO works in
+#              browsers
+#            - DUAL-CONTROL WORKFLOW — for regulated
+#              industries (finance, healthcare,
+#              defense) where SOX/Basel/HIPAA require
+#              a second-party-approval before code
+#              lands, git-proxy queues pushes for
+#              human review via an Express + React
+#              dashboard; reviewers see diffs (via
+#              diff2html), commit metadata, file lists
+#              before approving / rejecting
+#            - PLUGIN ARCHITECTURE — `proxy.config.json`
+#              declares a pipeline of plugins (secret
+#              scanners, allow/deny lists, custom
+#              regex checks, code-owner enforcement,
+#              audit-log emitters); plugins are
+#              authored as TypeScript modules
+#              implementing a defined interface
+#            - SECRET SCANNING BUILT-IN — bundled
+#              plugins check for AWS access keys,
+#              GitHub PATs, GitLab tokens, generic
+#              high-entropy strings; configurable
+#              entropy thresholds + per-plugin
+#              allowlists
+#            - DIFF2HTML PREVIEW — reviewers see push
+#              contents rendered as side-by-side or
+#              unified diffs via the diff2html library;
+#              integrated into the React + Material UI
+#              dashboard
+#            - EXPRESS 5.x SERVER — HTTP + HTTPS
+#              listeners forward to upstream git
+#              remotes via express-http-proxy after
+#              policy approval; rate-limited via
+#              express-rate-limit; CSRF via session
+#              middleware (express-session); session
+#              storage via connect-mongo OR @seald-
+#              io/nedb (embedded NoSQL)
+#            - JWT + bcryptjs AUTH — JWT tokens for
+#              dashboard + admin API auth; bcryptjs
+#              for password hashing; works with
+#              SAML/OIDC via additional adapters
+#            - AWS-SDK CREDENTIAL HELPERS — bundled
+#              @aws-sdk/credential-providers for
+#              fetching IAM-role credentials when
+#              git-proxy itself needs to authenticate
+#              with upstream AWS-hosted git (e.g.
+#              CodeCommit) on behalf of pushers
+#            - YARGS CLI for SERVER STARTUP — the
+#              `git-proxy` binary accepts `-c, --
+#              config <path>` to point at a custom
+#              proxy.config.json + `-v, --validate`
+#              to check the config file for schema
+#              compliance without starting the server
+#            - GIT-PROXY-ALL COMPANION BINARY —
+#              `git-proxy-all` is a concurrent runner
+#              that launches both the server + the
+#              client UI dev server simultaneously
+#              (useful during development; uses
+#              concurrently npm package)
+#            - 211+ STARS ON finos/git-proxy — backed
+#              by FINOS, the Fintech Open Source
+#              Foundation (a Linux Foundation project
+#              founded 2018 to promote open source in
+#              financial services); contributors from
+#              JP Morgan, Citi, Goldman Sachs, Morgan
+#              Stanley, Bank of America, Deutsche
+#              Bank, and other institutional members
+#          Used by: financial-services institutions
+#          requiring pre-merge policy enforcement
+#          beyond what GitHub Enterprise / GitLab
+#          Self-Managed provide natively, regulated
+#          industries where SOX/Basel/HIPAA dual-
+#          control requirements apply to source code
+#          changes, security teams enforcing centralized
+#          secret-scanning before code reaches the
+#          authoritative remote, and any organization
+#          where the cost of a leaked credential in
+#          the upstream repo would be substantial.
+#
+# Author:  FINOS (Fintech Open Source Foundation;
+#          https://www.finos.org), a Linux Foundation
+#          project.  Repo maintained under
+#          github.com/finos/git-proxy by a community
+#          of contributors from financial-services
+#          institutions including JP Morgan, Citi,
+#          Goldman Sachs, Morgan Stanley, BofA, and
+#          others.
+# Source:  https://github.com/finos/git-proxy
+#          https://github.com/finos/git-proxy/blob/main/index.ts
+#          https://github.com/finos/git-proxy/blob/main/package.json
+# Manpage: No traditional manpage; `git-proxy --help`
+#          shows yargs-generated help for the server
+#          startup options.  Full architecture +
+#          plugin docs in repo README.md + docs/.
+# Library: isomorphic-git ^1.36.3 (isomorphic-git/
+#          isomorphic-git — William Hilton's "A pure
+#          JavaScript implementation of git for node
+#          and browsers!").  This is the headline
+#          dependency for this completion's axis-43
+#          closing role; see taxonomy notes below.
+#          Also yargs ^16 (Axis 1 argparse — used in
+#          the CLI entry point), express ^5.2 (Axis
+#          26 web framework — serves the proxy + UI),
+#          express-http-proxy ^2.1 (forward layer),
+#          express-rate-limit ^8.2, express-session
+#          ^1.19, connect-mongo ^5.1 (session store
+#          for MongoDB), @seald-io/nedb ^4.1 (embedded
+#          NoSQL alternative session store), axios
+#          ^1.13 (HTTP client), bcryptjs ^3 (Axis 17
+#          password hashing), jsonwebtoken ^9 (JWT),
+#          cors ^2.8, diff2html ^3.4 (rendered diff
+#          previews), env-paths ^3 (XDG paths),
+#          escape-string-regexp ^5, https-proxy-agent
+#          ^7, @aws-sdk/credential-providers ^3.980
+#          (AWS IAM for CodeCommit auth).  Dashboard
+#          UI: React + @material-ui/core ^4.12 + @
+#          primer/octicons-react + @fontsource/roboto.
+# License: Apache-2.0
+# Status:  211+ stars on finos/git-proxy; active
+#          development (latest commit 2026-06-01);
+#          FINOS-incubated, working toward Active
+#          stage maturity.
+#
+# -----------------------------------------------------------------------------
+# CROSS-LANGUAGE CLI LIBRARY TAXONOMY — AXIS 43 CLOSES AT 1/1/1:
+#   GIT LIBRARY / VCS INTEGRATION
+# -----------------------------------------------------------------------------
+# This completion **CLOSES AXIS 43 AT 1/1/1 THREE-
+# LANGUAGE SYMMETRY** in the cross-language CLI
+# library taxonomy: Git Library / VCS Integration.
+#
+# Pattern: R760 122nd language (Verona) closes the
+# prior 3+1 cycle → R761 Rust=98 (ryu/gix OPENS Axis
+# 43) → R762 Go=98 (git-subtrac/go-git/go-git
+# continues Axis 43) → R763 TS-Node=98 (git-proxy/
+# isomorphic-git CLOSES Axis 43 AT 1/1/1 THIS ROUND).
+# Next R764 will be the 123rd language closing the
+# 3+1 micro-cycle.
+#
+# THE COMPLETE AXIS 43 PICTURE (NOW 1/1/1):
+#
+#   * RUST = gix (R761 ryu)
+#     - GitoxideLabs/gitoxide's pure-Rust git
+#       reimplementation by Sebastian Thiel; ~9,000
+#       stars on the gitoxide repo
+#     - Pure Rust, zero CGo, modular crate graph
+#     - Pattern: STACKED-PR-FOR-JJ via git push
+#       operations (ryu pushes bookmark stacks as
+#       chained PRs)
+#
+#   * GO = go-git/go-git (R762 git-subtrac)
+#     - The go-git org's pure-Go git
+#       reimplementation, originally from src-d;
+#       ~6,200 stars
+#     - PlainOpen/PlainInit/PlainClone API; storage-
+#       agnostic backend interface
+#     - Pattern: VENDORED-SUBMODULE COLLECTION via
+#       object-graph traversal (git-subtrac
+#       recursively gathers submodule histories into
+#       .trac branches)
+#
+#   * TS-NODE = isomorphic-git (R763 THIS)
+#     - isomorphic-git/isomorphic-git by William
+#       Hilton's pure-JavaScript git implementation
+#     - ~7,400 stars on isomorphic-git/isomorphic-git
+#       — the most cross-platform of the three
+#       axis-43 picks (runs in Node + browser
+#       identically; the other two are server-only)
+#     - Pattern: PRE-PUSH POLICY ENFORCEMENT via
+#       packfile inspection (git-proxy parses
+#       proposed pushes before forwarding to upstream)
+#
+# THE AXIS 43 ARC TELLS THE COMPLETE PURE-LANGUAGE-
+# GIT-REIMPLEMENTATION STORY:
+#   - R761 ryu (Rust GIX-FOR-VCS-WORKFLOW) — pure-Rust
+#     git push operations for novel Jujutsu stacked-PR
+#     workflow
+#   - R762 git-subtrac (Go GO-GIT-FOR-VENDORING) —
+#     pure-Go git object-graph traversal for vendored
+#     submodule collection
+#   - R763 git-proxy (TS-Node ISOMORPHIC-GIT-FOR-
+#     POLICY-ENFORCEMENT) — pure-JS git packfile
+#     inspection for institutional pre-push policy
+#     gating
+#
+# Each language's representative LIBRARY follows the
+# SAME architectural principle (pure-language
+# reimplementation, no libgit2 wrapper) while the
+# representative CLI demonstrates that this principle
+# enables qualitatively different VCS workflows:
+#   * Workflow innovation (stacked PRs for jj — Rust)
+#   * Repository self-containment (vendored
+#     submodules — Go)
+#   * Policy enforcement (pre-push gating — TS-Node)
+#
+# All three completions implement variants of the
+# same conceptual pipeline:
+#   1. OPEN a local or remote git object database
+#   2. TRAVERSE the commit/tree/blob object graph
+#      using the library's idiomatic iteration API
+#   3. ANALYZE the traversal results (find heads,
+#      collect transitively-referenced blobs, scan
+#      packed objects for secrets)
+#   4. ACT on the analysis (push as PR, write to
+#      .trac branch, approve/reject push)
+#
+# Cross-language CLI library taxonomy after R763:
+#   * 122 languages
+#   * 474 total CLI library variants (Rust 98 / Go 98 /
+#     TS-Node 98)
+#   * Axis 9 / Logging: 6/6/6 three-language symmetric
+#   * Axes 10 + 13 + 14: 2/2/2 three-language symmetric
+#   * 36 axes at 1/1/1 three-language symmetric (axes
+#     7 + 8 + 11 + 12 + 15-43)
+#
+# WHY isomorphic-git IS A DISTINCTIVE AXIS-43 CLOSER:
+#
+#   isomorphic-git/isomorphic-git by William Hilton is
+#   the *only* pure-JavaScript git implementation that
+#   runs in BOTH Node.js AND browser environments
+#   from the same codebase.  Distinguishing
+#   characteristics in the TS-Node ecosystem:
+#     1. RUNS IN BROWSER — the same `git.clone()`,
+#        `git.commit()`, `git.push()` API works in
+#        the browser via Service Worker + IndexedDB-
+#        backed storage; no other major language has
+#        a git library with this dual-environment
+#        guarantee
+#     2. FILESYSTEM-AGNOSTIC — accepts any "fs-like"
+#        object implementing the Node fs interface;
+#        users can plug in lightning-fs, BrowserFS,
+#        in-memory mock, S3-backed, or any custom
+#        backend.  Same code works across all
+#        backends
+#     3. SUPPORTS SHALLOW + PARTIAL CLONE — implements
+#            modern git protocol v2 features including
+#            shallow cloning + partial clone filters
+#            for efficient large-repo handling
+#     4. PROMISE-BASED ASYNC API — every operation
+#        returns a Promise; composes with await + the
+#        broader async/await ecosystem; no callback
+#        spaghetti
+#     5. NO NATIVE BINDINGS — pure JS, no compilation
+#        step; runs anywhere npm runs; trivial to
+#        install in CI + Lambda + Docker contexts
+#     6. NPM PACKAGE — single `isomorphic-git` import
+#        gets the entire library; no subpackage
+#        ceremony
+#     7. ~7,400 STARS ON isomorphic-git/isomorphic-git
+#        — sustained adoption in browser-based git
+#        tools (GitHub's web UI uses similar
+#        principles, Sourcegraph's browser
+#        extensions, in-browser code editors)
+#     8. PRODUCTION USAGE — used by FINOS git-proxy
+#        (this completion), Adobe Helix, CleverCloud
+#        clever-tools, Reddit Devvit, Microsoft
+#        FluidFramework, Kong Insomnia, GetUmbrel,
+#        Genezio, and many other Node CLI tools +
+#        browser-based development environments
+#
+# Maintained by William Hilton (@wmhilton) +
+# contributors at isomorphic-git/isomorphic-git.
+# License: MIT.
+#
+# Comparison to other Axis 43 candidates (TS-Node):
+#   * git-proxy (R763 THIS) — FINOS-backed push
+#     policy proxy with isomorphic-git as direct dep;
+#     211 stars; institutional gravitas
+#   * git-hours (kimmobrunfeldt) — git time-spent
+#     estimator with nodegit ^0.27; 812 stars but
+#     nodegit wraps libgit2 (CGo equivalent) which
+#     doesn't fit the pure-language axis-43 theme
+#   * glci (mdubourg001) — GitLab CI local runner
+#     with nodegit; 580 stars; same nodegit caveat
+#   * gitbanner (mappum) — GitHub profile banner
+#     generator with nodegit; 590 stars; same caveat
+#   * git-tutor (lesnitsky) — tutorial generator
+#     from git log with nodegit; 384 stars; same
+#     caveat
+#   * genezio — multi-cloud serverless framework
+#     with isomorphic-git as indirect dep; 489 stars
+#   * helix-deploy (Adobe) — multi-cloud deploy tool
+#     with isomorphic-git; only 17 stars
+#   * isomorphic-git's own bundled CLI — too minimal
+#     for a featured completion (just `clone`/`push`/
+#     `pull` mirrors of node-API)
+#
+# git-proxy is the chosen Axis 43 TS-Node closer
+# because:
+#   - It declares isomorphic-git as a DIRECT runtime
+#     dependency in package.json (`isomorphic-git
+#     ^1.36.3`)
+#   - The push-policy-enforcement use case directly
+#     exercises isomorphic-git's packfile parsing +
+#     object-graph inspection APIs (not just shallow
+#     fetch operations like many smaller users)
+#   - FINOS institutional backing + financial-
+#     services industry usage provide gravitas
+#     comparable to apenwarr's git-subtrac (R762)
+#     and Dillon Mulroy's ryu (R761)
+#   - The "pure-language reimplementation enables
+#     novel VCS workflows" axis-43 thesis is
+#     embodied perfectly by the pre-push gating
+#     pattern that requires server-side packfile
+#     parsing without the libgit2 CGo dependency
+#     that would complicate Lambda + serverless
+#     deployment
+#   - 211 stars is modest but the institutional
+#     backing + multi-bank contributor base + Linux
+#     Foundation umbrella provide stability beyond
+#     individual-maintainer projects
+#
+# -----------------------------------------------------------------------------
+#
+# THE git-proxy CLI
+#
+# git-proxy is a single-command server-launcher CLI
+# built on yargs.  Invocation:
+#   git-proxy [-v] [-c <path>]
+#
+# By default, git-proxy validates its configuration
+# file + starts the HTTP proxy server + the React
+# admin UI; the `-v / --validate` flag short-circuits
+# to validation-only mode useful for CI config-checks.
+#
+# Flags:
+#   -v, --validate                    check
+#                                     proxy.config.json
+#                                     for validation
+#                                     errors without
+#                                     starting server
+#   -c, --config <path>               path to custom
+#                                     git-proxy
+#                                     configuration file
+#                                     (default:
+#                                     proxy.config.json
+#                                     next to install)
+#   -h, --help                        show yargs help
+#       --version                     show version
+#
+# Companion binary:
+#   git-proxy-all                     concurrent runner
+#                                     that launches
+#                                     the server + UI
+#                                     dev server (uses
+#                                     `concurrently
+#                                     'npm run server'
+#                                     'npm run client'`)
+#
+# Common invocations:
+#   # Launch git-proxy with default config (proxy.config.json
+#   # in install dir)
+#   git-proxy
+#
+#   # Launch with a custom config file
+#   git-proxy -c /etc/git-proxy/proxy.config.json
+#   git-proxy --config /etc/git-proxy/proxy.config.json
+#
+#   # Validate the default config (CI lint check)
+#   git-proxy -v
+#   git-proxy --validate
+#
+#   # Validate a custom config file
+#   git-proxy -v -c ./test-proxy.config.json
+#   git-proxy --validate --config ./test-proxy.config.json
+#
+#   # systemd service launcher
+#   ExecStart=/usr/bin/git-proxy -c /etc/git-proxy/proxy.config.json
+#
+#   # Docker container CMD
+#   CMD ["git-proxy", "-c", "/config/proxy.config.json"]
+#
+#   # During development, launch BOTH server + UI together
+#   git-proxy-all
+#
+# OPTIONS (sourced directly from
+# https://github.com/finos/git-proxy/blob/main/index.ts):
+#
+#   -v, --validate                    validate-only mode
+#   -c, --config <PATH>               config file path
+#                                     (default
+#                                     proxy.config.json
+#                                     next to bin)
+#
+# Configuration file (proxy.config.json):
+#   The full schema is documented in the repo + the
+#   `validate()` helper from src/config/file.ts;
+#   key top-level keys include `proxyUrl`, `cookieSecret`,
+#   `sessionMaxAgeHours`, `tls`, `plugins`, `authorizedList`,
+#   `domains`.  See repo for the full schema.
+#
+# Required environment variables (when not provided
+# via config file):
+#   JWT_SECRET                        signing secret
+#                                     for admin JWTs
+#   COOKIE_SECRET                     express-session
+#                                     cookie secret
+#   GIT_PROXY_USER_PASSWORD           initial admin
+#                                     user password
+#                                     (bcrypt-hashed
+#                                     before storage)
+#
+# -----------------------------------------------------------------------------
+
+local curcontext="$curcontext" state line ret=1
+typeset -A opt_args
+
+_arguments -C \
+    '(- *)'{-h,--help}'[show help]' \
+    '(- *)--version[show version]' \
+    '(-v --validate)'{-v,--validate}'[validate proxy.config.json without starting server]' \
+    '(-c --config)'{-c,--config}'=[path to custom git-proxy configuration file]:config:_files -g "*.json"' \
+    && ret=0
+
+return ret
