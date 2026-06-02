@@ -1,0 +1,115 @@
+#compdef ari-proxy
+# ============================================================================
+# _ari-proxy — zsh completion for CyCoreSystems' Asterisk REST Interface
+#              proxy (ARI commands over NATS / RabbitMQ message buses)
+# ============================================================================
+#
+# UPSTREAM
+#   Repository : https://github.com/CyCoreSystems/ari-proxy
+#   Author     : CyCore Systems  (commercial telephony / Asterisk vendor)
+#   License    : Apache-2.0
+#   Language   : Go
+#   Module     : github.com/CyCoreSystems/ari-proxy/v5  (Go modules)
+#   Binary     : ari-proxy  (built from root main.go calling
+#                            RootCmd.Execute)
+#   Last push  : 2025-11-19
+#
+# WHAT IT IS
+#   ari-proxy is a proxy that bridges Asterisk's HTTP+WebSocket REST
+#   Interface (ARI) onto a message bus, so that Asterisk-driving
+#   applications can scale horizontally without each instance holding
+#   a direct ARI WebSocket.  The proxy speaks ARI on one side (HTTP +
+#   WS to the Asterisk daemon) and either NATS.io or RabbitMQ on the
+#   other side (request/response RPC + event fanout).  Multiple Go
+#   client applications attach to the message bus, subscribe to ARI
+#   events, and invoke ARI commands by RPC — the proxy handles
+#   per-application Stasis routing, connection multiplexing, and
+#   transparent reconnection.
+#
+# CLI ARGUMENT GRAMMAR  (verbatim from cmd.go RootCmd spf13/cobra +
+#                       viper.BindPFlag init block)
+#   ari-proxy [FLAGS]
+#
+#   ari-proxy has no subcommands;  the root command launches the
+#   bridge.  Configuration is layered:  CLI flags → viper config
+#   file → environment variables (viper.AutomaticEnv, replacing `.`
+#   with `_` — so `ari.username` becomes `ARI_USERNAME`).
+#
+#   Flags:
+#     -V, --version              Print version information and exit
+#         --config <FILE>        Config file
+#                                  (default $HOME/.ari-proxy.yaml)
+#     -v, --verbose              Enable verbose / debug logging
+#         --nats.url <URL>       NATS cluster URL  (backward-
+#                                compatibility alias for the message
+#                                bus URL when running pure-NATS;
+#                                default nats://127.0.0.1:4222 from
+#                                nats.DefaultURL)
+#         --messagebus.url <URL> Message Bus cluster URL.  Accepts
+#                                either a `nats://` URL or an
+#                                `amqp://` URL (RabbitMQ).  When
+#                                pointed at amqp:// the proxy uses
+#                                the rabbitmq/amqp091-go client to
+#                                exchange ARI commands and events.
+#         --ari.application <NAME>
+#                                ARI Stasis Application name (the
+#                                stasis() context name in Asterisk's
+#                                extensions.conf)
+#         --ari.username <USER>  ARI username
+#         --ari.password <PASS>  ARI password
+#         --ari.http_url <URL>   ARI HTTP base URL
+#                                  [default: http://localhost:8088/ari]
+#         --ari.websocket_url <URL>
+#                                ARI WebSocket events URL
+#                                  [default: ws://localhost:8088/ari/events]
+#
+#     -h, --help                 Show help
+#
+#   Environment-variable overrides (viper AutomaticEnv with `.→_`):
+#     ARI_APPLICATION, ARI_USERNAME, ARI_PASSWORD, ARI_HTTP_URL,
+#     ARI_WEBSOCKET_URL, MESSAGEBUS_URL, NATS_URL, VERBOSE.
+#     Special: NATS_SERVICE_HOST / NATS_SERVICE_PORT_CLIENT
+#     (Kubernetes service discovery) override messagebus URL when set.
+#
+# AXIS / CORPUS POSITION
+#   Direct dependency on `github.com/rabbitmq/amqp091-go v1.8.1`
+#   declared in go.mod — the canonical Go AMQP 0-9-1 client
+#   maintained by the RabbitMQ project itself (rabbitmq/amqp091-go,
+#   the supported continuation of the archived streadway/amqp).
+#   amqp091-go provides typed AMQP method handling, channel-level
+#   publisher confirms, consumer streams, and TLS over the standard
+#   library's net stack.  ari-proxy's `messagebus/rabbitmq.go` +
+#   `messagebus/rabbitmqsub.go` open one Connection + multiple
+#   Channels, declare per-application exchanges and queues, and use
+#   `Channel.Consume(...)` + `Channel.Publish(...)` to route ARI
+#   command RPCs and event broadcasts.  Verified via:
+#     gh api repos/CyCoreSystems/ari-proxy/contents/go.mod
+#       → github.com/rabbitmq/amqp091-go v1.8.1
+#     gh api search/code repo:CyCoreSystems/ari-proxy amqp091
+#       → messagebus/rabbitmq.go, messagebus/rabbitmqsub.go,
+#         client/client.go
+#   This entry is the Go=126 leader bump that continues Axis 71
+#   (AMQP 0-9-1 / RabbitMQ Client Library) opened at R873 with
+#   Rust=lapin 2.5 (Fguedes90/lazycelery).
+#
+#   No completion for `ari-proxy` ships with Apple zsh
+#   (/usr/share/zsh/*/functions) or Homebrew zsh-completions
+#   (/opt/homebrew/share/zsh/site-functions) — confirmed absent.
+# ============================================================================
+
+_ari-proxy() {
+    _arguments -s \
+        '(-V --version)'{-V,--version}'[print version information and exit]' \
+        '--config=[config file (default $HOME/.ari-proxy.yaml)]:config file:_files -g "*.{yaml,yml,toml}"' \
+        '(-v --verbose)'{-v,--verbose}'[enable verbose / debug logging]' \
+        '--nats.url=[NATS cluster URL (legacy; default nats\://127.0.0.1\:4222)]:url:' \
+        '--messagebus.url=[message bus URL (nats\:// or amqp\:// for RabbitMQ)]:url:' \
+        '--ari.application=[ARI Stasis Application name]:application:' \
+        '--ari.username=[ARI username]:user:_users' \
+        '--ari.password=[ARI password]:password:' \
+        '--ari.http_url=[ARI HTTP base URL (default http\://localhost\:8088/ari)]:url:' \
+        '--ari.websocket_url=[ARI WebSocket events URL (default ws\://localhost\:8088/ari/events)]:url:' \
+        '(- *)'{-h,--help}'[show help]'
+}
+
+_ari-proxy "$@"
