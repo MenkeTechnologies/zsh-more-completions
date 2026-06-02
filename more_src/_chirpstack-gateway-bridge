@@ -1,0 +1,127 @@
+#compdef chirpstack-gateway-bridge
+# ============================================================================
+# _chirpstack-gateway-bridge — zsh completion for the ChirpStack Gateway
+#                              Bridge LoRaWAN packet_forwarder ↔ MQTT abstractor
+# ============================================================================
+#
+# UPSTREAM
+#   Repository : https://github.com/chirpstack/chirpstack-gateway-bridge
+#                (org migrated from brocaar/chirpstack-gateway-bridge —
+#                module path still `github.com/brocaar/chirpstack-gateway-bridge`)
+#   Maintainer : ChirpStack project (founded by Orne Brocaar)
+#   License    : MIT
+#   Stars      : 444
+#   Language   : Go
+#   Module     : github.com/brocaar/chirpstack-gateway-bridge  (Go 1.x)
+#   Binary     : chirpstack-gateway-bridge  (built from
+#                cmd/chirpstack-gateway-bridge/main.go)
+#   Last push  : 2025-10-09
+#
+# WHAT IT IS
+#   ChirpStack Gateway Bridge sits between a LoRaWAN packet forwarder
+#   (Semtech UDP, ChirpStack Concentratord, Basic Station, etc.) and
+#   an MQTT broker.  It accepts gateway uplinks via the configured
+#   backend, normalizes them into Protobuf or JSON envelopes, and
+#   publishes them on `gateway/{GatewayID}/event/{EventType}` MQTT
+#   topics, while subscribing to `gateway/{GatewayID}/command/#` to
+#   forward downlink commands back to the packet forwarder.  The same
+#   bridge multiplexes generic-broker, Google Cloud IoT Core, and
+#   Azure IoT Hub authentication backends, plus filters / metadata
+#   injectors.  It is the ingress layer of the ChirpStack open-source
+#   LoRaWAN Network Server.
+#
+# CLI ARGUMENT GRAMMAR  (verbatim from
+#                       cmd/chirpstack-gateway-bridge/cmd/{root,
+#                       version, configfile}.go spf13/cobra Command
+#                       tree)
+#   chirpstack-gateway-bridge [PERSISTENT_FLAGS] [SUBCOMMAND]
+#
+#   Default (no subcommand): runs the bridge — connects the configured
+#   packet-forwarder backend, opens the MQTT integration, and starts
+#   processing uplinks/downlinks.
+#
+#   Persistent flags (inherited by every subcommand):
+#     -c, --config <PATH>...    Path to configuration file (optional,
+#                               repeatable — multiple files are merged
+#                               in order, later files override earlier
+#                               keys)
+#         --log-level <N>       Log verbosity:
+#                                 5 = debug
+#                                 4 = info     [default]
+#                                 3 = warning
+#                                 2 = error
+#                                 1 = fatal
+#                                 0 = panic
+#
+#   Subcommands:
+#     version                   Print the ChirpStack Gateway Bridge
+#                               version (set at build time via
+#                               -ldflags "-X main.version=…")
+#     configfile                Print a populated configuration file
+#                               template (rendered from the current
+#                               in-memory config — useful for
+#                               bootstrapping `chirpstack-gateway-bridge.toml`)
+#
+# AXIS / CORPUS POSITION
+#   Direct dependency on `github.com/eclipse/paho.mqtt.golang v1.5.1`
+#   declared in go.mod — the canonical Go MQTT client maintained by
+#   the Eclipse Foundation's Paho project (eclipse/paho.mqtt.golang).
+#   paho.mqtt.golang implements MQTT v3.1.1 with reconnect, auth,
+#   TLS, persistent session state, and a callback-driven `Client`
+#   API.  The bridge's `internal/integration/mqtt/` package wraps
+#   it through a `mqtt.NewClient(opts)`, subscribing to the gateway
+#   command topic and publishing event payloads on the configured
+#   event topic template.  Verified via:
+#     gh api repos/chirpstack/chirpstack-gateway-bridge/contents/go.mod
+#       → github.com/eclipse/paho.mqtt.golang v1.5.1
+#     gh api repos/chirpstack/chirpstack-gateway-bridge/contents/cmd/chirpstack-gateway-bridge/main.go
+#       → import paho "github.com/eclipse/paho.mqtt.golang"
+#   This entry is the Go=124 leader bump that continues Axis 69
+#   (MQTT Client Library) opened at R865 with Rust=rumqttc 0.24
+#   (rhoopr/bambutop).
+#
+#   No completion for `chirpstack-gateway-bridge` ships with Apple zsh
+#   (/usr/share/zsh/*/functions) or Homebrew zsh-completions
+#   (/opt/homebrew/share/zsh/site-functions) — confirmed absent.  The
+#   adjacent `more_src/_chirpstack` covers the umbrella ChirpStack
+#   server binary;  this entry targets the distinct gateway-bridge
+#   binary.
+# ============================================================================
+
+_chirpstack-gateway-bridge() {
+    local curcontext="$curcontext" state line ret=1
+    typeset -A opt_args
+
+    _arguments -C \
+        '*'{-c+,--config=}'[path to configuration file (repeatable, merged in order)]:config file:_files -g "*.{toml,yaml,yml}"' \
+        '--log-level=[log verbosity: 0=panic .. 5=debug (default 4)]:level:(0 1 2 3 4 5)' \
+        '(- *)'{-h,--help}'[show help]' \
+        '1: :_chirpstack-gateway-bridge_commands' \
+        '*::arg:->args' && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                version|configfile)
+                    _arguments \
+                        '*'{-c+,--config=}'[path to configuration file]:config file:_files -g "*.{toml,yaml,yml}"' \
+                        '--log-level=[log verbosity]:level:(0 1 2 3 4 5)' \
+                        '(- *)'{-h,--help}'[show help]' && ret=0 ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+(( $+functions[_chirpstack-gateway-bridge_commands] )) ||
+_chirpstack-gateway-bridge_commands() {
+    local -a commands
+    commands=(
+        'version:print the ChirpStack Gateway Bridge version'
+        'configfile:print a populated configuration file template'
+    )
+    _describe -t commands 'chirpstack-gateway-bridge command' commands
+}
+
+_chirpstack-gateway-bridge "$@"
