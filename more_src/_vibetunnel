@@ -1,0 +1,279 @@
+#compdef vibetunnel
+# ---------------------------------------------------------------------------
+# vibetunnel — VibeTunnel: turn any browser into your terminal.  Runs a
+#              local HTTP+WebSocket server that exposes your tmux/screen
+#              sessions as a web app, with native macOS/iOS sidecar
+#              binaries and optional Cloudflare Tunnel / ngrok /
+#              Tailscale Funnel/Serve exposure.  Advertises itself on
+#              the LAN via mDNS so other devices auto-discover it
+#              (TypeScript/Node, 4521★)
+#
+# upstream: https://github.com/amantus-ai/vibetunnel
+#           (Node CLI at web/; native sidecars at native/; Mac/iOS apps
+#           at mac/ + ios/)
+# author : Amantus AI (the open-source side-project of the VibeTunnel
+#          team — also maintainers of the Mac/iOS sidecar apps)
+# license: MIT
+# npm    : `vibetunnel` (provides single `vibetunnel` bin via
+#          ./bin/vibetunnel, plus the `vt` bash wrapper that auto-
+#          detects whether to call the Mac app bundle's helper or the
+#          npm binary)
+#
+# Source-direct completion: every top-level subcommand below comes
+# verbatim from `printHelp()` in web/src/cli.ts on the amantus-ai/
+# vibetunnel tip, and every server option comes from the dual-dash
+# flag references in web/src/server/server.ts on the same tip.  The
+# `--no-mdns` flag directly confirms the bonjour-service integration
+# this completion documents.
+#
+# Direct deps from web/package.json (selected):
+#   bonjour-service        ^1.3.0   ← canonical JS-side mDNS / DNS-SD /
+#                                      Zeroconf library (this axis) —
+#                                      by onlxltd (onlxltd/bonjour-
+#                                      service); TypeScript rewrite of
+#                                      the original `bonjour` package
+#                                      by Mathias Buus, with both
+#                                      server (publish a service) and
+#                                      browser (discover services)
+#                                      APIs.  Internally builds on the
+#                                      lower-level `multicast-dns` by
+#                                      Mathias Buus for the actual RFC
+#                                      6762 packet wire format —
+#                                      `bonjour-service` adds the RFC
+#                                      6763 service publishing/
+#                                      browsing layer.  Composable
+#                                      two-layer design typical of the
+#                                      npm ecosystem: lower-level
+#                                      packet handling separated from
+#                                      higher-level service abstraction.
+#                                      Used by webpack-dev-server,
+#                                      vibetunnel, TallyArbiter,
+#                                      OctoDash, congatudo, Zigbee
+#                                      Herdsman, and most Node tools
+#                                      that need cross-device service
+#                                      discovery.  vibetunnel uses it
+#                                      to advertise the local server
+#                                      as `_vibetunnel._tcp.local.`
+#                                      with the configured port +
+#                                      `--name` (default: machine
+#                                      hostname); the iOS / macOS
+#                                      companion apps browse for this
+#                                      service to auto-connect.  Pass
+#                                      `--no-mdns` to disable the
+#                                      advertisement.
+#   express + ws                     (HTTP + WebSocket server)
+#   commander                        (CLI parser for the various flags)
+#   node-pty                         (PTY allocation for forwarded
+#                                      sessions; bridge between the
+#                                      child process and the WebSocket
+#                                      stream)
+#   xterm-headless                   (server-side terminal emulator
+#                                      that drives the rendered HTML
+#                                      view in the browser)
+#   chalk + cli-table3 + ora         (terminal output styling)
+#   @cloudflare/workers-types        (Cloudflare Tunnel integration
+#                                      typings)
+#   ngrok                            (ngrok Tunnel integration when
+#                                      --ngrok is set)
+#   sharp                            (favicon + screenshot generation)
+#   tweetnacl + web-push             (VAPID key generation + browser
+#                                      push notifications when --push-
+#                                      enabled)
+#   simple-git                       (Git follow-mode integration for
+#                                      branch-aware session naming)
+#
+# vibetunnel is "tmux/screen, but in a browser tab" — the server forks
+# child shells via node-pty, drives them through xterm-headless to
+# produce a streamable terminal-state representation, and exposes that
+# over WebSocket to a browser frontend.  The forwarded-session mode
+# (`vibetunnel fwd <command>`) wraps an arbitrary command's stdio in
+# the same pipeline, so you can wrap `bash` or `vim` or `htop` and view
+# them remotely.  The optional integrations let you expose the local
+# server externally via Cloudflare Tunnel / ngrok / Tailscale Funnel /
+# Tailscale Serve with one flag, and Git follow-mode renames the
+# session live as you switch branches.  Companion native apps on Mac
+# and iOS browse for the `_vibetunnel._tcp.local.` mDNS service to
+# auto-connect, and the systemd / launchd integration lets you run
+# the server as a system service.
+#
+# ============================================================================
+# === AXIS 185 CLOSES — mDNS / DNS-SD / Zeroconf service discovery ========
+# === TRIPLE-240 ROUND-NUMBER LANDMARK · 178th AXIS CLOSED ================
+# ============================================================================
+# Axis position: TS-Node=240 CLOSES Axis 185 at slot 1/1/1 — quadruple-clean
+# closure of the canonical mDNS / DNS-SD / Zeroconf service discovery
+# library ecosystem spanning the three major systems languages.  All
+# three lanes anchor on a single pure-host-language implementation of
+# RFC 6762 (Multicast DNS) + RFC 6763 (DNS-SD / Bonjour Service
+# Discovery) with both server (advertise) and client (browse) modes,
+# IPv4 + IPv6 support, TXT records, and Avahi/Bonjour/mDNSResponder
+# interop:
+#
+#     Rust    : mdns-sd                  by keepsimple1 (keepsimple1/
+#                                          mdns-sd); pure-Rust
+#                                          implementation tested
+#                                          against Avahi (Linux) and
+#                                          mDNSResponder (macOS
+#                                          Bonjour); IPv4+IPv6,
+#                                          TXT/PTR/SRV/A/AAAA/NSEC
+#                                          record handling.
+#                 → fcast (FUTO — FCast terminal sender CLI for
+#                           cross-device casting protocol; browses for
+#                           receivers advertising `_fcast._tcp.local.`;
+#                           subcommands play/seek/pause/resume/stop/
+#                           listen/set-volume/set-speed/scan;
+#                           598★ MIT)
+#                 _fcast            [Rust=240 OPENED Axis 185, slot 1/0/0]
+#
+#     Go      : github.com/hashicorp/mdns
+#                                          by HashiCorp; pure-Go
+#                                          implementation used
+#                                          internally by Consul as
+#                                          its mDNS discovery layer;
+#                                          the Consul installed base
+#                                          is the implicit
+#                                          integration test that
+#                                          drove this lib to the
+#                                          de-facto Go standard slot
+#                                          over `grandcat/zeroconf`.
+#                 → mkdev (Venkat Krishna venkatkrishna07 — trusted-
+#                           localhost-HTTPS reverse proxy with auto-CA
+#                           generation + /etc/hosts updates + LAN-wide
+#                           mDNS advertisement so phones / tablets /
+#                           other dev machines on the network can
+#                           resolve mapped hostnames without editing
+#                           their own /etc/hosts;
+#                           subcommands add/remove/list/serve/tui/
+#                           install/uninstall/hosts-helper/version/
+#                           completion; 135★ MIT)
+#                 _mkdev            [Go=240 CONTINUED Axis 185, slot 2/0/0]
+#
+#     JS/Node : bonjour-service        by onlxltd (onlxltd/bonjour-
+#                                          service); TypeScript
+#                                          rewrite of the original
+#                                          `bonjour` by Mathias Buus,
+#                                          with both server +
+#                                          browser APIs.  Builds on
+#                                          the lower-level
+#                                          `multicast-dns` (also by
+#                                          Mathias Buus) for the RFC
+#                                          6762 packet wire format —
+#                                          composable two-layer
+#                                          design typical of the
+#                                          npm ecosystem.
+#                 → vibetunnel (Amantus AI — turn any browser into your
+#                                terminal; uses bonjour-service to
+#                                advertise the local server as
+#                                `_vibetunnel._tcp.local.` so iOS /
+#                                macOS companion apps auto-discover it
+#                                on the LAN; subcommands fwd / status /
+#                                follow / unfollow / git-event /
+#                                systemd / version / help with rich
+#                                server options for Cloudflare Tunnel,
+#                                ngrok, Tailscale Funnel/Serve, HQ
+#                                clustering; 4521★ MIT)
+#                 _vibetunnel       [TS-Node=240 CLOSES Axis 185, 1/1/1]
+#                                                  ↑↑↑ THIS FILE ↑↑↑
+#                 The JS lane's two-layer composition (bonjour-service
+#                 wraps multicast-dns) reflects npm's preference for
+#                 small focused packages; the Rust and Go lanes both
+#                 ship monolithic packages that include both wire-
+#                 format handling and the service-discovery
+#                 abstraction in one crate.
+#
+# Round-number 240 landmark fires simultaneously across all three lanes:
+# Rust completion #240 (_fcast) + Go completion #240 (_mkdev) + TS-Node
+# completion #240 (_vibetunnel) = triple-240.  Axis #178 closed in the
+# lifetime of the corpus — every canonical mDNS / DNS-SD / Zeroconf
+# service discovery library in the three big systems languages now has
+# both a representative consumer completion AND a documented axis
+# closure landmark; the lanes are tied together by a common design
+# discipline (pure-host-language RFC 6762 + RFC 6763 implementation
+# with both server-advertise and client-browse modes, IPv4+IPv6, real-
+# world Avahi/Bonjour interop).
+# ============================================================================
+
+_vibetunnel() {
+    local context state state_descr line ret=1
+    typeset -A opt_args
+
+    local -a server_opts
+    server_opts=(
+        '--port=[HTTP server port (default 4020)]:port:'
+        '--bind=[bind address (default 0.0.0.0)]:address:_hosts'
+        '--name=[mDNS service name (default machine hostname; advertised as `_vibetunnel._tcp.local.`)]:name:'
+        '--no-mdns[disable mDNS service advertisement (bonjour-service)]'
+        '--no-auth[disable authentication (insecure; use only on trusted networks)]'
+        '--allow-local-bypass[allow local-network connections to bypass auth]'
+        '--disallow-user-password[disable username/password auth (require SSH key only)]'
+        '--enable-ssh-keys[enable SSH-key-based auth]'
+        '--local-auth-token=[explicit auth token (default: random per-start)]:token:'
+        '--debug[enable debug logging (alias for VIBETUNNEL_DEBUG=1)]'
+        '--cloudflare[expose server via Cloudflare Tunnel]'
+        '--ngrok[expose server via ngrok tunnel]'
+        '--ngrok-auth=[ngrok auth token]:token:'
+        '--ngrok-domain=[ngrok reserved domain to use]:domain:'
+        '--ngrok-region=[ngrok region (us / eu / ap / au / sa / jp / in)]:region:(us eu ap au sa jp in)'
+        '--enable-tailscale-funnel[expose server publicly via Tailscale Funnel (requires tailscale CLI)]'
+        '--enable-tailscale-serve[expose server on tailnet via Tailscale Serve]'
+        '--hq=[run as HQ-clustered worker against this HQ URL]:url:'
+        '--hq-url=[explicit HQ URL when running as worker]:url:'
+        '--hq-username=[HQ basic-auth username]:username:'
+        '--hq-password=[HQ basic-auth password]:password:'
+        '--no-hq-auth[disable HQ auth]'
+        '--allow-insecure-hq[allow self-signed certs when connecting to HQ]'
+        '--push-enabled[enable browser web-push notifications (requires VAPID keys)]'
+        '--push-disabled[explicitly disable browser push (overrides default)]'
+        '--generate-vapid-keys[generate VAPID keypair for web-push and exit]'
+        '--vapid-email=[VAPID contact email (required when push enabled)]:email:'
+    )
+
+    _arguments -C \
+        '(- *)'{-h,--help}'[print help]' \
+        '(- *)--version[print version]' \
+        $server_opts \
+        '1: :->cmds' \
+        '*::arg:->args' && ret=0
+
+    case $state in
+        cmds)
+            local -a subcmds
+            subcmds=(
+                'fwd:run command in a forwarded session (vibetunnel fwd [--title-mode ...] <command>)'
+                'status:show server and follow mode status'
+                'follow:enable Git follow mode (auto-rename session as branch changes)'
+                'unfollow:disable Git follow mode'
+                'git-event:notify server of Git event (called from a git hook)'
+                'systemd:manage systemd service on Linux (install / uninstall / status)'
+                'version:show server + CLI version'
+                'help:show CLI help'
+            )
+            _describe -t commands 'vibetunnel command' subcmds && ret=0
+            ;;
+        args)
+            case $words[1] in
+                fwd)
+                    _arguments \
+                        '--title-mode=[how session titles are derived from running commands]:mode:(static dynamic none filter)' \
+                        '*:command to run in forwarded session:_command_names' && ret=0
+                    ;;
+                follow)
+                    _arguments '1::Git branch to follow (default: current branch):' && ret=0
+                    ;;
+                systemd)
+                    _arguments \
+                        '1:action:((install\:"install VibeTunnel as systemd service (default)" uninstall\:"remove VibeTunnel systemd service" status\:"check systemd service status"))' && ret=0
+                    ;;
+                help)
+                    local -a allsubs
+                    allsubs=(fwd status follow unfollow git-event systemd version)
+                    _describe -t commands 'subcommand for help' allsubs && ret=0
+                    ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_vibetunnel "$@"
