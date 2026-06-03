@@ -1,0 +1,106 @@
+#compdef stricter
+# ============================================================================
+# stricter - Atlassian project-wide JavaScript/TypeScript linter (Node, MIT)
+#
+# Author : Atlassian (atlassian organization)
+# Upstream: https://github.com/atlassian/stricter
+# npm    : stricter
+#
+# stricter is a project-wide lint runner that complements
+# per-file linters (eslint/biome/prettier) by enforcing rules
+# that span multiple files: directory-structure constraints,
+# inter-module import allow/deny lists, file-naming
+# conventions, sibling-file presence (e.g. every .ts has a
+# matching .test.ts), config-shape uniformity across packages
+# in a monorepo, etc. The rules are declared in
+# `.stricter.config.js` (or .json) at the project root and
+# run against the file graph in one pass with results cached
+# by xxhash content fingerprints.
+#
+# Flags (yargs):
+#   -c, --config <file>    - path to .stricter.config.js
+#   -r, --reporter <name>  - reporter: console / mocha / junit
+#       --rule <name>      - verify only specific rule(s) (repeatable)
+#       --clearCache       - clear the on-disk cache + re-walk all files
+#       --fix              - apply fixes for rule violations (where supported)
+#       --version          - print version
+#   -h, --help             - print help
+#
+# The xxhash lane is built on `@node-rs/xxhash` (declared at
+# upstream package.json HEAD), the canonical napi-rs-based
+# Node binding to the Rust `twox-hash` crate by LongYinan
+# (Brooooooklyn, the napi-rs maintainer) - github.com/napi-rs/
+# node-rs/tree/main/packages/xxhash. The package is part of
+# the @node-rs/* family that wraps high-performance Rust
+# crates as Node native modules via napi-rs (the modern
+# alternative to node-gyp). For XXHash specifically, the
+# napi-rs binding outperforms the pure-JS xxhashjs by ~10x on
+# large inputs because it dispatches directly to twox-hash's
+# SIMD fast paths (XXH3 via SSE4.2/AVX2 on x86_64, NEON on
+# arm64).
+#
+# stricter uses XXHash as the cache key for per-file lint
+# results: when the file content hasn't changed, the cached
+# rule-result is reused; when it has, the file is re-linted.
+# XXHash is the natural fit because the cache only needs
+# collision-resistance against benign changes (cryptographic
+# strength is not needed), and the throughput must keep up
+# with the file-walker (~500 MB/s on a single core for XXH64).
+#
+# ----------------------------------------------------------------------------
+# AXIS 222 :: XXHash (non-cryptographic ultra-fast content hashing)  [CLOSES]
+# Round 1366 :: TS-Node slot 3 of 4 :: CLOSES Axis 222 (215th axis closed)
+#
+# Cross-language canonical library family for this axis:
+#   Rust    : shepmaster/twox-hash         [R1364 _walrus]
+#   Go      : cespare/xxhash               [R1365 _lind]
+#   TS/Node : @node-rs/xxhash              [R1366 THIS FILE]
+#
+# The TS slot closes the axis with the "napi-rs bridge to the
+# Rust slot" pattern - a recurring motif across multiple axes
+# this hunt (Axis 208 argon2, Axis 215 snappy). The Node
+# ecosystem has converged on @node-rs/* as the canonical
+# wrapper for any high-throughput hashing/crypto/compression
+# library where pure-JS is too slow: instead of maintaining a
+# separate Node implementation, the napi-rs maintainers wrap
+# the proven Rust crate as a native addon and ship per-platform
+# prebuilt binaries via @node-rs/<lib>-{darwin,linux,win32}-{x64,arm64}.
+#
+# Cross-stack bit-identity is the killer property of XXHash on
+# this axis: a 64-bit XXH64 of "foo" computed by twox-hash
+# (Rust, in walrus's sliver fingerprinter), cespare/xxhash
+# (Go, in lind's shard router), and @node-rs/xxhash (Node, in
+# stricter's cache-key generator) are byte-for-byte identical.
+# This makes XXHash the ideal cross-stack content-addressing
+# primitive: a single hash value flows through Rust producers,
+# Go middleware, and Node consumers without re-hashing or
+# format conversion.
+#
+# Structural commentary: the napi-rs pattern is the post-2022
+# Node-native-module stack. Pre-napi-rs (node-gyp era) wrappers
+# required local C++ compilation at install time, which broke
+# in CI/CD and Docker builds. napi-rs uses the Node N-API
+# stable ABI + prebuilt binary distribution via separate
+# platform-specific npm packages, eliminating the install-
+# time-compile step entirely. The cost: Rust skills are now a
+# prerequisite to author high-throughput Node modules - but
+# the throughput payoff is decisive enough that the entire
+# performance-sensitive end of npm (parsing, hashing,
+# encoding, image processing, ML inference) has moved.
+# ============================================================================
+
+_stricter() {
+    local context state state_descr line
+    typeset -A opt_args
+
+    _arguments -s -S \
+        '(-c --config)'{-c,--config}'[specify config location]:file:_files -g "*.(js|json|cjs|mjs)"' \
+        '(-r --reporter)'{-r,--reporter}'[specify reporter]:reporter:(console mocha junit)' \
+        '*--rule[verify a particular rule (repeatable)]:rule:' \
+        '--clearCache[clear cache and re-walk all files]' \
+        '--fix[apply fixes for rule violations]' \
+        '(- *)--version[print version]' \
+        '(- *)'{-h,--help}'[print help]'
+}
+
+_stricter "$@"
