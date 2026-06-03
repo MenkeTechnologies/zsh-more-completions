@@ -1,0 +1,106 @@
+#compdef stargz-fuse-manager
+# ============================================================================
+# stargz-fuse-manager - per-container-image FUSE supervisor for the stargz
+#                        lazy-pull snapshotter (Go, Apache-2.0)
+#
+# Author : containerd Authors
+# Upstream: https://github.com/containerd/stargz-snapshotter
+#
+# `stargz-fuse-manager` is the per-image FUSE supervisor for
+# containerd's stargz snapshotter - the lazy-pull layer that
+# lets containerd start a container before the image layers
+# are fully downloaded by serving needed files on-demand over
+# FUSE. The manager process owns the FUSE mount for each
+# loaded layer, talks to `containerd-stargz-grpc` via a Unix
+# socket, and maintains a bbolt-backed metadata store for the
+# per-layer file-system trees.
+#
+# Architecture: the stargz snapshotter ships three long-running
+# binaries that together implement lazy container-image pull:
+#   - containerd-stargz-grpc: gRPC snapshotter plugin that
+#     containerd talks to via the standard plugin protocol
+#   - stargz-fuse-manager (THIS BIN): per-image FUSE mount
+#     supervisor, runs as a detached child of the snapshotter
+#   - stargz-store: per-layer chunk cache + on-disk store
+# Plus the `ctr-remote` debug CLI for image-level operations.
+#
+# Flags (Go stdlib `flag`):
+#   -v                       - show version and exit
+#   -action <name>           - action: "start" to spawn a new
+#                              detached fusemanager, or unset
+#                              to run the in-foreground daemon
+#                              loop directly
+#   -fusestore-path <dir>    - bbolt store directory
+#                              (default /var/lib/containerd-
+#                                       stargz-grpc/fusestor)
+#   -address <socket>        - gRPC Unix socket
+#                              (default /run/containerd-
+#                                       stargz-grpc/fuse-manager)
+#   -log-level <level>       - logging level
+#                              (trace|debug|info|warn|error|fatal|panic;
+#                               default info)
+#   -log-path <file>         - log file (default stderr)
+#
+# The bbolt lane is built on `go.etcd.io/bbolt v1.4.3`
+# (declared as a direct dep at upstream go.mod HEAD and used
+# from fusemanager/fusestore.go), the canonical Go embedded
+# key-value store maintained by the etcd team (github.com/
+# etcd-io/bbolt, 8800+ stars). bbolt is the active fork of
+# Ben Johnson's original BoltDB (boltdb/bolt, archived in
+# 2017 when Ben deprecated the project to discourage
+# unsupported production use). The etcd team picked it up
+# because they ship it as the persistence layer for the etcd
+# v3 storage engine - the same KV store that backs the
+# entire Kubernetes control plane runs the bbolt code on
+# every node. stargz-fuse-manager uses it for the per-mount
+# bookkeeping: layer-id -> mount-state, fd-id -> opened-file-
+# metadata, refcount-tracking for layer reuse across
+# containers.
+#
+# ----------------------------------------------------------------------------
+# AXIS 229 :: Embedded key-value stores (single-file ACID B-tree)
+# Round 1386 :: Go slot 2 of 4 :: continues Axis 229
+#
+# Cross-language canonical library family for this axis:
+#   Rust    : cberner/redb                 [R1385 _sacad]
+#   Go      : etcd-io/bbolt                [R1386 THIS FILE]
+#   TS/Node : kriszyp/lmdb-js              [R1387 closing]
+#
+# etcd-io/bbolt is structurally the *infrastructure-load-
+# bearing* canonical library for this axis - the etcd v3
+# storage engine that backs Kubernetes runs on top of it,
+# meaning every K8s cluster on Earth is transitively driving
+# bbolt code. The fork-and-adoption pattern is unusual: the
+# original maintainer (Ben Johnson, who later founded
+# litestream + replicated SQLite) deprecated the project in
+# 2017 not because it was buggy but because he didn't want
+# to support production users. The etcd team needed a
+# maintained version, forked, and bbolt has lived under the
+# etcd-io org since. Today bbolt and the original boltdb/bolt
+# are effectively the same codebase, just with bbolt
+# receiving bug fixes + Go compatibility updates.
+#
+# All three lanes converge on the same architectural choice:
+# *single-file, ACID-transactional, B-tree-indexed, memory-
+# mapped KV store with no separate server process*. This is
+# the niche that distinguishes "embedded persistence" from
+# both "in-process cache" (redis, memcached) and "server
+# database" (postgres, mysql). The use-case is local state
+# that survives process restart without operational overhead.
+# ============================================================================
+
+_stargz-fuse-manager() {
+    local context state state_descr line
+    typeset -A opt_args
+
+    _arguments -s -S \
+        '-v[show version and exit]' \
+        '-action[fusemanager action]:action:(start)' \
+        '-fusestore-path[bbolt store directory]:dir:_files -/' \
+        '-address[gRPC Unix socket path]:socket:_files' \
+        '-log-level[logging level]:level:(trace debug info warn error fatal panic)' \
+        '-log-path[log file path (default stderr)]:file:_files' \
+        '(- *)'{-h,--help}'[print help]'
+}
+
+_stargz-fuse-manager "$@"
