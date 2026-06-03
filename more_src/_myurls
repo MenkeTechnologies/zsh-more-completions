@@ -1,0 +1,177 @@
+#compdef myurls
+# ============================================================================
+# myurls - your own URL shortener (Go, MIT)
+#
+# Author : Carey Wang (CareyWang)
+# Upstream: https://github.com/CareyWang/MyUrls
+#
+# `myurls` is a self-hosted URL shortener that maps
+# short-code paths to redirect-target URLs via a
+# Redis-backed key/value store. The HTTP server
+# exposes:
+#   POST /short          - create a new short URL
+#   GET  /<short-code>   - 302-redirect to the
+#                           stored target URL
+#   GET  /              - serve the bundled
+#                           static-asset homepage
+#                           (frontend SPA)
+#
+# Architecture:
+#   - Gin HTTP server for the REST API
+#   - go-redis/v9 client for state persistence
+#   - In-process 1GB ballast to reduce GC churn
+#     under high request rates
+#
+# Use case: drop-in replacement for goo.gl /
+# bit.ly / TinyURL when you want the shortener
+# infrastructure on your own domain + your own
+# Redis instance for the persistent state.
+#
+# Usage:
+#   myurls [flags]
+#
+# Flags (Go stdlib flag.* parsing):
+#   --port <port>         - HTTP server port
+#                            (default 8080)
+#   --domain <domain>     - public domain (used in
+#                            generated short URLs)
+#                            (default localhost:8080)
+#   --proto <proto>       - public protocol
+#                            (default https)
+#   --conn <addr:port>    - Redis address
+#                            (default
+#                            localhost:6379)
+#   --password <pw>       - Redis AUTH password
+#                            (default empty)
+#   -h                    - print help
+#
+# Environment overrides (env vars take precedence
+# over CLI flags):
+#   MYURLS_PORT
+#   MYURLS_DOMAIN
+#   MYURLS_PROTO
+#   MYURLS_CONN
+#   MYURLS_PASSWORD
+#
+# The go-redis lane is built on `github.com/redis/
+# go-redis/v9 v9.8.0` (declared verbatim at upstream
+# go.mod HEAD as a direct dep, imported as `"github.
+# com/redis/go-redis/v9"` then `redis.Options{Addr,
+# Password, DB}` + `rc.Ping(ctx)` + `rc.Set/Get`),
+# the canonical Go Redis client by Vladimir
+# Mihailenco - github.com/redis/go-redis, 22000+
+# stars.
+#
+# go-redis has an interesting governance history:
+#   1. Mihailenco started the library in 2014 at
+#      github.com/go-redis/redis as `go-redis/redis`
+#      - the de-facto Go Redis client since the
+#      earliest days of the Go ecosystem
+#   2. 2017: gained Pipeline + Cluster + Sentinel +
+#      pub/sub support; reached canonical-Go-Redis
+#      status displacing earlier alternatives
+#      (gosexy/redis, gomodule/redigo)
+#   3. v8 (2020): added context.Context-aware APIs
+#      across the whole command surface
+#   4. v9 (2023): RESP3 protocol support + Redis 7
+#      streams + cluster-redirect improvements
+#   5. 2023: REPO TRANSITIONED from go-redis/redis
+#      to redis/go-redis under Redis Inc.'s official
+#      `redis` GitHub org. The import path remains
+#      `github.com/redis/go-redis/v9` (the Go module
+#      path follows the new repo location). The
+#      transition formally blessed Mihailenco's
+#      client as Redis Inc.'s canonical Go client,
+#      similar to:
+#      - NodeRedis/node-redis at Axis 255's Node
+#        slot (also under Redis Inc.'s org)
+#      - redis/redis-py at the Python ecosystem's
+#        equivalent
+#
+# This corporate-canonical-blessing pattern is unique
+# to the Go + Node + Python slots in the Redis
+# ecosystem. Compare:
+#   - Rust (Axis 255 slot 1): mitsuhiko/redis-rs
+#     stays under Ronacher's personal canonical
+#     position; Redis Inc. has not formally blessed a
+#     Rust client (the redis-rs/redis-rs org acts as
+#     the community canonical)
+#   - Go (Axis 255 slot 2, THIS FILE): redis/go-redis
+#     formally blessed under Redis Inc.
+#   - Node (Axis 255 closing): NodeRedis/node-redis
+#     under Redis Inc.
+#   - Python (off-axis): redis-py under Redis Inc.
+#
+# Mihailenco continues as primary maintainer post-
+# transition, but the org move signals the long-term
+# commitment from Redis Inc. to the client
+# ecosystem.
+#
+# myurls uses go-redis for:
+#   - `rc.Ping(ctx)` on startup as a Redis-health
+#     check
+#   - `rc.Set(ctx, code, target, 0)` for new short
+#     URL creation
+#   - `rc.Get(ctx, code)` for redirect resolution
+#
+# ----------------------------------------------------------------------------
+# AXIS 255 :: Redis protocol (RESP) client libraries
+# Round 1464 :: Go slot 2 of 4 :: continues Axis 255
+#
+# Cross-language canonical library family for this axis:
+#   Rust    : mitsuhiko/redis-rs           [R1463 _ocypod-server]
+#             (community canonical, not
+#              Redis Inc.-blessed)
+#   Go      : redis/go-redis (Vladimir     [R1464 THIS FILE]
+#             Mihailenco; Redis Inc.-
+#             blessed since 2023)
+#   TS/Node : NodeRedis/node-redis         [R1465 closing]
+#             (Redis Inc.-blessed)
+#
+# redis/go-redis is structurally interesting in this
+# axis because of the *org-transition-to-corporate-
+# canonical* pattern in 2023. Vladimir Mihailenco's
+# original work (go-redis/redis since 2014) reached
+# canonical-Go-Redis status through community
+# adoption alone for ~9 years before Redis Inc.
+# formally blessed the library by moving it under
+# the `redis/` GitHub org alongside redis-py and
+# node-redis.
+#
+# This pattern of *delayed-corporate-canonical-
+# blessing* contrasts with:
+#   - Rust (redis-rs): no Redis Inc. blessing;
+#     stays community-canonical under Ronacher's
+#     personal maintenance
+#   - libraries with day-1 corporate provenance
+#     (e.g. AWS SDK libraries, Google Cloud SDKs)
+#     that are corporate-canonical from inception
+#
+# The transition matters operationally because
+# Redis Inc. now coordinates the client library
+# release cycle with Redis server feature
+# announcements (vector search, JSON datatype,
+# streams) - the v9 series tracks Redis 7+ features
+# more aggressively than community-maintained
+# alternatives would.
+#
+# Cross-language interop at the wire format level - a
+# RESP2 / RESP3 command stream produced by redis-rs +
+# go-redis + node-redis is byte-identical to the
+# Redis server's expected wire format.
+# ============================================================================
+
+_myurls() {
+    local context state state_descr line
+    typeset -A opt_args
+
+    _arguments -s -S \
+        '--port[HTTP server port (default 8080)]:port:' \
+        '--domain[public domain for generated short URLs]:domain:' \
+        '--proto[public protocol]:proto:(http https)' \
+        '--conn[Redis address]:addr:' \
+        '--password[Redis AUTH password]:password:' \
+        '(- *)-h[print help]'
+}
+
+_myurls "$@"
