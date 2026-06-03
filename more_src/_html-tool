@@ -1,0 +1,173 @@
+#compdef html-tool
+# ============================================================================
+# html-tool - extract tags / attribs / comments / CSS-
+#              selected nodes from HTML on stdin
+#              (Go, no explicit LICENSE)
+#
+# Author : Tom Hudson (tomnomnom)
+# Upstream: https://github.com/tomnomnom/hacks/tree/master/html-tool
+#
+# `html-tool` reads a list of URLs or filenames from
+# stdin and applies a per-line HTML extraction mode to
+# each one. The output stream is one extracted value per
+# line - suitable for piping into the rest of a security
+# / data-scraping pipeline. It is part of Tom Hudson's
+# `hacks` repo, which is a collection of small Unix-pipe-
+# friendly Go binaries used heavily across the bug-bounty
+# + offensive-security communities (alongside assetfinder,
+# anti-burl, fff, gron, qsreplace, waybackurls, and
+# similar).
+#
+# Usage:
+#   <urls-or-files> | html-tool <mode> [<args>]
+#
+# Modes:
+#   tags <tag-names>       - extract text inside named
+#                            tags (e.g. `tags title a strong`)
+#   attribs <attrib-names> - extract attribute values
+#                            (e.g. `attribs src href`)
+#   comments               - extract HTML comment nodes
+#                            (`<!-- ... -->`)
+#   query <css-selector>   - extract first-child text of
+#                            elements matching the CSS
+#                            selector (via the upstream
+#                            ericchiang/css cascadia-
+#                            style selector engine)
+#
+# Examples (from upstream README):
+#   cat urls.txt | html-tool tags title a strong
+#   find . -type f -name "*.html" | html-tool attribs src href
+#   cat urls.txt | html-tool comments
+#   cat urls.txt | html-tool query "div.main h2"
+#
+# The x/net/html lane is built on `golang.org/x/net
+# v0.0.0-20220722155237-a158d28d115b` (declared verbatim
+# at upstream html-tool/go.mod HEAD as a direct dep,
+# imported as `golang.org/x/net/html`), the canonical Go
+# HTML5 parser by the Go core team in the
+# `golang.org/x/net` subrepository - github.com/golang/
+# net, 1500+ stars. The `html` subpackage is the Go
+# core team's WHATWG-spec-compliant HTML5 tokenizer +
+# tree builder, intentionally located in the
+# `golang.org/x/net` namespace (alongside http2, idna,
+# webdav, websocket, and proxy) to keep the std-lib's
+# `net/http` core lean while still providing the spec-
+# accurate parser to the broader ecosystem.
+#
+# The two main entry points are:
+#   html.Parse(io.Reader) -> *html.Node
+#     - constructs a full tree-builder DOM
+#   html.NewTokenizer(io.Reader) -> *html.Tokenizer
+#     - streaming token-by-token reader for tools that
+#       don't need a full DOM (lower memory)
+#
+# html-tool uses both styles - the `comments`, `attribs`,
+# and `tags` modes use the streaming `Tokenizer` (because
+# they only care about individual tokens, not tree
+# structure), while the `query` mode uses the full
+# `html.Parse` + ericchiang/css selector engine on the
+# constructed DOM (because CSS selectors need parent /
+# sibling traversal).
+#
+# Both the streaming Tokenizer + tree-builder Parse follow
+# the WHATWG spec's tokenizer state machine + insertion
+# mode rules byte-for-byte, so the parsed DOM matches what
+# a browser would construct from the same input.
+#
+# ----------------------------------------------------------------------------
+# AXIS 242 :: HTML5 parsing (WHATWG-spec-compliant DOM
+#              construction + CSS selectors)
+# Round 1425 :: Go slot 2 of 4 :: continues Axis 242
+#
+# Cross-language canonical library family for this axis:
+#   Rust    : servo/html5ever (+ scraper) [R1424 _docrawl]
+#   Go      : golang.org/x/net/html       [R1425 THIS FILE]
+#   TS/Node : inikulin/parse5             [R1426 closing]
+#
+# golang.org/x/net/html is structurally interesting in
+# this axis because of its *core-team-maintained subrepo*
+# governance pattern. Unlike the Rust slot
+# (servo/html5ever, extracted from Mozilla's Servo browser
+# engine) and the Node slot (inikulin/parse5, an
+# independent third-party project later adopted by
+# cheerio + jsdom), the Go slot is maintained directly by
+# the Go core team in the same `golang.org/x/*` namespace
+# as the rest of the experimental + ecosystem-adjacent
+# packages.
+#
+# The split rationale:
+#   - core std-lib `net/http` stays minimal (raw HTTP
+#     protocol, no markup parsing)
+#   - `golang.org/x/net/html` provides the WHATWG-spec
+#     HTML5 parser when applications need it
+#   - the `golang.org/x/*` namespace is governed under
+#     the same review process as std-lib but explicitly
+#     marked as "may change in incompatible ways" -
+#     allowing the parser to evolve with WHATWG spec
+#     drift without breaking std-lib compat guarantees
+#
+# This structural choice produces a strong network effect:
+# every Go-based scraping / SEO tool / link extractor /
+# OpenGraph harvester depends on `golang.org/x/net/html`,
+# directly or transitively through `goquery` (which is
+# itself a wrapper around `x/net/html` + cascadia CSS
+# selectors). When tomnomnom built html-tool he picked
+# `golang.org/x/net/html` directly + `ericchiang/css`
+# for selectors (rather than the heavier goquery facade)
+# because of html-tool's pipe-friendly minimalism story.
+#
+# Cross-language interop happens at the DOM-structure
+# level (same WHATWG insertion mode rules produce
+# structurally identical trees) but the in-memory
+# representation differs per lane:
+#   - scraper / html5ever: `ego_tree::Tree<Node>` with
+#     arena-allocated nodes
+#   - golang.org/x/net/html: `*html.Node` with parent /
+#     child / sibling pointer doubly-linked tree
+#   - parse5: JSON-shaped JS object tree with parentNode
+#     / childNodes / attrs fields
+# ============================================================================
+
+_html-tool() {
+    local context state state_descr line
+    typeset -A opt_args
+    local curcontext="$curcontext" ret=1
+
+    _arguments -C \
+        '1: :_html_tool_modes' \
+        '*::arg:->args' \
+    && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                tags|attribs)
+                    _arguments \
+                        '*:HTML tag or attribute name:'
+                    ;;
+                query)
+                    _arguments \
+                        '1:CSS selector:'
+                    ;;
+                comments)
+                    # no extra args
+                    ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_html_tool_modes() {
+    local -a modes
+    modes=(
+        'tags:extract text contained in named tags'
+        'attribs:extract values of named attributes'
+        'comments:extract HTML comment nodes'
+        'query:extract first-child text of CSS-selected elements'
+    )
+    _describe -t modes 'html-tool mode' modes
+}
+
+_html-tool "$@"
