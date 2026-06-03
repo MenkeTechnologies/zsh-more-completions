@@ -1,0 +1,175 @@
+#compdef bookhunter
+# ---------------------------------------------------------------------------
+# bookhunter — a downloader for clawing the ebooks from internets (Go, 1290★)
+#
+# upstream: https://github.com/bookstairs/bookhunter
+# org    : bookstairs
+# license: MIT
+#
+# Source-direct completion: every subcommand and every flag below is verbatim
+# from cmd/*.go on the bookhunter tip — cmd/root.go (persistent flags),
+# cmd/talebook.go (download/register init()), cmd/telegram.go,
+# cmd/sobooks.go, cmd/k12.go, cmd/hsu.go, cmd/aliyun.go, cmd/version.go,
+# cmd/flags/config.go (default values).
+#
+# Direct deps from go.mod:
+#   github.com/schollz/progressbar/v3 v3.17.1   ← canonical Go progress bar
+#   github.com/spf13/cobra
+#
+# === AXIS 153 CONTINUES — progress-bar / spinner ecosystem ===
+# Axis position: Go=208 continues Axis 153 (slot 2/0/0).  Canonical Go
+# progress-bar library is `schollz/progressbar` by Zack Scholl
+# (`@schollz` — also author of croc, find, raspberry-pi-turnkey).  v3 is
+# the maintained line and adds io.Reader/Writer/Closer adapters for piping
+# through HTTP downloads.  bookhunter shows per-book download progress
+# across its concurrent talebook / telegram / sobooks / k12 / hsu fetchers.
+#
+# Cycle position in current 3+1 micro-cycle:
+#   Rust=208   _ripunzip            ← previous round (axis 153 OPENS at 1/0/0)
+#   Go=208     ← THIS FILE          (axis 153 continues, slot 2/0/0)
+#   TS-Node=208 ← next round        (axis 153 CLOSES at triple-208, slot 1/1/1)
+# ---------------------------------------------------------------------------
+
+# --- shared download flags (talebook download / telegram / sobooks / hsu) ---
+_bookhunter_dl_common() {
+    print -- \
+        '*'{-f,--format=}'[file formats to download (epub azw3 mobi pdf zip)]:format:(epub azw3 mobi pdf zip)' \
+        '(-d --download)'{-d,--download=}'[book directory to use]:directory:_files -/' \
+        '(-i --initial)'{-i,--initial=}'[book id to start download from]:id:' \
+        '(-r --rename)'{-r,--rename}'[rename the book file by book id]' \
+        '(-t --thread)'{-t,--thread=}'[number of download threads]:n:' \
+        '--ratelimit=[allowed requests per minute per thread]:n:'
+}
+
+_bookhunter() {
+    local context state state_descr line ret=1
+    typeset -A opt_args
+
+    local -a subcmds
+    subcmds=(
+        'talebook:download books from a self-hosted talebook server'
+        'telegram:download books from a Telegram channel'
+        'sobooks:download books from sanqiu.mobi (formerly SoBooks)'
+        'k12:download books from k12 textbook source'
+        'hsu:download books from hsu.life'
+        'aliyun:acquire the refresh token from aliyundrive with QR code login'
+        'version:print bookhunter version'
+        'help:help about any command'
+    )
+
+    _arguments -C \
+        '(-c --config)'{-c,--config=}'[config path for bookhunter]:config:_files -/' \
+        '--proxy=[request proxy URL]:proxy URL:' \
+        '--retry=[retry times for a failed download]:n:' \
+        '(-s --skip-error)'{-s,--skip-error}'[continue to download the next book on failure (default true)]' \
+        '*'{-k,--keyword=}'[keywords for books]:keyword:' \
+        '--verbose[print all logs for debugging]' \
+        '(- *)'{-h,--help}'[help for bookhunter]' \
+        '1: :->cmds' \
+        '*::arg:->args' && ret=0
+
+    case $state in
+        cmds)
+            _describe -t commands 'bookhunter command' subcmds && ret=0
+            ;;
+        args)
+            case $line[1] in
+                talebook)
+                    _bookhunter_talebook && ret=0
+                    ;;
+                telegram)
+                    local -a common=( ${(z)$(_bookhunter_dl_common)} )
+                    _arguments \
+                        '--channelID=[channel id for telegram]:channel id:' \
+                        '--mobile=[mobile number (default zone code +86)]:mobile:' \
+                        '--refresh[refresh the login session]' \
+                        '--appID=[app id for telegram]:app id:' \
+                        '--appHash=[app hash for telegram]:app hash:' \
+                        '(-e --extract)'{-e,--extract}'[extract archive file for filtering]' \
+                        $common \
+                        '(-h --help)'{-h,--help}'[help for telegram]' && ret=0
+                    ;;
+                sobooks)
+                    local -a common=( ${(z)$(_bookhunter_dl_common)} )
+                    _arguments \
+                        '(-e --extract)'{-e,--extract}'[extract archive file for filtering]' \
+                        '--code=[secret code for SoBooks (default 881120)]:code:' \
+                        $common \
+                        '(-h --help)'{-h,--help}'[help for sobooks]' && ret=0
+                    ;;
+                k12)
+                    _arguments \
+                        '(-d --download)'{-d,--download=}'[book directory to use]:directory:_files -/' \
+                        '(-t --thread)'{-t,--thread=}'[number of download threads]:n:' \
+                        '--ratelimit=[allowed requests per minute per thread]:n:' \
+                        '(-h --help)'{-h,--help}'[help for k12]' && ret=0
+                    ;;
+                hsu)
+                    local -a common=( ${(z)$(_bookhunter_dl_common)} )
+                    _arguments \
+                        '(-u --username)'{-u,--username=}'[hsu.life username]:username:' \
+                        '(-p --password)'{-p,--password=}'[hsu.life password]:password:' \
+                        $common \
+                        '(-h --help)'{-h,--help}'[help for hsu]' && ret=0
+                    ;;
+                aliyun|version)
+                    _arguments \
+                        '(-h --help)'{-h,--help}'[help for this command]' && ret=0
+                    ;;
+                help)
+                    _describe -t commands 'bookhunter command' subcmds && ret=0
+                    ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+# `bookhunter talebook <download|register>` — two-level
+_bookhunter_talebook() {
+    local context state state_descr line ret=1
+    typeset -A opt_args
+
+    local -a tb_subcmds
+    tb_subcmds=(
+        'download:Download the books from talebook'
+        'register:Register account on talebook'
+    )
+
+    _arguments -C \
+        '(-h --help)'{-h,--help}'[help for talebook]' \
+        '1: :->tcmds' \
+        '*::arg:->targs' && ret=0
+
+    case $state in
+        tcmds)
+            _describe -t commands 'bookhunter talebook command' tb_subcmds && ret=0
+            ;;
+        targs)
+            case $line[1] in
+                download)
+                    local -a common=( ${(z)$(_bookhunter_dl_common)} )
+                    _arguments \
+                        '(-u --username)'{-u,--username=}'[talebook username]:username:' \
+                        '(-p --password)'{-p,--password=}'[talebook password]:password:' \
+                        '(-w --website)'{-w,--website=}'[talebook link (REQUIRED)]:URL:' \
+                        $common \
+                        '(-h --help)'{-h,--help}'[help for download]' && ret=0
+                    ;;
+                register)
+                    _arguments \
+                        '(-u --username)'{-u,--username=}'[talebook username (REQUIRED)]:username:' \
+                        '(-p --password)'{-p,--password=}'[talebook password (REQUIRED)]:password:' \
+                        '(-e --email)'{-e,--email=}'[talebook email (REQUIRED)]:email:' \
+                        '(-w --website)'{-w,--website=}'[talebook link (REQUIRED)]:URL:' \
+                        '(-h --help)'{-h,--help}'[help for register]' && ret=0
+                    ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_bookhunter "$@"
