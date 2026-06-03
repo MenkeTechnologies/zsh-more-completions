@@ -1,0 +1,99 @@
+#compdef carbon-clickhouse
+# ============================================================================
+# carbon-clickhouse - Graphite metrics receiver -> ClickHouse storage
+#                     (Go, MIT)
+#
+# Author : Roman Lomonosov (lomik) / go-graphite organization
+# Upstream: https://github.com/go-graphite/carbon-clickhouse
+#
+# carbon-clickhouse receives Graphite metrics over the standard
+# Carbon line protocols (TCP plaintext, TCP pickle, UDP, HTTP)
+# and persists them to a ClickHouse instance via the Native TCP
+# protocol. Designed as a drop-in replacement for carbon-cache
+# / go-carbon in the "ingest metrics -> store columnar" lane of
+# the GraphiteWeb stack. Throughput at ingest is gated by
+# ClickHouse insert batching; carbon-clickhouse keeps in-RAM
+# RowBinary batches per (metric, day) partition and flushes
+# them every config.upload.timeout to the configured
+# ClickHouse table (default: graphite.points).
+#
+# Pairs with `carbonapi` (the read path: pulls Graphite-format
+# queries, translates to ClickHouse SQL) and `graphite-clickhouse`
+# (alternative read service) to form the full go-graphite +
+# ClickHouse storage stack.
+#
+# Flags (Go stdlib flag):
+#   -config <file>             - path to TOML config
+#                                (default /etc/carbon-clickhouse/
+#                                          carbon-clickhouse.conf)
+#   -config-print-default      - dump default config to stdout
+#   -check-config              - parse config + exit (CI lint)
+#   -exact-config              - assert all config params are
+#                                in the target struct (strict mode)
+#   -version                   - print version
+#   -cat <file>                - decode a RowBinary on-disk batch
+#                                file to TSV (debugging)
+#   -recover <file>            - read good records from corrupted
+#                                RowBinary; emit recovered binary
+#                                to stdout
+#
+# The lz4 lane is built on `github.com/pierrec/lz4 v2.5.2+incompatible`
+# (declared as a direct dep at upstream go.mod HEAD), the canonical
+# Go LZ4 implementation by Pierre Curto (github.com/pierrec/lz4,
+# 1400+ stars). pierrec/lz4 is the only mainstream pure-Go LZ4
+# library and the universal choice for ClickHouse-Go drivers,
+# Kafka Go consumers, and Parquet readers in the Go ecosystem.
+# carbon-clickhouse uses pierrec/lz4 to negotiate the LZ4-
+# compressed Native-protocol frame format with ClickHouse - LZ4
+# is ClickHouse's default Native-protocol compression because
+# the decompression speed dominates query-response throughput
+# at the server end (ClickHouse can decompress LZ4 faster than
+# memcpy at typical compression ratios).
+#
+# ----------------------------------------------------------------------------
+# AXIS 223 :: LZ4 fast block compression (low-latency throughput)
+# Round 1368 :: Go slot 2 of 4 :: continues Axis 223
+#
+# Cross-language canonical library family for this axis:
+#   Rust    : PSeitz/lz4_flex              [R1367 _seekstorm_server]
+#   Go      : pierrec/lz4                  [R1368 THIS FILE]
+#   TS/Node : pierrec/node-lz4 OR lz4-napi [R1369 closing]
+#
+# pierrec/lz4 is structurally interesting in this axis: the
+# same Pierre Curto maintains the de-facto LZ4 binding for
+# BOTH Go (pierrec/lz4) AND Node (pierrec/node-lz4). This is
+# unusual - most canonical libraries have different maintainers
+# per language. The cross-language consistency of pierrec/lz4
+# + pierrec/node-lz4 is therefore unusually strong: they share
+# the same understanding of the LZ4 wire format quirks
+# (legacy-vs-modern frame format choice, content-size header
+# treatment, dictionary-mode handling), making cross-stack
+# interop between Go producers and Node consumers especially
+# reliable.
+#
+# The ClickHouse ecosystem is the killer use-case driver for
+# pierrec/lz4 in Go: every mainstream ClickHouse Go driver
+# (clickhouse-go, ch-go) depends on pierrec/lz4 for the
+# Native-protocol compression layer. ClickHouse Servers
+# transmit query results in LZ4-compressed Native-protocol
+# frames by default; the driver MUST be able to decompress
+# them in line-rate, and pierrec/lz4 is the only Go library
+# that hits that throughput target without CGo.
+# ============================================================================
+
+_carbon-clickhouse() {
+    local context state state_descr line
+    typeset -A opt_args
+
+    _arguments -s -S \
+        '-config[path to TOML config file]:file:_files -g "*.(conf|toml|cfg)"' \
+        '-config-print-default[print default config to stdout]' \
+        '-check-config[parse config and exit (CI/lint)]' \
+        '-exact-config[ensure all config params are in target struct (strict)]' \
+        '-version[print version]' \
+        '-cat[decode a RowBinary file to TSV]:file:_files' \
+        '-recover[read good records from corrupted RowBinary file]:file:_files' \
+        '(- *)'{-h,--help}'[print help]'
+}
+
+_carbon-clickhouse "$@"
