@@ -1,0 +1,213 @@
+#compdef jwter
+# ============================================================================
+# jwter - decode / sign / verify JSON Web Tokens from CLI
+#          (TypeScript -> Node, GPL-3.0)
+#
+# Author : Jack Humphries (JackHumphries9)
+# Upstream: https://github.com/JackHumphries9/jwter
+# npm    : jwter (binary: jwter)
+#
+# `jwter` is a TypeScript-built Node CLI for round-tripping
+# JWTs from the terminal. Decode an opaque JWT into its
+# header + claims JSON, sign a fresh JWT from a secret +
+# payload, or verify an existing JWT against a secret +
+# expected claim set. Built on top of Commander.js + the
+# upstream auth0/node-jsonwebtoken (`jsonwebtoken` on npm).
+#
+# Usage:
+#   jwter decode <token>
+#   jwter sign <secret> [data] [options]
+#   jwter verify <secret> <token> [options]
+#
+# Supported algorithms (per upstream
+# src/index.ts JWT_ALGORITHMS constant):
+#   HS256, HS384, HS512
+#   RS256, RS384, RS512
+#   ES256, ES384, ES512
+#   PS256, PS384, PS512
+#   none  (the unsafe "no signature" mode - flagged with
+#          a warning by jwter; not recommended)
+#
+# decode <token>:
+#   Decodes the token's header + payload and pretty-prints
+#   the JSON. No signature verification.
+#
+# sign <secret> [data]:
+#   -d, --data <data>           - payload data as JSON
+#   -s, --sub <sub>             - subject claim
+#   -e, --exp <exp>             - expiration claim
+#   -i, --iss <iss>             - issuer claim
+#   -a, --aud <aud>             - audience claim
+#   -db, --debug                - debug mode
+#   -al, --algorithm <alg>      - signing algorithm
+#                                  (default HS256)
+#
+# verify <secret> <token>:
+#   -d, --decode                - also decode the token
+#   -ie, --ignore-exp           - ignore expiration check
+#   -s, --sub <sub>             - expected subject
+#   -i, --iss <iss>             - expected issuer
+#   -a, --aud <aud>             - expected audience
+#
+# Global flags (from Commander):
+#   --version                   - print version
+#   --help, -h                  - print help
+#
+# The jsonwebtoken (Node) lane is built on `jsonwebtoken
+# ^9.0.0` (declared at upstream package.json HEAD as a
+# direct dep), the canonical Node JWT library by Auth0 -
+# github.com/auth0/node-jsonwebtoken, 17,000+ stars,
+# 13M+ weekly downloads. The library is the de-facto Node
+# JWT standard - corporately maintained by Auth0 (now Okta)
+# since 2014, used by approximately the entire Node web
+# auth ecosystem. It implements RFC 7519 (JWT), RFC 7515
+# (JWS), and RFC 7518 (JWA) with `jwt.sign(payload,
+# secretOrKey, options)` and `jwt.verify(token,
+# secretOrKey, options)` as the public API. Crypto
+# primitives delegate to Node's stdlib `crypto` module
+# (no native bindings, no separate Wasm artifact).
+#
+# jwter uses the public sign / verify / decode API surface
+# directly - the CLI is essentially a thin Commander
+# wrapper that takes the user's secret + token + claims
+# from argv and forwards them to jsonwebtoken's standard
+# functions. The algorithm whitelist in src/index.ts
+# matches `jsonwebtoken`'s supported algorithm set.
+#
+# ----------------------------------------------------------------------------
+# AXIS 241 :: JSON Web Tokens (RFC 7519 sign + verify)
+# Round 1423 :: TS-Node slot 3 of 4 :: CLOSES Axis 241
+#                                       (234th axis closed)
+#
+# Cross-language canonical library family for this axis:
+#   Rust    : Keats/jsonwebtoken           [R1421 _pushpin-handler]
+#   Go      : golang-jwt/jwt v5            [R1422 _cloudsmith-kubernetes-credential-provider]
+#   TS/Node : auth0/node-jsonwebtoken      [R1423 THIS FILE]
+#
+# Auth0/node-jsonwebtoken closes Axis 241 with the
+# *corporate-maintained reference implementation* pattern.
+# The three lanes form a clean spectrum of JWT library
+# governance models:
+#
+#   - Rust (Keats/jsonwebtoken): single-author project
+#     maintained by Vincent Prouillet since 2017; depends
+#     on `ring` by default with `rust_crypto` opt-in
+#   - Go (golang-jwt/jwt): community-fork governance after
+#     the 2020 abandonment of dgrijalva/jwt-go; explicit
+#     mission to preserve API + import path continuity
+#   - Node (auth0/node-jsonwebtoken): corporate-vendor
+#     maintained since 2014, written + reviewed by Auth0
+#     identity engineers; Node stdlib crypto backend
+#
+# Cross-language interop happens at the wire format level:
+# a JWT signed by any one of the three lanes verifies
+# byte-identically against the other two, modulo the
+# secret / key material being shared. Each lane's
+# algorithm registry is a strict subset of RFC 7518's IANA
+# registry (HS*/RS*/PS*/ES*/EdDSA).
+#
+# Structural commentary on the JWT spec ecosystem at this
+# axis closure:
+#   - JWT became the dominant web auth token format
+#     between 2014-2018, displacing opaque session IDs +
+#     SAML
+#   - All three lanes have had at least one security CVE
+#     - typically around the `alg: none` confusion or
+#     signature algorithm confusion. Patched + the
+#     ecosystem hardened
+#   - RFC 7519 + RFC 7515 are intentionally minimalist;
+#     real-world JWT-using systems layer additional spec
+#     (OIDC, OAuth 2.0, JWT-Profile-for-OAuth) on top
+#
+# Use-case spectrum across the three lanes:
+#   - pushpin-handler (Rust, jsonwebtoken): server-side
+#     EPCP publish-auth check on inbound publish requests
+#     to the Pushpin reverse proxy
+#   - cloudsmith-kubernetes-credential-provider (Go,
+#     golang-jwt/jwt v5): kubelet credential plugin
+#     parsing projected SA tokens for image-pull auth
+#     against Cloudsmith registries
+#   - jwter (Node, jsonwebtoken): debug-focused interactive
+#     CLI for decoding / signing / verifying JWTs from
+#     the terminal during development
+#
+# Three lanes, three use-case shapes (high-throughput
+# server / kubelet plugin / developer debug tool), three
+# governance models, all converging on RFC 7519 wire
+# format compatibility.
+#
+# Axis 241 closes the round 1423 cycle - 234th axis closed
+# total.
+# ============================================================================
+
+_jwter() {
+    local context state state_descr line
+    typeset -A opt_args
+    local curcontext="$curcontext" ret=1
+
+    local -a jwt_algs
+    jwt_algs=(
+        HS256 HS384 HS512
+        RS256 RS384 RS512
+        ES256 ES384 ES512
+        PS256 PS384 PS512
+        none
+    )
+
+    _arguments -C \
+        '(- *)--version[print version]' \
+        '(- *)'{-h,--help}'[print help]' \
+        '1: :_jwter_cmds' \
+        '*::arg:->args' \
+    && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                decode)
+                    _arguments \
+                        '(- *)'{-h,--help}'[print subcommand help]' \
+                        '1:JWT token:'
+                    ;;
+                sign)
+                    _arguments \
+                        '(- *)'{-h,--help}'[print subcommand help]' \
+                        '(-d --data)'{-d,--data}'[payload data as JSON]:json:' \
+                        '(-s --sub)'{-s,--sub}'[subject (sub) claim]:sub:' \
+                        '(-e --exp)'{-e,--exp}'[expiration (exp) claim]:exp:' \
+                        '(-i --iss)'{-i,--iss}'[issuer (iss) claim]:iss:' \
+                        '(-a --aud)'{-a,--aud}'[audience (aud) claim]:aud:' \
+                        '(-db --debug)'{-db,--debug}'[debug mode]' \
+                        '(-al --algorithm)'{-al,--algorithm}'[signing algorithm (default HS256)]:alg:($jwt_algs)' \
+                        '1:secret:' \
+                        '2:payload data (JSON):'
+                    ;;
+                verify)
+                    _arguments \
+                        '(- *)'{-h,--help}'[print subcommand help]' \
+                        '(-d --decode)'{-d,--decode}'[also decode the token]' \
+                        '(-ie --ignore-exp)'{-ie,--ignore-exp}'[ignore expiration check]' \
+                        '(-s --sub)'{-s,--sub}'[expected subject]:sub:' \
+                        '(-i --iss)'{-i,--iss}'[expected issuer]:iss:' \
+                        '(-a --aud)'{-a,--aud}'[expected audience]:aud:' \
+                        '1:secret:' \
+                        '2:JWT token:'
+                    ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_jwter_cmds() {
+    local -a cmds
+    cmds=(
+        'decode:decode a JWT and pretty-print the JSON'
+        'sign:create a JWT and sign it with a secret'
+        'verify:check a JWT against a secret + expected claims'
+    )
+    _describe -t commands 'jwter command' cmds
+}
+
+_jwter "$@"
