@@ -1,0 +1,223 @@
+#compdef concryptor
+# ============================================================================
+# concryptor - multi-threaded AEAD file encryption with
+#               Argon2id key derivation (Rust, AGPL-3.0)
+#
+# Author : FrogSnot
+# Upstream: https://github.com/FrogSnot/Concryptor
+# crates : concryptor (binary: concryptor)
+#
+# `concryptor` is a high-throughput file encryption engine.
+# It pairs an authenticated-encryption (AEAD) cipher
+# (AES-256-GCM or ChaCha20-Poly1305) with a memory-hard
+# password-based key derivation function (Argon2id) to
+# encrypt arbitrarily-large files at gigabyte-per-second
+# rates. The throughput claim is achieved via three
+# implementation choices:
+#   1. Rayon-based parallel chunk processing (data-parallel
+#      AEAD across CPU cores)
+#   2. Triple-buffered io_uring pipeline (kernel async I/O
+#      with O_DIRECT cache bypass)
+#   3. Hardware-accelerated AEAD primitives (AES-NI for
+#      AES-256-GCM, AVX2 for ChaCha20)
+#
+# Usage:
+#   concryptor <command> [options]
+#
+# Commands (clap derive Subcommand):
+#   encrypt              - encrypt a file
+#                          aliases: enc, e
+#   decrypt              - decrypt a file
+#                          aliases: dec, d
+#
+# encrypt flags:
+#   <input>              - input file to encrypt
+#   -o, --output <file>  - output file (default
+#                          <input>.enc)
+#   -c, --cipher <alg>   - cipher: aes (AES-256-GCM) or
+#                          chacha (ChaCha20-Poly1305)
+#                          (default aes)
+#       --chunk-size <N> - chunk size in MiB (default 4)
+#       --memory <N>     - Argon2id memory cost in MiB
+#                          (default 256; higher = more
+#                          resistant to brute-force)
+#   -p, --password <pw>  - password (skips interactive
+#                          prompt; visible in shell history
+#                          and process listings)
+#
+# decrypt flags:
+#   <input>              - input file to decrypt
+#   -o, --output <file>  - output file or directory
+#                          (default: strip .enc suffix or
+#                          add .dec)
+#   -x, --extract        - extract directory archive
+#                          after decryption
+#   -p, --password <pw>  - password (skips interactive
+#                          prompt)
+#
+# The argon2 lane is built on `argon2 = "0.5"` (declared
+# verbatim at upstream Cargo.toml HEAD as a direct dep,
+# imported from src/crypto.rs + src/engine.rs), the
+# canonical Rust Argon2 library by the RustCrypto working
+# group - github.com/RustCrypto/password-hashes/tree/
+# master/argon2 (within the RustCrypto/password-hashes
+# umbrella, 800+ stars on the umbrella). The crate
+# implements RFC 9106 (the Argon2 PHC standardization,
+# IETF September 2021) end-to-end: Argon2d (data-dependent
+# variant), Argon2i (data-independent variant), and
+# Argon2id (hybrid mode, the OWASP-recommended default
+# for password hashing). The implementation is pure-Rust
+# (no FFI to libargon2-c) and uses the constant-time
+# memory access patterns required by the spec.
+#
+# The library exposes two API levels:
+#   - low-level: `Argon2::hash_password_into(pw, salt,
+#                output_buf)` for raw KDF use
+#   - high-level: PHC string format
+#                 `$argon2id$v=19$m=...,t=...,p=...$salt$hash`
+#                 via the `password-hash` crate (also from
+#                 RustCrypto/password-hashes) for storage-
+#                 compatible password hashes
+#
+# concryptor uses the low-level KDF API in src/crypto.rs:
+# password + per-file-random salt go through Argon2id
+# (the hybrid mode that resists both side-channel and
+# GPU-cracking attacks) to derive the per-file AEAD key.
+# The configurable `--memory` flag maps directly to
+# Argon2's memory-cost parameter (m), letting the user
+# trade encryption-throughput latency for brute-force
+# resistance.
+#
+# Argon2 was selected as the canonical password-hashing
+# function by the Password Hashing Competition (PHC) in
+# July 2015 and was subsequently standardized as RFC 9106
+# in September 2021. It is the only PHC-winner that
+# achieved both IETF + OWASP recommendation status.
+#
+# ----------------------------------------------------------------------------
+# AXIS 244 :: Argon2 password-hash + memory-hard KDF
+# Round 1430 :: Rust slot 1 of 4 :: OPENS Axis 244
+#                                   (round-number landmark)
+#
+# Cross-language canonical library family for this axis
+# (proposed):
+#   Rust    : RustCrypto/password-hashes (argon2 crate)
+#                                       - pure-Rust impl
+#                                         within the
+#                                         RustCrypto
+#                                         umbrella; the
+#                                         de-facto Rust
+#                                         Argon2 binding
+#   Go      : alexedwards/argon2id      - the de-facto
+#                                         Go Argon2 helper
+#                                         wrapping the
+#                                         golang.org/x/
+#                                         crypto/argon2
+#                                         core (also
+#                                         core-team-
+#                                         maintained
+#                                         under the x/*
+#                                         subrepo)
+#   TS/Node : ranisalt/node-argon2      - Node binding
+#                                         to the reference
+#                                         P-H-C/phc-winner-
+#                                         argon2 C library
+#                                         via N-API
+#                                         (separate from
+#                                         @node-rs/argon2
+#                                         which uses
+#                                         napi-rs to wrap
+#                                         the RustCrypto
+#                                         Rust crate)
+#
+# Argon2 is a clean spec-bound axis - RFC 9106 defines
+# the algorithm + parameter validation + PHC string
+# format byte-for-byte. Compliant implementations produce
+# bit-identical hashes for the same (password, salt,
+# memory_cost, time_cost, parallelism, output_len) tuple.
+# All three lanes pass the PHC-published test vectors.
+#
+# Structural commentary on the canonical libraries:
+#   - RustCrypto/password-hashes argon2 (Rust): pure-Rust
+#     implementation; constant-time memory access patterns;
+#     no libargon2-c FFI; bundled into the RustCrypto
+#     umbrella's password-hashes group alongside scrypt +
+#     pbkdf2 + bcrypt-pbkdf
+#   - alexedwards/argon2id (Go): ergonomic-wrapper over
+#     golang.org/x/crypto/argon2 (the core-team-maintained
+#     low-level KDF); alexedwards wrapper adds PHC-string
+#     formatting + comparison helpers; the low-level
+#     x/crypto/argon2 is itself the canonical Go Argon2
+#     implementation
+#   - ranisalt/node-argon2 (Node): N-API binding to the
+#     reference P-H-C/phc-winner-argon2 C library (the
+#     reference impl by Argon2's authors - Daniel Dinu,
+#     Dmitry Khovratovich, Jean-Philippe Aumasson);
+#     N-API means the binary works on any Node release
+#     within the N-API stability promise without recompile
+#
+# Cross-language interop happens at the PHC-string-format
+# level - a hash produced by any of the three lanes
+# verifies identically against any other lane's verify
+# function (assuming the parameter tuple is preserved).
+# The wire format is the PHC string:
+#   `$argon2id$v=19$m=65536,t=3,p=4$<base64-salt>$<base64-hash>`
+#
+# Axis 244 opens at the round-number landmark R1430 with
+# the Rust slot at the RustCrypto umbrella implementation.
+# ============================================================================
+
+_concryptor() {
+    local context state state_descr line
+    typeset -A opt_args
+    local curcontext="$curcontext" ret=1
+
+    _arguments -C \
+        '(- *)'{-h,--help}'[print help]' \
+        '(- *)'{-V,--version}'[print version]' \
+        '1: :_concryptor_cmds' \
+        '*::arg:->args' \
+    && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                encrypt|enc|e)
+                    _arguments \
+                        '(-o --output)'{-o,--output}'[output file (default <input>.enc)]:file:_files' \
+                        '(-c --cipher)'{-c,--cipher}'[cipher algorithm]:alg:(aes chacha)' \
+                        '--chunk-size[chunk size in MiB (default 4)]:MiB:' \
+                        '--memory[Argon2id memory cost in MiB (default 256)]:MiB:' \
+                        '(-p --password)'{-p,--password}'[password (skips prompt; visible in shell history)]:password:' \
+                        '(- *)'{-h,--help}'[print subcommand help]' \
+                        '1:input file:_files'
+                    ;;
+                decrypt|dec|d)
+                    _arguments \
+                        '(-o --output)'{-o,--output}'[output file or directory]:file:_files' \
+                        '(-x --extract)'{-x,--extract}'[extract directory archive after decryption]' \
+                        '(-p --password)'{-p,--password}'[password (skips prompt)]:password:' \
+                        '(- *)'{-h,--help}'[print subcommand help]' \
+                        '1:input file:_files'
+                    ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_concryptor_cmds() {
+    local -a cmds
+    cmds=(
+        'encrypt:encrypt a file (aliases: enc, e)'
+        'enc:encrypt alias'
+        'e:encrypt alias'
+        'decrypt:decrypt a file (aliases: dec, d)'
+        'dec:decrypt alias'
+        'd:decrypt alias'
+    )
+    _describe -t commands 'concryptor command' cmds
+}
+
+_concryptor "$@"
