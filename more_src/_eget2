@@ -1,0 +1,358 @@
+#compdef eget2
+# ============================================================================
+# eget2 - download files from GitHub / GitLab /
+#          GHCR / Codeberg / direct URLs +
+#          extract archives in one command (Go,
+#          ISC)
+#
+# Author : xplshn
+# Upstream: https://github.com/xplshn/eget2
+#
+# `eget2` is a ground-up rewrite of zyedidia/eget
+# (the popular "easy pre-built binary downloads
+# from GitHub releases" tool). The original eget
+# was Go-stdlib-only; eget2 adds:
+#   - Multi-source support: GitHub + GitLab +
+#     GHCR (GitHub Container Registry) + Codeberg
+#   - Concurrent downloads (default 30 parallel)
+#   - Tag-pinned downloads via `project@tag`
+#     syntax
+#   - SHA-based asset filtering (klauspost/
+#     compress + blake3 verification)
+#   - Multi-format archive extraction via
+#     mholt/archives (tar/tar.gz/tar.xz/tar.bz2/
+#     tar.zst/zip/7z/rar/lz4)
+#   - Skip-existing + force-overwrite + prompt
+#     modes for file conflicts
+#   - Regex + keyword filtering for asset
+#     selection
+#
+# Use cases:
+#   - Self-bootstrapping toolchains (download
+#     ripgrep, fd, bat, eza, etc. in one
+#     command without managing each separately)
+#   - Container-image extraction (GHCR blobs +
+#     image layer extraction)
+#   - CI/CD release-artifact fetching
+#   - Multi-tool sync across machines (config
+#     management without Ansible/Puppet)
+#
+# Usage:
+#   eget2 [options]
+#
+# Source flags (each repeatable):
+#   --github / -gh <owner/repo>     - GitHub
+#                                      project
+#                                      (with
+#                                      optional
+#                                      @tag
+#                                      suffix)
+#   --gitlab / -gl <owner/repo|id>  - GitLab
+#                                      project
+#                                      (owner/
+#                                      repo or
+#                                      numeric
+#                                      project
+#                                      ID)
+#   --codeberg / -cb <owner/repo>   - Codeberg
+#                                      project
+#   --ghcr <image|blob>             - GHCR
+#                                      image or
+#                                      blob
+#                                      reference
+#
+# Asset filtering:
+#   -r, --regex <pattern>           - regex
+#                                      patterns
+#                                      to select
+#                                      assets
+#                                      (repeatable)
+#   -m, --match <keyword>           - keywords
+#                                      to match
+#                                      in asset
+#                                      names
+#                                      (repeatable)
+#   -e, --exclude <keyword>         - keywords
+#                                      to exclude
+#                                      from asset
+#                                      names
+#                                      (repeatable)
+#       --exact-case                - exact-case
+#                                      matching
+#                                      for
+#                                      keywords
+#                                      (default
+#                                      case-
+#                                      insensitive)
+#
+# Download behavior:
+#   -y, --yes                       - skip
+#                                      prompts +
+#                                      select
+#                                      first
+#                                      matching
+#                                      asset
+#   -o, --output <path>             - output
+#                                      file or
+#                                      directory
+#                                      path
+#   -c, --concurrency <n>           - concurrent
+#                                      download
+#                                      limit
+#                                      (default
+#                                      30)
+#       --ghcr-api <url>            - GHCR API
+#                                      base URL
+#                                      (override
+#                                      default)
+#       --extract                   - extract
+#                                      archives
+#                                      after
+#                                      download
+#                                      (uses
+#                                      mholt/
+#                                      archives)
+#       --extract-dir <dir>         - directory
+#                                      to extract
+#                                      archives
+#                                      into
+#                                      (default
+#                                      current
+#                                      directory)
+#       --force                     - force
+#                                      overwrite
+#                                      existing
+#                                      files
+#       --skip-existing             - skip
+#                                      downloading
+#                                      if file
+#                                      exists
+#
+# Environment variables:
+#   GITHUB_TOKEN                    - GitHub
+#                                      API token
+#                                      (avoids
+#                                      anonymous
+#                                      rate
+#                                      limit)
+#   GITLAB_TOKEN                    - GitLab
+#                                      API token
+#
+# Example usage:
+#   eget2 -gh BurntSushi/ripgrep --extract -y
+#   eget2 -gh sharkdp/fd@v9.0.0 -o ~/bin/fd \
+#         --force
+#   eget2 -gh helix-editor/helix \
+#         -gh zellij-org/zellij \
+#         -gh dandavison/delta \
+#         --extract --extract-dir ~/bin -y -c 10
+#   eget2 -gh BurntSushi/ripgrep \
+#         -r '.*linux.*musl.*' --extract
+#   eget2 --ghcr ghcr.io/example/image \
+#         --extract -o ./image-rootfs
+#
+# The mholt/archives lane is built on
+# `github.com/mholt/archives v0.1.2` (declared
+# verbatim at upstream go.mod HEAD as a direct
+# dep, imported by `pkg/archive.go` for multi-
+# format archive extraction including .tar +
+# .tar.gz + .tar.xz + .tar.bz2 + .tar.zst + .zip +
+# .7z + .rar + .lz4 + .br + .zlib), the canonical
+# Go multi-format archive library by Matt Holt
+# (mholt) - github.com/mholt/archives.
+#
+# Matt Holt's mholt/archives is the de-facto
+# canonical Go *archive abstraction* library:
+#   - Provides a unified interface over the
+#     Go stdlib `archive/tar` + `archive/zip` +
+#     additional non-stdlib formats (7z + rar +
+#     zstd via klauspost/compress)
+#   - Auto-detects archive format from file
+#     extension or magic bytes
+#   - Streaming + random-access interfaces for
+#     all supported formats
+#   - Replaces the older mholt/archiver library
+#     (which was deprecated in favor of the
+#     `archives` rewrite)
+#
+# Matt Holt's broader Go ecosystem footprint
+# (the foundational Go web + tooling stack):
+#   - Caddy (canonical Go reverse proxy + web
+#     server with automatic HTTPS via Let's
+#     Encrypt; 60,000+ GitHub stars)
+#   - CertMagic (canonical Go ACME client +
+#     certificate management library; powers
+#     Caddy's auto-HTTPS)
+#   - mholt/archives + mholt/archiver
+#     (canonical Go multi-format archive
+#     library; THIS AXIS)
+#   - mholt/json5 (JSON5 parser)
+#   - mholt/timeliner (canonical Go personal-
+#     data-archiver tool)
+#   - acmez (low-level ACME protocol
+#     implementation)
+#
+# Matt Holt's foundational role in Go is at the
+# *infrastructure-server* tier - his Caddy +
+# CertMagic stack provides the canonical Go
+# reverse proxy + HTTPS automation. His archive
+# library extends this position into the bulk-
+# archive-handling vertical.
+#
+# Holt joins the multi-axis canonical-Go author
+# cohort:
+#   - Andrew Gerrand + Go team (stdlib)
+#   - Russ Cox (Go modules + crypto)
+#   - Gustavo Niemeyer (yaml.v3 + gopkg.in
+#     infrastructure)
+#   - Klaus Post (compress + reedsolomon +
+#     cpuid + asmfmt)
+#   - Sergey Kamardin (gobwas/glob + gobwas/ws +
+#     gobwas/httphead + gobwas/pool)
+#   - Anthony Starks (ajstarks/svgo + deck +
+#     dchart + openvg + gensvg)
+#   - Jeevanandam Madanagopal (go-resty +
+#     go-aah + go-model + sslmate-go)
+#   - Matt Holt (Caddy + CertMagic + archives +
+#     timeliner + acmez, THIS AXIS Go slot)
+#
+# The mholt/archives library wraps + extends the
+# Go stdlib's `archive/tar` + `archive/zip`
+# implementations, so the canonical-author
+# citation in this axis is dual:
+#   - Stdlib level: Go team / Russ Cox (archive/
+#     tar shipped with Go 1.0)
+#   - Wrapper level: Matt Holt (canonical
+#     multi-format abstraction)
+#
+# This dual-canonical pattern reflects Go's
+# *language-as-canonical-provider* model
+# (stdlib ships archive/tar) overlaid with
+# *individual-as-canonical-provider* for
+# higher-level abstractions (mholt provides
+# the format-abstraction layer that stdlib
+# intentionally doesn't).
+#
+# eget2 uses mholt/archives in pkg/archive.go
+# to extract downloaded artifacts. The chain:
+#   HTTP response (net/http) ->
+#   io.Reader (with progressbar wrapping) ->
+#   archives.Identify(file_name, reader) (to
+#   auto-detect format) ->
+#   if extractor, ok :=
+#     archives.Format.(archives.Extractor); ok {
+#     extractor.Extract(ctx, reader, extractDir)
+#   }
+# This handles tar.gz from GitHub releases (the
+# typical Linux/macOS binary archive format),
+# tar.xz from many Rust toolchain releases, zip
+# from Windows releases, 7z from some Windows
+# tools, and rar from rare cases - all with the
+# same extraction code path.
+#
+# ----------------------------------------------------------------------------
+# AXIS 266 :: TAR archive libraries (POSIX TAR
+#              + GNU/ustar/pax extensions for
+#              streaming + random-access archive
+#              I/O)
+# Round 1497 :: Go slot 2 of 4 :: continues Axis 266
+#
+# Cross-language canonical library family for this axis:
+#   Rust    : alexcrichton/tar-rs        [R1496 _rustup-toolchain-install-master]
+#             (Alex Crichton; canonical
+#              Rust TAR)
+#   Go      : archive/tar (stdlib) +     [R1497 THIS FILE]
+#             mholt/archives (wrapper)
+#             (Go team + Matt Holt;
+#              language-as-canonical +
+#              wrapper-for-multi-format
+#              abstraction)
+#   TS/Node : isaacs/node-tar            [R1498 closing]
+#             (Isaac Z. Schlueter;
+#              canonical Node TAR;
+#              used by npm itself)
+#
+# Go's TAR axis is structurally interesting
+# because it demonstrates the *language-as-
+# canonical-provider* + *wrapper-for-
+# abstraction* dual-canonical pattern:
+#
+#   - archive/tar (stdlib): provides byte-level
+#     POSIX ustar + GNU TAR reading + writing;
+#     shipped with Go 1.0 (March 2012); no
+#     external dependency required
+#   - mholt/archives (wrapper): provides
+#     multi-format abstraction over stdlib
+#     TAR + ZIP + non-stdlib 7z + rar + brotli +
+#     zstd; needed when the user wants format-
+#     agnostic archive handling
+#
+# This is distinct from Rust + Node where the
+# canonical library is a *single individual-
+# authored* implementation. Go's stdlib-first
+# culture means many canonical libraries are
+# split between:
+#   - The Go team's stdlib implementation
+#     (provides the format-specific
+#     correctness baseline)
+#   - A third-party wrapper that adds
+#     ergonomics or multi-format abstraction
+#     (mholt/archives is the canonical wrapper
+#     for archive operations)
+#
+# Cross-language interop at the archive byte
+# level - the same .tar file produced by tar-rs
+# (Rust) can be read by archive/tar (Go) and
+# node-tar (Node), modulo the standard caveats
+# around timestamp precision + xattr + LongName/
+# LongLink extensions.
+#
+# Use-case spectrum across the three lanes (so
+# far):
+#   - rustup-toolchain-install-master (Rust,
+#     tar-rs): downloads + extracts .tar.xz
+#     toolchain archives from Rust CI server
+#   - eget2 (Go, mholt/archives wrapping
+#     archive/tar stdlib): downloads + extracts
+#     multi-format release archives from GitHub/
+#     GitLab/GHCR/Codeberg
+#
+# Notable that this axis's Go slot demonstrates
+# Go's *batteries-included stdlib* design
+# philosophy in action - the language itself
+# provides the canonical format-level library
+# (archive/tar), and the canonical wrapper is a
+# *thin abstraction layer* rather than a
+# replacement. This is the opposite of Rust's
+# pattern where the canonical library
+# (tar-rs) is a single foundational
+# implementation that downstream tools use
+# directly.
+# ============================================================================
+
+_eget2() {
+    local context state state_descr line
+    typeset -A opt_args
+
+    _arguments -s -S \
+        '*'{--github,-gh}'[GitHub project (owner/repo[@tag])]:project:' \
+        '*'{--gitlab,-gl}'[GitLab project (owner/repo or numeric ID)]:project:' \
+        '*'{--codeberg,-cb}'[Codeberg project (owner/repo)]:project:' \
+        '*--ghcr=[GHCR image or blob reference]:ref:' \
+        '*'{-r,--regex}'[regex patterns to select assets]:pattern:' \
+        '*'{-m,--match}'[keywords to match in asset names]:keyword:' \
+        '*'{-e,--exclude}'[keywords to exclude from asset names]:keyword:' \
+        '--exact-case[exact-case matching for keywords]' \
+        '(-y --yes)'{-y,--yes}'[skip prompts + select first matching asset]' \
+        '(-o --output)'{-o,--output}'[output file or directory path]:path:_files' \
+        '(-c --concurrency)'{-c,--concurrency}'[concurrent download limit]:n:' \
+        '--ghcr-api=[GHCR API base URL override]:url:' \
+        '--extract[extract archives after download]' \
+        '--extract-dir=[directory to extract archives into]:dir:_files -/' \
+        '--force[force overwrite existing files]' \
+        '--skip-existing[skip downloading if file exists]' \
+        '(- *)'{-h,--help}'[print help]' \
+        '(- *)'{-v,--version}'[print version]'
+}
+
+_eget2 "$@"
