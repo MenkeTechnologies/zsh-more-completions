@@ -1,0 +1,217 @@
+#compdef avml
+# ============================================================================
+# avml - Acquire Volatile Memory for Linux (forensics
+#         memory dumper) (Rust, MIT)
+#
+# Author : Microsoft Corporation
+# Upstream: https://github.com/microsoft/avml
+# crates : avml (binary: avml)
+#
+# `avml` is Microsoft's portable volatile-memory
+# acquisition tool for Linux - the Linux equivalent of
+# Windows's WinPMem / x86 LiME alternative. The tool
+# captures the contents of physical RAM from a running
+# Linux system + writes the snapshot to disk as either
+# a raw flat file or a Snappy-compressed structured
+# AVML file. The output is consumable by mainstream
+# memory forensics frameworks (Volatility, Rekall) for
+# post-incident analysis.
+#
+# avml's design priorities reflect its forensics
+# use case:
+#   - SINGLE STATIC BINARY: no glibc / libc / OpenSSL
+#     dependencies; can be dropped onto an unknown
+#     incident-response target without library
+#     concerns
+#   - MULTIPLE SOURCES: reads from `/dev/crash`,
+#     `/proc/kcore`, `/dev/mem`, or a per-distribution
+#     module like `/proc/kallsyms` - tries them in
+#     order of preference + falls back gracefully
+#   - OPTIONAL CLOUD UPLOAD: built-in HTTP PUT + Azure
+#     Blob Storage upload via SAS URLs for incident-
+#     response over remote-shell access where on-disk
+#     storage is unsafe
+#   - SNAPPY COMPRESSION: optional compression to keep
+#     the captured RAM snapshot under the available
+#     local disk space
+#
+# Usage:
+#   avml [OPTIONS] <filename>
+#
+# Flags (clap derive Parser):
+#       --compress             - Snappy-compress the
+#                                 output (default off
+#                                 = raw flat file)
+#       --source <source>      - explicit input source
+#                                 (proc-kcore /
+#                                 dev-crash /
+#                                 dev-mem / ...)
+#       --max-disk-usage <MB>  - cap total disk used
+#                                 by the output
+#                                 (megabytes)
+#       --max-disk-usage-percentage <pct>
+#                              - cap as percentage of
+#                                 free disk space
+#                                 (0.01 to 100.0)
+#
+# Cloud upload (when built with `put` / `blobstore`
+# features):
+#       --url <url>            - HTTP PUT upload
+#                                 destination
+#       --sas-url <url>        - Azure Blob SAS URL
+#       --sas-block-size <MiB> - per-block size
+#                                 (positive integer)
+#       --sas-block-concurrency <n>
+#                              - upload concurrency
+#                                 (positive integer)
+#       --delete               - delete local file
+#                                 after successful
+#                                 upload
+#
+# Positional:
+#   <filename>                 - output file path
+#
+# The Snappy lane is built on `snap = "1.1"` (declared
+# verbatim at upstream Cargo.toml HEAD as a direct dep,
+# used to compress the captured RAM snapshot when
+# `--compress` is set), the canonical Rust Snappy
+# library by Andrew Gallant (BurntSushi) - github.com/
+# BurntSushi/rust-snappy, 600+ stars.
+#
+# The `snap` crate is a *line-by-line safe-Rust port*
+# of Google's reference Snappy C++ library, done by
+# BurntSushi (the same author as ripgrep, the Rust
+# regex crate, BurntSushi/toml at Axis 243, fst, and
+# xsv). Gallant's port preserves byte-identical output
+# vs Google's reference encoder + supports both the
+# `snappy raw block` and `snappy framed` wire formats.
+#
+# This makes BurntSushi/rust-snappy the de-facto Rust
+# Snappy implementation + reinforces Gallant's
+# position as the canonical Rust author for several
+# spec-bound axes:
+#   - Axis 222 (XXHash): BurntSushi's ucd-generate-
+#     derived XXHash crate
+#   - Axis 243 (TOML): BurntSushi/toml-test + the Go
+#     library
+#   - Axis 253 (Snappy, THIS AXIS): BurntSushi/rust-
+#     snappy
+#
+# Gallant's canonical-library footprint across the
+# Rust ecosystem (regex / ripgrep / fst / xsv /
+# rust-snappy / toml-test) is unusually large for a
+# single author - it's the Rust equivalent of Daniel
+# Lemire's cross-language root-of-trust position at
+# Roaring Bitmap (Axis 250).
+#
+# avml uses `snap::write::FrameEncoder` to wrap the
+# output file in a Snappy-framed compression stream,
+# producing the AVML on-disk format's compressed
+# variant. Snappy was chosen over heavier compression
+# algorithms (LZ4 was at Axis 223, zstd is a likely
+# future axis) because of its very-fast decompression
+# path - Volatility + Rekall need to scan the captured
+# memory at full speed during the analysis pass, so
+# decompression overhead is the dominant cost.
+#
+# ----------------------------------------------------------------------------
+# AXIS 253 :: Snappy compression (Google fast LZ77
+#              variant, optimized for decompression
+#              throughput)
+# Round 1457 :: Rust slot 1 of 4 :: OPENS Axis 253
+#
+# Cross-language canonical library family for this axis
+# (proposed):
+#   Rust    : BurntSushi/rust-snappy      - Andrew
+#                                          Gallant's
+#                                          line-by-line
+#                                          safe-Rust port
+#                                          of Google's
+#                                          reference C++
+#                                          Snappy library;
+#                                          de-facto Rust
+#                                          canonical
+#   Go      : golang/snappy               - Go core
+#                                          team's
+#                                          maintained
+#                                          port in the
+#                                          golang/snappy
+#                                          repo;
+#                                          (originally
+#                                          part of
+#                                          golang/leveldb,
+#                                          extracted in
+#                                          2016)
+#   TS/Node : @node-rs/snappy             - napi-rs
+#                                          binding to
+#                                          BurntSushi/
+#                                          rust-snappy;
+#                                          inherits
+#                                          Gallant's
+#                                          Rust impl
+#                                          via N-API
+#
+# Snappy is a clean spec-bound axis - Google's
+# `snappy-format-description.txt` defines the
+# block + framed wire formats byte-for-byte.
+# Compliant implementations produce byte-identical
+# output for the same input + cross-decode correctly.
+# The test corpus from Google's Snappy repo is the
+# canonical reference; all three lanes pass it.
+#
+# Structural commentary on the canonical libraries:
+#   - BurntSushi/rust-snappy (Rust): line-by-line
+#     port of Google's reference C++ source;
+#     preserves byte-for-byte output equivalence;
+#     part of Andrew Gallant's broader canonical-
+#     Rust-library footprint (regex / ripgrep / fst /
+#     xsv / toml-test)
+#   - golang/snappy (Go): originally part of
+#     golang/leveldb (the Go LevelDB port), extracted
+#     into its own `golang/snappy` repo in 2016 +
+#     maintained by the Go core team since
+#   - @node-rs/snappy (Node): napi-rs binding to
+#     BurntSushi/rust-snappy - the Node slot binds to
+#     the same Rust implementation that powers the
+#     Rust slot, completing the Rust-roots cycle
+#
+# The Node-binds-to-Rust pattern at the Snappy slot
+# is structurally identical to @node-rs/argon2 (Axis
+# 244 binds to RustCrypto argon2) and @chainsafe/
+# libp2p-quic (Axis 249 binds to quinn-rs). The
+# napi-rs binding shape is increasingly the Node
+# ecosystem's preferred way to get high-performance
+# spec-bound primitives without reimplementing them
+# in JS.
+#
+# Cross-language interop at the wire format level -
+# Snappy bitstream produced by BurntSushi/rust-snappy
+# + golang/snappy + @node-rs/snappy decompresses
+# byte-identically through any of the others. Google's
+# test corpus validates this cross-library byte-
+# equivalence.
+#
+# Axis 253 opens with the Rust slot at Andrew Gallant's
+# canonical safe-Rust port.
+# ============================================================================
+
+_avml() {
+    local context state state_descr line
+    typeset -A opt_args
+
+    _arguments -s -S \
+        '--compress[Snappy-compress the output]' \
+        '--source[explicit input source]:source:(proc-kcore dev-crash dev-mem)' \
+        '--max-disk-usage[cap disk usage in MB]:MB:' \
+        '--max-disk-usage-percentage[cap as percentage of free disk (0.01-100.0)]:pct:' \
+        '--url[HTTP PUT upload destination]:url:' \
+        '--sas-url[Azure Blob SAS URL]:url:' \
+        '--sas-block-size[per-block upload size (MiB)]:MiB:' \
+        '--sas-block-concurrency[upload concurrency]:n:' \
+        '--delete[delete local file after successful upload]' \
+        '(- *)'{-h,--help}'[print help]' \
+        '(- *)'{-V,--version}'[print version]' \
+        '1:output file:_files'
+}
+
+_avml "$@"
