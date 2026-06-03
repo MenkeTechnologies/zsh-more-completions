@@ -1,0 +1,256 @@
+#compdef mnemon
+# ---------------------------------------------------------------------------
+# mnemon — LLM-supervised persistent memory for AI agents (Go, 326★)
+#
+# upstream: https://github.com/mnemon-dev/mnemon
+# author : the mnemon-dev collective
+# license: Apache-2.0
+#
+# Source-direct completion: every top-level subcommand and every flag below
+# is verbatim from cmd/{root,remember,recall,forget,search,log,related,
+# link,store,status,gc,import,viz,setup,embed,event,receipt}.go on the
+# mnemon tip — spf13/cobra `Use:` + `Flags()` registrations parsed exactly
+# as declared.
+#
+# Direct deps from go.mod (selected):
+#   modernc.org/sqlite        v1.45.0  ← canonical pure-Go SQLite
+#                                         (this axis) — Jan Mercl
+#                                         (cznic) translated SQLite's C
+#                                         source to Go via the c2go
+#                                         transpiler, producing a 100%
+#                                         CGO-free SQLite driver.  Same
+#                                         on-disk format as upstream
+#                                         SQLite; just no native-binding
+#                                         overhead or cross-compilation
+#                                         friction.
+#   github.com/spf13/cobra              (Steve Francia's cobra — the
+#                                        canonical Go CLI framework)
+#   internal/store, internal/embed       (mnemon's own stores + embedding
+#                                         client abstractions)
+#   Ollama HTTP client                   (default embedding model
+#                                         resolution: --embed-model flag
+#                                         > MNEMON_EMBED_MODEL env >
+#                                         embed.DefaultModel)
+#
+# mnemon is a standalone memory daemon for LLM agents based on MAGMA's
+# four-graph architecture (temporal / semantic / causal / entity edges).
+# Agents `remember` insights with a category + importance + tags + source,
+# then later `recall` by keyword with intent-aware retrieval, `search`
+# by exact match, or traverse via `related` graph queries.  All state
+# lives in a SQLite file at `~/.mnemon/<store>/db.sqlite` (configurable
+# via `--data-dir`), with one named "store" per logical memory partition
+# (workspaces, projects, agents).  The `setup` command integrates mnemon
+# into Claude Code / Codex / OpenClaw / Nanobot / PI / Hermes via
+# system-prompt injection.
+#
+# === AXIS 173 CONTINUES — embedded SQLite + type-safe query construction =
+# Axis position: Go=228 continues Axis 173 (slot 2/0/0).  Canonical Go
+# embedded SQLite is `modernc.org/sqlite` by Jan Mercl (cznic) — a
+# pure-Go SQLite driver produced by transpiling SQLite's C source to
+# Go via cznic's c2go transpiler.  The alternative `mattn/go-sqlite3`
+# (Yasuhiro Matsumoto / mattn) is older, more widely used, and requires
+# CGO; the modernc port is the canonical answer for projects that want
+# pure-Go single-binary distribution (no CGO + no cross-compile pain).
+# Both produce/read the same on-disk SQLite format.  mnemon picks the
+# modernc port so a single static binary works across Linux/macOS/
+# Windows without cross-compilation toolchains.
+#
+# Cycle position in current 3+1 micro-cycle:
+#   Rust=228     _intelli-shell        ← previous round (axis 173 OPENS, 1/0/0)
+#   Go=228       ← THIS FILE           (axis 173 continues, slot 2/0/0)
+#   TS-Node=228  ← next round          (axis 173 CLOSES at triple-228, 1/1/1)
+# ---------------------------------------------------------------------------
+
+_mnemon() {
+    local context state state_descr line ret=1
+    typeset -A opt_args
+
+    local -a global_opts
+    global_opts=(
+        '--data-dir=[base data directory (env MNEMON_DATA_DIR)]:directory:_files -/'
+        '--store=[named memory store (overrides MNEMON_STORE and active file)]:store name:'
+        '--readonly[open database in read-only mode (no WAL files, safe for read-only mounts)]'
+        '--embed-model=[Ollama embedding model (env MNEMON_EMBED_MODEL; default embed.DefaultModel)]:model:'
+    )
+
+    _arguments -C \
+        '(- *)'{-h,--help}'[print help]' \
+        '(- *)'{-v,--version}'[print version]' \
+        $global_opts \
+        '1: :->cmds' \
+        '*::arg:->args' && ret=0
+
+    case $state in
+        cmds)
+            local -a subcmds
+            subcmds=(
+                'remember:record an insight with category+importance+tags+source+entities; optional --no-diff skips duplicate/conflict detection'
+                'recall:keyword recall with intent-aware retrieval (WHY|WHEN|ENTITY|GENERAL), --basic for simple SQL LIKE'
+                'forget:delete an insight by ID'
+                'search:exact-match search over stored insights (--limit N)'
+                'log:show recent insight operations (--limit N)'
+                'related:traverse the graph from an insight (--edge temporal|semantic|causal|entity; --depth N)'
+                'link:create an edge between two insights (--type, --weight 0.0-1.0, --meta JSON)'
+                'store:manage named memory stores (list / create / set / remove)'
+                'status:show counts, store, DB size, embedding coverage'
+                'gc:garbage-collection candidates by effective_importance threshold (--threshold, --limit, --keep ID)'
+                'import:import insights from a draft JSONL file (--no-diff, --dry-run)'
+                'viz:visualize the graph as DOT or HTML (--format dot|html, -o/--output)'
+                'setup:wire mnemon into an LLM agent runtime (--target claude-code|codex|openclaw|nanobot|pi|hermes; --eject; --yes; --global)'
+                'embed:embed an insight by ID or backfill all un-embedded (--all, --status)'
+                'event:emit an event to a project .mnemon/events.jsonl (subcommand: emit)'
+                'receipt:show recent operations receipt (--limit N)'
+                'help:show help for a command'
+            )
+            _describe -t commands 'mnemon command' subcmds && ret=0
+            ;;
+        args)
+            case $words[1] in
+                remember)
+                    _arguments \
+                        $global_opts \
+                        '--cat=[category]:category:(preference decision fact insight context general)' \
+                        '--imp=[importance 1-5]:N:' \
+                        '--tags=[comma-separated tags]:tag1,tag2,...:' \
+                        '--source=[source]:source:(user agent external)' \
+                        '--entities=[comma-separated entities (LLM-extracted, merged with auto-extraction)]:entity1,...:' \
+                        '--entity-mode=[entity handling mode]:mode:(merge provided auto)' \
+                        '--no-diff[skip duplicate/conflict detection]' \
+                        '1:content:' && ret=0
+                    ;;
+                recall)
+                    _arguments \
+                        $global_opts \
+                        '--cat=[filter by category]:category:(preference decision fact insight context general)' \
+                        '--limit=[max results (default 10)]:N:' \
+                        '--source=[filter by source]:source:(user agent external)' \
+                        '--basic[use simple SQL LIKE matching instead of smart recall]' \
+                        '--intent=[override intent]:intent:(WHY WHEN ENTITY GENERAL)' \
+                        '--verbose[output full recall response (signals, meta, timestamps)]' \
+                        '1:keyword:' && ret=0
+                    ;;
+                forget)
+                    _arguments \
+                        $global_opts \
+                        '1:insight ID:' && ret=0
+                    ;;
+                search)
+                    _arguments \
+                        $global_opts \
+                        '--limit=[max results (default 10)]:N:' \
+                        '1:query:' && ret=0
+                    ;;
+                log|receipt)
+                    _arguments \
+                        $global_opts \
+                        '--limit=[max entries to show (default 20)]:N:' && ret=0
+                    ;;
+                related)
+                    _arguments \
+                        $global_opts \
+                        '--edge=[filter by edge type]:edge:(temporal semantic causal entity)' \
+                        '--depth=[max traversal depth (default 2)]:N:' \
+                        '1:insight ID:' && ret=0
+                    ;;
+                link)
+                    _arguments \
+                        $global_opts \
+                        '--type=[edge type (default semantic)]:type:(temporal semantic causal entity)' \
+                        '--weight=[edge weight 0.0-1.0 (default 0.5)]:weight:' \
+                        '--meta=[optional metadata JSON object]:json:' \
+                        '1:source insight ID:' \
+                        '2:target insight ID:' && ret=0
+                    ;;
+                store)
+                    _arguments \
+                        '1: :->store_cmds' \
+                        '*::arg:->store_args' && ret=0
+                    case $state in
+                        store_cmds)
+                            local -a sub; sub=(
+                                'list:list all named stores'
+                                'create:create a new store by name'
+                                'set:set the active store by name'
+                                'remove:remove a store by name'
+                            )
+                            _describe -t commands 'store subcommand' sub && ret=0
+                            ;;
+                        store_args)
+                            case $words[1] in
+                                create|set|remove)
+                                    _arguments '1:store name:' && ret=0
+                                    ;;
+                            esac
+                            ;;
+                    esac
+                    ;;
+                gc)
+                    _arguments \
+                        $global_opts \
+                        '--threshold=[effective_importance threshold; insights below this are candidates (default 0.5)]:threshold:' \
+                        '--limit=[max candidates to return (default 20)]:N:' \
+                        '--keep=[boost retention for this insight ID]:insight ID:' && ret=0
+                    ;;
+                import)
+                    _arguments \
+                        $global_opts \
+                        '--no-diff[skip deduplication; insert all insights as new]' \
+                        '--dry-run[validate the draft file without writing to the database]' \
+                        '1:draft JSONL file:_files -g "*.(json|jsonl)"' && ret=0
+                    ;;
+                viz)
+                    _arguments \
+                        $global_opts \
+                        '--format=[output format (default dot)]:format:(dot html)' \
+                        '(-o --output)'{-o,--output=}'[output file (- for stdout, default -)]:file:_files' && ret=0
+                    ;;
+                setup)
+                    _arguments \
+                        $global_opts \
+                        '--target=[target environment]:target:(claude-code codex openclaw nanobot pi hermes)' \
+                        '--eject[remove mnemon integrations]' \
+                        '--yes[auto-confirm all prompts (CI-friendly)]' \
+                        '--global[install to user-wide config instead of project-local]' && ret=0
+                    ;;
+                embed)
+                    _arguments \
+                        $global_opts \
+                        '--all[backfill embeddings for all un-embedded insights]' \
+                        '--status[show embedding coverage statistics]' \
+                        '1:insight ID:' && ret=0
+                    ;;
+                event)
+                    _arguments \
+                        '1: :->event_cmds' \
+                        '*::arg:->event_args' && ret=0
+                    case $state in
+                        event_cmds)
+                            local -a sub; sub=('emit:emit an event to a project .mnemon/events.jsonl')
+                            _describe -t commands 'event subcommand' sub && ret=0
+                            ;;
+                        event_args)
+                            case $words[1] in
+                                emit)
+                                    _arguments \
+                                        '--root=[project root whose .mnemon/events.jsonl should receive the event (default .)]:dir:_files -/' \
+                                        '--payload=[event payload JSON object (default {})]:json:' \
+                                        '--correlation-id=[correlation id; generated when unset]:id:' \
+                                        '--loop=[loop id associated with the event]:id:' \
+                                        '--host=[host id associated with the event]:id:' \
+                                        '1:event topic:' && ret=0
+                                    ;;
+                            esac
+                            ;;
+                    esac
+                    ;;
+                status)
+                    _arguments $global_opts && ret=0
+                    ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_mnemon "$@"
