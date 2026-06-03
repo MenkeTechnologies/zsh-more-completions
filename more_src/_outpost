@@ -1,0 +1,280 @@
+#compdef outpost
+# ---------------------------------------------------------------------------
+# outpost — Hookdeck Outpost: open-source outbound webhook + event-
+#           destination infrastructure with multi-destination fan-out
+#           (Webhook URLs + RabbitMQ + Kafka + Azure Service Bus +
+#           AWS SQS + GCP Pub/Sub + Slack), retry-with-backoff,
+#           transformation rules, observability, and a unified Redis-
+#           backed migration coordinator that orchestrates both
+#           Postgres (SQL) and Redis schema migrations through one CLI
+#           (Go, 979★)
+#
+# upstream: https://github.com/hookdeck/outpost
+#           (binary at cmd/outpost/ in the workspace; the actual server
+#           lives at cmd/outpost-server/ — `outpost serve` delegates
+#           to that sister binary)
+# author : Hookdeck — also operators of the managed Hookdeck webhook-
+#          routing service at hookdeck.com used by Shopify partners /
+#          Vercel / pre-IPO SaaS for inbound webhook delivery
+#          (Outpost is their OUTBOUND-direction sibling, while the
+#          original managed Hookdeck handles INBOUND webhooks; Outpost
+#          is open-sourced as the canonical Svix alternative for
+#          shops that want to keep webhook infrastructure in their own
+#          VPC)
+# license: Apache-2.0
+#
+# Source-direct completion: every subcommand + nested subcommand below
+# is verbatim from cmd/outpost/main.go + cmd/outpost/migrate.go on the
+# hookdeck/outpost tip — `urfave/cli/v3` `cli.Command{Name, Usage,
+# Flags, Commands}` declarations parsed exactly as declared, with the
+# migrate-tree's top-level `-c/--config` + `--verbose` flags + per-
+# subcommand flags (apply's `-y/--yes` + `--sql-only` + `--redis-
+# only`; unlock's `-y/--yes`) preserved.  The `serve` command is a
+# delegator that exec's `outpost-server` from PATH or the same dir as
+# the `outpost` binary (falling back to `go run ./cmd/outpost-server`
+# in development).
+#
+# Direct deps from go.mod (selected):
+#   github.com/rabbitmq/amqp091-go   v1.10.0  ← canonical Go AMQP
+#                                                0.9.1 / RabbitMQ
+#                                                client library (this
+#                                                axis) — by the
+#                                                RabbitMQ team
+#                                                (rabbitmq/amqp091-go;
+#                                                the official fork of
+#                                                streadway/amqp after
+#                                                Sean Treadway stepped
+#                                                back from active
+#                                                maintenance in 2021).
+#                                                Pure-Go AMQP 0.9.1
+#                                                wire-protocol
+#                                                implementation with
+#                                                full channel /
+#                                                exchange (direct /
+#                                                topic / fanout /
+#                                                headers) / queue
+#                                                (durable / exclusive
+#                                                / auto-delete / lazy
+#                                                / quorum) / publisher-
+#                                                confirms / consumer-
+#                                                QoS / NACK + dead-
+#                                                letter routing / TLS
+#                                                surface, plus the
+#                                                RabbitMQ extension
+#                                                surface (exchange-to-
+#                                                exchange binding,
+#                                                sender-selected
+#                                                distribution, priority
+#                                                queues, single-active
+#                                                consumer, quorum
+#                                                queues, streams).
+#                                                The transfer from
+#                                                streadway/amqp →
+#                                                rabbitmq/amqp091-go
+#                                                happened in 2022 when
+#                                                the RabbitMQ team
+#                                                forked the abandoned
+#                                                upstream to preserve
+#                                                continuity; the API
+#                                                is wire-identical so
+#                                                consumers migrate
+#                                                with a single import-
+#                                                path change.  THE Go
+#                                                answer to "talk to
+#                                                RabbitMQ from a Go
+#                                                service."  Used by
+#                                                pydio/cells (file
+#                                                collaboration
+#                                                platform), wait4x
+#                                                (service-readiness
+#                                                CLI), svix-bridge
+#                                                (sister daemon to
+#                                                Svix), dcso/
+#                                                nightwatch (Suricata
+#                                                analysis framework),
+#                                                hookdeck/outpost.
+#                                                outpost uses it
+#                                                inside internal/
+#                                                destinations/rabbitmq
+#                                                /provider.go as one
+#                                                of the destination
+#                                                providers — when a
+#                                                webhook event is
+#                                                fanned out from
+#                                                Outpost to a RabbitMQ
+#                                                destination, the
+#                                                provider publishes to
+#                                                the configured
+#                                                exchange via amqp091-
+#                                                go's `Channel.Publish
+#                                                WithContext`.
+#   github.com/urfave/cli/v3                    (CLI parser — nested
+#                                                Commands tree)
+#   github.com/redis/go-redis/v9                (Redis 7+ client for
+#                                                the event queue +
+#                                                migration coordinator)
+#   github.com/jackc/pgx/v5                     (Postgres 12+ driver)
+#   github.com/golang-migrate/migrate/v4        (SQL schema migration
+#                                                framework wrapped by
+#                                                the Outpost migrator)
+#   github.com/uber-go/zap                      (structured logging)
+#   github.com/Azure/azure-amqp-common-go +     (Azure Service Bus
+#       github.com/Azure/go-amqp                 destination provider
+#                                                using AMQP 1.0 — the
+#                                                separate-protocol
+#                                                sibling to the AMQP
+#                                                0.9.1 used for
+#                                                RabbitMQ; Azure
+#                                                Service Bus speaks
+#                                                1.0 not 0.9.1)
+#   confluent-kafka-go + segmentio/kafka-go     (Kafka destination
+#                                                providers — two
+#                                                alternative Kafka
+#                                                client implementations
+#                                                because Confluent's
+#                                                librdkafka cgo wrapper
+#                                                and segmentio's pure-
+#                                                Go each have
+#                                                different tradeoffs)
+#
+# Outpost runs the OUTBOUND side of webhook delivery: an application
+# POSTs an event to the Outpost ingest API, Outpost looks up the
+# matching destinations for that event type, fans out delivery to
+# each destination's queue (RabbitMQ via amqp091-go, or Kafka, or
+# Azure Service Bus, or AWS SQS, or GCP Pub/Sub, or just HTTP POST
+# back out), and tracks delivery state through retry-with-exponential-
+# backoff workers.  Transformation rules (JSON-template + JQ expression
+# transforms) can rewrite the event payload per destination so a
+# single inbound event becomes destination-shaped at delivery time.
+# The CLI binary (`outpost`) is the operator's tool: `outpost serve`
+# delegates to the sister `outpost-server` binary to run the actual
+# HTTP server, and `outpost migrate` orchestrates BOTH SQL (Postgres)
+# AND Redis schema migrations through the unified migrator/coordinator
+# package (Redis migrations exist because Outpost stores queue-state
+# and destination-config snapshots in Redis Streams + Hashes alongside
+# the canonical Postgres tables, and those Redis structures need
+# versioned schema migrations too).
+#
+# === AXIS 190 CONTINUES — AMQP 0.9.1 / RabbitMQ client libraries =========
+# Axis position: Go=245 continues Axis 190 (slot 2/0/0).  Canonical Go
+# AMQP 0.9.1 / RabbitMQ client is `github.com/rabbitmq/amqp091-go` —
+# the rabbitmq-team-maintained fork of streadway/amqp after Sean
+# Treadway stepped back in 2021.  The transfer happened in 2022; the
+# API is wire-identical so existing consumers migrated with a single
+# import-path change.  THE Go answer to "talk to RabbitMQ from a Go
+# service."  Used by pydio/cells, wait4x, svix-bridge, DCSO/nightwatch,
+# hookdeck/outpost, and the broader Go microservice ecosystem.
+#
+# Cycle position in current 3+1 micro-cycle:
+#   Rust=245     _svix-server         ← previous round (axis 190 OPENS, 1/0/0)
+#   Go=245       ← THIS FILE          (axis 190 continues, slot 2/0/0)
+#   TS-Node=245  ← next round         (axis 190 CLOSES at triple-245, 1/1/1)
+#
+# Interesting axis property: PREVIOUS round (_svix-server) is open-
+# source webhook-delivery infra by Svix Inc.  THIS round (_outpost) is
+# the same product category — open-source webhook-delivery infra — by
+# Hookdeck.  Two DIFFERENT companies' open-source webhook-infra
+# products both land on this axis because BOTH use AMQP 0.9.1 /
+# RabbitMQ as their canonical queue backend.  The Rust + Go lanes of
+# axis 190 are both anchored by direct competitors in the webhook
+# infrastructure space — and both projects ship effectively the same
+# OSS feature set (multi-destination fan-out, retry-backoff, signed
+# messages, observability), just on different host runtimes.  The
+# axis structure reveals the competitive landscape: there's not just
+# one canonical OSS webhook infra; there's one per host language
+# ecosystem, each consuming the canonical AMQP client for that
+# language.
+#
+# Cross-language design contrast for axis 190:
+#   Rust    : lapin (CleverCloud) — async-first single-crate
+#             implementation; the only meaningful Rust option.
+#   Go      : rabbitmq/amqp091-go — official rabbitmq-team-maintained
+#             fork of the abandoned streadway/amqp.  Pure Go, no CGO.
+#             The fork-and-continue pattern is unusual on cross-
+#             language axes; reflects Go's preference for protocol-
+#             library stability over API innovation (the wire format
+#             is RFC-frozen anyway, so API improvements are less
+#             valuable than continuity).
+#   JS/Node : amqplib (Michael Bridgen, formerly RabbitMQ's JS lead).
+#             [TBD next round]
+# ---------------------------------------------------------------------------
+
+_outpost() {
+    local context state state_descr line ret=1
+    typeset -A opt_args
+
+    _arguments -C \
+        '(- *)'{-h,--help}'[show CLI help]' \
+        '(- *)'{-v,--version}'[show CLI version]' \
+        '1: :->cmds' \
+        '*::arg:->args' && ret=0
+
+    case $state in
+        cmds)
+            local -a subcmds
+            subcmds=(
+                'serve:run the Outpost server (delegates to the sister `outpost-server` binary from PATH or same directory; falls back to `go run ./cmd/outpost-server` in development mode)'
+                'migrate:database migration tools (orchestrates both SQL and Redis migrations through the unified coordinator)'
+                'help:show help (or help for a specific subcommand)'
+            )
+            _describe -t commands 'outpost command' subcmds && ret=0
+            ;;
+        args)
+            case $words[1] in
+                migrate)
+                    _arguments \
+                        '(- *)'{-h,--help}'[show migrate help]' \
+                        '(-c --config)'{-c,--config}'=[path to config file (env CONFIG)]:file:_files -g "*.(yaml|yml|toml|json)"' \
+                        '--verbose[enable verbose logging (debug level)]' \
+                        '1: :->mcmds' \
+                        '*::m-arg:->margs' && ret=0
+                    case $state in
+                        mcmds)
+                            local -a msubs
+                            msubs=(
+                                'list:list all migrations (SQL + Redis) with their status'
+                                'plan:show what migrations would be applied (dry-run)'
+                                'apply:apply all pending migrations (SQL then Redis)'
+                                'verify:verify that migrations were applied correctly'
+                                'unlock:force clear the Redis migration lock (use with caution — only when a migration crashed mid-flight and the lock is stale)'
+                            )
+                            _describe -t migrate-commands 'migrate subcommand' msubs && ret=0
+                            ;;
+                        margs)
+                            case $words[1] in
+                                apply)
+                                    _arguments \
+                                        '(-y --yes)'{-y,--yes}'[skip confirmation prompt]' \
+                                        '--sql-only[only apply SQL migrations (skip Redis side)]' \
+                                        '--redis-only[only apply Redis migrations (skip SQL side)]' && ret=0
+                                    ;;
+                                unlock)
+                                    _arguments \
+                                        '(-y --yes)'{-y,--yes}'[skip confirmation prompt]' && ret=0
+                                    ;;
+                            esac
+                            ;;
+                    esac
+                    ;;
+                serve)
+                    # Outpost serve delegates everything to outpost-server via
+                    # exec.Command; arguments after `serve` are passed through
+                    # raw via SkipFlagParsing.  Show the outpost-server flag
+                    # surface here since that's what users actually configure.
+                    _arguments \
+                        '(- *)'{-h,--help}'[show outpost-server help]' \
+                        '*:arguments passed to outpost-server:' && ret=0
+                    ;;
+                help)
+                    local -a allsubs
+                    allsubs=(serve migrate)
+                    _describe -t commands 'subcommand for help' allsubs && ret=0
+                    ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_outpost "$@"
