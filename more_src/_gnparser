@@ -1,0 +1,103 @@
+#compdef gnparser
+# ============================================================================
+# gnparser - GN parser: parses scientific names into semantic elements
+#            (Go, MIT)
+#
+# Author : Dmitry Mozzherin (gnames team)
+# Upstream: https://github.com/gnames/gnparser
+#
+# gnparser is the Go reimplementation of the Global Names Parser
+# - a CLI + REST service that takes a binomial/taxonomic
+# scientific name (e.g. "Homo sapiens Linnaeus 1758",
+# "Carex pannewitziana var. brevifolia (Wahlb.) Kuk.") and
+# emits its parsed semantic structure: genus, species, infra-
+# specific epithet, authorship (with year, ex/in references),
+# nomenclatural code hints (botanical, zoological, bacterial,
+# viral, cultivar), rank annotations, hybrids, cultivar marks,
+# and a normalized canonical form suitable for matching across
+# biodiversity databases. Output formats: CSV, TSV, compact
+# JSON, pretty JSON. Operates batch from file/stdin or
+# interactively name-by-name via stream mode.
+#
+# Used as the parsing backend by gnverifier (cross-database
+# name resolver) and Global Names Resolver (gnr) - the global
+# infrastructure for biodiversity name normalization. Powers
+# the verification pipeline at gnames.org against >100
+# taxonomic data sources (Catalogue of Life, ITIS, GBIF,
+# WoRMS, IRMNG, NCBI, etc.).
+#
+# Subcommand-less single-binary CLI (cobra root command):
+#   gnparser <file_or_name> [flags]
+#   gnparser -p <port>                 # serve REST + web UI
+#   echo "name" | gnparser             # stdin pipe mode
+#
+# The pointlander/peg lane is built on `github.com/pointlander/
+# peg v1.0.1` (declared verbatim at upstream go.mod HEAD), the
+# canonical Go PEG parser generator by Andrew Snodgrass
+# (github.com/pointlander/peg, 1000+ stars). Pointlander's peg
+# generator takes a .peg grammar file and emits a Go parser
+# with a generated `Parse()` method + AST node types. gnparser
+# uses peg to compile the scientific-name grammar
+# (gnparser/ent/internal/preprocess/preprocess.peg + the
+# infraspecific/authorship sub-grammars) into the Go parser
+# that drives the entire normalization pipeline - the grammar
+# encodes ICZN/ICN/ICNCP rule conventions directly as PEG
+# productions.
+#
+# ----------------------------------------------------------------------------
+# AXIS 221 :: PEG (Parsing Expression Grammar) parser generators
+# Round 1362 :: Go slot 2 of 4 :: continues Axis 221
+#
+# Cross-language canonical library family for this axis:
+#   Rust    : pest-parser/pest             [R1361 _tuliprox]
+#   Go      : pointlander/peg              [R1362 THIS FILE]
+#   TS/Node : peggyjs/peggy                [R1363 closing]
+#
+# pointlander/peg is structurally interesting in this axis: it
+# is the *only* mainstream Go PEG generator with active long-
+# term maintenance - mna/pigeon is the other contender but
+# leans more toward "parser combinator with PEG syntax" while
+# pointlander/peg follows the Bryan Ford (2004) packrat-parser
+# model more closely. Both target Go's static type system by
+# emitting Go source, but pointlander/peg's generated parsers
+# carry strict left-recursion forbiddance + ordered choice
+# semantics that match Pest (Rust) and Peggy (JS) more
+# closely than pigeon's looser model.
+#
+# The biodiversity-informatics ecosystem (Global Names, GBIF,
+# Catalogue of Life) almost universally picks Go + PEG for
+# the parser layer: PEG's ordered-choice trivializes the
+# disambiguation of "Carex" the genus vs. "Carex" the surname
+# in authorship, and Go's compile-once / run-everywhere
+# distribution matches the high-throughput batch processing
+# the field needs (gnparser handles ~50,000 names/sec on a
+# single CPU thread).
+# ============================================================================
+
+_gnparser() {
+    local context state state_descr line
+    typeset -A opt_args
+
+    _arguments -s -S \
+        '(-a --compact-authors)'{-a,--compact-authors}'[remove spaces between initials of authors]' \
+        '(-b --batch_size)'{-b,--batch_size}'[maximum number of names in a batch sent for processing]:n:' \
+        '(-C --cultivar)'{-C,--cultivar}'[parse according to cultivar code ICNCP (DEPRECATED, use --nomenclatural-code)]' \
+        '(-n --nomenclatural-code)'{-n,--nomenclatural-code}'[nomenclatural code]:code:(bact icnp bacterial bot icn botanical cult icncp cultivar vir virus viral ictv icvcn zoo iczn zoological)' \
+        '(-c --capitalize)'{-c,--capitalize}'[capitalize the first letter of input name-strings]' \
+        '(-D --diaereses)'{-D,--diaereses}'[preserve diaereses in names]' \
+        '(-d --details)'{-d,--details}'[provide more details in output]' \
+        '(-f --format)'{-f,--format}'[output format (default csv)]:fmt:(csv tsv compact pretty)' \
+        '(-i --ignore_tags)'{-i,--ignore_tags}'[ignore HTML entities and tags when parsing]' \
+        '(-j --jobs)'{-j,--jobs}'[number of threads (default: CPU count)]:n:' \
+        '(-p --port)'{-p,--port}'[start web site and REST server on the port]:port:' \
+        '(-q --quiet)'{-q,--quiet}'[do not show progress]' \
+        '(-s --stream)'{-s,--stream}'[parse one name at a time in a stream instead of batch]' \
+        '(-u --unordered)'{-u,--unordered}'[output and input are in different order]' \
+        '--species-group-cut[cut autonym/species-group names to species for stemmed version]' \
+        '(-F --flatten-output)'{-F,--flatten-output}'[flatten nested JSON results]' \
+        '(- *)'{-V,--version}'[show build version and date, ignores other flags]' \
+        '(- *)'{-h,--help}'[print help]' \
+        '*:file or scientific name:_files'
+}
+
+_gnparser "$@"
