@@ -1,0 +1,154 @@
+#compdef arbor-cli
+# ============================================================================
+# arbor-cli - Manage worktrees, terminals, processes, and agent tasks
+#              (Rust, MIT)
+#
+# Author : penso
+# Upstream: https://github.com/penso/arbor
+# crates : arbor-cli (binary: arbor-cli; display name: "arbor")
+#
+# `arbor-cli` is the CLI entrypoint for Arbor - a native
+# desktop app + daemon that runs agentic coding workflows
+# in isolated Git worktrees. Each "task" creates a dedicated
+# worktree + branch + terminal session; the agent runs
+# against the worktree in isolation, and arbor-cli lets you
+# inspect + control those running sessions from the
+# terminal. Built on a GPUI desktop GUI + an axum HTTP
+# daemon (arbor-httpd) that the CLI shells communicate with
+# via the daemon-client crate; the GraphQL layer (used by
+# the GUI + arbor-cli's status calls) lives in
+# arbor-daemon-client and is built on `graphql_client`.
+#
+# Subcommand tree (clap derive):
+#   health                       - show daemon health and version
+#   repos list                   - list known repositories
+#   worktrees list [--repo-root <p>]
+#   worktrees create --repo-root <p> --path <p> [--branch <b>]
+#                              [--detach] [--force]
+#   worktrees delete --repo-root <p> --path <p>
+#                              [--delete-branch] [--force]
+#   worktrees changes --path <p>
+#   worktrees commit --path <p> [--message <m>]
+#   worktrees push --path <p>
+#   terminals list
+#   terminals create --cwd <p> [--session-id <id>] [--shell <s>]
+#                  [--cols <n>] [--rows <n>] [--title <t>] [--command <c>]
+#   terminals read <session-id> [--max-lines <n>]
+#   terminals write <session-id> <data>
+#   terminals resize <session-id> --cols <n> --rows <n>
+#   terminals signal <session-id> <signal>
+#   terminals detach <session-id>
+#   terminals kill <session-id>
+#   agents list                  - list active agent sessions
+#   processes list / start-all / stop-all
+#   processes start <name> / stop <name> / restart <name>
+#   tasks list / run <name>
+#
+# Global flags:
+#   --json                       - emit JSON instead of human text
+#   --help                       - print help
+#   --version                    - print version
+#
+# The graphql_client lane is built on `graphql_client = "0.16"`
+# (declared verbatim at upstream workspace Cargo.toml HEAD),
+# the canonical Rust GraphQL client library by the
+# graphql-rust working group (github.com/graphql-rust/
+# graphql-client, 1300+ stars). The library is the
+# uncontested Rust GraphQL client: derive-macro-driven
+# query generation from `.graphql` query files +
+# `schema.json` schema introspection results,
+# strong-typed query parameter + response structs, and
+# matching async runtime support. arbor uses it to talk to
+# the arbor daemon's GraphQL surface from both the
+# arbor-cli (status reads) and arbor-gui (live state +
+# mutations) sides; the GUI's reactivity is driven by
+# GraphQL subscriptions that the daemon-client wraps in
+# Rust futures for GPUI integration.
+#
+# ----------------------------------------------------------------------------
+# AXIS 237 :: GraphQL clients (typed queries from .graphql files)
+# Round 1409 :: Rust slot 1 of 4 :: OPENS Axis 237
+#
+# Cross-language canonical library family for this axis (proposed):
+#   Rust    : graphql-rust/graphql-client  - derive-macro typed GraphQL
+#                                            (alternative: obmarg/cynic for
+#                                             schema-first instead of query-first)
+#   Go      : Khan/genqlient               - Khan Academy's typed Go GraphQL
+#                                            client (alternative:
+#                                             shurcooL/graphql for runtime
+#                                             reflection-based)
+#   TS/Node : prisma-labs/graphql-request  - the de-facto minimal Node GraphQL
+#                                            client (now graffle/graffle after
+#                                             2024 rename + extensibility
+#                                             overhaul)
+#
+# GraphQL clients are a clean spec-bound axis: the
+# *GraphQL spec* (October 2021 final + monthly working
+# drafts) precisely defines the wire format (request +
+# response shape), the query language grammar, and the
+# introspection schema. Compliant clients produce
+# byte-identical request bodies for the same query +
+# variables and decode byte-identical response bodies into
+# language-native types. The differentiator across lanes
+# is *typing strategy*:
+#
+#   - graphql-client (Rust): query-first - point at a
+#     .graphql query file + introspection schema; the
+#     derive macro emits typed structs at compile time
+#   - genqlient (Go): schema-first - point at a schema and
+#     a query yaml; the codegen step produces typed structs
+#     in a separate .go file (committed to repo)
+#   - graphql-request (Node): runtime-typed - pass a query
+#     string + variables; types are user-supplied via
+#     TypeScript generics + the matching codegen tool
+#     (graphql-codegen) for compile-time typing.
+#
+# All three lanes produce wire-compatible queries that any
+# GraphQL server accepts.
+# ============================================================================
+
+_arbor-cli() {
+    local context state state_descr line
+    typeset -A opt_args
+    local curcontext="$curcontext" ret=1
+
+    _arguments -C \
+        '--json[emit JSON instead of human-readable text]' \
+        '(- *)'{-h,--help}'[print help]' \
+        '(- *)'{-V,--version}'[print version]' \
+        '1: :_arbor-cli_cmds' \
+        '*::arg:->args' \
+    && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                health)     _arguments '(- *)'{-h,--help}'[help]' ;;
+                repos)      _arguments '(- *)'{-h,--help}'[help]' '1:subcommand:(list)' '*::arg:->_default' ;;
+                worktrees)  _arguments '(- *)'{-h,--help}'[help]' '1:subcommand:(list create delete changes commit push)' '*::arg:->_default' ;;
+                terminals)  _arguments '(- *)'{-h,--help}'[help]' '1:subcommand:(list create read write resize signal detach kill)' '*::arg:->_default' ;;
+                agents)     _arguments '(- *)'{-h,--help}'[help]' '1:subcommand:(list)' '*::arg:->_default' ;;
+                processes)  _arguments '(- *)'{-h,--help}'[help]' '1:subcommand:(list start-all stop-all start stop restart)' '*::arg:->_default' ;;
+                tasks)      _arguments '(- *)'{-h,--help}'[help]' '1:subcommand:(list run)' '*::arg:->_default' ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_arbor-cli_cmds() {
+    local -a cmds
+    cmds=(
+        'health:Show daemon health and version'
+        'repos:Repository operations (list)'
+        'worktrees:Worktree operations (list/create/delete/changes/commit/push)'
+        'terminals:Terminal session operations'
+        'agents:AI agent activity (list)'
+        'processes:Managed process operations'
+        'tasks:Scheduled task operations'
+    )
+    _describe -t commands 'arbor-cli command' cmds
+}
+
+_arbor-cli "$@"
