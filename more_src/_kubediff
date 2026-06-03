@@ -1,0 +1,193 @@
+#compdef kubediff
+# ---------------------------------------------------------------------------
+# kubediff — "Source VS Deployed": Kubernetes manifest diff tool that
+#            compares the YAML manifests on disk (after kustomize build
+#            / helm template / plain `kubectl apply -f`) against the
+#            live state of the corresponding resources in the cluster,
+#            and produces a colorized Myers-diff highlighting the
+#            drift.  The use case: "I have a GitOps repo with manifests
+#            — what's actually deployed vs what the repo says should
+#            be deployed?" (Rust, 184★)
+#
+# upstream: https://github.com/Ramilito/kubediff
+# author : Ramilito (Robin Wallin)
+# license: MIT
+#
+# Source-direct completion: every flag below is verbatim from
+# src/main.rs on the Ramilito/kubediff tip — clap `#[derive(Parser)]`
+# Cli struct + `#[derive(ValueEnum)]` CliLogLevel enum parsed exactly
+# as declared.  The CLI is intentionally flat (no subcommands) — each
+# invocation is a single drift-check pass against the configured
+# paths.  Persistent configuration lives in `~/.config/kubediff/
+# config.toml` (a `Settings::load()` call near the top of main()) so
+# the CLI flag surface stays small.
+#
+# Direct deps from Cargo.toml (selected):
+#   similar                "2.6"    ← canonical Rust text-diff library
+#                                      (this axis) — by Armin Ronacher
+#                                      (mitsuhiko/similar); pure-Rust
+#                                      implementation of the Myers
+#                                      diff algorithm + Patience diff
+#                                      + LCS diff + line-level and
+#                                      char-level granularity + an
+#                                      ergonomic builder API for
+#                                      formatting differences as
+#                                      unified diff / inline diff /
+#                                      side-by-side / colorized
+#                                      terminal output.  Successor to
+#                                      Ronacher's own `difflib` Python
+#                                      port; the design intent is
+#                                      "Python's difflib but with
+#                                      Rust's type system + speed."
+#                                      Supports `TextDiff::from_lines`
+#                                      / `from_words` / `from_chars`
+#                                      / `from_graphemes` for varying
+#                                      granularity, and the
+#                                      `algorithm::Algorithm` enum
+#                                      selects between Myers /
+#                                      Patience / LCS depending on
+#                                      which tradeoff (speed vs
+#                                      diff-quality) the consumer
+#                                      needs.  THE Rust answer to
+#                                      "compute and format the diff
+#                                      between two strings" — used by
+#                                      every Rust tool that displays
+#                                      structured diffs: astral-sh/
+#                                      ruff (Python linter — uses
+#                                      similar for autofix preview),
+#                                      biomejs/gritql (Biome's
+#                                      structural search), sachaos/
+#                                      viddy (modern `watch`), denoland
+#                                      /deno_doc, LukeMathWalker/pavex
+#                                      (Rust web framework — generates
+#                                      diffs of generated code),
+#                                      oppiliappan/statix (Nix linter),
+#                                      Shemnei/punktf (dotfile
+#                                      manager — diff between source
+#                                      template and rendered config),
+#                                      chaqchase/lla (modern `ls`
+#                                      with snapshot-comparison
+#                                      modes).  kubediff uses similar
+#                                      inside src/lib.rs's Process
+#                                      module — once the Kubernetes
+#                                      live-state YAML is fetched
+#                                      from the cluster via kube-rs
+#                                      and the on-disk manifest is
+#                                      loaded, both are serialized
+#                                      to canonical YAML and fed to
+#                                      `TextDiff::from_lines` to
+#                                      produce the resource-level
+#                                      diff that the CLI then
+#                                      colorizes via the `colored`
+#                                      crate and pretty-prints via
+#                                      `bat` (the syntax-highlighted
+#                                      cat replacement) when stdout
+#                                      is a TTY.
+#   kube                   "3.0.0"   (Kubernetes API client — kube-rs;
+#                                      fetches the live state)
+#   k8s-openapi            "0.27"    (typed Kubernetes resource
+#                                      definitions matching the cluster
+#                                      API surface)
+#   tokio                            (async runtime for the kube-rs
+#                                      client)
+#   serde + serde_yaml + serde_json  (YAML/JSON parsing of both the
+#                                      on-disk manifests and the
+#                                      cluster responses)
+#   bat                    "0.24.0"  (syntax-highlighted output when
+#                                      a TTY is connected; falls back
+#                                      to plain text when piped)
+#   clap (with derive)               (CLI parser)
+#   colored                          (terminal color codes for the
+#                                      diff +/- line markers)
+#   anyhow + dirs + glob             (error handling + config-dir
+#                                      resolution + path globbing)
+#
+# kubediff fills a gap that vanilla `kubectl diff` doesn't quite cover:
+# `kubectl diff -f manifest.yaml` does server-side dry-run apply +
+# diff, but only against ONE manifest at a time and only for resources
+# the manifest explicitly references.  kubediff scans a configured
+# directory tree (typically a GitOps repo / Kustomize overlay /
+# umbrella Helm chart output), enumerates every resource the manifests
+# would create, fetches the actual live state from the cluster for
+# each, and emits a unified diff of the field-by-field drift.  The
+# `--env <env>` flag selects which kustomize overlay / Helm values set
+# to apply before comparing (so `kubediff --env prod` and
+# `kubediff --env staging` give the right diff for each environment
+# without separate commands), and `--inplace` lets you operate on a
+# pre-rendered manifest dir instead of running the build pipeline
+# again.
+#
+# ============================================================================
+# === AXIS 191 OPENS — text diff algorithm libraries =======================
+# === Rust=246 OPENS at slot 1/0/0 ========================================
+# ============================================================================
+# Axis position: Rust=246 OPENS Axis 191 at slot 1/0/0 — the first of the
+# three lanes for the canonical text diff algorithm library trio.  The
+# axis anchors on a single pure-host-language implementation of Myers
+# diff (or Patience diff, or LCS diff) with an API that returns
+# structured diff operations (Insert / Delete / Replace / Equal) so
+# downstream consumers can render them however they want — terminal
+# unified diff, side-by-side, inline-word-highlight, HTML, JSON,
+# whatever:
+#
+#     Rust    : similar                     by Armin Ronacher
+#                                              (mitsuhiko/similar);
+#                                              pure-Rust Myers +
+#                                              Patience + LCS with
+#                                              builder API for
+#                                              unified / inline /
+#                                              colorized formatting.
+#                                              Successor to Ronacher's
+#                                              own difflib Python port.
+#                 → kubediff (Robin Wallin Ramilito — Kubernetes
+#                              "Source VS Deployed" manifest diff
+#                              tool; compares on-disk manifests
+#                              against live cluster state via kube-rs;
+#                              similar produces the line-level diff
+#                              that bat syntax-highlights for the TTY
+#                              output; 184★ MIT)
+#                 _kubediff        [Rust=246 OPENS Axis 191, 1/0/0]
+#                                                  ↑↑↑ THIS FILE ↑↑↑
+#
+#     Go      : (next round — Go=246, slot 2/0/0)
+#                Canonical Go text-diff library: github.com/sergi/go-diff
+#                by Sergio Acosta — Go port of Google's diff-match-
+#                patch JavaScript library by Neil Fraser (the same
+#                Myers-based diff algorithm with the additional
+#                "patch" application surface that allows applying
+#                diffs as transformations).  Used by every Go tool
+#                that diffs text: golangci-lint, gopls (the Go LSP),
+#                kubernetes itself for the kubectl diff implementation,
+#                and many more.  [TBD next-round consumer]
+#
+#     JS/Node : (Axis 191 CLOSES at TS-Node=246, slot 1/1/1)
+#                Canonical JS text-diff library: `diff` by Kevin Decker
+#                (kpdecker/jsdiff) — pure-JS Myers diff with char /
+#                word / line / sentence / CSS / JSON granularity
+#                selectors.  Used by Mocha (for test diff output),
+#                Jest (for snapshot diffs), every JS code-review tool,
+#                Prettier (for printing the diff between formatted
+#                and unformatted output).  Alternative: `diff-match-
+#                patch` (google/diff-match-patch) — the original
+#                Google library that sergi/go-diff is a port of;
+#                still actively used in Node despite the older API.
+#                [TBD closer consumer]
+#
+# Cycle position in current 3+1 micro-cycle:
+#   Rust=246     ← THIS FILE          (axis 191 OPENS, slot 1/0/0)
+#   Go=246       ← next round         (axis 191 continues, slot 2/0/0)
+#   TS-Node=246  ← round after        (axis 191 CLOSES at triple-246, 1/1/1)
+# ============================================================================
+
+_kubediff() {
+    _arguments -s -S \
+        '(- *)'{-h,--help}'[print help]' \
+        '(- *)'{-V,--version}'[print version]' \
+        '(-e --env)'{-e,--env}'=[environment selector (matches a top-level key in ~/.config/kubediff/config.toml — typically `prod` / `staging` / `dev` — which controls the kustomize overlay or Helm values file the manifests are rendered with before comparison)]:env:' \
+        '(-i --inplace)'{-i,--inplace}'[operate on already-rendered manifests in --path without running the build pipeline (kustomize build / helm template) again — useful when the manifests are pre-rendered by CI]' \
+        '(-p --path)'{-p,--path}'=[explicit path to a directory of YAML manifests or a single .yaml file (overrides the path baked into the config file for the selected --env)]:path:_files' \
+        '(-l --log)'{-l,--log}'=[set log verbosity (defaults to error from the config file)]:level:(info warning error)' \
+        '(-t --term-width)'{-t,--term-width}'=[explicit terminal width for the diff output (default: auto-detect via ioctl TIOCGWINSZ)]:cols:'
+}
+
+_kubediff "$@"
