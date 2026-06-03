@@ -1,0 +1,368 @@
+#compdef processd
+# ============================================================================
+# processd - Minecraft-avatar image processor
+#             service (the Minotar pipeline's
+#             image-transformation HTTP server)
+#             (Go, Unlicense)
+#
+# Author : minotar / Tom (org)
+# Upstream: https://github.com/minotar/imgd
+# Binary path: cmd/processd/main.go
+#
+# `processd` is one of three image-pipeline services
+# in the Minotar Minecraft avatar service:
+#   - skind: fetches + caches raw Minecraft.net
+#     skin PNG textures (port 4643 default)
+#   - processd: receives a skin texture from skind,
+#     processes it (head/helm/cube/bust/body
+#     extraction + size + format conversion),
+#     returns the rendered avatar (THIS BINARY;
+#     port 4644 default)
+#   - imgd: the orchestrator that combines skind +
+#     processd + cache layer + user-facing HTTP
+#     server (port 4643+ ranges)
+#
+# Routes served by processd (registered in
+# `pkg/processd/processd.go::DefaultProcessRoutes`):
+#   - /avatar/<user>       - head crop (default
+#                             avatar)
+#   - /helm/<user>         - head + helm overlay
+#   - /cube/<user>         - isometric cube
+#                             rendering
+#   - /cubehelm/<user>     - isometric cube +
+#                             helm overlay
+#   - /bust/<user>         - upper-body crop
+#   - /body/<user>         - full-body render
+#   - /armor/bust/<user>   - armored upper body
+#                             (or /armour/bust)
+#   - /armor/body/<user>   - armored full body
+#                             (or /armour/body)
+#
+# Output formats:
+#   - PNG (default)
+#   - SVG (via the `?format=svg` query parameter
+#     or path-based negotiation)
+#
+# Use cases:
+#   - Self-hosting a Minecraft.net avatar service
+#     for a Minecraft server/website
+#   - Replacing crafatar/minotar.net as a
+#     self-hosted public avatar service
+#   - Bulk-rendering Minecraft avatar grids
+#     (server admin tools, forum signatures)
+#
+# Usage:
+#   processd [flags]
+#
+# Flags (Go stdlib `flag` + spf13/pflag wrapping +
+# kamaln7/envy env-var support; PROCESSD_<flag>
+# env vars also recognized):
+#
+# processd-specific flags:
+#   -processd.upstream-timeout <duration>
+#                                  - timeout for
+#                                     skin lookup
+#                                     (default 15s)
+#   -processd.skind-url <url>      - API endpoint
+#                                     for the
+#                                     skind sidecar
+#                                     (default
+#                                     http://localhost:4643/skin/)
+#   -processd.cors-allow-all       - permissive
+#                                     CORS policy
+#                                     (default
+#                                     true)
+#   -processd.use-etags            - use ETags to
+#                                     skip re-
+#                                     processing
+#                                     unchanged
+#                                     skins
+#                                     (default
+#                                     true)
+#   -processd.redirect-username    - redirect
+#                                     username
+#                                     requests to
+#                                     the UUID
+#                                     variant
+#                                     (default
+#                                     true)
+#   -processd.cache-control-ttl <duration>
+#                                  - Cache-Control
+#                                     TTL returned
+#                                     to clients
+#                                     (default 6h)
+#
+# Server flags (inherited from weaveworks/common/
+# server; weaveworks observability HTTP server
+# framework):
+#   -server.http-listen-address <ip>
+#                                  - HTTP server
+#                                     listen
+#                                     address
+#   -server.http-listen-port <port>
+#                                  - HTTP server
+#                                     port (default
+#                                     4644)
+#   -server.grpc-listen-address <ip>
+#                                  - gRPC server
+#                                     listen
+#                                     address
+#                                     (default
+#                                     127.0.0.3 for
+#                                     processd)
+#   -server.grpc-listen-port <port>
+#                                  - gRPC server
+#                                     port
+#   -server.log-level <level>      - log level
+#                                     (debug/info/
+#                                     warn/error)
+#   -server.log-format <format>    - log format
+#                                     (logfmt/json)
+#   -server.path-prefix <prefix>   - base path
+#                                     prefix for
+#                                     HTTP routes
+#   -server.register-instrumentation
+#                                  - register
+#                                     Prometheus
+#                                     instrumentation
+#                                     handlers
+#                                     (default
+#                                     true)
+#   -server.http-server-read-timeout <duration>
+#                                  - HTTP read
+#                                     timeout
+#                                     (default 30s)
+#   -server.http-server-write-timeout <duration>
+#                                  - HTTP write
+#                                     timeout
+#                                     (default 30s)
+#   -server.http-server-idle-timeout <duration>
+#                                  - HTTP idle
+#                                     timeout
+#                                     (default
+#                                     120s)
+#   -server.grpc-server-max-recv-msg-size <bytes>
+#                                  - gRPC max
+#                                     receive
+#                                     message size
+#                                     (default
+#                                     4MB)
+#   -server.grpc-server-max-send-msg-size <bytes>
+#                                  - gRPC max
+#                                     send message
+#                                     size
+#                                     (default
+#                                     4MB)
+#   -server.grpc-server-max-concurrent-streams <n>
+#                                  - max
+#                                     concurrent
+#                                     gRPC streams
+#   -server.metrics-namespace <name>
+#                                  - Prometheus
+#                                     metrics
+#                                     namespace
+#                                     prefix
+#                                     (default
+#                                     `processd`)
+#
+# Process flags:
+#   -version                       - print build
+#                                     version
+#                                     information
+#   -help                          - print help
+#
+# Environment variables:
+#   PROCESSD_<UPPER_SNAKE_CASE>    - any flag can
+#                                     be set via
+#                                     env var
+#                                     (e.g.
+#                                     PROCESSD_PROCESSD_SKIND_URL)
+#
+# Example invocation:
+#   processd \
+#     -processd.skind-url=http://skind.local:4643/skin/ \
+#     -processd.cache-control-ttl=12h \
+#     -server.http-listen-port=4644
+#
+# The ajstarks/svgo lane is built on `github.com/
+# ajstarks/svgo v0.0.0-20210406150507-75cfd577ce75`
+# (declared verbatim at upstream go.mod HEAD as a
+# direct dep, imported as
+# `svg "github.com/ajstarks/svgo"` in
+# pkg/processd/mcskin/mcskin.go line 16, then
+# `canvas := svg.New(w)` at line 440 in the
+# SVG-output write path), the canonical Go SVG
+# generation library by Anthony Starks (ajstarks) -
+# github.com/ajstarks/svgo.
+#
+# Anthony Starks's ajstarks/svgo is the de-facto
+# canonical Go SVG-*generation* library (write-
+# only; no rendering). It provides:
+#   - Procedural SVG construction (svg.Line,
+#     svg.Circle, svg.Rect, svg.Path, svg.Text,
+#     svg.Image, ...)
+#   - Direct io.Writer output (canvas := svg.New(w)
+#     then canvas.<shape>(...) calls write SVG XML
+#     directly to the writer)
+#   - Comprehensive SVG 1.1 element coverage
+#   - Animation + gradient + filter helpers
+#   - No external dependencies
+#
+# svgo's distinguishing position vs other Go SVG
+# libraries:
+#   - Generation-only (no parsing of existing SVG)
+#   - Co-canonical with srwiley/oksvg (which does
+#     parsing + rasterization)
+#   - Used by scientific computing + data
+#     visualization tools (Anthony Starks is the
+#     author of gonum/plot's SVG backend)
+#   - Wraps the SVG XML element-by-element with
+#     Go-idiomatic API
+#
+# Anthony Starks's broader Go ecosystem footprint:
+#   - ajstarks/svgo (canonical Go SVG generation;
+#     THIS AXIS)
+#   - ajstarks/deck (presentation tool that uses
+#     svgo for slide rendering)
+#   - ajstarks/dchart (data-charting library with
+#     SVG output)
+#   - ajstarks/openvg (Go bindings for the OpenVG
+#     vector graphics standard)
+#   - ajstarks/gensvg (newer SVG generation library
+#     with API improvements over svgo)
+#
+# Anthony Starks's Go ecosystem position is in
+# *vector graphics + data visualization* - distinct
+# from the systems-library cohort (Klaus Post,
+# Sergey Kamardin, Gustavo Niemeyer) and the
+# foundational-library cohort (Tolnay/Schlueter/
+# Sorhus in their respective ecosystems). Starks
+# is the canonical Go author for procedural
+# vector graphics + scientific data visualization.
+#
+# processd uses ajstarks/svgo in pkg/processd/
+# mcskin/mcskin.go's WriteSVG path. When a client
+# requests `/avatar/<user>?format=svg` or similar,
+# the renderer constructs an SVG document
+# representing the requested view of the Minecraft
+# skin texture using svgo's procedural API:
+#   ```go
+#   import svg "github.com/ajstarks/svgo"
+#
+#   func writeSkinSVG(w io.Writer, skin ...) {
+#       canvas := svg.New(w)
+#       canvas.Start(width, height)
+#       canvas.Image(0, 0, width, height, dataURL)
+#       canvas.End()
+#   }
+#   ```
+# The result is a pixel-accurate SVG that scales
+# infinitely (useful for vector-graphics-aware
+# rendering contexts where the raster PNG would
+# antialias unwanted edges).
+#
+# ----------------------------------------------------------------------------
+# AXIS 264 :: SVG rendering libraries (parse +
+#              rasterize/render SVG documents
+#              following the W3C SVG 1.1/2.0
+#              specification)
+# Round 1491 :: Go slot 2 of 4 :: continues Axis 264
+#
+# Cross-language canonical library family for this axis:
+#   Rust    : linebender/resvg             [R1490 _oxdraw]
+#             (Yevhenii Reizner; pure-Rust
+#              SVG parser + rasterizer via
+#              tiny-skia)
+#   Go      : ajstarks/svgo                [R1491 THIS FILE]
+#             (Anthony Starks; generation-
+#              only; co-canonical with
+#              srwiley/oksvg for parsing+
+#              rendering)
+#   TS/Node : svgdotjs/svg.js              [R1492 closing]
+#             (DOM-manipulation library;
+#              rasterization typically
+#              delegates to sharp/Puppeteer)
+#
+# ajstarks/svgo is structurally interesting in
+# this axis because it's a *generation-only*
+# canonical (no parsing or rendering). This is
+# the *inverse* of the Rust slot (resvg, which is
+# parsing + rendering, no generation). The three
+# lanes form a clean spectrum of SVG-library
+# specialization:
+#
+#   - Rust (resvg): parse + render (rasterize to
+#     PNG); no generation
+#   - Go (ajstarks/svgo): generate (write SVG
+#     XML); no parsing or rendering
+#   - Go alt (srwiley/oksvg + rasterx): parse +
+#     render; the rendering counterpart to svgo
+#   - Node (svgdotjs/svg.js): DOM manipulation;
+#     rasterization delegates to external tooling
+#
+# The SVG axis is unique among the corpus's
+# canonical-library axes in that *no single
+# library spans the full SVG pipeline* - parsing,
+# manipulation, generation, and rasterization
+# are often distinct libraries in each ecosystem.
+# This reflects the spec's enormous surface area
+# (SVG 1.1 + SVG 2 cover XML + CSS + scripting +
+# animation + filters + masks + gradients +
+# patterns).
+#
+# Use-case spectrum across the lanes (so far):
+#   - oxdraw (Rust, resvg + tiny-skia): Mermaid-
+#     style diagram CLI; parses Mermaid + renders
+#     to SVG/PNG via resvg pipeline
+#   - processd (Go, ajstarks/svgo): Minecraft
+#     avatar processor; generates SVG views of
+#     skin textures via svgo's procedural API
+#
+# Cross-language interop at the SVG document
+# level - svgo-generated SVG can be parsed by
+# resvg (Rust) + svg.js (Node) + librsvg + Inkscape
+# + any compliant SVG parser. The W3C SVG XML grammar
+# is the lingua franca.
+#
+# Note on Anthony Starks's parallel "gensvg"
+# library: in 2021+ Starks released ajstarks/gensvg
+# as a newer + API-improved SVG generation library,
+# but ajstarks/svgo remains canonical via
+# reverse-dependency lock-in (similar to the
+# Schlueter/node-glob pattern at Axis 261 +
+# Tolnay/serde-yaml at Axis 262 - older library
+# remains canonical via reverse-dep network effect
+# despite newer alternatives by the same author).
+# ============================================================================
+
+_processd() {
+    local context state state_descr line
+    typeset -A opt_args
+
+    _arguments -s -S \
+        '-processd.upstream-timeout=[timeout for skin lookup]:duration:' \
+        '-processd.skind-url=[API endpoint for the skind sidecar]:url:' \
+        '-processd.cors-allow-all=[permissive CORS policy]:bool:(true false)' \
+        '-processd.use-etags=[use ETags to skip re-processing]:bool:(true false)' \
+        '-processd.redirect-username=[redirect username requests to UUID variant]:bool:(true false)' \
+        '-processd.cache-control-ttl=[Cache-Control TTL returned to clients]:duration:' \
+        '-server.http-listen-address=[HTTP server listen address]:addr:' \
+        '-server.http-listen-port=[HTTP server port (default 4644)]:port:' \
+        '-server.grpc-listen-address=[gRPC server listen address]:addr:' \
+        '-server.grpc-listen-port=[gRPC server port]:port:' \
+        '-server.log-level=[log level]:level:(debug info warn error)' \
+        '-server.log-format=[log format]:format:(logfmt json)' \
+        '-server.path-prefix=[base path prefix for HTTP routes]:prefix:' \
+        '-server.register-instrumentation=[register Prometheus instrumentation handlers]:bool:(true false)' \
+        '-server.http-server-read-timeout=[HTTP read timeout]:duration:' \
+        '-server.http-server-write-timeout=[HTTP write timeout]:duration:' \
+        '-server.http-server-idle-timeout=[HTTP idle timeout]:duration:' \
+        '-server.grpc-server-max-recv-msg-size=[gRPC max receive message size in bytes]:bytes:' \
+        '-server.grpc-server-max-send-msg-size=[gRPC max send message size in bytes]:bytes:' \
+        '-server.grpc-server-max-concurrent-streams=[max concurrent gRPC streams]:n:' \
+        '-server.metrics-namespace=[Prometheus metrics namespace prefix]:name:' \
+        '(- *)-version[print build version information]' \
+        '(- *)-help[print help]'
+}
+
+_processd "$@"
