@@ -1,0 +1,183 @@
+#compdef ropee
+# ============================================================================
+# ropee - scalable Prometheus remote-storage adapter
+#          for Splunk (Go, Apache-2.0)
+#
+# Author : DaoCloud / kebe7jun
+# Upstream: https://github.com/DaoCloud/ropee
+#
+# `ropee` is a Prometheus remote-write + remote-read
+# adapter that forwards metrics to Splunk's HTTP Event
+# Collector (HEC) for long-term storage + correlation
+# with Splunk-indexed log data. It runs as a single
+# binary listening on a configurable HTTP port,
+# implements the standard Prometheus remote_write +
+# remote_read protocol (Snappy-compressed protobuf
+# payloads), and translates between Prometheus's
+# `samples + labels` data model and Splunk's metrics-
+# index document model.
+#
+# Use case: feed long-running Prometheus metric series
+# into Splunk for retention + cross-correlation with
+# logs without giving up Prometheus's native PromQL
+# query interface for short-window monitoring.
+#
+# Usage:
+#   ropee [flags]
+#
+# Flags (Go stdlib flag.* parsing):
+#   --listen-addr <addr:port>      - HTTP listen
+#                                     address
+#                                     (default
+#                                     127.0.0.1:9970)
+#   --splunk-url <url>             - Splunk management
+#                                     URL (default
+#                                     https://127.0.0.1:8089)
+#   --splunk-hec-url <url>         - Splunk HTTP Event
+#                                     Collector URL
+#                                     (default
+#                                     https://127.0.0.1:8088)
+#   --splunk-hec-token <token>     - HEC bearer token
+#                                     (required for
+#                                     ingestion)
+#   --splunk-metrics-index <name>  - Splunk metrics
+#                                     index name
+#                                     (default "*")
+#   --splunk-metrics-sourcetype <type>
+#                                  - sourcetype label
+#                                     (default
+#                                     DaoCloud_promu_metrics)
+#   --timeout <seconds>            - per-request
+#                                     timeout in
+#                                     seconds (default
+#                                     60)
+#   --log-file-path <path>         - log file
+#                                     directory
+#                                     (default
+#                                     /var/log; use
+#                                     "-" for stdout)
+#   --debug                        - enable debug-
+#                                     level logging
+#
+# The golang/snappy lane is built on `github.com/
+# golang/snappy v0.0.1` (declared at upstream go.mod
+# HEAD as a direct dep, used in main.go to decompress
+# inbound Prometheus remote_read + remote_write
+# request bodies), the canonical Go Snappy library by
+# the Go core team - github.com/golang/snappy, 1500+
+# stars.
+#
+# golang/snappy has a specific provenance story
+# inside the Go ecosystem:
+#   1. The Go core team originally developed Snappy
+#      bindings as part of `golang/leveldb` (the Go
+#      port of Google's LevelDB key-value store)
+#      around 2012
+#   2. The Snappy code was extracted from leveldb
+#      into a standalone `golang/snappy` repo in 2016
+#      to make it usable outside the LevelDB use case
+#   3. Maintenance has stayed with the Go core team
+#      since extraction, but the repo is intentionally
+#      low-velocity: Snappy v1 is fully stable so the
+#      library only needs incident-driven security
+#      patches
+#
+# This makes golang/snappy a *core-team-maintained-
+# subrepo-style* canonical, similar to the
+# `golang.org/x/*` packages but without the `x/`
+# prefix because Snappy predates the formal
+# `golang.org/x/*` namespace. The library is depended
+# on by:
+#   - Prometheus (remote_read + remote_write)
+#   - Thanos (object-storage block compression)
+#   - VictoriaMetrics (storage compression)
+#   - InfluxDB v1 (Snappy + zstd dual paths)
+#   - Cortex / Mimir (multi-tenant Prometheus)
+#   - Loki (chunk compression)
+#   - Bleve (full-text index segment compression)
+#   - golang/leveldb (the original use case)
+#   - ropee (THIS BINARY)
+#
+# ropee uses `snappy.Decode(nil, compressed)` to
+# decompress the inbound Prometheus protobuf payload
+# before passing it to `proto.Unmarshal` for
+# protobuf parsing. The remote_read response path
+# also re-encodes via `snappy.Encode` to match the
+# Prometheus client's expected wire format.
+#
+# ----------------------------------------------------------------------------
+# AXIS 253 :: Snappy compression (Google fast LZ77
+#              variant, optimized for decompression
+#              throughput)
+# Round 1458 :: Go slot 2 of 4 :: continues Axis 253
+#
+# Cross-language canonical library family for this axis:
+#   Rust    : BurntSushi/rust-snappy      [R1457 _avml]
+#   Go      : golang/snappy               [R1458 THIS FILE]
+#   TS/Node : @node-rs/snappy             [R1459 closing]
+#             (napi-rs binding to
+#              BurntSushi/rust-snappy)
+#
+# golang/snappy is structurally interesting because
+# of its *extracted-from-leveldb-port* origin. The
+# three lanes form a clean spectrum of Snappy
+# implementation paths:
+#
+#   - Rust (BurntSushi/rust-snappy): line-by-line
+#     safe-Rust port of Google's reference C++
+#     library; preserves byte-identical output
+#     vs the reference; part of Gallant's broader
+#     canonical-Rust footprint
+#   - Go (golang/snappy): Go core team port,
+#     originally inside `golang/leveldb` (the Go
+#     LevelDB port), extracted in 2016; maintenance
+#     intentionally low-velocity because Snappy v1
+#     is stable
+#   - Node (@node-rs/snappy): napi-rs binding to
+#     BurntSushi/rust-snappy; inherits Gallant's
+#     Rust impl through N-API
+#
+# The Rust + Node lanes converge on the same
+# BurntSushi/rust-snappy implementation - the Node
+# slot delegates to the Rust slot via napi-rs binding.
+# This Node-binds-to-Rust pattern is structurally
+# identical to:
+#   - Axis 244 (Argon2): @node-rs/argon2 binds to
+#     RustCrypto argon2
+#   - Axis 249 (QUIC): @chainsafe/libp2p-quic binds
+#     to ChainSafe's quinn-rs fork
+#
+# The Go slot deliberately stays separate from the
+# Rust + Node convergence because of Go's stronger
+# preference for pure-Go cross-compile (no FFI / no
+# napi). The trade-off: the Go core team has to
+# maintain its own port independently, but Go
+# binaries stay statically-linkable + cross-compile-
+# friendly without per-target build complexity.
+#
+# Cross-language interop at the wire format level -
+# Snappy bitstream produced by BurntSushi/rust-snappy
+# + golang/snappy + @node-rs/snappy decompresses
+# byte-identically through any of the others. Google's
+# canonical test corpus validates this cross-library
+# byte-equivalence.
+# ============================================================================
+
+_ropee() {
+    local context state state_descr line
+    typeset -A opt_args
+
+    _arguments -s -S \
+        '--listen-addr[HTTP listen address (default 127.0.0.1:9970)]:addr:' \
+        '--splunk-url[Splunk management URL]:url:' \
+        '--splunk-hec-url[Splunk HEC URL]:url:' \
+        '--splunk-hec-token[HEC bearer token]:token:' \
+        '--splunk-metrics-index[Splunk metrics index name]:name:' \
+        '--splunk-metrics-sourcetype[sourcetype label]:type:' \
+        '--timeout[per-request timeout in seconds]:seconds:' \
+        '--log-file-path[log file directory (- = stdout)]:path:_files -/' \
+        '--debug[enable debug-level logging]' \
+        '(- *)-h[print help]'
+}
+
+_ropee "$@"
