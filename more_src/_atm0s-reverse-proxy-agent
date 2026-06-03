@@ -1,0 +1,203 @@
+#compdef atm0s-reverse-proxy-agent
+# ============================================================================
+# atm0s-reverse-proxy-agent - decentralized reverse-proxy
+#   agent (NAT-traversal tunnel client) (Rust, MIT)
+#
+# Author : 8xFF
+# Upstream: https://github.com/8xFF/atm0s-reverse-proxy
+# crates : atm0s-reverse-proxy-agent
+#
+# `atm0s-reverse-proxy-agent` is the agent half of the
+# atm0s reverse-proxy cluster - a decentralized NAT-
+# traversal reverse-proxy designed for exposing local
+# IoT / HomeAssistant / RTSP camera / HTTP services to
+# the public internet without a central rendezvous server.
+# The agent runs alongside the service being exposed,
+# dials out to a relayer instance (HTTP / SNI-HTTPS /
+# RTSP / RTSPS multiplexed over TCP / TLS / QUIC), and
+# announces its public endpoint signed under the agent's
+# persistent Ed25519 local key. Relayer + agent identify
+# each other by Ed25519 public keys (no shared secrets
+# required, no PKI - just self-anchored asymmetric
+# crypto).
+#
+# Usage:
+#   atm0s-reverse-proxy-agent --connector-addr <URL>
+#                             --connector-protocol <PROTOCOL>
+#                             [options]
+#
+# Flags (argh derive FromArgs):
+#   --connector-addr <URL>
+#       URL of the relay server to dial
+#   --connector-protocol <PROTOCOL>
+#       transport protocol of the relay server
+#       (tcp / tls / quic)
+#   --http-dest <addr:port>
+#       local HTTP service destination
+#       (default 127.0.0.1:8080)
+#   --https-dest <addr:port>
+#       local SNI-HTTPS service destination
+#       (default 127.0.0.1:8443)
+#   --rtsp-dest <addr:port>
+#       local RTSP service destination
+#       (default 127.0.0.1:554)
+#   --rtsps-dest <addr:port>
+#       local SNI-RTSPS service destination
+#       (default 127.0.0.1:5443)
+#   --local-key <file>
+#       path to persistent Ed25519 key file (PEM)
+#       (default local_key.pem); generated + saved on
+#       first run if absent
+#   --custom-quic-cert-base64 <b64>
+#       (quic feature) custom QUIC server cert as base64
+#   --allow-quic-insecure
+#       (quic feature) accept self-signed QUIC certs
+#   --custom-tls-cert-base64 <b64>
+#       (tls feature) custom TLS server cert as base64
+#   --allow-tls-insecure
+#       (tls feature) accept self-signed TLS certs
+#   --help
+#       print help (argh adds this implicitly)
+#
+# Environment:
+#   RUST_LOG    log level (default info)
+#
+# The Ed25519 lane is built on `ed25519-dalek` (declared
+# at upstream workspace Cargo.toml via the workspace
+# `protocol-ed25519` member crate, which re-exports +
+# wraps ed25519-dalek primitives - imported from agent
+# main.rs as `protocol_ed25519::AgentLocalKey`), the
+# canonical Rust Ed25519 / X25519 / Ristretto255
+# library family by Henry de Valence + dalek-cryptography
+# - github.com/dalek-cryptography/ed25519-dalek, 800+
+# stars on the ed25519-dalek crate alone; the broader
+# dalek-cryptography umbrella covers curve25519-dalek
+# (3500+ stars), x25519-dalek, schnorrkel, bulletproofs,
+# and zcash/halo2 - the de-facto Rust elliptic-curve
+# cryptography stack.
+#
+# ed25519-dalek implements RFC 8032 (Edwards-curve Digital
+# Signature Algorithm) end-to-end: key generation,
+# deterministic + randomized signing, and constant-time
+# signature verification. The implementation is pure-Rust
+# (no FFI to libsodium / libsecp256k1) and is one of the
+# most-audited Rust crypto crates - used by Zcash,
+# Polkadot, Solana SDK, hyperledger, signal-rust,
+# and approximately every Rust project that needs
+# Ed25519.
+#
+# atm0s-reverse-proxy-agent uses ed25519-dalek (via the
+# `protocol-ed25519::AgentLocalKey` wrapper) to:
+#   1. Generate or load the agent's persistent local key
+#      from `local_key.pem`
+#   2. Sign the agent's announce message to the relayer
+#      (so the relayer can prove the agent's public key
+#      really controls the announced endpoint)
+#   3. Verify the relayer's challenge response (so the
+#      agent can prove the relayer's identity before
+#      forwarding traffic)
+#
+# ----------------------------------------------------------------------------
+# AXIS 246 :: Ed25519 / EdDSA signatures (RFC 8032)
+# Round 1436 :: Rust slot 1 of 4 :: OPENS Axis 246
+#
+# Cross-language canonical library family for this axis
+# (proposed):
+#   Rust    : dalek-cryptography/ed25519-dalek
+#                                       - pure-Rust impl
+#                                         in the dalek-
+#                                         cryptography
+#                                         umbrella;
+#                                         de-facto Rust
+#                                         Ed25519 stack
+#                                         (depended on by
+#                                         Solana, Polkadot,
+#                                         Zcash, ...)
+#   Go      : golang.org/x/crypto/ed25519
+#                                       - Go core team's
+#                                         RFC 8032 impl
+#                                         in the
+#                                         golang.org/x/
+#                                         crypto subrepo
+#                                         (also re-
+#                                         exported as
+#                                         the std-lib
+#                                         crypto/ed25519
+#                                         since Go 1.13)
+#   TS/Node : paulmillr/noble-ed25519   - audited pure-JS
+#             (npm @noble/ed25519)        Ed25519 impl
+#                                         by Paul Miller
+#                                         (the broader
+#                                         noble-curves /
+#                                         noble-hashes /
+#                                         noble-ciphers
+#                                         umbrella is the
+#                                         de-facto JS
+#                                         crypto-primitives
+#                                         stack); zero
+#                                         dependencies,
+#                                         constant-time,
+#                                         multi-runtime
+#                                         (Node + browser
+#                                         + Deno + Bun +
+#                                         Cloudflare
+#                                         Workers)
+#
+# Ed25519 is a clean spec-bound axis - RFC 8032 (EdDSA)
+# defines the algorithm + key + signature byte formats
+# byte-for-byte. Compliant implementations produce
+# bit-identical signatures for the same (private_key,
+# message) pair, and signatures cross-verify byte-
+# identically across implementations.
+#
+# Structural commentary on the canonical libraries:
+#   - ed25519-dalek (Rust): the de-facto Rust Ed25519
+#     crate by the dalek-cryptography working group;
+#     part of the broader dalek umbrella (curve25519-
+#     dalek + x25519-dalek + schnorrkel + bulletproofs)
+#     that powers the Rust cryptocurrency / privacy-
+#     coin ecosystem
+#   - golang.org/x/crypto/ed25519 (Go): core-team-
+#     maintained in the golang.org/x/* subrepository;
+#     additionally re-exported as the std-lib
+#     `crypto/ed25519` package starting Go 1.13, so
+#     Go users have two import paths for the same
+#     implementation
+#   - @noble/ed25519 (Node): Paul Miller's audited pure-
+#     JS Ed25519; part of the broader noble umbrella
+#     (noble-curves + noble-hashes + noble-ciphers)
+#     that became the de-facto JS crypto-primitives
+#     ecosystem after the deprecation of older Node
+#     crypto libraries
+#
+# Cross-language interop at the wire format level: a
+# 64-byte Ed25519 signature produced by ed25519-dalek
+# verifies byte-identically against x/crypto/ed25519 +
+# @noble/ed25519 (assuming the 32-byte public key is
+# shared correctly). RFC 8032 test vectors validate
+# this byte-equivalence across all three implementations.
+#
+# Axis 246 opens with the Rust slot at the dalek-
+# cryptography canonical Rust Ed25519 library.
+# ============================================================================
+
+_atm0s-reverse-proxy-agent() {
+    local context state state_descr line
+    typeset -A opt_args
+
+    _arguments -s -S \
+        '--connector-addr[URL of relay server]:url:' \
+        '--connector-protocol[relay transport protocol]:protocol:(tcp tls quic)' \
+        '--http-dest[local HTTP service destination]:addr:' \
+        '--https-dest[local SNI-HTTPS service destination]:addr:' \
+        '--rtsp-dest[local RTSP service destination]:addr:' \
+        '--rtsps-dest[local SNI-RTSPS service destination]:addr:' \
+        '--local-key[persistent Ed25519 key file (PEM)]:file:_files -g "*.pem"' \
+        '--custom-quic-cert-base64[custom QUIC server cert (base64)]:b64:' \
+        '--allow-quic-insecure[accept self-signed QUIC certs]' \
+        '--custom-tls-cert-base64[custom TLS server cert (base64)]:b64:' \
+        '--allow-tls-insecure[accept self-signed TLS certs]' \
+        '(- *)--help[print help]'
+}
+
+_atm0s-reverse-proxy-agent "$@"
