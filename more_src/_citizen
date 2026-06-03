@@ -1,0 +1,421 @@
+#compdef citizen
+# ============================================================================
+# citizen - private Terraform Module / Provider
+#            registry server + CLI (Node.js,
+#            MPL-2.0)
+#
+# Author : Joohyung Park (outsideris)
+# Upstream: https://github.com/outsideris/citizen
+# npm    : citizen (binary: citizen)
+#
+# `citizen` is a self-hosted private Terraform
+# registry that serves Terraform modules + providers
+# according to the official Terraform Registry HTTP
+# Protocol (https://developer.hashicorp.com/
+# terraform/internals/module-registry-protocol). It
+# fills the same niche as Terraform Cloud's private
+# registry but as a self-hosted alternative.
+#
+# Citizen distinguishes itself from alternatives:
+#   - Single Node.js binary (vs HashiCorp's
+#     enterprise products that need separate
+#     infrastructure)
+#   - Multi-backend storage (file / S3 / GCS)
+#   - Multi-backend database (SQLite / MySQL /
+#     MongoDB via Prisma ORM)
+#   - GPG-signed provider publishing
+#   - Standalone bundles via pkg for Linux/macOS/
+#     Windows distribution
+#
+# Use cases:
+#   - Internal corporate Terraform module +
+#     provider distribution (modules pinned to a
+#     team's private namespace + version-controlled)
+#   - Air-gapped or compliance-restricted networks
+#     where Terraform Cloud isn't accessible
+#   - Self-hosted CI/CD pipelines publishing
+#     Terraform modules without uploading to
+#     public registry
+#   - Multi-tenant private registries for managed-
+#     service providers
+#
+# Usage:
+#   citizen <subcommand> [args] [options]
+#
+# Subcommands (commander.js declarative):
+#   module <namespace> <name> <provider> <version>
+#                                  - publish a
+#                                     Terraform
+#                                     module to
+#                                     the registry
+#   provider <namespace> <type> <version> [protocols]
+#                                  - publish a
+#                                     Terraform
+#                                     provider to
+#                                     the registry
+#   server                         - run the
+#                                     registry
+#                                     HTTP server
+#                                     (default
+#                                     entry-point
+#                                     for the
+#                                     binary)
+#   generate-migration             - generate
+#                                     database
+#                                     migration
+#                                     files for
+#                                     SQLite/
+#                                     MySQL/
+#                                     MongoDB
+#
+# `module` subcommand flags:
+#   -v, --verbose                  - show more
+#                                     details
+#   -r, --registry <addr>          - registry
+#                                     address
+#                                     (or
+#                                     CITIZEN_ADDR
+#                                     env var)
+#   -o, --owner <owner>            - module owner
+#                                     (or
+#                                     CITIZEN_MODULE_OWNER
+#                                     env var)
+#
+# `provider` subcommand flags:
+#   -g, --gpg-key <gpgkey>         - GPG key ID
+#                                     to sign
+#                                     the provider
+#   -v, --verbose                  - show more
+#                                     details
+#
+# `server` subcommand flags:
+#   -v, --verbose                  - show more
+#                                     details
+#
+# Environment variables:
+#   CITIZEN_ADDR                   - registry
+#                                     server
+#                                     address
+#                                     (for
+#                                     publish
+#                                     subcommands)
+#   CITIZEN_MODULE_OWNER           - module owner
+#                                     (optional)
+#   CITIZEN_STORAGE                - storage
+#                                     backend
+#                                     (file/s3/
+#                                     gcs)
+#   CITIZEN_STORAGE_PATH           - directory
+#                                     for file
+#                                     storage
+#                                     backend
+#   CITIZEN_STORAGE_BUCKET         - bucket for
+#                                     s3/gcs
+#                                     storage
+#   CITIZEN_DATABASE_TYPE          - database
+#                                     backend
+#                                     (sqlite/
+#                                     mysql/
+#                                     mongodb)
+#
+# Examples:
+#   citizen server -v
+#   CITIZEN_ADDR=http://registry.internal citizen \
+#     module my-org my-module aws v1.0.0 -v
+#   citizen provider my-org aws v1.0.0 \
+#     5.0,6.0 -g 0xABCDEF12 -v
+#   citizen generate-migration
+#
+# The tar lane is built on `tar ^6.2.0` (declared
+# verbatim at upstream package.json HEAD as a
+# direct dep, imported as `const tar = require(
+# 'tar')` in lib/cli-helpers.js line 2, then
+# `tar.create({ gzip: true, file: tarballPath,
+# cwd: moduleDir }, fileList)` at line 36 to pack
+# Terraform module source directories into
+# `.tar.gz` archives for upload to the registry),
+# the canonical Node TAR library by Isaac Z.
+# Schlueter (isaacs) - github.com/isaacs/node-tar.
+#
+# Isaac Z. Schlueter's node-tar is the de-facto
+# canonical Node TAR library:
+#   - Used by npm itself to extract package
+#     tarballs (every `npm install` invocation
+#     unpacks .tgz files via node-tar)
+#   - 30,000,000+ weekly npm downloads
+#   - Implements the POSIX ustar + GNU TAR +
+#     pax extended-header TAR variants
+#   - Streaming + buffer-based APIs
+#   - Sparse file + long-filename + long-link
+#     extensions
+#   - Per-file mode + ownership + symlink
+#     handling
+#   - File-content filtering via per-entry
+#     callbacks
+#   - Built-in gzip + brotli compression
+#     (delegates to zlib + zlib brotli routines)
+#
+# node-tar's distinguishing position vs
+# alternatives:
+#   - tar (Schlueter): canonical; used by npm;
+#     THIS AXIS
+#   - tar-stream (mafintosh / Mathias Buus):
+#     pure-streaming alternative; lower-level
+#     API; used by some build tools
+#   - tar-fs (mafintosh): tar-stream wrapper
+#     with filesystem helpers
+#   - decompress-tar (Sindre Sorhus): tarball
+#     extraction wrapper using tar-stream
+#
+# Despite mafintosh's tar-stream being newer +
+# more modular, node-tar remains canonical via
+# **npm install lock-in** - every Node project
+# transitively depends on node-tar because npm
+# itself uses it. This is the same
+# *foundational-via-reverse-dependency-network*
+# pattern that node-glob (Schlueter, Axis 261)
+# exhibits.
+#
+# Schlueter's broader Node ecosystem footprint
+# (the isaacs/ infrastructure tier):
+#   - npm CLI (created in 2010; the foundation
+#     of the Node ecosystem)
+#   - node-tar (canonical Node TAR; THIS AXIS)
+#   - node-glob (canonical Node glob, Axis 261)
+#   - minimatch (the glob-to-regex engine used
+#     by node-glob + npm + many others)
+#   - rimraf (canonical recursive-rm)
+#   - node-semver (canonical SemVer parser)
+#   - tap (test framework)
+#   - chownr (recursive chown)
+#   - graceful-fs (fs wrapper with retry logic)
+#   - nopt (Node option parser)
+#   - dezalgo (callback-or-promise sanitizer)
+#   - inflight (request deduplication)
+#
+# Schlueter's role: founded npm in 2010 + Node.js
+# project lead 2012-2014 + authored ~12+
+# foundational infrastructure libraries that are
+# in the dependency graph of essentially every
+# Node project. By raw transitive-reverse-dep
+# count, Schlueter has *the largest single-author
+# canonical-Node footprint* - his stack underpins
+# the entire Node ecosystem.
+#
+# This is Schlueter's *second axis closure* in
+# the corpus (after Axis 261 Globbing with
+# node-glob at R1483). Multi-axis canonical
+# authors are common (Klaus Post: 2 axes, Tolnay:
+# many proc-macro/serialization axes, Gallant: 8
+# axes), but Schlueter's position is structurally
+# distinct - his libraries are foundational *via
+# the npm install graph itself* rather than via
+# direct API consumer adoption.
+#
+# citizen uses node-tar in lib/cli-helpers.js to
+# pack Terraform module source directories:
+#   ```js
+#   const tar = require('tar');
+#
+#   const makeTarball = async (sourcePath, files) => {
+#     const tarballPath = `${sourcePath}.tar.gz`;
+#     const compressed = tar.create(
+#       { gzip: true, file: tarballPath,
+#         cwd: sourcePath },
+#       files
+#     );
+#     return tarballPath;
+#   };
+#   ```
+# The created .tar.gz archive is then uploaded
+# to the registry HTTP endpoint via fetch/axios,
+# where the server stores it in the configured
+# backend (file/S3/GCS) for subsequent terraform
+# `terraform init` consumption.
+#
+# ----------------------------------------------------------------------------
+# AXIS 266 :: TAR archive libraries (POSIX TAR
+#              + GNU/ustar/pax extensions for
+#              streaming + random-access archive
+#              I/O)
+# Round 1498 :: TS-Node slot 3 of 4 :: CLOSES Axis 266
+#                                       (259th axis closed)
+#
+# Cross-language canonical library family for this axis:
+#   Rust    : alexcrichton/tar-rs        [R1496 _rustup-toolchain-install-master]
+#             (Alex Crichton; canonical
+#              Rust TAR)
+#   Go      : archive/tar (stdlib) +     [R1497 _eget2]
+#             mholt/archives (wrapper)
+#             (Go team + Matt Holt;
+#              language-as-canonical
+#              + wrapper-for-multi-
+#              format abstraction)
+#   TS/Node : isaacs/node-tar            [R1498 THIS FILE]
+#             (Isaac Z. Schlueter;
+#              canonical Node TAR;
+#              used by npm itself)
+#
+# isaacs/node-tar closes Axis 266 with the
+# *foundational-via-npm-install-graph* pattern.
+# The three lanes form a clean spectrum of TAR-
+# library canonicalization mechanisms:
+#
+#   - Rust (tar-rs): foundational-tooling
+#     individual-authored canonical; Crichton's
+#     library used by every Rust archive-handling
+#     tool (cargo + rustup + rustup-toolchain-
+#     install-master + ...)
+#   - Go (archive/tar): language-stdlib canonical;
+#     Go team / Russ Cox / Andrew Gerrand provides
+#     the byte-level baseline as part of the
+#     standard library
+#   - Node (node-tar): infrastructure-tier
+#     individual-authored canonical; Schlueter's
+#     library used by npm itself, making it a
+#     transitive dependency of every Node project
+#
+# Each lane shows a different mechanism for
+# achieving canonical-library status:
+#   - Rust: individual-authored foundational
+#     library used directly by build tooling
+#   - Go: language-as-canonical-provider
+#     (stdlib ships the canonical implementation)
+#   - Node: infrastructure-via-package-manager-
+#     lock-in (canonical via the npm install
+#     graph itself)
+#
+# Cross-language interop at the archive byte
+# level - the same .tar file produced by tar-rs
+# can be read by archive/tar + node-tar (with
+# standard caveats around timestamp precision +
+# xattr + LongName/LongLink extensions).
+#
+# Multi-axis canonical-Node author/org cohort
+# (now spanning 12 distinct individuals/orgs):
+#   - Sindre Sorhus (chalk + ~1000 microlibs)
+#   - Matt Ranney + Redis Inc. (node-redis)
+#   - Brian Carlson (node-postgres)
+#   - Andrey Sitnik (PostCSS + browserslist +
+#     nanoid)
+#   - Lovell Fuller (sharp)
+#   - Paul Miller (noble umbrella)
+#   - Devon Govett (foliojs umbrella +
+#     lightningcss)
+#   - Matteo Collina (undici + pino + fastify)
+#   - Isaac Z. Schlueter (npm CLI + node-tar +
+#     node-glob + rimraf + node-semver + tap
+#     + chownr + graceful-fs + nopt + ...;
+#     SECOND AXIS CLOSURE after node-glob at
+#     Axis 261)
+#   - Vitaly Puzrin + nodeca (js-yaml +
+#     markdown-it + pako + argparse + sax +
+#     linkify-it)
+#   - Sergey Belov + svgo team (svg/svgo)
+#   - Matt Zabriskie + axios team (axios)
+#
+# Use-case spectrum across the three lanes:
+#   - rustup-toolchain-install-master (Rust,
+#     tar-rs): downloads + extracts .tar.xz
+#     toolchain archives from Rust CI server
+#   - eget2 (Go, mholt/archives wrapping
+#     archive/tar stdlib): downloads + extracts
+#     multi-format release archives from GitHub/
+#     GitLab/GHCR/Codeberg
+#   - citizen (Node, node-tar): private Terraform
+#     module registry; packs module source
+#     directories into .tar.gz archives for
+#     upload
+#
+# Three lanes, three use-case shapes (Rust
+# toolchain installation / multi-source binary
+# downloader / Terraform module registry
+# publishing), three canonicalization mechanisms
+# (individual-authored / language-stdlib /
+# package-manager-install-graph), all converging
+# on the POSIX ustar + GNU TAR format.
+#
+# Axis 266 closes the round 1498 cycle - 259th
+# axis closed total. The three lanes
+# collectively demonstrate how canonical-
+# library status emerges from different
+# ecosystem governance models: individual
+# authorship (Rust), language-team stewardship
+# (Go), and package-manager-network-effect
+# (Node).
+#
+# Schlueter's second-axis closure at node-tar
+# reinforces his position as the *most-
+# transitively-foundational Node author* - he's
+# now closed two axes (globbing at 261 +
+# TAR at 266) via the same npm-install-graph
+# lock-in mechanism. Other multi-axis canonical
+# Node authors (Sorhus, Puzrin, etc.) typically
+# achieve dominance via direct API adoption;
+# Schlueter achieves it via npm internal use.
+# ============================================================================
+
+_citizen() {
+    local context state state_descr line
+    typeset -A opt_args
+    local curcontext="$curcontext" ret=1
+
+    _arguments -C \
+        '(- *)'{-h,--help}'[print help]' \
+        '(- *)'{-V,--version}'[print version]' \
+        '1: :_citizen_cmds' \
+        '*::arg:->args' \
+    && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                module)
+                    _arguments \
+                        '(-v --verbose)'{-v,--verbose}'[show more details]' \
+                        '(-r --registry)'{-r,--registry}'[registry address (or CITIZEN_ADDR env)]:addr:' \
+                        '(-o --owner)'{-o,--owner}'[module owner (or CITIZEN_MODULE_OWNER env)]:owner:' \
+                        '(- *)'{-h,--help}'[print subcommand help]' \
+                        '1:namespace:' \
+                        '2:name:' \
+                        '3:provider:' \
+                        '4:version:'
+                    ;;
+                provider)
+                    _arguments \
+                        '(-g --gpg-key)'{-g,--gpg-key}'[GPG key ID to sign the provider]:gpgkey:' \
+                        '(-v --verbose)'{-v,--verbose}'[show more details]' \
+                        '(- *)'{-h,--help}'[print subcommand help]' \
+                        '1:namespace:' \
+                        '2:type:' \
+                        '3:version:' \
+                        '4:protocols:'
+                    ;;
+                server)
+                    _arguments \
+                        '(-v --verbose)'{-v,--verbose}'[show more details]' \
+                        '(- *)'{-h,--help}'[print subcommand help]'
+                    ;;
+                generate-migration)
+                    _arguments \
+                        '(- *)'{-h,--help}'[print subcommand help]'
+                    ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_citizen_cmds() {
+    local -a cmds
+    cmds=(
+        'module:publish a Terraform module to the registry'
+        'provider:publish a Terraform provider to the registry'
+        'server:run the registry HTTP server'
+        'generate-migration:generate database migration files'
+    )
+    _describe -t commands 'citizen command' cmds
+}
+
+_citizen "$@"
