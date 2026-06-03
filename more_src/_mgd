@@ -1,0 +1,215 @@
+#compdef mgd
+# ============================================================================
+# mgd - Maghemite routing daemon: BGP / BFD / static
+#        routes for the Oxide rack (Rust, MPL-2.0)
+#
+# Author : Oxide Computer Company (oxidecomputer)
+# Upstream: https://github.com/oxidecomputer/maghemite
+# crates : mgd (binary: mgd)
+#
+# `mgd` is the routing daemon at the core of Oxide
+# Computer's Maghemite routing stack - a Rust-implemented
+# routing control plane that ships in production on
+# Oxide's rack-scale cloud-computer hardware. The daemon
+# manages BGP sessions (RFC 4271 + IPv4/IPv6 unicast
+# AFI/SAFI), BFD liveness detection (RFC 5880), and the
+# RIB-to-FIB lowering path that pushes routes into the
+# Oxide switch ASIC's forwarding tables. The daemon
+# exposes an HTTPS admin API (via dropshot) that the
+# companion `mgadm` CLI uses to issue config changes.
+#
+# Usage:
+#   mgd run [flags]
+#
+# Commands (clap derive Subcommand):
+#   run                        - run the mgd routing daemon
+#
+# run flags:
+#   --admin-addr <ip>          - admin API listen address
+#                                 (default ::)
+#   --admin-port <port>        - admin API listen port
+#                                 (default 4676)
+#   --no-bgp-dispatcher        - skip starting the BGP
+#                                 connection dispatcher
+#   --data-dir <path>          - local datastore root
+#                                 (default /var/run)
+#   --with-stats               - register as an oximeter
+#                                 metrics producer
+#   --dns-servers <addr...>    - DNS servers used to find
+#                                 nexus (repeatable)
+#   --oximeter-port <port>     - oximeter API listen port
+#                                 (default 4677)
+#   --rack-uuid <uuid>         - rack UUID this router is on
+#   --sled-uuid <uuid>         - sled UUID this router is on
+#   --mgs-addr <addr>          - Management Gateway Service
+#                                 endpoint (default
+#                                 [::1]:12225)
+#   --bgp-dispatcher-addr <addr>
+#                              - BGP listener bind address
+#                                 (default [::]:179)
+#
+# Global:
+#   -h, --help                 - print help
+#   -V, --version              - print version
+#
+# The ciborium lane is built on `ciborium = "0.2.2"`
+# (declared verbatim at upstream workspace Cargo.toml HEAD
+# as a direct dep, imported from rdb/src/types.rs for
+# CBOR serialization of the routing daemon's persistent
+# state - the Routing Information Base entries are
+# CBOR-encoded before being written to the on-disk
+# datastore), the canonical Rust CBOR library by the
+# Enarx working group + Nathaniel McCallum -
+# github.com/enarx/ciborium, 200+ stars.
+#
+# ciborium implements RFC 8949 (Concise Binary Object
+# Representation, the IETF Internet Standard that
+# superseded RFC 7049) end-to-end via a Serde adapter:
+# any `Serialize` / `Deserialize` Rust struct can be
+# round-tripped through CBOR with the same ergonomics
+# as serde_json. The library replaced the older
+# `serde_cbor` crate (which went unmaintained in 2021)
+# as the de-facto Rust CBOR implementation; the
+# RustCrypto / rust-lang nursery infrastructure both
+# moved their CBOR pipelines to ciborium.
+#
+# CBOR is the underlying wire format for many higher-
+# level standards:
+#   - COSE (RFC 9052): CBOR-based signing + encryption
+#   - CWT (RFC 8392): CBOR Web Token, the JWT analog
+#   - WebAuthn: authenticator attestation responses
+#   - DCBOR / dCBOR: deterministic CBOR for blockchain
+#   - IPLD: InterPlanetary Linked Data uses CBOR as one
+#     of its serialization codecs
+#
+# mgd uses ciborium to serialize routing-state records
+# (BGP RIB entries, BFD peer states, static-route
+# configurations) before persisting to the on-disk rdb
+# datastore, then deserializes them on daemon restart to
+# rebuild the in-memory state. CBOR was chosen over JSON
+# because of its smaller encoded size (binary length
+# prefixes + integer compaction) and over MessagePack
+# because of CBOR's IETF Internet Standard status (vs
+# MessagePack's vendor-specification status).
+#
+# ----------------------------------------------------------------------------
+# AXIS 247 :: CBOR / RFC 8949 Concise Binary Object
+#              Representation
+# Round 1439 :: Rust slot 1 of 4 :: OPENS Axis 247
+#
+# Cross-language canonical library family for this axis
+# (proposed):
+#   Rust    : enarx/ciborium             - the post-serde-
+#                                          cbor-deprecation
+#                                          canonical Rust
+#                                          CBOR crate by
+#                                          the Enarx
+#                                          confidential-
+#                                          computing
+#                                          working group;
+#                                          full RFC 8949
+#                                          + Serde adapter
+#   Go      : fxamacker/cbor             - the de-facto
+#                                          Go CBOR library
+#                                          by Faye Amacker
+#                                          (FIPS-grade
+#                                          security
+#                                          audits, used by
+#                                          Kubernetes
+#                                          CRD-validation,
+#                                          IPLD, sigstore,
+#                                          OpenSSF)
+#   TS/Node : kriszyp/cbor-x             - high-performance
+#                                          Node CBOR
+#                                          encoder/decoder
+#                                          by Kris Zyp
+#                                          (LMDB-js author);
+#                                          schema-aware
+#                                          fast path with
+#                                          fallback to
+#                                          plain RFC 8949
+#                                          encoding
+#
+# CBOR is a clean spec-bound axis - RFC 8949 (released
+# 2020 as an IETF Internet Standard) defines the encoding
+# byte-for-byte. The earlier RFC 7049 (2013) is the
+# original CBOR spec that RFC 8949 obsoletes; both
+# encode bit-identically (CBOR was designed to be stable
+# from RFC 7049 onward). Compliant implementations
+# round-trip CBOR byte-identically against each other.
+#
+# Structural commentary on the canonical libraries:
+#   - enarx/ciborium (Rust): chosen because the older
+#     `serde_cbor` crate by Pyfisch went unmaintained
+#     in 2021; the rust-lang nursery + Enarx workgroup
+#     coordinated the migration to ciborium as the
+#     post-serde-cbor canonical
+#   - fxamacker/cbor (Go): the de-facto Go CBOR library
+#     by Faye Amacker since 2019; FIPS-grade-audited
+#     (used in Kubernetes CRD validation, sigstore
+#     bundle parsing, OpenSSF security tooling); the
+#     library co-evolved with Kubernetes's adoption of
+#     CBOR for CustomResourceDefinition decoding
+#   - kriszyp/cbor-x (Node): high-performance Node CBOR
+#     by Kris Zyp (LMDB-js maintainer); benchmarks at
+#     ~3-5x the throughput of plain hildjj/node-cbor
+#     thanks to a schema-aware fast path + a streaming
+#     decoder; falls back to plain RFC 8949 for unknown
+#     types
+#
+# Cross-language interop at the wire format level - the
+# same RFC 8949 byte string round-trips byte-identically
+# through ciborium + fxamacker/cbor + cbor-x. Test vectors
+# from RFC 8949 Appendix A validate cross-library
+# byte-equivalence.
+#
+# Axis 247 opens with the Rust slot at the post-serde-
+# cbor-deprecation canonical CBOR crate.
+# ============================================================================
+
+_mgd() {
+    local context state state_descr line
+    typeset -A opt_args
+    local curcontext="$curcontext" ret=1
+
+    _arguments -C \
+        '(- *)'{-h,--help}'[print help]' \
+        '(- *)'{-V,--version}'[print version]' \
+        '1: :_mgd_cmds' \
+        '*::arg:->args' \
+    && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                run)
+                    _arguments \
+                        '--admin-addr[admin API listen address]:ip:' \
+                        '--admin-port[admin API listen port (default 4676)]:port:' \
+                        '--no-bgp-dispatcher[skip starting BGP connection dispatcher]' \
+                        '--data-dir[local datastore root]:dir:_files -/' \
+                        '--with-stats[register as oximeter metrics producer]' \
+                        '*--dns-servers[DNS server addresses]:addr:' \
+                        '--oximeter-port[oximeter API listen port (default 4677)]:port:' \
+                        '--rack-uuid[rack UUID]:uuid:' \
+                        '--sled-uuid[sled UUID]:uuid:' \
+                        '--mgs-addr[Management Gateway Service endpoint]:addr:' \
+                        '--bgp-dispatcher-addr[BGP listener bind address]:addr:' \
+                        '(- *)'{-h,--help}'[print subcommand help]'
+                    ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_mgd_cmds() {
+    local -a cmds
+    cmds=(
+        'run:run the mgd routing daemon'
+    )
+    _describe -t commands 'mgd command' cmds
+}
+
+_mgd "$@"
