@@ -1,0 +1,157 @@
+#compdef ogmigo
+# ============================================================================
+# ogmigo - Go client for ogmios (Cardano blockchain
+#           bridge); ChainSync subscriber
+#           (Go, Apache-2.0)
+#
+# Author : Matt Ho (savaki)
+# Upstream: https://github.com/savaki/ogmigo
+#
+# `ogmigo` is the CLI front-end to the savaki/ogmigo
+# Go client library for ogmios - the Cardano node-to-
+# JSON-WSP bridge that exposes the Ouroboros mini-
+# protocols (ChainSync, StateQuery, TxSubmission) over
+# a WebSocket / JSON-WSP interface. The binary acts as
+# a ChainSync subscriber: it connects to an ogmios
+# WebSocket endpoint, walks the Cardano chain from the
+# specified starting point, and prints per-block
+# (slot, hash, block_no) tuples every `--tick` slots.
+#
+# Usage:
+#   ogmigo [--ogmios WS_URL] [-p SLOT/HASH...]
+#          [--tick N]
+#
+# Flags (urfave/cli/v2):
+#   --ogmios <url>          - ogmios WebSocket endpoint
+#                              (default
+#                              ws://3.21.245.207:1337,
+#                              env: OGMIOS)
+#   -p, --point <SLOT/HASH> - starting point as
+#                              `{slot}/{hash}`
+#                              (repeatable, env: POINT)
+#   --tick <N>              - display progress every N
+#                              slots (default 5000,
+#                              env: TICK)
+#   -h, --help              - print help
+#   -v, --version           - print version
+#
+# Environment:
+#   OGMIOS                  - default --ogmios value
+#   POINT                   - default --point value
+#   TICK                    - default --tick value
+#
+# Cardano on-chain data (transactions, blocks, witness
+# sets, metadata, governance objects) is CBOR-encoded
+# per the Cardano Improvement Proposal CIP-21 spec.
+# Every byte that gets hashed for inclusion in a Cardano
+# block is canonically-encoded CBOR. The ogmios bridge
+# JSON-encodes the chain data for the WebSocket
+# transport, but Cardano-specific deserializers
+# (transaction body parsing, witness set parsing, plutus
+# datum/redeemer decoding) need to round-trip back
+# through CBOR for downstream applications.
+#
+# The fxamacker/cbor lane is built on `github.com/
+# fxamacker/cbor/v2 v2.4.0` (declared at upstream go.mod
+# HEAD as a direct dep, imported from ouroboros/
+# chainsync/types.go for CBOR encoding/decoding of
+# Cardano chain data structures), the canonical Go CBOR
+# library by Faye Amacker - github.com/fxamacker/cbor,
+# 700+ stars. The library is the de-facto Go CBOR
+# implementation, FIPS-grade audited (NCC Group +
+# Trail of Bits audits), and used by:
+#   - Kubernetes (CRD validation via CBOR-encoded schemas
+#     since k8s 1.30)
+#   - sigstore (bundle parsing + transparency log
+#     verification)
+#   - IPFS / IPLD (CBOR codec for content-addressed
+#     graphs)
+#   - go-cose (COSE / CWT signing + encryption, RFC 9052)
+#   - OpenSSF Scorecard (sigstore bundle parsing)
+#   - Cardano blockchain Go clients (gouroboros, ogmigo,
+#     bursa, ...)
+#
+# fxamacker/cbor implements RFC 8949 end-to-end + the
+# canonical/deterministic CBOR (dCBOR) subset used by
+# COSE for signing. The library exposes a `cbor.Marshal`
+# / `cbor.Unmarshal` API mirroring encoding/json's tag
+# convention (`cbor:"key"`), letting Go users drop CBOR
+# into existing JSON-tagged structs with no surgery.
+#
+# ogmigo uses fxamacker/cbor in `ouroboros/chainsync/
+# types.go` to round-trip Cardano-specific structures
+# (transaction bodies, witness sets, metadata blobs)
+# between the on-wire CBOR representation and Go structs
+# - this is needed when downstream apps want to operate
+# on transaction-level Cardano data rather than just the
+# coarse chain-event stream that the CLI's --tick output
+# prints.
+#
+# ----------------------------------------------------------------------------
+# AXIS 247 :: CBOR / RFC 8949 Concise Binary Object
+#              Representation
+# Round 1440 :: Go slot 2 of 4 :: continues Axis 247
+#                                  (round-number landmark)
+#
+# Cross-language canonical library family for this axis:
+#   Rust    : enarx/ciborium             [R1439 _mgd]
+#   Go      : fxamacker/cbor             [R1440 THIS FILE]
+#   TS/Node : kriszyp/cbor-x             [R1441 closing]
+#
+# fxamacker/cbor is structurally interesting in this
+# axis because of its *FIPS-grade-audited adoption* path.
+# Faye Amacker started the library in 2019 to fill the
+# gap left by go-codec's broad-but-shallow CBOR support
+# - go-codec covers many formats (MsgPack, BSON, JSON,
+# CBOR) but didn't track RFC 8949's later updates
+# closely. Amacker focused fxamacker/cbor specifically
+# on CBOR with these decisions:
+#   - tracks RFC 8949 + the canonical CBOR / dCBOR
+#     subsets used by COSE + CWT
+#   - prioritizes audit-readiness: NCC Group +
+#     Trail of Bits independent security audits
+#   - tagged-mode + untagged-mode + canonical-mode
+#     encoders so apps with different determinism
+#     requirements (blockchain canonicality vs IPLD
+#     graph canonicality vs COSE) can opt into the
+#     right mode
+#
+# The audit + canonical-mode focus paid off when
+# Kubernetes started using CBOR for CRD-schema-aware
+# validation (k8s 1.30, 2024); the broader sigstore /
+# OpenSSF / cncf supply-chain security ecosystem
+# adopted fxamacker/cbor as the canonical Go CBOR lib
+# for COSE signature bundles + transparency log
+# witnesses.
+#
+# Structural commentary on the cross-language canonicals:
+#   - enarx/ciborium (Rust): chosen after serde_cbor
+#     went unmaintained in 2021; rust-lang nursery +
+#     Enarx workgroup coordinated migration
+#   - fxamacker/cbor (Go): FIPS-grade-audited; adopted
+#     by Kubernetes (CRD validation), sigstore (bundle
+#     parsing), Cardano (chain data)
+#   - kriszyp/cbor-x (Node): high-performance Node CBOR
+#     by Kris Zyp (LMDB-js author); schema-aware fast
+#     path with plain RFC 8949 fallback
+#
+# Cross-language interop at the wire format level - same
+# RFC 8949 byte string round-trips byte-identically
+# through ciborium + fxamacker/cbor + cbor-x. RFC 8949
+# Appendix A test vectors validate cross-library
+# byte-equivalence.
+# ============================================================================
+
+_ogmigo() {
+    local context state state_descr line
+    typeset -A opt_args
+
+    _arguments -s -S \
+        '--ogmios[ogmios WebSocket endpoint (env: OGMIOS)]:url:' \
+        '*'{-p,--point}'[starting point SLOT/HASH (repeatable, env: POINT)]:point:' \
+        '--tick[display progress every N slots (env: TICK)]:N:' \
+        '(- *)'{-h,--help}'[print help]' \
+        '(- *)'{-v,--version}'[print version]'
+}
+
+_ogmigo "$@"
