@@ -1,0 +1,221 @@
+#compdef waza
+# ============================================================================
+# waza - Microsoft Agent Skills evaluation CLI / framework (Go, MIT)
+#
+# Author : Microsoft (microsoft organization)
+# Upstream: https://github.com/microsoft/waza
+#
+# waza is Microsoft's CLI + framework for the "Agent Skill"
+# packaging format - reusable, evaluable units of capability
+# that wrap a model + system prompt + tool surface + eval
+# suite into a single shippable unit. Each skill declares
+# what it does, what tools it needs, and a set of YAML eval
+# specs that measure whether the skill works.
+#
+# The CLI loops through the skill lifecycle:
+#   waza new skill   -> scaffold a new skill directory
+#   waza new eval    -> add an eval suite to an existing skill
+#   waza run         -> execute eval(s), record results
+#   waza grade       -> re-grade existing run results without re-execution
+#   waza compare     -> diff two run results side-by-side
+#   waza quality     -> LLM-judge a skill's content quality
+#   waza check       -> readiness gate before submission
+#   waza coverage    -> coverage grid across discovered skills
+#   waza suggest     -> propose eval files for a skill (experimental)
+#   waza cache       -> manage cached eval results
+#   waza session     -> view recorded session logs
+#   waza serve       -> HTTP dashboard / JSON-RPC server
+#   waza results     -> list + compare stored runs
+#   waza models      -> list available LLM models
+#   waza tokens      -> token-count utilities
+#   waza metadata    -> emit machine-readable extension metadata
+#   waza init        -> initialize a waza project
+#   waza update      -> self-update waza to latest release
+#
+# Global persistent flags (cobra):
+#   --debug             - enable debug logging
+#   --no-update-check   - skip the auto-update check on startup
+#
+# Skills are markdown-described with YAML frontmatter; waza
+# uses goldmark to parse the markdown body of each skill spec,
+# extracting code fences (the "answers"), prose sections (the
+# "rationale"), and section-titled subgraphs (the "input
+# patterns" + "output patterns"). The markdown parser is the
+# critical primitive that lets skill files double as both
+# human-readable docs and machine-readable evaluation specs.
+#
+# The goldmark lane is built on `github.com/yuin/goldmark
+# v1.7.16` (declared as a direct dep at upstream go.mod HEAD),
+# the canonical Go CommonMark + GFM parser by Yusuke Inuzuka
+# (github.com/yuin/goldmark, 4000+ stars). yuin/goldmark is
+# the parser that powers Hugo (the dominant Go static-site
+# generator), gitea (Go git forge), forgejo, Caddy's docs site,
+# and roughly every Go-language markdown consumer. goldmark
+# is the only Go CommonMark parser that passes the full
+# CommonMark 0.31.2 conformance suite + ships a clean
+# extension-point model (parser.Parser, renderer.Renderer,
+# parser.BlockParser, parser.InlineParser interfaces) for
+# user-defined custom syntax.
+#
+# ----------------------------------------------------------------------------
+# AXIS 224 :: Markdown parsers (CommonMark + GFM conformance)
+# Round 1371 :: Go slot 2 of 4 :: continues Axis 224
+#
+# Cross-language canonical library family for this axis:
+#   Rust    : kivikakk/comrak              [R1370 _rucola]
+#   Go      : yuin/goldmark                [R1371 THIS FILE]
+#   TS/Node : markedjs/marked              [R1372 closing]
+#
+# goldmark vs comrak structural contrast: goldmark exposes
+# the parser via interface-based extension points (write a
+# struct implementing parser.BlockParser, register via
+# parser.WithBlockParsers - Hugo uses this for its shortcode
+# extension), while comrak takes the opposite approach with a
+# monolithic-flag-set ComrakOptions struct (extension.table,
+# extension.strikethrough, ...). The TS slot will continue
+# the spectrum: marked uses a lexer-rule + renderer-method
+# override pattern (replace tokenize fns, override render fns).
+# Three different extensibility philosophies for the same
+# canonical CommonMark + GFM spec.
+#
+# The use-case alignment in this axis:
+#   - rucola (Rust): TUI note manager - render markdown to
+#     ratatui terminal cells
+#   - waza (Go): Agent skill evaluator - parse markdown spec
+#     files, extract code fences as eval inputs/outputs
+#   - <TS slot>: server-side renderer or build-time tool
+# ============================================================================
+
+_waza() {
+    local context state state_descr line
+    typeset -A opt_args
+    local curcontext="$curcontext" ret=1
+
+    _arguments -C \
+        '--debug[enable debug logging]' \
+        '--no-update-check[disable automatic update check]' \
+        '(- *)'{-h,--help}'[print help]' \
+        '(- *)--version[print version]' \
+        '1: :_waza_cmds' \
+        '*::arg:->args' \
+    && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                run)        _arguments '(- *)'{-h,--help}'[help]' '1:eval.yaml or skill name:_files -g "*.(yaml|yml)"' ;;
+                init)       _arguments '(- *)'{-h,--help}'[help]' '1:directory:_files -/' ;;
+                compare)    _arguments '(- *)'{-h,--help}'[help]' '*:result JSON:_files -g "*.json"' ;;
+                coverage)   _arguments '(- *)'{-h,--help}'[help]' '1:root:_files -/' ;;
+                grade)      _arguments '(- *)'{-h,--help}'[help]' '1:eval.yaml:_files -g "*.(yaml|yml)"' ;;
+                metadata)   _arguments '(- *)'{-h,--help}'[help]' ;;
+                check)      _arguments '(- *)'{-h,--help}'[help]' '1:skill name or path:' ;;
+                suggest)    _arguments '(- *)'{-h,--help}'[help]' '1:skill path:_files -/' ;;
+                cache)      _waza_cache ;;
+                new)        _waza_new ;;
+                session)    _waza_session ;;
+                serve)      _arguments '(- *)'{-h,--help}'[help]' ;;
+                results)    _waza_results ;;
+                models)     _arguments '(- *)'{-h,--help}'[help]' ;;
+                quality)    _arguments '(- *)'{-h,--help}'[help]' '1:skill path:_files -/' ;;
+                update)     _arguments '(- *)'{-h,--help}'[help]' ;;
+                tokens)     _arguments '(- *)'{-h,--help}'[help]' '*:arg:' ;;
+                dev)        _arguments '(- *)'{-h,--help}'[help]' '*:arg:' ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_waza_cmds() {
+    local -a cmds
+    cmds=(
+        'run:Run an evaluation benchmark'
+        'init:Initialize a waza project'
+        'compare:Compare multiple evaluation result files'
+        'coverage:Generate an eval coverage grid for discovered skills'
+        'grade:Run graders against existing run results without re-executing'
+        'metadata:Output extension metadata as JSON'
+        'check:Check if a skill is ready for submission'
+        'suggest:Suggest eval files for a skill (experimental)'
+        'cache:Manage evaluation result cache'
+        'new:Create new skills and tasks'
+        'session:View and manage session logs'
+        'serve:Start the waza server (HTTP dashboard or JSON-RPC)'
+        'results:Manage stored evaluation results'
+        'models:List available models'
+        'quality:Evaluate skill content quality with an LLM judge'
+        'update:Update waza to the latest release'
+        'tokens:Token-count utilities'
+        'dev:Development utilities'
+    )
+    _describe -t commands 'waza command' cmds
+}
+
+_waza_cache() {
+    _arguments \
+        '(- *)'{-h,--help}'[help]' \
+        '1:subcommand:(clear)' \
+        '*::arg:->_default'
+}
+
+_waza_new() {
+    local -a sub
+    sub=(
+        'skill:Create a new skill with its eval suite'
+        'eval:Scaffold a new eval suite for an existing skill'
+    )
+    _arguments \
+        '(- *)'{-h,--help}'[help]' \
+        '1:subcommand:->sub' \
+        '*::arg:->_default'
+
+    case $state in
+        sub) _describe -t commands 'new subcommand' sub ;;
+    esac
+}
+
+_waza_session() {
+    local -a sub
+    sub=(
+        'list:List recorded session logs'
+        'view:View a session timeline'
+    )
+    _arguments \
+        '(- *)'{-h,--help}'[help]' \
+        '1:subcommand:->sub' \
+        '*::arg:->args'
+
+    case $state in
+        sub) _describe -t commands 'session subcommand' sub ;;
+        args)
+            case $words[1] in
+                view) _arguments '(- *)'{-h,--help}'[help]' '1:session file:_files' ;;
+            esac
+            ;;
+    esac
+}
+
+_waza_results() {
+    local -a sub
+    sub=(
+        'list:List stored evaluation results'
+        'compare:Compare two evaluation runs'
+    )
+    _arguments \
+        '(- *)'{-h,--help}'[help]' \
+        '1:subcommand:->sub' \
+        '*::arg:->args'
+
+    case $state in
+        sub) _describe -t commands 'results subcommand' sub ;;
+        args)
+            case $words[1] in
+                compare) _arguments '(- *)'{-h,--help}'[help]' '1:run-id-1:' '2:run-id-2:' ;;
+            esac
+            ;;
+    esac
+}
+
+_waza "$@"
