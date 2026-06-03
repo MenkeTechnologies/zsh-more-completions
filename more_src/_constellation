@@ -1,0 +1,101 @@
+#compdef constellation
+# ============================================================================
+# constellation - Pluggable authoritative DNS server (Rust, MPL-2.0)
+#
+# Author : Valerian Saliou
+# Upstream: https://github.com/valeriansaliou/constellation
+# crates : constellation-server (binary: constellation)
+#
+# Constellation is an authoritative DNS server with a managed
+# HTTP REST API for dynamic record management - the use case is
+# operating an internal DNS zone where records are programmatically
+# added/removed (per-tenant subdomains, per-deployment GeoDNS,
+# Anycast routing, autoscaling-aware A/AAAA records). The server
+# is built around a Redis-backed record store + a per-zone
+# pluggable flatten step that resolves CNAMEs into A/AAAA at
+# write time + a per-record health check that masks unhealthy
+# upstreams from the answer.
+#
+# Architecture: tokio runtime + actix-web for the HTTP API,
+# hickory-server for the DNS protocol layer, Redis (via
+# bb8-redis) as the persistent backing store, MaxMind GeoLite2
+# database for IP-to-country mapping that drives GeoDNS
+# routing. Operational features:
+#   - GeoDNS: return different IPs per client country
+#   - Health checks: skip degraded upstreams in DNS answers
+#   - Flatten: replace CNAMEs with their resolved A/AAAA at
+#     write time so the per-query latency stays under 1ms
+#   - HTTP API: add / remove / list records via REST + JSON
+#
+# Flags (clap 4.x - hand-built via Command::new):
+#   -c, --config <file>   - configuration file path
+#                           (default ./config.cfg)
+#   -V, --version         - print version (clap default)
+#   -h, --help            - print help (clap default)
+#
+# The hickory-server lane is built on `hickory-server = "0.24"`
+# + `hickory-proto = "0.24"` + `hickory-resolver = "0.24"`
+# (declared verbatim at upstream Cargo.toml HEAD), the
+# canonical Rust DNS implementation by Benjamin Fry + the
+# hickory-dns org (github.com/hickory-dns/hickory-dns, 4400+
+# stars). Hickory is the modern fork of trust-dns (the project
+# was renamed in 2023 after trademark concerns); the codebase
+# is the same. The library family covers the full DNS spec:
+# RFC 1035 (DNS protocol), RFC 2535 (DNSSEC), RFC 7858 (DoT),
+# RFC 8484 (DoH), RFC 9230 (DoQ over QUIC) - the only Rust
+# DNS implementation with a credible claim to full coverage.
+# constellation uses hickory-server to drive the actual DNS
+# wire-protocol handler that fronts the Redis-backed record
+# store.
+#
+# ----------------------------------------------------------------------------
+# AXIS 228 :: DNS server libraries (RFC 1035 + DoH/DoT/DoQ)  [OPENS]
+# Round 1382 :: Rust slot 1 of 4 :: OPENS Axis 228
+#
+# Cross-language canonical library family for this axis (proposed):
+#   Rust    : hickory-dns/hickory-server   - full DNS protocol stack
+#                                            (formerly trust-dns)
+#   Go      : miekg/dns                    - de-facto Go DNS library
+#                                            (powers CoreDNS, Cilium,
+#                                             Hashicorp Consul, Tailscale)
+#   TS/Node : mafintosh/dns-packet         - low-level DNS packet
+#                                            codec (companion: multicast-dns,
+#                                             dns-rcode-helper, ...)
+#
+# DNS server libraries are a tightly bound axis: every modern
+# Go DNS-related project imports miekg/dns - CoreDNS, Cilium's
+# network policies, Consul's service discovery, Tailscale's
+# MagicDNS, Pi-hole's FTL daemon (Go rewrite), Wireguard's
+# wg-friendlier resolvers. There is no second contender; the
+# library has zero serious alternatives in Go because miekg
+# implemented the entire DNS spec corpus in ~2010 and has
+# maintained byte-for-byte spec conformance ever since.
+#
+# Hickory occupies the same position in Rust but had to live
+# under the original trust-dns name from 2014-2023. The
+# rename was friction-only - the library was canonical the
+# entire time. dns-packet in the JS world is more low-level
+# than the other two slots: it's a packet encoder/decoder,
+# not a server framework, so any JS DNS server (dns2, denoland/
+# deno_std/dns, ...) builds on top of dns-packet for the
+# wire layer.
+#
+# Cross-language interop for DNS is total at the wire level
+# (RFC 1035 is a byte-precise protocol). What diverges across
+# the axes is the *abstraction model* of the library: hickory
+# wraps DNS in a typed Request/Response trait, miekg/dns
+# exposes raw Msg structs + chained Handler interface, dns-
+# packet exposes a Buffer-in/Buffer-out codec function.
+# ============================================================================
+
+_constellation() {
+    local context state state_descr line
+    typeset -A opt_args
+
+    _arguments -s -S \
+        '(-c --config)'{-c,--config}'[path to configuration file (default ./config.cfg)]:file:_files -g "*.(cfg|toml)"' \
+        '(- *)'{-V,--version}'[print version]' \
+        '(- *)'{-h,--help}'[print help]'
+}
+
+_constellation "$@"
