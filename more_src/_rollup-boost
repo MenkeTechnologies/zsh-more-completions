@@ -1,0 +1,109 @@
+#compdef rollup-boost
+# ============================================================================
+# rollup-boost - Optimism rollup extensions sidecar (Rust, MIT)
+#
+# Author : Flashbots
+# Upstream: https://github.com/flashbots/rollup-boost
+#
+# rollup-boost is a sidecar daemon that sits between an Optimism rollup
+# node's consensus layer (op-node) and execution layer (op-geth /
+# op-reth), providing rollup extensions: a "flashblocks" pre-confirmation
+# layer for sub-block-time UX, MEV-aware block production via external
+# builders, and engine API mediation between the CL and one or more
+# competing execution payloads.
+#
+# The "flashblocks" channel between rollup-boost and downstream
+# consumers (block explorers, MEV-aware wallets, RPC providers) is
+# carried over WebSockets using `tokio-tungstenite` (workspace dep
+# at top-level Cargo.toml HEAD), the canonical async-Rust WebSocket
+# library by snapview org (github.com/snapview/tokio-tungstenite,
+# 2400+ stars).
+#
+# Verbatim from upstream `crates/rollup-boost/src/flashblocks/outbound.rs`
+# and `inbound.rs`:
+#
+#     use tokio_tungstenite::tungstenite::Message;
+#     use tokio_tungstenite::{connect_async, accept_async};
+#     ...
+#     // outbound: connect to peer
+#     let (ws_stream, _) = connect_async(url).await?;
+#     let (mut write, mut read) = ws_stream.split();
+#     ...
+#     // inbound: accept incoming peer
+#     let ws_stream = accept_async(tcp).await?;
+#
+# `tokio-tungstenite` is the futures-based wrapper around the
+# `tungstenite` core library (`snapview/tungstenite-rs`), which
+# implements RFC 6455 (the WebSocket Protocol) end-to-end:
+# HTTP/1.1 upgrade handshake, opcode framing (text, binary, close,
+# ping, pong, continuation), payload masking, fragmentation,
+# extension negotiation hooks for permessage-deflate (RFC 7692),
+# and the close-handshake state machine. It is the dependency-of-
+# record across the async-Rust ecosystem.
+#
+# ----------------------------------------------------------------------------
+# AXIS 201 :: WEBSOCKET PROTOCOL (RFC 6455 + RFC 7692)
+# Round 1301 :: Rust slot 1 of 4 :: OPENS Axis 201
+#
+# Cross-language canonical library family for this axis (proposed):
+#   Rust    : snapview/tokio-tungstenite + snapview/tungstenite-rs
+#   Go      : coder/websocket  (next-gen) or gorilla/websocket (long-running)
+#   TS/Node : websockets/ws    (canonical pure-JS RFC 6455 implementation)
+#
+# All three are end-to-end clean-room implementations of RFC 6455
+# (the WebSocket Protocol, IETF 2011) - the HTTP/1.1-upgrade
+# handshake, the opcode-framed binary protocol, the 4-byte XOR
+# masking for client-to-server payloads, the close-handshake state
+# machine, and the permessage-deflate extension (RFC 7692) hooks
+# for negotiated compression. The three libraries land on the
+# same surface area: a duplex Stream<Message> + Sink<Message>
+# value (or its language-equivalent: Reader/Writer in Go, EventEmitter
+# + .send() in JS) over a single TCP/TLS connection.
+#
+# rollup-boost is a real consumer that exercises both the client
+# side (`connect_async`) for peer connections and the server side
+# (`accept_async`) for incoming flashblocks subscribers - the full
+# RFC 6455 surface, not just the happy-path "echo server" demo.
+# This is canonical: a production crypto/MEV sidecar where the WS
+# message rate (sub-second block pre-confirmations) and fan-out
+# (many subscribers per sidecar instance) make tokio-tungstenite's
+# async-streaming design load-bearing.
+# ============================================================================
+
+_rollup-boost() {
+    local context state state_descr line
+    typeset -A opt_args
+
+    _arguments -s -S \
+        '--execution-mode[start in this execution mode]:mode:(enabled disabled)' \
+        '--block-selection-policy[block-selection policy]:policy:' \
+        '--external-state-root[use l2 client to compute state root]:bool:(true false)' \
+        '--ignore-unhealthy-builders[allow engine API calls even when builders unhealthy]:bool:(true false)' \
+        '--health-check-interval[seconds between async builder health checks]:seconds:' \
+        '--max-unsafe-interval[max seconds between builder unsafe head and now]:seconds:' \
+        '--rpc-host[host for the JSON-RPC server (default 127.0.0.1)]:host:' \
+        '--rpc-port[port for the JSON-RPC server (default 8081)]:port:' \
+        '--tracing[enable distributed tracing]' \
+        '--metrics[enable Prometheus metrics endpoint]' \
+        '--metrics-host[host for the metrics server (default 127.0.0.1)]:host:' \
+        '--metrics-port[port for the metrics server (default 9090)]:port:' \
+        '--otlp-endpoint[OTLP collector endpoint]:url:' \
+        '--log-level[log level]:level:(trace debug info warn error)' \
+        '--log-format[log format]:format:(text json)' \
+        '--log-file[redirect logs to this file]:file:_files' \
+        '--builder-url[upstream MEV-builder URL]:url:' \
+        '--builder-jwt-token[JWT token for upstream builder auth]:token:' \
+        '--builder-jwt-path[path to JWT secret file for builder]:file:_files' \
+        '--builder-timeout[builder request timeout in seconds]:seconds:' \
+        '--l2-url[L2 execution client URL]:url:' \
+        '--l2-jwt-token[JWT token for L2 client]:token:' \
+        '--l2-jwt-path[path to JWT secret file for L2 client]:file:_files' \
+        '--l2-timeout[L2 request timeout in seconds]:seconds:' \
+        '--flashblocks-ws-host[host for flashblocks WebSocket server]:host:' \
+        '--flashblocks-ws-port[port for flashblocks WebSocket server]:port:' \
+        '--flashblocks-p2p-enabled[enable flashblocks P2P]' \
+        '(- *)'{-h,--help}'[print help]' \
+        '(- *)'{-V,--version}'[print version]'
+}
+
+_rollup-boost "$@"
