@@ -1,0 +1,177 @@
+#compdef forward
+# ============================================================================
+# forward - quickly set up a reverse proxy from the
+#            command line (Go, MIT)
+#
+# Author : Axetroy
+# Upstream: https://github.com/axetroy/forward-cli
+#
+# `forward` is a single-binary reverse-proxy CLI. Pass
+# it a target URL + optional flags + it spins up an
+# HTTP / HTTPS reverse proxy that forwards traffic from
+# the local listen address to the target. Use cases:
+#   - quickly proxy a remote site through a custom port
+#     for local-only testing
+#   - inject custom request / response headers without
+#     touching the origin
+#   - bypass CORS by serving the target through a local
+#     proxy with `--cors` enabled
+#   - prototype a forward-proxy layer in front of an
+#     existing backend before deploying nginx / Caddy
+#
+# Usage:
+#   forward [OPTIONS] <host>
+#
+# Flags (Go stdlib flag.* parsing):
+#   --address <addr>            - bind address
+#                                  (default 0.0.0.0)
+#   --port <port>               - listen port
+#                                  (default 80)
+#   --proxy-external            - proxy external hosts
+#                                  (off by default;
+#                                  only proxy the
+#                                  configured target)
+#   --proxy-external-ignore <host>
+#                               - external host to skip
+#                                  (repeatable)
+#   --req-header key=value      - add request header
+#                                  (repeatable)
+#   --res-header key=value      - add response header
+#                                  (repeatable)
+#   --cors                      - enable CORS headers
+#                                  in proxy responses
+#   --overwrite <folder>        - serve files from
+#                                  <folder> at matching
+#                                  paths instead of
+#                                  proxying
+#   --no-cache                  - disable response cache
+#                                  (default true)
+#   --tls-cert-file <file>      - TLS cert file (enables
+#                                  HTTPS when paired
+#                                  with --tls-key-file)
+#   --tls-key-file <file>       - TLS private key file
+#   --help                      - print help
+#   --version                   - print version
+#
+# Examples:
+#   forward http://example.com
+#   forward --port=80 http://example.com
+#   forward --req-header="foo=bar" http://example.com
+#   forward --cors --req-header="foo=bar" \
+#           --req-header="hello=world" \
+#           http://example.com
+#   forward --tls-cert-file=/path/to/cert \
+#           --tls-key-file=/path/to/key \
+#           http://example.com
+#
+# The andybalholm/brotli lane is built on `github.com/
+# andybalholm/brotli v1.0.4` (declared verbatim at
+# upstream go.mod HEAD as a direct dep, used for
+# response-body Brotli en/decoding on the proxy hop -
+# when the origin emits `Content-Encoding: br`,
+# forward decodes the body, applies any
+# header/overwrite transformations, and re-encodes
+# Brotli on the way out to the client), the canonical
+# Go Brotli implementation by Andy Balholm -
+# github.com/andybalholm/brotli, 800+ stars.
+#
+# Balholm is a single-author maintainer who initially
+# wrote the library to fill the gap in Go's HTTP
+# ecosystem - while Go's stdlib `compress/gzip` and
+# `compress/flate` cover DEFLATE-family compression,
+# there was no canonical Go Brotli implementation
+# until andybalholm/brotli appeared in 2018. The
+# library is a *pure-Go reimplementation* of Brotli
+# (not a binding to Google's C reference); it
+# co-evolved with the Caddy web server's adoption of
+# Brotli as a default response-compression algorithm
+# (Caddy 2.x ships andybalholm/brotli as the default
+# Brotli encoder).
+#
+# The library is depended on by:
+#   - Caddy (default Brotli encoder since Caddy 2.x)
+#   - fasthttp (Brotli body en/decoding)
+#   - chi (HTTP middleware Brotli)
+#   - kratos (Brotli RPC encoding)
+#   - approximately every Go HTTP server with Brotli
+#     support
+#
+# forward uses andybalholm/brotli through the standard
+# `compress/brotli` interface for response body
+# round-tripping - the body is decoded with
+# `brotli.NewReader` before header modification +
+# re-encoded with `brotli.NewWriter` on the response
+# write path.
+#
+# ----------------------------------------------------------------------------
+# AXIS 251 :: Brotli compression (RFC 7932)
+# Round 1452 :: Go slot 2 of 4 :: continues Axis 251
+#
+# Cross-language canonical library family for this axis:
+#   Rust    : dropbox/rust-brotli          [R1451 _divans]
+#   Go      : andybalholm/brotli           [R1452 THIS FILE]
+#   TS/Node : foliojs/brotli.js            [R1453 closing]
+#
+# andybalholm/brotli is structurally interesting in
+# this axis because of its *pure-Go reimplementation*
+# pattern. The three lanes form a clean spectrum:
+#
+#   - Rust (dropbox/rust-brotli): line-by-line
+#     safe-Rust port of Google's reference C code;
+#     maintains byte-identical output vs the reference
+#     encoder + the same function structure as the C
+#     source
+#   - Go (andybalholm/brotli): pure-Go reimplementation
+#     by Andy Balholm; algorithmically equivalent to
+#     Google's reference but written in idiomatic Go
+#     with no FFI; depended on by Caddy + fasthttp +
+#     most Go web servers
+#   - Node (foliojs/brotli.js): pure-JS decompression-
+#     only library by Devon Govett; for Brotli
+#     compression in Node, projects pair with
+#     httptoolkit/brotli-wasm (Wasm binding to
+#     Google's C reference) or use Node's stdlib
+#     `zlib.brotliCompress`
+#
+# The Rust vs Go difference is interesting because it
+# reflects Dropbox's vs Balholm's different goals:
+# Dropbox prioritized *line-by-line correspondence*
+# with the C source for easier patch-tracking; Balholm
+# prioritized *idiomatic Go* for ease of maintenance
+# + integration into the Go web server ecosystem.
+# Both produce RFC-7932-compliant output that
+# decompresses identically through all canonical
+# implementations.
+#
+# Cross-language interop at the wire format level - a
+# Brotli bitstream produced by dropbox/rust-brotli +
+# andybalholm/brotli + foliojs/brotli.js (or Google's
+# C reference, or Node's built-in zlib.brotliCompress)
+# decompresses byte-identically through any of the
+# other canonical implementations. RFC 7932 test
+# vectors validate this cross-library byte-
+# equivalence.
+# ============================================================================
+
+_forward() {
+    local context state state_descr line
+    typeset -A opt_args
+
+    _arguments -s -S \
+        '--address[bind address (default 0.0.0.0)]:addr:' \
+        '--port[listen port (default 80)]:port:' \
+        '--proxy-external[proxy external hosts]' \
+        '*--proxy-external-ignore[external host to skip (repeatable)]:host:' \
+        '*--req-header[add request header (key=value, repeatable)]:header:' \
+        '*--res-header[add response header (key=value, repeatable)]:header:' \
+        '--cors[enable CORS headers in proxy responses]' \
+        '--overwrite[serve files from folder instead of proxying]:dir:_files -/' \
+        '--no-cache[disable response cache]' \
+        '--tls-cert-file[TLS certificate file]:file:_files -g "*.{pem,crt}"' \
+        '--tls-key-file[TLS private key file]:file:_files -g "*.{pem,key}"' \
+        '(- *)--help[print help]' \
+        '(- *)--version[print version]' \
+        '1:target URL:'
+}
+
+_forward "$@"
