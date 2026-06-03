@@ -1,0 +1,194 @@
+#compdef lazytail
+# ---------------------------------------------------------------------------
+# lazytail — fast terminal log viewer with live filtering & follow (Rust, 216★)
+#
+# upstream: https://github.com/raaymax/lazytail
+# author : Maksymilian Krzyżanowski (raaymax)
+# license: MIT
+#
+# Source-direct completion: every flag and subcommand below is verbatim from
+# src/main.rs (Cli struct) and src/cli/mod.rs (Commands / InitArgs / WebArgs /
+# BenchArgs / ConfigAction / ThemeAction / ImportArgs / UpdateArgs) on the
+# lazytail tip — no improvisation.
+#
+# Direct deps from Cargo.toml:
+#   ratatui     = "0.29"     ← canonical Rust TUI library (this axis)
+#   crossterm   = "0.28"     (terminal backend ratatui sits on top of)
+#   notify      = "7.0"      (file watcher for tailed logs)
+#   ansi-to-tui = "7.0"      (ansi color → ratatui spans bridge)
+#   clap        = "4.5"      (derive)
+#   memmap2     = "0.9"      (fast mmap'd log file scanning)
+#   memchr      = "2"        (BurntSushi's SIMD byte search)
+#   lru         = "0.12"     (line cache)
+#   rayon       = "1.10"     (parallel filter benchmarks)
+#
+# === AXIS 152 OPENER — TUI / terminal UI ecosystem ===
+# Axis position: Rust=207 OPENS Axis 152 at slot 1/0/0.  Canonical Rust TUI
+# library is `ratatui` — the maintained fork of the original `tui-rs` by
+# Florian Dehau, taken over by the ratatui-org collective after tui-rs went
+# unmaintained.  ratatui provides immediate-mode widget rendering on top of
+# crossterm or termion backends and now drives essentially every modern
+# Rust TUI: bottom (htop), atuin (shell history), gitui, lazysql, gobang,
+# zellij plugins, lazyjj, csvlens, oha, joshuto, ratatui.
+#
+# Cycle position in current 3+1 micro-cycle:
+#   Rust=207   ← THIS FILE              (axis 152 OPENS, slot 1/0/0)
+#   Go=207     ← next round              (axis 152 continues, slot 2/0/0)
+#   TS-Node=207 ← round after            (axis 152 CLOSES at triple-207, slot 1/1/1)
+# ---------------------------------------------------------------------------
+
+_lazytail() {
+    local context state state_descr line ret=1
+    typeset -A opt_args
+
+    local -a subcmds
+    subcmds=(
+        'init:Initialize a new lazytail.yaml config file'
+        'web:Start browser-based web UI'
+        'bench:Benchmark filter performance'
+        'config:Config file commands'
+        'theme:Theme management commands'
+        'update:Check for and install updates (self-update feature)'
+        'help:Print this message or the help of the given subcommand(s)'
+    )
+
+    _arguments -C \
+        '--no-watch[disable file watching (files won'\''t auto-reload on changes)]' \
+        '(-n --name)'{-n,--name=}'[capture stdin to a named source file (tee-like behavior)]:source name:' \
+        '--raw[output raw lines without rendering (only meaningful with -n)]' \
+        '--mcp[run as MCP (Model Context Protocol) server using stdio transport]' \
+        '(-v --verbose)'{-v,--verbose}'[verbose output (show config discovery paths)]' \
+        '--no-update-check[disable background update check on startup]' \
+        '(- *)'{-V,--version}'[print version]' \
+        '(- *)'{-h,--help}'[print help]' \
+        '1: :->cmds' \
+        '*::arg:->args' && ret=0
+
+    case $state in
+        cmds)
+            _alternative \
+                'subcommands:lazytail command:(($subcmds))' \
+                'files:log file:_files -g "*.(log|txt|*)"' && ret=0
+            ;;
+        args)
+            case $line[1] in
+                init)    _lazytail_init    && ret=0 ;;
+                web)     _lazytail_web     && ret=0 ;;
+                bench)   _lazytail_bench   && ret=0 ;;
+                config)  _lazytail_config  && ret=0 ;;
+                theme)   _lazytail_theme   && ret=0 ;;
+                update)  _lazytail_update  && ret=0 ;;
+                help)
+                    _describe -t commands 'lazytail command' subcmds && ret=0
+                    ;;
+                *)
+                    _files -g "*.(log|txt|*)" && ret=0
+                    ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+# `lazytail init` — bootstrap lazytail.yaml in CWD
+_lazytail_init() {
+    _arguments \
+        '--force[overwrite existing config file]' \
+        '(-h --help)'{-h,--help}'[print help]'
+}
+
+# `lazytail web` — browser-based web UI on host:port (default 127.0.0.1:8421)
+_lazytail_web() {
+    _arguments \
+        '--host=[bind host]:host:_hosts' \
+        '(-p --port)'{-p,--port=}'[bind port]:port:_ports' \
+        '--no-watch[disable file watching]' \
+        '(-v --verbose)'{-v,--verbose}'[verbose startup output]' \
+        '(-h --help)'{-h,--help}'[print help]' \
+        '*:log file:_files'
+}
+
+# `lazytail bench <PATTERN> <FILE>...` — benchmark filter performance
+_lazytail_bench() {
+    _arguments \
+        '--regex[use regex mode]' \
+        '--query[use query mode (structured query syntax)]' \
+        '--case-sensitive[case-sensitive matching (default: case-insensitive)]' \
+        '--trials=[number of benchmark trials (default 5)]:n:' \
+        '--json[output JSON instead of human-readable table]' \
+        '--compare[run both indexed and non-indexed paths, report speedup]' \
+        '(-h --help)'{-h,--help}'[print help]' \
+        '1:filter pattern:' \
+        '*:log file:_files'
+}
+
+# `lazytail config <validate|show>` — config tooling
+_lazytail_config() {
+    local context state state_descr line ret=1
+    typeset -A opt_args
+
+    local -a cfg_actions
+    cfg_actions=(
+        'validate:Validate the config file'
+        'show:Show effective configuration'
+    )
+
+    _arguments -C \
+        '(-h --help)'{-h,--help}'[print help]' \
+        '1: :->cmds' && ret=0
+
+    case $state in
+        cmds)
+            _describe -t commands 'lazytail config action' cfg_actions && ret=0
+            ;;
+    esac
+
+    return ret
+}
+
+# `lazytail theme <import|list>` — theme tooling
+_lazytail_theme() {
+    local context state state_descr line ret=1
+    typeset -A opt_args
+
+    local -a theme_actions
+    theme_actions=(
+        'import:Import a color scheme (Windows Terminal, Alacritty, Ghostty, iTerm2)'
+        'list:List available themes'
+    )
+
+    _arguments -C \
+        '(-h --help)'{-h,--help}'[print help]' \
+        '1: :->tcmds' \
+        '*::arg:->targs' && ret=0
+
+    case $state in
+        tcmds)
+            _describe -t commands 'lazytail theme action' theme_actions && ret=0
+            ;;
+        targs)
+            case $line[1] in
+                import)
+                    _arguments \
+                        '--name=[theme name (defaults to filename stem)]:name:' \
+                        '(-h --help)'{-h,--help}'[print help]' \
+                        '1:color scheme file:_files -g "*.(json|toml|itermcolors|conf|*)"' && ret=0
+                    ;;
+                list) ret=0 ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+# `lazytail update` — self-update feature
+_lazytail_update() {
+    _arguments \
+        '--check[only check for updates, do not install (exit 0 = up-to-date, 1 = available)]' \
+        '--nightly[use nightly (pre-release) build instead of latest stable]' \
+        '(-h --help)'{-h,--help}'[print help]'
+}
+
+_lazytail "$@"
