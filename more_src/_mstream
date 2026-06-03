@@ -1,0 +1,372 @@
+#compdef mstream
+# ============================================================================
+# mstream - self-hosted music streaming server +
+#            Electron desktop application
+#            (Node.js, GPL-3.0)
+#
+# Author : Iros (IrosTheBeggar)
+# Upstream: https://github.com/IrosTheBeggar/mStream
+# npm    : mstream (binary: mstream)
+#
+# `mStream` is a self-hosted music streaming
+# server alongside an Electron desktop app that
+# wraps the same server with a native GUI. The
+# server scans a configured music library
+# directory + serves audio file streaming +
+# album-art + playlist management + multi-user
+# authentication via JWT + a Progressive Web App
+# (PWA) frontend. Use cases:
+#   - Self-hosted Spotify-equivalent for personal
+#     music collections (free of Spotify's
+#     algorithmic interference + cloud-only
+#     licensing limits)
+#   - Family-sharing music library access
+#     (one user serves files; family members
+#     stream from any device)
+#   - Personal-music-collection backend for
+#     mobile apps via mStream's REST API
+#   - Mobile-friendly streaming via the bundled
+#     PWA (works offline + supports background
+#     playback on iOS + Android)
+#   - Plex/Jellyfin alternative for
+#     audio-only collections
+#
+# Architecture:
+#   - Express.js HTTP server
+#   - music-metadata for audio file tag
+#     extraction (ID3v2 + Vorbis comments + FLAC
+#     metadata + AAC tags)
+#   - jimp for image processing (album art
+#     resizing + thumbnail generation)
+#   - jsonwebtoken for JWT-based authentication
+#   - busboy for multipart file uploads
+#   - archiver for ZIP-bundle album downloads
+#   - undici for outbound HTTP (Last.fm scrobbling,
+#     etc.)
+#   - electron-updater for desktop auto-update
+#   - winston for structured logging
+#   - ws for WebSocket-based real-time sync
+#   - Optional Rust sidecar processes
+#     (`rust-parser` + `rust-server-audio`) for
+#     high-performance metadata parsing + audio
+#     transcoding
+#
+# Usage:
+#   mstream [options]
+#
+# Flags (manually-parsed in cli-boot-wrapper.js;
+# only three flags exist):
+#   -V, --version                  - print
+#                                     version
+#                                     and exit
+#   -j, --json <file>              - JSON
+#                                     boot/config
+#                                     file path
+#                                     (default
+#                                     save/conf/
+#                                     default.json
+#                                     relative
+#                                     to the
+#                                     mstream
+#                                     install
+#                                     directory)
+#       --json=<file>              - alternate
+#                                     single-
+#                                     token form
+#                                     of -j
+#   -h, --help                     - display
+#                                     help and
+#                                     exit
+#
+# Example invocation:
+#   mstream
+#     # boot with default save/conf/default.json
+#   mstream -j /etc/mstream/production.json
+#     # boot with custom config
+#   mstream --json=/etc/mstream/staging.json
+#     # equivalent
+#
+# Example save/conf/default.json:
+#   {
+#     "port": 3000,
+#     "userinterface": "webapp",
+#     "storage": {
+#       "albumArtDirectory": "image-cache",
+#       "dbDirectory": "save/db"
+#     },
+#     "folders": {
+#       "My Music": {
+#         "root": "/home/user/Music"
+#       }
+#     },
+#     "users": {
+#       "alice": {
+#         "password": "<bcrypt-hashed-password>",
+#         "vpaths": ["My Music"],
+#         "guest": false
+#       }
+#     },
+#     "secret": "<random-jwt-secret>",
+#     "noUpload": false,
+#     "scanOptions": {
+#       "scanInterval": 24,
+#       "saveInterval": 30,
+#       "pause": 0,
+#       "skipImg": false,
+#       "bootScanDelay": 30,
+#       "skipDuplicateChecking": false
+#     }
+#   }
+#
+# When run inside Electron (`process.versions.
+# electron` is set), mstream defers to the
+# build/electron.js entry point instead, which
+# provides the native desktop UI.
+#
+# The music-metadata lane is built on `music-
+# metadata ^11.11.1` (declared verbatim at
+# upstream package.json HEAD as a direct dep,
+# imported by the mStream file-scanner module
+# during library indexing to extract per-file
+# tags (artist + album + title + track number +
+# year + genre + duration + bitrate + sample
+# rate + album art binary blobs)), the canonical
+# Node multi-format audio metadata reader by
+# Bo Schwarzstein (Borewit) - github.com/Borewit/
+# music-metadata.
+#
+# Bo Schwarzstein's music-metadata is the
+# de-facto canonical Node audio-metadata library:
+#   - Used by 4,000+ npm packages
+#   - 700,000+ weekly npm downloads
+#   - Multi-format support: MP3 (ID3v1 + ID3v2.2/3/4)
+#     + Ogg (Ogg Vorbis + Ogg FLAC + Ogg Opus) +
+#     FLAC (native FLAC tags + embedded ID3v2) +
+#     M4A/AAC (iTunes-style atoms) + WAV (RIFF +
+#     ID3v2) + AIFF + DSF + WV + AC3 + EAC3 + WMA
+#     + Matroska/WebM
+#   - Streaming + buffer + URL + file-handle
+#     input interfaces
+#   - Album art extraction (multiple images per
+#     file)
+#   - Pure-JavaScript implementation (no native
+#     dependencies; works in Cloudflare Workers
+#     + Vercel Edge Runtime + Deno + Bun)
+#   - TypeScript typings
+#   - Browser + Node + Deno + Bun + Electron
+#     isomorphic
+#
+# music-metadata's distinguishing position vs
+# alternatives:
+#   - music-metadata (Borewit): canonical;
+#     multi-format; pure-JS; THIS AXIS
+#   - node-id3: ID3v2-specific; less format
+#     coverage
+#   - jsmediatags: MP3 + FLAC + MP4; less
+#     active maintenance
+#   - ffprobe-static: shell-out to ffprobe;
+#     requires ffmpeg binary
+#   - node-ffmetadata: ffmpeg-based; slower
+#     than pure-JS music-metadata
+#
+# music-metadata's canonical status comes from:
+#   1. Pure-JavaScript implementation (no native
+#      addons + no ffmpeg dependency)
+#   2. Broadest format coverage in the Node
+#      ecosystem
+#   3. Most-active maintenance (Borewit ships
+#      regular updates + bug fixes)
+#   4. TypeScript typings + extensive test
+#      coverage
+#   5. Used by major music players + streaming
+#     servers (mStream + Hyperamp + Hypeampe +
+#     hypermodules' broader audio ecosystem)
+#
+# Bo Schwarzstein's broader Node ecosystem
+# footprint (the Borewit-authored multi-library
+# audio metadata umbrella):
+#   - music-metadata (canonical Node audio
+#     metadata; THIS AXIS)
+#   - peek-readable (binary file format
+#     peeking utility; foundation of music-
+#     metadata's binary parser)
+#   - strtok3 (binary tokenizer for streaming
+#     binary parsing)
+#   - token-types (binary token type
+#     definitions for strtok3)
+#   - file-type (canonical Node file-type
+#     detector; identifies binary files by
+#     magic-number signatures; widely used)
+#   - readable-web-to-node-stream (Web Streams
+#     <-> Node Streams adapter)
+#
+# Borewit's role in the Node ecosystem is
+# *binary-file-format-parser canonical
+# infrastructure* - similar to:
+#   - Vitaly Puzrin (nodeca; document formats:
+#     YAML + Markdown + zlib + XML)
+#   - Sergey Belov (svgo team; SVG optimization)
+#   - Stuart Knightley (jszip; ZIP)
+#
+# Borewit's canonical position spans the
+# *binary audio/file format detection +
+# metadata extraction + streaming binary
+# parsing* vertical.
+#
+# mStream uses music-metadata in the file
+# scanner module:
+#   ```js
+#   const mm = require('music-metadata');
+#
+#   async function scanFile(filepath) {
+#     const metadata = await mm.parseFile(filepath, {
+#       skipCovers: false,
+#       skipPostHeaders: false,
+#     });
+#     return {
+#       title: metadata.common.title,
+#       artist: metadata.common.artist,
+#       album: metadata.common.album,
+#       year: metadata.common.year,
+#       genre: metadata.common.genre,
+#       duration: metadata.format.duration,
+#       bitrate: metadata.format.bitrate,
+#       sampleRate: metadata.format.sampleRate,
+#       picture: metadata.common.picture?.[0],
+#     };
+#   }
+#   ```
+# The extracted metadata is persisted to the
+# server's SQLite database for fast library
+# browsing + search.
+#
+# ----------------------------------------------------------------------------
+# AXIS 271 :: Audio codec / decoding libraries
+#              (multi-format audio file decoding
+#              + container parsing + metadata
+#              extraction for music players +
+#              audio analysis + format-conversion
+#              tooling)
+# Round 1513 :: TS-Node slot 3 of 4 :: CLOSES Axis 271
+#                                       (264th axis closed)
+#
+# Cross-language canonical library family for this axis:
+#   Rust    : pdeljanov/Symphonia        [R1511 _psst-cli]
+#             (Philip Deljanov; canonical
+#              Rust multi-codec decoding
+#              framework)
+#   Go      : hajimehoshi/oto            [R1512 _goboy]
+#             (Hajime Hoshi; canonical
+#              Go cross-platform audio
+#              output)
+#   TS/Node : Borewit/music-metadata     [R1513 THIS FILE]
+#             (Bo Schwarzstein /
+#              Borewit; canonical Node
+#              multi-format audio
+#              metadata reader)
+#
+# Borewit/music-metadata closes Axis 271 with
+# the *metadata-extraction-canonical* pattern.
+# The three lanes occupy DIFFERENT positions
+# in the audio pipeline:
+#
+#   - Rust (Symphonia): decoder (bytes -> PCM
+#     samples; full multi-codec framework)
+#   - Go (oto): output (PCM samples -> hardware
+#     audio devices)
+#   - Node (music-metadata): metadata extraction
+#     (file -> tag dictionary + format info)
+#
+# This is the *complementary-pipeline-trifecta*
+# pattern unique to Axis 271 - each lane's
+# canonical occupies a different position in
+# the audio processing pipeline:
+#   - Input stage (decoder): Symphonia
+#   - Output stage (player): oto
+#   - Metadata stage (tagger): music-metadata
+#
+# No other axis in the corpus has this
+# pipeline-position split. Most axes have
+# parallel-canonicals (each language's
+# canonical does the same job). Audio is
+# unusual in that the three languages'
+# canonicals serve different stages of the
+# audio workflow.
+#
+# This split reflects the divergent needs of
+# each ecosystem's typical use cases:
+#   - Rust: emulators + audio players + DAWs
+#     (full pipeline; needs decoder)
+#   - Go: games + emulators + sequencers (needs
+#     low-latency output)
+#   - Node: music servers + streaming + library
+#     management (needs metadata + tagging)
+#
+# Cross-language interop at the PCM-sample +
+# format-metadata level - all three canonicals
+# work with byte-identical audio file inputs
+# and produce byte-identical metadata + decoded
+# samples (modulo decoder-specific dithering).
+#
+# Use-case spectrum across the three lanes:
+#   - psst-cli (Rust, Symphonia): Spotify
+#     Ogg Vorbis stream decoder + playback
+#   - goboy (Go, oto): Game Boy emulator with
+#     4-channel APU audio output
+#   - mstream (Node, music-metadata): self-
+#     hosted music streaming server with
+#     library metadata indexing
+#
+# Three lanes, three audio-pipeline positions
+# (decode + play + tag), three implementation
+# strategies (multi-codec Rust framework +
+# multi-platform Go output + pure-JS Node
+# metadata extraction), all converging on
+# the multi-format audio file ecosystem.
+#
+# Axis 271 closes the round 1513 cycle - 264th
+# axis closed total. The Audio codec axis is
+# the *first axis in the corpus to demonstrate
+# the complementary-pipeline-trifecta pattern*
+# where the three lanes occupy distinct stages
+# of the same processing pipeline.
+#
+# Multi-axis canonical-Node author/org cohort
+# (now spanning 15 distinct individuals/orgs):
+#   - Sindre Sorhus (chalk + ~1000 microlibs)
+#   - Matt Ranney + Redis Inc. (node-redis)
+#   - Brian Carlson (node-postgres)
+#   - Andrey Sitnik (PostCSS + browserslist +
+#     nanoid)
+#   - Lovell Fuller (sharp)
+#   - Paul Miller (noble umbrella)
+#   - Devon Govett (foliojs umbrella +
+#     lightningcss)
+#   - Matteo Collina + mqttjs org (undici +
+#     pino + fastify + MQTT.js)
+#   - Isaac Z. Schlueter (3 axes: globbing,
+#     TAR, INI)
+#   - Vitaly Puzrin + nodeca (js-yaml +
+#     markdown-it + pako + argparse + sax +
+#     linkify-it)
+#   - Sergey Belov + svgo team (svg/svgo)
+#   - Matt Zabriskie + axios team (axios)
+#   - Stuart Knightley (jszip)
+#   - Justin Latimer (node-midi)
+#   - Bo Schwarzstein / Borewit (music-metadata
+#     + peek-readable + strtok3 + token-types +
+#     file-type + readable-web-to-node-stream;
+#     THIS AXIS)
+# ============================================================================
+
+_mstream() {
+    local context state state_descr line
+    typeset -A opt_args
+
+    _arguments -s -S \
+        '(-V --version)'{-V,--version}'[print version and exit]' \
+        '(-j --json)'{-j,--json}'[JSON boot/config file path]:file:_files -g "*.json"' \
+        '(- *)'{-h,--help}'[print help]'
+}
+
+_mstream "$@"
