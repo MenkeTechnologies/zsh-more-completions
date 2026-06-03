@@ -1,0 +1,139 @@
+#compdef excel-cli
+# ============================================================================
+# excel-cli - Excel CLI for AI agents, scripting, and terminal users (Rust, MIT)
+#
+# Author : fuhan666
+# Upstream: https://github.com/fuhan666/excel-cli
+# crates : excel-cli
+#
+# excel-cli is a dual-mode Rust CLI that gives both a structured-JSON
+# headless API (for scripting + LLM-agent integration) and an interactive
+# Vim-like TUI for inspecting + editing .xlsx/.xls/.ods workbooks. The
+# headless surface covers: inspect workbook / sheet / sample / columns,
+# read cell / range / rows / records, recursive `grep` across files,
+# data-quality check rules (blank headers, duplicate headers, blank
+# rows, null ratio, duplicate values, type drift, formula presence),
+# and a TUI mode (`excel-cli ui FILE`) for interactive browsing.
+#
+# Both canonical Rust Excel libraries are declared as direct
+# dependencies in upstream Cargo.toml (verified verbatim at HEAD):
+#
+#     calamine = "0.34.0"
+#     rust_xlsxwriter = "0.94.0"
+#
+# `calamine` (tafia/calamine, 2300+ stars on github.com/tafia/calamine)
+# is the canonical pure-Rust spreadsheet **reader**, supporting .xlsx,
+# .xls, .xlsb, .ods, and .xla. It implements the ECMA-376 OOXML
+# spreadsheet schema for .xlsx (Open Packaging Conventions + the
+# `worksheet/`, `sharedStrings.xml`, `styles.xml` parts) plus the
+# CFB/OLE2 + BIFF8 layout for legacy .xls. `rust_xlsxwriter`
+# (jmcnamara/rust_xlsxwriter, 500+ stars) is the canonical pure-Rust
+# spreadsheet **writer**, a port of the long-running Perl
+# Spreadsheet::WriteExcel + Python XlsxWriter projects by the same
+# author (John McNamara).
+#
+# ----------------------------------------------------------------------------
+# AXIS 200 :: SPREADSHEET (XLSX) READ / WRITE (ECMA-376 OOXML)
+# Round 1298 :: Rust slot 1 of 4 :: OPENS Axis 200
+#
+# Cross-language canonical library family for this axis (proposed):
+#   Rust    : calamine + rust_xlsxwriter   (tafia + jmcnamara)
+#   Go      : xuri/excelize                - reader + writer in one library
+#   TS/Node : exceljs/exceljs              - reader + writer in one library
+#
+# All three lanes target the same ECMA-376 / ISO 29500-1 OOXML
+# spreadsheet schema for .xlsx + the legacy CFB/BIFF8 layout for
+# .xls. The Rust lane is unique in that it splits read and write
+# across two crates (calamine for read, rust_xlsxwriter for write)
+# while Go and TS lanes ship a single library that does both - a
+# structural divergence driven by Rust's stronger preference for
+# minimal-dependency libraries and the relative ages of the two
+# projects (calamine pre-dates rust_xlsxwriter by years and the
+# reader/writer split is now load-bearing in the Rust ecosystem).
+#
+# excel-cli is the Rust opener and is structurally interesting -
+# the headless JSON output mode is explicitly designed for LLM
+# agent integration (this is the same pattern visible in 2026
+# CLIs like mark2pdf and ironclaw: structured envelope output +
+# error codes for tool-use orchestration), which is the new
+# expected shape for CLIs landing in 2026 vs the human-oriented
+# CLIs landing pre-2024.
+# ============================================================================
+
+_excel-cli() {
+    local context state state_descr line
+    typeset -A opt_args
+    local curcontext="$curcontext" ret=1
+
+    _arguments -C \
+        '(- *)'{-h,--help}'[print help]' \
+        '(- *)'{-V,--version}'[print version]' \
+        '1: :_excelcli_cmds' \
+        '*::arg:->args' \
+    && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                inspect)  _excelcli_inspect ;;
+                read)     _excelcli_read ;;
+                check)    _excelcli_check ;;
+                ui)       _arguments '1:xlsx file:_files -g "*.(xlsx|xls|ods|xlsb)"' ;;
+                grep)     _excelcli_grep ;;
+                help)     _excelcli_cmds ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_excelcli_cmds() {
+    local -a cmds
+    cmds=(
+        'inspect:Inspect workbook or sheet metadata'
+        'read:Read cell, range, row, or record data'
+        'check:Check workbook data quality (header/null/duplicate/etc rules)'
+        'ui:Open interactive Vim-like TUI browser'
+        'grep:Search cell values recursively across Excel files'
+        'help:Show help'
+    )
+    _describe -t commands 'excel-cli command' cmds
+}
+
+_excelcli_inspect() {
+    _arguments \
+        '(- *)'{-h,--help}'[help]' \
+        '1:subcommand:(workbook sheet sample columns)' \
+        '*::arg:->_default'
+}
+
+_excelcli_read() {
+    _arguments \
+        '(- *)'{-h,--help}'[help]' \
+        '1:subcommand:(cell range rows records)' \
+        '*::arg:->_default'
+}
+
+_excelcli_check() {
+    _arguments -s -S \
+        '--sheet[sheet name (exact match)]:sheet:' \
+        '--rules[comma-separated rule list (blank_headers, duplicate_headers, blank_rows, blank_columns, null_ratio, duplicate_values, type_drift, formula_presence)]:rules:' \
+        '--severity-threshold[minimum severity to report]:severity:(info warn error)' \
+        '(- *)'{-h,--help}'[help]' \
+        '1:xlsx file:_files -g "*.(xlsx|xls|ods|xlsb)"'
+}
+
+_excelcli_grep() {
+    _arguments -s -S \
+        '(-i --case-insensitive)'{-i,--case-insensitive}'[case-insensitive search]' \
+        '(-r --regex)'{-r,--regex}'[treat query as regex]' \
+        '(-s --sheet)'{-s,--sheet}'[limit search to a specific sheet]:sheet:' \
+        '(-f --format)'{-f,--format}'[output format (default markdown)]:format:(markdown json text)' \
+        '--skip-errors[skip unreadable worksheets rather than erroring]' \
+        '(- *)'{-h,--help}'[help]' \
+        '1:query pattern:' \
+        '*:file or directory:_files'
+}
+
+_excel-cli "$@"
