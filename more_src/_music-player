@@ -1,0 +1,127 @@
+#compdef music-player
+# ============================================================================
+# music-player - Rust music daemon with GraphQL API (MIT)
+#
+# Author : Tsiry Sandratraina (tsirysndr)
+# Upstream: https://github.com/tsirysndr/music-player
+#
+# music-player is an extensible music player daemon with a TUI
+# front-end, a Tauri-based web UI, mDNS device discovery (Avahi /
+# Bonjour), and a GraphQL API for remote control. Library scanning
+# walks `$HOME/Music` recursively, deduplicates by tag + content,
+# and stores everything in a SeaORM-managed SQLite database with
+# Tantivy full-text search. Playback uses rodio for audio and
+# tungstenite WebSockets for pushing real-time PlayerState updates
+# to subscribed clients.
+#
+# The GraphQL lane is built on `async-graphql = "4.0.15"` (declared
+# verbatim in upstream `graphql/Cargo.toml` HEAD), the canonical
+# Rust GraphQL server library by sunli829 (github.com/async-graphql/
+# async-graphql, 3600+ stars). async-graphql is a code-first GraphQL
+# server with full GraphQL spec support: queries, mutations,
+# subscriptions, federation (Apollo Federation v2), tracing
+# (OpenTelemetry / Apollo Tracing), persisted queries, schema
+# introspection, custom scalars, directives, dataloader integration,
+# and per-resolver complexity limits. It is the dependency-of-record
+# for the async Rust ecosystem (Axum / Actix / Warp / Poem all ship
+# `async-graphql-*` integration crates).
+#
+# music-player's GraphQL schema exposes `Track`, `Album`, `Artist`,
+# `Playlist`, `PlayerState`, and `Queue` types with mutations for
+# play / pause / next / prev / seek / volume + subscriptions for
+# `playerStateChanged` and `currentTrackChanged`. The Rust CLI
+# `music-player` ships both as a TUI client (when launched bare)
+# and a set of subcommands (`scan`, `play`, `pause`, `next`,
+# `albums`, `artists`, `playlist`, `queue`, `search`, etc.) that
+# wrap GraphQL mutations against a running music-player server.
+#
+# ----------------------------------------------------------------------------
+# AXIS 206 :: GRAPHQL (SPEC: WORKING DRAFT - OCT 2021)
+# Round 1316 :: Rust slot 1 of 4 :: OPENS Axis 206
+#
+# Cross-language canonical library family for this axis (proposed):
+#   Rust    : async-graphql/async-graphql           - code-first server
+#   Go      : 99designs/gqlgen                      - code-first server
+#   TS/Node : graphql/graphql-js                    - reference implementation
+#
+# All three target the same GraphQL spec (Facebook/Meta, originally
+# released in 2015, current working draft Oct 2021). Each lane's
+# canonical library is code-first / schema-first hybrid: define
+# the resolver types in the host language, derive the schema, and
+# expose subscriptions over WebSockets. The reference implementation
+# is graphql/graphql-js (Lee Byron, ~20k stars on github.com/graphql/
+# graphql-js) - JS holds the canonical-spec mantle because the
+# spec itself was bootstrapped on top of the graphql-js parser.
+# ============================================================================
+
+_music-player() {
+    local context state state_descr line
+    typeset -A opt_args
+    local curcontext="$curcontext" ret=1
+
+    _arguments -C \
+        '(- *)'{-h,--help}'[print help]' \
+        '(- *)'{-V,--version}'[print version]' \
+        '1: :_mp_cmds' \
+        '*::arg:->args' \
+    && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                open)         _arguments '(- *)'{-h,--help}'[help]' '1:song:_files -g "*.(mp3|flac|wav|ogg|m4a|opus|aac)"' ;;
+                scan)         _arguments '(- *)'{-h,--help}'[help]' ;;
+                albums)       _arguments '(- *)'{-h,--help}'[help]' '(-i --id)'{-i,--id}'[show album by id]:id:' ;;
+                artists)      _arguments '(- *)'{-h,--help}'[help]' ;;
+                playlist)     _mp_playlist ;;
+                queue)        _mp_queue ;;
+                tracks)       _arguments '(- *)'{-h,--help}'[help]' ;;
+                search)       _arguments '(- *)'{-h,--help}'[help]' '1:query:' ;;
+                pause|play|next|prev|stop|current|connect|devices|reset)
+                              _arguments '(- *)'{-h,--help}'[help]' ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_mp_cmds() {
+    local -a cmds
+    cmds=(
+        'open:Open and play an audio file'
+        'scan:Scan the music library ($HOME/Music)'
+        'albums:List all albums (or show one by --id)'
+        'artists:List all artists'
+        'playlist:Manage playlists (add/ls/clear/open/remove/shuffle/all/show)'
+        'queue:Manage the play queue (list/add/remove/clear)'
+        'tracks:List all tracks'
+        'search:Search for songs / albums / artists / playlists'
+        'pause:Pause the current song'
+        'play:Resume the current song'
+        'next:Play the next song'
+        'prev:Play the previous song'
+        'stop:Stop playback'
+        'current:Show the current song'
+        'connect:Connect to a remote music-player on the LAN'
+        'devices:List music-player devices on the LAN (mDNS)'
+        'reset:Reset the database and clear the config'
+    )
+    _describe -t commands 'music-player command' cmds
+}
+
+_mp_playlist() {
+    _arguments \
+        '(- *)'{-h,--help}'[help]' \
+        '1:subcommand:((add\:"Add song to playlist" ls\:"List playlists" clear\:"Clear a playlist" open\:"Play a playlist" remove\:"Remove song" shuffle\:"Shuffle playlist" all\:"List songs in playlist" show\:"Show details"))' \
+        '*::arg:->_default'
+}
+
+_mp_queue() {
+    _arguments \
+        '(- *)'{-h,--help}'[help]' \
+        '1:subcommand:((list\:"List songs in queue" add\:"Add song" remove\:"Remove song" clear\:"Clear queue"))' \
+        '*::arg:->_default'
+}
+
+_music-player "$@"
