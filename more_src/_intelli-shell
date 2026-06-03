@@ -1,0 +1,224 @@
+#compdef intelli-shell
+# ---------------------------------------------------------------------------
+# intelli-shell — IntelliSense for shells (Rust, 1,232★)
+#
+# upstream: https://github.com/lasantosr/intelli-shell
+# author : Roberto Latorre (lasantosr)
+# license: Apache-2.0
+#
+# Source-direct completion: every top-level subcommand and every flag below
+# is verbatim from src/cli.rs on the intelli-shell v3.4.2 tip — clap-derive
+# `Cli` Parser + `CliProcess` Subcommand enum + per-subcommand `*Process`
+# Args structs with `Interactive<T>` wrappers for the bookmarking /
+# searching / replacing / exporting / importing / completion-managing
+# subcommands.
+#
+# Default keybindings (after `eval "$(intelli-shell init zsh)"` etc.):
+#   - Ctrl+Space → search for commands
+#   - Ctrl+B     → bookmark a new command
+#   - Ctrl+L     → replace variables from a command
+#   - Ctrl+X     → fix a command that is failing
+#
+# Direct deps from Cargo.toml (selected):
+#   rusqlite             0.37    ← canonical Rust SQLite binding (this
+#                                  axis) — by Steven Fackler (sfackler)
+#                                  + the rusqlite contributors; the
+#                                  de-facto Rust answer to using SQLite
+#                                  as an embedded application database.
+#                                  intelli-shell uses rusqlite to
+#                                  persist bookmarked commands +
+#                                  dynamic completions + search history
+#                                  at ~/.config/intelli-shell/storage.db
+#                                  with full FTS5 indexing.
+#   rusqlite_migration   2.3     (Clément Renault's migration helper
+#                                  for rusqlite — schema versioning)
+#   sea-query            1.0.0-rc.14 (Chris Tsang and the SeaQL.org
+#                                     collective — type-safe SQL query
+#                                     builder, complement to sea-orm)
+#   sea-query-rusqlite           (rusqlite bridge for sea-query)
+#   clap (derive)        4        (CLI parsing)
+#   clap-stdin           0.8      (Ron Lin's clap-stdin — read positional
+#                                  values from stdin when arg is `-`)
+#   clap_complete        4.6      (shell completion generation)
+#   clap_complete_nushell 4.6     (Nushell-flavored completions)
+#   crossterm + ratatui + ratatui-textarea + tui-widget-list (TUI)
+#   reqwest              0.13     (HTTP client for tldr-pages fetching)
+#   pulldown-cmark       0.13     (markdown rendering in search results)
+#   git2                 0.20     (libgit2 — tldr-pages git clone)
+#   self_update          0.42     (binary auto-update from GitHub releases)
+#
+# intelli-shell is a shell autocompletion engine inspired by IntelliSense:
+# bookmark commands as you discover them, then recall + edit + execute via
+# Ctrl+Space inline TUI integrated into bash/zsh/fish/nu/powershell.
+# Variables in bookmarked commands ({{name}}) prompt for values when
+# recalled.  Optional tldr-pages integration imports the entire tldr
+# corpus as searchable commands (skipped on export so user-curated
+# remains separate).  All state lives in a single SQLite file, queried
+# via sea-query's type-safe query builder for migration-friendly schema
+# evolution.
+#
+# === AXIS 173 OPENER — embedded SQLite + type-safe SQL query builder ====
+# Axis position: Rust=228 OPENS Axis 173 at slot 1/0/0.  Canonical Rust
+# embedded SQLite stack is `rusqlite` (low-level SQLite binding) + a
+# typed query builder layered on top.  intelli-shell pairs `rusqlite`
+# with `sea-query` (Chris Tsang's SeaQL.org collective, which also
+# maintains sea-orm) for migration-friendly schema evolution and
+# type-safe query construction.  This is the de-facto pattern for
+# Rust apps that want SQLite-as-application-database without dragging
+# in a full ORM: the `rusqlite` + `sea-query` combo provides both
+# direct prepared-statement access AND fluent SQL building, with
+# `rusqlite_migration` handling schema versioning across releases.
+#
+# Cycle position in current 3+1 micro-cycle:
+#   Rust=228     ← THIS FILE              (axis 173 OPENS, slot 1/0/0)
+#   Go=228       ← next round              (axis 173 continues, slot 2/0/0)
+#   TS-Node=228  ← round after             (axis 173 CLOSES at triple-228, slot 1/1/1)
+# ---------------------------------------------------------------------------
+
+_intelli-shell() {
+    local context state state_descr line ret=1
+    typeset -A opt_args
+
+    local -a interactive_opts
+    interactive_opts=(
+        '(-i --interactive)'{-i,--interactive}'[open an interactive interface]'
+        '(-l --inline)'{-l,--inline}'[force inline render of the interactive interface (takes less space, requires --interactive)]'
+        '(-f --full-screen)'{-f,--full-screen}'[force full-screen render of the interactive interface (requires --interactive)]'
+    )
+
+    _arguments -C \
+        '(- *)'{-h,--help}'[print help]' \
+        '(- *)'{-V,--version}'[print version]' \
+        '1: :->cmds' \
+        '*::arg:->args' && ret=0
+
+    case $state in
+        cmds)
+            local -a subcmds
+            subcmds=(
+                'init:generate the shell integration script for the named shell'
+                'config:open the config file in the default editor (-p prints path instead)'
+                'logs:display logs from the last execution if enabled (-p prints log path instead)'
+                'new:bookmark a new command (interactive form with -i / inline form with -i -l)'
+                'search:search stored commands (positional initial query; interactive with -i)'
+                'replace:replace the variables of a command — anything in double brackets is a variable: echo {{message}}'
+                'fix:fix a command that is failing (re-runs it to capture output + exit code for LLM-driven repair; non-interactive only)'
+                'export:export stored user commands and completions to an external location (tldr-fetched commands NOT exported)'
+                'import:import user commands and completions from an external location'
+                'tldr:manage tldr-pages integration (fetch / clear subcommands)'
+                'completion:manage dynamic completions for variables (new / delete / list subcommands)'
+                'update:update intelli-shell to the latest version if possible (else show instructions)'
+                'changelog:display the changelog of the application (--from version range)'
+                'query:(debug) run a SQL query against the rusqlite storage DB (debug-only, hidden in release)'
+            )
+            _describe -t commands 'intelli-shell command' subcmds && ret=0
+            ;;
+        args)
+            case $words[1] in
+                init)
+                    _arguments \
+                        '1:shell to generate integration script for:(bash zsh fish elvish powershell nushell)' && ret=0
+                    ;;
+                config|logs)
+                    _arguments \
+                        '(-p --path)'{-p,--path}'[display the path instead of opening the editor / displaying logs content]' && ret=0
+                    ;;
+                new)
+                    _arguments \
+                        $interactive_opts \
+                        '*:command to bookmark (mandatory when non-interactive; quote special chars to preserve them):' && ret=0
+                    ;;
+                search)
+                    _arguments \
+                        $interactive_opts \
+                        '--mode=[search mode overriding the config default]:mode:(auto fuzzy regex exact relaxed)' \
+                        '1:initial search query to filter commands:' && ret=0
+                    ;;
+                replace)
+                    _arguments \
+                        $interactive_opts \
+                        '*:command to replace variables from (reads stdin if `-`):' && ret=0
+                    ;;
+                fix)
+                    _arguments \
+                        '1:non-interactive failing command:' \
+                        '*:recent shell history (additional context for the prompt):' && ret=0
+                    ;;
+                export)
+                    _arguments \
+                        $interactive_opts \
+                        '*:location to export items to (writes stdout if `-`; type auto-detected from content):_files' && ret=0
+                    ;;
+                import)
+                    _arguments \
+                        $interactive_opts \
+                        '--history[import from shell history file (replaces default location requirement)]' \
+                        '*:location to import items from (reads stdin if `-`):_files' && ret=0
+                    ;;
+                tldr)
+                    _arguments \
+                        '1: :->tldr_cmds' \
+                        '*::arg:->tldr_args' && ret=0
+                    case $state in
+                        tldr_cmds)
+                            local -a sub; sub=(
+                                'fetch:fetch command examples from tldr-pages and import them into a separate category'
+                                'clear:clear command examples imported from tldr-pages'
+                            )
+                            _describe -t commands 'tldr subcommand' sub && ret=0
+                            ;;
+                        tldr_args)
+                            case $words[1] in
+                                fetch|clear)
+                                    _arguments \
+                                        '1:category (e.g. common linux osx windows; omit to use current platform / clear all):(common linux osx windows android freebsd netbsd openbsd sunos)' && ret=0
+                                    ;;
+                            esac
+                            ;;
+                    esac
+                    ;;
+                completion)
+                    _arguments \
+                        '1: :->comp_cmds' \
+                        '*::arg:->comp_args' && ret=0
+                    case $state in
+                        comp_cmds)
+                            local -a sub; sub=(
+                                'new:add a new dynamic completion for a variable'
+                                'delete:delete an existing dynamic variable completion'
+                                'list:list all configured dynamic variable completions (alias: ls)'
+                            )
+                            _describe -t commands 'completion subcommand' sub && ret=0
+                            ;;
+                        comp_args)
+                            case $words[1] in
+                                new|delete)
+                                    _arguments \
+                                        '(-c --command)'{-c,--command=}'[root command where the completion should trigger (e.g. git)]:command:' \
+                                        '*:variable name (the {{variable}} inside bookmarked commands):' && ret=0
+                                    ;;
+                                list|ls)
+                                    _arguments \
+                                        $interactive_opts \
+                                        '1:root command to filter completions by:' && ret=0
+                                    ;;
+                            esac
+                            ;;
+                    esac
+                    ;;
+                changelog)
+                    _arguments \
+                        '--from=[start version (inclusive, default: current intelli-shell version)]:semver:' && ret=0
+                    ;;
+                query)
+                    _arguments \
+                        '1:SQL query (reads stdin if `-` or omitted):' && ret=0
+                    ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_intelli-shell "$@"
