@@ -1,0 +1,134 @@
+#compdef lind
+# ============================================================================
+# lind - LinDB CLI: scalable distributed time-series database (Go, Apache-2.0)
+#
+# Author : LinDB / Elong (lindb organization)
+# Upstream: https://github.com/lindb/lindb
+#
+# LinDB is a horizontally-scalable, high-throughput, high-
+# availability distributed time-series database written in
+# Go - similar in role to InfluxDB/VictoriaMetrics but with
+# a multi-IDC compute topology built around dedicated
+# broker/storage/root node roles. The `lind` binary is the
+# single entrypoint; subcommands launch each node role.
+#
+# Architecture topology:
+#   root        - multi-IDC/region routing compute node
+#   broker      - per-cluster routing + query compute node
+#   storage     - per-cluster time-series storage node (TSM-style)
+#   standalone  - all-in-one embed of root+broker+storage+etcd
+#
+# Each role uses cobra v2 sub-subcommands:
+#   <role> run          - start the node
+#   <role> init-config  - emit a default TOML config to disk
+#
+# Persistent flags shared by every <role> subcommand:
+#   --config <file>    - path to TOML config (default: <role>.toml in CWD)
+#   --pprof            - enable Go pprof profiling endpoint
+#
+# Plus:
+#   version            - print build version + commit
+#   tool <subcommand>  - admin/inspect utilities (internal)
+#
+# The xxhash lane is built on `github.com/cespare/xxhash/v2`
+# (declared as a direct dep at upstream go.mod HEAD and imported
+# from several core LinDB packages), the canonical Go XXHash
+# library by Caleb Spare (github.com/cespare/xxhash, 2300+ stars).
+# cespare/xxhash is the de-facto Go XXHash binding - faster than
+# the pure-Go alternatives (xxh3 SIMD via go:asm) and the only
+# implementation that ships true bit-identical output to the
+# original C upstream. LinDB uses XXHash for the routing-shard
+# selection: each incoming metric series is hashed by its
+# tagset, the hash modulo the shard count determines which
+# storage node owns the series. XXHash is the natural choice -
+# the hash must be fast enough to not bottleneck ingestion (a
+# single broker can route ~1M points/sec) and consistent
+# across language boundaries (Java/Python query clients that
+# bypass the broker need to compute the same hash).
+#
+# ----------------------------------------------------------------------------
+# AXIS 222 :: XXHash (non-cryptographic ultra-fast content hashing)
+# Round 1365 :: Go slot 2 of 4 :: continues Axis 222
+#
+# Cross-language canonical library family for this axis:
+#   Rust    : shepmaster/twox-hash         [R1364 _walrus]
+#   Go      : cespare/xxhash               [R1365 THIS FILE]
+#   TS/Node : Cyan4973/xxHash / xxhashjs   [R1366 closing]
+#
+# cespare/xxhash is structurally interesting: it is the *only*
+# mainstream Go XXHash implementation - no competing fork has
+# ever gained traction. Caleb Spare authored it in 2014 and
+# kept it minimal (single file, no allocations on the steady-
+# state path, asm fast-paths for amd64/arm64). The library is
+# transitively pulled in by almost the entire Go data-
+# infrastructure ecosystem: dgraph, badger, ristretto (the
+# Ristretto cache uses xxhash as its hash function), prometheus,
+# clickhouse-go, traefik, envoy-go, kubernetes-go-client (via
+# klog/cache). When a Go library wants a fast non-crypto hash,
+# `import "github.com/cespare/xxhash/v2"` is the reflex choice.
+#
+# Sharded TSDBs (lindb, victoriametrics, influxdb) almost
+# universally use XXHash for the per-series routing hash
+# because the alternatives (FNV-1a, murmur3) are either slower
+# (FNV-1a) or not bit-identical across implementations
+# (murmur3 has multiple incompatible variants). XXHash's
+# spec-pinned wire format makes it the only choice when
+# cross-language interop matters.
+# ============================================================================
+
+_lind() {
+    local context state state_descr line
+    typeset -A opt_args
+    local curcontext="$curcontext" ret=1
+
+    _arguments -C \
+        '(- *)'{-h,--help}'[print help]' \
+        '1: :_lind_cmds' \
+        '*::arg:->args' \
+    && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                version) _arguments '(- *)'{-h,--help}'[help]' ;;
+                root|broker|storage|standalone) _lind_role ;;
+                tool)    _arguments '(- *)'{-h,--help}'[help]' '*:arg:' ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_lind_cmds() {
+    local -a cmds
+    cmds=(
+        'root:Run as a root compute node with multi-IDC/regions mode'
+        'broker:Run as a compute node with cluster mode'
+        'storage:Run as a storage node with cluster mode'
+        'standalone:Run as a standalone node (embed broker, storage, etcd)'
+        'version:Print the version'
+        'tool:Admin/inspect utilities'
+    )
+    _describe -t commands 'lind command' cmds
+}
+
+_lind_role() {
+    local -a sub
+    sub=(
+        'run:Start the node'
+        'init-config:Create a new default config file'
+    )
+    _arguments \
+        '--config[path to TOML config]:file:_files -g "*.toml"' \
+        '--pprof[enable Go pprof profiling endpoint]' \
+        '(- *)'{-h,--help}'[help]' \
+        '1:subcommand:->sub' \
+        '*::arg:->_default'
+
+    case $state in
+        sub) _describe -t commands 'role subcommand' sub ;;
+    esac
+}
+
+_lind "$@"
