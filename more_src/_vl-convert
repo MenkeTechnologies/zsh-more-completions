@@ -1,0 +1,339 @@
+#compdef vl-convert
+# ---------------------------------------------------------------------------
+# vl-convert — Vega/Vega-Lite specification converter: CLI for the
+#              VlConverter Rust library that compiles Vega-Lite JSON
+#              specs through a headless Deno V8 runtime + the canonical
+#              Vega-Lite TypeScript compiler + a server-side renderer
+#              (resvg / typst-svg2pdf / mozjpeg-rs / image-rs PNG
+#              encoder) into Vega JSON / SVG / PNG / JPEG / PDF /
+#              standalone HTML / sharing URL (Rust, 155★)
+#
+# upstream: https://github.com/vega/vl-convert
+# author : Jon Mease (jonmmease — formerly Plotly Dash maintainer
+#          before joining the broader Vega project at the University
+#          of Washington's Interactive Data Lab); now maintained by
+#          the vega/* organization that also stewards Vega proper +
+#          Vega-Lite + Altair Python
+# license: BSD-3-Clause
+#
+# Source-direct completion: every subcommand below is verbatim from
+# the `Commands` enum in vl-convert/src/commands.rs on the vega/
+# vl-convert tip — clap `#[derive(Subcommand)]` variants parsed
+# exactly as declared, with the per-variant args (`-i/--input`,
+# `-o/--output`, `--vl-version`, `--theme`, `-c/--config`, `--scale`,
+# `--ppi`, `--bundle`, etc) preserved.  The CLI surface is large (24
+# subcommands) because vl-convert is the swiss-army-knife of the
+# Vega ecosystem — there's one subcommand per (input-format,
+# output-format) cross-product (Vega-Lite source × {Vega/SVG/PNG/
+# JPEG/PDF/URL/HTML/fonts/scenegraph}), plus convenience commands for
+# theme listing, OpenAPI dump, and the HTTP `serve` mode for use as
+# a microservice.
+#
+# Direct deps from vl-convert/Cargo.toml + vl-convert-rs/Cargo.toml
+# (selected):
+#   ttf-parser           ^0.x      ← canonical Rust TrueType / OpenType
+#                                     font parser library (this axis)
+#                                     — by Yevhenii Reizner
+#                                     (RazrFalcon/ttf-parser; also
+#                                     authored resvg, usvg, tiny-skia,
+#                                     and the broader RazrFalcon
+#                                     ecosystem of font + vector-
+#                                     graphics primitives).  Pure-Rust
+#                                     SAFE, zero-allocation, high-
+#                                     performance parser for the OFA-
+#                                     standardized tables of the True-
+#                                     Type / OpenType / WOFF / WOFF2
+#                                     font formats: cmap (char-to-
+#                                     glyph), glyf + CFF (glyph
+#                                     outlines), hmtx + vmtx (metrics),
+#                                     name (name records — font
+#                                     family / style / version), GPOS
+#                                     + GSUB (OpenType layout
+#                                     features — ligatures, kerning,
+#                                     contextual substitution), and
+#                                     the variable-font axes (fvar /
+#                                     gvar / HVAR).  Zero-allocation
+#                                     means it can be used in `no_std`
+#                                     environments — the parser
+#                                     borrows directly from the input
+#                                     `&[u8]` slice without copying.
+#                                     THE Rust answer to "parse a TTF
+#                                     and walk its tables" — used by
+#                                     typst (the typesetting system),
+#                                     servo/font-kit, linebender/resvg
+#                                     (SVG renderer), ruffle (Flash
+#                                     emulator's text rendering),
+#                                     plotters (chart library's
+#                                     custom font support), and the
+#                                     broader HarfBuzz-Rust bindings
+#                                     (harfbuzz/ttf-parser fork).
+#                                     vl-convert uses ttf-parser
+#                                     inside vl-convert-rs's font
+#                                     subsystem to inspect each
+#                                     loaded font file's metadata
+#                                     (family name, style, weight,
+#                                     supported scripts) before
+#                                     registering it with the server-
+#                                     side renderer; the same data
+#                                     drives the `vl-convert vl2fonts
+#                                     / vg2fonts` subcommands that
+#                                     emit a JSON report of every
+#                                     font + glyph used by a given
+#                                     Vega(-Lite) spec for offline-
+#                                     bundling workflows.
+#   vl-convert-rs                   (the parent crate that vl-convert
+#                                     wraps — actually performs the
+#                                     conversion via an embedded Deno
+#                                     runtime running the official
+#                                     Vega-Lite TypeScript compiler)
+#   deno_core + deno_runtime        (V8 JavaScript runtime — vl-
+#                                     convert spawns a sandboxed
+#                                     Deno isolate to run the Vega-
+#                                     Lite compiler because the
+#                                     compiler itself is canonical
+#                                     TypeScript and reimplementing
+#                                     it in Rust would diverge from
+#                                     upstream)
+#   resvg + usvg + tiny-skia        (RazrFalcon's SVG-rendering
+#                                     stack — vl-convert generates
+#                                     SVG output via the Vega-Lite
+#                                     compiler and then rasterizes
+#                                     to PNG/JPEG via resvg,
+#                                     producing pixel-perfect output
+#                                     that matches the Vega browser
+#                                     renderer)
+#   typst-svg2pdf                    (PDF output — converts the
+#                                     intermediate SVG to PDF using
+#                                     the typst-developed svg2pdf
+#                                     library for accurate font +
+#                                     vector rendering)
+#   mozjpeg-rs                       (JPEG encoder — Mozilla's
+#                                     mozjpeg fork of libjpeg-turbo,
+#                                     Rust-bound)
+#   image (image-rs)                 (PNG encoder + general image
+#                                     I/O)
+#   fontdb                           (cross-platform system font
+#                                     enumeration — finds installed
+#                                     TTFs in the OS font cache for
+#                                     font-family resolution)
+#   tokio + clap (with derive) + serde + anyhow
+#
+# vl-convert is the Vega ecosystem's headless converter — when you
+# need to render a Vega-Lite chart from a CI pipeline, a server
+# endpoint, or a notebook, you don't want to spin up a browser; you
+# want to invoke `vl-convert vl2png --input chart.vl.json --output
+# chart.png` and get the rendered output without Chrome/Chromium in
+# the loop.  The architectural trick: embed an actual V8 runtime
+# (Deno) and run the canonical Vega-Lite TypeScript compiler against
+# the input spec, then use Rust's SVG-rendering stack (resvg + usvg
+# + tiny-skia) to rasterize the resulting SVG to PNG / JPEG / PDF.
+# This avoids the maintenance burden of reimplementing the Vega-Lite
+# compiler in Rust (it's ~50K LOC of TypeScript and changes frequently)
+# while keeping the output deployment as a single static binary.
+# The `vl-convert serve` subcommand wraps the same conversion logic
+# in an HTTP server with an auto-generated OpenAPI surface so it can
+# be deployed as a microservice behind a reverse proxy.
+#
+# ============================================================================
+# === AXIS 193 OPENS — TrueType / OpenType font parser libraries ============
+# === Rust=248 OPENS at slot 1/0/0 ========================================
+# ============================================================================
+# Axis position: Rust=248 OPENS Axis 193 at slot 1/0/0 — the first of the
+# three lanes for the canonical TrueType / OpenType font parser library
+# trio.  The axis anchors on a single pure-host-language parser for the
+# OFA-standardized TTF/OTF format with cmap / glyf-CFF / hmtx-vmtx /
+# name / GPOS / GSUB / variable-font tables, and an API designed for
+# downstream consumers (renderers, shapers, subsetters):
+#
+#     Rust    : ttf-parser                  by Yevhenii Reizner
+#                                              (RazrFalcon/ttf-parser);
+#                                              pure-Rust SAFE zero-
+#                                              allocation parser.
+#                                              Powers typst, font-kit,
+#                                              resvg, ruffle's text,
+#                                              plotters.  Author also
+#                                              wrote resvg + usvg +
+#                                              tiny-skia, the broader
+#                                              RazrFalcon font +
+#                                              vector-graphics
+#                                              ecosystem.
+#                 → vl-convert (Jon Mease / vega org — Vega-Lite spec
+#                                converter; emits Vega/SVG/PNG/JPEG/
+#                                PDF/URL/HTML/fonts/scenegraph from
+#                                Vega-Lite JSON via embedded Deno
+#                                running canonical TS compiler +
+#                                Rust SVG-rendering stack; ttf-parser
+#                                inspects loaded font metadata for
+#                                font subsetting + vl2fonts / vg2fonts
+#                                JSON reports; 155★ BSD-3-Clause)
+#                 _vl-convert      [Rust=248 OPENS Axis 193, 1/0/0]
+#                                                  ↑↑↑ THIS FILE ↑↑↑
+#
+#     Go      : (next round — Go=248, slot 2/0/0)
+#                Canonical Go font parser: there's some split in this
+#                lane — `golang.org/x/image/font/sfnt` is the stdlib-
+#                ish (golang.org/x extension) reader, and `go-text/
+#                typesetting` (formerly benoitkugler/textlayout) is
+#                the modern alternative that handles HarfBuzz-equivalent
+#                shaping in pure Go.  [TBD next-round consumer]
+#
+#     JS/Node : (Axis 193 CLOSES at TS-Node=248, slot 1/1/1)
+#                Canonical JS font parser: `opentype.js` by Frederik
+#                De Bleser (opentypejs/opentype.js) — pure-JS parser
+#                + glyph rasterizer for OpenType / TrueType /
+#                PostScript / WOFF.  Used by font-foundry browser
+#                tools, font-editor web apps, and Node-side font
+#                inspection utilities.  Alternative: `fontkit` by
+#                foliojs (the same author who built pdfkit).
+#                [TBD closer consumer]
+#
+# Cycle position in current 3+1 micro-cycle:
+#   Rust=248     ← THIS FILE          (axis 193 OPENS, slot 1/0/0)
+#   Go=248       ← next round         (axis 193 continues, slot 2/0/0)
+#   TS-Node=248  ← round after        (axis 193 CLOSES at triple-248, 1/1/1)
+# ============================================================================
+
+_vl-convert() {
+    local context state state_descr line ret=1
+    typeset -A opt_args
+
+    _arguments -C \
+        '(- *)'{-h,--help}'[show CLI help]' \
+        '(- *)'{-V,--version}'[show CLI version]' \
+        '--log-level=[set log level (off / error / warn / info / debug / trace)]:level:(off error warn info debug trace)' \
+        '--log-filter=[advanced log filter expression (Rust tracing-subscriber EnvFilter syntax)]:filter:' \
+        '--log-format=[log output format]:format:(pretty json compact)' \
+        '--vlc-config=[path to a vlc-config TOML file overriding the embedded defaults (themes, locales, allowed base URLs, etc)]:path:_files -g "*.(toml|TOML)"' \
+        '--base-url=[base URL for resolving relative data sources in specs]:url:_urls' \
+        '*--allowed-base-urls=[allowed base URL pattern for spec data loading (whitelist; repeat for multiple)]:url:' \
+        '--auto-google-fonts=[enable automatic Google Fonts loading]:bool:(true false)' \
+        '--embed-local-fonts=[embed local system fonts in output SVG]:bool:(true false)' \
+        '--subset-fonts=[subset bundled fonts to only the glyphs used]:bool:(true false)' \
+        '--missing-fonts=[policy when a referenced font is missing]:policy:(error warn ignore)' \
+        '*--google-font=[Google font family to make available (repeat for multiple)]:family:' \
+        '--google-font-variant-threshold=[max number of weight/style variants to load per family]:n:' \
+        '--max-v8-heap-size-mb=[V8 isolate heap cap in MiB (0 = no cap)]:mb:' \
+        '--max-v8-execution-time-secs=[V8 execution timeout in seconds]:secs:' \
+        '--gc-after-conversion=[force V8 garbage collection after each conversion]:bool:(true false)' \
+        '*--vega-plugin=[Vega plugin URL to register (repeat for multiple)]:url:' \
+        '*--plugin-import-domains=[allowed domains for vega plugin imports (comma-separated; repeat for multiple)]:domains:' \
+        '--default-theme=[default Vega theme name to apply (use null to clear)]:theme:' \
+        '--default-format-locale=[d3-format locale name or .json file path]:locale:' \
+        '--default-time-format-locale=[d3-time-format locale name or .json file path]:locale:' \
+        '--themes=[named themes JSON file path]:file:_files -g "*.(json|JSON)"' \
+        '1: :->cmds' \
+        '*::arg:->args' && ret=0
+
+    case $state in
+        cmds)
+            local -a subcmds
+            subcmds=(
+                'vl2vg:convert a Vega-Lite specification to a Vega specification'
+                'vl2svg:convert a Vega-Lite specification to an SVG image'
+                'vl2png:convert a Vega-Lite specification to a PNG image'
+                'vl2jpeg:convert a Vega-Lite specification to a JPEG image'
+                'vl2pdf:convert a Vega-Lite specification to a PDF document'
+                'vl2url:convert a Vega-Lite specification to a vega.github.io-hosted URL'
+                'vl2html:convert a Vega-Lite specification to a standalone HTML file'
+                'vl2fonts:return JSON font metadata for a rendered Vega-Lite specification (used for offline-bundling workflows)'
+                'vl2sg:convert a Vega-Lite specification to a Vega scenegraph JSON'
+                'vg2svg:convert a Vega specification to an SVG image'
+                'vg2png:convert a Vega specification to a PNG image'
+                'vg2jpeg:convert a Vega specification to a JPEG image'
+                'vg2pdf:convert a Vega specification to a PDF document'
+                'vg2url:convert a Vega specification to a vega.github.io-hosted URL'
+                'vg2html:convert a Vega specification to a standalone HTML file'
+                'vg2fonts:return JSON font metadata for a rendered Vega specification'
+                'vg2sg:convert a Vega specification to a Vega scenegraph JSON'
+                'bundle-js:produce the JavaScript bundle used by Vega Embed integration'
+                'svg2png:convert an SVG image to a PNG image (via resvg + tiny-skia)'
+                'svg2jpeg:convert an SVG image to a JPEG image (via resvg + mozjpeg-rs)'
+                'svg2pdf:convert an SVG image to a PDF document (via typst-svg2pdf)'
+                'ls-themes:list available named Vega themes'
+                'config-path:print the default vlc-config file path'
+                'serve:run the HTTP conversion server (microservice mode with auto-generated OpenAPI spec)'
+                'help:show CLI help (or help for a specific subcommand)'
+            )
+            _describe -t commands 'vl-convert command' subcmds && ret=0
+            ;;
+        args)
+            local -a common_convert_opts=(
+                '(-i --input)'{-i,--input}'=[path to input file (reads stdin if omitted or set to -)]:file:_files'
+                '(-o --output)'{-o,--output}'=[path to output file (writes stdout if omitted or set to -)]:file:_files'
+                '(-l --vl-version)'{-l,--vl-version}'=[Vega-Lite version (5.8 / 5.14 / 5.15 / 5.16 / 5.17 / 5.20 / 5.21 / 6.1 / 6.4)]:version:(5.8 5.14 5.15 5.16 5.17 5.20 5.21 6.1 6.4)'
+                '--theme=[named theme (e.g. dark / quartz / vox / urbaninstitute)]:theme:'
+                '(-c --config)'{-c,--config}'=[path to Vega-Lite config JSON file]:file:_files -g "*.(json|JSON)"'
+            )
+            case $words[1] in
+                vl2vg)
+                    _arguments \
+                        $common_convert_opts \
+                        '(-p --pretty)'{-p,--pretty}'[pretty-print JSON in output]' && ret=0
+                    ;;
+                vl2svg|vg2svg)
+                    _arguments \
+                        $common_convert_opts \
+                        '--format-locale=[d3-format locale name or .json file]:locale:' \
+                        '--time-format-locale=[d3-time-format locale name or .json file]:locale:' \
+                        '--bundle[bundle fonts and images into a self-contained SVG]' && ret=0
+                    ;;
+                vl2png|vg2png)
+                    _arguments \
+                        $common_convert_opts \
+                        '--scale=[image scale factor (default 1.0)]:factor:' \
+                        '(-p --ppi)'{-p,--ppi}'=[pixels per inch (default 72.0)]:ppi:' && ret=0
+                    ;;
+                vl2jpeg|vg2jpeg)
+                    _arguments \
+                        $common_convert_opts \
+                        '--scale=[image scale factor]:factor:' \
+                        '--ppi=[pixels per inch]:ppi:' \
+                        '--quality=[JPEG quality 0-100 (default 90)]:quality:' && ret=0
+                    ;;
+                vl2pdf|vg2pdf)
+                    _arguments \
+                        $common_convert_opts \
+                        '--scale=[image scale factor]:factor:' \
+                        '--ppi=[pixels per inch]:ppi:' && ret=0
+                    ;;
+                vl2url|vg2url)
+                    _arguments $common_convert_opts && ret=0
+                    ;;
+                vl2html|vg2html)
+                    _arguments \
+                        $common_convert_opts \
+                        '--bundle[bundle Vega Embed JS into the HTML for offline use]' && ret=0
+                    ;;
+                vl2fonts|vg2fonts|vl2sg|vg2sg)
+                    _arguments $common_convert_opts && ret=0
+                    ;;
+                bundle-js)
+                    _arguments \
+                        '(-o --output)'{-o,--output}'=[output JS bundle path]:file:_files -g "*.js"' && ret=0
+                    ;;
+                svg2png|svg2jpeg|svg2pdf)
+                    _arguments \
+                        '(-i --input)'{-i,--input}'=[input SVG file]:file:_files -g "*.svg"' \
+                        '(-o --output)'{-o,--output}'=[output file]:file:_files' \
+                        '--scale=[scale factor]:factor:' \
+                        '--ppi=[pixels per inch]:ppi:' && ret=0
+                    ;;
+                serve)
+                    _arguments \
+                        '--host=[bind address]:host:_hosts' \
+                        '--port=[HTTP port]:port:' \
+                        '--openapi-dump=[dump OpenAPI spec for the configured surface and exit]:surface:(full minimal)' && ret=0
+                    ;;
+                help)
+                    local -a allsubs
+                    allsubs=(vl2vg vl2svg vl2png vl2jpeg vl2pdf vl2url vl2html vl2fonts vl2sg vg2svg vg2png vg2jpeg vg2pdf vg2url vg2html vg2fonts vg2sg bundle-js svg2png svg2jpeg svg2pdf ls-themes config-path serve)
+                    _describe -t commands 'subcommand for help' allsubs && ret=0
+                    ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_vl-convert "$@"
