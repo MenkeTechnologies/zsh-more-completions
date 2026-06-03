@@ -1,0 +1,320 @@
+#compdef sqler
+# ============================================================================
+# sqler - turn SQL queries into safe RESTful APIs +
+#          Redis Protocol (RESP) commands (Go,
+#          Apache-2.0)
+#
+# Author : Mohammed Al Ashaal (alash3al)
+# Upstream: https://github.com/alash3al/sqler
+#
+# `sqler` is a SQL-first API server: instead of
+# writing a REST handler, an ORM mapping, and a
+# DB query for each endpoint, you write a single
+# HCL config file mapping HTTP route names to SQL
+# macros (named multi-statement query blocks). The
+# server exposes each macro as both:
+#   - An HTTP REST endpoint (e.g. GET /macroName)
+#   - A Redis-Protocol command (e.g. `MACRONAME
+#     arg1 arg2` over a RESP connection)
+#
+# The server multiplexes a pool of database
+# connections (configurable via `--workers`) +
+# applies per-macro validation rules + authorization
+# hooks. Macros can call JavaScript hooks
+# (`include` directives) that execute via embedded
+# goja JS runtime, with full access to a `resty`-
+# backed HTTP client for outbound webhook calls
+# + a SQL client for follow-up queries.
+#
+# Supported database drivers (all imported as
+# blank imports in init.go):
+#   - MySQL (go-sql-driver/mysql)
+#   - PostgreSQL (lib/pq)
+#   - SQLite3 (mattn/go-sqlite3)
+#   - Microsoft SQL Server (denisenkom/go-mssqldb)
+#   - ClickHouse (ClickHouse/clickhouse-go)
+#   - SAP HANA (SAP/go-hdb)
+#
+# Use cases:
+#   - Rapid REST-API prototyping for SQL-backed
+#     services without writing Go handlers
+#   - Database-as-a-Service exposure for legacy
+#     SQL databases without rewriting them
+#   - Webhook orchestration via JS-hook macros
+#     (SQL query + outbound HTTP call in one
+#     atomic macro)
+#   - RESP-protocol gateway for monitoring tools
+#     that already speak Redis
+#
+# Usage:
+#   sqler [flags]
+#
+# Flags (Go stdlib `flag` declared in vars.go;
+# single-dash style):
+#   -driver <name>                 - SQL driver to
+#                                     use (default
+#                                     `mysql`;
+#                                     valid:
+#                                     mysql,
+#                                     postgres,
+#                                     sqlite3,
+#                                     mssql,
+#                                     clickhouse,
+#                                     hdb)
+#   -dsn <connection-string>       - DSN
+#                                     connection
+#                                     string for
+#                                     the selected
+#                                     driver
+#                                     (default
+#                                     `root:root@
+#                                     tcp(127.0.0.1)
+#                                     /test?
+#                                     multiStatements
+#                                     =true`)
+#   -config <path>                 - config file
+#                                     (or comma-
+#                                     separated
+#                                     glob patterns)
+#                                     containing
+#                                     endpoint
+#                                     macros
+#                                     (default
+#                                     `./config.
+#                                     example.hcl`)
+#   -rest <addr>                   - HTTP REST API
+#                                     listen
+#                                     address
+#                                     (default
+#                                     `:8025`)
+#   -resp <addr>                   - RESP (Redis
+#                                     Protocol)
+#                                     server
+#                                     listen
+#                                     address
+#                                     (default
+#                                     `:3678`)
+#   -workers <n>                   - max worker
+#                                     count (also
+#                                     sets
+#                                     GOMAXPROCS;
+#                                     default
+#                                     runtime.
+#                                     NumCPU())
+#   -sep <separator>               - multi-SQL
+#                                     query
+#                                     separator
+#                                     in macros
+#                                     (default
+#                                     `---\\--`)
+#   -h, -help                      - print help
+#
+# Example invocation:
+#   sqler -driver postgres \
+#         -dsn "postgres://user:pass@localhost/db?sslmode=disable" \
+#         -config "./apis/*.hcl" \
+#         -rest :8080 \
+#         -workers 8
+#
+# Example HCL macro:
+#   macro "users.list" {
+#     exec = "SELECT id, name FROM users LIMIT ?LIMIT?"
+#     methods = ["GET"]
+#     include = "./hooks/audit.js"
+#   }
+#
+# The go-resty/resty lane is built on
+# `github.com/go-resty/resty/v2 v2.1.0` (declared
+# verbatim at upstream go.mod HEAD as a direct dep,
+# imported as `"github.com/go-resty/resty/v2"` in
+# js.go line 8, then `client := resty.New()` at
+# line 48 - the resty HTTP client is exposed to
+# embedded JS macros for outbound HTTP calls), the
+# canonical Go HTTP client library by Jeevanandam
+# Madanagopal (jeevatkm) - github.com/go-resty/
+# resty.
+#
+# Jeevanandam Madanagopal's go-resty/resty is the
+# de-facto canonical Go HTTP client library
+# (alongside the bare net/http stdlib + the
+# higher-level alternatives like imroc/req +
+# valyala/fasthttp):
+#   - 10,000+ reverse-deps on pkg.go.dev
+#   - Method-chaining fluent API for request
+#     construction (axios-style ergonomics
+#     ported to Go)
+#   - Built on top of net/http (uses the
+#     standard library's HTTP transport
+#     internally)
+#   - JSON + XML + form-data + multipart
+#     serialization helpers
+#   - Built-in retry + circuit-breaker support
+#   - Connection pooling + transport
+#     configuration
+#   - Authentication helpers (basic auth,
+#     bearer token, digest, OAuth2)
+#   - Request/response middleware chain
+#   - File upload + download with progress
+#     callbacks
+#   - Cookie jar + automatic redirect handling
+#   - HTTP/2 support out-of-the-box (via
+#     net/http transport)
+#
+# resty's distinguishing positioning vs the
+# net/http stdlib:
+#   - net/http: low-level; you write each request
+#     by hand with http.Client + http.Request +
+#     http.Response juggling
+#   - resty: high-level; method chaining +
+#     auto-JSON + pluggable middleware + retry
+#     logic; trades verbosity for ergonomic
+#     conciseness
+#   - imroc/req: alternative high-level Go HTTP
+#     client with slightly different API
+#     conventions
+#   - valyala/fasthttp: lower-level + faster
+#     alternative to net/http (incompatible API);
+#     not a higher-level wrapper
+#
+# Jeevanandam Madanagopal's broader Go ecosystem
+# footprint:
+#   - go-resty/resty (canonical Go HTTP client;
+#     THIS AXIS)
+#   - go-aah/aah (the aah web framework,
+#     superseded by gin/echo in popularity but
+#     historically significant)
+#   - jeevatkm/go-model (struct mapping +
+#     conversion library)
+#   - jeevatkm/sslmate-go (SSL certificate
+#     management bindings)
+#
+# Madanagopal's role differs from the Klaus Post
+# (compress + reedsolomon + ...) and Niemeyer
+# (yaml.v3 + gopkg.in) Go cohort - his canonical
+# position is in *HTTP-client ergonomics* rather
+# than systems libraries or serialization.
+#
+# sqler uses resty in js.go to provide outbound
+# HTTP access to JavaScript macros:
+#   ```go
+#   import "github.com/go-resty/resty/v2"
+#
+#   func newJSContext() *goja.Runtime {
+#       vm := goja.New()
+#       client := resty.New()
+#       vm.Set("http", client) // exposes resty
+#       // to JS macros
+#       return vm
+#   }
+#   ```
+# JavaScript macros can then issue HTTP requests
+# via `http.R().SetBody(payload).Post(url)` from
+# within the macro, enabling integrations like
+# "after this UPDATE, send a webhook to
+# slack.example.com".
+#
+# ----------------------------------------------------------------------------
+# AXIS 265 :: HTTP client libraries (high-level
+#              ergonomic HTTP/HTTPS request
+#              construction + response handling)
+# Round 1494 :: Go slot 2 of 4 :: continues Axis 265
+#
+# Cross-language canonical library family for this axis:
+#   Rust    : seanmonstar/reqwest        [R1493 _semtools]
+#             (Sean McArthur; wraps
+#              hyper)
+#   Go      : go-resty/resty             [R1494 THIS FILE]
+#             (Jeevanandam Madanagopal;
+#              wraps net/http with
+#              fluent API)
+#   TS/Node : axios/axios                [R1495 closing]
+#             (Matt Zabriskie; the
+#              most-installed HTTP client
+#              in any ecosystem)
+#
+# go-resty/resty is structurally interesting in
+# this axis because it's the *ergonomic-wrapper-
+# over-stdlib* canonical:
+#   - The Go net/http stdlib already has a
+#     complete HTTP client implementation
+#   - resty doesn't replace net/http - it wraps
+#     it with axios-style method chaining
+#   - This is the *thin-ergonomic-layer* pattern
+#     where the canonical library trades 20% of
+#     net/http's flexibility for 80% of typical
+#     use cases' ergonomic ease
+#
+# The three lanes form a clean spectrum of HTTP-
+# client positioning:
+#
+#   - Rust (reqwest): wraps hyper; provides
+#     high-level abstractions over McArthur's
+#     own lower-level primitives; vertically-
+#     integrated stack (same author throughout)
+#   - Go (go-resty): wraps net/http stdlib;
+#     provides ergonomic layer over the language's
+#     bundled HTTP implementation
+#   - Node (axios): isomorphic (works in both
+#     browser + Node); the most-popular HTTP
+#     client in *any* ecosystem; 50,000,000+
+#     weekly npm downloads
+#
+# Cross-language interop at the HTTP wire-protocol
+# level - all three libraries produce identical
+# HTTP/1.1 + HTTP/2 requests on the wire that the
+# same server can serve.
+#
+# Use-case spectrum across the three lanes (so
+# far):
+#   - semtools (Rust, reqwest): LlamaIndex
+#     semantic-search CLI; reqwest for multipart
+#     uploads to LlamaParse REST API
+#   - sqler (Go, go-resty): SQL-to-REST API
+#     server; resty exposed to embedded JS macros
+#     for outbound webhook integration
+#
+# Notable that go-resty is in the *protocol-spec-
+# bound canonical* axis (like axios + reqwest)
+# rather than the fragmented-by-specialization
+# axis (like SVG) because HTTP's spec is well-
+# defined enough that ergonomic patterns
+# (method chaining + JSON + middleware) are
+# universal across implementations.
+#
+# Multi-axis canonical-Go author cohort (now
+# spanning ~5 distinct individuals):
+#   - Andrew Gerrand + the Go team (stdlib)
+#   - Russ Cox (Go modules + crypto)
+#   - Gustavo Niemeyer (yaml.v3 + gopkg.in
+#     infrastructure)
+#   - Klaus Post (compress + reedsolomon +
+#     cpuid + asmfmt)
+#   - Sergey Kamardin (gobwas/glob + gobwas/ws +
+#     gobwas/httphead + gobwas/pool)
+#   - Anthony Starks (ajstarks/svgo + deck +
+#     dchart + openvg + gensvg)
+#   - Jeevanandam Madanagopal (go-resty +
+#     go-aah + go-model + sslmate-go, THIS AXIS)
+#
+# The Go canonical-author cohort skews toward
+# *single-vertical mastery* (each author dominates
+# one specialization niche) rather than
+# horizontal-breadth like Tolnay in Rust.
+# ============================================================================
+
+_sqler() {
+    local context state state_descr line
+    typeset -A opt_args
+
+    _arguments -s -S \
+        '-driver=[SQL driver]:driver:(mysql postgres sqlite3 mssql clickhouse hdb)' \
+        '-dsn=[DSN connection string]:dsn:' \
+        '-config=[config file (or glob patterns)]:file:_files -g "*.hcl"' \
+        '-rest=[HTTP REST API listen address]:addr:' \
+        '-resp=[RESP (Redis Protocol) listen address]:addr:' \
+        '-workers=[max worker count (also GOMAXPROCS)]:n:' \
+        '-sep=[multi-SQL query separator in macros]:sep:' \
+        '(- *)'{-h,-help}'[print help]'
+}
+
+_sqler "$@"
