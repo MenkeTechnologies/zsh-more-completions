@@ -1,0 +1,140 @@
+#compdef tokf
+# ============================================================================
+# tokf - Token filter; compresses command output for LLM context (Rust, MIT)
+#
+# Author : Michal Pecan (mpecan)
+# Upstream: https://github.com/mpecan/tokf
+# crates : tokf
+#
+# tokf is a TOML-config-driven CLI that wraps an arbitrary shell
+# command, captures its output, applies user-defined filter
+# pipelines (drop noise lines, strip ANSI, dedupe stack traces,
+# replace repeated patterns with summary placeholders), and emits
+# the compressed result before forwarding to an LLM (Claude /
+# GPT / etc) via stdin. Designed to fit large noisy build / test /
+# CI output into the LLM context window without losing the
+# diagnostic signal. The configuration is per-tool: filters
+# matching "cargo test", "pytest", "go test", "npm test", etc.
+# are bundled in a built-in stdlib + extensible via user TOML.
+#
+# Subcommands cover: run / check / apply / ls / rewrite / which /
+# show / eject / hook / skill / cache / config / gain / history /
+# raw / verify / info / issue / auth / remote / publish / search /
+# sync / telemetry / doctor / discover / err / test / summary /
+# setup / install / completions (33+ total).
+#
+# The TOML lane is built on `toml = "1.0"` (declared verbatim at
+# upstream `crates/tokf-cli/Cargo.toml` HEAD), the canonical Rust
+# TOML library by Alex Crichton + community (toml-rs org,
+# github.com/toml-rs/toml, 1000+ stars). The library is the
+# upstream reference TOML implementation in Rust: TOML 1.0.0 spec
+# coverage end-to-end, serde integration via `toml::from_str<T>` /
+# `toml::to_string(&T)`, the typed `toml::Value` AST with
+# Inline-table + Array-of-tables + Date-time variants, and a
+# strict spec-conformance test suite tracked against the
+# upstream `toml-test` corpus.
+#
+# ----------------------------------------------------------------------------
+# AXIS 211 :: TOML 1.0.0 PARSING + EMISSION
+# Round 1331 :: Rust slot 1 of 4 :: OPENS Axis 211
+#
+# Cross-language canonical library family for this axis (proposed):
+#   Rust    : toml-rs/toml                      - upstream reference parser
+#   Go      : BurntSushi/toml (or pelletier/go-toml/v2) - canonical Go parsers
+#   TS/Node : iarna/iarna-toml (@iarna/toml)    - canonical Node parser
+#
+# All three target the TOML 1.0.0 spec (Tom Preston-Werner, 2021)
+# with the supporting RFC-style sub-specs (dotted keys, inline
+# tables, arrays of tables, the four datetime variants). TOML is
+# now the de-facto Rust/Cargo configuration format, the de-facto
+# Python (pyproject.toml) packaging format since PEP 518, and a
+# common Go application-config format (alongside YAML).
+#
+# tokf is the Rust opener and exercises the typed-serde path:
+# load per-tool filter configs from user TOML, validate against
+# a serde-derived schema, and emit / round-trip user-edited
+# configs back to disk. The "config-driven CLI that ingests
+# TOML" pattern is the dominant downstream of `toml-rs/toml` -
+# rustup, cargo, every Rust framework's user config, etc.
+# ============================================================================
+
+_tokf() {
+    local context state state_descr line
+    typeset -A opt_args
+    local curcontext="$curcontext" ret=1
+
+    _arguments -C \
+        '--timing[show how long filtering took]' \
+        '--no-filter[skip filtering; pass output through raw]' \
+        '(-v --verbose)'{-v,--verbose}'[show filter resolution details]' \
+        '--no-cache[bypass the binary config cache for this run]' \
+        '--no-mask-exit-code[restore real exit-code propagation]' \
+        '--preserve-color[preserve ANSI color codes in filtered output]' \
+        '--otel-export[export metrics via OpenTelemetry OTLP]' \
+        '(- *)'{-h,--help}'[print help]' \
+        '(- *)'{-V,--version}'[print version]' \
+        '1: :_tokf_cmds' \
+        '*::arg:->args' \
+    && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                run)         _arguments '--baseline-pipe[pipe command for fair accounting]:pipe:' '--prefer-less[use whichever output is smaller]' '*:command:_command_names -e' ;;
+                completions) _arguments '1:shell:(bash zsh fish powershell elvish nushell)' ;;
+                check|apply|ls|rewrite|which|show|eject|raw|verify|info|err|test|summary|doctor|discover) _arguments '(- *)'{-h,--help}'[help]' '*::arg:->_default' ;;
+                hook|skill|cache|config|gain|history|issue|auth|remote|publish|search|sync|telemetry|setup|install) _tokf_simple_sub ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_tokf_cmds() {
+    local -a cmds
+    cmds=(
+        'run:Run a command and filter its output'
+        'check:Validate the active config (and per-tool filters)'
+        'apply:Apply a config / preset'
+        'ls:List installed filters + presets'
+        'rewrite:Show how a shell line would be rewritten by tokf'
+        'which:Show which filter pipeline matches a command'
+        'show:Show the resolved config for a tool'
+        'eject:Eject a stdlib filter into a user-editable copy'
+        'hook:Manage shell hooks'
+        'skill:Manage Claude / LLM skills published from tokf'
+        'cache:Manage the binary config cache'
+        'config:Manage the user config'
+        'gain:Compute token-gain reports'
+        'history:Browse filter / command history'
+        'raw:Run command without filtering (debug shortcut)'
+        'verify:Verify installation integrity'
+        'info:Show tokf install info'
+        'issue:Report an issue or wrap a bug-report bundle'
+        'auth:Manage auth tokens'
+        'remote:Manage remote registries / sync targets'
+        'publish:Publish a user filter to a remote registry'
+        'search:Search remote filter registries'
+        'sync:Sync local filters with a remote registry'
+        'telemetry:Manage opt-in telemetry'
+        'doctor:Diagnose installation issues'
+        'discover:Discover candidate filters for the current command'
+        'err:Inspect last error / replay last run'
+        'test:Run the built-in self-tests'
+        'summary:Print a per-tool token-saved summary'
+        'setup:Initial setup wizard'
+        'install:Install a filter from a remote source'
+        'completions:Generate shell completion scripts'
+    )
+    _describe -t commands 'tokf command' cmds
+}
+
+_tokf_simple_sub() {
+    _arguments \
+        '(- *)'{-h,--help}'[help]' \
+        '1:subcommand:(list show add remove update enable disable login logout status)' \
+        '*::arg:->_default'
+}
+
+_tokf "$@"
