@@ -1,0 +1,172 @@
+#compdef addon-controller
+# ============================================================================
+# addon-controller - Project Sveltos Kubernetes add-on controller
+#                     (Go, Apache-2.0)
+#
+# Author : Project Sveltos team
+# Upstream: https://github.com/projectsveltos/addon-controller
+#
+# `addon-controller` is the Project Sveltos Kubernetes
+# controller that programmatically deploys Helm charts +
+# Kustomize overlays + raw YAML manifests to fleets of
+# Kubernetes clusters discovered via Cluster API,
+# matching annotations, or a custom selector. The
+# differentiator vs ArgoCD / Flux is the Sveltos
+# *ClusterProfile* object - a CRD that declaratively
+# expresses "deploy these addons to every cluster
+# matching this label selector," automatically resolving
+# CAPI cluster lifecycle events.
+#
+# Architecture: controller-runtime manager around the
+# ClusterProfile CRD + Cluster API integration; per-
+# managed-cluster drift-detection-manager runs as a
+# lightweight side-car; embedded gopher-lua interpreter
+# for the "Lua methods" CRD extension where operators
+# can attach Lua scripts to ClusterProfile templates to
+# transform per-cluster values at deploy time.
+#
+# Flags (pflag - K8s controller-runtime style):
+#   --report-mode <int>          - how ReportSummaries are
+#                                  collected
+#   --agent-in-mgmt-cluster      - drift-detection-manager
+#                                  runs in mgmt cluster
+#   --disable-secret-caching     - skip caching secrets +
+#                                  configmaps
+#   --disable-telemetry          - opt out of telemetry
+#   --diagnostics-address <addr> - metrics + pprof bind addr
+#                                  (default :8443; HTTPS+auth)
+#   --insecure-diagnostics       - serve diagnostics over HTTP
+#                                  without auth (also exposes
+#                                  pprof on the same port)
+#   --shard-key <key>            - only reconcile clusters
+#                                  with matching shard annotation
+#   --capi-onboard-annotation <ann>
+#                                - only manage CAPI clusters
+#                                  with this exact annotation
+#   --worker-number <n>          - workers for CAPI feature
+#                                  deployment (default 20)
+#   --concurrent-reconciles <n>  - max concurrent reconciles
+#                                  (default 10)
+#   --version <str>              - current sveltos version tag
+#   --health-addr <addr>         - health endpoint bind addr
+#                                  (default :9440)
+#   --profiler-address <addr>    - pprof profiler bind addr
+#                                  (e.g. localhost:6060)
+#   --drift-detection-config <cm>- ConfigMap with
+#                                  drift-detection-manager config
+#   --lua-methods <cm>           - ConfigMap with Lua utilities
+#                                  loaded into the embedded VM
+#   --registry <reg>             - drift-detection image
+#                                  registry (default docker.io/)
+#   --kube-api-qps <n>           - K8s API QPS (default 20)
+#   --kube-api-burst <n>         - K8s API burst (default 60)
+#   --webhook-port <n>           - webhook server port
+#                                  (default 9443)
+#   --sync-period <dur>          - resource reconcile interval
+#                                  (default 10m)
+#   --conflict-retry-time <dur>  - ClusterProfile conflict
+#                                  retry interval (default 60s)
+#   --health-error-retry-time <dur>
+#                                - health-check failure retry
+#                                  interval (default 60s)
+#   --auto-deploy-dependencies   - automatically deploy
+#                                  prerequisite ClusterProfiles
+#   --metrics-bind-address <addr>- metrics listener (CR default)
+#   --leader-elect               - enable leader election (CR)
+#   --kubeconfig <path>          - kubeconfig path
+#                                  (controller-runtime default)
+#   --zap-log-level <level>      - log level (info, debug, error)
+#   --zap-encoder <enc>          - log encoder (json | console)
+#   --zap-time-encoding <enc>    - log timestamp encoding
+#
+# Environment:
+#   NAMESPACE                    - REQUIRED: Sveltos installation
+#                                  namespace
+#
+# The gopher-lua lane is built on `github.com/yuin/gopher-
+# lua v1.1.2` (declared as a direct dep at upstream go.mod
+# HEAD and imported from cmd/main.go + controllers/
+# template_instantiation.go + lua_validation.go etc.), the
+# canonical pure-Go Lua 5.1 implementation by Yusuke
+# Inuzuka (github.com/yuin/gopher-lua, 5800+ stars).
+# gopher-lua is the uncontested Go Lua implementation -
+# pure-Go reimplementation of the Lua 5.1 bytecode
+# interpreter + standard library, no CGo, no liblua
+# dependency. The pure-Go choice mirrors the wazero /
+# sugarme/tokenizer / Go-canonical pattern - preserve Go's
+# cross-compile story over performance parity with the
+# upstream C implementation. addon-controller uses it to
+# evaluate per-ClusterProfile Lua transformation scripts:
+# the operator attaches a `--lua-methods` ConfigMap that
+# loads helper utilities into the embedded VM, then
+# ClusterProfile templates reference Lua functions to
+# transform per-cluster Helm values or Kustomize patches
+# at deploy time.
+#
+# ----------------------------------------------------------------------------
+# AXIS 239 :: Embedded Lua VM (host-language bindings to Lua scripting)
+# Round 1416 :: Go slot 2 of 4 :: continues Axis 239
+#
+# Cross-language canonical library family for this axis:
+#   Rust    : mlua-rs/mlua                 [R1415 _maki]
+#   Go      : yuin/gopher-lua              [R1416 THIS FILE]
+#   TS/Node : ceifa/wasmoon                [R1417 closing]
+#
+# gopher-lua is structurally interesting in this axis:
+# unlike the Rust slot (mlua, which FFI-binds to upstream
+# PUC-Rio liblua) and the Node slot (wasmoon, which loads
+# liblua via Wasm), gopher-lua is the *only* pure-host-
+# language Lua implementation in the trio. The Go-language
+# preference for CGo-free dependencies is decisive - the
+# Go ecosystem has converged on gopher-lua despite the
+# performance gap vs LuaJIT-bound alternatives (the gap
+# is ~10x slower for compute-heavy Lua, but irrelevant
+# for the typical "embed a small config-script DSL" use
+# case Go programs need).
+#
+# Cross-language interop happens at the Lua source level:
+# a .lua script using only the Lua 5.1 standard library
+# loads identically into mlua, gopher-lua, and wasmoon.
+# Host-exposed Rust / Go / Node functions are per-lane
+# (each defines its own host-binding API), so portability
+# is *at the Lua source*, not at the host-extension layer.
+# ============================================================================
+
+_addon-controller() {
+    local context state state_descr line
+    typeset -A opt_args
+
+    _arguments -s -S \
+        '--report-mode[ReportSummary collection mode]:n:' \
+        '--agent-in-mgmt-cluster[drift-detection-manager runs in mgmt cluster]' \
+        '--disable-secret-caching[disable caching of secrets/configmaps]' \
+        '--disable-telemetry[disable telemetry reporting]' \
+        '--diagnostics-address[diagnostics bind address (default :8443)]:addr:' \
+        '--insecure-diagnostics[serve diagnostics over HTTP without auth]' \
+        '--shard-key[only reconcile clusters with matching shard annotation]:key:' \
+        '--capi-onboard-annotation[only manage CAPI clusters with this annotation]:ann:' \
+        '--worker-number[workers for CAPI feature deployment]:n:' \
+        '--concurrent-reconciles[max concurrent reconciles]:n:' \
+        '--version[current sveltos version]:tag:' \
+        '--health-addr[health endpoint bind address (default :9440)]:addr:' \
+        '--profiler-address[pprof profiler bind address]:addr:' \
+        '--drift-detection-config[ConfigMap with drift-detection-manager config]:name:' \
+        '--lua-methods[ConfigMap with Lua utilities to load into the VM]:name:' \
+        '--registry[container registry for drift-detection images]:registry:' \
+        '--kube-api-qps[Kubernetes API QPS (default 20)]:n:' \
+        '--kube-api-burst[Kubernetes API burst (default 60)]:n:' \
+        '--webhook-port[webhook server port (default 9443)]:port:' \
+        '--sync-period[resource reconcile interval (default 10m)]:duration:' \
+        '--conflict-retry-time[ClusterProfile conflict retry interval (default 60s)]:duration:' \
+        '--health-error-retry-time[health-check failure retry interval (default 60s)]:duration:' \
+        '--auto-deploy-dependencies[automatically deploy prerequisite ClusterProfiles]' \
+        '--metrics-bind-address[metrics listener address]:addr:' \
+        '--leader-elect[enable leader election]' \
+        '--kubeconfig[kubeconfig path]:file:_files' \
+        '--zap-log-level[log level]:level:(info debug error warn)' \
+        '--zap-encoder[log encoder]:enc:(json console)' \
+        '--zap-time-encoding[log timestamp encoding]:enc:(epoch iso8601 rfc3339 rfc3339nano)' \
+        '(- *)'{-h,--help}'[print help]'
+}
+
+_addon-controller "$@"
