@@ -1,0 +1,169 @@
+#compdef muskel
+# ============================================================================
+# muskel - MuSkeL musical sketch language (Go, GPL-2.0)
+#
+# Author : Marc-Andre Lureau (metakeule / gomidi)
+# Upstream: https://gitlab.com/gomidi/muskel  (mirror: github.com/gomidi/muskel)
+#
+# muskel is the reference compiler + player + server for MuSkeL,
+# a tracker-style text-based musical sketch language designed for
+# rapid composition. A .mskl source file describes tracks, columns,
+# patterns, and timing in a human-editable plain-text grid; muskel
+# compiles that to SMF (Standard MIDI File), plays it live via a
+# selected MIDI output port + external softsynth (fluidsynth /
+# timidity / audacious), or hosts a WebSocket server for live coding.
+#
+# Subcommands:
+#   smf      - compile a .mskl file to .mid (SMF)
+#   smfjson  - SMF / JSON round-trip
+#   play     - compile + play the file through a MIDI out port
+#   server   - host a live-coding WebSocket server
+#   client   - speak to a running muskel server
+#   ports    - list available MIDI in/out ports
+#   template - render a starter .mskl scaffold
+#   dirs     - print muskel's config + data directories
+#   inspect  - dump parsed AST + items + patterns for debugging
+#
+# The MIDI lane is built on `gitlab.com/gomidi/midi/v2 v2.3.23`
+# (declared verbatim at upstream go.mod HEAD), the canonical Go
+# MIDI library by Marc-Andre Lureau (gomidi org). gomidi/midi
+# unifies live-port I/O (`v2/drivers/rtmididrv` wrapping the
+# RtMidi C library) and SMF file I/O (`v2/smf` reader/writer) in
+# a single import path, with a typed event taxonomy covering the
+# full Channel/SysEx/Meta event surface of the SMF spec. This is
+# the structural differentiator vs the Rust + JS lanes which
+# typically split file I/O and live I/O across separate packages.
+#
+# ----------------------------------------------------------------------------
+# AXIS 204 :: MIDI / STANDARD MIDI FILE (SMF 0/1/2)
+# Round 1311 :: Go slot 2 of 4 :: continues Axis 204
+#
+# Cross-language canonical library family for this axis:
+#   Rust    : kovaxis/midly                  [R1310 _miditui]
+#   Go      : gomidi/midi (v2)               [R1311 THIS FILE]
+#   TS/Node : Tonejs/Midi                    [R1312 closing]
+#
+# muskel pairs cleanly with miditui (Rust opener) - both are
+# text/terminal-first MIDI composition tools, distinct from the
+# typical "GUI DAW" workflow that dominates the MIDI ecosystem.
+# This is a deliberate axis convergence on the text-first
+# composition workflow (musician-as-programmer) rather than the
+# piano-roll-GUI workflow. gomidi/midi v2 is also the canonical
+# Go pick for any program that needs MIDI: live-coding
+# environments, ML-music research notebooks, hardware controllers,
+# auto-accompaniment tools.
+# ============================================================================
+
+_muskel() {
+    local context state state_descr line
+    typeset -A opt_args
+    local curcontext="$curcontext" ret=1
+
+    _arguments -C \
+        '(- *)'{-h,--help}'[print help]' \
+        '(- *)--version[print version]' \
+        '1: :_muskel_cmds' \
+        '*::arg:->args' \
+    && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                smf)      _muskel_smf ;;
+                play)     _muskel_play ;;
+                server)   _muskel_server ;;
+                client)   _muskel_client ;;
+                template) _muskel_template ;;
+                smfjson)  _muskel_smfjson ;;
+                ports|dirs|inspect|help) _arguments '(- *)'{-h,--help}'[help]' ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_muskel_cmds() {
+    local -a cmds
+    cmds=(
+        'smf:Compile a .mskl source to .mid (SMF)'
+        'smfjson:SMF and JSON conversion round-trip'
+        'play:Compile and play the .mskl file via a MIDI port'
+        'server:Host a live-coding WebSocket server'
+        'client:Connect to a running muskel server'
+        'ports:List available MIDI input/output ports'
+        'template:Render a starter .mskl scaffold'
+        'dirs:Print muskel config and data directories'
+        'inspect:Dump parsed AST/items/patterns for debugging'
+    )
+    _describe -t commands 'muskel command' cmds
+}
+
+_muskel_common() {
+    _arguments \
+        '--in[input .mskl file]:file:_files -g "*.mskl"' \
+        '--sketch[name of sketch within the .mskl file]:sketch:' \
+        '--flow[enable flow mode]' \
+        '--solo[solo a single track by index]:index:' \
+        '--cutout[cut-out mode]' \
+        '*--params[JSON params array]:params:' \
+        '--pattern[pattern to use]:pattern:' \
+        '--csv-separator[CSV separator character]:char:' \
+        '--watch[watch the input file for changes]' \
+        '--watch-dir[watch the input directory for changes]' \
+        '--sleeping-time[sleep interval ms when watching]:ms:' \
+        '--unroll-file[unroll the .mskl into this file]:file:_files' \
+        '--debug[enable debug logging]' \
+        '--current[use the current .mskl in the working dir]' \
+        '--keep-empty-lines[preserve empty lines in output]' \
+        '(- *)'{-h,--help}'[help]'
+}
+
+_muskel_smf() {
+    _muskel_common
+    _arguments -s -S \
+        '--resolution-ticks[SMF resolution (ticks per quarter note)]:ticks:' \
+        '--export-image[export track image]' \
+        '--export-score[export musical score]' \
+        '--pdf[output PDF file]:file:_files -g "*.pdf"' \
+        '--open[open the result after writing]' \
+        '--out[output .mid file]:file:_files -g "*.mid"'
+}
+
+_muskel_play() {
+    _muskel_common
+    _arguments -s -S \
+        '--out-port[MIDI output port number]:port:' \
+        '--wave-file[write wave output to this file]:file:_files -g "*.wav"'
+}
+
+_muskel_server() {
+    _arguments -s -S \
+        '--address[server bind address (host:port)]:address:' \
+        '--play-program[external play program (fluidsynth, timidity, audacious, auto)]:program:(fluidsynth timidity audacious auto)' \
+        '(- *)'{-h,--help}'[help]'
+}
+
+_muskel_client() {
+    _arguments -s -S \
+        '--server-address[running muskel server address]:address:' \
+        '--toggle[toggle playback]' \
+        '--play[play through the server]' \
+        '--convert[ask server to convert]' \
+        '(- *)'{-h,--help}'[help]'
+}
+
+_muskel_template() {
+    _arguments -s -S \
+        '--file[output template file]:file:_files -g "*.mskl"' \
+        '(- *)'{-h,--help}'[help]'
+}
+
+_muskel_smfjson() {
+    _arguments -s -S \
+        '--file[input file (.mid or .json)]:file:_files -g "*.(mid|json)"' \
+        '--out[output file]:file:_files' \
+        '(- *)'{-h,--help}'[help]'
+}
+
+_muskel "$@"
