@@ -1,0 +1,125 @@
+#compdef javy
+# ============================================================================
+# javy - JavaScript to WebAssembly toolchain (Rust, Apache-2.0)
+#
+# Author : Bytecode Alliance
+# Upstream: https://github.com/bytecodealliance/javy
+#
+# javy compiles a JavaScript source file into a WebAssembly module
+# that embeds the QuickJS engine plus the original JS source code,
+# producing a self-contained WASM binary that can run anywhere
+# wasmtime / wasmer / wasm runtimes are available. Used heavily in
+# Shopify Functions, Fastly Compute@Edge, and other serverless
+# JS-on-WASM platforms.
+#
+# Subcommands:
+#   build         - compile JS -> WASM (main use case)
+#   emit-plugin   - emit the plugin binary required for dynamic linking
+#   init-plugin   - pre-initialize a plugin for deterministic output
+#   profile       - JS-on-WASM profiler (feature-gated, --features profiler)
+#
+# The Brotli compression lane is built on `brotli = "8.0.2"`
+# (declared verbatim at upstream Cargo.toml HEAD), the canonical
+# Rust Brotli implementation by Daniel Reiter Horn et al
+# (dropbox/rust-brotli, 920+ stars on github.com/dropbox/rust-brotli).
+# javy uses it directly in `crates/codegen/src/js.rs`:
+#
+#     use brotli::enc::{self, BrotliEncoderParams};
+#     ...
+#     let params = BrotliEncoderParams { ... };
+#     enc::BrotliCompress(&mut input, &mut output, &params);
+#
+# This compresses the JS source code before embedding it into the
+# WASM custom section, so the final WASM artifact is significantly
+# smaller (typical 3-5x compression for minified JS). At runtime
+# the embedded JS is decompressed inside the WASM module via the
+# same brotli library compiled into the QuickJS-wrapped plugin.
+#
+# dropbox/rust-brotli implements the full RFC 7932 (the Brotli
+# Compressed Data Format spec, IETF 2016) in pure Rust: streaming
+# encoder + decoder, all 11 quality levels, custom dictionary
+# support, no_std support (the "optionally avoids the stdlib"
+# part of its description), and a CFFI shim for C callers.
+#
+# ----------------------------------------------------------------------------
+# AXIS 214 :: BROTLI COMPRESSION (RFC 7932)
+# Round 1340 :: Rust slot 1 of 4 :: OPENS Axis 214
+#
+# Cross-language canonical library family for this axis (proposed):
+#   Rust    : dropbox/rust-brotli            - pure-Rust + optional no_std
+#   Go      : andybalholm/brotli             - pure-Go Brotli encoder + decoder
+#   TS/Node : Node stdlib zlib brotli APIs   - built into Node 12+
+#
+# All three target the same RFC 7932 wire format (Google, 2015,
+# IETF 7932 2016). The structural shape differs: Rust + Go have
+# community-maintained pure-language ports; Node lane has the
+# unique distinction of having Brotli in the stdlib since v12 -
+# no external dependency needed for the wire format. brotli is
+# the modern default content-encoding for HTTP responses
+# (alongside gzip), supported by all major browsers since
+# 2017, and is the load-bearing compressor for HTTP/2 + HTTP/3
+# server stacks across all three lanes.
+# ============================================================================
+
+_javy() {
+    local context state state_descr line
+    typeset -A opt_args
+    local curcontext="$curcontext" ret=1
+
+    _arguments -C \
+        '(- *)'{-h,--help}'[print help]' \
+        '(- *)'{-V,--version}'[print version]' \
+        '1: :_javy_cmds' \
+        '*::arg:->args' \
+    && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                build)        _javy_build ;;
+                emit-plugin)  _javy_emit_plugin ;;
+                init-plugin)  _javy_init_plugin ;;
+                profile)      _arguments '(- *)'{-h,--help}'[help]' '1:subcommand:(record report)' '*::arg:->_default' ;;
+                help)         _javy_cmds ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_javy_cmds() {
+    local -a cmds
+    cmds=(
+        'build:Compile a JavaScript source file to WebAssembly'
+        'emit-plugin:Emit the plugin binary for dynamically-linked modules'
+        'init-plugin:Initialize a plugin binary (pre-init for determinism)'
+        'profile:Profile a Javy-generated WASM module (requires --features profiler)'
+    )
+    _describe -t commands 'javy command' cmds
+}
+
+_javy_build() {
+    _arguments -s -S \
+        '-o[output WASM path (default index.wasm)]:file:_files -g "*.wasm"' \
+        '*'{-C,--codegen}'[codegen option (use "-C help" for list)]:codegen option:' \
+        '*'{-J,--javascript}'[JS runtime option (use "-J help" for list)]:js option:' \
+        '(- *)'{-h,--help}'[help]' \
+        '1:JS input file:_files -g "*.(js|mjs|cjs|ts)"'
+}
+
+_javy_emit_plugin() {
+    _arguments -s -S \
+        '(-o --out)'{-o,--out}'[output plugin binary path (default stdout)]:file:_files' \
+        '(- *)'{-h,--help}'[help]'
+}
+
+_javy_init_plugin() {
+    _arguments -s -S \
+        '(-o --out)'{-o,--out}'[initialized plugin output path (default stdout)]:file:_files' \
+        '--deterministic[produce deterministic output via fixed clocks + zero RNG]' \
+        '(- *)'{-h,--help}'[help]' \
+        '1:plugin binary to initialize:_files'
+}
+
+_javy "$@"
