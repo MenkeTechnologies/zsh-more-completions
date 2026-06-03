@@ -1,0 +1,423 @@
+#compdef rpi2mqtt
+# ============================================================================
+# rpi2mqtt - Raspberry Pi GPIO + 1-Wire
+#             temperature sensor -> MQTT bridge
+#             (Node.js, MIT)
+#
+# Author : Sebastian "Hobbyquaker" Raff
+# Upstream: https://github.com/hobbyquaker/rpi2mqtt
+# npm    : rpi2mqtt (binary: rpi2mqtt)
+#
+# `rpi2mqtt` is a Node.js daemon that bridges
+# Raspberry Pi hardware I/O into MQTT topics for
+# integration with smart-home platforms (Home
+# Assistant + Node-RED + OpenHAB + Domoticz +
+# ioBroker). It supports:
+#   - GPIO digital inputs (with onoff library;
+#     edge-triggered interrupt-driven reads)
+#   - GPIO digital outputs (toggled via MQTT-
+#     received messages on `<set-topic>/gpio/<pin>`)
+#   - 1-Wire temperature sensors (Dallas
+#     DS1820 / DS18B20 / DS18S20 thermometers
+#     polled via /sys/bus/w1/devices/)
+#
+# Use cases:
+#   - DIY smart-home sensor nodes (reed switches
+#     on doors/windows, motion PIR sensors,
+#     temperature monitors in fridges/freezers/
+#     greenhouses)
+#   - GPIO-controlled relays for power switching
+#     (turn lamps + fans + heaters on/off via
+#     MQTT)
+#   - 1-Wire bus monitoring for boiler/heating
+#     systems (industrial heating installations
+#     commonly use 1-Wire DS18B20 sensors)
+#   - Pi-based industrial-control sensor
+#     publishing
+#
+# Architecture: yargs for CLI flag parsing +
+# mqtt (MQTT.js) for broker connection + onoff
+# for GPIO via /sys/class/gpio sysfs interface
+# + native readdir of /sys/bus/w1/devices/ for
+# 1-Wire sensor enumeration + yalm for
+# structured logging + mkdirp for log directory
+# creation.
+#
+# Usage:
+#   rpi2mqtt [options]
+#
+# Flags (yargs declarative; both short + long
+# forms supported):
+#   -c, --config <file>            - config
+#                                    file path
+#                                    (default
+#                                    ~/.pi2mqtt/
+#                                    config.json)
+#   -l, --log <file>               - log file
+#                                    path
+#                                    (default
+#                                    ~/.pi2mqtt/
+#                                    daemon.log)
+#   -v, --verbosity <level>        - log level
+#                                    (error/
+#                                    info/debug;
+#                                    default
+#                                    error)
+#   -d                             - don't fork
+#                                    into
+#                                    background;
+#                                    log to
+#                                    stdout
+#                                    (implies
+#                                    --verbosity
+#                                    debug)
+#   -a, --alias <topic-mapping>    - alias
+#                                    topics
+#                                    (format:
+#                                    `<source>:<alias>`;
+#                                    repeatable)
+#   -i, --in / --input <gpio>      - GPIO pin
+#                                    to use as
+#                                    input
+#                                    (repeatable)
+#   -o, --out / --output <gpio>    - GPIO pin
+#                                    to use as
+#                                    output
+#                                    (repeatable)
+#   -p, --payload <type>           - MQTT
+#                                    payload
+#                                    format
+#                                    (plain/
+#                                    json;
+#                                    default
+#                                    plain)
+#   -r, --retain                   - publish
+#                                    with
+#                                    retain
+#                                    flag
+#                                    (default
+#                                    true)
+#   -t, --status-topic <prefix>    - topic
+#                                    prefix
+#                                    for status
+#                                    messages
+#                                    (default
+#                                    <hostname>/
+#                                    status/)
+#   -z, --set-topic <prefix>       - topic
+#                                    prefix
+#                                    for set
+#                                    messages
+#                                    (default
+#                                    <hostname>/
+#                                    set/)
+#   -x, --testament-topic <topic>  - topic for
+#                                    connect +
+#                                    last-will
+#                                    message
+#                                    (default
+#                                    <hostname>/
+#                                    connected)
+#   -u, --url <broker-url>         - MQTT
+#                                    broker URL
+#                                    (default
+#                                    mqtt://
+#                                    127.0.0.1;
+#                                    supports
+#                                    mqtt:// +
+#                                    mqtts:// +
+#                                    ws:// +
+#                                    wss://
+#                                    schemes)
+#   -s, --w1-wait <seconds>        - seconds
+#                                    to wait
+#                                    before
+#                                    reading
+#                                    /sys/bus/
+#                                    w1/devices/
+#                                    (default
+#                                    30)
+#   -n, --w1-interval <seconds>    - polling
+#                                    interval
+#                                    for 1-wire
+#                                    temperature
+#                                    sensors
+#                                    (default
+#                                    30)
+#   -w, --w1-disable               - disable
+#                                    1-wire
+#                                    sensor
+#                                    polling
+#                                    (GPIO-only
+#                                    mode)
+#   -h, --help                     - print
+#                                    yargs help
+#
+# Example usage:
+#   rpi2mqtt -w -i 17 -i 18 -o 23
+#     # disable 1-wire; GPIO 17 + 18 as inputs;
+#     # GPIO 23 as output
+#
+#   rpi2mqtt -t -o 17 \
+#            -a w1/28-0000002981762:Temperature/Garden \
+#            -a gpio/17:Light/Garden
+#     # 1-wire + GPIO 17 as output; rename topics
+#     # via aliases
+#
+# Topic structure (defaults):
+#   <hostname>/status/gpio/<pin>     - GPIO
+#                                       input
+#                                       state
+#                                       updates
+#   <hostname>/status/w1/<sensor-id> - 1-Wire
+#                                       temperature
+#                                       readings
+#   <hostname>/set/gpio/<pin>        - GPIO
+#                                       output
+#                                       toggle
+#                                       commands
+#                                       (receive)
+#   <hostname>/connected             - testament
+#                                       (online/
+#                                       offline
+#                                       status)
+#
+# The mqtt lane is built on `mqtt ^2.13.1`
+# (declared verbatim at upstream package.json
+# HEAD as a direct dep, imported as `const Mqtt
+# = require('mqtt')` in index.js line 6, used
+# at line 39 as `Mqtt.connect(config.url, {
+# will: { topic: config.testamentTopic, payload:
+# testamentPayload } })` for MQTT broker
+# connection with Last-Will-Testament support +
+# subsequent `mqtt.publish(...)` for state
+# updates + `mqtt.on('message', ...)` for set-
+# topic command handling), the canonical Node
+# MQTT client by the mqttjs maintainer team -
+# github.com/mqttjs/MQTT.js.
+#
+# The mqttjs/MQTT.js library is the de-facto
+# canonical Node MQTT client:
+#   - 2,500,000+ weekly npm downloads
+#   - Isomorphic: browser + Node + Deno + Bun +
+#     React Native + Electron
+#   - MQTT v3.1.1 + v5.0 protocol support
+#   - WebSocket + WSS + TCP + TLS transport
+#   - Promise-based + callback-based API
+#     surfaces
+#   - Auto-reconnect with configurable backoff
+#   - QoS 0/1/2 delivery guarantees
+#   - LWT + Retain + Clean Session control
+#   - Reactive packet inspection via the
+#     `packetreceive` / `packetsend` events
+#   - Authentication helpers (MQTT v5 enhanced
+#     auth)
+#
+# mqttjs/MQTT.js governance:
+#   - Now under the mqttjs GitHub organization
+#     (the maintainer team includes Matteo
+#     Collina + Adam Rudd + Yoshihiro Mishima +
+#     others)
+#   - Sister projects in the mqttjs org:
+#     - mqttjs/aedes (Node MQTT broker)
+#     - mqttjs/async-mqtt (Promise wrapper)
+#     - mqttjs/mqtt-packet (low-level packet
+#       parser)
+#     - mqttjs/mqtt-connection (connection
+#       primitive)
+#     - mqttjs/connect-combine (multi-broker
+#       client)
+#
+# Matteo Collina's role in the mqttjs org
+# parallels his role at NearForm + the broader
+# Node-core team:
+#   - undici (canonical Node HTTP client at
+#     Axis 265 indirect mention)
+#   - pino (canonical Node logger)
+#   - fastify (canonical Node web framework)
+#   - mqttjs/MQTT.js (THIS AXIS) + mqttjs/aedes
+#     (canonical Node MQTT client + broker)
+#
+# Collina is a multi-axis foundational Node
+# infrastructure author. While the corpus has
+# documented him via undici/pino/fastify
+# clustering at Axis 265, his MQTT contributions
+# extend that influence into the IoT messaging
+# vertical. This is Collina's *first formal
+# axis closure* in the corpus.
+#
+# rpi2mqtt uses MQTT.js in index.js:
+#   ```js
+#   const Mqtt = require('mqtt');
+#   const mqtt = Mqtt.connect(config.url, {
+#     will: {
+#       topic: config.testamentTopic,
+#       payload: 'false'
+#     }
+#   });
+#   mqtt.publish(config.testamentTopic, 'true');
+#
+#   // GPIO input -> MQTT publish
+#   io[pin].watch((err, val) => {
+#     mqtt.publish(
+#       config.statusTopic + 'gpio/' + pin,
+#       String(val),
+#       { retain: true }
+#     );
+#   });
+#
+#   // MQTT receive -> GPIO output toggle
+#   mqtt.subscribe(config.setTopic + 'gpio/+');
+#   mqtt.on('message', (topic, payload) => {
+#     const pin = topic.split('/').pop();
+#     gpioOut[pin].writeSync(
+#       parseInt(payload.toString(), 10)
+#     );
+#   });
+#   ```
+# The pattern - GPIO event -> MQTT publish,
+# MQTT message -> GPIO toggle - is canonical
+# for IoT-bridge daemons across all three
+# canonical MQTT lanes.
+#
+# ----------------------------------------------------------------------------
+# AXIS 270 :: MQTT (Message Queuing Telemetry
+#              Transport) client libraries
+#              (publish/subscribe message broker
+#              client implementing the OASIS
+#              MQTT v3.1.1 + v5.0 specifications)
+# Round 1510 :: TS-Node slot 3 of 4 :: CLOSES Axis 270
+#                                       (263rd axis closed)
+#
+# Cross-language canonical library family for this axis:
+#   Rust    : bytebeamio/rumqtt           [R1508 _hms-mqtt-publish]
+#             (Bytebeam Tech; commercial-
+#              IoT-focused canonical;
+#              client + broker)
+#   Go      : eclipse/                    [R1509 _mqtunnel]
+#             paho.mqtt.golang
+#             (Eclipse Foundation Paho
+#              project; foundation-backed
+#              canonical)
+#   TS/Node : mqttjs/MQTT.js              [R1510 THIS FILE]
+#             (the mqttjs maintainer
+#              team incl. Matteo Collina;
+#              isomorphic browser + Node;
+#              2.5M+ weekly downloads)
+#
+# mqttjs/MQTT.js closes Axis 270 with the
+# *isomorphic-multi-runtime canonical* pattern.
+# The three lanes demonstrate three distinct
+# governance + technical-architecture combinations
+# for MQTT canonical libraries:
+#
+#   - Rust (rumqttc): commercial-entity-backed
+#     single-team canonical; pure-Rust; client
+#     + broker from same team
+#   - Go (paho.mqtt.golang): foundation-backed
+#     multi-language project; pure-Go; part of
+#     cross-language Paho umbrella
+#   - Node (MQTT.js): maintainer-org-backed
+#     isomorphic canonical; works in browser +
+#     Node + Deno + Bun + React Native + Electron
+#
+# Each governance pattern produces canonical-
+# library status via different mechanisms:
+#   - Commercial backing (Bytebeam): industrial-
+#     IoT focus + production-grade reliability
+#   - Foundation backing (Eclipse): cross-
+#     language standardization + multi-vendor
+#     CLA-protected contributions
+#   - Maintainer-org backing (mqttjs + Collina):
+#     ecosystem-spanning isomorphic support +
+#     long-term maintainer continuity
+#
+# Cross-language interop at the MQTT wire-
+# protocol level - all three libraries
+# interoperate with any compliant broker
+# (Mosquitto + EMQX + HiveMQ + AWS IoT Core +
+# Azure IoT Hub + Google Cloud IoT Core).
+#
+# Use-case spectrum across the three lanes:
+#   - hms-mqtt-publish (Rust, rumqttc): Hoymiles
+#     solar inverter -> Home Assistant via MQTT
+#   - mqtunnel (Go, paho.mqtt.golang): TCP-over-
+#     MQTT tunnel for NAT traversal + corporate-
+#     firewall transit
+#   - rpi2mqtt (Node, MQTT.js): Raspberry Pi
+#     GPIO + 1-Wire sensor -> MQTT bridge for
+#     smart-home integration
+#
+# Three lanes, three use-case shapes (solar
+# monitoring / network tunneling / Pi sensor
+# bridge), three governance patterns (commercial
+# / foundation / maintainer-org), all converging
+# on the OASIS MQTT spec.
+#
+# Axis 270 closes the round 1510 cycle - 263rd
+# axis closed total.
+#
+# Multi-axis canonical-Node author/org cohort
+# (Collina's *first formal axis closure*):
+#   - Sindre Sorhus (chalk + ~1000 microlibs)
+#   - Matt Ranney + Redis Inc. (node-redis)
+#   - Brian Carlson (node-postgres)
+#   - Andrey Sitnik (PostCSS + browserslist +
+#     nanoid)
+#   - Lovell Fuller (sharp)
+#   - Paul Miller (noble umbrella)
+#   - Devon Govett (foliojs umbrella +
+#     lightningcss)
+#   - Matteo Collina + mqttjs org (undici +
+#     pino + fastify + mqttjs/MQTT.js +
+#     mqttjs/aedes, THIS AXIS - first formal
+#     closure)
+#   - Isaac Z. Schlueter (3 axes: globbing,
+#     TAR, INI)
+#   - Vitaly Puzrin + nodeca (js-yaml +
+#     markdown-it + pako + argparse + sax +
+#     linkify-it)
+#   - Sergey Belov + svgo team (svg/svgo)
+#   - Matt Zabriskie + axios team (axios)
+#   - Stuart Knightley (jszip)
+#   - Justin Latimer (node-midi)
+#
+# Sebastian Raff (Hobbyquaker)'s smart-home
+# ecosystem footprint (the hobbyquaker GitHub
+# org) is also worth noting - he authored ~30+
+# MQTT-bridge daemons that connect proprietary
+# smart-home protocols (HomeMatic + Z-Wave +
+# Zigbee + various manufacturer IoT clouds) to
+# MQTT for unified Home Assistant integration.
+# His position is in the *smart-home-bridge
+# ecosystem-glue* vertical - distinct from
+# foundational-library authors but canonical for
+# bridging proprietary protocols into the
+# open-source IoT ecosystem.
+# ============================================================================
+
+_rpi2mqtt() {
+    local context state state_descr line
+    typeset -A opt_args
+
+    _arguments -s -S \
+        '(-c --config)'{-c,--config}'[config file path]:file:_files' \
+        '(-l --log)'{-l,--log}'[log file path]:file:_files' \
+        '(-v --verbosity)'{-v,--verbosity}'[log level]:level:(error info debug)' \
+        '-d[do not fork into background; log to stdout]' \
+        '*'{-a,--alias}'[alias topic mapping (source:alias)]:mapping:' \
+        '*'{-i,--in,--input}'[GPIO pin to use as input]:gpio:' \
+        '*'{-o,--out,--output}'[GPIO pin to use as output]:gpio:' \
+        '(-p --payload)'{-p,--payload}'[MQTT payload format]:type:(plain json)' \
+        '(-r --retain)'{-r,--retain}'[publish with retain flag]' \
+        '(-t --status-topic)'{-t,--status-topic}'[topic prefix for status messages]:prefix:' \
+        '(-z --set-topic)'{-z,--set-topic}'[topic prefix for set messages]:prefix:' \
+        '(-x --testament-topic)'{-x,--testament-topic}'[topic for connect + last-will]:topic:' \
+        '(-u --url)'{-u,--url}'[MQTT broker URL]:url:' \
+        '(-s --w1-wait)'{-s,--w1-wait}'[seconds to wait before reading 1-wire devices]:seconds:' \
+        '(-n --w1-interval)'{-n,--w1-interval}'[1-wire polling interval (seconds)]:seconds:' \
+        '(-w --w1-disable)'{-w,--w1-disable}'[disable 1-wire sensor polling]' \
+        '(- *)'{-h,--help}'[print help]'
+}
+
+_rpi2mqtt "$@"
