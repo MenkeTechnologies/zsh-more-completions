@@ -1,0 +1,235 @@
+#compdef mache
+# ============================================================================
+# mache - The Universal Semantic Overlay Engine (Go, Apache-2.0)
+#
+# Author : agentic-research team
+# Upstream: https://github.com/agentic-research/mache
+#
+# mache projects structured data (source code, JSON, YAML, SQLite
+# rows, git history) as a semantic NFS mount or MCP server. The
+# core operation is "mount": given a data source + topology
+# schema, mache builds a Formal-Concept-Analysis lattice of the
+# data and presents it as a navigable filesystem (find_callers /
+# find_callees / find_definition / list_directory / read_file /
+# search). The mount is zero-copy by default - the underlying
+# files stay in place, mache layers a virtual NFS view on top.
+# Built for LLM-agent navigation: every operation is an MCP tool.
+#
+# Subcommand tree (cobra):
+#   (default) [mountpoint]      - mount a Mache instance
+#   build [source] [output.db]  - build a Mache SQLite db from source
+#   serve [data-source]         - serve as MCP server (stdio or HTTP)
+#   pack [db]                   - markdown context bundle for agents
+#   init                        - initialize .mache.json + .claude/mcp.json
+#   find-smells                 - run code-smell rules against a db
+#   cache                       - portable mache db (push/pull/verify/inspect)
+#   list                        - list active mache instances
+#   unmount <mount-name>        - unmount and stop a mache mount
+#   clean                       - remove stale mounts and orphaned snapshots
+#   version                     - print version
+#
+# The Cap'n Proto lane is built on `capnproto.org/go/capnp/v3
+# v3.1.0-alpha.2` (declared verbatim at upstream go.mod HEAD),
+# the canonical Go Cap'n Proto library by Ross Light + the
+# capnproto.org team (github.com/capnproto/go-capnp, 1500+ stars).
+# Cap'n Proto archives are mmap-friendly fixed-layout binary
+# blobs accessed via offset pointers - the equivalent of rkyv in
+# Rust + capnp-es in TypeScript. mache uses Cap'n Proto for the
+# Leyline wire protocol that carries per-mount metadata + sheaf
+# subscriptions between mache instances; the schema is defined
+# in the agentic-research/ley-line-open repository and consumed
+# via the leyline-schema Go bindings.
+#
+# ----------------------------------------------------------------------------
+# AXIS 220 :: Typed binary archive formats with zero-copy mmap access
+# Round 1359 :: Go slot 2 of 4 :: continues Axis 220
+#
+# Cross-language canonical library family for this axis:
+#   Rust    : rkyv/rkyv                    [R1358 _mitex]
+#   Go      : capnproto/go-capnp           [R1359 THIS FILE]
+#   TS/Node : capnp-es OR @msgpack/msgpack [R1360 closing]
+#
+# capnp/v3 is structurally interesting in this axis: Cap'n Proto
+# was specified by Kenton Varda (Sandstorm.io, formerly Google
+# Protocol Buffers v2 author) as the explicit successor to
+# protobuf - same schema-driven approach but with zero-copy
+# wire reads via fixed-layout pointers. The Go bindings
+# (capnproto.org/go/capnp/v3) are the only mainstream Go
+# implementation; mache uses them in lockstep with the Leyline
+# control-block format - a schema-versioned binary blob that
+# mache reads from a mmap'd arena to drive hot-swap reconfig
+# without restarting the mount.
+#
+# The structural contrast with the Rust slot (rkyv) is sharp:
+# rkyv is *schema-less in the wire format* (the type lives in
+# Rust source as `#[derive(Archive)]` annotations and the
+# archive is just a memory dump of the struct), while Cap'n
+# Proto is *schema-first* (the .capnp file is the contract,
+# generated code in each language reads the same wire bytes).
+# Same goal (zero-copy typed access to a binary blob); opposite
+# schema philosophy. The Node slot will close the axis with
+# the choice between schema-first capnp-es and schema-less
+# MessagePack.
+# ============================================================================
+
+_mache() {
+    local context state state_descr line
+    typeset -A opt_args
+    local curcontext="$curcontext" ret=1
+
+    _arguments -C \
+        '(-s --schema)'{-s,--schema}'[path to topology schema]:file:_files -g "*.json"' \
+        '(-d --data)'{-d,--data}'[path to data source]:path:_files' \
+        '--control[path to Leyline control block (enables hot-swap)]:file:_files' \
+        '(-w --writable)'{-w,--writable}'[enable write-back (splice edits into source files)]' \
+        '--infer[auto-infer schema from data via FCA]' \
+        '(-q --quiet)'{-q,--quiet}'[suppress standard output]' \
+        '--agent[agent mode: auto-mount to temp dir with instructions]' \
+        '--out[write to path instead of mounting]:path:_files' \
+        '--format[output format for --out]:fmt:(sqlite zip json)' \
+        '--nfs-opts[extra NFS mount options (comma-separated)]:opts:' \
+        '--snapshot[copy data source to temp before mounting (true sandbox)]' \
+        '--max-file-size[skip files larger than this during ingestion (e.g. 100MB)]:size:' \
+        '(- *)'{-h,--help}'[print help]' \
+        '--version[print version]' \
+        '1: :_mache_cmds_or_mountpoint' \
+        '*::arg:->args' \
+    && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                version|list|clean) _arguments '(- *)'{-h,--help}'[help]' ;;
+                unmount)            _arguments '(- *)'{-h,--help}'[help]' '1:mount name:' ;;
+                init)               _arguments \
+                                        '--force[overwrite existing .mache.json]' \
+                                        '--global[install mache MCP server globally in ~/.claude/]' \
+                                        '--schema[schema preset or path (auto-detected if omitted)]:schema:' \
+                                        '--source[data source path]:path:_files -/' \
+                                        '(- *)'{-h,--help}'[help]' ;;
+                build)              _arguments \
+                                        '(-s --schema)'{-s,--schema}'[path to topology schema (defaults to FCA inference)]:file:_files -g "*.json"' \
+                                        '--backend[parsing backend]:backend:(auto leyline tree-sitter)' \
+                                        '(- *)'{-h,--help}'[help]' \
+                                        '1:source directory:_files -/' \
+                                        '2:output db:_files -g "*.db"' ;;
+                serve)              _mache_serve ;;
+                pack)               _arguments \
+                                        '--max[maximum entries per section (communities, abstractions, API surface)]:n:' \
+                                        '--dir[optional human-readable name for the codebase root]:name:' \
+                                        '(- *)'{-h,--help}'[help]' \
+                                        '1:db:_files -g "*.db"' ;;
+                find-smells)        _mache_find_smells ;;
+                cache)              _mache_cache ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_mache_cmds_or_mountpoint() {
+    local -a cmds
+    cmds=(
+        'build:Build a Mache SQLite database from a source directory'
+        'serve:Serve a Mache graph as an MCP server'
+        'pack:Produce a markdown context bundle for agent pre-injection'
+        'init:Initialize a project for mache MCP serving (.mache.json + .claude/mcp.json)'
+        'find-smells:Run structural code-smell rules against a mache/leyline-built SQLite database'
+        'cache:Portable mache db: push/pull lockfile + chunks via the LLO cache substrate'
+        'list:List active mache instances (mounts and MCP servers)'
+        'unmount:Unmount and stop a mache mount'
+        'clean:Remove stale mache mounts and orphaned snapshots'
+        'version:Print the version number'
+    )
+    _alternative \
+        'commands:mache command:_describe -t commands "mache command" cmds' \
+        'mountpoint:mount point:_files -/'
+}
+
+_mache_serve() {
+    _arguments \
+        '(-s --schema)'{-s,--schema}'[path to topology schema]:file:_files -g "*.json"' \
+        '--http[listen address for Streamable HTTP transport]:addr:' \
+        '--stdio[use stdio transport instead of HTTP (for subprocess mode)]' \
+        '--path[base directory for project detection]:path:_files -/' \
+        '--repo[git repo URL to clone and serve (ephemeral)]:url:' \
+        '--control[path to ley-line control block]:file:_files' \
+        '*--mount[mount a graph at NAME=PATH (repeatable)]:NAME=PATH:' \
+        '(- *)'{-h,--help}'[help]' \
+        '1:data source:_files'
+}
+
+_mache_find_smells() {
+    _arguments \
+        '--db[path to the SQLite database (required)]:file:_files -g "*.db"' \
+        '--rule[rule ID or glob (e.g. drift_doc_*); omit to list available rules]:rule:' \
+        '--source-id[scope rule to a single source file path]:path:_files' \
+        '--limit[cap result count per rule]:n:' \
+        '--min-metric[drop findings whose metric is below this threshold]:n:' \
+        '--format[output format]:fmt:(json md ci)' \
+        '--fail-on[exit non-zero when findings reach severity]:sev:(none warn error)' \
+        '--tags[comma-separated tags; runs rules whose Tags contain ANY of these]:tags:' \
+        '(- *)'{-h,--help}'[help]'
+}
+
+_mache_cache() {
+    local -a sub
+    sub=(
+        'push:Emit a lockfile + chunks from a mache .db (Phase 1+3)'
+        'pull:Restore a .db state from a lockfile + chunks (Phase 2+3)'
+        'verify:Verify a remote build-cache bundle exists + chunks pass verify-on-read'
+        'inspect:Print a summary of a local cache dir / lockfile (no remote network)'
+    )
+    _arguments \
+        '(- *)'{-h,--help}'[help]' \
+        '1:subcommand:->sub' \
+        '*::arg:->args'
+
+    case $state in
+        sub) _describe -t commands 'cache subcommand' sub ;;
+        args)
+            case $words[1] in
+                push)
+                    _arguments \
+                        '--db[path to mache-built .db]:file:_files -g "*.db"' \
+                        '--remote[Phase 3: OCI registry base URL]:url:' \
+                        '--scope[Phase 3: scope segment (e.g. <repo>/<commit>)]:scope:' \
+                        '--tag[Phase 3: mutable tag]:tag:' \
+                        '--token[Phase 3: bearer token (or MACHE_CACHE_TOKEN env)]:token:' \
+                        '--token-file[read bearer token from a file]:file:_files' \
+                        '(- *)'{-h,--help}'[help]' \
+                        '1:output directory:_files -/'
+                    ;;
+                pull)
+                    _arguments \
+                        '--out-db[path to write the restored .db]:file:_files -g "*.db"' \
+                        '--verify[after restore, re-walk sources and assert BLAKE3 matches the lockfile]' \
+                        '--remote[Phase 3: OCI registry base URL]:url:' \
+                        '--scope[Phase 3: scope segment]:scope:' \
+                        '--ref[Phase 3: digest or tag]:ref:' \
+                        '--token[Phase 3: bearer token (or MACHE_CACHE_TOKEN env)]:token:' \
+                        '--token-file[read bearer token from a file]:file:_files' \
+                        '(- *)'{-h,--help}'[help]' \
+                        '1:input directory:_files -/'
+                    ;;
+                verify)
+                    _arguments \
+                        '--remote[OCI registry base URL]:url:' \
+                        '--scope[scope segment (e.g. <repo>/<commit>)]:scope:' \
+                        '--ref[digest or tag to verify]:ref:' \
+                        '--token[bearer token (or MACHE_CACHE_TOKEN env)]:token:' \
+                        '--token-file[read bearer token from a file]:file:_files' \
+                        '(- *)'{-h,--help}'[help]'
+                    ;;
+                inspect)
+                    _arguments \
+                        '(- *)'{-h,--help}'[help]' \
+                        '1:cache dir or lockfile:_files'
+                    ;;
+            esac
+            ;;
+    esac
+}
+
+_mache "$@"
