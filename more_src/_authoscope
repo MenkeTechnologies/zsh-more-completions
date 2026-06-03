@@ -1,0 +1,115 @@
+#compdef authoscope
+# ============================================================================
+# authoscope - Scriptable network authentication cracker (Rust, GPL-3.0)
+#
+# Author : kpcyrd (Sebastian Pipping)
+# Upstream: https://github.com/kpcyrd/authoscope
+#
+# authoscope is a scriptable password / credential brute-forcing
+# framework. Operator-supplied Lua scripts model the per-protocol
+# authentication flow (HTTP login form, SMTP AUTH, MySQL handshake,
+# SSH, custom TCP, etc.), and authoscope dispatches a configurable
+# worker pool to test each (username, password) pair from a
+# dictionary or combolist against the target. Successful
+# credentials are written to an output file in real-time.
+#
+# Subcommands:
+#   dict   - try every password against every user
+#   combo  - try a `user:password` combolist
+#   enum   - enumerate which usernames exist on the target
+#   run    - run a script with a single (user, password)
+#   fsck   - validate a wordlist / combolist file
+#   completions - generate shell completions
+#
+# The bcrypt password-hashing lane is built on `bcrypt = "0.12"`
+# (declared verbatim at upstream Cargo.toml HEAD), the canonical
+# Rust bcrypt implementation by Vincent Prouillet (Keats / rust-
+# bcrypt, github.com/Keats/rust-bcrypt, 370+ stars). The library
+# implements Niels Provos + David Mazieres's bcrypt (USENIX 1999)
+# end-to-end: the Eksblowfish key schedule, the $2a$ / $2b$ / $2x$ /
+# $2y$ versioned PHC string format, the 4096-byte salt + work-
+# factor schedule, and constant-time hash verification. authoscope
+# uses `bcrypt` to verify per-protocol stored-hash captures (when
+# a script extracts the server-side hash from a /etc/shadow-like
+# source) against candidate passwords, and to emit hashes for
+# offline cracking handoff.
+#
+# ----------------------------------------------------------------------------
+# AXIS 212 :: BCRYPT PASSWORD HASHING (Provos+Mazieres USENIX 1999)
+# Round 1334 :: Rust slot 1 of 4 :: OPENS Axis 212
+#
+# Cross-language canonical library family for this axis (proposed):
+#   Rust    : Keats/rust-bcrypt                  - typed bcrypt + PHC string format
+#   Go      : golang.org/x/crypto/bcrypt         - Go-team-maintained pure-Go bcrypt
+#   TS/Node : dcodeIO/bcrypt.js or kelektiv/node.bcrypt.js
+#
+# All three implement the same Provos+Mazieres bcrypt spec (the
+# 1999 USENIX paper) with the same $2a / $2b / $2x / $2y versioned
+# PHC strings + cost-factor schedule. bcrypt is one of the oldest
+# password-hashing functions still in widespread production use
+# (1999 - present, 26+ years), and the cross-language libraries
+# converge tightly because the spec dictates the byte-level
+# Eksblowfish key schedule.
+#
+# Axis 208 (Argon2) and this Axis 212 (bcrypt) are companion axes:
+# Argon2 is the modern OWASP-recommended password hash for new
+# applications since 2021; bcrypt remains the de-facto choice for
+# legacy applications + per-protocol implementations (htpasswd,
+# MySQL password storage, $2y$ in Apache, etc.) that still need
+# to round-trip the older PHC string format.
+# ============================================================================
+
+_authoscope() {
+    local context state state_descr line
+    typeset -A opt_args
+    local curcontext="$curcontext" ret=1
+
+    _arguments -C \
+        '*'{-v,--verbose}'[verbose output (repeat for more)]' \
+        '(-n --workers)'{-n,--workers}'[concurrent workers (default 16)]:n:' \
+        '(-o --output)'{-o,--output}'[write results to file]:file:_files' \
+        '(- *)'{-h,--help}'[print help]' \
+        '(- *)'{-V,--version}'[print version]' \
+        '1: :_authoscope_cmds' \
+        '*::arg:->args' \
+    && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                dict)         _arguments '1:users path:_files' '2:passwords path:_files' '*:script:_files' ;;
+                combo)        _arguments '1:combolist path:_files' '*:script:_files' ;;
+                enum)         _arguments '1:users path:_files' '*:script:_files' ;;
+                run)          _arguments '(-x --exitcode)'{-x,--exitcode}'[exit 2 on invalid credentials]' '1:script:_files' '2:user:' '3:password:' ;;
+                fsck)         _authoscope_fsck ;;
+                completions)  _arguments '1:shell:(bash zsh fish powershell elvish)' ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_authoscope_cmds() {
+    local -a cmds
+    cmds=(
+        'dict:For each user, try every password from a wordlist'
+        'combo:Run a credential-stuffing attack with a combolist'
+        'enum:Enumerate which usernames exist on the target'
+        'run:Run a script with a single (user, password) pair'
+        'fsck:Validate a wordlist / combolist file'
+        'completions:Generate shell completion scripts'
+    )
+    _describe -t commands 'authoscope command' cmds
+}
+
+_authoscope_fsck() {
+    _arguments -s -S \
+        '(-q --quiet)'{-q,--quiet}'[do not show invalid lines]' \
+        '(-s --silent)'{-s,--silent}'[do not show valid lines]' \
+        '(-c --colon)'{-c,--colon}'[require one colon per line]' \
+        '(- *)'{-h,--help}'[help]' \
+        '*:file:_files'
+}
+
+_authoscope "$@"
