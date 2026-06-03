@@ -1,0 +1,145 @@
+#compdef media-curator
+# ============================================================================
+# media-curator - Intelligent photo/video collection deduplicator + organizer
+#                  (Node, MIT)
+#
+# Author : SylphxAI
+# Upstream: https://github.com/SylphxAI/media-curator
+# npm    : @sylphx/media-curator (binary: media-curator)
+#
+# `media-curator` walks a directory of digital photos and
+# videos, computes perceptual hashes per file (DCT-based for
+# images, frame-sampled DCT for videos with scene-change
+# detection), clusters near-duplicates via a VPTree on Hamming
+# distance, and copies/moves the canonical file of each
+# cluster to a target directory tree organized by a
+# user-defined format template ({D.YYYY}/{D.MM}/{NAME}.{EXT}
+# by default). Duplicate files go to a separate duplicates/
+# directory; unprocessable files go to an errors/ directory.
+#
+# Architecture: workerpool fans the per-file hash computation
+# across N worker threads; exiftool-vendored extracts metadata
+# (date/camera/GPS); sharp generates image thumbnails; an
+# LMDB cache memoizes the per-file hashes so re-runs over the
+# same library are sub-second instead of re-decoding every
+# video frame. The VPTree clustering happens after the
+# gather phase; the comparator threshold is tuned per-pair
+# (image-vs-image, image-vs-video, video-vs-video) because
+# the cross-modality false-positive rate differs sharply.
+#
+# Usage:
+#   media-curator <source> <destination> [options]
+#
+# Flags (commander):
+#   -e, --error <path>                  - directory for unprocessable files
+#   -d, --duplicate <path>              - directory for duplicates
+#       --debug <path>                  - directory for full duplicate sets
+#   -c, --concurrency <n>               - worker count (default: CPU-1)
+#   -m, --move                          - move instead of copy
+#   -r, --resolution <n>                - perceptual-hash resolution (default 64)
+#       --min-frames <n>                - min video frames to extract (default 5)
+#       --max-scene-frames <n>          - max scene-change frames (default 100)
+#       --target-fps <n>                - video target FPS (default 2)
+#   -w, --window-size <n>               - clustering window (default 5)
+#   -p, --step-size <n>                 - clustering step (default 1)
+#   -F, --format <template>             - output filename template
+#                                          (default {D.YYYY}/{D.MM}/{D.DD}/
+#                                                   {NAME}.{EXT})
+#       --scene-change-threshold <n>    - default 0.05
+#       --image-similarity-threshold <n>      - default 0.99
+#       --image-video-similarity-threshold <n>- default 0.93
+#       --video-similarity-threshold <n>      - default 0.93
+#       --max-chunk-size <bytes>        - file-processing chunk (default 2MB)
+#       --verbose                       - verbose logging
+#   -h, --help                          - print help
+#   -V, --version                       - print version
+#
+# Format template placeholders include date subtokens
+# ({D.YYYY}, {I.MM}, {F.DDDD}, ...), filename subtokens
+# ({NAME}, {NAME.L}, {EXT}, {RND}), and metadata subtokens
+# ({GEO}, {CAM}, {TYPE}, {HAS.GEO}, ...). See `media-curator
+# --help` for the full grammar.
+#
+# The lmdb lane is built on `lmdb ^3.0.13` (declared verbatim
+# at upstream package.json HEAD), the canonical N-API binding
+# to OpenLDAP's mature C LMDB implementation, maintained by
+# Kris Zyp (github.com/kriszyp/lmdb-js, 1100+ stars). lmdb-js
+# wraps the well-proven mdb_env / mdb_dbi / mdb_txn API from
+# liblmdb but adds a JavaScript-idiomatic encoder layer
+# (msgpackr by default for value serialization) + an async
+# transaction batching API that amortizes the syscall cost.
+# media-curator uses it for the per-file hash cache: key =
+# file path + mtime + size; value = { perceptual_hash, exif,
+# generation_time }. The cache hit-rate on a re-run is near
+# 100% because the key changes only when the underlying file
+# is modified.
+#
+# ----------------------------------------------------------------------------
+# AXIS 229 :: Embedded key-value stores (single-file ACID B-tree)  [CLOSES]
+# Round 1387 :: TS-Node slot 3 of 4 :: CLOSES Axis 229 (222nd axis closed)
+#
+# Cross-language canonical library family for this axis:
+#   Rust    : cberner/redb                 [R1385 _sacad]
+#   Go      : etcd-io/bbolt                [R1386 _stargz-fuse-manager]
+#   TS/Node : kriszyp/lmdb-js              [R1387 THIS FILE]
+#
+# lmdb-js is structurally interesting in this axis: it is
+# the *N-API wrapper* slot to a mature C library, the same
+# pattern seen in Axis 208 (@node-rs/argon2 wrapping rust-
+# argon2), Axis 215 (@node-rs/snappy wrapping rust-snappy),
+# and Axis 222 (@node-rs/xxhash wrapping twox-hash). For
+# performance-critical Node modules, the ecosystem has
+# converged on "wrap a proven non-JS implementation via
+# N-API rather than reimplement in JS" - because the speed
+# difference is decisive enough that pure-JS alternatives
+# (level-js, classic-level, classic-better-sqlite3) cannot
+# compete on throughput.
+#
+# The structural commentary across the three lanes: all
+# three converge on *memory-mapped single-file B-tree*
+# architecture but with different MVCC strategies:
+#   - redb (Rust): MVCC via copy-on-write at the page level
+#   - bbolt (Go): MVCC via copy-on-write at the B+tree node
+#   - lmdb (C): MVCC via copy-on-write at the page level
+#     with a separate locktable file (the most mature
+#     implementation; mature enough that Postgres uses
+#     similar techniques internally)
+#
+# All three achieve the same correctness guarantees with
+# slightly different on-disk formats; data is portable
+# in spirit (same B-tree topology, same MVCC semantics) but
+# not byte-for-byte across the three lanes - cross-language
+# interop happens at the application layer, not the store
+# layer.
+# ============================================================================
+
+_media-curator() {
+    local context state state_descr line
+    typeset -A opt_args
+
+    _arguments -s -S \
+        '(-e --error)'{-e,--error}'[directory for unprocessable files]:dir:_files -/' \
+        '(-d --duplicate)'{-d,--duplicate}'[directory for duplicate files]:dir:_files -/' \
+        '--debug[directory for storing all files in duplicate sets]:dir:_files -/' \
+        '(-c --concurrency)'{-c,--concurrency}'[worker count (default: CPU-1)]:n:' \
+        '(-m --move)'{-m,--move}'[move files instead of copying]' \
+        '(-r --resolution)'{-r,--resolution}'[perceptual-hash resolution (default 64)]:n:' \
+        '--min-frames[minimum video frames to extract (default 5)]:n:' \
+        '--max-scene-frames[max scene-change frames (default 100)]:n:' \
+        '--target-fps[target video FPS for extraction (default 2)]:n:' \
+        '(-w --window-size)'{-w,--window-size}'[frame-clustering window (default 5)]:n:' \
+        '(-p --step-size)'{-p,--step-size}'[frame-clustering step (default 1)]:n:' \
+        '(-F --format)'{-F,--format}'[destination filename template]:template:' \
+        '--scene-change-threshold[default 0.05]:n:' \
+        '--image-similarity-threshold[default 0.99]:n:' \
+        '--image-video-similarity-threshold[default 0.93]:n:' \
+        '--video-similarity-threshold[default 0.93]:n:' \
+        '--max-chunk-size[file-processing chunk in bytes (default 2MB)]:bytes:' \
+        '--verbose[enable verbose logging]' \
+        '(- *)'{-V,--version}'[print version]' \
+        '(- *)'{-h,--help}'[print help]' \
+        '1:source directory:_files -/' \
+        '2:destination directory:_files -/'
+}
+
+_media-curator "$@"
