@@ -1,0 +1,489 @@
+#compdef semtools
+# ============================================================================
+# semtools - LlamaIndex's semantic-search +
+#             document-parsing CLI (Rust, MIT)
+#
+# Author : Logan Markewich (run-llama / LlamaIndex)
+# Upstream: https://github.com/run-llama/semtools
+# crates : semtools (binary: semtools)
+#
+# `semtools` is LlamaIndex's Rust CLI that bundles
+# four document-intelligence operations into a
+# single command-line interface:
+#   - parse: convert documents (PDF, DOCX, HTML,
+#     EPUB, etc.) into Markdown via LlamaParse
+#     (LlamaIndex's hosted document-parsing API)
+#     or pluggable backends
+#   - search: fast semantic + keyword search over
+#     local files using local SIMD-accelerated
+#     embeddings (model2vec-rs + simsimd) - no
+#     remote inference required
+#   - ask: document-grounded Q&A using an OpenAI-
+#     compatible API (the agent retrieves context
+#     via the semantic-search backend, then
+#     answers via LLM)
+#   - workspace: namespace organization for
+#     embeddings + parse caches (similar to git
+#     branches but for document indexes)
+#
+# LlamaIndex (formerly GPT Index) is the most-
+# popular Python RAG (Retrieval-Augmented
+# Generation) framework with ~40k stars on
+# github.com/run-llama/llama_index. semtools is
+# their Rust-native CLI complement, optimized for
+# terminal-based document-pipeline workflows
+# without needing a Python interpreter.
+#
+# Use cases:
+#   - RAG-pipeline prototyping from the terminal
+#     (parse PDFs -> semantic-search -> answer
+#     questions)
+#   - Bulk document-conversion in CI pipelines
+#     (PDF -> Markdown for static-site
+#     generators)
+#   - Local code/document search across large
+#     repositories without a remote embedding
+#     service
+#   - Lightweight document-grounded Q&A without
+#     a full vector database
+#
+# Usage:
+#   semtools <subcommand> [options]
+#
+# Subcommands (clap derive):
+#   parse        - convert documents to Markdown
+#                   via a parsing backend
+#   search       - fast semantic + keyword search
+#                   over files
+#   ask          - document-grounded Q&A using an
+#                   LLM agent
+#   workspace    - manage semtools workspaces
+#                   (use/status/prune)
+#
+# Global compile-time features (must be enabled
+# at build time for the corresponding subcommand
+# to be available):
+#   parse      - enables Parse subcommand
+#   search     - enables Search subcommand
+#   ask        - enables Ask subcommand
+#   workspace  - enables Workspace subcommand
+#
+# `parse` flags:
+#   -c, --config <path>            - path to
+#                                     config file
+#                                     (default
+#                                     ~/.semtools_
+#                                     config.json)
+#   -b, --backend <name>           - parsing
+#                                     backend
+#                                     (default
+#                                     `llama-parse`)
+#   -v, --verbose                  - verbose
+#                                     output
+#       <file>...                  - files to
+#                                     parse
+#                                     (required)
+#
+# `search` flags:
+#   -n, --n-lines <n>              - context lines
+#                                     before/after
+#                                     each match
+#                                     (default 3;
+#                                     alias
+#                                     --context)
+#       --top-k <n>                - top-k files
+#                                     or texts to
+#                                     return
+#                                     (default 3;
+#                                     ignored if
+#                                     --max-distance
+#                                     set)
+#   -m, --max-distance <f>         - return all
+#                                     results
+#                                     with
+#                                     distance
+#                                     below
+#                                     threshold
+#                                     (0.0+;
+#                                     alias
+#                                     --threshold)
+#   -i, --ignore-case              - case-
+#                                     insensitive
+#                                     search
+#                                     (default
+#                                     false)
+#   -j, --json                     - JSON output
+#                                     format
+#   -w, --workspace <name>         - use specific
+#                                     workspace
+#       <query>                    - search query
+#                                     (positional)
+#       <file>...                  - files to
+#                                     search
+#                                     (positional;
+#                                     optional if
+#                                     using stdin)
+#
+# `ask` flags:
+#   -c, --config <path>            - path to
+#                                     config file
+#                                     (default
+#                                     ~/.semtools_
+#                                     config.json)
+#       --api-key <key>            - OpenAI API
+#                                     key (overrides
+#                                     config + env)
+#       --base-url <url>           - OpenAI base
+#                                     URL (overrides
+#                                     config)
+#   -m, --model <name>             - LLM model
+#                                     (overrides
+#                                     config)
+#       --api-mode <mode>          - API mode
+#                                     (`chat` or
+#                                     `responses`;
+#                                     overrides
+#                                     config)
+#   -j, --json                     - JSON output
+#                                     format
+#   -w, --workspace <name>         - use specific
+#                                     workspace
+#       <query>                    - prompt query
+#                                     (positional)
+#       <file>...                  - files for
+#                                     context
+#                                     (positional;
+#                                     optional if
+#                                     using stdin)
+#
+# `workspace` subcommands:
+#   use <name>                     - use or create
+#                                     a workspace
+#                                     (prints
+#                                     export
+#                                     command)
+#   status [<name>]                - show active
+#                                     workspace +
+#                                     basic stats
+#   prune [<name>]                 - remove stale
+#                                     or missing
+#                                     files from
+#                                     store
+#
+# `workspace` global flag:
+#   -j, --json                     - JSON output
+#                                     format
+#
+# Example usage:
+#   semtools parse my-document.pdf -v
+#   semtools search "kubernetes deployment" \
+#     ./docs --top-k 5 --json
+#   semtools ask "what is the architecture?" \
+#     ./README.md --model gpt-4o-mini
+#   semtools workspace use my-project
+#   semtools workspace status
+#
+# The reqwest lane is built on `reqwest =
+# "0.12.23"` with
+# `features = ["multipart", "json", "rustls-tls"]`
+# + `default-features = false` (declared verbatim
+# at upstream Cargo.toml HEAD as a direct dep
+# under the `parse` feature, imported by
+# `semtools/src/cmds/parse.rs` for HTTP requests
+# to the LlamaParse REST API + multipart file
+# uploads with PDF/DOCX/HTML/EPUB binary
+# payloads), the canonical Rust HTTP client by
+# Sean McArthur (seanmonstar) - github.com/
+# seanmonstar/reqwest.
+#
+# `reqwest` is the de-facto canonical Rust HTTP
+# client library:
+#   - 10,000+ reverse-deps on crates.io
+#   - High-level ergonomic API over `hyper`
+#     (Sean McArthur's lower-level HTTP server/
+#     client primitives)
+#   - Two backend selection (rustls-tls /
+#     native-tls / no-tls)
+#   - Async + blocking API surfaces
+#   - JSON serialization via serde
+#   - Multipart form uploads
+#   - Streaming response bodies
+#   - HTTP/2 support out-of-the-box
+#   - Pluggable middleware via reqwest-middleware
+#   - Cookie store + automatic redirect handling
+#
+# Sean McArthur's broader Rust ecosystem
+# footprint (the seanmonstar HTTP stack):
+#   - hyper (canonical Rust HTTP/1.1 + HTTP/2
+#     server + client primitives; the foundation
+#     of the Rust web ecosystem)
+#   - reqwest (canonical Rust HTTP client;
+#     THIS AXIS)
+#   - warp (web framework built on hyper;
+#     canonical filter-based Rust web
+#     framework)
+#   - http (canonical Rust HTTP types + traits;
+#     re-exported by hyper + reqwest +
+#     actix-web + axum + every other Rust web
+#     framework)
+#   - http-body (canonical Rust HTTP body
+#     trait)
+#   - tower-http (HTTP middleware for tower
+#     services)
+#   - try_lock (low-level synchronization
+#     primitive used by hyper internals)
+#
+# McArthur's foundational role in Rust HTTP is
+# *the* foundational role - every major Rust web
+# framework (warp, axum, actix-web, rocket,
+# tonic, etc.) either depends on hyper directly
+# or interoperates via the `http` crate's
+# Request/Response types. The Rust HTTP
+# ecosystem has effectively standardized around
+# his abstractions.
+#
+# This positions McArthur in the *foundational-
+# infrastructure-library* canonical-Rust cohort
+# alongside Tolnay (syn + quote + serde +
+# thiserror + ...) but with a different
+# vertical: McArthur dominates HTTP/networking
+# while Tolnay dominates proc-macros + error
+# handling + serialization.
+#
+# semtools uses reqwest in src/cmds/parse.rs to
+# upload documents to the LlamaParse API:
+#   ```rust
+#   use reqwest::multipart;
+#   let form = multipart::Form::new()
+#       .part("file", multipart::Part::bytes(file_bytes)
+#           .file_name(file_name));
+#   let resp = client.post(parse_url)
+#       .bearer_auth(api_key)
+#       .multipart(form)
+#       .send().await?;
+#   ```
+# The `multipart` + `json` + `rustls-tls` feature
+# selection enables the multipart file upload +
+# JSON response deserialization paths needed for
+# the LlamaParse REST API, while `rustls-tls`
+# avoids the OpenSSL system-dependency that
+# `native-tls` would introduce.
+#
+# ----------------------------------------------------------------------------
+# AXIS 265 :: HTTP client libraries (high-level
+#              ergonomic HTTP/HTTPS request
+#              construction + response handling)
+# Round 1493 :: Rust slot 1 of 4 :: OPENS Axis 265
+#
+# Cross-language canonical library family for this axis
+# (proposed):
+#   Rust    : seanmonstar/reqwest          - Sean
+#                                              McArthur's
+#                                              canonical
+#                                              Rust HTTP
+#                                              client;
+#                                              high-level
+#                                              wrapper
+#                                              over hyper
+#                                              with
+#                                              JSON +
+#                                              multipart
+#                                              + cookie +
+#                                              redirect
+#                                              ergonomics
+#   Go      : go-resty/resty                - Jeevanandam
+#                                              Madanagopal's
+#                                              canonical
+#                                              Go HTTP
+#                                              client;
+#                                              axios-style
+#                                              ergonomic
+#                                              wrapper
+#                                              over
+#                                              net/http
+#   TS/Node : axios/axios                   - Matt
+#                                              Zabriskie's
+#                                              canonical
+#                                              Node HTTP
+#                                              client;
+#                                              the
+#                                              foundational
+#                                              ergonomic
+#                                              HTTP
+#                                              client
+#                                              for JS;
+#                                              powers
+#                                              ~every
+#                                              browser-
+#                                              compatible
+#                                              + Node
+#                                              HTTP-
+#                                              consuming
+#                                              library
+#
+# HTTP client is a *spec-bound + ergonomic-pattern-
+# bound* axis - the underlying protocol is HTTP/1.1 +
+# HTTP/2 (RFCs 7230-7235 + 7540 + 9112-9114),
+# byte-for-byte standardized. Each canonical library
+# provides ergonomic abstractions on top:
+#   - Method-chaining fluent API for request
+#     construction
+#   - Automatic JSON serialization/deserialization
+#   - Built-in cookie jar + redirect handling
+#   - Pluggable middleware/interceptors for
+#     auth/retry/logging
+#   - Both async + sync surfaces
+#   - Streaming bodies
+#   - File upload multipart support
+#
+# Structural commentary on the canonical libraries:
+#   - reqwest (Rust): wraps hyper; rustls-tls +
+#     native-tls feature backends; async by default
+#     with optional `blocking` module
+#   - go-resty (Go): wraps net/http; thin
+#     ergonomic layer; sync by default (Go's
+#     concurrency model doesn't need explicit
+#     async)
+#   - axios (Node): the most-installed HTTP
+#     client in any ecosystem; ~50,000,000+
+#     weekly npm downloads; isomorphic
+#     (browser + Node)
+#
+# Cross-language interop happens at the HTTP
+# wire-protocol level - all three libraries
+# produce identical HTTP/1.1 + HTTP/2 requests
+# on the wire that the same server can serve
+# (modulo TLS implementation differences in
+# extreme edge cases like 0-RTT TLS 1.3).
+#
+# Axis 265 opens with the Rust slot at McArthur's
+# reqwest, anchoring his foundational position
+# in Rust HTTP/networking. Subsequent rounds will
+# visit the Go (go-resty/resty) + TS/Node
+# (axios/axios) canonicals.
+#
+# Notable that this axis has *unified canonicals*
+# in all three lanes (unlike SVG at Axis 264 which
+# fragmented by specialization). HTTP clients
+# consolidate because:
+#   1. The HTTP protocol is well-defined
+#   2. Ergonomic patterns (method chaining + JSON
+#      + middleware) are universal
+#   3. Network effect: libraries that depend on
+#      HTTP clients pick the most-popular one for
+#      compatibility + community support
+#
+# This is the *protocol-spec-bound canonical*
+# pattern, distinct from:
+#   - port-chain-canonical (Reed-Solomon at Axis
+#     263): one library is source-of-truth + others
+#     are ports
+#   - fragmented-by-specialization (SVG at Axis
+#     264): no single library spans the full
+#     pipeline
+#   - foundational-via-incumbency (node-glob at
+#     Axis 261): old library remains canonical
+#     via reverse-dep lock-in
+# ============================================================================
+
+_semtools() {
+    local context state state_descr line
+    typeset -A opt_args
+    local curcontext="$curcontext" ret=1
+
+    _arguments -C \
+        '(- *)'{-h,--help}'[print help]' \
+        '(- *)'{-V,--version}'[print version]' \
+        '1: :_semtools_cmds' \
+        '*::arg:->args' \
+    && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                parse)
+                    _arguments \
+                        '(-c --config)'{-c,--config}'[path to config file]:file:_files' \
+                        '(-b --backend)'{-b,--backend}'[parsing backend (default llama-parse)]:backend:(llama-parse)' \
+                        '(-v --verbose)'{-v,--verbose}'[verbose output]' \
+                        '(- *)'{-h,--help}'[print subcommand help]' \
+                        '*:file:_files'
+                    ;;
+                search)
+                    _arguments \
+                        '(-n --n-lines --context)'{-n,--n-lines,--context}'[context lines before/after match]:n:' \
+                        '--top-k=[top-k files or texts to return]:n:' \
+                        '(-m --max-distance --threshold)'{-m,--max-distance,--threshold}'[distance threshold]:f:' \
+                        '(-i --ignore-case)'{-i,--ignore-case}'[case-insensitive search]' \
+                        '(-j --json)'{-j,--json}'[JSON output format]' \
+                        '(-w --workspace)'{-w,--workspace}'[use specific workspace]:name:' \
+                        '(- *)'{-h,--help}'[print subcommand help]' \
+                        '1:query:' \
+                        '*:file:_files'
+                    ;;
+                ask)
+                    _arguments \
+                        '(-c --config)'{-c,--config}'[path to config file]:file:_files' \
+                        '--api-key=[OpenAI API key (overrides config + env)]:key:' \
+                        '--base-url=[OpenAI base URL (overrides config)]:url:' \
+                        '(-m --model)'{-m,--model}'[LLM model (overrides config)]:model:' \
+                        '--api-mode=[API mode (chat or responses)]:mode:(chat responses)' \
+                        '(-j --json)'{-j,--json}'[JSON output format]' \
+                        '(-w --workspace)'{-w,--workspace}'[use specific workspace]:name:' \
+                        '(- *)'{-h,--help}'[print subcommand help]' \
+                        '1:query:' \
+                        '*:file:_files'
+                    ;;
+                workspace)
+                    _arguments -C \
+                        '(-j --json)'{-j,--json}'[JSON output format]' \
+                        '(- *)'{-h,--help}'[print subcommand help]' \
+                        '1: :_semtools_workspace_cmds' \
+                        '*::arg:->ws_args' \
+                    && ret=0
+                    case $state in
+                        ws_args)
+                            case $words[1] in
+                                use)
+                                    _arguments \
+                                        '1:name:' \
+                                        '(- *)'{-h,--help}'[print help]'
+                                    ;;
+                                status|prune)
+                                    _arguments \
+                                        '1:name:' \
+                                        '(- *)'{-h,--help}'[print help]'
+                                    ;;
+                            esac
+                            ;;
+                    esac
+                    ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_semtools_cmds() {
+    local -a cmds
+    cmds=(
+        'parse:convert documents to Markdown via a parsing backend'
+        'search:fast semantic + keyword search over files'
+        'ask:document-grounded Q&A using an LLM agent'
+        'workspace:manage semtools workspaces (use/status/prune)'
+    )
+    _describe -t commands 'semtools command' cmds
+}
+
+_semtools_workspace_cmds() {
+    local -a cmds
+    cmds=(
+        'use:use or create a workspace (prints export command)'
+        'status:show active workspace and basic stats'
+        'prune:remove stale or missing files from store'
+    )
+    _describe -t commands 'workspace command' cmds
+}
+
+_semtools "$@"
