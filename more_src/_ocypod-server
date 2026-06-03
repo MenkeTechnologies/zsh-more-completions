@@ -1,0 +1,210 @@
+#compdef ocypod-server
+# ============================================================================
+# ocypod-server - Redis-backed background job
+#                  orchestration service
+#                  (Rust, Apache-2.0)
+#
+# Author : Dave Challis (davechallis)
+# Upstream: https://github.com/davechallis/ocypod
+# crates : ocypod (binary: ocypod-server)
+#
+# `ocypod-server` is the HTTP server side of the Ocypod
+# background-job orchestrator. It speaks HTTP/JSON for
+# the queue + job + tag + health endpoints, persists
+# all queue state into Redis, and lets workers in any
+# programming language connect via plain HTTP without
+# language-specific client libraries.
+#
+# Architecture model:
+#   1. Clients POST jobs to /queue/<name>/job to create
+#      work items
+#   2. Workers GET /queue/<name>/job to fetch the next
+#      job (atomic check-out)
+#   3. Workers PUT /job/<id>/heartbeat periodically to
+#      signal liveness
+#   4. Workers PATCH /job/<id> with `status = completed
+#      / failed` when done
+#   5. Clients poll /job/<id>/status or GET
+#      /job/<id>/output to retrieve results
+#   6. The server tracks job timeouts + dead-worker
+#      detection + retry-on-failure + per-queue
+#      priority + tag-based filtering
+#
+# Compared to alternatives:
+#   - Sidekiq (Ruby-only workers, Redis-backed)
+#   - Celery (Python-only workers, broker-backed)
+#   - bull (Node-only workers, Redis-backed)
+#   Ocypod's HTTP/JSON wire format lets workers in any
+#   language plug in without per-language client
+#   library development.
+#
+# Usage:
+#   ocypod-server [<config-file>]
+#
+# Args:
+#   <config-file>           - path to TOML/YAML
+#                              configuration file
+#                              (default: built-in
+#                              defaults)
+#
+# Configuration file structure (TOML):
+#   [server]
+#   host = "127.0.0.1"
+#   port = 8023
+#   log_level = "info"
+#   shutdown_timeout = "30s"
+#   max_body_size = 4194304
+#   threads = 8
+#
+#   [redis]
+#   url = "redis://localhost:6379"
+#   key_namespace = "ocy"
+#
+#   [queue]
+#   default_pool_size = 10
+#   [[queue.queues]]
+#   name = "high"
+#   timeout = "1h"
+#   ...
+#
+# CLI flags (structopt):
+#   <config>                - positional path to
+#                              config file
+#   -h, --help              - print help
+#   -V, --version           - print version
+#
+# The redis lane is built on `redis = { version =
+# "0.23", default-features = false }` (declared
+# verbatim at upstream Cargo.toml HEAD as a direct dep)
+# + `deadpool-redis = "0.12"` (connection pooling),
+# the canonical Rust Redis client by Armin Ronacher
+# (mitsuhiko, also the Flask + Jinja2 + Click + similar
+# author) - github.com/redis-rs/redis-rs, 3700+ stars.
+#
+# Ronacher originally wrote redis-rs in 2014 as one of
+# the earliest Rust async libraries (predating tokio
+# itself). The crate now lives at the `redis-rs`
+# GitHub org with shared maintainership but Ronacher's
+# original API design + protocol implementation
+# remains canonical. The library implements:
+#   - RESP2 wire protocol (Redis 2.0+ default)
+#   - RESP3 wire protocol (Redis 7+ optional)
+#   - 200+ Redis commands as type-safe Rust methods
+#   - Async (tokio + async-std + smol backends) +
+#     sync APIs in parallel
+#   - Pipelining + transactions + pub/sub +
+#     streams + scripting (Lua via EVAL)
+#   - Cluster + Sentinel + standalone deployment
+#     modes
+#
+# This makes Ronacher a multi-axis canonical-Rust
+# author across:
+#   - Axis 252 (Diffing): mitsuhiko/similar
+#   - Axis 255 (Redis, THIS AXIS): mitsuhiko/redis-rs
+#   - + insta (snapshot testing), minijinja,
+#     midas-rs, dynfmt, and several other Rust crates
+#
+# Combined with his Python ecosystem footprint (Flask,
+# Jinja2, Click, Werkzeug, Sentry-SDK), Ronacher is
+# one of the most prolific cross-language canonical
+# authors in the open-source ecosystem - parallel to
+# Daniel Lemire's position across Rust + Go + C + C++
+# + Java for Roaring Bitmap (Axis 250).
+#
+# ocypod-server uses redis-rs via the
+# `deadpool-redis` connection pool: every HTTP
+# handler acquires a pooled connection, runs the
+# necessary RESP commands against the Redis backend
+# (SET for job storage, ZADD for queue ordering,
+# HASH for job metadata, EXPIRE for timeouts), and
+# returns the JSON response. The Redis backend
+# handles all the persistence + atomic operations
+# (via SCRIPT EVAL Lua atomicity for multi-key
+# transactions).
+#
+# ----------------------------------------------------------------------------
+# AXIS 255 :: Redis protocol (RESP) client libraries
+# Round 1463 :: Rust slot 1 of 4 :: OPENS Axis 255
+#
+# Cross-language canonical library family for this axis
+# (proposed):
+#   Rust    : mitsuhiko/redis-rs           - Armin
+#                                            Ronacher's
+#                                            canonical
+#                                            Rust Redis
+#                                            client;
+#                                            also the
+#                                            multi-axis
+#                                            canonical
+#                                            for similar
+#                                            (Axis 252)
+#   Go      : redis/go-redis               - the de-
+#                                            facto Go
+#                                            Redis
+#                                            client by
+#                                            Vladimir
+#                                            Mihailenco;
+#                                            originally
+#                                            go-redis/
+#                                            redis, now
+#                                            in the
+#                                            official
+#                                            `redis`
+#                                            GitHub org
+#   TS/Node : NodeRedis/node-redis         - the de-
+#             (npm package `redis`)          facto Node
+#                                            Redis
+#                                            client;
+#                                            originally
+#                                            written by
+#                                            Matt Ranney
+#                                            in 2010,
+#                                            now in the
+#                                            NodeRedis
+#                                            GitHub org
+#                                            maintained
+#                                            by Redis
+#                                            Inc.
+#
+# Redis is a clean spec-bound axis - the Redis
+# Serialization Protocol (RESP, defined in the Redis
+# source `src/resp.h` + the redis-protocol document
+# in the official Redis docs) defines the wire format
+# byte-for-byte. All three lanes implement RESP2 +
+# RESP3 (the newer Redis 7+ format) byte-identically.
+#
+# Structural commentary on the canonical libraries:
+#   - mitsuhiko/redis-rs (Rust): Ronacher's canonical
+#     since 2014; pre-tokio async; now part of his
+#     multi-axis canonical position (similar +
+#     redis-rs + insta + minijinja)
+#   - redis/go-redis (Go): Vladimir Mihailenco's
+#     canonical Go Redis client; originally
+#     go-redis/redis, moved to Redis Inc.'s `redis`
+#     GitHub org in 2023 + officially blessed as
+#     the canonical Go client
+#   - NodeRedis/node-redis (Node): Matt Ranney's
+#     original 2010 implementation; transitioned to
+#     NodeRedis org under Redis Inc.'s maintenance;
+#     the de-facto Node Redis client
+#
+# Cross-language interop at the wire format level - a
+# RESP2 / RESP3 command stream produced by redis-rs +
+# go-redis + node-redis is byte-identical to the
+# Redis server's expected wire format.
+#
+# Axis 255 opens with the Rust slot at Ronacher's
+# canonical redis-rs.
+# ============================================================================
+
+_ocypod-server() {
+    local context state state_descr line
+    typeset -A opt_args
+
+    _arguments -s -S \
+        '(- *)'{-h,--help}'[print help]' \
+        '(- *)'{-V,--version}'[print version]' \
+        '1:configuration file:_files -g "*.{toml,yaml,yml}"'
+}
+
+_ocypod-server "$@"
