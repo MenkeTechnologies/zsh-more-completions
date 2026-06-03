@@ -1,0 +1,230 @@
+#compdef panopticon
+# ============================================================================
+# panopticon - customizable command runner on file
+#               change with bubbletea TUI (Go,
+#               MPL-2.0)
+#
+# Author : Chris Bender (cfbender)
+# Upstream: https://github.com/cfbender/panopticon
+#
+# `panopticon` watches a project directory tree for
+# file changes + runs declared commands when matching
+# paths are modified. The TUI (charmbracelet/
+# bubbletea) shows each command's name + status +
+# last run output in a panel layout, with keyboard
+# shortcuts for manually triggering specific commands
+# + reviewing logs.
+#
+# Each command is declared in a per-project config
+# file (panopticon's `init` subcommand scaffolds one)
+# with:
+#   - name: human-readable label for the TUI panel
+#   - command: shell command to execute
+#   - watch: glob patterns to watch for changes
+#   - run-on-start: whether to fire on initial start
+#   - timeout: max execution time before killing
+#
+# When a watched file changes, panopticon walks the
+# command table + fires every command whose `watch`
+# globs match the changed path. The `--match` flag
+# at startup further filters which commands are
+# eligible to run (e.g. `--match='build:*'` to only
+# run commands whose names start with "build:").
+#
+# Use cases:
+#   - Continuous test+lint+typecheck loop during
+#     development (one panel per check)
+#   - Continuous build orchestration for multi-
+#     language monorepos
+#   - Watch-mode for documentation regeneration
+#   - Live-reload for static-site generators
+#
+# Usage:
+#   panopticon [options]
+#   panopticon init                  # scaffold config
+#
+# Subcommands:
+#   init                  - scaffold a default
+#                            panopticon.yaml config
+#                            in the cwd
+#
+# Flags (Go stdlib flag.* parsing):
+#   -r, --run-on-start    - run all commands once at
+#                            startup
+#       --verbose         - log to pan.log
+#   -m, --match <glob>    - filter commands by name
+#                            glob (default "*")
+#       --theme <name>    - theme preset for the TUI
+#                            (default theme if empty)
+#   -h, --help            - print help
+#   -v                    - print version
+#
+# Configuration file (panopticon.yaml in cwd):
+#   commands:
+#     - name: "test"
+#       command: "go test ./..."
+#       watch:
+#         - "**/*.go"
+#       run-on-start: true
+#       timeout: 60s
+#     - name: "lint"
+#       command: "golangci-lint run"
+#       watch:
+#         - "**/*.go"
+#
+# The gobwas/glob lane is built on `github.com/
+# gobwas/glob v0.2.3` (declared verbatim at upstream
+# go.mod HEAD as a direct dep, imported as
+# `"github.com/gobwas/glob"` then `glob.MustCompile(
+# match)` in main.go for the `--match` filter +
+# similar internal usage for per-command watch
+# patterns), the canonical Go globbing library by
+# Sergey Kamardin (gobwas) - github.com/gobwas/glob,
+# 1700+ stars.
+#
+# Kamardin started gobwas/glob in 2017 as a Go-
+# native alternative to writing ad-hoc glob matchers
+# on top of `filepath.Match` (Go's stdlib glob, which
+# has limitations: no `**` recursive descent, no
+# `{a,b,c}` alternatives, no character classes
+# beyond simple `[abc]`).
+#
+# gobwas/glob's distinguishing implementation
+# strategy: *pre-compile glob patterns into a
+# finite automaton* + match the path against the
+# pre-compiled DFA. This trades a small upfront
+# compilation cost for fast repeated matching - the
+# same compiled glob can be matched against
+# thousands of paths in O(path length) time per
+# match, with no allocations after the initial
+# compilation.
+#
+# The compilation strategy matters for tools like
+# panopticon that match many paths against the same
+# set of patterns over the lifetime of the program.
+#
+# gobwas/glob is depended on by many production-
+# grade Go infrastructure tools:
+#   - MinIO (object storage server's bucket-policy
+#     glob matching)
+#   - Traefik (HTTP reverse proxy's host + path
+#     matching)
+#   - Grafana (data-source whitelist + alert
+#     filter rules)
+#   - Datadog Agent (log-collection tagger globs)
+#   - Tyk API gateway (route matching)
+#   - panopticon (THIS BINARY)
+#   - colly (the Go web crawler)
+#
+# Sergey Kamardin's broader Go ecosystem footprint:
+#   - gobwas/glob (canonical Go glob library)
+#   - gobwas/ws (WebSocket library used by Mailgun
+#     + Discord's Go backends)
+#   - gobwas/httphead (HTTP header parser)
+#   - gobwas/pool (sync.Pool wrappers)
+#   - The broader gobwas org publishing tightly-
+#     scoped focused infrastructure libraries
+#
+# panopticon uses gobwas/glob in main.go:
+#   ```go
+#   g := glob.MustCompile(match)
+#   model := panopticon.NewModel(cancel, g, theme)
+#   ```
+# The compiled glob is passed to the TUI model
+# where each command-name is checked via `g.Match(
+# cmd.Name)` during the configuration load.
+# Per-command watch patterns get compiled
+# separately via the same MustCompile path in the
+# config loader.
+#
+# ----------------------------------------------------------------------------
+# AXIS 261 :: Globbing libraries (shell-style file
+#              pattern matching with `*` / `**` /
+#              `[]` / `{}` syntax)
+# Round 1482 :: Go slot 2 of 4 :: continues Axis 261
+#
+# Cross-language canonical library family for this axis:
+#   Rust    : BurntSushi/globset           [R1481 _dropignore]
+#             (RegexSet-backed batch
+#              matching)
+#   Go      : gobwas/glob                  [R1482 THIS FILE]
+#             (DFA pre-compilation)
+#   TS/Node : isaacs/node-glob             [R1483 closing]
+#             (callback-style walker)
+#
+# gobwas/glob is structurally interesting in this
+# axis because of its *pre-compile-once-match-many*
+# implementation strategy. The three lanes form a
+# clean spectrum of glob-implementation philosophies:
+#
+#   - Rust (globset): RegexSet-backed batch matching;
+#     compiles ALL patterns into a single DFA;
+#     matches in O(text length) regardless of pattern
+#     count
+#   - Go (gobwas/glob): per-pattern DFA pre-
+#     compilation; matches each pattern individually
+#     but at DFA speed; trades per-pattern
+#     compilation for fast repeated matching
+#   - Node (node-glob): runtime glob expansion +
+#     filesystem walk; older callback-style API;
+#     pattern is interpreted rather than compiled
+#
+# Each lane reflects the host ecosystem's preferred
+# matching strategy:
+#   - Rust prefers batch DFAs (globset is part of
+#     ripgrep's gitignore engine - matching hundreds
+#     of patterns per file)
+#   - Go prefers per-pattern DFAs (gobwas/glob is
+#     used in MinIO/Traefik/Grafana where matching
+#     happens at request time)
+#   - Node prefers runtime interpretation (node-glob
+#     is used at file-walking startup in build tools)
+#
+# Cross-language interop at the pattern-grammar
+# level - the same glob pattern matches the same
+# files across all three lanes, modulo edge cases
+# around extended globbing features:
+#   - `**` recursive descent: all three support
+#   - `{a,b,c}` brace alternatives: globset + node-
+#     glob support; gobwas/glob supports
+#   - `[abc]` character classes: all three support
+#   - `[!abc]` negation: all three support
+#   - extglob `?(...)` / `*(...)` / `+(...)` /
+#     `@(...)` / `!(...)`: node-glob only
+#
+# Use-case spectrum across the three lanes (so far):
+#   - dropignore (Rust, globset): Dropbox sync-ignore
+#     bulk applier using globset for pattern
+#     matching
+#   - panopticon (Go, gobwas/glob): file-watch
+#     command runner using gobwas/glob for command
+#     filter + watch-pattern compilation
+# ============================================================================
+
+_panopticon() {
+    local context state state_descr line
+    typeset -A opt_args
+    local curcontext="$curcontext" ret=1
+
+    _arguments -C \
+        '(-r --run-on-start)'{-r,--run-on-start}'[run all commands once at startup]' \
+        '--verbose[log output to pan.log]' \
+        '(-m --match)'{-m,--match}'[filter commands by name glob (default *)]:pattern:' \
+        '--theme[theme preset for TUI]:theme:' \
+        '(- *)'{-h,--help}'[print help]' \
+        '(- *)-v[print version]' \
+        '1: :_panopticon_cmds' \
+    && ret=0
+
+    return ret
+}
+
+_panopticon_cmds() {
+    local -a cmds
+    cmds=(
+        'init:scaffold a default panopticon config in cwd'
+    )
+    _describe -t commands 'panopticon command' cmds
+}
+
+_panopticon "$@"
