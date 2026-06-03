@@ -1,0 +1,112 @@
+#compdef cross-seed
+# ============================================================================
+# cross-seed - fully-automatic torrent cross-seeding CLI (TypeScript, Apache-2.0)
+#
+# Author : cross-seed maintainers
+# Upstream: https://github.com/cross-seed/cross-seed
+# npm    : cross-seed
+#
+# cross-seed automates BitTorrent cross-seeding workflows: given a
+# local torrent + downloaded data, it searches Torznab + Newznab
+# indexers (Prowlarr / Jackett) for the same content on other
+# trackers, and submits the matched .torrent files to a torrent
+# client (qBittorrent, Deluge, Transmission, rTorrent) configured
+# to cross-seed against the local data. Runs as a one-shot CLI or
+# as a long-running daemon with periodic searches + RSS feed
+# scanning + push notifications.
+#
+# The bencode lane is built on `bencode ^2.0.1` (declared verbatim
+# at upstream cross-seed/cross-seed/cross-seed/package.json HEAD),
+# the canonical Node bencode codec maintained by the WebTorrent org
+# (github.com/webtorrent/bencode). It implements BEP 3 in pure
+# JavaScript with a Buffer-based API (`bencode.encode(obj)` -> Buffer,
+# `bencode.decode(buf)` -> obj), supports the four BEP 3 primitives
+# (integer, byte-string, list, dict), preserves byte-string types
+# (not converted to UTF-8 strings - critical for the `pieces` field
+# of the metainfo `info` dictionary which is concatenated 20-byte
+# SHA-1 hashes), and round-trips canonical-form output for
+# info-hash stability.
+#
+# Verbatim usage from upstream `src/torrent.ts`:
+#
+#     import bencode from "bencode";
+#     ...
+#     const metainfo = bencode.decode(buf);
+#     const infoBytes = bencode.encode(metainfo.info);
+#     const infoHash = crypto
+#         .createHash("sha1").update(infoBytes).digest("hex");
+#
+# This is the canonical use: decode the full .torrent, re-encode the
+# `info` sub-dict, SHA-1 the result, and emit the hex info-hash for
+# tracker announce + cross-tracker matching.
+#
+# ----------------------------------------------------------------------------
+# AXIS 205 :: BENCODE / BITTORRENT METAINFO (BEP 3)  [CLOSES]
+# Round 1315 :: TS-Node slot 3 of 4 :: CLOSES Axis 205 (198th axis closed)
+#
+# Cross-language canonical library family for this axis:
+#   Rust    : P3KI/bendy                    [R1313 _vcz]
+#   Go      : zeebo/bencode                 [R1314 _storrent]
+#   TS/Node : webtorrent/bencode            [R1315 THIS FILE]
+#
+# All three lanes' canonical libraries differ in their primary
+# encoding entry point but converge on the same BEP 3 wire format:
+# typed `decode<T>(bytes) -> T` in Rust via bendy's `FromBencode`
+# trait; reflective `Decode(io.Reader, &v)` in Go via zeebo/bencode
+# struct tags; `Buffer`-in/`object`-out in Node via webtorrent's
+# `bencode.decode(buf)`. Cross-seed exercises the JS lane at scale:
+# parsing thousands of .torrent files in a single daemon run while
+# computing info-hashes and matching across multiple trackers.
+# ============================================================================
+
+_cross-seed() {
+    local context state state_descr line
+    typeset -A opt_args
+    local curcontext="$curcontext" ret=1
+
+    _arguments -C \
+        '(-V --version)'{-V,--version}'[print version]' \
+        '(-v --verbose)'{-v,--verbose}'[log verbose output]' \
+        '(- *)'{-h,--help}'[print help]' \
+        '1: :_xs_cmds' \
+        '*::arg:->args' \
+    && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                update-torrent-cache-trackers) _arguments '1:old-announce-url:' '2:new-announce-url:' ;;
+                diff)         _arguments '1:searchee torrent:_files -g "*.torrent"' '2:candidate torrent:_files -g "*.torrent"' ;;
+                tree)         _arguments '1:torrent:_files -g "*.torrent"' ;;
+                daemon|rss|search|inject|restore|test-notification|api-key|reset-api-key|reset-user|dev-login|clear-indexer-failures|clear-cache|clear-client-cache) _arguments '(- *)'{-h,--help}'[help]' ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_xs_cmds() {
+    local -a cmds
+    cmds=(
+        'update-torrent-cache-trackers:Update announce URLs in the torrent cache'
+        'diff:Analyze two torrents for cross-seed compatibility'
+        'tree:Print a torrent file tree'
+        'clear-indexer-failures:Clear cached indexer failure / caps state'
+        'clear-cache:Clear the search-decision cache + timestamp filters'
+        'clear-client-cache:Clear cross-seed cache of client torrents'
+        'api-key:Show the API key'
+        'reset-api-key:Reset the API key'
+        'reset-user:Delete all users and sessions'
+        'dev-login:Create a development login URL'
+        'daemon:Start the cross-seed daemon (long-running)'
+        'rss:Run an RSS feed scan'
+        'search:Search for cross-seeds across indexers'
+        'inject:Inject saved candidate torrents to the configured client'
+        'restore:Restore from the torrent cache'
+        'test-notification:Send a test push notification'
+    )
+    _describe -t commands 'cross-seed command' cmds
+}
+
+_cross-seed "$@"
