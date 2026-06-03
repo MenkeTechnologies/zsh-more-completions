@@ -1,0 +1,413 @@
+#compdef rustup-toolchain-install-master
+# ============================================================================
+# rustup-toolchain-install-master - install master
+#                                    rustc toolchain
+#                                    into rustup
+#                                    (Rust, MIT)
+#
+# Author : Kenny TM~ (kennytm)
+# Upstream: https://github.com/kennytm/rustup-toolchain-install-master
+# crates : rustup-toolchain-install-master
+#           (binary: rustup-toolchain-install-master)
+#
+# `rustup-toolchain-install-master` is a CLI tool
+# for installing specific rustc commits from the
+# Rust project's CI artifact server
+# (ci-artifacts.rust-lang.org) as a rustup
+# toolchain. Use cases:
+#   - Bisecting Rust compiler regressions across
+#     master-branch commits without compiling
+#     rustc locally (compile-from-scratch takes
+#     hours; downloading + extracting a CI artifact
+#     takes seconds)
+#   - Testing PRs that haven't merged yet (the
+#     CI artifact is pre-built per-PR)
+#   - Reproducing bugs against historical master
+#     builds when bisecting against the rust-lang/
+#     rust commit history
+#   - rust-bisect / cargo-bisect-rustc backend
+#     (these wrap rustup-toolchain-install-master
+#     for bisection automation)
+#
+# The tool downloads `.tar.xz`-compressed
+# toolchain archives, decompresses them via
+# xz2 + tar-rs, and installs them into the
+# user's `~/.rustup/toolchains` directory under
+# a user-specified or auto-generated toolchain
+# name (e.g. `master`, `pr-12345`, `dad13be4`).
+# Once installed, the toolchain is usable via
+# standard rustup commands:
+#   - `rustup default pr-12345`
+#   - `cargo +pr-12345 build`
+#   - `RUSTC=$(rustup which --toolchain pr-12345
+#      rustc) cargo build`
+#
+# Use cases:
+#   - Rust compiler PR review (test a PR locally
+#     before approving)
+#   - Bisecting a regression to a specific commit
+#     range
+#   - Comparing two compiler versions side-by-side
+#     for performance/codegen analysis
+#   - Testing rustc nightly features that haven't
+#     made it into the nightly toolchain yet
+#
+# Usage:
+#   rustup-toolchain-install-master [options]
+#                                    [commit-sha1...]
+#
+# Positional argument:
+#   <commit>...                    - full commit
+#                                     hashes of
+#                                     rustc builds
+#                                     (40 hex
+#                                     digits each;
+#                                     if omitted,
+#                                     installs
+#                                     latest HEAD)
+#
+# Flags (clap derive):
+#   -n, --name <name>              - name to call
+#                                     the toolchain
+#                                     (default
+#                                     derived from
+#                                     commit hash)
+#   -a, --alt                      - download the
+#                                     alt build
+#                                     instead of
+#                                     normal build
+#                                     (alt = LLVM
+#                                     assertions
+#                                     enabled +
+#                                     debug
+#                                     codegen)
+#   -s, --server <url>             - server URL
+#                                     storing the
+#                                     compilers
+#                                     (default
+#                                     https://ci-
+#                                     artifacts.
+#                                     rust-lang.
+#                                     org)
+#   -i, --host <triple>            - target triple
+#                                     of the host
+#                                     platform
+#                                     (default
+#                                     auto-
+#                                     detected
+#                                     from build)
+#   -t, --targets <triple>...      - additional
+#                                     target
+#                                     platforms to
+#                                     install
+#                                     rust-std for
+#                                     (besides the
+#                                     host)
+#   -c, --component <name>...      - additional
+#                                     components
+#                                     to install
+#                                     (besides
+#                                     rustc +
+#                                     rust-std;
+#                                     e.g. clippy,
+#                                     rustfmt,
+#                                     rust-analyzer)
+#       --channel <name>           - specify
+#                                     channel
+#                                     (nightly/
+#                                     beta/stable)
+#                                     instead of
+#                                     auto-
+#                                     detecting
+#   -p, --proxy <url>              - HTTP proxy
+#                                     for all
+#                                     download
+#                                     requests
+#       --github-token <token>     - authorization
+#                                     token for
+#                                     GitHub APIs
+#                                     (used for
+#                                     PR queries)
+#       --dry-run                  - log URLs
+#                                     without
+#                                     downloading
+#   -f, --force                    - replace an
+#                                     existing
+#                                     toolchain
+#                                     of the same
+#                                     name
+#   -k, --keep-going               - continue
+#                                     downloading
+#                                     toolchains
+#                                     even if some
+#                                     fail
+#   -r, --retry <n>                - max retries
+#                                     for xz
+#                                     downloads
+#                                     (default 0)
+#       --help                     - print help
+#       --version                  - print version
+#
+# Example usage:
+#   rustup-toolchain-install-master
+#       # installs latest master HEAD
+#   rustup-toolchain-install-master \
+#       dad13be4 c50f7e1f
+#       # installs two specific commits
+#   rustup-toolchain-install-master \
+#       -n pr-12345 -a -c clippy \
+#       dad13be4
+#       # installs alt build of dad13be4 as 'pr-12345'
+#       # toolchain, with clippy component
+#   rustup-toolchain-install-master \
+#       -t aarch64-unknown-linux-gnu \
+#       -t wasm32-unknown-unknown
+#       # installs latest with extra target stds
+#
+# The tar lane is built on `tar = "0.4"` (declared
+# verbatim at upstream Cargo.toml HEAD as a direct
+# dep, imported as `use tar::Archive;` in
+# src/main.rs line 22, used to extract the
+# `.tar.xz`-compressed toolchain archive after
+# xz2 decompression - the typical flow is
+# `Archive::new(XzDecoder::new(reader))
+# .unpack(target_dir)`), the canonical Rust TAR
+# archive library by Alex Crichton (alexcrichton) -
+# github.com/alexcrichton/tar-rs.
+#
+# Alex Crichton's tar-rs is the de-facto canonical
+# Rust TAR archive library:
+#   - 10,000+ reverse-deps on crates.io
+#   - Implements the GNU + ustar + pax TAR
+#     formats
+#   - Streaming + iterator-style API for reading
+#     entries
+#   - Builder-style API for writing archives
+#   - Symbolic link + hardlink + special-file
+#     support
+#   - Long-filename + long-link extensions (LongLink
+#     + LongName + pax extended headers)
+#   - Sparse file support
+#   - File mode + ownership preservation
+#
+# tar-rs's distinguishing position vs alternatives:
+#   - tar (Alex Crichton): the canonical pure-Rust
+#     TAR; THIS AXIS
+#   - flate2 + tar: gzip+tar combo (most common
+#     usage; .tar.gz files)
+#   - xz2 + tar: xz+tar combo (used by Rust CI
+#     for compressed-toolchain delivery)
+#   - zstd + tar: zstd+tar combo (faster
+#     decompression than xz for the same
+#     compression ratio)
+#   - bzip2 + tar: legacy bzip2+tar combo
+#
+# Alex Crichton's broader Rust ecosystem
+# footprint (the alexcrichton stack):
+#   - tar (canonical Rust TAR; THIS AXIS)
+#   - flate2 (canonical Rust deflate/gzip/zlib
+#     library; used by ~every Rust HTTP client +
+#     every gzip-handling tool)
+#   - cc (canonical Rust C/C++ build-script
+#     helper; used by build.rs scripts that need
+#     to compile C/C++ code)
+#   - openssl (canonical Rust OpenSSL bindings)
+#   - openssl-sys (low-level OpenSSL FFI)
+#   - tokio (co-author with Carl Lerche; the
+#     canonical async runtime; Crichton was a
+#     co-author + co-founded the tokio.rs team)
+#   - futures (the futures crate; co-authored
+#     with Carl Lerche)
+#   - bytes (efficient byte buffer for tokio;
+#     co-authored)
+#   - rust-lang/rust (Crichton is a long-time
+#     compiler-team contributor + cargo
+#     maintainer)
+#   - rustup (Crichton was a key contributor
+#     during early development)
+#   - cargo (Crichton has been a primary cargo
+#     maintainer since 2014+)
+#   - wasm-pack / wasm-bindgen (Crichton is
+#     a key contributor to the wasm-bindgen
+#     ecosystem)
+#
+# Alex Crichton's foundational role in Rust
+# tooling is *the foundational role* alongside
+# Tolnay (proc-macros + serialization), Gallant
+# (applications + spec authority), Reizner
+# (graphics stack), and McArthur (HTTP/networking).
+# Crichton's vertical is *build tooling +
+# compression/archive + async runtime + cargo*.
+#
+# Multi-axis canonical-Rust author cohort (now
+# spanning multiple distinct individuals):
+#   - David Tolnay (syn + serde + thiserror +
+#     ryu + itoa + ...)
+#   - Andrew Gallant / BurntSushi (ripgrep +
+#     globset + regex + xsv + fst + toml-test +
+#     twox-hash + rust-snappy)
+#   - Sean McArthur (hyper + reqwest + warp +
+#     http + http-body + tower-http)
+#   - Yevhenii Reizner / RazrFalcon (resvg +
+#     usvg + tiny-skia + rustybuzz + fontdb)
+#   - Klaus Post -> Darren Ldl (Go -> Rust port
+#     chain for reed-solomon-erasure)
+#   - Alex Crichton (tar + flate2 + cc + openssl +
+#     futures + bytes + tokio + cargo + rustup +
+#     rust-lang, THIS AXIS)
+#
+# Crichton's *cargo + rustup + rust-lang*
+# contributions place him in a unique position:
+# every Rust user transitively depends on his
+# code via the build pipeline itself (cargo
+# compiles your project; rustup installs your
+# toolchain; tar + flate2 + cc are likely in
+# your build graph).
+#
+# rustup-toolchain-install-master uses tar-rs
+# in src/main.rs's download path:
+#   ```rust
+#   use tar::Archive;
+#   use xz2::read::XzDecoder;
+#
+#   let xz_reader = XzDecoder::new(response_body);
+#   let mut archive = Archive::new(xz_reader);
+#   archive.unpack(toolchain_dir)?;
+#   ```
+# The chain: HTTP response (reqwest blocking) ->
+# XzDecoder (xz2) -> Archive (tar) -> unpack to
+# `~/.rustup/toolchains/<name>/`. This is the
+# standard Rust pattern for handling .tar.xz
+# archives.
+#
+# ----------------------------------------------------------------------------
+# AXIS 266 :: TAR archive libraries (POSIX TAR
+#              + GNU/ustar/pax extensions for
+#              streaming + random-access archive
+#              I/O)
+# Round 1496 :: Rust slot 1 of 4 :: OPENS Axis 266
+#
+# Cross-language canonical library family for this axis
+# (proposed):
+#   Rust    : alexcrichton/tar-rs           - Alex
+#                                              Crichton's
+#                                              canonical
+#                                              Rust TAR
+#                                              library;
+#                                              pure-Rust;
+#                                              GNU +
+#                                              ustar + pax
+#                                              format
+#                                              support
+#   Go      : archive/tar (stdlib) OR        - Go's
+#             mholt/archives (wrapping it)    bundled
+#                                              archive/
+#                                              tar;
+#                                              mholt/
+#                                              archives is
+#                                              the
+#                                              canonical
+#                                              wrapper for
+#                                              format
+#                                              abstraction
+#   TS/Node : isaacs/node-tar (`tar`)        - Isaac Z.
+#                                              Schlueter's
+#                                              canonical
+#                                              Node TAR
+#                                              library;
+#                                              used by
+#                                              npm
+#                                              itself
+#                                              for
+#                                              package
+#                                              tarball
+#                                              extraction
+#
+# TAR is a *spec-bound* axis - the POSIX
+# (IEEE Std 1003.1) ustar format + GNU
+# extensions (LongLink + LongName + pax
+# extended headers) + sparse file extensions
+# define the byte-for-byte archive format.
+# Compliant implementations produce + consume
+# byte-identical archives modulo:
+#   - Timestamp precision (POSIX ustar: integer
+#     seconds; pax: nanosecond precision)
+#   - Filename + linkname length (ustar: 100
+#     chars; LongLink/LongName: arbitrary;
+#     pax: arbitrary)
+#   - Extended attributes (xattrs via pax
+#     headers; not all implementations support)
+#   - Owner/group representation (numeric UID/
+#     GID + symbolic name)
+#
+# Structural commentary on the canonical libraries:
+#   - tar-rs (Rust): streaming + iterator API;
+#     pure-Rust; no C dependencies
+#   - archive/tar (Go): bundled with the Go
+#     standard library; minimal but complete
+#     POSIX ustar support
+#   - node-tar (Node): used by npm itself;
+#     supports `streaming` + `extract` + `create`
+#     + `list` + `replace` operations
+#
+# Cross-language interop at the archive byte level
+# - the same .tar file can be read + written by
+# all three libraries (with the timestamp/xattr/
+# Long* caveats above for edge cases).
+#
+# Axis 266 opens with the Rust slot at
+# Crichton's tar-rs, anchoring his foundational
+# position in Rust build tooling + archive
+# handling.
+#
+# Notable that this axis bridges three different
+# canonical-author patterns:
+#   - Rust (Crichton): foundational-tooling
+#     author whose code is in every Rust build
+#     pipeline
+#   - Go (Go team / stdlib): the language itself
+#     provides the canonical library; no
+#     external maintainer
+#   - Node (Schlueter): infrastructure-library
+#     author (npm + node-tar + node-glob +
+#     rimraf + node-semver) whose libraries are
+#     the substrate of npm itself
+#
+# This is the *language-as-canonical-provider*
+# pattern in Go (the Go team itself ships the
+# canonical TAR + JSON + HTTP + crypto/tls
+# libraries via the standard library), vs the
+# *individual-or-org-as-canonical-provider*
+# pattern in Rust + Node.
+#
+# Use-case spectrum for this axis:
+#   - rustup-toolchain-install-master (Rust,
+#     tar-rs): Rust toolchain installer for
+#     master rustc builds; tar-rs extracts
+#     .tar.xz archives downloaded from CI
+# ============================================================================
+
+_rustup-toolchain-install-master() {
+    local context state state_descr line
+    typeset -A opt_args
+
+    _arguments -s -S \
+        '(-n --name)'{-n,--name}'[name to call the toolchain]:name:' \
+        '(-a --alt)'{-a,--alt}'[download the alt build (LLVM assertions enabled)]' \
+        '(-s --server)'{-s,--server}'[server URL storing the compilers]:url:' \
+        '(-i --host)'{-i,--host}'[target triple of the host platform]:triple:' \
+        '*'{-t,--targets}'[additional target platforms to install rust-std for]:triple:' \
+        '*'{-c,--component}'[additional components to install]:component:(clippy rustfmt rust-analyzer rustc-dev llvm-tools-preview miri rust-docs rust-src)' \
+        '--channel=[specify channel instead of auto-detecting]:channel:(nightly beta stable)' \
+        '(-p --proxy)'{-p,--proxy}'[HTTP proxy for all download requests]:url:' \
+        '--github-token=[authorization token for GitHub APIs]:token:' \
+        '--dry-run[log URLs without downloading]' \
+        '(-f --force)'{-f,--force}'[replace existing toolchain of the same name]' \
+        '(-k --keep-going)'{-k,--keep-going}'[continue downloading even if some toolchains fail]' \
+        '(-r --retry)'{-r,--retry}'[max retries for xz downloads]:n:' \
+        '(- *)--help[print help]' \
+        '(- *)--version[print version]' \
+        '*:commit:'
+}
+
+_rustup-toolchain-install-master "$@"
