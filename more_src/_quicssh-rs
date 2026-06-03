@@ -1,0 +1,236 @@
+#compdef quicssh-rs
+# ============================================================================
+# quicssh-rs - QUIC proxy that tunnels SSH over QUIC
+#               (Rust, MIT)
+#
+# Author : oowl
+# Upstream: https://github.com/oowl/quicssh-rs
+# crates : quicssh-rs (binary: quicssh-rs)
+#
+# `quicssh-rs` is a transparent proxy pair that wraps an
+# existing SSH client / server with QUIC transport.
+# Unlike SSH-over-QUIC implementations that require
+# modifying both the SSH client and server (or sshd
+# itself), quicssh-rs runs as two unmodified-protocol
+# bridges:
+#   - the SSH client invokes
+#     `ssh -o ProxyCommand="quicssh-rs client <addr>"`
+#     to tunnel its outbound stdio through a QUIC client
+#   - the QUIC server side runs `quicssh-rs server -l
+#     <listen> -p <sshd-addr>` which terminates the QUIC
+#     connection + forwards the unwrapped stdio to the
+#     real sshd
+#
+# The use case: bypass middleboxes that block long-lived
+# TCP-22 connections (corporate firewalls, hostile NATs,
+# state-actor censorship) by riding SSH inside QUIC
+# (which uses UDP and looks like HTTP/3 to passive
+# observers).
+#
+# quicssh-rs is the Rust port of moul/quicssh (Manfred
+# Touron's original Go implementation from 2018).
+#
+# Usage:
+#   quicssh-rs <command> [global-flags] [command-flags]
+#
+# Commands (clap derive Subcommand):
+#   server      - run the server-side QUIC terminator +
+#                  SSH forwarder
+#   client      - run the client-side stdio + QUIC bridge
+#                  (typically invoked via SSH's
+#                  ProxyCommand)
+#
+# Global flags:
+#   --log <file>           - path to log file (default
+#                             stderr)
+#   --log-level <level>    - log level (error / warn /
+#                             info / debug / trace;
+#                             default error)
+#   -h, --help             - print help
+#   -V, --version          - print version
+#
+# server flags:
+#   -l, --listen <addr>    - QUIC listen address
+#                             (default 0.0.0.0:4433)
+#   -p, --proxy-to <addr>  - forwarded SSH server address
+#                             (e.g. 127.0.0.1:22)
+#   -F, --conf <file>      - alternate config file
+#
+# client flags:
+#   <url>                  - QUIC server URL (positional)
+#   -b, --bind <addr>      - local QUIC client bind
+#                             address
+#
+# Example deployment (from upstream README):
+#   # On the SSH server's host:
+#   quicssh-rs server -l 0.0.0.0:4433 -p 127.0.0.1:22
+#
+#   # On the SSH client side:
+#   ssh -o ProxyCommand="quicssh-rs client wopr:4433" user@dest
+#
+# The quinn lane is built on `quinn = "0.10.2"` (declared
+# verbatim at upstream Cargo.toml HEAD as a direct dep,
+# imported throughout src/client.rs + src/server.rs),
+# the canonical Rust QUIC library by the quinn-rs
+# working group + Dirkjan Ochtman + Benjamin Saunders -
+# github.com/quinn-rs/quinn, 4400+ stars. The crate is
+# the de-facto Rust QUIC implementation, depended on by:
+#   - hyper / reqwest's HTTP/3 support
+#   - cloudflare/boring + cloudflare/quiche-rs alternative
+#     (quiche is Cloudflare's separate impl)
+#   - Solana validator + Solana CLI
+#   - tonic-quic (gRPC over QUIC)
+#   - aws-sdk-rust's HTTP/3 transport
+#
+# quinn implements RFC 9000 (QUIC v1, the IETF
+# Standards Track release, May 2021) + RFC 9001 (QUIC
+# TLS), RFC 9002 (QUIC loss recovery + congestion
+# control), RFC 9221 (unreliable datagrams), plus the
+# QUIC-V2 draft (RFC 9369) and several experimental
+# extensions (multipath QUIC, qlog, datagram
+# fragmentation). Crypto delegated to either `rustls`
+# (default) or `openssl` (opt-in feature). Loss recovery
+# + congestion control via NewReno / Cubic / BBR
+# (BBR via opt-in feature flag).
+#
+# The library exposes both a high-level async API
+# (`Endpoint::server` / `Endpoint::client` +
+# `Connection::open_uni` / `open_bi`) and a low-level
+# protocol-state-machine API for embedding into custom
+# event loops (the `quinn-proto` sister crate).
+#
+# quicssh-rs uses the high-level `Endpoint` + `Connection`
+# + bidirectional `SendStream`/`RecvStream` API: the
+# server `accept`s incoming connections, each connection's
+# bi-stream is paired with a TCP connection to the
+# real sshd; the client opens a bi-stream and pipes
+# stdio bidirectionally through it.
+#
+# ----------------------------------------------------------------------------
+# AXIS 249 :: QUIC / RFC 9000 (UDP-based transport with
+#              TLS 1.3 integrated + multiplexed streams)
+# Round 1445 :: Rust slot 1 of 4 :: OPENS Axis 249
+#
+# Cross-language canonical library family for this axis
+# (proposed):
+#   Rust    : quinn-rs/quinn             - de-facto Rust
+#                                          QUIC implementation;
+#                                          rustls or
+#                                          openssl crypto;
+#                                          BBR / NewReno /
+#                                          Cubic congestion
+#                                          control;
+#                                          depended on by
+#                                          reqwest + Solana
+#                                          + tonic-quic
+#   Go      : quic-go/quic-go            - de-facto Go QUIC
+#                                          implementation
+#                                          by Marten Seemann
+#                                          (former Google
+#                                          Chrome QUIC team);
+#                                          single-author
+#                                          maintained since
+#                                          2016; used by
+#                                          Caddy, Cloudflare
+#                                          Workers, libp2p,
+#                                          algorand
+#   TS/Node : nodejs-undici              - Matteo Collina's
+#             (with quic backend)         Node HTTP client
+#                                          with HTTP/1.1 +
+#                                          HTTP/2 + HTTP/3
+#                                          (via embedded
+#                                          QUIC) support;
+#                                          part of Node's
+#                                          stdlib promotion
+#                                          path (`undici`
+#                                          is promoted to
+#                                          `fetch()` in
+#                                          Node 18+)
+#
+# QUIC is a clean spec-bound axis - RFC 9000 (May 2021)
+# defines the transport-level protocol byte-for-byte;
+# RFC 9001 binds it to TLS 1.3; RFC 9002 specifies loss
+# recovery + congestion control. The IETF interop test
+# matrix validates that compliant implementations talk
+# to each other (the original IETF QUIC working group
+# ran weekly interop testing through the entire 2017-2021
+# spec development cycle).
+#
+# Structural commentary on the canonical libraries:
+#   - quinn-rs/quinn (Rust): single repo + clean split
+#     between `quinn-proto` (sans-I/O protocol state
+#     machine) + `quinn` (high-level tokio-async wrapper);
+#     this split lets the protocol code be unit-tested
+#     deterministically while the I/O layer handles
+#     real-world UDP + socket integration
+#   - quic-go/quic-go (Go): single-author canonical by
+#     Marten Seemann; Seemann was formerly on the Chrome
+#     QUIC team at Google (where IETF QUIC was originally
+#     developed before being de-Google-ified as the IETF
+#     working group's mandate); his Go implementation
+#     co-evolved with Chrome's C++ QUIC implementation
+#   - undici (Node): part of Matteo Collina's broader
+#     Node-fast-HTTP ecosystem; promoted into Node's
+#     `fetch()` builtin starting Node 18 (Oct 2022),
+#     making `undici` the stdlib-adjacent canonical for
+#     Node HTTP including HTTP/3 over QUIC
+#
+# Cross-language interop at the wire format level - the
+# IETF QUIC working group's interop matrix validates
+# that quinn + quic-go + undici (and ngtcp2 + msquic +
+# quiche + lsquic + ...) talk to each other across all
+# RFC 9000 features. The qlog telemetry format (RFC
+# 9369 draft) is a cross-implementation debug log
+# format that all major QUIC libraries can emit.
+#
+# Axis 249 opens with the Rust slot at the canonical
+# quinn-rs Rust QUIC library.
+# ============================================================================
+
+_quicssh-rs() {
+    local context state state_descr line
+    typeset -A opt_args
+    local curcontext="$curcontext" ret=1
+
+    _arguments -C \
+        '--log[path to log file]:file:_files' \
+        '--log-level[log level]:level:(error warn info debug trace)' \
+        '(- *)'{-h,--help}'[print help]' \
+        '(- *)'{-V,--version}'[print version]' \
+        '1: :_quicssh_rs_cmds' \
+        '*::arg:->args' \
+    && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                server)
+                    _arguments \
+                        '(-l --listen)'{-l,--listen}'[QUIC listen address]:addr:' \
+                        '(-p --proxy-to)'{-p,--proxy-to}'[forwarded SSH server address]:addr:' \
+                        '(-F --conf)'{-F,--conf}'[alternate config file]:file:_files' \
+                        '(- *)'{-h,--help}'[print subcommand help]'
+                    ;;
+                client)
+                    _arguments \
+                        '(-b --bind)'{-b,--bind}'[local QUIC client bind address]:addr:' \
+                        '(- *)'{-h,--help}'[print subcommand help]' \
+                        '1:QUIC server URL:'
+                    ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_quicssh_rs_cmds() {
+    local -a cmds
+    cmds=(
+        'server:run the server-side QUIC terminator + SSH forwarder'
+        'client:run the client-side stdio <-> QUIC bridge'
+    )
+    _describe -t commands 'quicssh-rs command' cmds
+}
+
+_quicssh-rs "$@"
