@@ -1,0 +1,188 @@
+#compdef lips
+# ============================================================================
+# lips - Scheme-based powerful Lisp interpreter in
+#         JavaScript (JavaScript -> Node, MIT-style)
+#
+# Author : Jakub T. Jankiewicz (jcubic)
+# Upstream: https://github.com/jcubic/lips
+# npm    : @jcubic/lips (binary: lips)
+#
+# `lips` (LIPS Is Pretty Simple) is Jakub Jankiewicz's
+# R5RS-flavored Scheme interpreter implemented in pure
+# JavaScript - runs in Node, browser, Deno, and Bun. The
+# interpreter supports R7RS-style modules, hygienic
+# macros, tail-call optimization, continuations,
+# JavaScript interop (call-with-js-interface +
+# js->scheme + scheme->js value conversion), and a
+# binary bytecode format (`.xcb`) for ahead-of-time
+# compilation of Scheme source files.
+#
+# Usage:
+#   lips [options] [file]
+#   lips                       # start REPL
+#   lips -e "(+ 1 2)"          # eval one-liner
+#   lips -c source.scm         # compile to .xcb
+#   lips source.xcb            # run pre-compiled
+#
+# Flags (lily argv parser):
+#   -h, --help                 - print help message
+#   -e, --eval <code>          - execute code from
+#                                 command line
+#   -V, --version              - print SRFI-176
+#                                 version information
+#   -c, --compile              - parse + compile the file
+#                                 into binary CBOR
+#                                 bytecode format
+#                                 (`.xcb`)
+#   -b, --bootstrap <file>     - bootstrap stdlib file
+#                                 (default ./dist/std.xcb;
+#                                  use `none` to disable
+#                                  bootstrapping)
+#   -q, --quiet                - don't display REPL
+#                                 banner
+#   -d, --dynamic              - run interpreter with
+#                                 dynamic scope (vs
+#                                 default lexical scope)
+#   -t, --trace                - print JavaScript + Scheme
+#                                 stack traces on
+#                                 exception
+#
+# Files:
+#   ~/.lips_history            - REPL command history
+#   ~/.lips_error              - per-invocation error
+#                                 log
+#
+# Called without arguments lips drops into a REPL with
+# Prism syntax highlighting; called with one positional
+# arg it treats it as a source file and runs it. The
+# `--compile` flag transforms a `.scm` source file into
+# a `.xcb` CBOR-encoded bytecode artifact for faster
+# subsequent startup.
+#
+# The cbor-x lane is built on `cbor-x ^1.6.0` (declared
+# at upstream package.json HEAD as a direct dep,
+# imported from src/lips.js as `import { addExtension,
+# Encoder } from 'cbor-x'`), the canonical high-
+# performance Node CBOR library by Kris Zyp (kriszyp,
+# also the LMDB-js + dbjs author) - github.com/kriszyp/
+# cbor-x, 350+ stars, ~1.5M weekly downloads.
+#
+# cbor-x is a performance-focused CBOR encoder/decoder
+# with two operating modes:
+#   1. SCHEMA-AWARE FAST PATH: when the structure of
+#      encoded objects is predictable (same property
+#      names across invocations), cbor-x records a shared
+#      schema dictionary and encodes property names as
+#      compact varints. Throughput hits ~3-5x the plain
+#      hildjj/node-cbor library in this mode.
+#   2. PLAIN RFC 8949 FALLBACK: for unknown / dynamic
+#      structures, cbor-x falls back to the standard
+#      RFC 8949 encoding without the dictionary
+#      optimization. Still byte-identical with other
+#      RFC 8949 libraries for the same input.
+#
+# The library uses a custom `addExtension(class,
+# encoder, decoder)` API to register per-class encoders
+# for arbitrary JavaScript objects (Date, Map, Set,
+# BigInt, plus user-defined classes) - cbor-x emits
+# them as tagged CBOR values per RFC 8949 §3.4.
+#
+# lips uses cbor-x for the `.xcb` binary bytecode format:
+# the compiled interpreter state (parsed AST + per-
+# symbol environment bindings + macro definitions) is
+# CBOR-encoded with custom extensions for the Lips
+# value classes (LSymbol, Pair, nil, LString,
+# Interpreter, Macro). The `-c/--compile` flag walks
+# the AST + registers extensions via `addExtension` +
+# emits the binary `.xcb` to disk; subsequent runs
+# decode the `.xcb` directly without re-parsing.
+#
+# ----------------------------------------------------------------------------
+# AXIS 247 :: CBOR / RFC 8949 Concise Binary Object
+#              Representation
+# Round 1441 :: TS-Node slot 3 of 4 :: CLOSES Axis 247
+#                                       (240th axis closed,
+#                                        triple-302 landmark)
+#
+# Cross-language canonical library family for this axis:
+#   Rust    : enarx/ciborium             [R1439 _mgd]
+#   Go      : fxamacker/cbor             [R1440 _ogmigo]
+#   TS/Node : kriszyp/cbor-x             [R1441 THIS FILE]
+#
+# kriszyp/cbor-x closes Axis 247 with the *performance-
+# optimized-with-spec-compliant-fallback* pattern. The
+# three lanes form a clean spectrum of CBOR library
+# implementation strategies:
+#
+#   - Rust (enarx/ciborium): the post-serde-cbor
+#     migration canonical Rust CBOR crate by the Enarx
+#     working group; full RFC 8949 + Serde adapter +
+#     deterministic CBOR (dCBOR) subset for blockchain /
+#     COSE use; coordinated by rust-lang nursery after
+#     serde_cbor went unmaintained in 2021
+#   - Go (fxamacker/cbor): FIPS-grade-audited (NCC Group
+#     + Trail of Bits); adopted by Kubernetes CRD
+#     validation (k8s 1.30, 2024), sigstore bundle
+#     parsing, OpenSSF Scorecard, IPLD codecs, Cardano
+#     chain data; library-author Faye Amacker coordinated
+#     with the Go-Kubernetes-sigstore ecosystem for the
+#     canonical-mode encoders
+#   - Node (kriszyp/cbor-x): high-performance encoder
+#     with schema-aware fast path; library-author Kris
+#     Zyp also maintains LMDB-js, so cbor-x co-evolves
+#     with high-throughput on-disk storage; library
+#     fits into a category of "spec-compliant when you
+#     need it, faster when you don't"
+#
+# Cross-language interop at the wire format level - same
+# RFC 8949 byte string round-trips byte-identically
+# through ciborium + fxamacker/cbor + cbor-x (with
+# cbor-x running in its plain RFC 8949 mode, not its
+# schema-aware mode). The cbor-x schema-aware fast path
+# is a Node-internal optimization - the encoded byte
+# stream is still valid RFC 8949 (just uses CBOR tags
+# for the shared-schema dictionary references) and
+# decodes correctly in other RFC 8949 implementations
+# that follow tag-unknown-then-skip semantics.
+#
+# Use-case spectrum across the three lanes:
+#   - mgd (Rust, ciborium): Oxide Maghemite routing
+#     daemon CBOR-encoding RIB/BFD/static-route state
+#     for the on-disk rdb datastore
+#   - ogmigo (Go, fxamacker/cbor): Cardano ogmios
+#     ChainSync client CBOR-decoding on-chain
+#     transaction bodies + witness sets + metadata
+#   - lips (Node, cbor-x): Scheme interpreter CBOR-
+#     encoding compiled `.xcb` bytecode for ahead-of-time
+#     interpreter state caching
+#
+# Three lanes, three use-case shapes (routing daemon
+# state persistence / blockchain client / language
+# runtime bytecode cache), three implementation
+# strategies (Enarx-coordinated post-deprecation
+# canonical / FIPS-grade audited / performance-optimized
+# with spec-compliant fallback), all converging on RFC
+# 8949 wire-format compatibility.
+#
+# Axis 247 closes the round 1441 cycle - 240th axis closed
+# total with the triple-302 round-number landmark
+# (Rust=302 / Go=302 / TS-Node=302).
+# ============================================================================
+
+_lips() {
+    local context state state_descr line
+    typeset -A opt_args
+
+    _arguments -s -S \
+        '(-h --help)'{-h,--help}'[print help message]' \
+        '(-e --eval)'{-e,--eval}'[execute code from command line]:code:' \
+        '(-V --version)'{-V,--version}'[print SRFI-176 version information]' \
+        '(-c --compile)'{-c,--compile}'[parse + compile file into .xcb bytecode]' \
+        '(-b --bootstrap)'{-b,--bootstrap}'[bootstrap stdlib file (or "none" to disable)]:file:_files' \
+        '(-q --quiet)'{-q,--quiet}'[don'\''t display REPL banner]' \
+        '(-d --dynamic)'{-d,--dynamic}'[use dynamic scope (vs default lexical)]' \
+        '(-t --trace)'{-t,--trace}'[print JavaScript + Scheme stack traces on exception]' \
+        '*:Scheme source file:_files -g "*.{scm,xcb,ss,sld,sps}"'
+}
+
+_lips "$@"
