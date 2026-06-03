@@ -1,0 +1,235 @@
+#compdef walrus
+# ============================================================================
+# walrus - Decentralized blob store on Sui (Rust, Apache-2.0)
+#
+# Author : Mysten Labs (MystenLabs)
+# Upstream: https://github.com/MystenLabs/walrus
+#
+# Walrus is a decentralized blob storage protocol built on the
+# Sui Move blockchain for coordination + governance. The CLI
+# is the primary client for storing/reading blobs against a
+# Walrus network: it negotiates encoding, splits blobs into
+# Reed-Solomon coded slivers, distributes them across storage
+# nodes via the Sui contract layer, and emits a content-
+# addressable blob ID. Storage is paid for in WAL (the network's
+# native token) and registered as a Sui-managed Storage object.
+#
+# Subcommand structure (clap derive):
+#   CliCommands - direct CLI operations:
+#     store / write <files>           - publish blob(s) to Walrus
+#     store-quilt / write-quilt       - publish files as a quilt bundle
+#     read <blob-id> [--out file]     - fetch blob by ID
+#     read-quilt                      - fetch + unpack a quilt
+#     list-patches-in-quilt           - list patch IDs in a quilt
+#     blob-status <blob-id>           - on-chain status of a blob
+#     info <subcommand>               - epoch/storage/size/price/bft/coin
+#     health                          - storage-node health check
+#     blob-id <file>                  - compute the Walrus blob ID locally
+#     convert-blob-id                 - convert between blob-ID formats
+#     list-blobs                      - list blobs owned by the wallet
+#     delete                          - delete a deletable blob
+#     stake / request-withdraw-stake / withdraw-stake / list-staked-wal
+#                                     - WAL staking / validator delegation
+#     generate-sui-wallet             - generate a Sui wallet for Walrus
+#     get-wal                         - request WAL from a faucet
+#     burn-blobs / fund-shared-blob / extend / share
+#                                     - blob lifecycle operations
+#     get-blob-attribute / set-blob-attribute
+#         / remove-blob-attribute-fields / remove-blob-attribute
+#                                     - blob metadata management
+#     node-admin <subcommand>         - validator node admin operations
+#     pull-archive-blobs              - download archived blobs
+#     blob-backfill                   - backfill blobs from a peer
+#   DaemonCommands - long-running services:
+#     publisher                       - HTTP publisher API (POST blobs)
+#     aggregator                      - HTTP aggregator API (GET blobs)
+#     daemon                          - combined publisher + aggregator
+#   Json {command_string?}            - JSON-driven invocation (stdin or arg)
+#   completion --shell <shell>        - generate shell completion script
+#
+# Global flags:
+#   --config <file>     - Walrus client config (default search order:
+#                         ./client_config.yaml, $XDG_CONFIG_HOME/walrus/,
+#                         ~/.config/walrus/, ~/.walrus/)
+#   --context <name>    - configuration context (default: defaultContext)
+#   --wallet <file>     - Sui wallet config
+#   --gas-budget <n>    - explicit gas budget (default: auto-estimate)
+#   --json              - emit JSON output
+#   --trace-cli <mode>  - tracing exporter ('otlp' or 'file=path')
+#
+# The twox-hash lane is built on `twox-hash = "2.1.2"` (declared
+# verbatim at upstream workspace Cargo.toml HEAD), the canonical
+# Rust XXHash library by Jake Goulding (github.com/shepmaster/
+# twox-hash, 350+ stars). twox-hash implements Yann Collet's
+# XXH3/XXH64/XXH32 family of non-cryptographic hash functions -
+# the fastest mainstream hash for content addressing and
+# de-duplication workloads (~25 GB/s on a single x86_64 core
+# for XXH3, vs ~5 GB/s for SHA-256-NI). Walrus uses XXHash for
+# the per-sliver fingerprint that drives shard-routing + duplicate
+# detection across storage nodes, where cryptographic strength
+# is not needed (the BLS signature scheme handles authenticity)
+# but throughput matters at the per-byte-stored level.
+#
+# ----------------------------------------------------------------------------
+# AXIS 222 :: XXHash (non-cryptographic ultra-fast content hashing)  [OPENS]
+# Round 1364 :: Rust slot 1 of 4 :: OPENS Axis 222
+#
+# Cross-language canonical library family for this axis (proposed):
+#   Rust    : shepmaster/twox-hash         - canonical Rust XXHash binding
+#   Go      : cespare/xxhash               - de-facto Go XXHash
+#   TS/Node : Cyan4973/xxHash (xxhashjs)   - JS port from Pierre Curto
+#                                            (or pierrec/js-xxhash)
+#
+# XXHash (Yann Collet, 2012) sits in the operational sweet spot
+# of "fast enough that the hash never bottlenecks" - the entire
+# hash-table + content-addressable-store ecosystem (RocksDB,
+# Cassandra, Spark, ClickHouse, Sled, BadgerDB) has converged
+# on XXH3 as the non-crypto default. The cross-language
+# uniformity is total: a 64-bit XXH64 of the same byte sequence
+# is bit-identical from Rust, Go, and JavaScript (and C, Java,
+# Python, Ruby, ...). This makes XXHash the natural identifier
+# format for cross-stack content addressing - Walrus blob IDs
+# computed by twox-hash (Rust) are byte-identical to the
+# equivalent computation in cespare/xxhash (Go) or xxhashjs
+# (TypeScript), enabling interop between the storage node, the
+# CLI, and downstream JS-based applications.
+# ============================================================================
+
+_walrus() {
+    local context state state_descr line
+    typeset -A opt_args
+    local curcontext="$curcontext" ret=1
+
+    _arguments -C \
+        '--config[Walrus client config file]:file:_files -g "*.(yaml|yml)"' \
+        '--context[configuration context]:context:' \
+        '--wallet[Sui wallet config file]:file:_files -g "*.(yaml|yml)"' \
+        '--gas-budget[gas budget for transactions]:n:' \
+        '--json[write output as JSON]' \
+        '--trace-cli[tracing exporter (otlp or file=path)]:exporter:' \
+        '(- *)'{-h,--help}'[print help]' \
+        '(- *)'{-V,--version}'[print version]' \
+        '1: :_walrus_cmds' \
+        '*::arg:->args' \
+    && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                store|write)            _arguments '(- *)'{-h,--help}'[help]' '*:files:_files' ;;
+                store-quilt|write-quilt) _arguments '*--paths[paths to include]:path:_files' '*--blobs[JSON-described blobs]:json:' '(- *)'{-h,--help}'[help]' ;;
+                read)                   _arguments '--out[output file (default: stdout)]:file:_files' '(- *)'{-h,--help}'[help]' '1:blob id:' ;;
+                read-quilt)             _arguments '(- *)'{-h,--help}'[help]' '*:arg:' ;;
+                list-patches-in-quilt|resolve-quilt) _arguments '(- *)'{-h,--help}'[help]' '*:arg:' ;;
+                blob-status)            _arguments '(- *)'{-h,--help}'[help]' '1:blob id:' ;;
+                info)                   _walrus_info ;;
+                health)                 _arguments '(- *)'{-h,--help}'[help]' ;;
+                blob-id)                _arguments '(- *)'{-h,--help}'[help]' '1:file:_files' ;;
+                convert-blob-id)        _arguments '(- *)'{-h,--help}'[help]' '1:blob id:' ;;
+                list-blobs)             _arguments '(- *)'{-h,--help}'[help]' ;;
+                delete)                 _arguments '(- *)'{-h,--help}'[help]' '1:blob id:' ;;
+                stake)                  _arguments '(- *)'{-h,--help}'[help]' '*:arg:' ;;
+                request-withdraw-stake) _arguments '(- *)'{-h,--help}'[help]' '*:arg:' ;;
+                withdraw-stake)         _arguments '(- *)'{-h,--help}'[help]' '*:arg:' ;;
+                list-staked-wal)        _arguments '(- *)'{-h,--help}'[help]' ;;
+                generate-sui-wallet)    _arguments '(- *)'{-h,--help}'[help]' ;;
+                get-wal)                _arguments '(- *)'{-h,--help}'[help]' ;;
+                burn-blobs|fund-shared-blob|extend|share) _arguments '(- *)'{-h,--help}'[help]' '*:arg:' ;;
+                get-blob-attribute|set-blob-attribute|remove-blob-attribute-fields|remove-blob-attribute) \
+                                        _arguments '(- *)'{-h,--help}'[help]' '*:arg:' ;;
+                node-admin)             _walrus_node_admin ;;
+                pull-archive-blobs|blob-backfill) _arguments '(- *)'{-h,--help}'[help]' '*:arg:' ;;
+                publisher|aggregator|daemon) _arguments '(- *)'{-h,--help}'[help]' '*:arg:' ;;
+                json)                   _arguments '(- *)'{-h,--help}'[help]' '1:JSON command string:' ;;
+                completion)             _arguments '--shell[shell type]:shell:(bash zsh fish powershell elvish)' '(- *)'{-h,--help}'[help]' ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_walrus_cmds() {
+    local -a cmds
+    cmds=(
+        'store:Store (publish) a new blob to Walrus'
+        'write:Alias for store'
+        'store-quilt:Store files as a quilt bundle'
+        'write-quilt:Alias for store-quilt'
+        'read:Read a blob from Walrus by blob ID'
+        'read-quilt:Read a quilt blob and unpack patches'
+        'list-patches-in-quilt:List patches inside a quilt'
+        'resolve-quilt:Alias for list-patches-in-quilt'
+        'blob-status:Show on-chain status of a blob'
+        'info:Show information (epoch, storage, size, price, bft, coin)'
+        'health:Check storage-node health'
+        'blob-id:Compute the Walrus blob ID of a file locally'
+        'convert-blob-id:Convert between blob-ID encodings'
+        'list-blobs:List blobs owned by the wallet'
+        'delete:Delete a deletable blob'
+        'stake:Stake WAL with a validator'
+        'request-withdraw-stake:Request a stake withdrawal'
+        'withdraw-stake:Withdraw an unlocked stake'
+        'list-staked-wal:List staked WAL positions'
+        'generate-sui-wallet:Generate a Sui wallet for Walrus'
+        'get-wal:Request WAL from a faucet (testnet)'
+        'burn-blobs:Burn (irreversibly free) blobs'
+        'fund-shared-blob:Fund a shared blob with more epochs'
+        'extend:Extend the storage duration of a blob'
+        'share:Share a blob via a shared object'
+        'get-blob-attribute:Get a blob attribute'
+        'set-blob-attribute:Set a blob attribute'
+        'remove-blob-attribute-fields:Remove individual fields from a blob attribute'
+        'remove-blob-attribute:Remove an entire blob attribute'
+        'node-admin:Validator-node admin operations'
+        'pull-archive-blobs:Download archived blobs from cold storage'
+        'blob-backfill:Backfill blobs from a peer'
+        'publisher:Run the HTTP publisher daemon (POST blobs)'
+        'aggregator:Run the HTTP aggregator daemon (GET blobs)'
+        'daemon:Run combined publisher + aggregator daemon'
+        'json:Run client with JSON-encoded arguments (string or stdin)'
+        'completion:Generate shell completion script'
+    )
+    _describe -t commands 'walrus command' cmds
+}
+
+_walrus_info() {
+    local -a sub
+    sub=(
+        'epoch:Show current epoch information'
+        'storage:Show storage allocation information'
+        'size:Show encoded size information'
+        'price:Show storage price information'
+        'bft:Show BFT-quorum / fault-tolerance information'
+        'coin:Show WAL coin information'
+    )
+    _arguments \
+        '(- *)'{-h,--help}'[help]' \
+        '1:subcommand:->sub' \
+        '*::arg:->_default'
+
+    case $state in
+        sub) _describe -t commands 'info subcommand' sub ;;
+    esac
+}
+
+_walrus_node_admin() {
+    local -a sub
+    sub=(
+        'collect-commission:Collect accrued commission for a validator node'
+        'vote-for-upgrade:Vote for a contract upgrade'
+        'set-governance-authorized:Set the governance-authorized address'
+        'set-commission-authorized:Set the commission-authorized address'
+        'package-digest:Show the package digest'
+    )
+    _arguments \
+        '(- *)'{-h,--help}'[help]' \
+        '1:subcommand:->sub' \
+        '*::arg:->_default'
+
+    case $state in
+        sub) _describe -t commands 'node-admin subcommand' sub ;;
+    esac
+}
+
+_walrus "$@"
