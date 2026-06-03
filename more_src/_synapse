@@ -1,0 +1,104 @@
+#compdef synapse
+# ============================================================================
+# synapse - LambdaTest Test-at-Scale (TAS) self-hosted runner (Go, Apache-2.0)
+#
+# Author : LambdaTest team
+# Upstream: https://github.com/LambdaTest/test-at-scale
+#
+# `synapse` is the open-source self-hosted runner for
+# LambdaTest's "Test at Scale" platform - a parallelized
+# test-orchestration product that takes a repo's test suite,
+# computes a per-PR set of affected tests via call-graph
+# analysis, then dispatches the affected subset across
+# isolated Docker containers in parallel. The synapse binary
+# runs on the customer's own infrastructure as a long-lived
+# daemon - it polls LambdaTest's cloud control plane for
+# work, spawns ephemeral Docker containers per assigned test
+# job, streams logs back, and uploads result artifacts.
+#
+# Architecture: cobra root with two main goroutines -
+# `synapse.InitiateConnection` (control-plane WebSocket
+# heartbeat + work assignment) and `proxyserver.ListenAndServe`
+# (local HTTP proxy that test runs use for outbound
+# request capture). Each test job spawns via the docker
+# runner package; per-test artifact upload + log streaming
+# goes back to the cloud over the same control-plane
+# connection. A cron scheduler manages periodic tasks like
+# garbage-collecting stale containers + config refresh.
+#
+# Usage:
+#   synapse [flags]
+#
+# Flags (cobra):
+#   -c, --config <file>     - config file path
+#       --verbose           - log every proxy request to stdout
+#   -h, --help              - print help
+#       --version           - print version
+#
+# Environment:
+#   Standard .env file loading via joho/godotenv -
+#   credentials + per-repo secrets are layered from .env
+#   + the loaded config + the cloud control plane.
+#
+# The cenkalti/backoff lane is built on `github.com/cenkalti/
+# backoff/v4 v4.1.3` (declared as a direct dep at upstream
+# go.mod HEAD), the canonical Go exponential-backoff retry
+# library by Cenk Altı (github.com/cenkalti/backoff, 2600+
+# stars). cenkalti/backoff is the *original* implementation
+# of the Google-SRE-book exponential-backoff-with-jitter
+# pattern in Go - released in 2014 and adopted as the
+# de-facto standard across the Go ecosystem. The /v4 module
+# adds context-aware `BackOffWithContext` for cancellation,
+# the `Notify` callback for observability, and
+# `Permanent(err)` to bail out early on non-retryable
+# errors. synapse uses it for: cloud-control-plane reconnect
+# (WebSocket disconnects retry with exponential backoff up
+# to a max-elapsed-time), Docker daemon API calls (transient
+# 503 / dial timeouts retry inside the per-job runner), and
+# artifact-upload S3 calls (rate-limit + transient-failure
+# retry).
+#
+# ----------------------------------------------------------------------------
+# AXIS 233 :: Exponential-backoff retry policies (idempotent retry gates)
+# Round 1398 :: Go slot 2 of 4 :: continues Axis 233
+#
+# Cross-language canonical library family for this axis:
+#   Rust    : ihrwein/backoff              [R1397 _oramacore]
+#   Go      : cenkalti/backoff             [R1398 THIS FILE]
+#   TS/Node : vercel/async-retry           [R1399 closing]
+#
+# cenkalti/backoff is the *source* of this axis - the
+# original 2014 Go implementation that the Rust slot
+# (ihrwein/backoff) is a line-by-line port of, and that
+# every other Go retry library traces design-influence to.
+# This is a rare pattern across the 233 axes covered so far:
+# usually the canonical library in each lane is the
+# *independent* implementation by the native-language
+# community of a spec or paper. Axis 233 instead has a
+# canonical lane (Go) with a direct downstream port lane
+# (Rust) and an API-similar-but-independent lane (Node).
+# The cross-language consistency is therefore strongest
+# between the Rust + Go slots and looser between Go + Node.
+#
+# All three lanes implement the same algorithmic pattern
+# (initial interval + multiplier + max interval +
+# max-elapsed-time + ±50% jitter) with subtly different
+# default parameters (`ExponentialBackoff` defaults: 500ms
+# / 1.5x / 60s / 15min; vercel/async-retry defaults: 1000ms
+# / 2x / unbounded / 10 retries) - the choice of defaults
+# reflects each lane's typical workload (HTTP retry for
+# Node, RPC retry for Go).
+# ============================================================================
+
+_synapse() {
+    local context state state_descr line
+    typeset -A opt_args
+
+    _arguments -s -S \
+        '(-c --config)'{-c,--config}'[config file path]:file:_files' \
+        '--verbose[log every proxy request to stdout]' \
+        '(- *)'{-h,--help}'[print help]' \
+        '(- *)--version[print version]'
+}
+
+_synapse "$@"
