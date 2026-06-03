@@ -1,0 +1,122 @@
+#compdef influxdb3
+# ============================================================================
+# influxdb3 - InfluxDB 3 Core server + CLI (Rust, Apache-2.0)
+#
+# Author : InfluxData
+# Upstream: https://github.com/influxdata/influxdb
+#
+# influxdb3 is the single binary for InfluxDB 3.0 Core (also called
+# InfluxDB IOx) - the ground-up rewrite of InfluxDB in Rust + Apache
+# Arrow + DataFusion + Parquet. It hosts the time-series storage
+# engine, the SQL/InfluxQL query layer, the processing-engine
+# plugin runtime, and the operator-facing CLI for resource
+# management. Eleven top-level subcommands:
+#
+#   serve       - run the InfluxDB 3 Core server
+#   create      - create resources (database / token / table / trigger / etc)
+#   show        - list resources
+#   update      - update resources
+#   delete      - delete resources
+#   enable      - enable a resource (e.g., a trigger)
+#   disable     - disable a resource
+#   query       - SQL/InfluxQL query against a running server
+#   write       - write line-protocol points to a running server
+#   install     - install processing-engine plugins / packages
+#   test        - test that plugins behave as expected
+#
+# The Snappy compression lane is built on `snap = "1.0.0"`
+# (declared verbatim at upstream Cargo.toml HEAD), the canonical
+# Rust Snappy implementation by Andrew Gallant (BurntSushi /
+# rust-snappy, github.com/BurntSushi/rust-snappy, 510+ stars).
+# `snap` implements both the Snappy compressed block format
+# (Google's original 2011 algorithm) and the Snappy framing
+# format (`*.sz` files - a streaming wrapper used by HBase /
+# Kafka / Cassandra / etc.). InfluxDB 3 uses snap for compressing
+# WAL (write-ahead log) entries before they hit object storage,
+# which is the dominant downstream use case for Snappy: low CPU
+# overhead, decent compression ratio, format compatibility with
+# the larger Hadoop / data-lake ecosystem.
+#
+# ----------------------------------------------------------------------------
+# AXIS 215 :: SNAPPY COMPRESSION (Google block + framing format)
+# Round 1343 :: Rust slot 1 of 4 :: OPENS Axis 215
+#
+# Cross-language canonical library family for this axis (proposed):
+#   Rust    : BurntSushi/rust-snappy            - pure-Rust block + framing
+#   Go      : golang/snappy                     - Google's first-party Go port
+#   TS/Node : kesla/node-snappy or zlib substitute
+#
+# All three implement Google's 2011 Snappy block format end-to-end
+# - the dictionary-free LZ77-style coder with literal + copy tags,
+# fast encoder (~250 MB/s on contemporary CPUs), even faster
+# decoder (~500 MB/s). The framing format (`*.sz`) wraps multiple
+# blocks with CRC32 checksums for streaming. Snappy is the load-
+# bearing inner compression of the Hadoop ecosystem (HBase /
+# Cassandra / Parquet / Avro / Kafka), where "fast > small" is
+# the design preference - vs Brotli (Axis 214) where "small >
+# slow" is the preference. The two are complementary: Brotli for
+# build-time / on-the-wire HTTP encoding; Snappy for runtime hot-
+# path block compression.
+# ============================================================================
+
+_influxdb3() {
+    local context state state_descr line
+    typeset -A opt_args
+    local curcontext="$curcontext" ret=1
+
+    _arguments -C \
+        '(- *)'{-h,--help}'[print help]' \
+        '(- *)'{-V,--version}'[print version]' \
+        '1: :_influxdb3_cmds' \
+        '*::arg:->args' \
+    && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                serve)    _arguments '(- *)'{-h,--help}'[help]' '*::arg:->_default' ;;
+                create)   _influxdb3_resource_sub create ;;
+                show)     _influxdb3_resource_sub show ;;
+                update)   _influxdb3_resource_sub update ;;
+                delete)   _influxdb3_resource_sub delete ;;
+                enable)   _influxdb3_resource_sub enable ;;
+                disable)  _influxdb3_resource_sub disable ;;
+                query)    _arguments '(- *)'{-h,--help}'[help]' '--host[server URL]:url:' '--database[database]:db:' '--token[auth token]:token:' '1:SQL/InfluxQL query:' ;;
+                write)    _arguments '(- *)'{-h,--help}'[help]' '--host[server URL]:url:' '--database[database]:db:' '--token[auth token]:token:' '1:line-protocol file:_files' ;;
+                install)  _arguments '(- *)'{-h,--help}'[help]' '1:subcommand:(package python-plugin)' ;;
+                test)     _arguments '(- *)'{-h,--help}'[help]' '1:subcommand:(wal-plugin schedule-plugin request-plugin)' ;;
+                help)     _influxdb3_cmds ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_influxdb3_cmds() {
+    local -a cmds
+    cmds=(
+        'serve:Run the InfluxDB 3 Core server'
+        'create:Create resources (database, auth token, table, trigger)'
+        'show:List resources (databases, tokens, tables, triggers)'
+        'update:Update resources on the server'
+        'delete:Delete resources (database, table, etc.)'
+        'enable:Enable a resource (e.g., a processing-engine trigger)'
+        'disable:Disable a resource'
+        'query:Run a SQL or InfluxQL query against the server'
+        'write:Write line-protocol points to a running server'
+        'install:Install processing-engine plugins and packages'
+        'test:Test processing-engine plugins'
+    )
+    _describe -t commands 'influxdb3 command' cmds
+}
+
+_influxdb3_resource_sub() {
+    local cmd=$1
+    _arguments \
+        '(- *)'{-h,--help}'[help]' \
+        '1:resource:(database table token trigger plugin distinct_cache last_cache file_index processing_engine)' \
+        '*::arg:->_default'
+}
+
+_influxdb3 "$@"
