@@ -1,0 +1,170 @@
+#compdef martin
+# ============================================================================
+# martin - Blazing-fast tile server with PostGIS / MBTiles / PMTiles support
+#           (Rust, Apache-2.0 / MIT)
+#
+# Author : Stepan Kuzmin + Yuri Astrakhan + MapLibre contributors
+# Upstream: https://github.com/maplibre/martin
+# crates : martin (binaries: martin, martin-cp, gen-schemas, mbtiles)
+#
+# `martin` is the MapLibre project's high-performance vector +
+# raster tile server in Rust. The headline use case: serve
+# Mapbox/MapLibre vector tiles directly from a PostGIS
+# database (no preprocessing required), from on-disk MBTiles
+# / PMTiles archives, or from cloud-optimized GeoTIFF (COG)
+# files. Supports SVG sprite serving, font (.pbf) serving,
+# and Mapbox style JSON serving as additional tile-adjacent
+# resources from the same HTTP server.
+#
+# Architecture: actix-web HTTP server, tokio-postgres for the
+# Postgres connection pool, async per-tile generation with an
+# in-memory tile cache, auto-detection of PostGIS tables +
+# functions (martin discovers tile sources at startup unless
+# constrained by a config file). Configuration can be passed
+# entirely on CLI for simple cases or via YAML config file
+# for production deployments.
+#
+# Companion bins:
+#   martin-cp                   - bulk-copy tiles from a source
+#                                 (Postgres / PMTiles / MBTiles)
+#                                 into a new MBTiles archive
+#                                 (the "tile snapshot" tool)
+#   gen-schemas                 - regenerate the embedded JSON
+#                                 schemas (internal/dev tool)
+#   mbtiles                     - standalone CLI for MBTiles
+#                                 archive operations (validate,
+#                                 copy, summary, ...)
+#
+# Major flags (clap derive):
+#
+#   Meta args:
+#     -c, --config <file>        - YAML config file
+#                                  (mutually exclusive with
+#                                   positional connection strings)
+#         --save-config <file>   - save resolved config to file
+#                                  (or `-` for stdout)
+#         --on-invalid <action>  - source validation policy
+#                                  (abort | warn | ignore)
+#     <connection...>            - positional source connection
+#                                  strings (postgres:// URLs,
+#                                  paths to .mbtiles/.pmtiles/
+#                                  .tif files or dirs)
+#
+#   Server args:
+#     -k, --keep-alive <s>       - connection keep-alive timeout
+#     -l, --listen-addresses <a> - bind addresses (default 0.0.0.0:3000)
+#         --route-prefix <path>  - HTTP path prefix (e.g. /tiles)
+#     -W, --workers <n>          - HTTP worker thread count
+#         --preferred-encoding <e>- gzip (default) | brotli | br
+#     -u, --webui <mode>         - disable (default) | enable-for-all
+#         --tilejson-url-version-param <name>
+#                                - embed tileset version in
+#                                  TileJSON tiles URL
+#     -C, --cache-size <MB>      - main tile cache size in MB
+#         --cache-expiry <dur>   - max lifetime (e.g. 1h, 30m, 1d)
+#         --cache-idle-timeout <dur>
+#                                - max idle time (e.g. 15m, 1h)
+#
+#   Extra args:
+#     -s, --sprite <dir>         - sprite source directory (repeatable)
+#     -f, --font <path>          - font file or dir (repeatable)
+#     -S, --style <path>         - style file or dir (repeatable)
+#
+#   Postgres args:
+#     -b, --auto-bounds          - auto-compute table bounds
+#         --ca-root-file <file>  - TLS CA root certificate
+#     -s, --default-srid <n>     - default SRID for tables
+#                                  without one declared
+#     -m, --max-feature-count <n>- per-tile feature cap
+#
+# Environment:
+#   RUST_LOG=<spec>              - tracing filter
+#                                  (e.g. martin=debug)
+#   RUST_LOG_FORMAT=<fmt>        - json | full | compact (default)
+#                                  | bare | pretty
+#
+# The utoipa lane is built on `utoipa` (declared at upstream
+# workspace Cargo.toml HEAD), the canonical Rust OpenAPI
+# code-generation library by Juhani Imberg (juhaku/utoipa,
+# 3600+ stars). utoipa generates OpenAPI 3.x schemas from
+# Rust types + handler annotations at compile time via
+# proc-macro derives - the `#[utoipa::path(...)]` macro on
+# each axum/actix-web handler captures the path + method +
+# parameters + response types, and `#[derive(ToSchema)]`
+# on request/response structs emits the JSON Schema bodies.
+# Together they produce a complete OpenAPI 3.x JSON document
+# without writing any spec by hand. martin uses utoipa to
+# emit its `/openapi.json` endpoint - the OpenAPI document
+# that drives the optional Swagger UI mounted at
+# `/swagger-ui/` and is consumed by downstream clients to
+# generate typed bindings.
+#
+# ----------------------------------------------------------------------------
+# AXIS 238 :: OpenAPI codegen + spec emission (OpenAPI 3.x JSON Schema)
+# Round 1412 :: Rust slot 1 of 4 :: OPENS Axis 238
+#
+# Cross-language canonical library family for this axis (proposed):
+#   Rust    : juhaku/utoipa                - compile-time OpenAPI emission
+#                                            from Rust types + macros
+#   Go      : getkin/kin-openapi           - de-facto Go OpenAPI 3.x model +
+#                                            parser + validator + codegen
+#   TS/Node : drwpow/openapi-typescript    - generate TS types from an
+#                                            OpenAPI spec (the inverse
+#                                            direction: spec -> types)
+#
+# OpenAPI tooling is a clean spec-bound axis (OpenAPI 3.0
+# was OAS 2017, 3.1 was 2021), and the three lanes serve
+# complementary slices of the spec lifecycle:
+#
+#   - utoipa (Rust): *code-first* spec emission - Rust
+#     handler annotations + Rust types are the source of
+#     truth; the OpenAPI JSON is regenerated at build time
+#   - kin-openapi (Go): *spec-first* with codegen - the
+#     OpenAPI JSON is the source of truth; Go types are
+#     parsed from + generated from it; runtime validation
+#     enforces request/response conformance
+#   - openapi-typescript (Node): *spec-first* type
+#     generation - the OpenAPI JSON is the source of
+#     truth; TypeScript types are generated from it for
+#     compile-time client-side request shape enforcement
+#
+# All three lanes converge on the OpenAPI 3.x JSON Schema
+# wire format. Cross-language interop is total at the
+# JSON-document level: a spec emitted by utoipa loads
+# identically into kin-openapi (validates / generates
+# bindings) and openapi-typescript (produces TS types).
+# The schema document is the contract; the per-language
+# tooling is interchangeable.
+# ============================================================================
+
+_martin() {
+    local context state state_descr line
+    typeset -A opt_args
+
+    _arguments -s -S \
+        '(-c --config)'{-c,--config}'[YAML config file]:file:_files -g "*.(yaml|yml)"' \
+        '--save-config[save resolved config to file (- for stdout)]:file:_files' \
+        '--on-invalid[source validation policy]:action:(abort warn ignore)' \
+        '(-k --keep-alive)'{-k,--keep-alive}'[connection keep-alive timeout (seconds)]:s:' \
+        '(-l --listen-addresses)'{-l,--listen-addresses}'[bind addresses (default 0.0.0.0:3000)]:addr:' \
+        '--route-prefix[HTTP path prefix (e.g. /tiles)]:path:' \
+        '(-W --workers)'{-W,--workers}'[HTTP worker thread count]:n:' \
+        '--preferred-encoding[preferred tile compression]:enc:(gzip brotli br)' \
+        '(-u --webui)'{-u,--webui}'[web UI mode]:mode:(disable enable-for-all)' \
+        '--tilejson-url-version-param[embed tileset version in TileJSON tiles URL]:name:' \
+        '(-C --cache-size)'{-C,--cache-size}'[main cache size in MB]:MB:' \
+        '--cache-expiry[max cache entry lifetime (1h, 30m, 1d)]:duration:' \
+        '--cache-idle-timeout[max idle time (15m, 1h)]:duration:' \
+        '*'{-s,--sprite}'[SVG sprite source directory (repeatable)]:dir:_files -/' \
+        '*'{-f,--font}'[font file or directory (repeatable)]:path:_files' \
+        '*'{-S,--style}'[style file or directory (repeatable)]:path:_files' \
+        '(-b --auto-bounds)'{-b,--auto-bounds}'[auto-compute table bounds]:strategy:(quick calc skip)' \
+        '--ca-root-file[TLS CA root certificate file]:file:_files' \
+        '--default-srid[default SRID for tables without one]:srid:' \
+        '(-m --max-feature-count)'{-m,--max-feature-count}'[per-tile feature cap]:n:' \
+        '(- *)'{-h,--help}'[print help]' \
+        '(- *)'{-V,--version}'[print version]' \
+        '*:connection string (postgres URL or path to .mbtiles/.pmtiles/.tif):_files'
+}
+
+_martin "$@"
