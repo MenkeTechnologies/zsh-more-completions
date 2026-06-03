@@ -1,0 +1,168 @@
+#compdef lunatic
+# ============================================================================
+# lunatic - Erlang-inspired runtime for WebAssembly (Rust, Apache-2.0)
+#
+# Author : Lunatic Solutions
+# Upstream: https://github.com/lunatic-solutions/lunatic
+# crates : lunatic (binaries: lunatic, cargo-lunatic)
+#
+# `lunatic` is a runtime for WebAssembly that brings the
+# Erlang/BEAM execution model to Wasm: lightweight isolated
+# processes that communicate via message passing, supervisor
+# trees for fault tolerance, hot code reloading, and seamless
+# distribution across multiple nodes. The runtime treats each
+# Wasm function as an Erlang-style actor - millions of
+# concurrent processes per node, each with its own pre-emptive
+# scheduler slot, sandboxed via the Wasm linear-memory model.
+# Built on wasmtime as the underlying Wasm engine.
+#
+# Subcommand tree (clap derive):
+#   (default) <foo.wasm> [args]   - implied `run` when first arg
+#                                   matches *.wasm / --dir / --bench
+#   init                          - initialize a cargo project for lunatic
+#                                   (writes .cargo/config.toml with
+#                                    target=wasm32-wasi + runner=lunatic run)
+#   run [args]                    - execute a .wasm file
+#                                   --dir <DIRECTORY>  preopen directory
+#                                   --bench            benchmark mode
+#                                   <path> [wasm_args]
+#   control                       - start a control node (cluster coordinator)
+#                                   --bind-socket <addr>
+#   node <control_url>            - start a worker node
+#                                   --bind-socket <addr>
+#                                   --wasm <module>
+#                                   --tag <key=value>  (repeatable)
+#   login                         - login to Lunatic Cloud
+#                                   -p, --provider <url>
+#   app                           - manage Lunatic Cloud applications
+#                                   create <name>
+#   deploy                        - deploy app to Lunatic Cloud
+#
+# With the `prometheus` feature enabled, every subcommand
+# also accepts --prometheus and --prometheus-http <addr> for
+# metrics export.
+#
+# The wasmtime lane is built on `wasmtime = "8"` + `wasmtime-
+# wasi = "8"` (declared verbatim at upstream Cargo.toml HEAD),
+# the canonical Rust Wasm runtime by the Bytecode Alliance
+# (github.com/bytecodealliance/wasmtime, 15400+ stars).
+# wasmtime is the uncontested Rust Wasm engine - the only
+# mainstream Wasm runtime with a credible claim to full
+# Wasm spec coverage + WASI Preview 1/2 + component model
+# support + production-grade JIT (Cranelift). The Bytecode
+# Alliance (formed 2019 by Mozilla / Fastly / Intel / Red
+# Hat / Microsoft) maintains wasmtime as the reference
+# implementation that drives the Wasm spec evolution.
+#
+# lunatic embeds wasmtime as the Wasm execution engine and
+# layers its Erlang-inspired process scheduler on top - the
+# actor model is a runtime abstraction over wasmtime's
+# instance model. Each lunatic "process" is a wasmtime Store
+# with its own message-passing channel; the scheduler
+# multiplexes processes across OS threads using cooperative
+# yield points injected at function-call boundaries via
+# fuel-based interruption (the same wasmtime mechanism that
+# powers serverless cold-start timeouts).
+#
+# ----------------------------------------------------------------------------
+# AXIS 232 :: WebAssembly runtime + WASI host (Wasm spec + WASI Preview)
+# Round 1394 :: Rust slot 1 of 4 :: OPENS Axis 232
+#
+# Cross-language canonical library family for this axis (proposed):
+#   Rust    : bytecodealliance/wasmtime    - reference Wasm runtime
+#                                            (Cranelift JIT + WASI Preview 1/2
+#                                             + component model)
+#   Go      : tetratelabs/wazero           - zero-dep pure-Go Wasm runtime
+#                                            (no CGo, designed for Go's
+#                                             cross-compile story)
+#   TS/Node : bytecodealliance/jco         - Wasm component-model tool for JS
+#                                            (alternative: @wasmer/wasi for
+#                                             classic Wasm + WASI)
+#
+# WASM runtimes are a clean cross-language axis because the
+# Wasm spec is one of the most rigorously defined modern
+# binary formats: every implementation passes the
+# spec-testsuite (1500+ tests) before it is taken seriously.
+# wasmtime is the Wasm reference implementation; wazero is
+# the Go canonical because it deliberately has zero
+# dependencies on CGo (key for Go's cross-compile story);
+# jco is the JS-native tool for the Wasm component model
+# (the higher-level type-rich Wasm interface introduced in
+# 2024).
+#
+# All three lanes execute Wasm modules byte-for-byte
+# identically - a Wasm binary produced by `rustc --target
+# wasm32-wasi` runs without modification under wasmtime
+# (Rust host), wazero (Go host), or jco (Node host). The
+# wire-level interop is total at the Wasm spec level. What
+# diverges across the lanes is the *host integration*: how
+# host functions are exposed to Wasm, how memory is shared,
+# how component-model imports/exports are wired up - each
+# host language's idioms shape the embedding API.
+# ============================================================================
+
+_lunatic() {
+    local context state state_descr line
+    typeset -A opt_args
+    local curcontext="$curcontext" ret=1
+
+    _arguments -C \
+        '--prometheus[enable Prometheus metrics export]' \
+        '--prometheus-http[Prometheus HTTP listen address]:addr:' \
+        '(- *)'{-h,--help}'[print help]' \
+        '(- *)'{-V,--version}'[print version]' \
+        '1: :_lunatic_cmds_or_wasm' \
+        '*::arg:->args' \
+    && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                init)    _arguments '(- *)'{-h,--help}'[help]' ;;
+                run)     _arguments \
+                            '--dir[preopen directory for the wasm]:dir:_files -/' \
+                            '--bench[benchmark mode]' \
+                            '(- *)'{-h,--help}'[help]' \
+                            '1:wasm file:_files -g "*.wasm"' \
+                            '*:wasm args:' ;;
+                control) _arguments \
+                            '--bind-socket[control server bind address]:addr:' \
+                            '(- *)'{-h,--help}'[help]' ;;
+                node)    _arguments \
+                            '--bind-socket[node UDP bind address]:addr:' \
+                            '--wasm[wasm module to load on node start]:file:_files -g "*.wasm"' \
+                            '*--tag[node tag (key=value; repeatable)]:tag:' \
+                            '(- *)'{-h,--help}'[help]' \
+                            '1:control server URL (default http://127.0.0.1:3030/):' ;;
+                login)   _arguments \
+                            '(-p --provider)'{-p,--provider}'[provider URL (default https://lunatic.cloud)]:url:' \
+                            '(- *)'{-h,--help}'[help]' ;;
+                app)     _arguments \
+                            '(- *)'{-h,--help}'[help]' \
+                            '1:subcommand:(create)' \
+                            '*::arg:->_default' ;;
+                deploy)  _arguments '(- *)'{-h,--help}'[help]' ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_lunatic_cmds_or_wasm() {
+    local -a cmds
+    cmds=(
+        'init:Initialize a Rust cargo project as a lunatic project'
+        'run:Execute a .wasm file'
+        'control:Start a control node (cluster coordinator)'
+        'node:Start a worker node'
+        'login:Login to Lunatic Cloud'
+        'app:Manage Lunatic Cloud applications'
+        'deploy:Deploy app to Lunatic Cloud'
+    )
+    _alternative \
+        'commands:lunatic command:_describe -t commands "lunatic command" cmds' \
+        'wasm:wasm file (implicit run):_files -g "*.wasm"'
+}
+
+_lunatic "$@"
