@@ -1,0 +1,153 @@
+#compdef text-embeddings-router
+# ============================================================================
+# text-embeddings-router - HuggingFace TEI inference server for embedding +
+#                          re-ranker models (Rust, Apache-2.0)
+#
+# Author : Olivier Dehaene + Nicolas Patry + Alvaro Bartolome (HuggingFace)
+# Upstream: https://github.com/huggingface/text-embeddings-inference
+#
+# `text-embeddings-router` is the binary for HuggingFace
+# Text Embeddings Inference (TEI) - the production-grade
+# Rust inference server for sentence/passage embedding
+# models + cross-encoder re-rankers. The companion to TGI
+# (Text Generation Inference) for the encoder-only / dense-
+# embedding model family. Loads a Sentence-Transformers
+# compatible model from the HuggingFace Hub (or a local
+# directory), exposes a Hugging-Face-API + OpenAI-compatible
+# HTTP API + an optional gRPC API, batches incoming requests
+# at the token level for maximum GPU/CPU utilization, and
+# runs a tokenizer worker pool for the tokenization +
+# validation + truncation pipeline.
+#
+# Backends:
+#   candle    - HuggingFace's pure-Rust ML framework
+#   ort       - ONNX Runtime (CPU + CUDA + Intel oneDNN)
+#   python    - PyTorch sub-process fallback for unsupported models
+#
+# Flags (clap derive, environment-variable backed):
+#   --model-id <id>             - HF model ID or local path (required)
+#   --revision <ref>             - model revision (commit / branch)
+#   --tokenization-workers <n>   - tokenizer worker pool size
+#   --dtype <type>               - force a specific dtype
+#   --served-model-name <name>   - public model name for OpenAI API
+#   --pooling <mode>             - override pooling method
+#                                  (cls|mean|splade|last-token)
+#   --max-concurrent-requests <n>   - default 512
+#   --max-batch-tokens <n>          - default 16384 (key throughput knob)
+#   --max-batch-requests <n>
+#   --max-client-batch-size <n>     - default 32
+#   --auto-truncate [bool]          - default true
+#   --default-prompt-name <name>    - sentence-transformers prompt key
+#   --default-prompt <text>         - explicit prompt prefix
+#   --dense-path <dir>              - 2_Dense module override
+#   --hf-token <token>              - HF Hub token
+#   --hostname <ip>                 - default 0.0.0.0
+#   -p, --port <port>               - default 3000
+#   --uds-path <path>               - default /tmp/text-embeddings-inference-server
+#   --huggingface-hub-cache <dir>   - HF cache override
+#   --payload-limit <bytes>         - default 2000000
+#   --api-key <key>                 - Bearer-token auth
+#   --json-output                   - JSON-structured logs
+#   --disable-spans                 - skip span trace propagation
+#   --otlp-endpoint <url>           - OTLP/gRPC tracing destination
+#   --otlp-service-name <name>      - default text-embeddings-inference.server
+#   --prometheus-port <port>        - default 9000
+#   --cors-allow-origin <origin>    - repeatable
+#
+# Every flag has a matching env var (same uppercase + underscores).
+#
+# The tokenizers lane is built on `tokenizers = "0.21.0"`
+# (declared verbatim at upstream workspace Cargo.toml HEAD),
+# the canonical HuggingFace Rust tokenizer library
+# (github.com/huggingface/tokenizers, 10000+ stars). The
+# tokenizers crate is the *reference implementation* of the
+# subword-tokenization algorithms used by every modern LLM
+# (BPE - GPT, Llama, Qwen; WordPiece - BERT, DistilBERT;
+# Unigram - T5, ALBERT; Byte-level BPE - GPT-2, Llama). The
+# library is the canonical source-of-truth for tokenization
+# wire-format compatibility - any tokenizer.json file
+# produced by transformers.tokenizer.save_pretrained() loads
+# identically into the Rust crate, into @huggingface/
+# tokenizers (Node WASM bindings), into sugarme/tokenizer
+# (Go port), and into the Python transformers library. TEI
+# uses it to run the tokenization workers that turn raw
+# strings into the model's input tensor.
+#
+# ----------------------------------------------------------------------------
+# AXIS 234 :: LLM tokenizers (BPE/WordPiece/Unigram/byte-BPE subword tokenization)
+# Round 1400 :: Rust slot 1 of 4 :: OPENS Axis 234 (round-number landmark)
+#
+# Cross-language canonical library family for this axis (proposed):
+#   Rust    : huggingface/tokenizers       - reference impl (this lane is
+#                                            also the upstream that all
+#                                            other lanes wrap or port from)
+#   Go      : sugarme/tokenizer            - Go port of huggingface/tokenizers
+#                                            (alternative: daulet/tokenizers
+#                                             is the CGo bindings to the Rust
+#                                             library)
+#   TS/Node : @huggingface/tokenizers      - WASM bindings of the Rust crate
+#                                            (huggingface.js subpackage)
+#
+# Axis 234 is the round-number-landmark axis at round 1400.
+# Unusually, the *Rust slot is also the canonical source-of-
+# truth for the cross-language ecosystem*: every other lane
+# either ports the algorithms verbatim (sugarme/tokenizer
+# is a port-by-translation) or directly wraps the Rust
+# library (daulet/tokenizers, @huggingface/tokenizers,
+# transformers.tokenizers in Python). This is a unique
+# structural property in the 234 axes covered so far - the
+# canonical-library *family* has a single root-of-trust
+# implementation, and the other lanes are downstream from it.
+#
+# Cross-language interop is therefore total at the file
+# format level: a tokenizer.json file loads identically into
+# any of the four lanes. The wire-format-as-contract pattern
+# is at its strongest here because the contract itself is
+# the JSON schema published by the HuggingFace tokenizers
+# repo - other lanes don't define their own format, they
+# just consume HF's.
+#
+# Use-case alignment in Axis 234:
+#   - Rust slot (text-embeddings-router): server-side
+#     tokenization for the embedding inference pipeline
+#   - Go slot (TBD): tokenization in Go-language LLM tools
+#   - Node slot (TBD): tokenization in JS-language LLM tools
+# ============================================================================
+
+_text-embeddings-router() {
+    local context state state_descr line
+    typeset -A opt_args
+
+    _arguments -s -S \
+        '--model-id[HuggingFace model ID or local path]:model:' \
+        '--revision[model revision (commit/branch)]:ref:' \
+        '--tokenization-workers[tokenizer worker count]:n:' \
+        '--dtype[force a specific dtype]:dtype:(float16 float32)' \
+        '--served-model-name[public model name for OpenAI-compatible API]:name:' \
+        '--pooling[pooling method override]:pool:(cls mean splade last-token)' \
+        '--max-concurrent-requests[max concurrent requests (default 512)]:n:' \
+        '--max-batch-tokens[max tokens per batch (default 16384)]:n:' \
+        '--max-batch-requests[max requests per batch]:n:' \
+        '--max-client-batch-size[max inputs per client request (default 32)]:n:' \
+        '--auto-truncate[automatic input truncation (default true)]:bool:(true false)' \
+        '--default-prompt-name[sentence-transformers prompt key]:name:' \
+        '--default-prompt[explicit prompt prefix]:text:' \
+        '--dense-path[2_Dense module override path]:dir:_files -/' \
+        '--hf-token[HuggingFace Hub token]:token:' \
+        '--hostname[bind hostname (default 0.0.0.0)]:host:' \
+        '(-p --port)'{-p,--port}'[bind port (default 3000)]:port:' \
+        '--uds-path[Unix socket path for backends]:path:_files' \
+        '--huggingface-hub-cache[HF Hub cache directory override]:dir:_files -/' \
+        '--payload-limit[payload size limit in bytes (default 2000000)]:bytes:' \
+        '--api-key[Bearer-token auth key]:key:' \
+        '--json-output[JSON-structured logs]' \
+        '--disable-spans[skip span trace propagation]' \
+        '--otlp-endpoint[OTLP/gRPC tracing destination]:url:' \
+        '--otlp-service-name[OpenTelemetry service name]:name:' \
+        '--prometheus-port[Prometheus port (default 9000)]:port:' \
+        '*--cors-allow-origin[CORS allowed origin (repeatable)]:origin:' \
+        '(- *)'{-h,--help}'[print help]' \
+        '(- *)'{-V,--version}'[print version]'
+}
+
+_text-embeddings-router "$@"
