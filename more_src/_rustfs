@@ -1,0 +1,126 @@
+#compdef rustfs
+# ============================================================================
+# rustfs - High-performance distributed S3-compatible object storage (Rust, Apache-2.0)
+#
+# Author : RustFS Team
+# Upstream: https://github.com/rustfs/rustfs
+#
+# rustfs is a self-hosted S3-compatible object store advertised as
+# "2.3x faster than MinIO for 4KB object PUT" - written in Rust,
+# erasure-code-backed, with built-in IAM, S3 Select, KMS encryption
+# (local / Vault / Vault-Transit backends), bucket replication,
+# Keystone integration, and a NATS-based event-notification bus.
+# The subcommand surface is:
+#
+#   rustfs server  - run the object store daemon (default)
+#   rustfs info    - dump system / runtime info
+#   rustfs tls     - inspect TLS cert directory layout + parsing
+#
+# The NATS messaging lane is built on `async-nats` (workspace dep,
+# declared in `crates/targets/Cargo.toml` HEAD), the canonical
+# Rust NATS client by Synadia / nats-io (github.com/nats-io/nats.rs,
+# 1400+ stars). The library implements the full NATS wire protocol:
+# core pub/sub, request-reply, NATS JetStream (consumers + streams +
+# key-value + object stores), JetStream domains + accounts, and the
+# nkeys + JWT credential model. rustfs uses it as one of the
+# bucket-notification fan-out targets - PutObject / DeleteObject /
+# CompleteMultipartUpload events get fanned out to configured NATS
+# subjects (plus webhook / Kafka / MQTT / AMQP / Redis fan-out
+# targets in adjacent `crates/targets/*` crates).
+#
+# ----------------------------------------------------------------------------
+# AXIS 209 :: NATS MESSAGING PROTOCOL (CORE + JETSTREAM)
+# Round 1325 :: Rust slot 1 of 4 :: OPENS Axis 209
+#
+# Cross-language canonical library family for this axis (proposed):
+#   Rust    : nats-io/nats.rs (async-nats crate)    - Rust NATS client
+#   Go      : nats-io/nats.go                       - Go NATS client
+#   TS/Node : nats-io/nats.js                       - Node NATS client
+#
+# All three are first-party clients from the same upstream
+# organization (Synadia / nats-io), which is unusual in the cross-
+# language axis convergence pattern - usually each lane has an
+# independent community-maintained library. NATS is one of the
+# rare protocols where a single vendor maintains canonical clients
+# across all three languages and keeps them feature-parity-locked
+# (also true for `redis/*`, `mongodb/*`, `cockroachdb/*`-tooling).
+#
+# rustfs is a real production consumer: an S3-compatible store
+# distributing event-notification messages to NATS subjects for
+# downstream consumers (event-driven workflows, audit logs,
+# external lifecycle hooks). 28000+ stars and active 2026
+# development make it the load-bearing Rust opener here.
+# ============================================================================
+
+_rustfs() {
+    local context state state_descr line
+    typeset -A opt_args
+    local curcontext="$curcontext" ret=1
+
+    _arguments -C \
+        '(- *)'{-h,--help}'[print help]' \
+        '(- *)'{-V,--version}'[print version]' \
+        '--info[show system information (legacy alias for "info")]' \
+        '1: :_rustfs_cmds' \
+        '*::arg:->args' \
+    && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                server)   _rustfs_server ;;
+                info)     _rustfs_info ;;
+                tls)      _arguments '(- *)'{-h,--help}'[help]' ;;
+                help)     _rustfs_cmds ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_rustfs_cmds() {
+    local -a cmds
+    cmds=(
+        'server:Start the object-storage daemon (default)'
+        'info:Display system / runtime information'
+        'tls:Inspect TLS certificate directory layout + parsing status'
+        'help:Print help'
+    )
+    _describe -t commands 'rustfs command' cmds
+}
+
+_rustfs_server() {
+    _arguments -s -S \
+        '--address[bind address (default :9000)]:address:' \
+        '*--server-domains[domain(s) for virtual-host-style requests]:domains:' \
+        '--access-key[S3 access key]:key:' \
+        '--access-key-file[file containing S3 access key]:file:_files' \
+        '--secret-key[S3 secret key]:key:' \
+        '--secret-key-file[file containing S3 secret key]:file:_files' \
+        '--console-enable[enable the web console]:bool:(true false)' \
+        '--console-address[console bind address]:address:' \
+        '--obs-endpoint[OTLP base URL for traces / metrics / logs]:url:' \
+        '--tls-path[directory containing TLS certs for API + console]:directory:_files -/' \
+        '--license[license string or token]:license:' \
+        '--region[S3 region name]:region:' \
+        '--kms-enable[enable KMS server-side encryption]' \
+        '--kms-backend[KMS backend]:backend:(local vault vault-kv2 vault-transit)' \
+        '--kms-key-dir[KMS key directory (local backend)]:directory:_files -/' \
+        '--kms-vault-address[Vault HTTP address]:url:' \
+        '--kms-vault-token[Vault auth token]:token:' \
+        '--kms-vault-mount-path[Vault mount path]:path:' \
+        '--kms-default-key-id[default KMS key ID]:key id:' \
+        '--buffer-profile-disable[disable adaptive buffer sizing]' \
+        '--buffer-profile[workload profile for adaptive buffers]:profile:(GeneralPurpose AiTraining DataAnalytics WebWorkload IndustrialIoT SecureStorage)' \
+        '(- *)'{-h,--help}'[help]' \
+        '*:volume directory:_files -/'
+}
+
+_rustfs_info() {
+    _arguments -s -S \
+        '--type[info type to display]:type:(system runtime config license version all)' \
+        '(- *)'{-h,--help}'[help]'
+}
+
+_rustfs "$@"
