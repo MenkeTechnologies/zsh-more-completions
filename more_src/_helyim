@@ -1,0 +1,438 @@
+#compdef helyim
+# ============================================================================
+# helyim - SeaweedFS distributed object store
+#           rewritten in pure Rust (Rust, Apache-2.0)
+#
+# Author : helyim contributors (org)
+# Upstream: https://github.com/helyim/helyim
+# crates : helyim (binary: helyim)
+#
+# `helyim` is a pure-Rust reimplementation of
+# SeaweedFS (https://github.com/seaweedfs/seaweedfs),
+# the distributed object/blob storage system
+# pioneered by Chris Lu. The Rust port preserves
+# SeaweedFS's core architecture: a master server
+# coordinates volume servers (each holding a
+# fixed-size append-only file with embedded needle
+# metadata), and an optional filer server presents
+# a POSIX-like filesystem view on top of the
+# master+volume layer.
+#
+# SeaweedFS's distinguishing storage model is the
+# *needle* concept (originally from Facebook's
+# Haystack paper): each blob is a small fixed-
+# format header followed by raw blob bytes,
+# appended sequentially to large 32 GiB volume
+# files. The master tracks volume->server mappings;
+# clients query the master for the volume hosting
+# a blob, then read directly from the volume
+# server. This eliminates filesystem-level
+# inode/metadata overhead at scale.
+#
+# Use cases:
+#   - High-volume object storage (photos, videos,
+#     scientific data) at S3-equivalent scale
+#   - Replacement for S3/MinIO in self-hosted
+#     deployments
+#   - Hadoop/Spark/AI-training data lakes (HDFS
+#     replacement with better small-file
+#     performance)
+#   - CDN origin for static assets
+#
+# Usage:
+#   helyim <subcommand> [options]
+#
+# Subcommands (clap derive):
+#   master                   - run a master server
+#                               (coordinates volume
+#                               + tracks topology)
+#   volume                   - run a volume server
+#                               (stores actual blob
+#                               data in needle
+#                               files)
+#   filer                    - run a filer server
+#                               (POSIX-like filesystem
+#                               view atop master +
+#                               volume layer)
+#
+# Global flags (LogOptions, applied to all
+# subcommands):
+#   --log-path <path>        - directory for daily
+#                               rolling log files
+#                               (default `./target`)
+#   --debug                  - enable DEBUG-level
+#                               logging
+#
+# Master flags (MasterOptions):
+#   --ip <addr>              - listen IP (default
+#                               127.0.0.1)
+#   --port <port>            - listen port (default
+#                               9333)
+#   --meta-path <dir>        - directory for master
+#                               metadata storage
+#                               (default `./`)
+#   --pulse <seconds>        - heartbeat pulse
+#                               interval (default 5)
+#   --volume-size-limit-mb <mb>
+#                            - per-volume size limit
+#                               (default 30000)
+#   --default-replication <strategy>
+#                            - default replication
+#                               strategy (default
+#                               `000`; format is
+#                               <DC><rack><server>
+#                               replica counts)
+#   --peers <addr>           - raft peer addresses
+#                               (repeatable)
+#
+# Volume flags (VolumeOptions):
+#   --ip <addr>              - listen IP (default
+#                               127.0.0.1)
+#   --port <port>            - listen port (default
+#                               8080)
+#   --pulse <seconds>        - heartbeat pulse
+#                               interval (default 5)
+#   --public-url <url>       - URL clients should
+#                               use to reach this
+#                               volume server
+#   --default-replication <strategy>
+#                            - default replication
+#                               strategy (default
+#                               `000`)
+#   --data-center <name>     - data-center name for
+#                               topology placement
+#   --rack <name>            - rack name for
+#                               topology placement
+#   --master-server <addr>   - master server address
+#                               (default
+#                               127.0.0.1:9333)
+#   --folders <dir>          - data folder(s) for
+#                               volume storage
+#                               (repeatable)
+#
+# Filer flags (FilerOptions):
+#   --ip <addr>              - listen IP (default
+#                               127.0.0.1)
+#   --port <port>            - listen port (default
+#                               8888)
+#   --masters <addr>         - master server addr(s)
+#                               (default
+#                               127.0.0.1:9333;
+#                               repeatable)
+#   --collection <name>      - default collection
+#                               name for filer
+#                               entries
+#   --default-replication <strategy>
+#                            - default replication
+#                               strategy (default
+#                               `000`)
+#   --redirect-on-read       - redirect read
+#                               requests to volume
+#                               servers (default
+#                               off)
+#   --data-center <name>     - data-center name
+#   --rack <name>            - rack name
+#   --disable-dir-listing    - disable directory
+#                               listing (default
+#                               enabled)
+#   --max-mb <mb>            - max file size in MB
+#                               (default 32)
+#   --dir-listing-limit <n>  - max entries per
+#                               directory listing
+#                               (default 100000)
+#
+# The reed-solomon-erasure lane is built on
+# `reed-solomon-erasure` (declared verbatim at
+# upstream Cargo.toml HEAD as a direct dep via the
+# `helyim-ec` crate with `features =
+# ["simd-accel"]`, used to compute parity shards
+# for SeaweedFS's per-volume erasure coding
+# strategy: a 30 GiB volume is split into N data
+# shards + K parity shards, allowing volume
+# recovery from any N surviving shards), the
+# canonical Rust Reed-Solomon erasure coding
+# library by Darren Ldl (darrenldl) -
+# github.com/rust-rse/reed-solomon-erasure.
+#
+# helyim's upstream uses a *fork* of the canonical
+# library at github.com/helyim/reed-solomon-erasure
+# branch `main` version 6.0.0, but the
+# fundamental implementation traces back to
+# Darren's rust-rse/reed-solomon-erasure (and
+# further back to Klaus Post's Go reedsolomon
+# implementation, which itself traces back to
+# Backblaze's open-source Java reedsolomon
+# library released alongside the Backblaze Vault
+# storage paper in 2015).
+#
+# Reed-Solomon erasure coding is the foundational
+# error-correction technique behind:
+#   - QR codes (small RS code, e.g. (255, 251)
+#     over GF(2^8))
+#   - CDs + DVDs + Blu-rays (the CIRC encoder)
+#   - DSL modems + ADSL2+ (forward error correction
+#     on the wire)
+#   - RAID-6 + RAID-Z2 (dual-parity disk arrays)
+#   - Distributed storage systems (HDFS-EC, Ceph
+#     erasure-coded pools, Backblaze Vault, MinIO
+#     erasure-coded buckets, this helyim binary)
+#   - Satellite + spacecraft communications (Voyager
+#     1+2 used Reed-Solomon over the Deep Space
+#     Network)
+#
+# Reed-Solomon's mathematical core: treat data as
+# polynomial coefficients over a Galois field
+# (typically GF(2^8) for byte-oriented data),
+# evaluate the polynomial at extra distinct points
+# to produce parity shards, and use polynomial
+# interpolation (Lagrange, Berlekamp-Massey, or
+# similar) to recover the original data from any
+# k of n shards. The (n, k) parameters are
+# tunable: (10, 4) gives 4-shard parity (recover
+# from any 6-of-10), (255, 223) is a classic
+# satellite/CCSDS parameter.
+#
+# The rust-rse/reed-solomon-erasure crate's
+# distinguishing features:
+#   - SIMD acceleration (AVX2 + SSSE3 on x86_64;
+#     NEON on aarch64) via the `simd-accel`
+#     cargo feature - helyim enables this
+#   - GF(2^8) Galois field arithmetic via lookup
+#     tables (the classic implementation strategy)
+#   - Streaming + buffer-pool API for large-volume
+#     encoding without per-shard allocations
+#   - Cauchy + Vandermonde matrix support for the
+#     parity generation matrix
+#   - 3-clause BSD-style permissive license
+#     (compatible with Apache-2.0 + MIT)
+#
+# Darren Ldl's rust-rse/reed-solomon-erasure
+# implementation is a direct port + Rust idiomatic
+# rewrite of Klaus Post's klauspost/reedsolomon
+# Go library. The Klaus Post implementation is
+# itself a port of Backblaze's Java reedsolomon
+# library. This creates a three-step canonical
+# lineage:
+#   Java (Backblaze, 2015) -> Go (klauspost, 2015) ->
+#   Rust (darrenldl, 2016) -> all later Rust RS
+#   implementations
+#
+# Darren Ldl's broader Rust ecosystem footprint:
+#   - rust-rse/reed-solomon-erasure (canonical
+#     Rust RS library)
+#   - smallvec maintenance contributions
+#   - blkar (an archive+restore tool using RS
+#     erasure coding directly)
+#
+# helyim uses reed-solomon-erasure in `helyim-ec`
+# (the erasure-coding crate). When a volume
+# reaches the configured size limit + a worker
+# decides to "EC-encode" it, the volume's needle
+# data is split into N (typically 10) data shards
+# + K (typically 4) parity shards using the
+# Reed-Solomon library. The 14 shards are then
+# distributed across data centers per the
+# replication strategy. Recovery: any 10 of the 14
+# shards reconstruct the original volume.
+#
+# ----------------------------------------------------------------------------
+# AXIS 263 :: Reed-Solomon erasure coding libraries
+#              (forward error correction via
+#              polynomial evaluation over Galois
+#              fields)
+# Round 1487 :: Rust slot 1 of 4 :: OPENS Axis 263
+#
+# Cross-language canonical library family for this
+# axis (proposed):
+#   Rust    : rust-rse/                   - Darren
+#             reed-solomon-erasure          Ldl's
+#                                            canonical
+#                                            Rust RS
+#                                            library;
+#                                            port of
+#                                            Klaus
+#                                            Post's
+#                                            Go
+#                                            implementation
+#                                            with
+#                                            Rust
+#                                            idioms +
+#                                            SIMD
+#                                            acceleration
+#   Go      : klauspost/reedsolomon       - Klaus
+#                                            Post's
+#                                            canonical
+#                                            Go RS
+#                                            library;
+#                                            port of
+#                                            Backblaze's
+#                                            Java
+#                                            implementation;
+#                                            powers MinIO
+#                                            erasure-
+#                                            coded
+#                                            buckets +
+#                                            many
+#                                            distributed
+#                                            storage
+#                                            systems
+#   TS/Node : NebulousLabs/                - Streaming
+#             reed-solomon-wasm or          RS WASM
+#             ronomon/reed-solomon           wrapper or
+#                                            ronomon's
+#                                            pure-JS RS
+#                                            implementation;
+#                                            fragmented
+#                                            ecosystem
+#
+# Reed-Solomon is a *spec-bound* axis - the
+# polynomial-evaluation + Galois-field arithmetic
+# is mathematically defined. Compliant
+# implementations produce identical parity shards
+# given identical input + identical (n, k)
+# parameters + identical Galois-field-encoding
+# choice.
+#
+# Structural commentary on the canonical libraries:
+#   - rust-rse/reed-solomon-erasure (Rust): SIMD-
+#     accelerated; AVX2/SSSE3/NEON paths;
+#     streaming buffer-pool API
+#   - klauspost/reedsolomon (Go): SIMD-accelerated;
+#     AVX2/AVX512/NEON paths; the original Go
+#     port of Backblaze's Java algorithm
+#   - reed-solomon-wasm/ronomon/reed-solomon
+#     (Node): pure-JS or WASM-wrapped; not as
+#     well-consolidated as Rust/Go canonicals
+#
+# Cross-language interop at the wire-shard level
+# - the same (n, k, GF parameters) produce
+# byte-identical parity shards across all three
+# lanes, enabling polyglot distributed storage
+# systems where shards encoded in one language can
+# be decoded in another.
+#
+# Klaus Post's broader Go ecosystem footprint:
+#   - klauspost/compress (canonical Go compression
+#     library; gzip/zstd/zlib/brotli/snappy in pure
+#     Go with SIMD acceleration; depended on by
+#     Caddy + MinIO + Cloudflare's Go services +
+#     ~every Go HTTP server needing fast gzip)
+#   - klauspost/reedsolomon (canonical Go RS; THIS
+#     AXIS)
+#   - klauspost/asmfmt (asm formatting tool)
+#   - klauspost/cpuid (canonical Go CPU feature
+#     detection)
+#   - klauspost/dedup (deduplication library)
+#   - klauspost/pgzip (parallel gzip)
+#   - klauspost/readahead (async readahead
+#     buffering)
+#
+# Klaus Post is a multi-axis canonical Go author
+# joining the cohort:
+#   - klauspost/compress (Go compression; the
+#     foundation library; reverse-deps from MinIO/
+#     Caddy/Cloudflare-Go scale)
+#   - klauspost/reedsolomon (Go RS; THIS AXIS)
+#   - klauspost/cpuid (Go CPU detection)
+#   - klauspost/asmfmt (Go asm tooling)
+#   - klauspost/pgzip (Go parallel gzip)
+#
+# Klaus Post's foundational role in Go differs
+# from Niemeyer's (yaml.v3 + gopkg.in) - Post's
+# position is in *SIMD-accelerated systems libs*
+# rather than serialization/parsing. Together with
+# Sergey Kamardin (gobwas/glob + gobwas/ws) +
+# Gustavo Niemeyer (yaml.v3 + gopkg.in/check.v1 +
+# gopkg.in/mgo.v2) they form the multi-axis Go
+# canonical author cohort.
+#
+# Axis 263 opens with the Rust slot at darrenldl's
+# rust-rse/reed-solomon-erasure (via a downstream
+# fork used by helyim). Subsequent rounds will
+# visit the Go (klauspost/reedsolomon) + TS/Node
+# (reed-solomon-wasm or ronomon/reed-solomon)
+# canonicals.
+#
+# Notable that this axis traces a three-step
+# canonical lineage (Java -> Go -> Rust), with
+# each step adding SIMD acceleration + idiomatic
+# language fitting. The wire format (shard bytes)
+# remains compatible across all three lanes,
+# making distributed storage systems language-
+# agnostic at the storage layer.
+# ============================================================================
+
+_helyim() {
+    local context state state_descr line
+    typeset -A opt_args
+    local curcontext="$curcontext" ret=1
+
+    _arguments -C \
+        '--log-path=[directory for daily rolling log files]:dir:_files -/' \
+        '--debug[enable DEBUG-level logging]' \
+        '(- *)'{-h,--help}'[print help]' \
+        '(- *)'{-V,--version}'[print version]' \
+        '1: :_helyim_cmds' \
+        '*::arg:->args' \
+    && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                master)
+                    _arguments \
+                        '--ip=[listen IP]:ip:_hosts' \
+                        '--port=[listen port]:port:' \
+                        '--meta-path=[directory for master metadata]:dir:_files -/' \
+                        '--pulse=[heartbeat pulse interval seconds]:seconds:' \
+                        '--volume-size-limit-mb=[per-volume size limit MB]:mb:' \
+                        '--default-replication=[default replication strategy (DDD)]:strategy:' \
+                        '*--peers=[raft peer addresses]:peer:' \
+                        '(- *)'{-h,--help}'[print subcommand help]'
+                    ;;
+                volume)
+                    _arguments \
+                        '--ip=[listen IP]:ip:_hosts' \
+                        '--port=[listen port]:port:' \
+                        '--pulse=[heartbeat pulse interval seconds]:seconds:' \
+                        '--public-url=[URL clients should use to reach this server]:url:' \
+                        '--default-replication=[default replication strategy]:strategy:' \
+                        '--data-center=[data-center name]:name:' \
+                        '--rack=[rack name]:name:' \
+                        '--master-server=[master server address]:addr:_hosts' \
+                        '*--folders=[data folder for volume storage]:dir:_files -/' \
+                        '(- *)'{-h,--help}'[print subcommand help]'
+                    ;;
+                filer)
+                    _arguments \
+                        '--ip=[listen IP]:ip:_hosts' \
+                        '--port=[listen port]:port:' \
+                        '*--masters=[master server address]:addr:_hosts' \
+                        '--collection=[default collection name]:name:' \
+                        '--default-replication=[default replication strategy]:strategy:' \
+                        '--redirect-on-read[redirect read requests to volume servers]' \
+                        '--data-center=[data-center name]:name:' \
+                        '--rack=[rack name]:name:' \
+                        '--disable-dir-listing[disable directory listing]' \
+                        '--max-mb=[max file size in MB]:mb:' \
+                        '--dir-listing-limit=[max entries per directory listing]:n:' \
+                        '(- *)'{-h,--help}'[print subcommand help]'
+                    ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_helyim_cmds() {
+    local -a cmds
+    cmds=(
+        'master:run master server (coordinates volume + tracks topology)'
+        'volume:run volume server (stores blob data in needle files)'
+        'filer:run filer server (POSIX-like filesystem view atop master+volume)'
+    )
+    _describe -t commands 'helyim command' cmds
+}
+
+_helyim "$@"
