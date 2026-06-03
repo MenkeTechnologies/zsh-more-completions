@@ -1,0 +1,115 @@
+#compdef brs-cli
+# ============================================================================
+# brs-cli - BrightScript Simulation Engine CLI / REPL (Node, MIT)
+#
+# Author : Marcelo Lv Cabral (lvcabral) + Sean Barag + Mark Pearce
+# Upstream: https://github.com/lvcabral/brs-engine
+# npm    : brs-node (binary: brs-cli)
+#
+# brs-cli runs BrightScript apps - the language used by every
+# Roku streaming device - in a Node.js (or browser) simulation
+# layer. The CLI takes one or more `.brs` source files (or an
+# `app.zip` packaged Roku app), boots a simulated Roku device
+# environment (RAF, scene graph, audio mixer, registry persistence,
+# ECP remote-control server), and renders the framebuffer either
+# as a canvas PNG, ASCII-art in the terminal, or a Unicode-block
+# pseudo-graphics frame. The same engine that powers the browser
+# Roku simulator at lvcabral.com/brs/ runs in Node here.
+#
+# Worker-thread architecture: the main thread owns the CLI
+# parser + the ECP REST server + the terminal renderer; a
+# dedicated worker thread runs the BrightScript interpreter +
+# scene graph; the two communicate over a SharedArrayBuffer
+# control channel that carries opcode-level messages
+# (DataType.KEY, DataType.SOUND, DataType.VIDEO, DataType.DEBUG).
+#
+# Flags (commander):
+#   -a, --ascii <columns>     - render terminal as ASCII art
+#   -u, --unicode             - use Unicode block characters in ASCII mode
+#   -c, --colors <level>      - chalk color level (0-3, 0=disable)
+#   -d, --debug               - open micro-debugger on app crash
+#   -e, --ecp                 - enable ECP server (external control protocol)
+#   -n, --no-sg               - disable SceneGraph extension
+#   -p, --pack <password>     - generate encrypted app package
+#   -o, --out <directory>     - output directory for --pack
+#   -r, --root <directory>    - root for `pkg:/` resolution
+#   -x, --ext-vol <path>      - path mounted as `ext1:/`
+#   -k, --deep-link <params>  - deep-link key=value,... params
+#   -y, --registry            - persist simulated device registry to disk
+#   -v, --version             - print version
+#
+# The MessagePack lane is built on `@msgpack/msgpack ^2.8.0`
+# (declared verbatim at upstream packages/node/package.json HEAD),
+# the canonical Node MessagePack library by Yusuke Kawasaki
+# + Daisuke Murase (github.com/msgpack/msgpack-javascript, 1100+
+# stars - the reference TypeScript implementation of the
+# MessagePack spec). brs-cli uses MessagePack to serialize the
+# Roku registry blob + app package metadata that flows between
+# main thread and worker thread - exactly the schema-less
+# binary archive pattern Axis 220 explores: a typed binary
+# blob accessible without a parse step, mmap-friendly through
+# SharedArrayBuffer.
+#
+# ----------------------------------------------------------------------------
+# AXIS 220 :: Typed binary archive formats with zero-copy mmap access [CLOSES]
+# Round 1360 :: TS-Node slot 3 of 4 :: CLOSES Axis 220 (213th axis closed)
+#
+# Cross-language canonical library family for this axis:
+#   Rust    : rkyv/rkyv               [R1358 _mitex]
+#   Go      : capnproto/go-capnp      [R1359 _mache]
+#   TS/Node : @msgpack/msgpack        [R1360 THIS FILE]
+#
+# The TS slot closes the axis with the *schema-less* end of the
+# spectrum - MessagePack is "JSON in bytes": dynamic types,
+# no compile-time schema, parse-required-but-fast access. The
+# three lanes form a tidy spectrum of schema-binding strictness:
+#
+#   rkyv (Rust)        : type-bound at compile time, zero-parse
+#                        access, schema = Rust struct definition
+#   Cap'n Proto (Go)   : schema-first via .capnp file, code-gen
+#                        per language, zero-copy pointer access
+#   MessagePack (TS)   : schema-less, dynamic types, parse-on-read
+#                        but extremely fast (no metadata overhead)
+#
+# Use-case mapping: rkyv for compile-time data tables (mitex
+# LaTeX command spec); Cap'n Proto for cross-language wire
+# protocols where the schema is the contract (mache Leyline
+# control block); MessagePack for runtime serialization of
+# dynamically-typed values across worker-thread boundaries
+# (brs-cli registry blob + scenegraph IPC).
+#
+# Structural commentary: the schema-binding strictness axis
+# tracks the language ecosystem's general preference for
+# explicit typing. Rust ships with derive-macros that make the
+# type-driven approach natural; Go's static typing meets the
+# .capnp schema halfway via codegen; TypeScript's structural
+# typing aligns with MessagePack's schema-on-read pattern
+# (parse + validate at use sites, not at deserialization).
+# Axis 220 is the round-number landmark axis - each lane lands
+# at the canonical library for its ecosystem's preferred
+# schema-binding philosophy.
+# ============================================================================
+
+_brs-cli() {
+    local context state state_descr line
+    typeset -A opt_args
+
+    _arguments -s -S \
+        '(-a --ascii)'{-a,--ascii}'[enable ASCII screen mode with # of columns]:columns:' \
+        '(-u --unicode)'{-u,--unicode}'[render ASCII screen mode using Unicode block characters]' \
+        '(-c --colors)'{-c,--colors}'[console color level (0 to disable)]:level:(0 1 2 3)' \
+        '(-d --debug)'{-d,--debug}'[open the micro debugger if the app crashes]' \
+        '(-e --ecp)'{-e,--ecp}'[enable the ECP server for control simulation]' \
+        '(-n --no-sg)'{-n,--no-sg}'[disable the SceneGraph extension]' \
+        '(-p --pack)'{-p,--pack}'[password to generate the encrypted package]:password:' \
+        '(-o --out)'{-o,--out}'[directory to save the encrypted package file]:dir:_files -/' \
+        '(-r --root)'{-r,--root}'[root directory from which `pkg:` paths will be resolved]:dir:_files -/' \
+        '(-x --ext-vol)'{-x,--ext-vol}'[path to directory or zip file mounted as `ext1:`]:path:_files' \
+        '(-k --deep-link)'{-k,--deep-link}'[deep-link parameters (format: key=value,...)]:params:' \
+        '(-y --registry)'{-y,--registry}'[persist the simulated device registry on disk]' \
+        '(- *)'{-v,--version}'[print version]' \
+        '(- *)'{-h,--help}'[print help]' \
+        '*:BrightScript file:_files -g "*.(brs|zip)"'
+}
+
+_brs-cli "$@"
