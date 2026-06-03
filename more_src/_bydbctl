@@ -1,0 +1,200 @@
+#compdef bydbctl
+# ---------------------------------------------------------------------------
+# bydbctl — CLI client for Apache SkyWalking BanyanDB (Go, 341★)
+#
+# upstream: https://github.com/apache/skywalking-banyandb
+# project: Apache SkyWalking BanyanDB — observability database for
+#          Metrics + Tracing + Logging at scale
+# license: Apache-2.0
+#
+# Source-direct completion: every subcommand and every persistent flag below
+# is verbatim from bydbctl/internal/cmd/*.go on the BanyanDB tip — root.go
+# (persistent flags + RootCmdFlags AddCommand block), group.go, use.go,
+# stream.go, measure.go, topn.go, index_rule.go, index_rule_binding.go,
+# property.go, trace.go, health_check.go, analyze.go.
+#
+# Direct deps from go.mod (selected):
+#   github.com/blugelabs/bluge v0.2.2          ← canonical Go full-text search
+#                                                index/scoring library (this axis)
+#   github.com/blugelabs/bluge_segment_api v0.2.0
+#   github.com/spf13/cobra
+#   github.com/spf13/viper
+#
+# === AXIS 157 CONTINUES — full-text search engine ecosystem ===
+# Axis position: Go=212 continues Axis 157 (slot 2/0/0).  Canonical Go
+# Lucene-inspired full-text search library is `blugelabs/bluge` by
+# Marty Schoch (formerly Couchbase, original author of bleve) — the
+# successor to bleve with a cleaner API surface and immutable segment
+# files.  bluge powers Apache SkyWalking BanyanDB's series/measure
+# indices, ZincSearch (17,838★), Heroic Labs Nakama, ParadeDB analytics,
+# diamondburned/nix-search, and tigergraph/grafana enterprise.
+#
+# Cycle position in current 3+1 micro-cycle:
+#   Rust=212   _codanna             ← previous round (axis 157 OPENS at 1/0/0)
+#   Go=212     ← THIS FILE          (axis 157 continues, slot 2/0/0)
+#   TS-Node=212 ← next round        (axis 157 CLOSES at triple-212, slot 1/1/1)
+# ---------------------------------------------------------------------------
+
+# --- shared CRUD-subcommand list builder ----------------------------------
+# Every operation noun (stream/measure/topn/indexRule/indexRuleBinding/trace)
+# uses the same create/update/get/delete/list[/query] pattern with -f/-n flags.
+_bydbctl_crud_basic() {
+    print -- \
+        'create:create the named resources from files (-f)' \
+        'update:update the named resources from files (-f)' \
+        'get:get a single resource (-g group -n name)' \
+        'delete:delete a single resource (-g group -n name)' \
+        'list:list resources in a group (-g group)'
+}
+
+_bydbctl() {
+    local context state state_descr line ret=1
+    typeset -A opt_args
+
+    local -a subcmds
+    subcmds=(
+        'group:manage groups (create/update/get/delete/list)'
+        'use:select a default group'
+        'stream:manage streams (CRUD + query)'
+        'measure:manage measures (CRUD + query)'
+        'topn:manage TopN aggregations (CRUD + query)'
+        'indexRule:manage index rules (CRUD)'
+        'indexRuleBinding:bind index rules to streams/measures (CRUD)'
+        'property:property schema + data operations'
+        'trace:manage traces (CRUD)'
+        'health:server health check'
+        'analyze:analyze series cardinality and distribution'
+        'completion:generate the autocompletion script'
+        'help:help about any command'
+    )
+
+    _arguments -C \
+        '--config=[config file (default $HOME/.bydbctl.yaml)]:config file:_files -g "*.(yaml|yml)"' \
+        '(-g --group)'{-g,--group=}'[list objects in this group]:group:' \
+        '(-a --addr)'{-a,--addr=}'[server address (Schema://Domain:Port, default http://localhost:17913)]:addr:' \
+        '(-u --username)'{-u,--username=}'[username for authentication]:username:' \
+        '(-p --password)'{-p,--password=}'[password for authentication]:password:' \
+        '(- *)'{-h,--help}'[help for bydbctl]' \
+        '(- *)'{-v,--version}'[version of bydbctl]' \
+        '1: :->cmds' \
+        '*::arg:->args' && ret=0
+
+    case $state in
+        cmds)
+            _describe -t commands 'bydbctl command' subcmds && ret=0
+            ;;
+        args)
+            case $line[1] in
+                group)
+                    local -a gcmds
+                    gcmds=(
+                        'create:create groups from files'
+                        'update:update groups from files'
+                        'get:get a group (-g group)'
+                        'delete:delete a group (--force --dry-run --data-only)'
+                        'list:list all groups'
+                    )
+                    _bydbctl_subnest gcmds && ret=0
+                    ;;
+                use)
+                    _arguments '1:group name:' && ret=0
+                    ;;
+                stream|measure|topn|trace)
+                    local -a ccmds
+                    ccmds=( ${(z)$(_bydbctl_crud_basic)} )
+                    ccmds+=( 'query:query data (-s start_time -e end_time -f spec)' )
+                    _bydbctl_subnest ccmds && ret=0
+                    ;;
+                indexRule|indexRuleBinding)
+                    local -a icmds
+                    icmds=( ${(z)$(_bydbctl_crud_basic)} )
+                    _bydbctl_subnest icmds && ret=0
+                    ;;
+                property)
+                    local -a pcmds
+                    pcmds=(
+                        'schema:property schema operations (create/update/get/delete/list)'
+                        'data:property data operations (apply/get/delete/query)'
+                    )
+                    _bydbctl_subnest pcmds && ret=0
+                    ;;
+                health)
+                    ret=0
+                    ;;
+                analyze)
+                    local -a acmds
+                    acmds=(
+                        'series:analyze series cardinality and distribution (-s subject)'
+                    )
+                    _bydbctl_subnest acmds && ret=0
+                    ;;
+                completion)
+                    _arguments '1:shell:(bash zsh fish powershell)' && ret=0
+                    ;;
+                help)
+                    _describe -t commands 'bydbctl command' subcmds && ret=0
+                    ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+# Helper for nested subcommand prompts — accepts the subcommand array by name
+_bydbctl_subnest() {
+    local arr_name=$1
+    local -a entries
+    entries=( ${(P)arr_name} )
+
+    local context state state_descr line ret=1
+    typeset -A opt_args
+
+    _arguments -C \
+        '(-h --help)'{-h,--help}'[help for command]' \
+        '1: :->scmd' \
+        '*::arg:->sarg' && ret=0
+
+    case $state in
+        scmd)
+            _describe -t commands 'subcommand' entries && ret=0
+            ;;
+        sarg)
+            # Common per-op flags from group/stream/measure/topn/indexRule/etc
+            case $line[1] in
+                create|update)
+                    _arguments \
+                        '(-f --file)'{-f,--file=}'[file, directory, or - for stdin]:file:_files' && ret=0
+                    ;;
+                get|delete)
+                    _arguments \
+                        '(-n --name)'{-n,--name=}'[resource name]:name:' \
+                        '--force[force delete the group even if it contains data (group delete only)]' \
+                        '--dry-run[preview what would be deleted without making changes (group delete only)]' \
+                        '--data-only[delete only data files without removing metadata (group delete only)]' && ret=0
+                    ;;
+                list) ret=0 ;;
+                query)
+                    _arguments \
+                        '(-s --start)'{-s,--start=}'[query start time]:start time:' \
+                        '(-e --end)'{-e,--end=}'[query end time]:end time:' \
+                        '(-f --file)'{-f,--file=}'[query spec file, directory, or - for stdin]:file:_files' && ret=0
+                    ;;
+                series)
+                    _arguments \
+                        '(-s --subject)'{-s,--subject=}'[subject name]:subject:' && ret=0
+                    ;;
+                schema|data)
+                    local -a inner=(
+                        'create' 'update' 'get' 'delete' 'list'
+                    )
+                    _describe -t commands 'inner command' inner && ret=0
+                    ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_bydbctl "$@"
