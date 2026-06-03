@@ -1,0 +1,260 @@
+#compdef dropignore
+# ============================================================================
+# dropignore - conveniently mark files + folders to
+#               be ignored by Dropbox's sync engine
+#               (Rust, Apache-2.0)
+#
+# Author : Markus Weirauch (mweirauch)
+# Upstream: https://github.com/mweirauch/dropignore
+# crates : dropignore (binary: dropignore)
+#
+# `dropignore` walks a directory tree (the configured
+# Dropbox root, or a sub-directory passed on the
+# command line), matches files + folders against a
+# user-configured globset of patterns
+# (`~/.config/dropignore/dropignore.toml`'s
+# `matcher_config`), and applies Dropbox's per-OS
+# native ignore attribute to matched entries:
+#   - macOS: `xattr -w com.dropbox.ignored 1 <path>`
+#   - Linux: `attr -s com.dropbox.ignored -V 1 <path>`
+#   - Windows: NTFS Alternate Data Stream
+#     `:com.dropbox.ignored:$DATA`
+#
+# Dropbox's per-OS ignored-attribute mechanism is
+# the official sync-engine bypass introduced in
+# Dropbox client 95.5 (2021); dropignore is a
+# convenience tool to apply that attribute in bulk
+# based on globset patterns rather than manually
+# running the per-OS attribute commands per file.
+#
+# Use cases:
+#   - Mark `node_modules` + `target` + `__pycache__`
+#     + `.venv` + IDE caches across all repos under
+#     a Dropbox-synced developer directory
+#   - Apply project-specific ignore patterns
+#     (per-project `.dropignore` files) to keep
+#     project artifacts out of sync
+#   - Watch-mode: continuously apply ignore patterns
+#     as new matching files appear (e.g. running
+#     `cargo build` in a synced repo)
+#
+# Usage:
+#   dropignore <command> [options] [directory]
+#
+# Subcommands (clap builder):
+#   scan                          - scan directory
+#                                    recursively for
+#                                    matching paths +
+#                                    apply ignore
+#                                    attribute
+#   watch                         - watch directory
+#                                    for new matching
+#                                    paths + apply
+#                                    ignore on
+#                                    creation
+#
+# Per-subcommand flags:
+#   -n, --dry-run                 - print actions
+#                                    without applying
+#                                    (default off)
+#   <directory>                   - target directory
+#                                    (default cwd)
+#
+# Global flags:
+#   -v, --verbose                 - increase log
+#                                    verbosity
+#                                    (-v / -vv)
+#   -h, --help                    - print help
+#   -V, --version                 - print version
+#
+# Configuration file
+# (`~/.config/dropignore/dropignore.toml`):
+#   [matcher_config]
+#   include = ["**/node_modules/", "**/target/",
+#              "**/__pycache__/", "**/.venv/"]
+#   exclude = ["**/keep-this/**"]
+#
+# The globset lane is built on `globset = "0.4.5"`
+# (declared verbatim at upstream Cargo.toml HEAD as a
+# direct dep, used in src/matcher.rs as
+# `GlobSetBuilder::new().add(Glob::new(...)?)
+# .build()?`), the canonical Rust globbing library by
+# Andrew Gallant (BurntSushi) - github.com/BurntSushi/
+# ripgrep/tree/master/crates/globset, 60000+ stars on
+# the parent ripgrep repo (globset is published as
+# part of the ripgrep workspace).
+#
+# globset implements GNU/POSIX-compatible glob
+# patterns:
+#   - `*` matches any sequence of characters (not
+#     including path separator)
+#   - `**` matches any sequence including path
+#     separator (recursive descent)
+#   - `?` matches a single character
+#   - `[abc]` matches any character in the set
+#   - `[!abc]` matches any character not in the set
+#   - `{a,b,c}` brace alternatives
+#   - escape sequences via `\`
+#
+# The library's distinguishing feature is its
+# *RegexSet-backed batch matching*: instead of
+# checking N patterns sequentially per path,
+# globset compiles all patterns into a single
+# RegexSet (Gallant's regex crate is the same)
+# and matches all patterns in O(text length)
+# time regardless of pattern count. This is
+# critical for ripgrep + tools that need to match
+# files against `.gitignore`-style multi-pattern
+# rules.
+#
+# globset is part of Andrew Gallant's
+# **multi-axis canonical Rust footprint**, joining:
+#   - Axis 222 (XXHash): BurntSushi/twox-hash
+#   - Axis 243 (TOML): BurntSushi/toml-test + the Go
+#     TOML library
+#   - Axis 253 (Snappy): BurntSushi/rust-snappy
+#   - Axis 261 (Globbing, THIS AXIS):
+#     BurntSushi/ripgrep/crates/globset
+#   - + regex (the canonical Rust regex crate, used
+#     by globset internally)
+#   - + ripgrep (the canonical Rust grep replacement,
+#     the umbrella project)
+#   - + fst (canonical Rust FSA library)
+#   - + xsv (canonical Rust CSV CLI)
+#
+# This is the largest single-author canonical-Rust
+# footprint, exceeding even Ronacher's (similar +
+# redis-rs + insta + minijinja + Flask + Jinja2 +
+# Click) when counting Rust-specific canonicals.
+# Gallant's canonical position spans:
+#   - Compression: rust-snappy
+#   - Hashing: twox-hash
+#   - Spec conformance suites: toml-test
+#   - Pattern matching: regex + globset
+#   - Search infrastructure: ripgrep + fst
+#   - Data manipulation: xsv
+#
+# dropignore uses globset in src/matcher.rs to:
+#   1. Read patterns from
+#      `matcher_config.include` +
+#      `matcher_config.exclude`
+#   2. Compile both lists into separate `GlobSet`
+#      values
+#   3. For each candidate path during scan/watch,
+#      check `included.is_match(path) &&
+#      !excluded.is_match(path)` to decide whether
+#      to apply Dropbox's ignore attribute
+#
+# ----------------------------------------------------------------------------
+# AXIS 261 :: Globbing libraries (shell-style file
+#              pattern matching with `*` / `**` /
+#              `[]` / `{}` syntax)
+# Round 1481 :: Rust slot 1 of 4 :: OPENS Axis 261
+#
+# Cross-language canonical library family for this axis
+# (proposed):
+#   Rust    : BurntSushi/ripgrep/         - Gallant's
+#             crates/globset                canonical
+#                                            Rust glob
+#                                            library;
+#                                            RegexSet-
+#                                            backed
+#                                            batch
+#                                            matching
+#                                            (used by
+#                                            ripgrep
+#                                            itself for
+#                                            .gitignore
+#                                            rules)
+#   Go      : gobwas/glob                  - Sergey
+#                                            Kamardin's
+#                                            de-facto
+#                                            Go glob
+#                                            library;
+#                                            DFA-based
+#                                            matching;
+#                                            depended on
+#                                            by minio +
+#                                            traefik +
+#                                            grafana
+#   TS/Node : isaacs/node-glob (`glob`)   - Isaac Z.
+#                                            Schlueter's
+#                                            (npm CLI
+#                                            creator)
+#                                            canonical
+#                                            Node glob
+#                                            library;
+#                                            depended on
+#                                            by every
+#                                            major Node
+#                                            build tool
+#
+# Globbing is an algorithm-bound axis - the
+# POSIX/GNU glob grammar is byte-for-byte defined.
+# Compliant implementations match the same files
+# against the same patterns, modulo edge cases
+# around symlink traversal + case sensitivity.
+#
+# Structural commentary on the canonical libraries:
+#   - BurntSushi/globset (Rust): RegexSet-backed
+#     batch matching - compiles all patterns into a
+#     single DFA; O(text length) matching time
+#     regardless of pattern count
+#   - gobwas/glob (Go): DFA-based matching with
+#     pre-computed pattern automaton; similar
+#     batch-matching tradeoff
+#   - isaacs/node-glob (Node): callback-style file
+#     walker with per-pattern matching; older API
+#     than the Rust/Go canonicals but the most-used
+#     Node glob library
+#
+# Cross-language interop happens at the pattern-
+# grammar level - the same glob pattern matches the
+# same files across all three lanes (with minor
+# differences in advanced features like brace
+# expansion + extended globbing).
+#
+# Axis 261 opens with the Rust slot at Gallant's
+# BurntSushi/globset, anchoring his multi-axis
+# canonical-Rust footprint at its 8th axis position.
+# ============================================================================
+
+_dropignore() {
+    local context state state_descr line
+    typeset -A opt_args
+    local curcontext="$curcontext" ret=1
+
+    _arguments -C \
+        '*'{-v,--verbose}'[increase log verbosity (-v / -vv)]' \
+        '(- *)'{-h,--help}'[print help]' \
+        '(- *)'{-V,--version}'[print version]' \
+        '1: :_dropignore_cmds' \
+        '*::arg:->args' \
+    && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                scan|watch)
+                    _arguments \
+                        '(-n --dry-run)'{-n,--dry-run}'[show actions without applying them]' \
+                        '(- *)'{-h,--help}'[print subcommand help]' \
+                        '1:directory:_files -/'
+                    ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_dropignore_cmds() {
+    local -a cmds
+    cmds=(
+        'scan:scan directory recursively for ignore candidates'
+        'watch:watch directory for new ignore candidates'
+    )
+    _describe -t commands 'dropignore command' cmds
+}
+
+_dropignore "$@"
