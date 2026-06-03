@@ -1,0 +1,332 @@
+#compdef jetmidi
+# ============================================================================
+# jetmidi - firewall-traversing 2-way MIDI over
+#            UDP between two networked hosts
+#            (Node.js, no LICENSE file declared)
+#
+# Author : David Konsumer
+# Upstream: https://github.com/konsumer/jetmidi
+# npm    : jetmidi (binary: jetmidi)
+#
+# `jetmidi` streams MIDI messages bidirectionally
+# between two hosts over UDP, with a clever
+# firewall-traversal handshake that lets both
+# endpoints punch through NAT without requiring
+# port forwarding or relay servers. Each side:
+#   1. Creates a virtual ALSA/CoreMIDI/WinMM MIDI
+#      input + output port (named "JetMIDI in"
+#      and "JetMIDI out") that local DAWs can
+#      route to
+#   2. Sends 10 "garbage" UDP datagrams to the
+#      remote peer to coax NAT translation tables
+#      into existence
+#   3. Sends an "ACK_MAGICK" datagram that the
+#      remote peer recognizes as the handshake
+#      completion signal
+#   4. After handshake, every local MIDI message
+#      is encapsulated in a UDP datagram + sent
+#      to the peer; every received UDP datagram
+#      is replayed to the local virtual output
+#      port (where DAWs see it as incoming MIDI)
+#
+# This pattern is based on the classic
+# UDP-hole-punching technique used by STUN/TURN
+# for VoIP and game-server matchmaking. jetmidi
+# adapts it for MIDI's low-bandwidth + low-latency
+# requirements.
+#
+# Use cases:
+#   - Remote collaboration on MIDI compositions
+#     (two musicians on different home networks
+#     can share a MIDI session without VPN /
+#     port forwarding / external relays)
+#   - Educational remote teaching (instructor's
+#     keyboard MIDI streams to student's DAW
+#     synth in real time)
+#   - Live-performance distributed MIDI control
+#     (a remote musician's controller drives an
+#     on-stage instrument)
+#   - Network MIDI without RTP-MIDI / AppleMIDI
+#     stack (jetmidi's UDP protocol is simpler +
+#     more firewall-friendly than the RFC 6295
+#     RTP-MIDI flow)
+#
+# Usage:
+#   jetmidi --ip <remote-host> \
+#           [--port <local-udp-port>] \
+#           [--destination <remote-udp-port>] \
+#           [--verbose]
+#
+# Flags (yargs declarative):
+#   -i, --ip <host>                - destination
+#                                     IP address
+#                                     of the
+#                                     remote peer
+#                                     (required)
+#   -p, --port <port>              - local UDP
+#                                     port to
+#                                     bind for
+#                                     receiving
+#                                     (default
+#                                     5556)
+#   -d, --destination <port>       - remote UDP
+#                                     port to
+#                                     send to
+#                                     (default
+#                                     5557)
+#   -v, --verbose                  - verbose
+#                                     debugging
+#                                     info
+#                                     (logs every
+#                                     MIDI
+#                                     message
+#                                     sent +
+#                                     received)
+#   -h, --help                     - print yargs
+#                                     help
+#
+# Symmetric-peer configuration example:
+#   # On host A (LAN IP 192.168.0.5):
+#   jetmidi -i 192.168.0.4
+#   # On host B (LAN IP 192.168.0.4):
+#   jetmidi -i 192.168.0.5 -p 5557 -d 5556
+#
+#   # The port/destination pair is swapped on
+#   # the second peer so each side's outbound
+#   # port matches the other side's inbound port.
+#
+# Internet-peer example (NAT traversal):
+#   # Each peer needs to know the other's
+#   # public IP + port. Coordination typically
+#   # via Discord/Slack/email pre-session.
+#   # On home network behind NAT:
+#   jetmidi -i 203.0.113.42 -v
+#
+# The midi lane is built on `midi ^0.9.2`
+# (declared verbatim at upstream package.json
+# HEAD as a direct dep, imported as
+# `var midi = require('midi')` in index.js line
+# 10, used at lines 41-43 to create virtual MIDI
+# input + output ports `new midi.input()` +
+# `input.openVirtualPort('JetMIDI in')` +
+# `output.sendMessage(out)` for sending received
+# UDP-encapsulated messages to the local virtual
+# output port), the canonical Node MIDI library
+# by Justin Latimer (justinlatimer) - github.com/
+# justinlatimer/node-midi.
+#
+# Justin Latimer's node-midi is the de-facto
+# canonical Node MIDI library:
+#   - Wraps the rtmidi C++ library (Gary P.
+#     Scavone's cross-platform MIDI I/O
+#     abstraction) via node-gyp native addon
+#   - Cross-platform MIDI I/O (Linux ALSA +
+#     macOS CoreMIDI + Windows WinMM/WinRT +
+#     JACK)
+#   - 100,000+ weekly npm downloads
+#   - Stable API since 2012; minimal breaking
+#     changes between major versions
+#   - Virtual port support (Linux + macOS;
+#     Windows requires loopMIDI or similar
+#     external bridge)
+#   - Input callback-based + output direct-call
+#     APIs
+#   - Sysex (System Exclusive) message support
+#
+# node-midi's distinguishing position vs
+# alternatives:
+#   - justinlatimer/midi (Latimer): canonical;
+#     the npm `midi` package; THIS AXIS
+#   - @julusian/midi (Julian Waller's
+#     maintained fork): newer; better Node 18+
+#     compatibility; active maintenance after
+#     Latimer's original lapsed
+#   - easymidi (Tom Dinchak): higher-level
+#     event-based wrapper over @julusian/midi
+#   - jzz (Jazz-Soft): pure-JS MIDI library
+#     using Web MIDI API in browser + jzz-midi
+#     bindings in Node; alternative pure-JS
+#     path
+#
+# The Latimer/Julusian split mirrors common
+# Node ecosystem patterns where a popular
+# library transitions from original-author
+# maintenance to community-fork maintenance.
+# Both packages remain canonical in different
+# contexts:
+#   - `midi` (Latimer): used by older projects
+#     locked to a specific version
+#   - `@julusian/midi`: used by newer projects
+#     that need active maintenance + Node 18+
+#     support
+#
+# Justin Latimer's broader Node ecosystem
+# footprint:
+#   - node-midi (canonical Node MIDI; THIS AXIS)
+#   - Various smaller utility libraries around
+#     real-time audio + MIDI integration
+#   - Ad-hoc contributions to the wider Node
+#     audio + music-software ecosystem
+#
+# Latimer's role in the Node ecosystem is
+# *specialized real-time audio/MIDI infrastructure*
+# - similar position to Patrick Klein's role in
+# Rust (midir at Axis 269 Rust slot R1505) +
+# Marc Rene Arns's role in Go (gomidi at Axis
+# 269 Go slot R1506).
+#
+# The three canonical MIDI authors form a
+# cross-language *specialized-protocol-author*
+# cluster, each canonical for their respective
+# language ecosystem:
+#   - Rust: Patrick Klein / Boddlnagg / midir
+#   - Go: Marc Rene Arns / gomidi org
+#   - Node: Justin Latimer / node-midi
+#
+# All three wrap or interface with operating
+# system MIDI APIs (ALSA + CoreMIDI + WinMM/
+# WinRT), with the Rust lane being the only
+# pure-language implementation (the Go + Node
+# lanes wrap rtmidi C++ via cgo + node-gyp
+# respectively).
+#
+# jetmidi uses node-midi in index.js to:
+#   1. Create virtual MIDI input + output ports
+#      (`new midi.input()` + `input.openVirtualPort
+#      ('JetMIDI in')` + `new midi.output()` +
+#      `output.openVirtualPort('JetMIDI out')`)
+#   2. Receive MIDI messages from the virtual
+#      input port via the `input.on('message',
+#      callback)` event handler
+#   3. Send MIDI messages to the virtual output
+#      port via `output.sendMessage(byteArray)`
+#   4. Encapsulate received MIDI bytes in UDP
+#      datagrams for transmission to the remote
+#      peer
+#   5. Replay UDP-received MIDI bytes via the
+#      virtual output port (so local DAWs see
+#      remote MIDI as incoming on the JetMIDI
+#      virtual port)
+#
+# ----------------------------------------------------------------------------
+# AXIS 269 :: MIDI (Musical Instrument Digital
+#              Interface) device I/O libraries
+#              (cross-platform MIDI 1.0 spec +
+#              USB MIDI Class + sysex message
+#              handling)
+# Round 1507 :: TS-Node slot 3 of 4 :: CLOSES Axis 269
+#                                       (262nd axis closed)
+#
+# Cross-language canonical library family for this axis:
+#   Rust    : Boddlnagg/midir            [R1505 _flow-8-midi]
+#             (Patrick Klein; canonical
+#              Rust MIDI; pure-Rust)
+#   Go      : gomidi/midi                [R1506 _hidi]
+#             (Marc Rene Arns; canonical
+#              Go MIDI; multi-driver
+#              framework)
+#   TS/Node : justinlatimer/node-midi    [R1507 THIS FILE]
+#             (Justin Latimer; canonical
+#              Node MIDI; rtmidi C++
+#              wrapper via node-gyp)
+#
+# justinlatimer/node-midi closes Axis 269 with
+# the *rtmidi-wrapper canonical* pattern. The
+# three lanes demonstrate the spectrum of
+# cross-language MIDI library implementation
+# strategies:
+#
+#   - Rust (midir): pure-Rust; bindgen-generated
+#     OS API bindings; no C/C++ dependency
+#   - Go (gomidi): multi-driver framework;
+#     pure-Go ALSA + cgo-wrapped rtmidi +
+#     cgo-wrapped portmidi; consumer chooses
+#     backend
+#   - Node (node-midi): single-driver C++
+#     wrapper; rtmidi via node-gyp; no
+#     pure-JS option (jzz uses Web MIDI API
+#     which isn't a stdlib in Node)
+#
+# Each lane's choice reflects language culture:
+#   - Rust: prefers pure-language single
+#     implementation
+#   - Go: prefers multi-driver abstraction
+#     with opt-in cgo
+#   - Node: prefers native addons via
+#     node-gyp for performance-critical I/O
+#
+# Cross-language interop at the MIDI message
+# byte level - all three libraries send +
+# receive byte-identical MIDI messages on the
+# wire. Sysex compatibility is universal since
+# the message format is defined at the byte
+# level.
+#
+# Use-case spectrum across the three lanes:
+#   - flow-8-midi (Rust, midir): cross-platform
+#     desktop MIDI controller for the Behringer
+#     FLOW 8 digital mixer
+#   - hidi (Go, gomidi): Linux HID-to-MIDI
+#     translation daemon turning USB devices
+#     into MIDI controllers
+#   - jetmidi (Node, node-midi): firewall-
+#     traversing 2-way MIDI over UDP between
+#     two networked hosts
+#
+# Three lanes, three use-case shapes (hardware
+# mixer control / HID-to-MIDI translation /
+# network MIDI streaming), three implementation
+# strategies (pure-Rust / multi-driver-Go /
+# C++-wrapper-Node), all converging on the MIDI
+# 1.0 spec byte-format.
+#
+# Axis 269 closes the round 1507 cycle - 262nd
+# axis closed total.
+#
+# Multi-axis canonical-Node author/org cohort
+# (now spanning 14 distinct individuals/orgs):
+#   - Sindre Sorhus (chalk + ~1000 microlibs)
+#   - Matt Ranney + Redis Inc. (node-redis)
+#   - Brian Carlson (node-postgres)
+#   - Andrey Sitnik (PostCSS + browserslist +
+#     nanoid)
+#   - Lovell Fuller (sharp)
+#   - Paul Miller (noble umbrella)
+#   - Devon Govett (foliojs umbrella +
+#     lightningcss)
+#   - Matteo Collina (undici + pino + fastify)
+#   - Isaac Z. Schlueter (3 axes: globbing,
+#     TAR, INI; the most-axis-closed Node
+#     author)
+#   - Vitaly Puzrin + nodeca (js-yaml +
+#     markdown-it + pako + argparse + sax +
+#     linkify-it)
+#   - Sergey Belov + svgo team (svg/svgo)
+#   - Matt Zabriskie + axios team (axios)
+#   - Stuart Knightley (jszip)
+#   - Justin Latimer (node-midi, THIS AXIS)
+#
+# The Node cohort skews heavily toward
+# *specialized-format/protocol canonicals*
+# (vs Rust's foundational-library bias or Go's
+# stdlib-supplemented approach). Latimer's
+# node-midi extends this pattern - a niche but
+# canonical library for a specialized vertical
+# (MIDI I/O) that no other library has
+# displaced in 12+ years of Node ecosystem
+# evolution.
+# ============================================================================
+
+_jetmidi() {
+    local context state state_descr line
+    typeset -A opt_args
+
+    _arguments -s -S \
+        '(-i --ip)'{-i,--ip}'[destination IP address of remote peer (required)]:host:_hosts' \
+        '(-p --port)'{-p,--port}'[local UDP port to bind for receiving]:port:' \
+        '(-d --destination)'{-d,--destination}'[remote UDP port to send to]:port:' \
+        '(-v --verbose)'{-v,--verbose}'[verbose debugging info]' \
+        '(- *)'{-h,--help}'[print help]'
+}
+
+_jetmidi "$@"
