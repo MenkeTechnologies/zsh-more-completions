@@ -1,0 +1,177 @@
+#compdef oklog
+# ---------------------------------------------------------------------------
+# oklog — distributed and coördination-free log management system (Go, 2,973★)
+#
+# upstream: https://github.com/oklog/oklog
+# author : Peter Bourgon (peterbourgon) — Go style/best-practices advocate,
+#          ex-SoundCloud / Weaveworks / Fastly; same author who later
+#          extracted `github.com/oklog/ulid` from this project into its
+#          own canonical library.
+# license: Apache-2.0
+#
+# Source-direct completion: every subcommand mode and every flag below is
+# verbatim from cmd/oklog/{main,forward,ingest,store,ingeststore,query,
+# stream,testsvc}.go on the oklog tip — `flag.NewFlagSet(...).Bool/String/
+# Int/Duration/Var` registrations parsed exactly as documented.
+#
+# Direct deps from oklog's go-vendor.json (selected):
+#   github.com/oklog/ulid                   ← canonical Go ULID
+#                                             (this axis) — by Peter
+#                                             Bourgon, EXTRACTED from this
+#                                             very oklog project before
+#                                             oklog was archived
+#   github.com/hashicorp/memberlist         (gossip-based cluster membership)
+#   github.com/pkg/errors                   (Dave Cheney's error wrapping)
+#   github.com/go-kit/kit/log               (Peter Bourgon's own log package)
+#   github.com/prometheus/client_golang     (metrics)
+#   github.com/spaolacci/murmur3            (consistent hashing for cluster)
+#
+# oklog is a distributed log management system that ingests log records
+# (newline-delimited, no schema), stores them in segment files, replicates
+# segments across the cluster (configurable replication factor), and lets
+# operators query historical records by ULID time range + plaintext or
+# regex match.  Every record is prefixed at the ingest boundary with a
+# ULID — providing global unique identity AND lexicographic chronological
+# sort order in a single 26-character string.  Coördination-free: cluster
+# membership via memberlist gossip; no leader election, no quorum writes.
+#
+# === AXIS 168 CONTINUES — lexicographically sortable random identifiers ===
+# Axis position: Go=223 continues Axis 168 (slot 2/0/0).  Canonical Go ULID
+# implementation is `github.com/oklog/ulid` by Peter Bourgon — Crockford-
+# base32 26-character 128-bit IDs (10 chars of timestamp ms since epoch +
+# 16 chars of randomness) producing monotonically sortable, collision-
+# resistant identifiers; drop-in UUIDv4 replacement anywhere DB indexes
+# benefit from temporal locality.  5,034★ on oklog/ulid as of harvest.
+# `oklog/ulid` was originally extracted FROM this same `oklog/oklog` log
+# system — so the completion lives at the historical headwaters of the lib.
+#
+# Cycle position in current 3+1 micro-cycle:
+#   Rust=223     _brioche             ← previous round (axis 168 OPENS, 1/0/0)
+#   Go=223       ← THIS FILE          (axis 168 continues, slot 2/0/0)
+#   TS-Node=223  ← next round         (axis 168 CLOSES at triple-223, 1/1/1)
+# ---------------------------------------------------------------------------
+
+_oklog() {
+    local context state state_descr line ret=1
+    typeset -A opt_args
+
+    _arguments -C \
+        '1: :->modes' \
+        '*::arg:->args' && ret=0
+
+    case $state in
+        modes)
+            local -a modes
+            modes=(
+                'forward:forwarding agent — tails stdin and pushes records to ingest tier'
+                'ingest:ingester node — accepts records on fast/durable/bulk ports and writes segment files'
+                'store:storage node — replicates segments from ingesters and serves query/stream APIs'
+                'ingeststore:combined ingest+store node for small installations (single binary, no separation)'
+                'query:querying commandline tool — ULID time-range plaintext or regex search against a store'
+                'stream:streaming commandline tool — live tail of newly-arriving records with deduplication window'
+                'testsvc:test service emitting log lines at a fixed bytes/sec rate for capacity testing'
+            )
+            _describe -t commands 'oklog mode' modes && ret=0
+            ;;
+        args)
+            case $words[1] in
+                forward)
+                    _arguments \
+                        '-debug[debug logging]' \
+                        '-api=[listen address for forward API (and metrics)]:host:port:' \
+                        '*-prefix=[prefix annotated on each log record (repeatable)]:prefix:' \
+                        '*:ingester ingest URL (e.g. fast://host:7651):' && ret=0
+                    ;;
+                ingest)
+                    _arguments \
+                        '-debug[debug logging]' \
+                        '-topic-mode=[topic mode for ingested records]:mode:(static prefix)' \
+                        '-topic=[static topic name (requires -topic-mode=static)]:topic:' \
+                        '-api=[listen address for ingest API]:host:port:' \
+                        '-ingest.fast=[listen address for fast (async) writes]:host:port:' \
+                        '-ingest.durable=[listen address for durable (sync) writes]:host:port:' \
+                        '-ingest.bulk=[listen address for bulk (whole-segment) writes]:host:port:' \
+                        '-cluster=[listen address for cluster (memberlist gossip)]:host:port:' \
+                        '-cluster.advertise-addr=[optional, explicit address to advertise in cluster]:host:port:' \
+                        '-ingest.path=[path holding segment files for ingest tier]:path:_files -/' \
+                        '-ingest.segment-flush-size=[flush segments after they grow to this size in bytes]:bytes:' \
+                        '-ingest.segment-flush-age=[flush segments after they are active for this long]:duration:' \
+                        '-ingest.segment-pending-timeout=[claimed but uncommitted pending segments are failed after this long]:duration:' \
+                        '-filesystem=[backing filesystem implementation]:fs:(real virtual nop)' \
+                        '*-peer=[cluster peer host:port (repeatable)]:host:port:' && ret=0
+                    ;;
+                store)
+                    _arguments \
+                        '-debug[debug logging]' \
+                        '-api=[listen address for store API]:host:port:' \
+                        '-cluster=[listen address for cluster (memberlist gossip)]:host:port:' \
+                        '-cluster.advertise-addr=[optional, explicit address to advertise in cluster]:host:port:' \
+                        '-store.path=[path holding segment files for storage tier]:path:_files -/' \
+                        '-store.segment-consumers=[concurrent segment consumers]:N:' \
+                        '-store.segment-target-age=[replicate once the aggregate segment is this old]:duration:' \
+                        '-store.segment-delay=[request next segment files after this delay]:duration:' \
+                        '-store.segment-replication-factor=[how many copies of each segment to replicate]:N:' \
+                        '-store.segment-retain=[retention period for segment files]:duration:' \
+                        '-store.segment-purge=[purge deleted segment files after this long]:duration:' \
+                        '-ui.local[ignore embedded files and go straight to the filesystem]' \
+                        '-filesystem=[backing filesystem implementation]:fs:(real virtual nop)' \
+                        '*-peer=[cluster peer host:port (repeatable)]:host:port:' && ret=0
+                    ;;
+                ingeststore)
+                    _arguments \
+                        '-debug[debug logging]' \
+                        '-api=[listen address for ingest and store APIs]:host:port:' \
+                        '-ingest.topic-mode=[topic mode for ingested records]:mode:(static dynamic)' \
+                        '-ingest.topic=[static topic name (requires -topic-mode=static)]:topic:' \
+                        '-ingest.fast=[listen address for fast (async) writes]:host:port:' \
+                        '-ingest.durable=[listen address for durable (sync) writes]:host:port:' \
+                        '-ingest.bulk=[listen address for bulk (whole-segment) writes]:host:port:' \
+                        '-cluster=[listen address for cluster]:host:port:' \
+                        '-cluster.advertise-addr=[optional, explicit address to advertise in cluster]:host:port:' \
+                        '-ingest.path=[path holding segment files for ingest tier]:path:_files -/' \
+                        '-ingest.segment-flush-size=[flush segments after they grow to this size]:bytes:' \
+                        '-ingest.segment-flush-age=[flush segments after they are active for this long]:duration:' \
+                        '-ingest.segment-pending-timeout=[claimed but uncommitted pending segments are failed after this long]:duration:' \
+                        '-store.path=[path holding segment files for storage tier]:path:_files -/' \
+                        '-store.segment-consumers=[concurrent segment consumers]:N:' \
+                        '-store.segment-target-age=[replicate once the aggregate segment is this old]:duration:' \
+                        '-store.segment-delay=[request next segment files after this delay]:duration:' \
+                        '-store.segment-replication-factor=[how many copies of each segment to replicate]:N:' \
+                        '-store.segment-retain=[retention period for segment files]:duration:' \
+                        '-store.segment-purge=[purge deleted segment files after this long]:duration:' && ret=0
+                    ;;
+                query)
+                    _arguments \
+                        '-store=[address of store instance to query]:host:port:' \
+                        '-from=[from, as RFC3339 timestamp or duration ago]:time-or-duration (default 1h):' \
+                        '-to=[to, as RFC3339 timestamp or duration ago]:time-or-duration (default now):' \
+                        '-q=[query expression (plaintext or regex with -regex)]:expression:' \
+                        '-regex[parse -q as regular expression]' \
+                        '-stats[statistics only, no records (implies -v)]' \
+                        '-nocopy[don'\''t read the response body]' \
+                        '-ulid[include ULID prefix with each record]' \
+                        '-time[include time prefix with each record]' \
+                        '-v[verbose output to stderr]' && ret=0
+                    ;;
+                stream)
+                    _arguments \
+                        '-store=[address of store instance to query]:host:port:' \
+                        '-q=[query expression]:expression:' \
+                        '-regex[parse -q as regular expression]' \
+                        '-window=[deduplication window (default 3s)]:duration:' \
+                        '-ulid[include ULID prefix with each record]' && ret=0
+                    ;;
+                testsvc)
+                    _arguments \
+                        '-id=[ID for this instance (default foo)]:id:' \
+                        '-size=[bytes per record (default 512)]:bytes:' \
+                        '-rate=[records per second (default 5)]:N:' && ret=0
+                    ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_oklog "$@"
