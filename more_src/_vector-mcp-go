@@ -1,0 +1,109 @@
+#compdef vector-mcp-go
+# ============================================================================
+# vector-mcp-go - Vector/embedding MCP server with per-project codebase index
+#                  (Go, MIT)
+#
+# Author : nilesh32236
+# Upstream: https://github.com/nilesh32236/vector-mcp-go
+#
+# `vector-mcp-go` is a Model Context Protocol (MCP) server
+# that indexes a project's codebase into a local vector store
+# + exposes the index to AI coding agents as MCP tools
+# (search by semantic similarity, rerank candidates, watch
+# file changes for incremental re-index). Designed to run
+# as a per-project daemon that any MCP-aware client (Claude
+# Code, Cursor, Cline, Codex CLI, Gemini CLI, etc.) attaches
+# to via a Unix-socket-backed stdio bridge.
+#
+# Architecture: a single Go process per project. The first
+# instance for a given data-dir becomes the *master* (owns
+# the embedding worker pool + vector store + file watcher);
+# subsequent processes detect the master via a Unix socket
+# (data-dir/daemon.sock) and become *workers* (forward MCP
+# tool calls over the socket to the master). The embedding
+# stack is ONNX Runtime + an HF tokenizer JSON config; the
+# vector store is sqlite-vec for the on-disk index; the
+# watcher is fsnotify for incremental re-indexing on file
+# changes. Optional Prometheus + OpenTelemetry tracing
+# integration via init-tracing-opentelemetry.
+#
+# Flags (Go stdlib `flag`):
+#   -data-dir <dir>     - base directory for DB + models
+#   -models-dir <dir>   - specific directory for ONNX models
+#                         (defaults to <data-dir>/models)
+#   -db-path <path>     - specific path for the vector DB
+#                         (defaults to <data-dir>/db.sqlite)
+#   -index              - run full codebase indexing + exit
+#                         (initial scan; daemon mode handles
+#                          incremental updates afterward)
+#   -daemon             - run as background daemon (master
+#                         worker) without MCP stdio server -
+#                         useful for the long-lived index +
+#                         watch loop
+#   -version            - print version + build info
+#   -h, --help          - print help
+#
+# The sugarme/tokenizer lane is built on `github.com/sugarme/
+# tokenizer v0.3.0` (declared as a direct dep at upstream
+# go.mod HEAD), the canonical Go port of huggingface/
+# tokenizers by Truong Mai (github.com/sugarme/tokenizer,
+# 200+ stars). sugarme/tokenizer is a *line-by-line port* of
+# the Rust huggingface/tokenizers crate to pure Go - it
+# implements the same Byte-Pair-Encoding (BPE), WordPiece,
+# Unigram, and Byte-Level-BPE algorithms with the same
+# spec-bound output (a tokenizer.json file loads identically
+# in either lane).
+#
+# An alternative Go lane exists - `daulet/tokenizers`, used
+# by knights-analytics/hugot - which is CGo bindings to the
+# Rust library rather than a pure-Go port. The pure-Go port
+# has the Go ecosystem's preference for cross-compile-
+# friendly distribution (no CGo, no C deps); the CGo
+# bindings have access to the latest Rust-library features
+# at the cost of breaking Go's cross-compile story. The
+# split mirrors the Wasm-runtime axis (Axis 232) where
+# wazero (pure-Go) won out over wasmtime-go (CGo) for the
+# same reason.
+#
+# ----------------------------------------------------------------------------
+# AXIS 234 :: LLM tokenizers (BPE/WordPiece/Unigram/byte-BPE subword tokenization)
+# Round 1401 :: Go slot 2 of 4 :: continues Axis 234 (round-number landmark)
+#
+# Cross-language canonical library family for this axis:
+#   Rust    : huggingface/tokenizers       [R1400 _text-embeddings-router]
+#   Go      : sugarme/tokenizer            [R1401 THIS FILE]
+#                                            (alt: daulet/tokenizers via CGo)
+#   TS/Node : @huggingface/tokenizers      [R1402 closing]
+#
+# sugarme/tokenizer is the rare "Go port of a Rust library"
+# success story: pure-Go reimplementation that maintains
+# bit-for-bit wire-format compatibility with the upstream
+# Rust reference. The maintainability question - whether
+# the port keeps pace with the upstream as new tokenizer
+# algorithms ship - has been answered by the project's
+# 6+ year track record of staying within 1-2 minor versions
+# of huggingface/tokenizers.
+#
+# The Axis 234 pattern (canonical-library-as-spec-root,
+# downstream lanes either port or bind) demonstrates the
+# alternative to the more common pattern where each lane
+# independently implements the same spec. Cross-lane
+# interop in Axis 234 is unusually tight because all lanes
+# trace back to the same source of truth.
+# ============================================================================
+
+_vector-mcp-go() {
+    local context state state_descr line
+    typeset -A opt_args
+
+    _arguments -s -S \
+        '-data-dir[base directory for DB and models]:dir:_files -/' \
+        '-models-dir[specific directory for ONNX models]:dir:_files -/' \
+        '-db-path[specific path for the vector DB]:file:_files' \
+        '-index[run full codebase indexing and exit]' \
+        '-daemon[run as background daemon master (no MCP stdio server)]' \
+        '-version[print version and exit]' \
+        '(- *)'{-h,--help}'[print help]'
+}
+
+_vector-mcp-go "$@"
