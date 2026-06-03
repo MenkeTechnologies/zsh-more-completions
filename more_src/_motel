@@ -1,0 +1,183 @@
+#compdef motel motel-mcp
+# ============================================================================
+# motel / motel-mcp - Local OTLP ingest + TUI viewer for development
+#                     (Node/Bun, ?)
+#
+# Author : Kit Langton
+# Upstream: https://github.com/kitlangton/motel
+# npm    : @kitlangton/motel (binaries: motel, motel-mcp)
+#
+# `motel` is a development-only OpenTelemetry collector that
+# accepts OTLP/HTTP from your local app's exporters, stores
+# everything in a local SQLite database, and exposes the
+# collected traces + spans + logs through three concurrent
+# surfaces:
+#   - a terminal TUI (the default front-end on `motel`)
+#   - a built-in web UI (separate HTTP endpoint)
+#   - an MCP server (`motel-mcp`) so AI coding agents can
+#     query runtime evidence directly from the chat loop
+#
+# The use case: instead of running a heavyweight collector
+# (Jaeger, Tempo, Honeycomb) for local dev, point your
+# OTLP/HTTP exporters at `http://127.0.0.1:27686` and the
+# motel TUI shows traces + logs from your app as they happen.
+# Runs on Bun (the binary is a `#!/usr/bin/env bun` script);
+# `bun add -g @kitlangton/motel` installs both the `motel`
+# CLI + the `motel-mcp` MCP server bin.
+#
+# Subcommands (motel; dispatched by hand-rolled argv switch):
+#   (default) / tui / ui     - launch the TUI viewer
+#   daemon / start           - start the OTLP ingest daemon
+#   status                   - show daemon status (JSON)
+#   stop                     - stop the daemon
+#   restart                  - stop + restart + relaunch TUI
+#   server                   - run server only (no TUI)
+#   mcp                      - run as MCP server (delegates to motel-mcp)
+#   services                 - list services with recent telemetry
+#   traces [service] [limit] - list traces
+#   trace <trace-id>         - show one trace
+#   span <span-id>           - show one span
+#   trace-spans <trace-id>   - list spans within a trace
+#   search-spans [service] [operation] [parent=<op>] [attr.key=val ...]
+#                            - query spans by attributes
+#   search-traces [service] [operation] [attr.key=val ...]
+#                            - query traces
+#   trace-stats <groupBy> <agg> [service] [attr.key=val ...]
+#                            - aggregate stats over traces
+#   logs [service]           - list logs
+#   search-logs [service] [body] [attr.key=val ...]
+#                            - query logs by body/attrs
+#   log-stats <groupBy> [service] [attr.key=val ...]
+#                            - aggregate stats over logs
+#   trace-logs <trace-id>    - logs correlated with a trace
+#   span-logs <span-id>      - logs correlated with a span
+#   facets <traces|logs> <field>
+#                            - distinct values for a field
+#   instructions             - print paste-ready setup instructions
+#   endpoints                - print exporter endpoints
+#   help / --help / -h       - show help
+#
+# `motel-mcp` exposes the same query surface as MCP tools
+# for AI agent integration.
+#
+# The opentelemetry-js lane is built on `@opentelemetry/api`
+# + `@opentelemetry/sdk-node` + `@opentelemetry/sdk-trace-*`
+# + `@opentelemetry/exporter-trace-otlp-http` +
+# `@opentelemetry/exporter-logs-otlp-http` +
+# `@opentelemetry/sdk-logs` (declared verbatim at upstream
+# package.json HEAD), the canonical Node OpenTelemetry SDK
+# maintained by the open-telemetry/opentelemetry-js project
+# (2700+ stars) under the same OpenTelemetry GitHub org as
+# the Rust + Go reference SDKs. motel uses it to *ingest*
+# OTLP/HTTP traces emitted by the user's application -
+# the same wire-format that opentelemetry-rust /
+# opentelemetry-go / opentelemetry-js applications emit on
+# the producer side - and to *re-emit* the collected
+# telemetry to downstream sinks (e.g. forward to a real
+# observability backend in CI).
+#
+# ----------------------------------------------------------------------------
+# AXIS 236 :: OpenTelemetry SDK (trace + metrics + logs unified observability)
+# Round 1408 :: TS-Node slot 3 of 4 :: CLOSES Axis 236 (229th axis closed)
+#
+# Cross-language canonical library family for this axis:
+#   Rust    : open-telemetry/opentelemetry-rust  [R1406 _msb]
+#   Go      : open-telemetry/opentelemetry-go    [R1407 _kronk]
+#   TS/Node : open-telemetry/opentelemetry-js    [R1408 THIS FILE]
+#
+# opentelemetry-js closes Axis 236 with the *spec-author-
+# maintained-per-language* pattern at its cleanest - all
+# three lanes ship under the same `open-telemetry/`
+# GitHub org, all three maintained by the OpenTelemetry
+# project leadership, all three verified against the
+# shared semantic-conventions test suite.
+#
+# Cross-language interop is total at the OTLP/HTTP +
+# OTLP/gRPC wire level: a trace emitted by a Rust app via
+# opentelemetry-rust is byte-identical (at the protobuf
+# wire format level) to the equivalent trace from a Go or
+# JS app. motel demonstrates this by accepting OTLP/HTTP
+# from *any* OpenTelemetry-compliant client - the wire
+# format is the contract; the producer SDK is irrelevant.
+#
+# The instrumentation idiom in JS is *automatic
+# monkey-patching* via the `@opentelemetry/instrumentation-*`
+# packages: each instrumentation package wraps a popular
+# library (express, fastify, http, pg, redis, mongodb, ...)
+# at require/import time, so app code doesn't have to
+# manually `tracer.startSpan()` for instrumented operations -
+# the SDK observes them automatically. This is the JS
+# ecosystem's pragmatic approach: minimize the
+# instrumentation burden on application authors at the
+# cost of monkey-patching overhead.
+#
+# Axis 236 closes the round 1408 cycle - 229th axis closed
+# total.
+# ============================================================================
+
+_motel() {
+    local context state state_descr line
+    typeset -A opt_args
+
+    case "$service" in
+        motel)
+            _arguments -s -S \
+                '(- *)'{-h,--help}'[print help]' \
+                '1: :_motel_cmds' \
+                '*::arg:->args'
+            ;;
+        motel-mcp)
+            _arguments -s -S \
+                '(- *)'{-h,--help}'[print help]' \
+                '*:arg:'
+            ;;
+    esac
+
+    case $state in
+        args)
+            case $words[1] in
+                trace|span|trace-spans|trace-logs|span-logs) \
+                    _arguments '(- *)'{-h,--help}'[help]' '1:id:' ;;
+                traces|logs|search-traces|search-logs|search-spans|trace-stats|log-stats) \
+                    _arguments '(- *)'{-h,--help}'[help]' '*:arg:' ;;
+                facets) \
+                    _arguments '(- *)'{-h,--help}'[help]' '1:scope:(traces logs)' '2:field:' ;;
+            esac
+            ;;
+    esac
+}
+
+_motel_cmds() {
+    local -a cmds
+    cmds=(
+        'tui:Launch the TUI viewer (default)'
+        'ui:Alias for tui'
+        'daemon:Start the OTLP ingest daemon'
+        'start:Alias for daemon'
+        'status:Show daemon status (JSON)'
+        'stop:Stop the daemon'
+        'restart:Stop + restart + relaunch TUI'
+        'server:Run server only (no TUI)'
+        'mcp:Run as MCP server'
+        'services:List services with recent telemetry'
+        'traces:List traces ([service] [limit])'
+        'trace:Show one trace by ID'
+        'span:Show one span by ID'
+        'trace-spans:List spans within a trace'
+        'search-spans:Query spans by attributes'
+        'search-traces:Query traces by attributes'
+        'trace-stats:Aggregate stats over traces'
+        'logs:List logs'
+        'search-logs:Query logs by body or attributes'
+        'log-stats:Aggregate stats over logs'
+        'trace-logs:Logs correlated with a trace'
+        'span-logs:Logs correlated with a span'
+        'facets:Distinct values for a field'
+        'instructions:Print paste-ready setup instructions'
+        'endpoints:Print exporter endpoints'
+        'help:Show help'
+    )
+    _describe -t commands 'motel command' cmds
+}
+
+_motel "$@"
