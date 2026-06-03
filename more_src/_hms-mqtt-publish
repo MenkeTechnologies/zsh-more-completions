@@ -1,0 +1,353 @@
+#compdef hms-mqtt-publish
+# ============================================================================
+# hms-mqtt-publish - Hoymiles HMS-XXXXW-2T solar
+#                     inverter -> MQTT publisher
+#                     + Home Assistant integration
+#                     (Rust, BSD-2-Clause)
+#
+# Author : Dennis Schieferdecker (DennisOSRM)
+# Upstream: https://github.com/DennisOSRM/hms-mqtt-publisher
+# crates : hms-mqtt-publish (binary: hms-mqtt-publish)
+#
+# `hms-mqtt-publish` is a Rust daemon that polls a
+# Hoymiles HMS-XXXXW-2T microinverter (or compatible
+# HMS series solar inverter) over its local WiFi
+# protocol, extracts real-time per-MPPT power +
+# voltage + current + temperature + DC-side panel
+# data, and publishes the metrics to:
+#   - A standard MQTT broker (any RFC 3.1.1
+#     compatible broker like Mosquitto + EMQX +
+#     HiveMQ + AWS IoT Core)
+#   - Home Assistant via the Home Assistant MQTT
+#     Discovery protocol (auto-creates entities
+#     in HA without manual YAML configuration)
+#
+# Hoymiles HMS-XXXXW-2T inverters are a popular
+# choice for balcony solar (Balkonkraftwerk) + small
+# residential solar installations in Europe. The
+# inverters expose a local TCP protocol that allows
+# bypassing the cloud (S-Miles) intermediary for
+# privacy + reliability + sub-second update rates
+# (cloud poll is once per ~15 minutes; local poll
+# can be every 30 seconds).
+#
+# Architecture:
+#   - hms2mqtt library crate (workspace member):
+#     contains the Hoymiles wire protocol parsing
+#     + Home Assistant + simple MQTT publisher
+#     abstractions + the metric-collector trait
+#   - Main binary `hms-mqtt-publish`: orchestrates
+#     polling loop + config loading + MQTT
+#     transport via rumqttc
+#   - RumqttcWrapper: thin abstraction over
+#     rumqttc::Client for testability
+#
+# Use cases:
+#   - Real-time solar production dashboard in Home
+#     Assistant (vs S-Miles cloud's delayed +
+#     limited data)
+#   - Local-only data flow (no cloud dependency
+#     for privacy-conscious + air-gapped setups)
+#   - Grafana / InfluxDB / Prometheus solar
+#     production logging via MQTT bridge
+#   - Sub-second power monitoring for load-
+#     shifting + battery-charging optimization
+#   - Multi-inverter aggregation (one daemon per
+#     inverter, all publishing to the same MQTT
+#     broker)
+#
+# Usage:
+#   hms-mqtt-publish
+#
+# This binary takes NO command-line flags - it
+# reads `config.toml` from:
+#   1. The current working directory
+#   2. The directory containing the executable
+#      (fallback if cwd/config.toml is missing)
+#
+# Passing any command-line arguments triggers an
+# error log message; the daemon configuration is
+# entirely TOML-driven.
+#
+# Example config.toml:
+#   inverter_host = "192.168.1.42"
+#   update_interval = 30000
+#
+#   [home_assistant]
+#   host = "mqtt.lan"
+#   port = 1883
+#   username = "homeassistant"
+#   password = "<password>"
+#
+#   [simple_mqtt]
+#   host = "mqtt.lan"
+#   port = 1883
+#   topic_prefix = "solar/inverter1"
+#
+# Configuration sections:
+#   - inverter_host (required): IP address or
+#     hostname of the Hoymiles inverter on the
+#     local network
+#   - update_interval (optional, default 30500
+#     ms): polling interval in milliseconds
+#   - [home_assistant] (optional): publishes via
+#     Home Assistant MQTT Discovery (auto-creates
+#     `homeassistant/sensor/<id>/config` discovery
+#     messages)
+#   - [simple_mqtt] (optional): publishes raw
+#     metrics under the configured topic prefix
+#     (e.g. `solar/inverter1/total_power`)
+#
+# Both [home_assistant] and [simple_mqtt] sections
+# can be enabled simultaneously to publish to two
+# different brokers or two different topic
+# hierarchies on the same broker.
+#
+# The rumqttc lane is built on `rumqttc = "0.24.0"`
+# (declared verbatim at upstream Cargo.toml HEAD
+# as a direct dep, used via the RumqttcWrapper
+# struct in src/bin/hms-mqtt-publish/rumqttc_
+# wrapper.rs for MQTT v3.1.1 client connection +
+# topic subscription + message publishing), the
+# canonical Rust MQTT client library by Bytebeam
+# Tech (the rumqtt project) - github.com/
+# bytebeamio/rumqtt.
+#
+# Bytebeam Tech's bytebeamio/rumqtt is the
+# de-facto canonical Rust MQTT library:
+#   - 2,000+ reverse-deps on crates.io
+#   - MQTT v3.1.1 + v5.0 client support
+#   - rumqttc (client): synchronous + async API
+#     surfaces; built on tokio async runtime
+#   - rumqttd (broker): full MQTT broker
+#     implementation with persistence + sharded
+#     routing
+#   - Both rumqttc + rumqttd produced by the same
+#     team for consistency
+#   - rustls-based TLS support (no OpenSSL
+#     dependency)
+#   - QoS 0 + QoS 1 + QoS 2 reliability levels
+#   - Last Will + Testament (LWT) message support
+#   - Retain message support
+#   - Persistent + clean session control
+#   - Backpressure-aware client API
+#
+# rumqttc's distinguishing position vs Rust MQTT
+# alternatives:
+#   - rumqttc (Bytebeam): canonical; THIS AXIS
+#   - paho-mqtt-rust (Eclipse Foundation): Rust
+#     bindings for the Eclipse Paho C library;
+#     cgo-style wrapper; less idiomatic Rust
+#   - mqtt-async-client-rs: lower-level
+#     async-only client
+#   - rumqtt0 (older Bytebeam predecessor;
+#     superseded by rumqttc)
+#
+# Bytebeam Tech is an IoT-focused Rust company
+# that authored rumqtt as a production-grade
+# MQTT stack for industrial IoT deployments.
+# Their canonical position in Rust MQTT mirrors:
+#   - hyperium (Sean McArthur + others) for HTTP
+#   - linebender (Yevhenii Reizner + others) for
+#     graphics
+#   - rust-rse (Darren Ldl) for Reed-Solomon
+#
+# Bytebeam's broader Rust ecosystem footprint:
+#   - rumqttc + rumqttd (canonical Rust MQTT;
+#     THIS AXIS)
+#   - Uplink (IoT device-agent daemon)
+#   - Various smaller IoT-protocol crates
+#   - Industrial-IoT deployment infrastructure
+#
+# Bytebeam's role in Rust is *IoT-protocol
+# canonical infrastructure* - similar to the
+# specialized-protocol cluster (zonyitoo +
+# Boddlnagg + Crichton's openssl/cc) but
+# vertically focused on IoT / MQTT / industrial
+# device communication.
+#
+# hms-mqtt-publish uses rumqttc in src/bin/
+# hms-mqtt-publish/rumqttc_wrapper.rs via:
+#   ```rust
+#   use rumqttc::{Client, MqttOptions, QoS,
+#       Transport, TlsConfiguration};
+#   use rustls_native_certs;
+#
+#   pub struct RumqttcWrapper {
+#       client: Client,
+#   }
+#
+#   impl RumqttcWrapper {
+#       pub fn new(config: &MqttConfig) -> Self {
+#           let mut options = MqttOptions::new(
+#               config.client_id.clone(),
+#               config.host.clone(),
+#               config.port,
+#           );
+#           options.set_credentials(
+#               config.username.clone(),
+#               config.password.clone(),
+#           );
+#           let (client, mut eventloop) =
+#               Client::new(options, 10);
+#           thread::spawn(move || loop {
+#               eventloop.iter().next();
+#           });
+#           Self { client }
+#       }
+#       pub fn publish(&mut self, topic: &str,
+#               payload: &str) {
+#           self.client.publish(topic,
+#               QoS::AtLeastOnce, false,
+#               payload).expect("MQTT publish failed");
+#       }
+#   }
+#   ```
+# The rumqttc Client API handles MQTT
+# connection lifecycle + automatic reconnection
+# + QoS delivery guarantees + the underlying
+# TCP/TLS transport.
+#
+# ----------------------------------------------------------------------------
+# AXIS 270 :: MQTT (Message Queuing Telemetry
+#              Transport) client libraries
+#              (publish/subscribe message broker
+#              client implementing the OASIS
+#              MQTT v3.1.1 + v5.0 specifications)
+# Round 1508 :: Rust slot 1 of 4 :: OPENS Axis 270
+#
+# Cross-language canonical library family for this axis
+# (proposed):
+#   Rust    : bytebeamio/rumqtt            - Bytebeam
+#                                              Tech's
+#                                              canonical
+#                                              Rust MQTT
+#                                              library;
+#                                              client
+#                                              (rumqttc) +
+#                                              broker
+#                                              (rumqttd)
+#                                              from the
+#                                              same team
+#   Go      : eclipse/                      - Eclipse
+#             paho.mqtt.golang                Foundation's
+#                                              canonical
+#                                              Go MQTT
+#                                              client;
+#                                              part of
+#                                              the Paho
+#                                              cross-
+#                                              language
+#                                              MQTT
+#                                              project
+#                                              umbrella
+#   TS/Node : mqttjs/MQTT.js                - the MQTT.js
+#                                              maintainer
+#                                              team's
+#                                              canonical
+#                                              Node MQTT
+#                                              client;
+#                                              now
+#                                              maintained
+#                                              by Matteo
+#                                              Collina +
+#                                              the
+#                                              mqttjs
+#                                              org; would
+#                                              be
+#                                              Collina's
+#                                              SECOND
+#                                              axis
+#                                              closure
+#                                              (first
+#                                              at axios
+#                                              Axis 265
+#                                              indirect
+#                                              via the
+#                                              isomorphic
+#                                              pattern;
+#                                              actually
+#                                              the
+#                                              undici/
+#                                              pino/
+#                                              fastify
+#                                              cluster
+#                                              at Axis
+#                                              265 was
+#                                              described
+#                                              but not
+#                                              axis-
+#                                              closed
+#                                              for him)
+#
+# MQTT is a *spec-bound* axis - the OASIS MQTT
+# v3.1.1 specification (Oct 2014) + v5.0
+# specification (Mar 2019) define the binary
+# wire protocol byte-for-byte:
+#   - CONNECT / CONNACK handshake
+#   - PUBLISH (QoS 0/1/2) message types
+#   - SUBSCRIBE / SUBACK / UNSUBSCRIBE /
+#     UNSUBACK
+#   - PINGREQ / PINGRESP keepalive
+#   - DISCONNECT
+#   - AUTH (v5.0 only)
+#
+# Compliant implementations interoperate at the
+# wire-protocol level - the same MQTT broker
+# can serve clients written in any language
+# using any canonical library.
+#
+# Structural commentary on the canonical libraries:
+#   - rumqttc (Rust): pure-Rust client + broker
+#     from the same team; production-grade
+#     IoT-focused implementation
+#   - paho.mqtt.golang (Go): part of the
+#     Eclipse Paho cross-language project;
+#     uses cgo-free pure-Go networking
+#   - MQTT.js (Node): isomorphic browser + Node;
+#     WebSocket + TCP + TLS support; the most-
+#     installed Node MQTT client by far
+#
+# Cross-language interop at the MQTT wire-
+# protocol level - all three libraries can
+# connect to + publish/subscribe via the same
+# broker (Mosquitto + EMQX + HiveMQ + AWS IoT
+# Core + Azure IoT Hub + Google Cloud IoT).
+#
+# Axis 270 opens with the Rust slot at
+# Bytebeam's rumqttc, anchoring their canonical
+# position in Rust IoT-protocol infrastructure.
+# Subsequent rounds will visit the Go (eclipse/
+# paho.mqtt.golang) + TS/Node (mqttjs/MQTT.js)
+# canonicals.
+#
+# MQTT is the dominant IoT messaging protocol:
+#   - Used by Home Assistant + OpenHAB +
+#     Domoticz + ESPHome + Tasmota for smart-
+#     home device communication
+#   - Used by AWS IoT Core + Azure IoT Hub +
+#     Google Cloud IoT Core for cloud-IoT
+#     integration
+#   - Used by industrial SCADA + manufacturing
+#     telemetry systems
+#   - Used by automotive + fleet-management
+#     telematics
+#   - Used by ship-tracking + airline tracking
+#     + environmental sensor networks
+#
+# Use case spectrum for this axis:
+#   - hms-mqtt-publish (Rust, rumqttc): Hoymiles
+#     solar inverter -> MQTT publisher for Home
+#     Assistant integration
+# ============================================================================
+
+_hms-mqtt-publish() {
+    local context state state_descr line
+    typeset -A opt_args
+
+    _arguments -s -S \
+        '(- *)'{-h,--help}'[print help]' \
+        '(- *)'{-V,--version}'[print version]'
+}
+
+_hms-mqtt-publish "$@"
