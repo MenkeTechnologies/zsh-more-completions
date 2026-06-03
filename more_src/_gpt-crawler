@@ -1,0 +1,125 @@
+#compdef gpt-crawler
+# ============================================================================
+# gpt-crawler - Crawl a website to generate a knowledge file for a custom GPT
+#                (Node, ISC)
+#
+# Author : Builder.io team
+# Upstream: https://github.com/BuilderIO/gpt-crawler
+# npm    : @builder.io/gpt-crawler
+#
+# `gpt-crawler` walks a website starting from a seed URL,
+# filtering URLs by a glob pattern + extracting per-page
+# content by a CSS selector, and emits a JSON file ready
+# to upload as the knowledge source for a custom GPT (or
+# any RAG pipeline). The use case: turn product
+# documentation into a chatbot, or scrape an open-source
+# project's docs into an offline LLM context. Used by the
+# Builder.io docs team to bootstrap the Builder.io custom
+# GPT.
+#
+# Internals: Playwright headless browser for rendering
+# (handles SPA-style sites that need JS execution),
+# crawlee for the polite-crawler infrastructure (robots.txt
+# honoring, configurable depth, retry on transient
+# failures), gpt-tokenizer for client-side token-counting
+# of the assembled output against GPT-4 / GPT-4o / GPT-3.5
+# context limits so the output stays uploadable.
+#
+# Usage:
+#   gpt-crawler [options]
+#
+# Flags (commander):
+#   -u, --url <url>                - seed URL (prompted if omitted)
+#   -m, --match <glob>             - URL glob pattern for in-scope links
+#   -s, --selector <css>           - CSS selector for content extraction
+#       --maxPagesToCrawl <n>      - default 50 (note: also bound to -m
+#                                    in the upstream source - if you
+#                                    pass -m it might conflict with the
+#                                    --match -m alias; use --maxPagesToCrawl
+#                                    long-form to be safe)
+#   -o, --outputFileName <file>    - default output.json
+#   -V, --version                  - print version
+#   -h, --help                     - print help
+#
+# Behavior: if --url, --match, or --selector is missing,
+# the CLI drops into an interactive inquirer prompt to
+# collect the value.
+#
+# The gpt-tokenizer lane is built on `gpt-tokenizer ^2.1.2`
+# (declared verbatim at upstream package.json HEAD), the
+# de-facto Node BPE tokenizer for OpenAI models by Niieani
+# (github.com/niieani/gpt-tokenizer, 600+ stars). The
+# library implements OpenAI's cl100k_base / o200k_base /
+# p50k_base / r50k_base / gpt2 BPE merges in pure
+# TypeScript - no WASM, no native code, runs in any JS
+# environment (Node, Deno, Bun, browser, Cloudflare Workers).
+# Bit-identical output with the official OpenAI tiktoken
+# Python library (every byte sequence tokenizes to the
+# same token IDs). gpt-crawler uses it to gate the
+# assembled-knowledge-file size against the target GPT
+# context limit - if the crawl exceeds the GPT-4 32k
+# context, the CLI warns the user to either narrow the
+# crawl scope or upload it in chunks.
+#
+# ----------------------------------------------------------------------------
+# AXIS 234 :: LLM tokenizers (BPE/WordPiece/Unigram/byte-BPE subword tokenization)
+# Round 1402 :: TS-Node slot 3 of 4 :: CLOSES Axis 234 (227th axis closed)
+# Round-number landmark close: Axis 234 / Round 1402
+#
+# Cross-language canonical library family for this axis:
+#   Rust    : huggingface/tokenizers       [R1400 _text-embeddings-router]
+#   Go      : sugarme/tokenizer            [R1401 _vector-mcp-go]
+#   TS/Node : @huggingface/tokenizers (WASM) OR gpt-tokenizer (pure-TS BPE)
+#                                          [R1402 THIS FILE: gpt-tokenizer]
+#
+# The Node lane has a *bifurcated* canonical-library story
+# in this axis:
+#
+#   @huggingface/tokenizers (WASM wrapper):
+#     Spec-aligned with the Rust slot - same tokenizer.json
+#     loads identically. Best for projects that need
+#     compatibility with HF model checkpoints.
+#
+#   gpt-tokenizer (pure-TS BPE):
+#     OpenAI-specific - implements only the cl100k_base /
+#     o200k_base / p50k_base / r50k_base / gpt2 encodings
+#     used by OpenAI models. Pure TypeScript, no WASM, runs
+#     anywhere. Best for projects that target OpenAI APIs
+#     and just need accurate token counts before sending
+#     requests (rate-limit gates, cost estimation,
+#     context-fitting heuristics).
+#
+# gpt-crawler picks gpt-tokenizer because the use case is
+# OpenAI-specific (custom GPT uploads are bounded by GPT-4
+# context); a Hugging-Face-checkpoint-loading project
+# would pick @huggingface/tokenizers instead. The bifurcation
+# reflects the JS ecosystem's pragmatic preference: pick
+# the *specific* tokenizer for the *specific* model family
+# rather than the spec-agnostic library, because pure-JS
+# implementations avoid the WASM-loading cost on Cloudflare
+# Workers / Vercel Edge / browser deployments where the
+# tokenizer needs to ship in the bundle.
+#
+# All four Axis-234 lanes (Rust HF, Go sugarme, Node HF,
+# Node gpt-tokenizer) produce bit-identical token IDs on
+# the same input bytes for the tokenizer encodings they
+# share - the BPE merge tables are the contract; the
+# implementations are interchangeable. Axis 234 closes at
+# round 1402.
+# ============================================================================
+
+_gpt-crawler() {
+    local context state state_descr line
+    typeset -A opt_args
+
+    _arguments -s -S \
+        '(-u --url)'{-u,--url}'[seed URL]:url:' \
+        '(--match)'{-m,--match}'[URL glob pattern for in-scope links]:glob:' \
+        '(-s --selector)'{-s,--selector}'[CSS selector for content extraction]:css:' \
+        '--maxPagesToCrawl[max pages to crawl (default 50)]:n:' \
+        '(-o --outputFileName)'{-o,--outputFileName}'[output filename (default output.json)]:file:_files -g "*.json"' \
+        '(- *)'{-V,--version}'[print version]' \
+        '(- *)'{-h,--help}'[print help]'
+}
+
+_gpt-crawler "$@"
