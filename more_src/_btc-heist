@@ -1,0 +1,190 @@
+#compdef btc-heist
+# ============================================================================
+# btc-heist - generate BIP39 mnemonics + derive
+#              Bitcoin addresses + check against a
+#              ~50M nonzero-balance address allowlist
+#              (Go, MIT)
+#
+# Author : TheDen
+# Upstream: https://github.com/TheDen/btc-heist
+#
+# `btc-heist` is a stress-test tool that demonstrates
+# the cryptographic infeasibility of brute-forcing
+# Bitcoin's secp256k1 keyspace. The tool:
+#   1. Generates fresh BIP39 mnemonic seeds (cryptocurrency-
+#      strength entropy via crypto/rand seeded
+#      ChaCha8 RNG)
+#   2. Derives N child addresses per mnemonic using
+#      HD-wallet BIP32 derivation (amortising the
+#      expensive PBKDF2-2048-round seed derivation
+#      across multiple addresses)
+#   3. Checks each derived address against a memory-
+#      mapped + Bloom-filter-indexed file of ~50M
+#      historical Bitcoin addresses with nonzero
+#      balances (typically loyce.club's
+#      `Bitcoin_addresses_LATEST.txt`)
+#   4. Logs any "found" match to the output file
+#      (statistically expected: zero matches over
+#      the heat death of the universe)
+#
+# The point is educational + benchmarking, not actual
+# brute-forcing - the expected match probability is
+# ~50M / 2^160 ≈ 4.4e-41 per address derivation, far
+# below any practical compute budget. The tool's
+# performance numbers serve as a baseline reference
+# for "how fast can a single machine even attempt
+# this".
+#
+# Usage:
+#   btc-heist [flags]
+#
+# Flags (Go stdlib flag.* parsing):
+#   -c <N>             - number of CPU worker cores
+#                         (default: runtime.NumCPU())
+#   -f <file>          - file containing target BTC
+#                         addresses, one per line
+#                         (default:
+#                         Bitcoin_addresses_LATEST.txt)
+#   -o <file>          - output file for any matched
+#                         keys (default:
+#                         found_keys.txt)
+#   -n <N>             - addresses to derive per
+#                         mnemonic (default 50;
+#                         amortises PBKDF2 cost)
+#
+# The bits-and-blooms/bloom lane is built on `github.
+# com/bits-and-blooms/bloom/v3 v3.7.0` (declared
+# verbatim at upstream go.mod HEAD as a direct dep,
+# imported as `bloom.NewWithEstimates(bloomEstimate,
+# bloomFPRate)` then `filter.Test(addrHash[:])`),
+# the canonical Go Bloom filter library by the
+# bits-and-blooms working group.
+#
+# The library has a notable governance trajectory:
+#   1. github.com/willf/bloom - Will Fitzgerald
+#      authored the original Go Bloom filter
+#      implementation in 2013; became the de-facto
+#      Go Bloom canonical via community adoption
+#   2. 2021: Fitzgerald handed maintenance to the
+#      bits-and-blooms working group + the repo
+#      moved from willf/bloom to bits-and-blooms/
+#      bloom; old import paths continue to redirect
+#   3. v3 release introduced Go modules support +
+#      generic type parameters + the m,k parameter
+#      auto-calculation from (n, fp_rate) tuple
+#   4. Maintained by Daniel Lemire (who also wrote
+#      the canonical RoaringBitmap Go library at
+#      Axis 250) + community contributors
+#
+# This makes bits-and-blooms/bloom another node in
+# **Daniel Lemire's multi-axis canonical position**
+# in the Go ecosystem. Lemire's Go-ecosystem
+# footprint:
+#   - Axis 250 (Roaring Bitmap): RoaringBitmap/
+#     roaring (his personal reference Go impl)
+#   - Axis 257 (Bloom filter, THIS AXIS): bits-and-
+#     blooms/bloom (governance under his working group)
+#   - + smaller crates: fastrand, fastsha256,
+#     fastbitset
+#
+# Lemire's cross-language root-of-trust position is
+# unique - similar to BurntSushi/Andrew Gallant's
+# Rust footprint (XXHash + TOML + Snappy + regex +
+# ripgrep + fst + xsv) and Armin Ronacher's
+# (similar + redis-rs + insta + Flask + Jinja2),
+# but Lemire's spans Rust + Go + C + C++ + Java
+# under the RoaringBitmap umbrella + the broader
+# probabilistic-data-structure category.
+#
+# bits-and-blooms/bloom is depended on by:
+#   - CockroachDB (range-key Bloom filter for
+#     SSTable lookups)
+#   - Caddy (certificate store Bloom prefilter)
+#   - InfluxDB v1 (time-series Bloom index)
+#   - Loki (chunk Bloom prefilter)
+#   - Milvus (vector-search Bloom prefilter)
+#   - bitmagnet (torrent search Bloom index)
+#   - btc-heist (THIS BINARY)
+#
+# btc-heist uses bits-and-blooms in `loadAddresses()`
+# to construct a Bloom filter sized for 100M entries
+# at 0.01% false-positive rate, then layered above a
+# `map[addrHash]struct{}` exact-membership map. The
+# tight-loop derivation path checks the Bloom filter
+# first (constant-time, no allocation) + only
+# upgrades to the map lookup when the Bloom says
+# "maybe". This gives ~10x faster throughput than
+# map-only lookups because the Bloom rejection path
+# is hit ~99.9999% of the time and stays in L1
+# cache.
+#
+# ----------------------------------------------------------------------------
+# AXIS 257 :: Bloom filter probabilistic data structure
+#              (set membership with tunable FP rate)
+# Round 1470 :: Go slot 2 of 4 :: continues Axis 257
+#                                  (round-number landmark)
+#
+# Cross-language canonical library family for this axis:
+#   Rust    : xx-bloomfilter               [R1469 _rust-mdbg]
+#   Go      : bits-and-blooms/bloom        [R1470 THIS FILE]
+#             (renamed from willf/bloom
+#              2021; Lemire maintainer)
+#   TS/Node : bloom-filters                [R1471 closing]
+#
+# bits-and-blooms/bloom is structurally interesting
+# because of its *willf-to-org-rename* governance
+# pattern. The rename in 2021 was a clean
+# maintenance handoff:
+#   - Old import paths (`github.com/willf/bloom`)
+#     continue to redirect to the new location
+#   - All existing dependents continue to work
+#     without code changes
+#   - The new bits-and-blooms working group adds
+#     fresh contributor energy (Lemire's expertise
+#     on probabilistic data structures + the wider
+#     community)
+#
+# Compare against the more dramatic Go canonical
+# transitions:
+#   - Axis 248 (WebSocket): gorilla/websocket
+#     archived in Dec 2022, then UNARCHIVED in July
+#     2023 - dramatic transition
+#   - Axis 256 (Postgres): lib/pq stayed maintained
+#     but stopped accepting features; pgx replaced
+#     it as canonical via community pull
+#   - Axis 257 (Bloom, THIS AXIS): willf/bloom
+#     RENAMED to bits-and-blooms/bloom + handed off
+#     to working group cleanly
+#
+# Each of these axes shows a different mechanism for
+# canonical-library succession in the Go ecosystem
+# - archive-then-unarchive vs feature-stop vs clean-
+# org-rename. The bits-and-blooms transition is the
+# smoothest of the three.
+#
+# Cross-language interop at the algorithm level - the
+# Bloom filter algorithm is the same across all
+# three lanes. Wire format is NOT standardized:
+#   - xx-bloomfilter (Rust): xxhash3 hashing
+#   - bits-and-blooms/bloom (Go): murmur3 hashing
+#   - bloom-filters (Node): configurable hash family
+# Different hash families produce different bit
+# patterns for the same input, so cross-language
+# serialization requires either picking a common
+# hash family OR shipping the hash function +
+# parameters alongside the bit array.
+# ============================================================================
+
+_btc-heist() {
+    local context state state_descr line
+    typeset -A opt_args
+
+    _arguments -s -S \
+        '-c[number of CPU worker cores (default NumCPU)]:N:' \
+        '-f[target BTC addresses file]:file:_files' \
+        '-o[output file for matched keys]:file:_files' \
+        '-n[addresses derived per mnemonic (default 50)]:N:' \
+        '(- *)-h[print help]'
+}
+
+_btc-heist "$@"
