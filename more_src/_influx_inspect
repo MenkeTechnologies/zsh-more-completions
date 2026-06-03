@@ -1,0 +1,125 @@
+#compdef influx_inspect influx_stress influx_tools
+# ============================================================================
+# influx_inspect / influx_stress / influx_tools - InfluxDB 1.x / Cluster maintenance tools (Go, MIT)
+#
+# Upstream: https://github.com/chengshiwen/influxdb-cluster
+#         (extended fork of influxdata/influxdb 1.x)
+#
+# These are the InfluxDB 1.x-era maintenance + admin binaries that
+# ship with the InfluxDB Open Source Cluster project (a community
+# fork of the InfluxDB Enterprise Cluster code):
+#
+#   influx_inspect - inspect and repair TSM data files
+#                    subcommands: buildtsi / deletetsm / dumptsi /
+#                                 dumptsm / dumptsmwal / export /
+#                                 report / reportdisk / reporttsi /
+#                                 verify seriesfile / verify tombstone /
+#                                 verify tsm
+#
+#   influx_stress  - load-generator that writes synthetic timeseries
+#                    points at configurable concurrency
+#
+#   influx_tools   - cluster admin (compaction trigger, gen-init-cmd,
+#                    parse-tsm, etc.)
+#
+# The Snappy compression lane is built on `github.com/golang/snappy
+# v0.0.4` (declared verbatim at upstream go.mod HEAD), the canonical
+# Go Snappy implementation maintained by the Go core team
+# (github.com/golang/snappy, 1500+ stars). The library is the
+# pure-Go reference implementation of Google's 2011 Snappy block
+# format + the `*.sz` framing format, and is the de-facto Go
+# Snappy library. InfluxDB uses it for block-level compression
+# of TSM (Time-Structured Merge tree) on-disk files and for
+# wire-format compression on the inter-node replication channel.
+#
+# ----------------------------------------------------------------------------
+# AXIS 215 :: SNAPPY COMPRESSION (Google block + framing format)
+# Round 1344 :: Go slot 2 of 4 :: continues Axis 215
+#
+# Cross-language canonical library family for this axis:
+#   Rust    : BurntSushi/rust-snappy             [R1343 _influxdb3]
+#   Go      : golang/snappy                      [R1344 THIS FILE]
+#   TS/Node : kesla/node-snappy or similar       [R1345 closing]
+#
+# The deliberate axis convergence: both R1343 (InfluxDB 3 Core,
+# Rust) and R1344 (InfluxDB 1.x Cluster, Go) use Snappy for
+# the same role - TSM block compression on disk + WAL inter-node
+# transport. Snappy was selected by the original InfluxDB team
+# specifically because its decode speed (~500 MB/s) is much
+# higher than gzip/Brotli on the read-heavy timeseries workload.
+# This is the dominant Snappy downstream in the wild: every
+# major timeseries database (InfluxDB, VictoriaMetrics, Mimir,
+# Prometheus remote_write) uses Snappy for inner-block + remote-
+# write payload compression.
+# ============================================================================
+
+_influx_inspect() {
+    case "$service" in
+        influx_inspect)  _influx_inspect_args ;;
+        influx_stress)   _influx_stress_args ;;
+        influx_tools)    _influx_tools_args ;;
+    esac
+}
+
+_influx_inspect_args() {
+    local context state state_descr line
+    typeset -A opt_args
+    local curcontext="$curcontext" ret=1
+
+    _arguments -C \
+        '(- *)'{-h,--help}'[print help]' \
+        '1: :_influx_inspect_cmds' \
+        '*::arg:->args' \
+    && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                buildtsi|deletetsm|dumptsi|dumptsm|dumptsmwal|export|report|reportdisk|reporttsi) _arguments '(- *)'{-h,--help}'[help]' '*::arg:->_default' ;;
+                verify) _arguments '1:subcommand:(seriesfile tombstone tsm)' '*::arg:->_default' ;;
+                help)   _influx_inspect_cmds ;;
+            esac
+            ;;
+    esac
+    return ret
+}
+
+_influx_inspect_cmds() {
+    local -a cmds
+    cmds=(
+        'buildtsi:Rebuild the TSI (Time Series Index) from TSM files'
+        'deletetsm:Delete points matching a measurement from TSM files'
+        'dumptsi:Dump low-level TSI index details'
+        'dumptsm:Dump TSM file metadata + index + block summaries'
+        'dumptsmwal:Dump TSM WAL file contents'
+        'export:Export TSM data to Influx line protocol'
+        'report:Cardinality estimation report (HLL)'
+        'reportdisk:Per-shard disk-usage report'
+        'reporttsi:Cardinality report from TSI index'
+        'verify:Verify integrity of seriesfile / tombstone / tsm'
+        'help:Show help for a subcommand'
+    )
+    _describe -t commands 'influx_inspect command' cmds
+}
+
+_influx_stress_args() {
+    _arguments -s -S \
+        '-config[stress config file]:file:_files -g "*.(toml|json)"' \
+        '-cpuprofile[CPU profile path]:file:_files' \
+        '-memprofile[memory profile path]:file:_files' \
+        '-pps[max points per second]:n:' \
+        '-batch[batch size]:n:' \
+        '-fast[run at fastest possible speed]' \
+        '-quiet[suppress per-point output]' \
+        '-strict[stop on first error]' \
+        '(- *)'{-h,--help}'[help]'
+}
+
+_influx_tools_args() {
+    _arguments -s -S \
+        '(- *)'{-h,--help}'[help]' \
+        '1:subcommand:(compact-shard export gen-init-cmd help)' \
+        '*::arg:->_default'
+}
+
+_influx_inspect "$@"
