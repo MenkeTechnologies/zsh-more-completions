@@ -1,0 +1,242 @@
+#compdef tplot
+# ============================================================================
+# tplot - terminal plotting tool with pluggable data
+#          sources (shell, stdin, Redis lists, AWS SQS)
+#          (JavaScript -> Node, source-available)
+#
+# Author : Moshe (moshe)
+# Upstream: https://github.com/moshe/tplot
+# npm    : tplot (binary: tplot)
+#
+# `tplot` is a real-time terminal line-chart plotting
+# tool. It accepts data points from a configurable
+# source (poll a shell command, read stdin, poll a
+# Redis list's LLEN, or poll an AWS SQS queue's
+# ApproximateNumberOfMessages metric) and renders a
+# scrolling line chart with rolling-window regression
+# + goal-line overlay in the terminal via blessed-
+# contrib.
+#
+# Use cases:
+#   - Watch a Redis worker queue's depth drain in
+#     real-time during a deploy
+#   - Visualise SQS queue size + alarm thresholds for
+#     consumer scaling
+#   - Plot any shell command's numeric output over
+#     time (`watch`-style but with a chart)
+#
+# Usage:
+#   tplot <command> [args] [options]
+#
+# Top-level commands:
+#   cmd <command>    - poll a shell command for its
+#                       numeric stdout output (alias c)
+#   stdin            - read newline-separated numeric
+#                       values from stdin (alias s)
+#   redis <list>     - poll a Redis list's LLEN
+#                       (alias r)
+#   sqs <queue>      - poll an AWS SQS queue's
+#                       ApproximateNumberOfMessages
+#                       (or other metric)
+#
+# Global flags (commander):
+#   -t, --title <title>            - chart title
+#                                     (default "Line")
+#   -p, --points <n>               - max data points
+#                                     shown (default 200)
+#   -g, --goal <n>                 - goal line for the
+#                                     chart (default 0)
+#   -r, --regressionPoints <n>     - rolling-window
+#                                     regression
+#                                     point count
+#                                     (default 16)
+#
+# Per-command flags:
+#   cmd:
+#     -i, --pollingInterval <ms>   - command poll
+#                                     interval (default
+#                                     50ms)
+#   redis:
+#     -i, --pollingInterval <ms>   - Redis poll
+#                                     interval (default
+#                                     50ms)
+#     -h, --host <name>            - Redis host
+#                                     (default
+#                                     localhost)
+#     -t, --enableTLS              - enable Redis TLS
+#                                     connection
+#   sqs:
+#     -i, --pollingInterval <ms>   - SQS poll interval
+#     -r, --region <name>          - AWS region
+#                                     (default
+#                                     us-east-1)
+#     -m, --metric <name>          - SQS metric to
+#                                     monitor:
+#                                     ApproximateNumberOfMessages
+#                                     / ...NotVisible
+#                                     / ...Delayed
+#
+# The `redis` lane is built on `redis ^2.8.0`
+# (declared at upstream package.json HEAD as a direct
+# dep, imported as `require('redis')` then `redis.
+# createClient({ host, tls })` + `client.llen(list,
+# cb)`), the canonical Node Redis client. The npm
+# `redis` package today is the v4+ release line
+# maintained at `NodeRedis/node-redis` under Redis
+# Inc.'s GitHub org - the de-facto Node Redis client
+# since Matt Ranney first wrote it in 2010.
+#
+# The package's governance trajectory:
+#   1. 2010: Matt Ranney creates `mranney/node_redis`
+#      at GitHub; npm-published as `redis` v0.x
+#   2. 2014-2018: NodeRedis org formed for community
+#      maintenance; repo moves to NodeRedis/node-
+#      redis; published as `redis` v1-v3
+#   3. 2021: Redis Inc. takes over org maintenance;
+#      v4 rewrite ships with full TypeScript types,
+#      Promise-based API, RESP3 support
+#   4. 2023: v5 ships matching the v9 server's vector
+#      search + JSON datatype + stream extensions
+#
+# NodeRedis/node-redis sits alongside redis-py and
+# redis/go-redis as Redis Inc.'s three officially-
+# blessed canonical clients (with Java's jedis +
+# .NET's StackExchange.Redis as the other two
+# corporate canonicals). Rust's redis-rs remains
+# community-canonical under Ronacher's personal
+# maintenance.
+#
+# tplot uses the older v2.8 API (`redis.createClient`
+# callback-style + `client.llen` for LIST length).
+# v4+ migrated to a Promise-based API + namespaced
+# modules, but tplot pins to v2 for API stability.
+# The wire format remains RESP-compliant across
+# versions, so the Redis server sees identical
+# command bytes regardless.
+#
+# ----------------------------------------------------------------------------
+# AXIS 255 :: Redis protocol (RESP) client libraries
+# Round 1465 :: TS-Node slot 3 of 4 :: CLOSES Axis 255
+#                                       (248th axis closed)
+#
+# Cross-language canonical library family for this axis:
+#   Rust    : mitsuhiko/redis-rs           [R1463 _ocypod-server]
+#             (community canonical)
+#   Go      : redis/go-redis (Vladimir     [R1464 _myurls]
+#             Mihailenco; Redis Inc.-
+#             blessed since 2023)
+#   TS/Node : NodeRedis/node-redis         [R1465 THIS FILE]
+#             (Matt Ranney original 2010;
+#              under Redis Inc. since 2021)
+#
+# NodeRedis/node-redis closes Axis 255 with the
+# *original-author-handoff-to-corporate-org* pattern.
+# The three lanes form a clean spectrum of Redis-Inc.-
+# blessing trajectories:
+#
+#   - Rust (mitsuhiko/redis-rs): community-canonical
+#     stays community-canonical; no formal Redis
+#     Inc. blessing
+#   - Go (redis/go-redis): community-canonical for
+#     9 years, then 2023 corporate blessing via
+#     repo move to redis/ org
+#   - Node (NodeRedis/node-redis): community-
+#     canonical for 11 years (2010-2021), then 2021
+#     corporate maintenance handoff inside the
+#     existing NodeRedis org
+#
+# Across the three lanes, Redis Inc. has progressively
+# absorbed canonical client maintenance for the
+# major language ecosystems (Go + Node + Python +
+# Java + .NET = 5/6 of the major ecosystems). Rust
+# remains the holdout community-canonical position.
+#
+# Cross-language interop at the wire format level - a
+# RESP2 / RESP3 command stream produced by redis-rs +
+# go-redis + node-redis is byte-identical to the
+# Redis server's expected wire format. The Redis
+# server treats all three clients as protocol-
+# indistinguishable.
+#
+# Use-case spectrum across the three lanes:
+#   - ocypod-server (Rust, redis-rs): Redis-backed
+#     HTTP/JSON job orchestrator
+#   - myurls (Go, go-redis/v9): self-hosted URL
+#     shortener with Redis backend
+#   - tplot (Node, redis v2.8): terminal plotting tool
+#     monitoring Redis LIST lengths in real time
+#
+# Three lanes, three use-case shapes (multi-language
+# job queue / link shortener / queue monitoring TUI),
+# three canonicalship trajectories (community-only /
+# 9-year-delayed-corporate / 11-year-delayed-corporate),
+# all converging on the RESP wire format.
+#
+# Axis 255 closes the round 1465 cycle - 248th axis
+# closed total.
+# ============================================================================
+
+_tplot() {
+    local context state state_descr line
+    typeset -A opt_args
+    local curcontext="$curcontext" ret=1
+
+    _arguments -C \
+        '(-t --title)'{-t,--title}'[chart title]:title:' \
+        '(-p --points)'{-p,--points}'[max data points shown]:n:' \
+        '(-g --goal)'{-g,--goal}'[goal line for chart]:n:' \
+        '(-r --regressionPoints)'{-r,--regressionPoints}'[rolling regression point count]:n:' \
+        '(- *)'{-h,--help}'[print help]' \
+        '(- *)--version[print version]' \
+        '1: :_tplot_cmds' \
+        '*::arg:->args' \
+    && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                cmd|c)
+                    _arguments \
+                        '(-i --pollingInterval)'{-i,--pollingInterval}'[command poll interval (ms)]:ms:' \
+                        '(- *)'{-h,--help}'[print subcommand help]' \
+                        '1:shell command:'
+                    ;;
+                stdin|s)
+                    _arguments '(- *)'{-h,--help}'[print subcommand help]'
+                    ;;
+                redis|r)
+                    _arguments \
+                        '(-i --pollingInterval)'{-i,--pollingInterval}'[Redis poll interval (ms)]:ms:' \
+                        '(-h --host)'{-h,--host}'[Redis host]:host:' \
+                        '(-t --enableTLS)'{-t,--enableTLS}'[enable Redis TLS]' \
+                        '1:Redis list key:'
+                    ;;
+                sqs)
+                    _arguments \
+                        '(-i --pollingInterval)'{-i,--pollingInterval}'[SQS poll interval (ms)]:ms:' \
+                        '(-r --region)'{-r,--region}'[AWS region]:region:' \
+                        '(-m --metric)'{-m,--metric}'[SQS metric]:metric:(ApproximateNumberOfMessages ApproximateNumberOfMessagesNotVisible ApproximateNumberOfMessagesDelayed)' \
+                        '1:SQS queue name:'
+                    ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_tplot_cmds() {
+    local -a cmds
+    cmds=(
+        'cmd:poll a shell command for numeric output'
+        'c:cmd alias'
+        'stdin:read numeric values from stdin'
+        's:stdin alias'
+        'redis:poll Redis LIST length'
+        'r:redis alias'
+        'sqs:poll AWS SQS queue size'
+    )
+    _describe -t commands 'tplot command' cmds
+}
+
+_tplot "$@"
