@@ -1,0 +1,191 @@
+#compdef playit-cli
+# ============================================================================
+# playit-cli - Playit.gg game-server tunneling agent CLI (Rust, BSD-2-Clause)
+#
+# Author : Patrick Lorio + playit-cloud
+# Upstream: https://github.com/playit-cloud/playit-agent
+# crates : playit-cli (binary: playit-cli)
+#
+# Playit.gg is a managed network-tunnel service for hobbyist
+# game-server operators - similar to ngrok or Cloudflare Tunnel
+# but optimized for the high-throughput / low-latency game-
+# server traffic profile (Minecraft, Terraria, Valheim, Rust,
+# CS2, Factorio). The CLI controls the local playitd daemon
+# that maintains the persistent tunnel to playit.gg edge
+# infrastructure: every TCP/UDP packet received by an edge node
+# for your assigned hostname:port is rate-limited at the
+# tunnel layer + forwarded to the local playitd, which
+# forwards it to the game server bound to a local port.
+#
+# The CLI itself is mostly a control surface for playitd
+# (start/stop/attach/status) plus the one-time setup flow
+# (claim a new agent, exchange a claim code for the persistent
+# secret key, set up account login).
+#
+# Subcommand tree (clap derive):
+#   (default)         - run the "auto" command: attach to a running
+#                       playitd if there is one, otherwise start setup
+#   version           - print version
+#   attach            - attach console to running playitd
+#                       -s, --stdout      stream logs to stdout (no TUI)
+#   start             - start the installed playitd service
+#   stop              - stop the installed playitd service
+#   status            - status of the installed playitd service
+#   reset             - remove the secret key, allowing re-claim
+#   secret-path       - print path to the secret-key file
+#   setup             - provision a new secret to playitd
+#   account
+#     login-url       - generate a login URL for the playit account
+#   claim
+#     generate        - emit a random claim code
+#     url <code>      - print a claim URL for a generated code
+#                       --name <name>    agent display name
+#                       --type <type>    agent type (self-managed)
+#     exchange <code> - exchange the claim for the secret key
+#                       --wait <seconds> wait timeout (0=infinite)
+#
+# Global flags:
+#   -s, --stdout         - print logs to stdout (no TUI)
+#   --socket-path <p>    - override IPC socket / named pipe to playitd
+#
+# The governor lane is built on `governor` (declared in the
+# workspace dep graph and used directly by playit-agent-core/
+# src/network/tcp/tcp_clients.rs +
+# packages/agent_core/src/network/udp/udp_clients.rs at
+# upstream HEAD), the canonical Rust rate-limiter by Andreas
+# Fuchs (github.com/boinkor-net/governor, 1100+ stars).
+# governor implements the Generic Cell Rate Algorithm (GCRA)
+# - the leaky-bucket variant that powers ATM network rate-
+# limiting + cellular-network QoS - in a lock-free atomic-
+# state-machine implementation that scales to millions of
+# rate-checks per second per core without contention. playit-
+# agent uses governor to police per-tunnel-port packet rates,
+# enforcing the playit.gg plan limits at the edge of the
+# local agent without round-tripping to the cloud control
+# plane.
+#
+# ----------------------------------------------------------------------------
+# AXIS 226 :: Rate limiting (leaky bucket / token bucket / GCRA)  [OPENS]
+# Round 1376 :: Rust slot 1 of 4 :: OPENS Axis 226
+#
+# Cross-language canonical library family for this axis (proposed):
+#   Rust    : boinkor-net/governor         - GCRA leaky-bucket
+#   Go      : golang.org/x/time/rate       - canonical Go token bucket
+#                                            (alternative: uber-go/ratelimit
+#                                             for leaky-bucket semantics)
+#   TS/Node : SGrondin/bottleneck          - per-key concurrency + rate limit
+#                                            (alternative: animir/node-rate-
+#                                             limiter-flexible)
+#
+# Rate limiting is a curiously underspecified axis: there is
+# no single canonical algorithm everyone agrees on. The four
+# main approaches:
+#   - Token bucket (x/time/rate, Stripe, AWS API Gateway):
+#     fill at constant rate, consume per request; allows
+#     bursts up to bucket capacity
+#   - Leaky bucket (uber-go/ratelimit, bottleneck): output
+#     at constant rate, queue/drop excess; smooths bursts
+#   - GCRA (governor, ATM QoS, Lua redis-cell): leaky-bucket
+#     equivalent expressed as "earliest acceptable timestamp"
+#     for the next event - lock-free, branch-free per-check
+#   - Sliding window log (rate-limiter-flexible): per-key
+#     ring buffer of last-N timestamps, expensive but precise
+#
+# governor's GCRA implementation is the Rust-canonical choice
+# because it delivers leaky-bucket semantics with token-bucket-
+# style branch-free per-request cost. The cross-language
+# story is messy: each lane's canonical library picks a
+# different algorithm based on the host language's
+# concurrency model.
+# ============================================================================
+
+_playit-cli() {
+    local context state state_descr line
+    typeset -A opt_args
+    local curcontext="$curcontext" ret=1
+
+    _arguments -C \
+        '(-s --stdout)'{-s,--stdout}'[print logs to stdout]' \
+        '--socket-path[override IPC socket / named pipe path]:path:_files' \
+        '(- *)'{-h,--help}'[print help]' \
+        '(- *)'{-V,--version}'[print version]' \
+        '1: :_playit-cli_cmds' \
+        '*::arg:->args' \
+    && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                version|start|stop|status|reset|secret-path|setup) \
+                    _arguments '(- *)'{-h,--help}'[help]' ;;
+                attach) \
+                    _arguments \
+                        '(-s --stdout)'{-s,--stdout}'[stream logs to stdout instead of using TUI]' \
+                        '(- *)'{-h,--help}'[help]' ;;
+                account) _playit-cli_account ;;
+                claim)   _playit-cli_claim ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_playit-cli_cmds() {
+    local -a cmds
+    cmds=(
+        'version:Print version information'
+        'attach:Attach to a running playitd service'
+        'start:Start the installed playitd service'
+        'stop:Stop the installed playitd service'
+        'status:Show the status of the installed playitd service'
+        'reset:Remove the secret key so the agent can be re-claimed'
+        'secret-path:Show the file path where the playit secret can be found'
+        'setup:Setup playit by provisioning a new secret to playitd'
+        'account:Account management commands'
+        'claim:Setting up a new playit agent'
+    )
+    _describe -t commands 'playit-cli command' cmds
+}
+
+_playit-cli_account() {
+    _arguments \
+        '(- *)'{-h,--help}'[help]' \
+        '1:subcommand:(login-url)'
+}
+
+_playit-cli_claim() {
+    local -a sub
+    sub=(
+        'generate:Generate a random claim code'
+        'url:Print a claim URL given the code and options'
+        'exchange:Exchange the claim for the secret key'
+    )
+    _arguments \
+        '(- *)'{-h,--help}'[help]' \
+        '1:subcommand:->sub' \
+        '*::arg:->args'
+
+    case $state in
+        sub) _describe -t commands 'claim subcommand' sub ;;
+        args)
+            case $words[1] in
+                url)
+                    _arguments \
+                        '--name[name for the agent]:name:' \
+                        '--type[agent type]:type:(self-managed)' \
+                        '(- *)'{-h,--help}'[help]' \
+                        '1:claim code:'
+                    ;;
+                exchange)
+                    _arguments \
+                        '--wait[seconds to wait (0=infinite)]:seconds:' \
+                        '(- *)'{-h,--help}'[help]' \
+                        '1:claim code:'
+                    ;;
+            esac
+            ;;
+    esac
+}
+
+_playit-cli "$@"
