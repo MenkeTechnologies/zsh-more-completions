@@ -1,0 +1,253 @@
+#compdef reverst reverstd
+# ---------------------------------------------------------------------------
+# reverst / reverstd — Reverst: "Reverse Tunnels in Go over HTTP/3 and
+#                      QUIC."  A reverse-tunnel pair where the client
+#                      (`reverst http <ADDR>`) running inside a private
+#                      network establishes an outbound QUIC connection
+#                      to the public server (`reverstd`) and registers
+#                      a forward route, after which the server accepts
+#                      inbound HTTPS requests on the public address and
+#                      multiplexes them through the QUIC tunnel back to
+#                      the client's local service.  Same use case as
+#                      ngrok / Cloudflare Tunnel / inlets — give an
+#                      internal service an externally-reachable URL
+#                      without opening firewall holes — but built
+#                      around HTTP/3 + QUIC instead of HTTP/1.1 + WSS,
+#                      which means connection migration survives
+#                      client-network changes (laptop sleep / Wi-Fi to
+#                      LTE / VPN reconnect) without dropping the
+#                      tunnel (Go, 1001★)
+#
+# upstream: https://github.com/flipt-io/reverst
+#           (client binary at cmd/reverst/, server daemon at
+#           cmd/reverstd/ in the workspace)
+# author : Flipt (the feature-flag company) — Reverst was originally
+#          built to expose Flipt instances running in private VPCs to
+#          the public Flipt management plane, but the design is
+#          generic and works for any HTTP-speaking service
+# license: Apache-2.0
+#
+# Source-direct completion: every flag below is verbatim from
+# cmd/reverst/config.go + internal/config/config.go on the flipt-io/
+# reverst tip — the `peterbourgon/ff/v4` struct-tag annotations
+# (`ff:" short=X | long=name | default='...' | usage: '...' "`) parsed
+# exactly as declared.  The two binaries share a similar Config
+# struct shape but with slightly different fields (server has
+# --certificate-path / --private-key-path / --tunnel-groups /
+# --watch-groups / --management-address; client has --cacert-path /
+# --insecure / --username / --password / --token / --scheme /
+# --tunnel-group).
+#
+# Direct deps from go.mod (selected):
+#   github.com/quic-go/quic-go      v0.48.2  ← canonical Go IETF QUIC
+#                                              (RFC 9000-9002)
+#                                              implementation library
+#                                              (this axis) — by Marten
+#                                              Seemann (quic-go/quic-
+#                                              go; formerly libp2p /
+#                                              Protocol Labs).  Pure-
+#                                              Go async-first QUIC v1
+#                                              implementation with
+#                                              HTTP/3 support via the
+#                                              sibling http3
+#                                              subpackage, WebTransport
+#                                              support via the
+#                                              quic-go/webtransport-go
+#                                              sibling, and a long
+#                                              list of RFC compliance
+#                                              tests against
+#                                              quic-interop-runner.
+#                                              Pluggable crypto via
+#                                              the standard
+#                                              crypto/tls package
+#                                              (Go's stdlib TLS) —
+#                                              no separate crypto
+#                                              backend like Rust's
+#                                              quinn-vs-aws-lc-rs
+#                                              choice.  Uses Go's
+#                                              built-in goroutine
+#                                              concurrency without
+#                                              an external runtime
+#                                              dependency (Rust's
+#                                              quinn requires tokio
+#                                              or async-std).  THE
+#                                              Go answer to "speak
+#                                              QUIC from a Go
+#                                              process" — used by
+#                                              Caddy 2 (the HTTP/3
+#                                              server), cilium/
+#                                              cilium (Hubble UI's
+#                                              QUIC transport),
+#                                              syncthing's
+#                                              relayserver, gost
+#                                              (multi-protocol
+#                                              tunnel proxy), the
+#                                              broader Go HTTP/3
+#                                              ecosystem (gorilla/
+#                                              websocket users
+#                                              migrating to
+#                                              WebTransport), and
+#                                              the Flipt ecosystem's
+#                                              reverst.  reverst
+#                                              uses quic-go in
+#                                              pkg/protocol's stream
+#                                              wire format on top of
+#                                              the bidirectional
+#                                              QUIC streams the
+#                                              client opens to the
+#                                              server during
+#                                              registration —
+#                                              forwarded HTTPS
+#                                              requests are
+#                                              multiplexed through
+#                                              one QUIC stream per
+#                                              outstanding HTTP
+#                                              transaction.
+#   github.com/quic-go/qpack        v0.5.1   (HTTP/3 header compression
+#                                              — QPACK, the QUIC-
+#                                              specific successor to
+#                                              HTTP/2's HPACK)
+#   github.com/peterbourgon/ff/v4            (CLI parser — Peter
+#                                              Bourgon's struct-tag-
+#                                              driven flag library;
+#                                              alternative to clap /
+#                                              cobra for tools that
+#                                              want minimal
+#                                              dependencies)
+#   github.com/peterbourgon/ff/v4/ffyaml     (YAML config-file loader
+#                                              for ff — `--config
+#                                              config.yml` is parsed
+#                                              into the same struct
+#                                              the CLI flags fill)
+#   k8s.io/client-go                         (Kubernetes ConfigMap
+#                                              watcher for the
+#                                              tunnel-groups config —
+#                                              `--tunnel-groups
+#                                              k8s:my-cm` watches a
+#                                              ConfigMap for live
+#                                              tunnel-group updates,
+#                                              which is the Flipt
+#                                              control-plane
+#                                              integration mode)
+#   github.com/fsnotify/fsnotify             (filesystem watcher for
+#                                              `--watch-groups` on
+#                                              file-backed configs)
+#
+# Reverst's architectural premise: most reverse-tunnel tools (ngrok,
+# Cloudflare Tunnel, inlets, frp) use HTTP/1.1 + WebSocket-Secure for
+# the control + data channels.  This worked fine in 2015 but suffers
+# in 2026 from (a) head-of-line blocking when many slow requests are
+# in flight, (b) tunnel drop + reconnect when the client laptop
+# changes networks (Wi-Fi → LTE → VPN), and (c) inability to
+# multiplex bidirectional streams cleanly.  QUIC fixes all three:
+# stream multiplexing eliminates HOL blocking, connection migration
+# (RFC 9000 §9) keeps the tunnel alive across client IP changes, and
+# bidirectional streams are first-class.  Reverst leans on quic-go to
+# get all of this for free.  Operator workflow: deploy `reverstd` on
+# a publicly-reachable host with TLS cert (--certificate-path +
+# --private-key-path) and a tunnel-groups config (YAML file or k8s
+# ConfigMap); on each private-network client, run `reverst http
+# 127.0.0.1:8080 --server-name tunnel.example.com --tunnel-group
+# my-group` and inbound HTTPS to https://tunnel.example.com flows
+# through the QUIC tunnel to localhost:8080.
+#
+# === AXIS 192 CONTINUES — IETF QUIC implementation libraries ==============
+# Axis position: Go=247 continues Axis 192 (slot 2/0/0).  Canonical Go
+# QUIC implementation is `github.com/quic-go/quic-go` by Marten Seemann
+# — pure-Go async-first QUIC v1 (RFC 9000-9002) with HTTP/3 support
+# via the sibling http3 subpackage and WebTransport via the quic-go/
+# webtransport-go sibling.  THE Go answer to "speak QUIC from a Go
+# process" — used by Caddy 2's HTTP/3 server, cilium's Hubble UI,
+# syncthing's relayserver, gost, and the broader Go HTTP/3 ecosystem.
+#
+# Cycle position in current 3+1 micro-cycle:
+#   Rust=247     _quincy-client       ← previous round (axis 192 OPENS, 1/0/0)
+#   Go=247       ← THIS FILE          (axis 192 continues, slot 2/0/0)
+#   TS-Node=247  ← next round         (axis 192 CLOSES at triple-247, 1/1/1)
+#
+# Cross-language design contrast for axis 192:
+#   Rust    : quinn (Quinn org) — pluggable crypto backend
+#             (rustls / aws-lc-rs).  Requires an explicit async
+#             runtime (tokio or async-std) — quinn is "bring your
+#             own runtime."  Post-quantum hybrid KEM available
+#             via aws-lc-rs backend.
+#   Go      : quic-go (Marten Seemann) — uses Go's stdlib
+#             crypto/tls package; no separate crypto backend
+#             choice.  Uses goroutines without an external runtime
+#             dependency (Go's runtime is implicit).  PQ KEM not
+#             yet available because Go's stdlib TLS hasn't shipped
+#             it (as of 2026).  Reflects Go's preference for
+#             "stdlib first" cryptography vs Rust's preference
+#             for "pluggable crypto backend per use case."
+#   JS/Node : [TBD next round]  Node's QUIC story has been in flux
+#             — Node 15 shipped experimental QUIC behind --
+#             experimental-quic but the API was removed in Node 17;
+#             mature non-builtin options are @nodejs/node-quic
+#             (OpenSSL-backed) or nghttp3-js (WASM port of
+#             nghttp3/ngtcp2).
+# ---------------------------------------------------------------------------
+
+_reverst() {
+    local context state state_descr line ret=1
+    typeset -A opt_args
+
+    local cmd="${words[1]}"
+
+    if [[ "$cmd" == "reverstd" ]]; then
+        # Server daemon flags
+        _arguments -s -S \
+            '(- *)'{-h,--help}'[show help]' \
+            '(-l --log)'{-l,--log}'=[log level (default info)]:level:(debug info warn error)' \
+            '(-a --tunnel-address)'{-a,--tunnel-address}'=[address for accepting tunnelling QUIC connections (default 127.0.0.1:7171)]:addr:_hosts' \
+            '(-s --http-address)'{-s,--http-address}'=[address for serving HTTP requests (default 0.0.0.0:8181)]:addr:_hosts' \
+            '(-n --server-name)'{-n,--server-name}'=[server name used to identify tunnel via TLS (required)]:name:' \
+            '(-k --private-key-path)'{-k,--private-key-path}'=[path to TLS private key PEM file (required)]:file:_files -g "*.(pem|key)"' \
+            '(-c --certificate-path)'{-c,--certificate-path}'=[path to TLS certificate PEM file (required)]:file:_files -g "*.(pem|crt|cer)"' \
+            '(-g --tunnel-groups)'{-g,--tunnel-groups}'=[path to file or k8s ConfigMap identifier (default groups.yml; use k8s:namespace/name for ConfigMaps)]:source:_files' \
+            '(-w --watch-groups)'{-w,--watch-groups}'[watch tunnel-groups source for updates (uses fsnotify for files, k8s ConfigMap watch for ConfigMaps)]' \
+            '--management-address=[HTTP address for management API (telemetry / debugging endpoints; empty = disabled)]:addr:_hosts' \
+            '--max-idle-timeout=[maximum time a QUIC connection can be idle (default 1m)]:duration:' \
+            '--keep-alive-period=[period between QUIC keep-alive PING frames (default 30s)]:duration:' \
+            '--config=[path to YAML config file (default config.yml)]:file:_files -g "*.(yaml|yml|YAML|YML)"' && ret=0
+        return ret
+    fi
+
+    # Client `reverst` flags + `http <ADDR>` subcommand
+    _arguments -C \
+        '(- *)'{-h,--help}'[show help]' \
+        '1: :->cmds' \
+        '*::arg:->args' && ret=0
+
+    case $state in
+        cmds)
+            _describe -t commands 'reverst subcommand' \
+                '(http:forward inbound HTTPS-tunnel traffic to a local HTTP address)' && ret=0
+            ;;
+        args)
+            case $words[1] in
+                http)
+                    _arguments \
+                        '(- *)'{-h,--help}'[show http subcommand help]' \
+                        '(-l --log)'{-l,--log}'=[log level (default info)]:level:(debug info warn error)' \
+                        '(-a --tunnel-address)'{-a,--tunnel-address}'=[address for accepting tunnelling QUIC connections (default 127.0.0.1:7171)]:addr:_hosts' \
+                        '(-n --server-name)'{-n,--server-name}'=[server name used to identify tunnel via TLS (required)]:name:' \
+                        '(-g --tunnel-group)'{-g,--tunnel-group}'=[tunnel group to join (defaults to server name)]:group:' \
+                        '(-c --cacert-path)'{-c,--cacert-path}'=[path to TLS CA certificate PEM file]:file:_files -g "*.(pem|crt|cer)"' \
+                        '--insecure[skip TLS certificate verification (default false; DEV USE ONLY)]' \
+                        '--username=[username for HTTP basic authentication]:username:' \
+                        '--password=[password for HTTP basic authentication]:password:' \
+                        '--token=[bearer token for HTTP authentication]:token:' \
+                        '--scheme=[optionally override the auth scheme (e.g. Token / Bearer)]:scheme:' \
+                        '--max-idle-timeout=[maximum time a QUIC connection can be idle (default 1m)]:duration:' \
+                        '--keep-alive-period=[period between QUIC keep-alive PING frames (default 30s)]:duration:' \
+                        '--config=[path to YAML config file (default config.yml)]:file:_files -g "*.(yaml|yml|YAML|YML)"' \
+                        '1:local HTTP address to forward to (e.g. 127.0.0.1:8080 or just 8080 — port-only is expanded to 0.0.0.0\:<port>):_hosts' && ret=0
+                    ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_reverst "$@"
