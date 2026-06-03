@@ -1,0 +1,191 @@
+#compdef docrawl
+# ============================================================================
+# docrawl - polite documentation-site crawler:
+#            HTML -> Markdown (Rust, MIT)
+#
+# Author : neur0map
+# Upstream: https://github.com/neur0map/docrawl
+# crates : docrawl (binary: docrawl)
+#
+# `docrawl` is a same-origin documentation-site crawler
+# that downloads HTML pages, extracts the main content
+# section (via configurable CSS selectors), and converts
+# the result to clean Markdown for ingestion by docs
+# pipelines / static site generators / LLM training
+# corpora. It handles rate limiting, concurrency, robots
+# .txt, asset downloading, sitemap discovery, and resume-
+# from-frontier-cache - the operational shape of "I want
+# to scrape this docs site for an LLM context" without
+# the ad-hoc fragility of a one-off wget script.
+#
+# Usage:
+#   docrawl <URL> [FLAGS]
+#
+# Flags (clap derive Parser):
+#       --all                    crawl whole same-origin
+#                                 site (ignores --depth)
+#       --depth <N>              max link depth from start
+#                                 (default 10)
+#   -o, --output <PATH>          output root (site folder
+#                                 is created inside)
+#       --concurrency <N>        parallel fetch workers
+#                                 (default 16)
+#       --rate <N>               global requests/second
+#                                 (default 10)
+#       --host-only              restrict scope to exact
+#                                 origin (scheme+host+port)
+#       --external-assets        allow downloading images
+#                                 from other domains
+#       --allow-svg              permit saving SVG images
+#       --max-pages <N>          stop after N pages
+#       --selector <CSS>         preferred content selector
+#                                 (repeatable)
+#       --exclude <REGEX>        URL exclusion regex
+#                                 (repeatable)
+#       --timeout-minutes <N>    graceful shutdown after N min
+#       --resume                 resume from persisted
+#                                 frontier in cache
+#       --no-assets              skip downloading images
+#                                 / assets (fastest)
+#       --fast                   preset: higher rate /
+#                                 concurrency + no assets
+#       --silence                no status / progress output
+#       --update                 self-update from crates.io
+#   -h, --help                   print help
+#   -V, --version                print version
+#
+# The html5ever lane is built on `scraper = "0.24"`
+# (declared verbatim at upstream Cargo.toml HEAD), the
+# canonical Rust HTML-querying crate by Causal Agency +
+# the rust-scraper working group - github.com/rust-
+# scraper/scraper, 2400+ stars. scraper is a thin
+# ergonomic facade over `servo/html5ever` (the spec-
+# compliant HTML5 parser extracted from the Servo browser
+# engine, 1700+ stars) + `causal-agent/selectors` (the
+# CSS-Selectors-Level-4 implementation also from Servo).
+# `scraper::Html::parse_document()` walks the input string
+# through html5ever's tokenizer + tree builder producing
+# a fully-typed DOM tree, then `scraper::Selector::parse`
+# compiles a CSS selector string into a runtime matcher
+# that can iterate over matching elements.
+#
+# docrawl uses scraper in `src/extract.rs` to pull the
+# main-content region from each crawled HTML page:
+# `scraper::Html::parse_document(html_body)` then
+# `Selector::parse(".main, article, .content, main")` (or
+# the user-supplied `--selector` value) then iterate +
+# extract text. The Markdown conversion is delegated to
+# `fast_html2md` which itself uses html5ever for its
+# secondary parse pass.
+#
+# Why html5ever as the canonical Rust HTML parser? It is
+# the only Rust HTML5 parser that targets the WHATWG HTML
+# Living Standard tree construction spec byte-for-byte
+# (vs. ad-hoc parsers that approximate the spec). When
+# scraping real-world web pages with malformed markup
+# (missing close tags, mismatched nesting, character
+# entity quirks), html5ever's tree-builder applies the
+# spec's error-recovery rules identically to what a
+# WHATWG-compliant browser would do - so the parsed DOM
+# matches what a browser would render.
+#
+# ----------------------------------------------------------------------------
+# AXIS 242 :: HTML5 parsing (WHATWG-spec-compliant DOM
+#              construction + CSS selectors)
+# Round 1424 :: Rust slot 1 of 4 :: OPENS Axis 242
+#
+# Cross-language canonical library family for this axis
+# (proposed):
+#   Rust    : servo/html5ever (+ scraper) - the WHATWG
+#                                            spec-compliant
+#                                            HTML5 parser
+#                                            extracted
+#                                            from Servo,
+#                                            with scraper
+#                                            as the
+#                                            ergonomic
+#                                            facade
+#   Go      : golang.org/x/net/html        - the Go core-
+#                                            team-
+#                                            maintained
+#                                            HTML5
+#                                            tokenizer +
+#                                            tree builder
+#                                            in the
+#                                            golang.org/
+#                                            x/net subrepo
+#   TS/Node : inikulin/parse5              - the WHATWG-
+#                                            spec-compliant
+#                                            HTML5 parser
+#                                            used by
+#                                            cheerio,
+#                                            jsdom, and
+#                                            Angular SSR
+#
+# HTML5 parsing is a clean spec-bound axis - the WHATWG
+# HTML Living Standard defines the tokenizer state machine
+# (~80 states) + the tree construction insertion modes
+# (~25 modes) byte-for-byte. Compliant parsers produce
+# bit-identical DOM trees for the same input HTML, modulo
+# implementation-specific extensions to the DOM node
+# types. All three lanes pass the html5lib test suite
+# (the spec's official conformance corpus).
+#
+# Structural commentary on the canonical-library origins:
+#   - servo/html5ever (Rust): extracted from Mozilla's
+#     experimental Servo browser engine; the same parser
+#     that ships in Firefox's Gecko codebase via the
+#     stylo subsystem
+#   - golang.org/x/net/html (Go): maintained by the Go
+#     core team in the `golang.org/x/net` subrepository
+#     (same import-path namespace as net/http2 + net/
+#     idna); intentionally minimal API surface
+#   - inikulin/parse5 (Node): pure-JS WHATWG-spec parser
+#     by Ivan Nikulin; the de-facto Node HTML5 parser,
+#     bundled into cheerio (the Node "jQuery for the
+#     server" library), jsdom (DOM emulation), Angular
+#     SSR (server-side render), and React Server
+#     Components implementations
+#
+# Cross-language interop happens at the DOM level (parsed
+# DOM is structurally identical) but representation
+# differs per lane: scraper produces `ego_tree::Tree<Node>`
+# (rooted tree of arena-allocated nodes), x/net/html
+# produces `*html.Node` (doubly-linked tree), parse5
+# produces a JSON-shaped object tree. Cross-lane
+# transport requires re-serializing to HTML (or to a
+# pivot format like JSON-LD / Markdown).
+#
+# Axis 242 opens with the Rust slot at the canonical
+# Servo-extracted HTML5 parser + the scraper ergonomic
+# facade.
+# ============================================================================
+
+_docrawl() {
+    local context state state_descr line
+    typeset -A opt_args
+
+    _arguments -s -S \
+        '--all[crawl whole same-origin site (ignores --depth)]' \
+        '--depth[max link depth from start (default 10)]:N:' \
+        '(-o --output)'{-o,--output}'[output root (site folder created inside)]:path:_files -/' \
+        '--concurrency[parallel fetch workers (default 16)]:N:' \
+        '--rate[global requests/second (default 10)]:N:' \
+        '--host-only[restrict scope to exact origin]' \
+        '--external-assets[allow downloading images from other domains]' \
+        '--allow-svg[permit saving SVG images]' \
+        '--max-pages[stop after writing N pages]:N:' \
+        '*--selector[preferred content CSS selector (repeatable)]:css:' \
+        '*--exclude[URL exclusion regex (repeatable)]:regex:' \
+        '--timeout-minutes[graceful shutdown after N minutes]:N:' \
+        '--resume[resume from persisted frontier cache]' \
+        '--no-assets[skip downloading images/assets (fastest)]' \
+        '--fast[preset: higher rate/concurrency + no assets]' \
+        '--silence[silence status / progress output]' \
+        '--update[self-update from crates.io]' \
+        '(- *)'{-h,--help}'[print help]' \
+        '(- *)'{-V,--version}'[print version]' \
+        '1:starting URL:'
+}
+
+_docrawl "$@"
