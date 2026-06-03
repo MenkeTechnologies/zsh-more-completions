@@ -1,0 +1,108 @@
+#compdef seekstorm_server
+# ============================================================================
+# seekstorm_server - SeekStorm vector + lexical search server (Rust, Apache-2.0)
+#
+# Author : Wolf Garbe (wolf.garbe@seekstorm.com)
+# Upstream: https://github.com/SeekStorm/SeekStorm
+# crates : seekstorm (binary: seekstorm_server)
+#
+# SeekStorm is a sub-millisecond Rust full-text search library +
+# standalone multi-tenancy HTTP server. The library powers an
+# embedded BM25F/proximity-ranking lexical search engine plus a
+# vector index (HNSW) for hybrid semantic-+ keyword retrieval.
+# The server wraps the library with a RESTful API: per-tenant
+# API key management, per-key rate limiting, per-tenant
+# document/index quotas, and an embedded web UI for ad-hoc
+# query exploration.
+#
+# Performance characteristics: ingestion at ~10 ms/document for
+# medium-corpus text, query latency <1 ms p99 on warm cache,
+# index storage typically 25-30% of source text size. Optional
+# default features:
+#   zh   - Chinese word segmentation
+#   pdf  - PDF text extraction (via pdfium-render)
+#   gx   - GXHash instead of AHash (faster but x86_64-only)
+#   vb   - VarByte posting-list encoding (smaller on disk)
+#
+# Argument format (no clap - raw KEY=VALUE positional parsing):
+#   seekstorm_server [KEY=VALUE]...
+#
+# Recognized keys:
+#   index_path=<dir>   - on-disk index directory
+#                        (default: ./seekstorm_index)
+#   local_ip=<ip>      - bind IP (default: 0.0.0.0)
+#   local_port=<port>  - bind TCP port (default: 80)
+#
+# Environment:
+#   MASTER_KEY_SECRET  - REQUIRED for production: secret that
+#                        signs generated per-tenant API keys.
+#                        Unset => generated keys are predictable.
+#
+# Console:
+#   `quit`  - exit the running server
+#
+# The lz4_flex lane is built on `lz4_flex = "0.13.0"` (declared
+# verbatim at upstream Cargo.toml HEAD), the canonical pure-Rust
+# LZ4 implementation by Pascal Seitz (github.com/PSeitz/lz4_flex,
+# 500+ stars). lz4_flex is the only mainstream LZ4 library in
+# Rust without a C dependency - it ships in pure safe Rust with
+# SIMD-accelerated decompression paths (SSE2/AVX2 on x86_64,
+# NEON on aarch64) that match or exceed the C reference
+# implementation on most workloads. SeekStorm uses lz4_flex to
+# compress the per-block posting-list payload on disk: posting
+# lists compress 4-6x with LZ4 with near-zero decompression
+# overhead, which dominates the cost-vs-benefit tradeoff for
+# random-access search workloads where every query touches
+# many blocks.
+#
+# ----------------------------------------------------------------------------
+# AXIS 223 :: LZ4 fast block compression (low-latency throughput)  [OPENS]
+# Round 1367 :: Rust slot 1 of 4 :: OPENS Axis 223
+#
+# Cross-language canonical library family for this axis (proposed):
+#   Rust    : PSeitz/lz4_flex              - pure-Rust LZ4
+#   Go      : pierrec/lz4                  - pure-Go LZ4 (de-facto)
+#   TS/Node : pierrec/node-lz4 OR lz4-napi - lz4 in Node (the same
+#                                            pierrec project ships both)
+#
+# LZ4 (Yann Collet, 2011) sits in a different operational niche
+# than the brotli/zstd compressors covered in Axis 214/215:
+# brotli/zstd optimize for *compression ratio* at moderate CPU
+# cost; LZ4 optimizes for *raw throughput* at the cost of ratio.
+# Decompression speed is the killer property - LZ4 reads at
+# ~5 GB/s/core, ~10x faster than zstd's high-ratio modes. This
+# makes LZ4 the canonical choice for any "compress everything on
+# disk, decompress on every read" workload: RocksDB/LevelDB
+# block compression, Postgres TOAST, Elasticsearch/Lucene
+# segment compression, Spark shuffle compression, Cassandra
+# SSTable compression, and (here) SeekStorm posting-list
+# compression.
+#
+# The cross-language wire format is byte-identical across all
+# implementations - an LZ4-compressed block written by lz4_flex
+# (Rust), pierrec/lz4 (Go), or lz4-napi (Node) decompresses
+# correctly with any of the others. This makes LZ4 a natural
+# choice for storage formats consumed by multiple language
+# stacks: Parquet's LZ4_RAW codec is read by every Parquet
+# implementation regardless of host language.
+# ============================================================================
+
+_seekstorm_server() {
+    local context state state_descr line
+    typeset -A opt_args
+
+    _arguments -s -S \
+        '*: :_seekstorm_kv'
+}
+
+_seekstorm_kv() {
+    local -a kv_keys
+    kv_keys=(
+        'index_path=:on-disk index directory (default: ./seekstorm_index)'
+        'local_ip=:bind IP address (default: 0.0.0.0)'
+        'local_port=:bind TCP port (default: 80)'
+    )
+    _describe -t kvkeys 'KEY=VALUE argument' kv_keys
+}
+
+_seekstorm_server "$@"
