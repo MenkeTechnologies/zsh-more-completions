@@ -1,0 +1,218 @@
+#compdef phantasm
+# ============================================================================
+# phantasm - human-in-the-loop approval gateway for AI
+#             agent workflows (Rust, GPL-3.0)
+#
+# Author : Edwin Kys (edwinkys)
+# Upstream: https://github.com/edwinkys/phantasm
+# crates : phantasm (binary: phantasm)
+#
+# `phantasm` is a Rust server that sits between an AI
+# agent (Claude / GPT / Gemini / Llama) and the real-
+# world side effects the agent wants to apply. The
+# agent submits a proposed action (HTTP request, shell
+# command, database mutation, ...) through the gRPC
+# "receiver" interface; phantasm forwards the proposal
+# to a human-side WebSocket-attached operator console
+# (the "coordinator" interface); the operator approves
+# or rejects, and phantasm returns the decision to the
+# agent. This is the supervised-execution pattern for
+# autonomous agents: the operator stays in the loop
+# without having to copy/paste each individual call.
+#
+# Usage:
+#   phantasm start [--receiver-port PORT]
+#                  [--coordinator-port PORT]
+#   phantasm run   [...]    # alias for start
+#
+# Commands (clap builder):
+#   start (alias: run)      - launch the receiver +
+#                              coordinator servers
+#
+# start flags:
+#   --receiver-port <port>  - gRPC receiver server port
+#                              (default 2505)
+#   --coordinator-port <port>
+#                           - WebSocket coordinator
+#                              server port (default 2510)
+#
+# Environment:
+#   PHANTASM_AUTO_APPROVE   - bypass operator approval
+#                              (boolean; default false)
+#   PHANTASM_SECRET         - shared auth token for the
+#                              receiver gRPC server
+#
+# The receiver side speaks gRPC (via tonic) to the AI
+# agent client; the coordinator side speaks WebSocket
+# (via tokio-tungstenite) to the human operator's web
+# UI. WebSocket was picked for the coordinator side
+# because of its bidirectional push semantics + low
+# operator-side latency for the approve/reject
+# round-trip.
+#
+# The tungstenite lane is built on `tokio-tungstenite =
+# "0.24.0"` (declared verbatim at upstream Cargo.toml
+# HEAD as a direct dep, imported from src/main.rs as
+# `use tokio_tungstenite::accept_async`), the canonical
+# Rust WebSocket library by SnapView GmbH (snapview) -
+# github.com/snapview/tokio-tungstenite, 2200+ stars on
+# the tokio-tungstenite crate alone. The underlying
+# `tungstenite-rs` crate (also by snapview) is the
+# transport-agnostic WebSocket protocol engine; tokio-
+# tungstenite glues it to tokio's async runtime for
+# server + client use.
+#
+# tungstenite implements RFC 6455 (The WebSocket
+# Protocol, IETF Standards Track 2011) end-to-end:
+#   - opening handshake (HTTP/1.1 Upgrade + Sec-
+#     WebSocket-Accept)
+#   - framing (FIN + opcode + payload length + mask)
+#   - per-message deflate compression
+#     (permessage-deflate extension, RFC 7692)
+#   - close handshake (RFC 6455 §5.5.1)
+#   - autobahn-test-suite green across all 500+ test
+#     vectors
+#
+# The library is the de-facto Rust WebSocket
+# implementation - depended on by tokio-tungstenite +
+# axum (Sec-WebSocket-Accept handshake via axum's
+# WebSocketUpgrade) + hyper-tungstenite (for hyper
+# servers) + reqwest's WS support + most Rust HTTP
+# frameworks with WebSocket endpoints.
+#
+# phantasm uses `accept_async` to upgrade incoming
+# coordinator-port TCP connections to WebSocket streams,
+# then exchanges JSON-serialized approval requests /
+# responses through the resulting `WebSocketStream`.
+# The receiver gRPC connections + the coordinator
+# WebSocket connections are joined together by a
+# central `ConnectionID`-indexed routing table inside
+# the `Phantasm` service struct.
+#
+# ----------------------------------------------------------------------------
+# AXIS 248 :: WebSocket / RFC 6455 (bidirectional
+#              full-duplex framing over HTTP/1.1 Upgrade)
+# Round 1442 :: Rust slot 1 of 4 :: OPENS Axis 248
+#
+# Cross-language canonical library family for this axis
+# (proposed):
+#   Rust    : snapview/tokio-tungstenite - the de-facto
+#             (+ snapview/tungstenite-rs   Rust WebSocket
+#              for the protocol engine)    library family;
+#                                          transport-
+#                                          agnostic
+#                                          protocol engine
+#                                          (tungstenite-
+#                                          rs) + tokio
+#                                          adapter
+#                                          (tokio-
+#                                          tungstenite);
+#                                          depended on by
+#                                          axum + hyper-
+#                                          tungstenite +
+#                                          reqwest + most
+#                                          Rust HTTP
+#                                          frameworks
+#   Go      : gorilla/websocket          - the long-running
+#                                          de-facto Go
+#                                          WebSocket
+#                                          library; archived
+#                                          in 2022 but
+#                                          unarchived in
+#                                          2023 after the
+#                                          successor coder/
+#                                          websocket
+#                                          (formerly
+#                                          nhooyr.io/
+#                                          websocket)
+#                                          didn't displace
+#                                          it
+#   TS/Node : websockets/ws              - the canonical
+#                                          Node WebSocket
+#                                          library by
+#                                          Einar Otto Stangvik
+#                                          since 2011;
+#                                          ~70M weekly
+#                                          downloads;
+#                                          part of the
+#                                          @websockets
+#                                          GitHub org
+#                                          (also publishes
+#                                          @websockets/
+#                                          bufferutil +
+#                                          @websockets/
+#                                          utf-8-validate
+#                                          performance
+#                                          addons)
+#
+# WebSocket is a clean spec-bound axis - RFC 6455 (2011)
+# defines the framing + handshake byte-for-byte. The
+# autobahn-test-suite conformance corpus has ~500
+# behavior-test vectors that all three lanes pass.
+# Compliant implementations interoperate at the wire
+# level: a client written with tokio-tungstenite can
+# connect to a server written with gorilla/websocket,
+# exchange messages with a server written in ws, etc.
+#
+# Structural commentary on the canonical libraries:
+#   - snapview/tokio-tungstenite (Rust): transport-
+#     agnostic protocol engine separated from the async
+#     I/O glue; lets users pick async-std, smol, glommio,
+#     or tokio runtime by picking the matching adapter
+#     crate
+#   - gorilla/websocket (Go): notable for the unique
+#     2022 archive -> 2023 unarchive story; the Gorilla
+#     toolkit was sunset by its maintainers in Dec 2022,
+#     but the WebSocket library specifically was
+#     reactivated in mid-2023 after the proposed
+#     successor (coder/websocket, formerly nhooyr.io/
+#     websocket) didn't manage to displace its market
+#     share
+#   - websockets/ws (Node): single-source canonical Node
+#     WebSocket library since 2011; ~70M weekly npm
+#     downloads; the GitHub org houses related perf
+#     addons (bufferutil + utf-8-validate) that the
+#     main `ws` package detects + uses if installed
+#
+# Axis 248 opens with the Rust slot at the snapview
+# canonical Rust WebSocket library family.
+# ============================================================================
+
+_phantasm() {
+    local context state state_descr line
+    typeset -A opt_args
+    local curcontext="$curcontext" ret=1
+
+    _arguments -C \
+        '(- *)'{-h,--help}'[print help]' \
+        '(- *)'{-V,--version}'[print version]' \
+        '1: :_phantasm_cmds' \
+        '*::arg:->args' \
+    && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                start|run)
+                    _arguments \
+                        '--receiver-port[gRPC receiver server port (default 2505)]:port:' \
+                        '--coordinator-port[WebSocket coordinator server port (default 2510)]:port:' \
+                        '(- *)'{-h,--help}'[print subcommand help]'
+                    ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_phantasm_cmds() {
+    local -a cmds
+    cmds=(
+        'start:launch the receiver + coordinator servers'
+        'run:alias for start'
+    )
+    _describe -t commands 'phantasm command' cmds
+}
+
+_phantasm "$@"
