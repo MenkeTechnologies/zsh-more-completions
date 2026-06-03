@@ -1,0 +1,149 @@
+#compdef swarm-cronjob
+# ---------------------------------------------------------------------------
+# swarm-cronjob — declarative cron scheduler for Docker Swarm services:
+#                 polls the Swarm daemon for services labeled with
+#                 `swarm.cronjob.schedule=<cron-expression>` and re-deploys
+#                 each one whenever its expression fires (Go, 873★)
+#
+# upstream: https://github.com/crazy-max/swarm-cronjob
+# author : CrazyMax (the prolific Docker tooling author behind
+#          docker-actions-toolkit, dockge-actions, ftpgrab, and many
+#          other crazy-max/* infrastructure CLIs)
+# license: MIT
+#
+# Source-direct completion: every flag below is verbatim from
+# internal/model/cli.go on the crazy-max/swarm-cronjob tip — the
+# alecthomas/kong `kong:"name='...',env='...',default='...',help='...'"`
+# struct-tag annotations parsed exactly as declared on the Cli struct,
+# preserving env-var bindings (LOG_LEVEL / LOG_JSON) and default values.
+# swarm-cronjob is a daemon with no CLI subcommands — the cron schedule
+# behavior is configured via Docker Swarm service LABELS on the services
+# themselves, not via CLI flags, so the user-facing CLI surface is
+# intentionally minimal.
+#
+# Direct deps from go.mod (selected):
+#   github.com/robfig/cron/v3      v3.0.1   ← canonical Go cron-
+#                                              expression scheduler
+#                                              library (this axis) —
+#                                              by Rob Figueiredo
+#                                              (robfig/cron); the de-
+#                                              facto standard "cron in
+#                                              Go" with classic 5-field
+#                                              syntax + Quartz-style
+#                                              6-field (with seconds)
+#                                              + descriptors (@daily /
+#                                              @hourly / @reboot) +
+#                                              the cron.Schedule
+#                                              interface for custom
+#                                              triggers + timezone-
+#                                              aware parsing.  THE Go
+#                                              answer to "run this
+#                                              function on a recurring
+#                                              schedule" — used by
+#                                              Kubernetes' CronJob
+#                                              controller (the source
+#                                              of the cluster-side
+#                                              cron behavior every K8s
+#                                              user takes for
+#                                              granted), Argo CD,
+#                                              Caddy's reload-on-cert-
+#                                              expire hooks, every Go
+#                                              background-job library
+#                                              (gocron, asynq's
+#                                              recurring tasks, gocron-
+#                                              x/gocron), and the
+#                                              broader Go ecosystem.
+#                                              The v3 API change from
+#                                              v2 dropped the
+#                                              singleton scheduler in
+#                                              favor of explicit
+#                                              `cron.New()` + per-job
+#                                              schedule strings, which
+#                                              is the API every modern
+#                                              Go consumer uses.  swarm-
+#                                              cronjob uses it in
+#                                              internal/app/scheduler.go
+#                                              — service labels carry
+#                                              the cron expression, and
+#                                              the daemon registers
+#                                              each label-derived
+#                                              schedule against a
+#                                              `cron.Cron` instance
+#                                              that re-deploys the
+#                                              target service when
+#                                              the expression fires.
+#   github.com/docker/docker                  (Docker Engine / Swarm
+#                                              API client — lists
+#                                              services, watches label
+#                                              changes, triggers
+#                                              `ServiceUpdate` to
+#                                              re-deploy on schedule)
+#   github.com/alecthomas/kong                (CLI parser — struct-
+#                                              tag-driven flag
+#                                              registration, replaces
+#                                              the older urfave/cli
+#                                              the v1 codebase used)
+#   github.com/rs/zerolog                     (structured logging —
+#                                              JSON-or-text via
+#                                              --log-json)
+#   github.com/pkg/errors                     (error wrapping for
+#                                              causality preservation)
+#
+# swarm-cronjob is a daemon that runs alongside your Docker Swarm
+# cluster (typically as a Swarm-managed service itself, on a manager
+# node).  At startup it queries the Swarm API for all services, scans
+# their labels for `swarm.cronjob.enable=true` + `swarm.cronjob.schedule
+# =<cron-expression>` (+ optional `swarm.cronjob.skip-running=true`),
+# and registers a cron job per matching service.  Each fire triggers
+# a service-update API call that increments the service's spec
+# version, causing Swarm to re-schedule the task on a fresh container
+# (effectively "re-run" the service).  Combined with `restart-condition:
+# none` in the service spec, this lets you express "run this job once,
+# every day at 03:00" purely via service labels, no external scheduler
+# required.  Label-driven configuration means the cron schedule
+# follows the service through `docker stack deploy` updates without
+# touching the swarm-cronjob daemon itself.
+#
+# === AXIS 187 CONTINUES — cron-expression scheduling libraries ============
+# Axis position: Go=242 continues Axis 187 (slot 2/0/0).  Canonical Go
+# cron-expression scheduler is `github.com/robfig/cron/v3` by Rob
+# Figueiredo — the de-facto standard "cron in Go" with classic 5-field
+# crontab syntax + Quartz-style 6-field (with seconds) + descriptor
+# shorthand (@daily / @hourly / @reboot) + the cron.Schedule
+# interface for custom triggers + timezone-aware parsing.  Used by
+# Kubernetes' CronJob controller (the integration test that drove
+# this library to canonical-status — every k8s user implicitly trusts
+# this parser's correctness via the CronJob controller), Argo CD,
+# Caddy's reload hooks, and every Go background-job library.
+#
+# Cycle position in current 3+1 micro-cycle:
+#   Rust=242     _cup                 ← previous round (axis 187 OPENS, 1/0/0)
+#   Go=242       ← THIS FILE          (axis 187 continues, slot 2/0/0)
+#   TS-Node=242  ← next round         (axis 187 CLOSES at triple-242, 1/1/1)
+#
+# Cross-language design contrast for axis 187:
+#   Rust    : tokio-cron-scheduler wraps zslayton/cron (expression
+#             parser) + adds async-first runtime + persistent backends
+#             (in-memory / SQLite / Postgres / Nats).  Two-layer
+#             composition.
+#   Go      : robfig/cron is a SINGLE package — expression parser +
+#             scheduler + cron.Schedule interface all in one.  Native
+#             goroutine concurrency without an explicit runtime
+#             dependency.  Persistent storage is left to the consumer
+#             (write the schedule + job state to your DB of choice).
+#             Reflects Go's preference for unopinionated single-binary
+#             building blocks.
+#   JS/Node : node-cron OR kelektiv/node-cron — single-package
+#             scheduler + parser; pick by ecosystem age.  [TBD next
+#             round]
+# ---------------------------------------------------------------------------
+
+_swarm-cronjob() {
+    _arguments -s -S \
+        '(- *)'{-h,--help}'[show CLI help]' \
+        '(- *)--version[print version and exit]' \
+        '--log-level=[set log level (env LOG_LEVEL, default info)]:level:(trace debug info warn error fatal panic)' \
+        '--log-json[enable JSON logging output (env LOG_JSON, default false)]'
+}
+
+_swarm-cronjob "$@"
