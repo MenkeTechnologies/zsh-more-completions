@@ -1,0 +1,251 @@
+#compdef rust-mdbg
+# ============================================================================
+# rust-mdbg - minimizer-space de Bruijn graph genome
+#              assembler for long+accurate reads (Rust,
+#              MIT)
+#
+# Authors : Baris Ekim + Rayan Chikhi
+# Upstream: https://github.com/ekimb/rust-mdbg
+# crates  : rust-mdbg (binary: rust-mdbg)
+#
+# `rust-mdbg` is an ultra-fast minimizer-space de
+# Bruijn graph (mdBG) assembler geared toward
+# long-and-accurate sequencing reads (PacBio HiFi,
+# Oxford Nanopore Q20+, ONT Q30 R10.4.1). The
+# assembler is fast because it operates in
+# minimizer-space, meaning that:
+#   - reads are represented as ordered lists of
+#     minimizers (not strings of nucleotides)
+#   - the de Bruijn graph itself is built over
+#     minimizer-tuples (k-min-mers) rather than k-mers
+#   - the final assembly is also a minimizer-space
+#     representation
+#   - a separate conversion step (the `to_basespace`
+#     binary shipped alongside `rust-mdbg`) emits the
+#     base-space (ACGT) assembly when needed
+#
+# Published in Bioinformatics 2021: "minimizer-space
+# de Bruijn graphs: Whole-genome assembly of long
+# reads in minutes on a personal computer", Ekim +
+# Chikhi + Berger, Cell Systems 2021.
+#
+# Usage:
+#   rust-mdbg [OPTIONS] <reads-file>
+#
+# Args:
+#   <reads-file>            - input FASTA / FASTQ
+#                              file (also accepts
+#                              .gz / .lz4
+#                              compression)
+#
+# Required parameters (typical values):
+#   -k <k>                  - k-min-mer length
+#                              (typical 21-31)
+#   -l <l>                  - l-mer (minimizer) length
+#                              (typical 14-21)
+#   -n <n>                  - tuple length for
+#                              read bucketing
+#   -t <t>                  - POA path weight
+#                              threshold
+#   -d, --density <f>       - density threshold for
+#                              minimizer selection
+#                              (typical 0.001)
+#
+# Output:
+#   -p, --prefix <path>     - output prefix for GFA
+#                              + .sequences files
+#
+# Optional flags (structopt):
+#       --debug             - show base-space
+#                              sequence + minimizer-
+#                              space representation
+#                              per read
+#       --uhs <file>        - universal k-mer file
+#                              for UHS-based selection
+#       --lcp <file>        - core substring file for
+#                              LCP-based selection
+#       --minabund <N>      - minimum k-min-mer
+#                              abundance
+#       --distance <N>      - distance parameter
+#       --correction-threshold <i>
+#                           - error-correction
+#                              threshold
+#       --error-correct     - run the error-
+#                              correction pass
+#       --restart-from-postcor
+#                           - restart from post-
+#                              correction
+#                              intermediate
+#       --reference         - reference-mode (single
+#                              high-quality input)
+#       --bf                - use BLOOM FILTER for
+#                              fast k-min-mer
+#                              counting (this file's
+#                              canonical-library
+#                              hook)
+#       --skiphpc           - skip homopolymer-
+#                              compression
+#       --no-basespace      - skip the post-assembly
+#                              minimizer -> base-space
+#                              conversion step
+#       --read-stats <file> - emit per-read stats
+#                              file
+#       --syncmers          - use syncmer selection
+#                              instead of minimizer
+#       -s <s>              - syncmer parameter
+#       --lmer-counts <file> - precomputed l-mer
+#                              counts file
+#       --lmer-counts-min <N>
+#       --lmer-counts-max <N>
+#       --presimp <f>       - pre-simplification
+#                              threshold (0.0-1.0)
+#       --threads <N>       - parallel threads
+#                              (default available
+#                              CPUs)
+#   -h, --help              - print help
+#   -V, --version           - print version
+#
+# The Bloom filter lane is built on `xx-bloomfilter =
+# "0.10.0"` (declared at upstream Cargo.toml HEAD as
+# a direct dep, imported as `use xx_bloomfilter::
+# Bloom`), the canonical Rust Bloom filter
+# implementation by Akira Yoshikuma + the xx-
+# bloomfilter contributors. The crate provides:
+#   - configurable false-positive rate target
+#   - automatic bit-array sizing
+#   - XXHash-based hashing (compatible with
+#     BurntSushi-style XXHash usage at Axis 222)
+#   - constant-time `insert(item)` + `check(item)`
+#     operations
+#
+# The Bloom filter data structure (Burton Bloom,
+# CACM 1970) provides probabilistic set membership
+# with no false negatives + tunable false-positive
+# rate. The structure is *the* foundational
+# probabilistic data structure - the conceptual
+# predecessor to Cuckoo filters, Count-Min Sketch,
+# HyperLogLog, and the whole family of approximate
+# data structures.
+#
+# rust-mdbg uses Bloom filters in the `--bf` mode
+# for fast k-min-mer dedup during the graph
+# construction pass. Without `--bf`, the assembler
+# uses an exact HashMap<KminMer, Abundance> for
+# counting; with `--bf`, a Bloom filter pre-filters
+# the keys + only high-confidence-non-singleton
+# k-min-mers reach the exact HashMap. The trade-off
+# is faster construction (no false-negatives from
+# the Bloom layer) at the cost of slightly
+# inflated abundance counts (rare false positives
+# from the Bloom side).
+#
+# The `RacyBloom` wrapper in src/main.rs
+# intentionally allows data races on the Bloom
+# filter bits to maximize multi-threaded insertion
+# throughput - safe because Bloom filter's monotonic
+# "set bit -> still set" invariant means concurrent
+# writes that conflict simply set the same bit
+# twice with no semantic loss.
+#
+# ----------------------------------------------------------------------------
+# AXIS 257 :: Bloom filter probabilistic data structure
+#              (set membership with tunable FP rate)
+# Round 1469 :: Rust slot 1 of 4 :: OPENS Axis 257
+#
+# Cross-language canonical library family for this axis
+# (proposed):
+#   Rust    : xx-bloomfilter               - Akira
+#                                            Yoshikuma's
+#                                            canonical
+#                                            Rust Bloom
+#                                            filter
+#                                            crate;
+#                                            XXHash-
+#                                            based
+#                                            hashing
+#   Go      : bits-and-blooms/bloom        - the
+#                                            community
+#                                            canonical
+#                                            Go Bloom
+#                                            filter
+#                                            library;
+#                                            depended on
+#                                            by
+#                                            CockroachDB,
+#                                            Caddy
+#                                            certificate
+#                                            store
+#   TS/Node : bloom-filters                - Node Bloom
+#                                            + Cuckoo +
+#                                            Count-Min +
+#                                            HyperLogLog
+#                                            umbrella by
+#                                            Folkvir
+#
+# Bloom filter is an algorithm-bound axis - Burton
+# Bloom's 1970 CACM paper defines the algorithm
+# with a single hash family + parameter triple (n,
+# m, k). Compliant implementations produce the same
+# false-positive rate for the same parameter triple,
+# modulo hash function choice (different libraries
+# use different hash families; the wire format is
+# not standardized across implementations).
+#
+# Structural commentary on the canonical libraries:
+#   - xx-bloomfilter (Rust): XXHash-based; constant-
+#     time insert + check; optional persistence to
+#     disk
+#   - bits-and-blooms/bloom (Go): renamed from
+#     willf/bloom in 2021 after the original author
+#     handed off maintenance; the de-facto Go Bloom
+#     filter library; depended on by CockroachDB +
+#     Caddy + InfluxDB
+#   - bloom-filters (Node): Folkvir's umbrella
+#     covering Bloom + Cuckoo + Count-Min Sketch +
+#     HyperLogLog + Quotient Filter + Vacuum Filter +
+#     Counting Bloom + Scalable Bloom
+#
+# Cross-language interop at the algorithm level - same
+# (n, m, k) parameters + same hash family produces
+# byte-identical bit arrays. Wire format is not
+# standardized; lanes intentionally don't try to
+# interop at the binary-format level.
+# ============================================================================
+
+_rust-mdbg() {
+    local context state state_descr line
+    typeset -A opt_args
+
+    _arguments -s -S \
+        '--debug[show base-space + minimizer-space representation]' \
+        '--uhs[universal k-mer file]:file:_files' \
+        '--lcp[core substring file]:file:_files' \
+        '(-p --prefix)'{-p,--prefix}'[output prefix]:path:_files -W "$PWD" -P "" -S ""' \
+        '(-k)-k[k-min-mer length]:k:' \
+        '(-l)-l[l-mer (minimizer) length]:l:' \
+        '(-n)-n[tuple length for read bucketing]:n:' \
+        '(-t)-t[POA path weight threshold]:t:' \
+        '(-d --density)'{-d,--density}'[density threshold]:f:' \
+        '--minabund[minimum k-min-mer abundance]:N:' \
+        '--distance[distance parameter]:N:' \
+        '--correction-threshold[error-correction threshold]:i:' \
+        '--error-correct[run error-correction pass]' \
+        '--restart-from-postcor[restart from post-correction intermediate]' \
+        '--reference[reference-mode (single high-quality input)]' \
+        '--bf[use Bloom filter for fast k-min-mer counting]' \
+        '--skiphpc[skip homopolymer compression]' \
+        '--no-basespace[skip minimizer->base-space conversion]' \
+        '--read-stats[emit per-read stats file]:file:_files' \
+        '--syncmers[use syncmer selection]' \
+        '(-s)-s[syncmer parameter]:s:' \
+        '--lmer-counts[precomputed l-mer counts file]:file:_files' \
+        '--lmer-counts-min[lmer counts min]:N:' \
+        '--lmer-counts-max[lmer counts max]:N:' \
+        '--presimp[pre-simplification threshold (0.0-1.0)]:f:' \
+        '--threads[parallel thread count]:N:' \
+        '(- *)'{-h,--help}'[print help]' \
+        '(- *)'{-V,--version}'[print version]' \
+        '1:reads file:_files -g "*.{fa,fasta,fq,fastq,fa.gz,fastq.gz,fa.lz4,fastq.lz4}"'
+}
+
+_rust-mdbg "$@"
