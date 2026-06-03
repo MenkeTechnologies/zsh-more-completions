@@ -1,0 +1,157 @@
+#compdef pushpin-handler
+# ============================================================================
+# pushpin-handler - Pushpin reverse proxy handler component
+#                    (Rust + C++, Apache-2.0)
+#
+# Author : Fastly (formerly Fanout)
+# Upstream: https://github.com/fastly/pushpin
+# crate  : pushpin (workspace)
+#
+# `pushpin-handler` is the long-lived connection handler
+# component of Pushpin - Fastly's open-source reverse
+# proxy that adds HTTP push (long-poll, SSE, WebSocket)
+# to any HTTP backend without the backend itself having
+# to be push-aware. Pushpin sits in front of a request /
+# response backend and the *handler* component holds
+# subscribed client connections + delivers messages
+# published to them via the Pushpin EPCP protocol. Pushpin
+# powers Fastly's Fanout product (the in-CDN push fabric)
+# and is also self-hostable as a single multi-binary
+# install.
+#
+# The Pushpin install ships ~7 binaries:
+#   pushpin           - top-level launcher (config-driven)
+#   pushpin-proxy     - request/response proxying
+#   pushpin-handler   - this binary; long-lived
+#                       connection management + JWT-auth +
+#                       EPCP message dispatch
+#   pushpin-connmgr   - dedicated connection manager
+#                       (low-level socket handling)
+#   pushpin-publish   - CLI publisher (push from terminal)
+#   pushpin-legacy    - legacy single-process daemon
+#   m2adapter         - Mongrel2 protocol bridge
+#
+# Usage:
+#   pushpin-handler [OPTIONS]
+#
+# Flags (clap derive Parser):
+#   -c, --config <file>     - path to configuration file
+#                              (default: standard pushpin
+#                               install location)
+#   -l, --logfile <file>    - path to log file (default
+#                              stderr)
+#   -L, --loglevel <0..4>   - 0=error, 1=warn, 2=info,
+#                              3=debug, 4=trace (default 2)
+#       --verbose           - same as --loglevel=3
+#       --ipc-prefix <p>    - prefix added to all ZeroMQ
+#                              IPC filenames; lets multiple
+#                              pushpin instances coexist
+#                              on one host
+#       --port-offset <n>   - increment all ZeroMQ TCP
+#                              ports + the HTTP control
+#                              server port by n
+#   -h, --help              - print help
+#   -V, --version           - print version
+#
+# The jsonwebtoken (JWT) lane is built on `jsonwebtoken =
+# "9"` (declared at upstream Cargo.toml HEAD as a direct
+# dep, used from src/core/jwt.rs), the canonical Rust JWT
+# library by Vincent Prouillet (Keats) - github.com/Keats/
+# jsonwebtoken, 1700+ stars. The crate implements RFC 7519
+# (JSON Web Token), RFC 7515 (JSON Web Signature), and
+# RFC 7518 (JSON Web Algorithms) - sign / verify JWTs with
+# HMAC (HS256/HS384/HS512), RSA (RS256/PS256/...), ECDSA
+# (ES256/ES384), and EdDSA (EdDSA / Ed25519). The library
+# defaults to `ring` for cryptographic primitives with an
+# optional `rust_crypto` feature flag for the pure-Rust
+# backend.
+#
+# pushpin-handler uses JWT for the publisher-auth path:
+# the EPCP control channel accepts inbound publish
+# requests, and each request is authenticated via a JWT
+# bearer token. The token is verified with the configured
+# secret (HS256 by default) before the message is
+# dispatched to subscribed client connections. The
+# `src/core/jwt.rs` module wraps `jsonwebtoken::decode`
+# with pushpin-specific claim validation (iss / aud / exp).
+#
+# ----------------------------------------------------------------------------
+# AXIS 241 :: JSON Web Tokens (RFC 7519 sign + verify)
+# Round 1421 :: Rust slot 1 of 4 :: OPENS Axis 241
+#
+# Cross-language canonical library family for this axis
+# (proposed):
+#   Rust    : Keats/jsonwebtoken           - RFC 7519 +
+#                                            RFC 7515 +
+#                                            RFC 7518 impl
+#                                            with ring or
+#                                            RustCrypto
+#                                            backend
+#   Go      : golang-jwt/jwt               - the fork of
+#                                            dgrijalva/jwt
+#                                            after the
+#                                            2021 community
+#                                            takeover;
+#                                            still uses the
+#                                            github.com/
+#                                            golang-jwt/jwt
+#                                            import path
+#   TS/Node : auth0/node-jsonwebtoken      - the Auth0-
+#                                            maintained
+#                                            Node JWT lib
+#                                            (jsonwebtoken
+#                                            on npm) with
+#                                            sync + async
+#                                            sign / verify
+#                                            and full RFC
+#                                            7519 + 7515 +
+#                                            7518 coverage
+#
+# JWT is a clean spec-bound axis - RFC 7519 defines the
+# JSON Web Token vocabulary (header + payload + signature
+# Base64URL-joined with `.`), RFC 7515 the JSON Web
+# Signature container, and RFC 7518 the JSON Web Algorithm
+# registry. Compliant libraries produce + verify byte-
+# identical tokens for the same key + payload + algorithm
+# combination. The three lanes converge at the wire
+# format level (a JWT minted by golang-jwt/jwt verifies
+# identically against Keats/jsonwebtoken and
+# auth0/node-jsonwebtoken).
+#
+# Structural commentary:
+#   - Keats/jsonwebtoken (Rust): the Rust ecosystem JWT
+#     library; depends on `ring` by default for crypto
+#     primitives (with a `rust_crypto` opt-in feature for
+#     a pure-Rust crypto backend)
+#   - golang-jwt/jwt (Go): the community-maintained fork
+#     of dgrijalva/jwt - the original author abandoned
+#     the library in 2020, and a community group forked
+#     it under github.com/golang-jwt/jwt (the import path
+#     is intentionally unchanged for drop-in upgrade)
+#   - auth0/node-jsonwebtoken (Node): Auth0's npm package
+#     `jsonwebtoken` - the de-facto Node JWT library,
+#     maintained by Auth0 since the original sequester of
+#     the namespace in 2014
+#
+# Three different maintainership stories, three different
+# crypto-primitive choices, converging on RFC 7519 wire
+# format. Axis 241 opens with the Rust slot at the canonical
+# Rust JWT library family.
+# ============================================================================
+
+_pushpin-handler() {
+    local context state state_descr line
+    typeset -A opt_args
+
+    _arguments -s -S \
+        '(-c --config)'{-c,--config}'[path to configuration file]:file:_files' \
+        '(-l --logfile)'{-l,--logfile}'[path to log file]:file:_files' \
+        '(-L --loglevel)'{-L,--loglevel}'[log level (1-4)]:level:(1 2 3 4)' \
+        '--verbose[same as --loglevel=3]' \
+        '--ipc-prefix[prefix added to ZeroMQ IPC filenames]:prefix:' \
+        '--port-offset[increment ZeroMQ TCP ports + HTTP control port by n]:offset:' \
+        '(- *)'{-h,--help}'[print help]' \
+        '(- *)'{-V,--version}'[print version]'
+}
+
+_pushpin-handler "$@"
