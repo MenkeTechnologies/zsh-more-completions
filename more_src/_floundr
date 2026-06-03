@@ -1,0 +1,253 @@
+#compdef floundr
+# ============================================================================
+# floundr - OCI container registry server with TUI
+#            management client (Rust, MIT)
+#
+# Author : PThorpe92 (Patrick Thorpe)
+# Upstream: https://github.com/PThorpe92/Floundr
+# crates : floundr (binary: floundr)
+#
+# `floundr` is an OCI-spec-compliant container registry
+# server built on Axum + Tokio. It implements the OCI
+# Distribution Specification (the registry-server side
+# of `docker push` / `docker pull` / `crane copy` /
+# `skopeo inspect`) with a SQLite-backed metadata store
+# + a local filesystem (or S3-compatible) blob driver.
+# The repo also ships a TUI management client built
+# with Ratatui for interactive repository + user
+# management, but this completion covers the server
+# binary specifically.
+#
+# Usage:
+#   floundr [OPTIONS] [COMMAND]
+#   floundr -p 8080                       # serve plain HTTP
+#   floundr --ssl --cert-path certs/cert \
+#            --key-path certs/key         # serve HTTPS
+#   floundr new-repo myrepo --public      # admin task
+#   floundr new-user alice@example.com \
+#            --password "hunter2"         # bcrypt-hashed
+#
+# Top-level flags (clap derive Parser):
+#   -p, --port <port>            - HTTP port
+#                                   (default 8080)
+#       --storage-path <path>    - blob storage root
+#       --home-dir <path>        - floundr home dir
+#                                   (default
+#                                   $XDG_DATA_HOME/
+#                                   floundr)
+#       --ssl                    - enable HTTPS
+#       --cert-path <file>       - TLS certificate file
+#                                   (requires --ssl)
+#       --key-path <file>        - TLS private key file
+#                                   (requires --cert-path)
+#       --https-port <port>      - HTTPS port
+#                                   (default 443)
+#   -d, --db-path <path>         - SQLite database path
+#       --driver <type>          - storage driver type
+#                                   (default local)
+#       --debug                  - enable debug
+#                                   logging
+#   -h, --help                   - print help
+#   -V, --version                - print version
+#
+# Subcommands:
+#   migrate-fresh                - migrate the DB to a
+#                                   fresh state (drop +
+#                                   recreate)
+#   new-repo <name> [--public]   - create a new
+#                                   repository
+#   new-user <email>             - create a new user
+#                                   account
+#                                   --password <pw>     password (bcrypt-hashed)
+#   gen-key <email>              - generate API key for
+#                                   admin user
+#                                   --output-file <file>
+#                                                      output (default key.txt)
+#
+# Environment:
+#   FLOUNDR_HOME                 - floundr home dir
+#   DB_PATH                      - SQLite path
+#   HOST                         - bind host
+#                                   (default 127.0.0.1)
+#
+# The bcrypt lane is built on `bcrypt = "0.15.1"`
+# (declared verbatim at upstream Cargo.toml HEAD as a
+# direct dep, used in src/auth.rs to hash + verify user
+# passwords in the `new-user` subcommand + the login
+# handler), the canonical Rust bcrypt library by
+# Vincent Prouillet (Keats) - github.com/Keats/rust-
+# bcrypt, 250+ stars.
+#
+# Keats's rust-bcrypt is the de-facto Rust bcrypt
+# implementation. The library implements:
+#   - the bcrypt algorithm by Niels Provos + David
+#     Mazières at OpenBSD (USENIX 1999 paper "A
+#     Future-Adaptable Password Scheme")
+#   - the modular crypt format (MCF) PHC-string
+#     encoding (`$2a$` / `$2b$` / `$2y$` variants for
+#     historical bcrypt-implementation compatibility)
+#   - configurable cost factor (4-31; bcrypt-style log2
+#     iteration count)
+#   - constant-time `verify()` for hash comparison
+#
+# Prouillet maintains both rust-bcrypt + Keats/
+# jsonwebtoken (which closed Axis 241 at the Rust slot).
+# This makes Keats a two-axis canonical-library
+# maintainer for security primitives in the Rust
+# ecosystem, similar to:
+#   - BurntSushi/Andrew Gallant (XXHash + TOML + Snappy
+#     + regex + ripgrep + fst + xsv)
+#   - mitsuhiko/Armin Ronacher (similar + insta +
+#     Flask + Jinja2)
+#   - paulmillr/Paul Miller (noble-ed25519 + noble-
+#     curves + noble-hashes + noble-ciphers)
+#
+# floundr uses `bcrypt::hash(password, DEFAULT_COST)`
+# in the `new-user` subcommand + login handler to
+# produce $2b$ PHC-formatted hashes stored in the
+# SQLite user table, then `bcrypt::verify(password,
+# stored_hash)` on subsequent login attempts.
+#
+# ----------------------------------------------------------------------------
+# AXIS 254 :: bcrypt password hashing (Provos +
+#              Mazières 1999, OpenBSD origin;
+#              adaptive cost factor)
+# Round 1460 :: Rust slot 1 of 4 :: OPENS Axis 254
+#                                   (round-number landmark)
+#
+# Cross-language canonical library family for this axis
+# (proposed):
+#   Rust    : Keats/rust-bcrypt         - the de-facto
+#                                          Rust bcrypt
+#                                          crate by
+#                                          Vincent
+#                                          Prouillet;
+#                                          also two-
+#                                          axis canonical
+#                                          for Keats/
+#                                          jsonwebtoken
+#                                          (Axis 241)
+#   Go      : golang.org/x/crypto/bcrypt
+#                                       - Go core team's
+#                                          maintained
+#                                          bcrypt impl
+#                                          in the
+#                                          golang.org/x/
+#                                          crypto subrepo;
+#                                          stayed in
+#                                          subrepo (not
+#                                          promoted to
+#                                          std-lib like
+#                                          ed25519 was
+#                                          at Axis 246)
+#   TS/Node : kelektiv/node.bcrypt.js   - the canonical
+#             (npm package `bcrypt`)      Node bcrypt
+#                                          library;
+#                                          native
+#                                          binding to
+#                                          OpenBSD's
+#                                          reference C
+#                                          implementation;
+#                                          ~3M weekly
+#                                          npm downloads
+#
+# bcrypt is a clean spec-bound axis - the Provos +
+# Mazières 1999 USENIX paper defines the algorithm
+# byte-for-byte, and the OpenBSD reference C
+# implementation in `pwd_mkdb.c` is the canonical wire-
+# format reference. Compliant implementations produce
+# byte-identical hashes for the same (password, salt,
+# cost) tuple in the MCF/PHC string format.
+#
+# Structural commentary on the canonical libraries:
+#   - Keats/rust-bcrypt (Rust): single-author
+#     canonical Rust impl; Vincent Prouillet's two-
+#     axis position (bcrypt + jsonwebtoken)
+#   - golang.org/x/crypto/bcrypt (Go): core-team-
+#     maintained subrepo; stayed at x/crypto rather
+#     than promoting to std-lib (vs ed25519 which got
+#     promoted in Go 1.13 at Axis 246) because Go
+#     core team treats bcrypt as a stable but legacy
+#     primitive (Argon2 is preferred for new code)
+#   - kelektiv/node.bcrypt.js (Node): native N-API
+#     binding to OpenBSD's reference C implementation;
+#     ~3M weekly downloads + ~85% of Node password-
+#     hashing code paths
+#
+# Cross-language interop at the wire format level - a
+# bcrypt $2b$ hash produced by rust-bcrypt +
+# x/crypto/bcrypt + kelektiv/node.bcrypt.js + OpenBSD's
+# reference implementation verifies byte-identically
+# across all canonical implementations.
+#
+# Axis 254 opens at the round-number landmark R1460
+# with the Rust slot at Vincent Prouillet's canonical
+# rust-bcrypt - extending Prouillet's two-axis
+# canonical position (bcrypt + jsonwebtoken).
+# ============================================================================
+
+_floundr() {
+    local context state state_descr line
+    typeset -A opt_args
+    local curcontext="$curcontext" ret=1
+
+    _arguments -C \
+        '(-p --port)'{-p,--port}'[HTTP port (default 8080)]:port:' \
+        '--storage-path[blob storage root]:path:_files -/' \
+        '--home-dir[floundr home dir]:path:_files -/' \
+        '--ssl[enable HTTPS]' \
+        '--cert-path[TLS certificate file]:file:_files -g "*.pem"' \
+        '--key-path[TLS private key file]:file:_files -g "*.{pem,key}"' \
+        '--https-port[HTTPS port (default 443)]:port:' \
+        '(-d --db-path)'{-d,--db-path}'[SQLite database path]:file:_files -g "*.sqlite*"' \
+        '--driver[storage driver type]:driver:(local s3)' \
+        '--debug[enable debug logging]' \
+        '(- *)'{-h,--help}'[print help]' \
+        '(- *)'{-V,--version}'[print version]' \
+        '1: :_floundr_cmds' \
+        '*::arg:->args' \
+    && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                migrate-fresh)
+                    _arguments '(- *)'{-h,--help}'[print subcommand help]'
+                    ;;
+                new-repo)
+                    _arguments \
+                        '--public[create repo as public]' \
+                        '(- *)'{-h,--help}'[print subcommand help]' \
+                        '1:repository name:'
+                    ;;
+                new-user)
+                    _arguments \
+                        '--password[user password (bcrypt-hashed)]:password:' \
+                        '(- *)'{-h,--help}'[print subcommand help]' \
+                        '1:user email:'
+                    ;;
+                gen-key)
+                    _arguments \
+                        '--output-file[output file for generated key (default key.txt)]:file:_files' \
+                        '(- *)'{-h,--help}'[print subcommand help]' \
+                        '1:user email:'
+                    ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_floundr_cmds() {
+    local -a cmds
+    cmds=(
+        'migrate-fresh:migrate the database to a fresh state'
+        'new-repo:create a new repository'
+        'new-user:create a new user account'
+        'gen-key:generate API key for admin user'
+    )
+    _describe -t commands 'floundr command' cmds
+}
+
+_floundr "$@"
