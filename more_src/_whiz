@@ -1,0 +1,297 @@
+#compdef whiz
+# ============================================================================
+# whiz - DAG/tasks runner for multi-platform
+#         monorepos with live reload + tabbed
+#         terminal UI (Rust, MPL-2.0)
+#
+# Author : Théo Crevon (zifeo)
+# Upstream: https://github.com/zifeo/whiz
+# crates : whiz (binary: whiz)
+#
+# `whiz` is a YAML-config-driven task orchestrator
+# for monorepos. The config defines a directed
+# acyclic graph (DAG) of jobs with dependencies +
+# watched-file globs + env-var injection rules; the
+# runner schedules ready jobs onto parallel actors
+# + presents each job's stdout/stderr in a tabbed
+# terminal UI (crossterm-backed) so the operator
+# can switch between live job streams without
+# leaving the terminal.
+#
+# Use cases:
+#   - Multi-language monorepo dev loop: run the
+#     backend server + frontend dev server + DB
+#     migrator + worker queue + ... all
+#     simultaneously with one command
+#   - File-watch-based hot reload: edit a Rust
+#     module + whiz re-runs `cargo build` + restarts
+#     the dependent server tab
+#   - CI pipelines locally: replicate the full
+#     pipeline DAG on a developer machine before
+#     pushing
+#
+# Configuration file (default `whiz.yaml`):
+#   jobs:
+#     backend:
+#       command: cargo run -p backend
+#       watch: ['backend/**/*.rs']
+#       env:
+#         RUST_LOG: debug
+#     frontend:
+#       command: npm run dev
+#       cwd: ./frontend
+#       watch: ['frontend/**/*.{ts,tsx,css}']
+#       depends_on: [backend]
+#     migrate:
+#       command: ./scripts/migrate.sh
+#
+# Usage:
+#   whiz [options]                  # run all jobs
+#   whiz x <job>                    # run a specific
+#                                    job + its deps
+#   whiz graph                      # ASCII DAG
+#   whiz list-jobs                  # job inventory
+#   whiz upgrade                    # upgrade binary
+#
+# Subcommands (clap derive):
+#   upgrade [--version <v>] [-y]   - upgrade whiz
+#                                     to latest or
+#                                     specific version
+#   graph [-b/--boxed]             - print ASCII DAG
+#                                     (use box-drawing
+#                                     characters with
+#                                     --boxed)
+#   list-jobs                      - list jobs from
+#                                     config
+#   x, execute <job>               - run a specific
+#                                     job + its
+#                                     dependencies
+#                                     serially
+#
+# Global flags:
+#   -V, --version                  - print version
+#   -f, --file <file>              - config file
+#                                     (default
+#                                     whiz.yaml)
+#   -v, --verbose                  - verbose logging
+#   -t, --timestamp                - prepend
+#                                     timestamps to
+#                                     log lines
+#   -r, --run <job>                - run only the
+#                                     specified job
+#                                     (repeatable)
+#       --exit-after               - exit when all
+#                                     tasks finish
+#                                     (no watch loop)
+#       --watch                    - enable file
+#                                     watching
+#                                     (default
+#                                     true; --watch=
+#                                     false to
+#                                     disable)
+#   -h, --help                     - print help
+#
+# The crossterm lane is built on `crossterm =
+# "0.27.0"` (declared verbatim at upstream Cargo.toml
+# HEAD as a direct dep, used by the tabbed-UI
+# actors in src/actors/), the canonical Rust
+# terminal control library by the crossterm-rs
+# working group + Robert Vojtech (TimonPost) -
+# github.com/crossterm-rs/crossterm, 4000+ stars.
+#
+# crossterm provides a unified API for ANSI
+# terminal control across:
+#   - Cursor positioning + visibility
+#   - Color (16/256/truecolor) + text styling
+#   - Terminal mode (raw/cooked)
+#   - Event input (keyboard + mouse + resize +
+#     paste)
+#   - Screen buffering + alternate screen
+#   - Terminal size queries
+#
+# Crossterm's distinguishing feature is
+# *cross-platform Windows + Unix support without
+# requiring a separate terminfo database*. Unlike
+# the older ncurses-style libraries that depend on
+# terminfo, crossterm directly implements the ANSI
+# escape sequences + uses Windows Console API on
+# Windows 10+, letting Rust TUIs run identically
+# across:
+#   - macOS Terminal.app + iTerm2 + kitty + alacritty
+#   - Linux xterm + gnome-terminal + konsole +
+#     foot + various tmux/screen multiplexers
+#   - Windows Terminal + PowerShell + cmd.exe
+#     (with ANSI mode enabled by Win10 1607+)
+#
+# This makes crossterm the canonical Rust TUI
+# foundation - depended on by:
+#   - ratatui (the canonical Rust TUI framework,
+#     successor to tui-rs)
+#   - bat (syntax-highlighting cat)
+#   - zellij (terminal workspace manager)
+#   - helix (modal text editor)
+#   - lapce (multi-frontend code editor)
+#   - delta (git diff syntax highlighter)
+#   - many of the Rust TUI/CLI tools
+#   - whiz (THIS BINARY)
+#
+# The crossterm-rs/crossterm working group
+# coordinates with ratatui's maintainers on cross-
+# library compatibility - crossterm's event-API
+# changes get implemented in tandem with ratatui's
+# event-handling code to prevent ecosystem
+# fragmentation.
+#
+# whiz uses crossterm in src/actors/ to:
+#   - Switch into the alternate screen buffer on
+#     startup (preserves the user's pre-whiz
+#     terminal scrollback)
+#   - Render the tabbed job UI with cursor
+#     positioning + color
+#   - Capture keyboard events for tab switching +
+#     job-restart triggers + graceful shutdown
+#   - Restore the original screen on exit
+#
+# ----------------------------------------------------------------------------
+# AXIS 260 :: ANSI terminal control libraries
+#              (cursor + color + event input +
+#              cross-platform Windows + Unix)
+# Round 1478 :: Rust slot 1 of 4 :: OPENS Axis 260
+#
+# Cross-language canonical library family for this axis
+# (proposed):
+#   Rust    : crossterm-rs/crossterm      - the
+#                                            canonical
+#                                            Rust
+#                                            terminal
+#                                            control
+#                                            library;
+#                                            cross-
+#                                            platform
+#                                            Windows +
+#                                            Unix
+#                                            without
+#                                            terminfo
+#   Go      : gdamore/tcell               - the
+#                                            canonical
+#                                            Go terminal
+#                                            cell-based
+#                                            UI library
+#                                            by Garrett
+#                                            D'Amore;
+#                                            terminfo-
+#                                            backed
+#   TS/Node : chalk                       - the
+#                                            canonical
+#                                            Node
+#                                            terminal-
+#                                            color
+#                                            library by
+#                                            Sindre
+#                                            Sorhus;
+#                                            ~250M
+#                                            weekly npm
+#                                            downloads
+#
+# ANSI terminal control is an algorithm-bound axis -
+# the ECMA-48 escape sequence standard + the broader
+# xterm/VT100 extensions define the wire format
+# byte-for-byte. All three lanes target the same
+# escape sequences but layer different abstractions
+# on top.
+#
+# Structural commentary on the canonical libraries:
+#   - crossterm-rs/crossterm (Rust): cross-platform
+#     terminal abstraction without terminfo
+#     dependency; targets ANSI escape sequences +
+#     Windows Console API directly
+#   - gdamore/tcell (Go): cell-based terminal UI by
+#     Garrett D'Amore (Illumos + Joyent + AMD
+#     ZFS-on-Linux contributor); terminfo-backed +
+#     Unicode-aware; depended on by k9s + lazydocker
+#     + many Go TUIs
+#   - chalk (Node): focused on color/styling rather
+#     than full terminal control; Sindre Sorhus's
+#     canonical position via the ~1000-package
+#     microlib umbrella; the de-facto Node terminal
+#     color library since ~2013
+#
+# The Node slot's scope is narrower than the Rust +
+# Go canonicals - chalk handles color/styling but
+# delegates cursor/event/raw-mode control to other
+# libraries (cli-cursor, term-cursor, blessed, or
+# Node's stdlib readline). The Node ecosystem
+# splits ANSI control across multiple specialized
+# packages whereas Rust + Go centralize via single
+# umbrella libraries.
+#
+# Cross-language interop at the wire format level - a
+# crossterm-emitted escape sequence + a tcell-emitted
+# escape sequence + a chalk-emitted escape sequence
+# render identically in any ECMA-48-compatible
+# terminal.
+#
+# Axis 260 opens with the Rust slot at crossterm-rs/
+# crossterm.
+# ============================================================================
+
+_whiz() {
+    local context state state_descr line
+    typeset -A opt_args
+    local curcontext="$curcontext" ret=1
+
+    _arguments -C \
+        '(-V --version)'{-V,--version}'[print version]' \
+        '(-f --file)'{-f,--file}'[config file (default whiz.yaml)]:file:_files -g "*.{yaml,yml}"' \
+        '(-v --verbose)'{-v,--verbose}'[verbose logging]' \
+        '(-t --timestamp)'{-t,--timestamp}'[prepend timestamps to log lines]' \
+        '*'{-r,--run}'[run only the specified job (repeatable)]:job:' \
+        '--exit-after[exit when all tasks finish]' \
+        '--watch[enable file watching]' \
+        '(- *)'{-h,--help}'[print help]' \
+        '1: :_whiz_cmds' \
+        '*::arg:->args' \
+    && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                upgrade)
+                    _arguments \
+                        '--version[upgrade to specific version]:version:' \
+                        '(-y --yes)'{-y,--yes}'[skip version confirmation]' \
+                        '(- *)'{-h,--help}'[print help]'
+                    ;;
+                graph)
+                    _arguments \
+                        '(-b --boxed)'{-b,--boxed}'[use box-drawing characters]' \
+                        '(- *)'{-h,--help}'[print help]'
+                    ;;
+                list-jobs)
+                    _arguments '(- *)'{-h,--help}'[print help]'
+                    ;;
+                x|execute)
+                    _arguments \
+                        '(- *)'{-h,--help}'[print help]' \
+                        '1:task name:'
+                    ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_whiz_cmds() {
+    local -a cmds
+    cmds=(
+        'upgrade:upgrade whiz binary'
+        'graph:print ASCII DAG of jobs'
+        'list-jobs:list jobs from config file'
+        'x:execute a specific job + its dependencies'
+        'execute:alias for x'
+    )
+    _describe -t commands 'whiz command' cmds
+}
+
+_whiz "$@"
