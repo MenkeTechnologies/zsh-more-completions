@@ -24,7 +24,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![zsh](https://img.shields.io/badge/zsh-plugin-cyan.svg)](https://github.com/MenkeTechnologies/zpwr)
 
-### `[THE LARGEST CURATED ZSH COMPLETION CORPUS IN EXISTENCE // 30,861 FILES]`
+### `[THE LARGEST CURATED ZSH COMPLETION CORPUS IN EXISTENCE // 30,867 FILES]`
 
 > *"Every CLI you've heard of, completed. Plus several you haven't."*
 
