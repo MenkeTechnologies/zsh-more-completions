@@ -1,0 +1,171 @@
+#compdef maki
+# ============================================================================
+# maki - AI coding agent with native Rust TUI (Rust, MIT)
+#
+# Author : Tony Solomonik (tontinton)
+# Upstream: https://github.com/tontinton/maki
+#
+# `maki` is a Claude-Code-compatible AI coding agent
+# implemented natively in Rust - same flag surface as
+# Anthropic's `claude` CLI (so existing Claude Code
+# workflows + skills transfer), but rendered through a
+# Rust TUI with ~immediate startup, 60 FPS scrolling,
+# and a Lua plugin system for in-process tool extension.
+# Designed as a drop-in alternative for users who want a
+# faster local-render experience without giving up the
+# Claude Code ecosystem.
+#
+# Architecture: ratatui TUI, smol async runtime, isahc HTTP
+# client for provider APIs, mlua-backed Lua interpreter for
+# the plugin system. Plugins run in a sandboxed Lua VM and
+# can extend the agent's tool set, post-process responses,
+# or hook into the session lifecycle.
+#
+# Subcommand tree (clap derive):
+#   (default)                - launch interactive TUI; optional
+#                              positional prompt
+#   auth login <provider>    - login to a model provider
+#   auth logout <provider>   - clear stored credentials
+#   models                   - list all available models
+#   index <path>             - run the index tool on a file
+#                              to inspect its representation
+#   mcp auth <server>        - authenticate with an MCP server
+#   mcp logout <server>      - clear stored MCP credentials
+#   update [-y] [--no-color] - update maki to the latest version
+#   rollback                 - rollback to previous version
+#   migrate xdg              - move ~/.maki/ to XDG dirs
+#
+# Top-level flags:
+#   -p, --print              - non-interactive (Claude-Code-
+#                              compatible flag); run + exit
+#   -m, --model <spec>       - provider/model id; default
+#                              "last used" or claude-opus-4-6
+#       --verbose            - include full turn-by-turn
+#                              messages in --print output
+#   -c, --continue           - resume most recent session
+#                              in this directory
+#   -s, --session <id>       - resume a specific session ID
+#       --output-format <fmt>- Text (default) | json | ...
+#       --no-commands        - skip loading custom commands
+#                              from .maki/commands /
+#                              .claude/commands / etc.
+#       --no-rtk             - disable rtk command rewriting
+#       --no-plugins         - disable the Lua plugin system
+#       --yolo               - skip all permission prompts
+#                              (allow everything)
+#       --exit-on-done       - exit after the agent completes
+#                              (for automation workflows)
+#       --allowed-tools <t,t>- pre-approve tools
+#                              (PascalCase or snake_case)
+#   [prompt]                 - initial prompt (stdin if piped)
+#
+# The mlua lane is built on `mlua` (declared at upstream
+# workspace Cargo.toml HEAD via the `maki-lua` workspace
+# member), the canonical Rust Lua-VM bindings library by
+# Aleksandr Orlenko (Khvzak) - github.com/mlua-rs/mlua,
+# 2300+ stars. mlua is the uncontested Rust embedded-Lua
+# library: high-level safe wrappers over Lua 5.1 / 5.2 /
+# 5.3 / 5.4 / LuaJIT (selected at compile time), async/
+# coroutine integration, sandbox support, serde
+# integration for marshalling Rust structs to Lua tables,
+# and the only Lua-from-Rust ergonomics that don't require
+# manually managing the Lua stack. maki uses it for the
+# plugin system - each plugin loads as a Lua module, and
+# the host exposes Rust functions to the Lua side for
+# session manipulation, tool registration, and response
+# transformation.
+#
+# ----------------------------------------------------------------------------
+# AXIS 239 :: Embedded Lua VM (host-language bindings to Lua scripting)
+# Round 1415 :: Rust slot 1 of 4 :: OPENS Axis 239
+#
+# Cross-language canonical library family for this axis (proposed):
+#   Rust    : mlua-rs/mlua                 - high-level safe Lua bindings
+#                                            (alternative: rlua - older,
+#                                             same author, now mostly
+#                                             merged into mlua)
+#   Go      : yuin/gopher-lua              - pure-Go Lua 5.1 implementation
+#                                            (no CGo, no liblua dep)
+#   TS/Node : ceifa/wasmoon                - Lua-via-WASM in JavaScript
+#                                            (alternative: fengari-lua/fengari
+#                                             is pure-JS Lua, more mature
+#                                             but less performant)
+#
+# Embedded Lua is a clean spec-bound axis: the Lua reference
+# manual + the lua.org C API are the canonical contract.
+# Each host-language slot wraps or reimplements that
+# contract:
+#
+#   - Rust (mlua): FFI bindings to upstream PUC-Rio liblua
+#     (or LuaJIT); safe Rust types over the Lua stack
+#   - Go (gopher-lua): pure-Go reimplementation of Lua 5.1
+#     bytecode interpreter (no liblua linkage); the pure-Go
+#     choice mirrors wazero / sugarme/tokenizer patterns
+#     seen at Axes 232 / 234
+#   - Node (wasmoon): liblua compiled to Wasm + JS wrapper
+#     loads the .wasm in any Node or browser environment
+#
+# Cross-language interop happens at the *Lua source level*:
+# a .lua plugin file that uses only the standard library
+# loads identically into mlua, gopher-lua, and wasmoon.
+# Host-exposed Rust / Go / Node functions are not portable
+# (each lane defines its own host-binding API), but the
+# Lua-side plugin code is.
+# ============================================================================
+
+_maki() {
+    local context state state_descr line
+    typeset -A opt_args
+    local curcontext="$curcontext" ret=1
+
+    _arguments -C \
+        '(-p --print)'{-p,--print}'[non-interactive mode (Claude-Code --print compatible)]' \
+        '(-m --model)'{-m,--model}'[model spec (provider/model-id)]:spec:' \
+        '--verbose[include full turn-by-turn messages in --print output]' \
+        '(-c --continue)'{-c,--continue}'[resume most recent session in this directory]' \
+        '(-s --session)'{-s,--session}'[resume specific session by ID]:id:' \
+        '--output-format[output format for --print mode]:fmt:(text json)' \
+        '--no-commands[skip loading custom commands]' \
+        '--no-rtk[disable rtk command rewriting]' \
+        '--no-plugins[disable the Lua plugin system]' \
+        '--yolo[skip all permission prompts (allow everything)]' \
+        '--exit-on-done[exit after the agent completes]' \
+        '--allowed-tools[pre-approve tools (comma-separated)]:tools:' \
+        '(- *)'{-h,--help}'[print help]' \
+        '(- *)'{-V,--version}'[print version]' \
+        '1: :_maki_cmds_or_prompt' \
+        '*::arg:->args' \
+    && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                auth)     _arguments '(- *)'{-h,--help}'[help]' '1:subcommand:(login logout)' '*::arg:->_default' ;;
+                models)   _arguments '(- *)'{-h,--help}'[help]' ;;
+                index)    _arguments '(- *)'{-h,--help}'[help]' '1:file:_files' ;;
+                mcp)      _arguments '(- *)'{-h,--help}'[help]' '1:subcommand:(auth logout)' '*::arg:->_default' ;;
+                update)   _arguments '(-y --yes)'{-y,--yes}'[skip confirmation]' '--no-color[disable syntax highlighting]' '(- *)'{-h,--help}'[help]' ;;
+                rollback) _arguments '(- *)'{-h,--help}'[help]' ;;
+                migrate)  _arguments '(- *)'{-h,--help}'[help]' '1:subcommand:(xdg)' ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_maki_cmds_or_prompt() {
+    local -a cmds
+    cmds=(
+        'auth:Manage API authentication (login/logout)'
+        'models:List all available models'
+        'index:Run the index tool on a file'
+        'mcp:Manage MCP server authentication'
+        'update:Update maki to the latest version'
+        'rollback:Rollback to the previous version'
+        'migrate:Data migration utilities'
+    )
+    _describe -t commands 'maki command (or initial prompt text)' cmds
+}
+
+_maki "$@"
