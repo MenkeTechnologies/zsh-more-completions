@@ -1,0 +1,146 @@
+#compdef cdk-cli
+# ---------------------------------------------------------------------------
+# cdk-cli — Cashu CLI wallet built on the Cashu Development Kit
+#           (Rust, 220★)
+#
+# upstream: https://github.com/cashubtc/cdk
+# author : "thesimplekid" (tsk@thesimplekid.com) + the cashubtc/cdk
+#          collective (Cashu Development Kit team)
+# license: MIT
+#
+# Source-direct completion: every top-level subcommand and every global
+# flag below is verbatim from crates/cdk-cli/src/main.rs on the
+# cashubtc/cdk tip — clap-derive `Cli` Parser + `Commands` Subcommand
+# enum.  Per-subcommand args live in crates/cdk-cli/src/sub_commands/*.rs;
+# this completion focuses on subcommand discovery and global-flag
+# templating rather than enumerating every per-subcommand option (pair
+# with `cdk-cli <subcommand> --help` for the per-subcommand surface).
+#
+# Direct deps from crates/cdk-cli/Cargo.toml (selected):
+#   cdk-redb           ← canonical Rust pure-Rust embedded ACID B-tree
+#                        KV store (this axis) — wraps Christopher Berner's
+#                        `redb` (cberner/redb) crate.  Feature-gated as
+#                        `redb` feature; alternative is `cdk-sqlite`
+#                        (default).  Selectable at CLI launch via
+#                        `--engine redb`.
+#   cdk-sqlite         (alternative SQLite-backed wallet database)
+#   cdk                (CDK core wallet APIs)
+#   cdk-common         (shared types + HTTP client)
+#   clap (derive)
+#   bip39 + bitcoin    (BIP39 seed phrase + Bitcoin primitives)
+#   tokio              (async runtime)
+#   tracing + tracing-subscriber
+#   nostr-sdk          (Nostr protocol — npubcash integration)
+#   lightning          (Lightning Network types)
+#
+# cdk-cli is the reference CLI wallet implementation for Cashu — the
+# Chaumian e-cash protocol for Bitcoin built on the Lightning Network.
+# Tokens are blind-signed by a mint, ensuring privacy: the mint cannot
+# correlate which user created a token with which user redeemed it.
+# Wallet state (proofs, mint URLs, pending operations) is persisted in
+# either SQLite (default) or redb (feature-gated, MSRV not tracked) at
+# `~/.cdk-cli/` by default.  Operations include minting from Lightning
+# invoices, melting tokens back to Lightning, sending/receiving tokens
+# offline, BIP353 address resolution, and Nostr-based payment requests.
+#
+# === AXIS 172 OPENER — embedded ACID B-tree KV stores (LMDB-style) ======
+# Axis position: Rust=227 OPENS Axis 172 at slot 1/0/0.  Canonical Rust
+# pure-Rust embedded ACID B-tree key-value store is `cberner/redb` by
+# Christopher Berner — a single-file embedded database providing MVCC,
+# copy-on-write B+ trees, single-writer / multi-reader concurrency, and
+# zero-cost typed read/write transactions.  Designed as a pure-Rust
+# replacement for LMDB (the same niche that Symas Lightning Memory-Mapped
+# Database fills in C-land) without LMDB's mmap-based crash-recovery
+# pitfalls.  Used by ordinals/ord (Bitcoin Ordinals indexer), n0-computer/
+# iroh (Iroh CRDT), seaweedfs/seaweedfs, sigp/lighthouse (Ethereum
+# consensus), apache/opendal, dora-rs/dora, fedimint/fedimint (via
+# fedimint-cursed-redb), spacedriveapp/spacedrive, freenet/freenet-core,
+# txpipe/dolos (Cardano data node), cashubtc/cdk (Cashu mint/wallet).
+#
+# Cycle position in current 3+1 micro-cycle:
+#   Rust=227     ← THIS FILE              (axis 172 OPENS, slot 1/0/0)
+#   Go=227       ← next round              (axis 172 continues, slot 2/0/0)
+#   TS-Node=227  ← round after             (axis 172 CLOSES at triple-227, slot 1/1/1)
+# ---------------------------------------------------------------------------
+
+_cdk-cli() {
+    local context state state_descr line ret=1
+    typeset -A opt_args
+
+    local -a global_opts
+    global_opts=(
+        '(-e --engine)'{-e,--engine=}'[database engine to use (default sqlite)]:engine:(sqlite redb)'
+        '(-w --work-dir)'{-w,--work-dir=}'[path to working dir (default ~/.cdk-cli)]:directory:_files -/'
+        '(-l --log-level)'{-l,--log-level=}'[logging level (default error)]:level:(trace debug info warn error)'
+        '(-p --proxy)'{-p,--proxy=}'[NWS proxy URL]:url:'
+        '(-u --unit)'{-u,--unit=}'[currency unit to use for the wallet (default sat)]:currency:(sat msat usd eur)'
+        '(-n --non-interactive)'{-n,--non-interactive}'[disable all interactive prompts; commands must provide required arguments]'
+        '--npubcash-url=[NpubCash API URL (default https://npubx.cash)]:url:'
+        '--tor=[Tor transport toggle (only with --features tor; default on)]:state:(on off)'
+        '--password=[database password for sqlcipher feature]:password:'
+    )
+
+    _arguments -C \
+        '(- *)'{-h,--help}'[print help]' \
+        '(- *)'{-V,--version}'[print version]' \
+        $global_opts \
+        '1: :->cmds' \
+        '*::arg:->args' && ret=0
+
+    case $state in
+        cmds)
+            local -a subcmds
+            subcmds=(
+                'decode-token:decode a Cashu token blob'
+                'balance:show wallet balance across all mints'
+                'melt:pay a BOLT11 Lightning invoice by melting tokens'
+                'mint-pending:claim pending mint quotes that have been paid'
+                'receive:receive a token sent to this wallet'
+                'send:create a token to send to another wallet'
+                'transfer:transfer tokens between mints (melt+mint cross-mint)'
+                'check-pending:reclaim pending proofs that are no longer pending at the mint'
+                'check-requests:check incoming payments for stored payment requests'
+                'mint-info:view mint info (NUTs supported, name, description, contact)'
+                'mint:mint proofs via a BOLT11 invoice (request quote then pay then mint)'
+                'mint-batch:mint proofs for multiple existing quotes in one request'
+                'burn:burn spent tokens (clean up locally-tracked spent proofs)'
+                'restore:restore proofs from BIP39 seed phrase'
+                'update-mint-url:update a mint URL in the wallet'
+                'list-mint-proofs:list all proofs at a mint'
+                'decode-request:decode a NUT-18 payment request'
+                'pay-request:pay a NUT-18 payment request'
+                'resolve:resolve a BIP353 address and inspect available payment methods'
+                'create-request:create a NUT-18 payment request'
+                'mint-blind-auth:mint blind auth proofs (NUT-22 OAuth)'
+                'cat-login:Cashu Auth Token login with username/password'
+                'cat-device-login:Cashu Auth Token login with OAuth device-code flow'
+                'npub-cash:NpubCash integration commands (-m/--mint-url required, with subcommand)'
+                'generate-public-key:generate a public key'
+                'get-public-keys:get public keys from a mint'
+            )
+            _describe -t commands 'cdk-cli command' subcmds && ret=0
+            ;;
+        args)
+            case $words[1] in
+                send|receive|melt|mint|transfer|burn|restore|list-mint-proofs|mint-info|update-mint-url)
+                    _arguments \
+                        $global_opts \
+                        '*::arg:_files' && ret=0
+                    ;;
+                npub-cash)
+                    _arguments \
+                        '(-m --mint-url)'{-m,--mint-url=}'[mint URL to use for npubcash operations (required)]:url:' \
+                        '1: :->npub_cmds' && ret=0
+                    ;;
+                decode-token|decode-request)
+                    _arguments \
+                        '1:token / request string (cashuA... or creqA...):' && ret=0
+                    ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_cdk-cli "$@"
