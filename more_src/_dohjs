@@ -1,0 +1,120 @@
+#compdef dohjs
+# ============================================================================
+# dohjs - DNS-over-HTTPS lookup CLI (Node, MIT)
+#
+# Author : Tom McKinney + BYU IMaaL (BYU's Internet Measurements as a Lab)
+# Upstream: https://github.com/byu-imaal/dohjs
+# npm    : dohjs
+#
+# `dohjs` is a command-line DoH (RFC 8484) client that mirrors
+# the `dig` UX for DNS over HTTPS resolvers. Send DNS queries
+# over HTTPS to any RFC 8484 endpoint (Cloudflare's
+# `cloudflare-dns.com/dns-query`, Google's `dns.google/
+# dns-query`, Quad9's `dns.quad9.net/dns-query`, NextDNS,
+# AdGuard, Mullvad, etc.) and print the response as pretty
+# JSON or one-line short form. Same argument style as `dig`
+# (using both `-` and `+` prefixes via argparse's prefixChars
+# trick) - any longtime dig user can drive dohjs without
+# reading the help.
+#
+# Usage:
+#   dohjs <url> [<qname> [<qtype>]] [options]
+#
+# Positional args:
+#   url                      - DoH endpoint URL
+#                              (e.g. https://cloudflare-dns.com/dns-query)
+#   qname                    - name to query (default ".")
+#   qtype                    - query type (default "A")
+#
+# DNS-style "+" options (dig convention):
+#   +subnet <addr/prefix>    - EDNS Client Subnet (ECS) option
+#   +dnssec                  - set DNSSEC OK bit
+#   +edns <code>:<hex>       - arbitrary EDNS option (repeatable)
+#
+# Standard "-" options:
+#   -m, --method <method>    - request method: GET or POST (default POST)
+#   -s, --short              - one-line short output
+#   -d, --debug              - also print the generated query
+#   -h, --help               - print help
+#   -v, --version            - print version
+#
+# The dns-packet lane is built on `dns-packet ^5.2.1` (declared
+# verbatim at upstream package.json HEAD), the canonical Node
+# DNS-wire-format codec by Mathias Buus (mafintosh) - github.com/
+# mafintosh/dns-packet, 280+ stars but ~12 million weekly
+# downloads via the transitive dep graph. dns-packet is the
+# *low-level codec* underneath every Node DNS implementation:
+# the multicast-dns library (mDNS / Bonjour), node-dns-packet's
+# downstream consumers (libp2p-dns, ddns-server, dns2,
+# Whisper / signal-protocol message exchange via DNS-over-
+# HTTPS), and Node's own deno_std/dns + ts-dns + dohjs. The
+# library is a pure function pair (encode/decode) over an
+# RFC 1035 + RFC 6891 (EDNS) byte buffer, with no transport
+# or server abstractions.
+#
+# dohjs wraps dns-packet's encoder for the request side +
+# decoder for the response side, with a thin HTTP fetch layer
+# (POST or GET per RFC 8484) and the dig-style pretty-printer
+# on top.
+#
+# ----------------------------------------------------------------------------
+# AXIS 228 :: DNS server libraries (RFC 1035 + DoH/DoT/DoQ)  [CLOSES]
+# Round 1384 :: TS-Node slot 3 of 4 :: CLOSES Axis 228 (221st axis closed)
+#
+# Cross-language canonical library family for this axis:
+#   Rust    : hickory-dns/hickory-server   [R1382 _constellation]
+#   Go      : miekg/dns                    [R1383 _rawdns]
+#   TS/Node : mafintosh/dns-packet         [R1384 THIS FILE]
+#
+# dns-packet diverges sharply from the other two lanes in
+# *abstraction level*: it is a pure codec, not a server
+# framework. The Rust + Go slots in this axis both ship
+# complete server abstractions (`hickory_server::ServerFuture`,
+# `dns.HandleFunc`); the Node slot ships only the wire
+# codec, and any server abstraction is built ad-hoc on top.
+# The reason: Node's stdlib already provides the network
+# primitives (UDP via dgram, TCP via net, HTTPS via https)
+# that the server framework would wrap, so the JS ecosystem
+# converged on "codec + bring-your-own-transport" rather
+# than "framework + opinionated transport."
+#
+# The cross-language interop story remains total at the wire
+# level - a DNS message encoded by dns-packet (Node) is
+# decoded identically by hickory-proto (Rust) and miekg/dns
+# (Go). The byte-for-byte spec conformance across three
+# independent maintainer trees is the canonical-library
+# pattern at its strongest.
+#
+# Use-case mapping across all three lanes:
+#   - constellation (Rust): authoritative DNS server with
+#     REST API for record management + GeoDNS
+#   - rawdns (Go): Docker-aware DNS shim that resolves
+#     container names to live IPs
+#   - dohjs (Node): DoH client mimicking `dig` UX for the
+#     HTTPS-based DNS transport
+#
+# Three lanes, three deployment topologies (server / shim /
+# client), one wire format. RFC 1035 is the contract;
+# RFC 8484 (DoH), RFC 7858 (DoT), RFC 9230 (DoQ) are the
+# transport variants. Axis 228 closes round 1384.
+# ============================================================================
+
+_dohjs() {
+    local context state state_descr line
+    typeset -A opt_args
+
+    _arguments -s -S \
+        '+subnet[EDNS Client Subnet option (address/source-prefix-len)]:subnet:' \
+        '+dnssec[set DNSSEC OK bit]' \
+        '*+edns[arbitrary EDNS option (opt-code:hex-data; repeatable)]:opt:' \
+        '(-m --method)'{-m,--method}'[request method]:method:(GET POST)' \
+        '(-s --short)'{-s,--short}'[print in short form (one line)]' \
+        '(-d --debug)'{-d,--debug}'[also print the generated query]' \
+        '(- *)'{-h,--help}'[print help]' \
+        '(- *)'{-v,--version}'[print version]' \
+        '1:DoH endpoint URL:' \
+        '2:qname (default ".")::_default' \
+        '3:qtype (default "A"):(A AAAA NS MX TXT CNAME SOA PTR SRV CAA DS DNSKEY DNSSEC OPT SVCB HTTPS ANY)'
+}
+
+_dohjs "$@"
