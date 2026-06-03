@@ -1,0 +1,152 @@
+#compdef gofmtmd
+# ============================================================================
+# gofmtmd - apply gofmt to Go code blocks inside
+#            markdown files (Go, Apache-2.0)
+#
+# Author : po3rin (Hiroki Nakagawa)
+# Upstream: https://github.com/po3rin/gofmtmd
+#
+# `gofmtmd` walks a markdown file, detects fenced
+# Go code blocks (```` ```go ```` fences), runs the
+# Go standard `gofmt` formatter on each block's
+# contents, and writes the formatted result back
+# into the markdown. Use cases:
+#   - keep Go code samples in documentation
+#     consistently formatted as the surrounding
+#     code style evolves
+#   - lint pull requests against drift between
+#     committed Go code + the snippets quoted in
+#     README / docs files
+#   - integrate into pre-commit hooks for blog posts
+#     / talk slides / book manuscripts that embed
+#     live Go examples
+#
+# Usage:
+#   gofmtmd [file.md]
+#   gofmtmd -r file.md            # rewrite in place
+#   gofmtmd -w out.md file.md     # write to out.md
+#   cat file.md | gofmtmd         # stdin -> stdout
+#
+# Flags (cobra):
+#   -r, --replace          - replace original Go code
+#                             with formatted code
+#                             in-place
+#   -w, --write <file>     - write the formatted
+#                             markdown to <file>
+#                             instead of stdout
+#   -h, --help             - print help
+#   --version              - print version
+#
+# When invoked without `--replace` or `--write`,
+# gofmtmd prints the formatted markdown to stdout
+# (suitable for piping through `delta` or `git
+# diff --no-index --` for visual diffing).
+#
+# The sergi/go-diff lane is built on `github.com/
+# sergi/go-diff v1.0.0` (declared at upstream
+# go.mod HEAD as a direct dep), the canonical Go
+# diffing library by Sergi Mansilla - github.com/
+# sergi/go-diff, 2000+ stars.
+#
+# sergi/go-diff is a *line-by-line Go port* of
+# Google's `diff-match-patch` library (originally
+# written by Neil Fraser at Google in 2006, then
+# ported to ~10 languages over the next decade).
+# The C++ original implements:
+#   - Myers diff (the classic 1986 algorithm)
+#   - the patch + merge operations for round-tripping
+#     diffs back through the original input
+#   - a fast char-grained diff for word-level
+#     highlighting in code review tools
+#
+# The Go port preserves the function-by-function
+# correspondence with Google's reference C++ source,
+# letting downstream users reason about Go-side
+# behavior by reading the C++ algorithm
+# documentation. The library is the de-facto Go
+# diffing library + the underlying engine for:
+#   - hashicorp/terraform's plan output
+#   - kubernetes' kubectl diff
+#   - cncf/kubectl-ai's diff visualizer
+#   - netlify/gotrue's account-change audit log
+#   - lacework/go-sdk's resource change reports
+#   - gofmtmd (THIS BINARY)
+#
+# gofmtmd uses sergi/go-diff to compute the per-block
+# diff between the original + formatted Go code, then
+# only modifies the markdown when the diff is non-
+# empty (preserving original line counts + indentation
+# for unchanged blocks). The line-grained Myers diff
+# gives stable, minimal-edit output.
+#
+# ----------------------------------------------------------------------------
+# AXIS 252 :: Diffing libraries (Myers / Patience /
+#              LCS algorithms with multi-format output)
+# Round 1455 :: Go slot 2 of 4 :: continues Axis 252
+#
+# Cross-language canonical library family for this axis:
+#   Rust    : mitsuhiko/similar           [R1454 _mdslw]
+#   Go      : sergi/go-diff               [R1455 THIS FILE]
+#   TS/Node : kpdecker/jsdiff             [R1456 closing]
+#
+# sergi/go-diff is structurally interesting in this
+# axis because of its *Google-reference-port* pattern.
+# The three lanes form a clean spectrum of diff-
+# library origins:
+#
+#   - Rust (mitsuhiko/similar): independent multi-
+#     algorithm Rust reimplementation by Armin
+#     Ronacher; not a port of any specific reference
+#     - re-derives the algorithms from the papers +
+#     wraps them in idiomatic Rust adapters
+#   - Go (sergi/go-diff): line-by-line port of
+#     Google's diff-match-patch C++ library; mirrors
+#     the upstream API + algorithms; benefits from
+#     Google's ongoing maintenance + spec docs
+#   - Node (kpdecker/jsdiff): independent pure-JS
+#     reimplementation by Kevin Decker (kpdecker);
+#     re-derives the algorithms in JS without binding
+#     to any reference impl
+#
+# Cross-language interop happens at the structural
+# level - the same input produces the same set of
+# inserted / deleted / equal segments across all
+# three lanes (modulo equivalent algorithmic choices,
+# e.g. all using Myers vs Patience). The output
+# formatting differs per lane (similar provides
+# unified+side-by-side+inline formatters, go-diff
+# provides the patch+match+diff operation triple,
+# jsdiff provides line+word+character+JSON diff
+# variants), but the underlying diff structure is
+# convertible across formats.
+#
+# Use-case spectrum across the three lanes:
+#   - mdslw (Rust, similar): markdown semantic line-
+#     wrapper using similar's Myers diff for
+#     --report diff output
+#   - gofmtmd (Go, sergi/go-diff): gofmt applied to
+#     Go code blocks in markdown, using sergi/go-diff
+#     to detect + minimize per-block edits
+#   - jsdiff consumer (Node, kpdecker/jsdiff): TBD
+#     for R1456 closure
+#
+# Each lane reflects the host ecosystem's diffing
+# culture: Rust's "re-derive from papers", Go's
+# "port Google's reference", Node's "re-derive in
+# JS". All three produce structurally-equivalent
+# diffs.
+# ============================================================================
+
+_gofmtmd() {
+    local context state state_descr line
+    typeset -A opt_args
+
+    _arguments -s -S \
+        '(-r --replace)'{-r,--replace}'[replace Go code with formatted code in-place]' \
+        '(-w --write)'{-w,--write}'[write formatted markdown to file (instead of stdout)]:file:_files -g "*.md"' \
+        '(- *)'{-h,--help}'[print help]' \
+        '(- *)--version[print version]' \
+        '1:markdown file:_files -g "*.md"'
+}
+
+_gofmtmd "$@"
