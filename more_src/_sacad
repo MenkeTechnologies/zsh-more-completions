@@ -1,0 +1,125 @@
+#compdef sacad sacad_r
+# ============================================================================
+# sacad / sacad_r - Smart Automatic Cover Art Downloader (Rust, MPL-2.0)
+#
+# Author : Maxime Desbruslais (desbma)
+# Upstream: https://github.com/desbma/sacad
+# crates : sacad (binaries: sacad, sacad_r, sacad_gen_extras)
+#
+# `sacad` queries five cover-art sources (CoverArtArchive,
+# Deezer, Discogs, iTunes, Last.fm) for a given artist+album
+# pair and downloads the highest-quality match within a target
+# size +/- tolerance. The companion `sacad_r` walks a music
+# library directory recursively, reads the artist+album tags
+# from each audio file (FLAC/MP3/Ogg/M4A/Opus), looks up
+# missing covers, and writes them next to the audio files
+# (with `{artist}` / `{album}` template patterns) or embeds
+# them as JPEG in the file metadata (single `+` value to
+# `output`).
+#
+# Binaries:
+#   sacad   <artist> <album> <size> <output.jpg>  - one-shot lookup
+#   sacad_r <lib_root_dir> <size> <output|+>      - recursive walk
+#
+# Common flags:
+#   -t, --size-tolerance <pct>   - percentage tolerance vs target
+#                                  size (default 25)
+#   -s, --cover-sources <name>   - source name (repeatable):
+#                                  coverartarchive | deezer |
+#                                  discogs | itunes | lastfm
+#   -p, --preserve-format        - preserve source image format
+#   -v, --verbosity <level>      - error | warn | info (default)
+#                                  | debug | trace
+#       --version / --help
+#
+# `sacad_r` adds:
+#   -i, --ignore-existing        - re-download even if cover
+#                                  already exists
+#
+# The redb lane is built on `redb = "3.1.3"` (declared
+# verbatim at upstream Cargo.toml HEAD), the canonical modern
+# Rust embedded key-value store by Christopher Berner
+# (github.com/cberner/redb, 4200+ stars). redb is the pure-
+# Rust "second-generation" embedded KV store: ACID-compliant
+# transactional B-tree on a single file (vs sled's append-
+# only log structure), zero-copy memory-mapped reads, MVCC
+# isolation for concurrent transactions, no external C deps
+# (unlike rocksdb-rs or lmdb-zero). It is to Rust what BoltDB
+# is to Go - the canonical "use this for any local persistent
+# state" answer. sacad uses redb to cache cover-art lookups
+# across runs - artist+album+size -> { source, image_hash,
+# fetch_timestamp } - avoiding hammering the upstream APIs
+# for already-resolved albums.
+#
+# ----------------------------------------------------------------------------
+# AXIS 229 :: Embedded key-value stores (single-file ACID B-tree)  [OPENS]
+# Round 1385 :: Rust slot 1 of 4 :: OPENS Axis 229
+#
+# Cross-language canonical library family for this axis (proposed):
+#   Rust    : cberner/redb                 - modern pure-Rust ACID KV store
+#   Go      : etcd-io/bbolt                - Bolt fork by etcd; de-facto
+#                                            Go embedded KV (boltdb was
+#                                            archived 2017 in favor of bbolt)
+#   TS/Node : kriszyp/lmdb-js              - LMDB Node bindings (the de-facto
+#                                            high-performance embedded KV
+#                                            in Node; competes with
+#                                            better-sqlite3 for "embedded
+#                                            persistence" slot)
+#
+# Embedded KV stores are a tightly-bound axis: each language
+# has converged on a single de-facto choice for "I need a
+# persistent local map without standing up a server" use
+# cases. The choice reflects host-language idioms:
+#
+#   - Rust (redb): pure-Rust to avoid the C-dep tax that
+#     hurts cross-compilation; B-tree + MVCC + zero-copy
+#     memory-mapped reads; single-file storage; ~50K LOC
+#   - Go (bbolt): single-file mmap'd B+tree, "pure-Go" but
+#     with a thin syscall layer; rooted in CoreOS / etcd
+#     experience running it at million-key scale for
+#     Kubernetes control-plane state
+#   - Node (lmdb-js): N-API bindings to OpenLDAP's mature
+#     LMDB C implementation; pure-Rust alternatives like
+#     polodb exist but lmdb-js dominates by raw read
+#     throughput
+#
+# All three implement the same conceptual contract: ordered
+# key+value pairs, range scans, ACID transactions, single-
+# writer + multi-reader concurrency. The implementation
+# differs (B-tree vs LMDB's B+tree vs bbolt's COW B+tree)
+# but the user-visible semantics are unified.
+# ============================================================================
+
+_sacad() {
+    local context state state_descr line
+    typeset -A opt_args
+
+    local -a common_args
+    common_args=(
+        '(-t --size-tolerance)'{-t,--size-tolerance}'[size tolerance percentage]:pct:'
+        '*'{-s,--cover-sources}'[cover source to use (repeatable)]:source:(coverartarchive deezer discogs itunes lastfm)'
+        '(-p --preserve-format)'{-p,--preserve-format}'[preserve source image format]'
+        '(-v --verbosity)'{-v,--verbosity}'[log level]:level:(error warn info debug trace)'
+        '(- *)'{-V,--version}'[print version]'
+        '(- *)'{-h,--help}'[print help]'
+    )
+
+    case "$service" in
+        sacad)
+            _arguments -s -S $common_args \
+                '1:artist:' \
+                '2:album:' \
+                '3:target size (pixels):' \
+                '4:output cover file:_files -g "*.(jpg|jpeg|png|webp|jxl)"'
+            ;;
+        sacad_r)
+            _arguments -s -S $common_args \
+                '(-i --ignore-existing)'{-i,--ignore-existing}'[re-download even if covers already exist]' \
+                '1:music library root directory:_files -/' \
+                '2:target size (pixels):' \
+                '3:output pattern or "+" to embed:'
+            ;;
+    esac
+}
+
+_sacad "$@"
