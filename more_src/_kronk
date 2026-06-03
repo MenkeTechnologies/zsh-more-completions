@@ -1,0 +1,149 @@
+#compdef kronk
+# ============================================================================
+# kronk - Local LLM inference engine with hardware acceleration (Go, Apache-2.0)
+#
+# Author : Ardan Labs (Bill Kennedy + team)
+# Upstream: https://github.com/ardanlabs/kronk
+#
+# `kronk` is Ardan Labs' Go-implemented local LLM inference
+# server - a complete stack for running large language models
+# locally with GPU acceleration via Metal (macOS), CUDA
+# (NVIDIA), ROCm (AMD), or Vulkan (cross-platform). Built on
+# top of llama.cpp for the inference backend with a thin Go
+# orchestration layer that handles model management,
+# request routing, prompt-caching (SPC/IMC), YaRN context
+# extension, JWT authentication, MCP service integration,
+# and a browser-served UI.
+#
+# Subcommand tree (cobra):
+#   server                      - start/stop the model server
+#                                 (default port localhost:11435)
+#                                 subcommands: start, stop, restart, status
+#   model                       - manage local models
+#                                 subcommands: list, pull, remove, show, ps
+#   catalog                     - browse + manage model catalog
+#                                 subcommands: list, show, remove
+#   libs                        - install/upgrade llama.cpp libraries
+#   security                    - manage API keys + JWT tokens
+#   run                         - run a model directly (no server)
+#                                 for interactive chat
+#   bucky                       - Whisper (whisper.cpp) backend
+#                                 subcommands: libs, model management
+#   devices                     - list available accelerators
+#
+# Global flags (cobra persistent):
+#   --base-path <path>          - base path for kronk data
+#                                 (models, libraries, catalog,
+#                                  model_config)
+#   --help                      - print help
+#   --version                   - print version
+#
+# Two operating modes:
+#   Web mode (default)          - CLI communicates with running server
+#                                 at localhost:11435
+#   Local mode (--local)        - direct file operations without
+#                                 connecting to a server
+#
+# Environment variables:
+#   KRONK_BASE_PATH             - base data path
+#   KRONK_PROCESSOR             - hardware target
+#                                 (cpu | cuda | metal | rocm | vulkan)
+#   KRONK_LIB_VERSION           - pin llama.cpp library version
+#   KRONK_HF_TOKEN              - HuggingFace auth token (gated models)
+#   KRONK_WEB_API_HOST          - override web API host
+#   KRONK_TOKEN                 - pre-authenticated JWT token
+#
+# The opentelemetry-go lane is built on `go.opentelemetry.io/
+# otel` family of packages (declared as direct deps at upstream
+# go.mod HEAD and imported from cmd/kronk/server +
+# foundation/observability layers), the canonical Go
+# OpenTelemetry SDK maintained by the open-telemetry/
+# opentelemetry-go project (10000+ stars). The Go SDK is one
+# of three reference implementations the OpenTelemetry
+# project ships alongside the Rust + JS lanes. kronk uses
+# it to emit distributed-tracing spans + metrics + structured
+# logs across the inference pipeline - model load, prompt
+# tokenization, batched generation, KV-cache eviction,
+# response streaming - so operators can see exactly which
+# stage of the pipeline is dominating wall-clock latency
+# for a given workload.
+#
+# ----------------------------------------------------------------------------
+# AXIS 236 :: OpenTelemetry SDK (trace + metrics + logs unified observability)
+# Round 1407 :: Go slot 2 of 4 :: continues Axis 236
+#
+# Cross-language canonical library family for this axis:
+#   Rust    : open-telemetry/opentelemetry-rust  [R1406 _msb]
+#   Go      : open-telemetry/opentelemetry-go    [R1407 THIS FILE]
+#   TS/Node : open-telemetry/opentelemetry-js    [R1408 closing]
+#
+# opentelemetry-go is structurally the *spec-author-
+# maintained* reference SDK - same pattern as the Rust slot
+# (and Eclipse Paho in Axis 227 MQTT, the
+# prometheus/client_golang in Axis 235 metrics). The
+# OpenTelemetry project ships the Go SDK under the same
+# umbrella as the spec itself; the wire-format-level
+# conformance is verified by a shared semantic-conventions
+# test suite that all three reference SDKs must pass.
+#
+# Cross-language interop in Axis 236: a trace exported via
+# OTLP/gRPC from opentelemetry-rust (msb), opentelemetry-go
+# (kronk), or opentelemetry-js (closing lane) is byte-
+# identical at the protobuf-wire-format level. The receiving
+# OTLP collector (Jaeger, Tempo, Grafana Cloud Traces,
+# Honeycomb Refinery, Datadog Agent, ...) cannot tell which
+# SDK produced the span.
+#
+# The instrumentation idiom in Go is *explicit context
+# propagation* via `(ctx, span) := tracer.Start(ctx,
+# "operation-name")` - the trace context lives inside the
+# `context.Context` value that already flows through every
+# Go HTTP handler / gRPC service / goroutine, so OTel slots
+# into the existing context-threading discipline without
+# introducing new propagation infrastructure.
+# ============================================================================
+
+_kronk() {
+    local context state state_descr line
+    typeset -A opt_args
+    local curcontext="$curcontext" ret=1
+
+    _arguments -C \
+        '--base-path[base path for kronk data]:path:_files -/' \
+        '(- *)'{-h,--help}'[print help]' \
+        '(- *)--version[print version]' \
+        '1: :_kronk_cmds' \
+        '*::arg:->args' \
+    && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                server)   _arguments '(- *)'{-h,--help}'[help]' '1:subcommand:(start stop restart status)' '*::arg:->_default' ;;
+                model)    _arguments '(- *)'{-h,--help}'[help]' '1:subcommand:(list pull remove show ps)' '*::arg:->_default' ;;
+                catalog)  _arguments '(- *)'{-h,--help}'[help]' '1:subcommand:(list show remove)' '*::arg:->_default' ;;
+                libs|security|run|devices) _arguments '(- *)'{-h,--help}'[help]' '*:arg:' ;;
+                bucky)    _arguments '(- *)'{-h,--help}'[help]' '1:subcommand:(libs model)' '*::arg:->_default' ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_kronk_cmds() {
+    local -a cmds
+    cmds=(
+        'server:Start/stop the model server (default localhost:11435)'
+        'model:Manage local models (list, pull, remove, show, ps)'
+        'catalog:Browse and manage the model catalog'
+        'libs:Install/upgrade llama.cpp libraries'
+        'security:Manage API keys and JWT tokens'
+        'run:Run a model directly for interactive chat (no server)'
+        'bucky:Whisper (whisper.cpp) backend management'
+        'devices:List available accelerators'
+    )
+    _describe -t commands 'kronk command' cmds
+}
+
+_kronk "$@"
