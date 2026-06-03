@@ -1,0 +1,187 @@
+#compdef lading
+# ============================================================================
+# lading - Data generation + load testing suite (Rust, MIT)
+#
+# Author : Brian L. Troutwine + Datadog team
+# Upstream: https://github.com/DataDog/lading
+#
+# `lading` is Datadog's open-source load generator + workload
+# observer for daemon-style services. The tool spins up a
+# *target* (a binary path, a running PID, or a Docker
+# container) and three orthogonal sidecars: a *generator*
+# that drives synthetic traffic at the target, a *blackhole*
+# that absorbs whatever the target tries to send out, and an
+# *observer* that watches the target's resource usage
+# (CPU/mem/IO via /proc, eBPF probes, or cgroup metrics).
+# The combined measurement campaign lasts a configurable
+# experiment-duration window; per-metric samples are captured
+# either to a Parquet/JSONL file (for offline analysis) or
+# exposed live via a Prometheus HTTP exporter.
+#
+# Subcommands (clap derive):
+#   run [args]                   - run lading with configuration
+#   config-check                 - validate config file and exit
+#                                  --config-path <file>
+#   (legacy flat structure also supported - the args below
+#    can be passed directly without the `run` subcommand)
+#
+# Major flags (LadingArgs):
+#   --json-logs                  - emit logs as JSON
+#   --config-path <file>         - YAML config (default
+#                                  /etc/lading/lading.yaml;
+#                                  env LADING_CONFIG=<yaml-blob>
+#                                  bypasses)
+#   --global-labels <K=V,...>    - labels applied to every capture
+#
+#   Target selection (one of):
+#     --target-pid <pid>         - measure existing PID
+#     --target-container <name>  - measure docker container
+#     --target-path <bin>        - spawn this binary as target
+#                                  + target arguments (positional)
+#                                  --target-inherit-environment
+#                                  --target-environment-variables <K=V,...>
+#                                  --target-stdout-path <Behavior>
+#                                  --target-stderr-path <Behavior>
+#     --no-target                - disable target measurement
+#
+#   Telemetry destination (one of):
+#     --capture-path <path>      - on-disk capture file (JSONL or
+#                                  Parquet)
+#     --capture-format <fmt>     - jsonl | parquet | multi
+#     --capture-flush-seconds <n>- default 60
+#     --capture-compression-level <1-22> - parquet only; default 3
+#     --capture-expiriation-seconds <n>  - metric expiration
+#     --prometheus-addr <addr>   - host:port for Prometheus
+#                                  exporter (HTTP)
+#     --prometheus-path <path>   - Unix-socket Prometheus exporter
+#
+#   --experiment-duration-seconds <n>   - default 120
+#   --experiment-duration-infinite      - run forever
+#   --warmup-duration-seconds <n>       - default 30
+#   --max-shutdown-delay <n>            - default 30
+#   --disable-inspector                 - skip the inspector phase
+#
+# The prometheus lane is built on `metrics-exporter-prometheus
+# = "0.18"` + `metrics = "0.24"` (declared verbatim at upstream
+# workspace Cargo.toml HEAD), the canonical Rust Prometheus
+# metrics emitter by the metrics-rs project (github.com/
+# metrics-rs/metrics, 1000+ stars). The metrics-rs family is
+# the de-facto Rust metrics-instrumentation stack: a
+# language-agnostic `metrics` macro layer
+# (`counter!()` / `gauge!()` / `histogram!()`) + per-backend
+# exporters. The Prometheus exporter renders the recorded
+# metrics in the Prometheus text-format wire protocol over
+# an HTTP endpoint (or a Unix socket) - the same format
+# scraped by every Prometheus server, Grafana Agent, or
+# Datadog Agent.
+#
+# lading uses it to expose per-experiment metrics live
+# during a load run - the Prometheus exporter is the live-
+# observability path (a side car like grafana-agent can
+# scrape the lading prom endpoint to plot per-experiment
+# graphs in real time), while the capture-path is the
+# offline-analysis path (Parquet files for post-hoc
+# statistical analysis).
+#
+# ----------------------------------------------------------------------------
+# AXIS 235 :: Prometheus client / metrics-exporter (text-format scrape protocol)
+# Round 1403 :: Rust slot 1 of 4 :: OPENS Axis 235
+#
+# Cross-language canonical library family for this axis (proposed):
+#   Rust    : metrics-rs/metrics + metrics-exporter-prometheus
+#                                          - the modern Rust metrics-instrumentation
+#                                            stack with per-backend exporters
+#                                            (alternative: tikv/rust-prometheus
+#                                             is the older direct-port lib)
+#   Go      : prometheus/client_golang     - the official Prometheus Go client
+#                                            from the Prometheus project itself
+#   TS/Node : siimon/prom-client           - the de-facto Node Prometheus
+#                                            client; same maintainer since 2015
+#
+# Prometheus client libraries are a clean spec-bound axis -
+# the *Prometheus text format* (and the newer
+# OpenMetrics text format that supersedes it) is a precisely
+# defined exposition protocol. Any compliant library
+# produces bit-identical scrape output for the same metrics
+# state. Cross-language interop is therefore total at the
+# HTTP-endpoint level: a Prometheus server scrapes Rust /
+# Go / Node services with no awareness of the host
+# language.
+#
+# What diverges across the lanes is the *instrumentation
+# idiom*:
+#   - Rust (metrics-rs): macro-based recorder layer
+#     (`counter!()`) with a pluggable backend
+#   - Go (client_golang): typed struct constructors
+#     (`NewCounter()`) with explicit metric registration
+#   - Node (prom-client): JS classes (`new Counter({})`)
+#     with implicit default-registry registration
+#
+# Use-case alignment in this axis: every lane targets the
+# same operational pattern - "expose application-internal
+# state as Prometheus-scrapeable metrics for observability."
+# ============================================================================
+
+_lading() {
+    local context state state_descr line
+    typeset -A opt_args
+    local curcontext="$curcontext" ret=1
+
+    _arguments -C \
+        '--json-logs[emit logs in JSON format]' \
+        '(- *)'{-h,--help}'[print help]' \
+        '(- *)'{-V,--version}'[print version]' \
+        '1: :_lading_cmds_or_args' \
+        '*::arg:->args' \
+    && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                run|config-check) _lading_args ;;
+                *) _lading_args ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_lading_cmds_or_args() {
+    local -a cmds
+    cmds=(
+        'run:Run lading with specified configuration'
+        'config-check:Validate configuration file and exit'
+    )
+    _describe -t commands 'lading subcommand' cmds
+}
+
+_lading_args() {
+    _arguments \
+        '--config-path[path to configuration file or directory]:file:_files' \
+        '--global-labels[labels applied to all captures (KEY=VAL,KEY2=VAL)]:labels:' \
+        '--target-pid[measure externally-launched process by PID]:pid:' \
+        '--target-container[measure externally-launched container by name]:name:' \
+        '--no-target[disable target measurement]' \
+        '--target-path[path of the target executable]:file:_files' \
+        '--target-inherit-environment[inherit target env vars from lading]' \
+        '--target-environment-variables[target env vars (KEY=VAL,KEY2=VAL)]:env:' \
+        '--target-stdout-path[target stdout destination]:behavior:(Quiet)' \
+        '--target-stderr-path[target stderr destination]:behavior:(Quiet)' \
+        '--capture-path[capture file path (exclusive with prometheus options)]:path:_files' \
+        '--capture-expiriation-seconds[metric expiration time]:s:' \
+        '--capture-format[capture file format]:fmt:(jsonl parquet multi)' \
+        '--capture-flush-seconds[flush interval for capture file (default 60)]:s:' \
+        '--capture-compression-level[parquet compression (1-22, default 3)]:n:' \
+        '--prometheus-addr[Prometheus exporter HTTP bind address]:addr:' \
+        '--prometheus-path[Prometheus exporter Unix-socket path]:path:_files' \
+        '--max-shutdown-delay[max controlled-shutdown wait (default 30)]:s:' \
+        '--experiment-duration-seconds[experiment duration (default 120)]:s:' \
+        '--experiment-duration-infinite[run experiment forever]' \
+        '--warmup-duration-seconds[warmup duration (default 30)]:s:' \
+        '--disable-inspector[skip inspector phase]' \
+        '(- *)'{-h,--help}'[help]' \
+        '*:target arguments:'
+}
+
+_lading "$@"
