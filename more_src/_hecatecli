@@ -1,0 +1,222 @@
+#compdef hecatecli
+# ============================================================================
+# hecatecli - CLI for Hecate persistent GeoJSON-first data store (Node, MIT)
+#
+# Author : Mapbox (mapbox/HecateJS)
+# Upstream: https://github.com/mapbox/HecateJS
+# npm    : hecate-cli (binary: hecatecli)
+#
+# `hecatecli` is the Mapbox-authored Node.js client for
+# Hecate - a persistent, mutable data store focused on
+# GeoJSON-first interchange. It speaks to a remote Hecate
+# server over HTTP and uploads / downloads geographic
+# feature collections, manages bounding-box clipped
+# downloads, downloads server-wide clones, reverts to
+# prior deltas, and manages users + auth rules. The CLI is
+# also the public library API - import the module to use
+# the Hecate class programmatically against a server.
+#
+# Usage:
+#   hecatecli <command> [--help] [--script] [--version]
+#
+# Commands (top-level help):
+#   user            - user management subcommand group
+#   import          - bulk-import GeoJSON features to a
+#                     server (streamed, validated, signed)
+#   feature         - download individual features +
+#                     their history at a given key
+#   schema          - obtain the JSON schema for the
+#                     remote server
+#   auth            - obtain the JSON auth document for
+#                     the remote server
+#   bbox            - download data via bounding-box clip
+#                     from a remote server
+#   clone           - download the complete server
+#                     dataset
+#   revert          - revert data state to a specific
+#                     delta version
+#   help            - print top-level help message
+#
+# Global flags:
+#   --version, -v   - print CLI version
+#   --help, -?      - print help message (also valid as
+#                     subcommand-specific help)
+#   --script        - disable interactive prompts;
+#                     caller must supply all flags
+#
+# Environment:
+#   HECATE_USERNAME, HECATE_PASSWORD - auth credentials
+#                                       (override CLI prompt)
+#
+# The Turfjs lane is built on `@turf/turf` (declared at
+# upstream package.json HEAD), the canonical Node geospatial
+# library by the Turfjs working group (github.com/Turfjs/
+# turf, 9000+ stars) - a modular geospatial analysis
+# engine for GeoJSON. The library bundles ~100 modular
+# sub-packages (@turf/distance, @turf/area, @turf/buffer,
+# @turf/point-in-polygon, @turf/coord-each, ...) into a
+# single `@turf/turf` umbrella import. Each sub-package is
+# also independently npm-installable for tree-shaking-
+# friendly use. Turfjs covers the same algorithm surface
+# as georust/geo (Rust) and golang/geo (Go) at the OGC
+# Simple Features predicate / operator level.
+#
+# hecatecli uses Turfjs in `util/validateGeojson.js` for
+# the upload validation pass: `turf.coordEach(feature,
+# (coords) => { ... })` walks every coordinate pair in the
+# GeoJSON feature before submission, allowing per-coord
+# range / projection sanity checks. Combined with
+# @mapbox/geojsonhint (the strict schema linter), the
+# validation pipeline catches malformed input before it
+# reaches the network.
+#
+# ----------------------------------------------------------------------------
+# AXIS 240 :: Geospatial geometry libraries (point-in-polygon + GIS algos)
+# Round 1420 :: TS-Node slot 3 of 4 :: CLOSES Axis 240 (233rd axis closed)
+#
+# Cross-language canonical library family for this axis:
+#   Rust    : georust/geo                  [R1418 _rtz]
+#   Go      : golang/geo (S2)              [R1419 _create-static-map]
+#   TS/Node : Turfjs/turf                  [R1420 THIS FILE]
+#
+# Turfjs/turf closes Axis 240 with the *modular monorepo +
+# umbrella package* pattern. The three lanes form a clean
+# spectrum of geospatial-library architectures:
+#
+#   - Rust (georust/geo): single typed-geometry crate
+#     family (geo, geo-types, proj) with planar-Cartesian
+#     primitives + opt-in spherical extensions
+#   - Go (golang/geo): pure-Go port of Google's S2 with
+#     spherical-Earth-native coordinates + cell-index
+#     based covering for global-scale workloads
+#   - Node (Turfjs/turf): npm monorepo of ~100 sub-packages
+#     unified under a single umbrella import; planar
+#     primitives by default, spherical-Earth opt-in via
+#     specific algorithms (@turf/distance, @turf/length)
+#
+# Cross-language interop happens at the .geojson wire
+# format level - all three lanes produce + consume the
+# RFC 7946 GeoJSON spec, so feature collections can be
+# round-tripped through any combination of lanes without
+# information loss. The geometry-representation in memory
+# is per-lane (geo::Polygon<f64> vs s2.Polygon vs Polygon
+# from turfjs) but the on-disk format is universal.
+#
+# Structural commentary across the use cases:
+#   - rtz (Rust, georust/geo): server-side lat/lng ->
+#     timezone resolution using precomputed polygon
+#     indexes; planar-Cartesian geo is appropriate when
+#     polygons are pre-projected
+#   - create-static-map (Go, golang/geo S2): static PNG
+#     map renderer with spherical-Earth coordinate
+#     conversion + tile compositing
+#   - hecatecli (Node, Turfjs): GeoJSON validation +
+#     coordinate iteration for upload to a persistent
+#     mutable GeoJSON server (Hecate)
+#
+# Three lanes, three use-case shapes, three geometry-
+# representation philosophies, all converging on RFC 7946
+# GeoJSON as the cross-lane interchange contract.
+#
+# Axis 240 closes the round 1420 cycle - 233rd axis closed
+# total, with the triple-295 round-number landmark
+# (Rust=295 / Go=295 / TS-Node=295).
+# ============================================================================
+
+_hecatecli() {
+    local context state state_descr line
+    typeset -A opt_args
+    local curcontext="$curcontext" ret=1
+
+    _arguments -C \
+        '(- *)'{-v,--version}'[print CLI version]' \
+        '(-\?  --help)'{-\?,--help}'[print help message]' \
+        '--script[disable interactive prompts (caller supplies all flags)]' \
+        '1: :_hecatecli_cmds' \
+        '*::arg:->args' \
+    && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                user)
+                    _arguments \
+                        '(- *)--help[print subcommand help]' \
+                        '--script[disable interactive prompts]' \
+                        '--username[Hecate username]:user:' \
+                        '--password[Hecate password]:pass:' \
+                        '--email[user email (register)]:email:' \
+                        '1:subcommand:(register list)'
+                    ;;
+                import)
+                    _arguments \
+                        '(- *)--help[print subcommand help]' \
+                        '--script[disable interactive prompts]' \
+                        '--input[input GeoJSON file (line-delimited)]:file:_files -g "*.{geojson,json,ldjson,ndjson}"' \
+                        '--username[Hecate username]:user:' \
+                        '--password[Hecate password]:pass:' \
+                        '--message[commit message for the import delta]:msg:'
+                    ;;
+                feature)
+                    _arguments \
+                        '(- *)--help[print subcommand help]' \
+                        '--script[disable interactive prompts]' \
+                        '--feat[feature ID]:id:' \
+                        '--key[feature key]:key:' \
+                        '1:subcommand:(get history key)'
+                    ;;
+                schema)
+                    _arguments \
+                        '(- *)--help[print subcommand help]' \
+                        '--script[disable interactive prompts]' \
+                        '--output[output schema file]:file:_files'
+                    ;;
+                auth)
+                    _arguments \
+                        '(- *)--help[print subcommand help]' \
+                        '--script[disable interactive prompts]'
+                    ;;
+                bbox)
+                    _arguments \
+                        '(- *)--help[print subcommand help]' \
+                        '--script[disable interactive prompts]' \
+                        '--bbox[bounding box minx,miny,maxx,maxy]:bbox:' \
+                        '--output[output GeoJSON file]:file:_files -g "*.{geojson,json,ldjson,ndjson}"'
+                    ;;
+                clone)
+                    _arguments \
+                        '(- *)--help[print subcommand help]' \
+                        '--script[disable interactive prompts]' \
+                        '--output[output GeoJSON file]:file:_files -g "*.{geojson,json,ldjson,ndjson}"'
+                    ;;
+                revert)
+                    _arguments \
+                        '(- *)--help[print subcommand help]' \
+                        '--script[disable interactive prompts]' \
+                        '--start[start delta ID]:id:' \
+                        '--end[end delta ID]:id:'
+                    ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_hecatecli_cmds() {
+    local -a cmds
+    cmds=(
+        'user:user management (register, list)'
+        'import:bulk-import GeoJSON features to a server'
+        'feature:download individual features + history'
+        'schema:obtain the JSON schema for the server'
+        'auth:obtain the JSON auth document for the server'
+        'bbox:download data via bounding-box clip'
+        'clone:download the complete server dataset'
+        'revert:revert state to a specific delta'
+        'help:print top-level help message'
+    )
+    _describe -t commands 'hecatecli command' cmds
+}
+
+_hecatecli "$@"
