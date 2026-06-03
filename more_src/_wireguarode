@@ -1,0 +1,116 @@
+#compdef wireguarode
+# ============================================================================
+# wireguarode - WireGuard with ACLs and TOTP 2FA (Node, Apache-2.0)
+#
+# Author : Pedro Dias (apocas)
+# Upstream: https://github.com/apocas/wireguarode
+# npm    : wireguarode
+#
+# wireguarode wraps a vanilla WireGuard server with per-peer
+# access-control lists + TOTP-based time-bound activation: a
+# peer's tunnel is closed by default, and the operator (or the
+# peer themselves via a self-service portal) submits a TOTP code
+# from a Google-Authenticator-compatible app to "activate" the
+# peer for a configurable time window. Combined with the
+# `wireguard-tools` userspace + iptables NAT layer, this provides
+# 2FA-gated VPN access on top of an off-the-shelf WireGuard
+# deployment.
+#
+# Subcommands (commander.js dispatch tree):
+#   restart                       - bounce the WireGuard interface
+#   reload                        - regenerate configs + reload
+#   save        --path <path>     - persist current config
+#   generate    --path <path>     - emit wg-quick configs to disk
+#   group add / remove <id>       - manage ACL groups
+#   group adddestination / removedestination <id> <addr>
+#   peer add / remove / activate / deactivate / secret / expire
+#
+# The TOTP lane is built on `otplib ^12.0.1` (declared verbatim
+# at upstream package.json HEAD), the canonical Node OTP library
+# by Gerald Yeo (yeojz/otplib, 2200+ stars on github.com/yeojz/
+# otplib). otplib implements RFC 6238 (TOTP) layered on RFC 4226
+# (HOTP), supports HMAC-SHA1/SHA256/SHA512, the `otpauth://` URI
+# parser + builder, base32 secret encoding/decoding, optional
+# verification window for clock-drift tolerance, and a typed
+# class API (`authenticator.generate(secret)` /
+# `authenticator.verify({token, secret})`).
+#
+# ----------------------------------------------------------------------------
+# AXIS 218 :: TOTP (RFC 6238 Time-based One-Time Password Algorithm)  [CLOSES]
+# Round 1354 :: TS-Node slot 3 of 4 :: CLOSES Axis 218 (211th axis closed)
+#
+# Cross-language canonical library family for this axis:
+#   Rust    : storyfeet/totp-lite + constantoine/totp-rs    [R1352 _totp]
+#   Go      : pquerna/otp                                   [R1353 _totp-ssh-fluxer]
+#   TS/Node : yeojz/otplib                                  [R1354 THIS FILE]
+#
+# All three closers exemplify the "creative TOTP use" pattern -
+# none of them are user-facing password-manager UIs. The Rust
+# opener (totp) is a TUI dashboard for stored secrets; the Go
+# middle (totp-ssh-fluxer) uses TOTP as a covert side-channel
+# for SSH port rotation; the Node closer (wireguarode) gates
+# WireGuard peers behind TOTP-bound activation windows. Same
+# spec, three different security topologies built on top.
+#
+# RFC 6238 was published in 2011 as the standardization of
+# Google's 2009 Authenticator app's algorithm; pquerna/otp (Go),
+# yeojz/otplib (JS), and constantoine/totp-rs (Rust) all date
+# from 2014-2017 and have remained the canonical libraries in
+# their lanes for 8+ years - rare longevity in the
+# JavaScript/Node ecosystem in particular.
+# ============================================================================
+
+_wireguarode() {
+    local context state state_descr line
+    typeset -A opt_args
+    local curcontext="$curcontext" ret=1
+
+    _arguments -C \
+        '(- *)'{-h,--help}'[print help]' \
+        '(- *)'{-V,--version}'[print version]' \
+        '1: :_wireguarode_cmds' \
+        '*::arg:->args' \
+    && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                restart|reload) _arguments '(- *)'{-h,--help}'[help]' ;;
+                save|generate)  _arguments '--path[path to wireguarode/wireguard config]:directory:_files -/' '(- *)'{-h,--help}'[help]' ;;
+                group)          _wireguarode_group ;;
+                peer)           _wireguarode_peer ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_wireguarode_cmds() {
+    local -a cmds
+    cmds=(
+        'restart:Restart the WireGuard interface'
+        'reload:Regenerate configs and reload WireGuard'
+        'save:Persist the current Wireguarode configuration'
+        'generate:Generate WireGuard wg-quick config files'
+        'group:Manage ACL groups (add / remove / adddestination / removedestination)'
+        'peer:Manage peers (add / remove / activate / deactivate / secret / expire)'
+    )
+    _describe -t commands 'wireguarode command' cmds
+}
+
+_wireguarode_group() {
+    _arguments \
+        '(- *)'{-h,--help}'[help]' \
+        '1:subcommand:(add remove adddestination removedestination)' \
+        '*::arg:->_default'
+}
+
+_wireguarode_peer() {
+    _arguments \
+        '(- *)'{-h,--help}'[help]' \
+        '1:subcommand:(add remove activate deactivate secret expire)' \
+        '*::arg:->_default'
+}
+
+_wireguarode "$@"
