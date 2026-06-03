@@ -1,0 +1,146 @@
+#compdef gitness
+# ============================================================================
+# gitness - Harness Open Source: end-to-end developer platform server
+#            (Go, Apache-2.0)
+#
+# Author : Harness team
+# Upstream: https://github.com/harness/harness
+#
+# `gitness` is the binary for Harness Open Source (formerly
+# Gitness) - the open-source self-hostable end-to-end developer
+# platform from Harness Inc. Combines a Git forge (SCM with
+# pull requests + code review), an embedded CI runner, an
+# artifact registry, and IDP-style dashboards into a single
+# Go binary backed by a Postgres or SQLite store. Designed
+# as the OSS counterpart to the proprietary Harness SaaS.
+#
+# Subcommand tree (kingpin v2):
+#   server [envfile]            - start the Harness server
+#                                 --enable-ci  also spin up CI runners
+#   migrate                     - database migration utility
+#     current                     show current migration version
+#     to <version>                migrate up/down to a version
+#   login <server>              - login to a remote Harness instance
+#   register <server>           - register a new account
+#   logout                      - log out from the current account
+#   user                        - per-user account operations
+#   users                       - admin user management
+#     create / find / list / update / delete
+#   hooks                       - git server-side hook helpers
+#                                 (invoked by gitness git layer
+#                                  internally; rarely run directly)
+#   swagger <path>              - emit the OpenAPI schema to <path>
+#
+# The mimetype lane is built on `github.com/gabriel-vasile/
+# mimetype` (declared as a direct dep at upstream go.mod
+# HEAD and used from internal/handler/upload paths), the
+# canonical Go magic-byte file-type detector by Gabriel
+# Vasile (github.com/gabriel-vasile/mimetype, 1300+ stars).
+# mimetype is the uncontested Go choice for content-type
+# detection - the standard library's `http.DetectContentType`
+# covers only ~30 common formats while mimetype handles 200+
+# IANA-registered types via a hierarchical detection tree
+# (each format has a parent format; image/png is a child of
+# application/octet-stream, etc.) that allows fast bailout
+# at any level. gitness uses it when ingesting Git LFS
+# blobs + pull-request attachment uploads + artifact-registry
+# pushes to validate the declared Content-Type against the
+# actual bytes - the same "never trust the extension"
+# pattern as the Rust slot's infer use case.
+#
+# ----------------------------------------------------------------------------
+# AXIS 231 :: File-type / MIME detection from magic bytes
+# Round 1392 :: Go slot 2 of 4 :: continues Axis 231
+#
+# Cross-language canonical library family for this axis:
+#   Rust    : bojand/infer                 [R1391 _lit]
+#   Go      : gabriel-vasile/mimetype      [R1392 THIS FILE]
+#   TS/Node : sindresorhus/file-type       [R1393 closing]
+#
+# mimetype is structurally interesting in this axis: it is
+# the *only* Go MIME-detection library with significant
+# adoption, but it does NOT replace the stdlib
+# net/http.DetectContentType - the two coexist because they
+# trade off coverage vs. dependency size. The stdlib version
+# is in every Go binary at zero size cost but only knows ~30
+# formats; mimetype adds ~2 MB of magic-byte tables but
+# covers 200+. The Go ecosystem has settled on "use the
+# stdlib for common HTTP-served content, use mimetype when
+# you need accurate dispatch on arbitrary uploaded bytes."
+#
+# The use-case spectrum across this axis:
+#   - Rust slot (lit): document-parser dispatch (PDF vs DOCX
+#     vs image branch selection)
+#   - Go slot (gitness): trust-but-verify uploaded file
+#     declared Content-Type
+#   - <Node slot> (closing): similar
+#
+# All three lanes share the *byte-magic* approach: read the
+# first 8-16 KB of a file, match against a precompiled table
+# of magic-number signatures, return the canonical MIME type.
+# No two implementations share the same magic-byte table
+# verbatim, but they agree on the 200+ widely-used formats -
+# the wire-format-level interop is total despite independent
+# table maintenance per library.
+# ============================================================================
+
+_gitness() {
+    local context state state_descr line
+    typeset -A opt_args
+    local curcontext="$curcontext" ret=1
+
+    _arguments -C \
+        '(- *)'{-h,--help}'[print help]' \
+        '(- *)--version[print version]' \
+        '1: :_gitness_cmds' \
+        '*::arg:->args' \
+    && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                server)   _arguments \
+                              '--enable-ci[start CI runners for build executions]' \
+                              '(- *)'{-h,--help}'[help]' \
+                              '1:envfile:_files -g "*.env"' ;;
+                migrate)  _arguments \
+                              '(- *)'{-h,--help}'[help]' \
+                              '1:subcommand:(current to)' \
+                              '*::arg:->_default' ;;
+                login|register) _arguments \
+                              '(- *)'{-h,--help}'[help]' \
+                              '1:remote server URL:' ;;
+                logout)   _arguments '(- *)'{-h,--help}'[help]' ;;
+                user)     _arguments '(- *)'{-h,--help}'[help]' '*:arg:' ;;
+                users)    _arguments \
+                              '(- *)'{-h,--help}'[help]' \
+                              '1:subcommand:(create delete find list update)' \
+                              '*::arg:->_default' ;;
+                hooks)    _arguments '(- *)'{-h,--help}'[help]' '*:arg:' ;;
+                swagger)  _arguments \
+                              '(- *)'{-h,--help}'[help]' \
+                              '1:output path:_files' ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_gitness_cmds() {
+    local -a cmds
+    cmds=(
+        'server:Start the Harness server'
+        'migrate:Database migration tool'
+        'login:Login to a remote Harness server'
+        'register:Register a new account'
+        'logout:Log out from the current account'
+        'user:Per-user account operations'
+        'users:Admin user management (create/delete/find/list/update)'
+        'hooks:Git server-side hook helpers'
+        'swagger:Emit the OpenAPI schema'
+    )
+    _describe -t commands 'gitness command' cmds
+}
+
+_gitness "$@"
