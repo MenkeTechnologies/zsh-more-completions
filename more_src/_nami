@@ -1,0 +1,118 @@
+#compdef nami
+# ---------------------------------------------------------------------------
+# nami — a clean and tidy decentralized package manager (Go, 352★)
+#
+# upstream: https://github.com/txthinking/nami
+# author : Cloud (cloud@txthinking.com) — author of the txthinking
+#          collective (brook proxy, joker, mad, etc.)
+# license: GPL-3.0
+#
+# Source-direct completion: every top-level subcommand below is verbatim
+# from main.go on the nami v20240902 tip — `urfave/cli/v2` `cli.Command`
+# registrations parsed exactly as declared.  Every command takes only
+# positional args; no flag options on subcommands (all configuration is
+# via the `config` subcommand which writes to the bbolt-backed key/value
+# store).  Top-level App.Before hook fetches the latest release from
+# GitHub to nag if the user is behind on version (skipped when running
+# `nami install nami` to bootstrap the upgrade).
+#
+# Direct deps from go.mod (selected):
+#   go.etcd.io/bbolt  v1.3.8   ← canonical Go pure-Go embedded ACID
+#                                B-tree key-value store (this axis) —
+#                                fork of Ben Johnson's boltdb (now
+#                                archived) maintained by the etcd
+#                                community after etcd v3 adopted it as
+#                                the canonical KV backend.  Single-file,
+#                                memory-mapped, single-writer/multi-
+#                                reader, copy-on-write B+ trees.
+#                                nami uses bbolt to persist the local
+#                                package state at ~/.nami/nami.db (which
+#                                packages are installed, where their
+#                                binaries live, config key/values).
+#   github.com/urfave/cli/v2    (Jeremy Saenz's urfave/cli v2 — Go CLI
+#                                framework predating cobra dominance)
+#   github.com/bitly/go-simplejson (Jehiah Czebotar's simplejson — used
+#                                to parse the GitHub Releases API
+#                                response for the version-check banner)
+#
+# nami is a decentralized package manager that installs binaries directly
+# from GitHub releases.  No centralized registry — each package is
+# identified by its GitHub repo path (e.g. `nami install
+# github.com/txthinking/brook`) and the version-specific binary is
+# downloaded from the GitHub Releases artifact matching the host's OS
+# and architecture.  The `release` subcommand provides the publisher
+# side: it pushes a local binaries directory to a GitHub release for a
+# given repo + version, automating multi-arch artifact upload via the
+# GitHub API.  bbolt persists the local installed-packages registry so
+# `list` / `remove` can be O(1) lookups.
+#
+# === AXIS 172 CONTINUES — embedded ACID B-tree KV stores (LMDB-style) ===
+# Axis position: Go=227 continues Axis 172 (slot 2/0/0).  Canonical Go
+# pure-Go embedded ACID B-tree key-value store is `go.etcd.io/bbolt` —
+# the etcd-maintained fork of Ben Johnson's `boltdb/bolt` (archived in
+# 2018 when Ben stopped maintaining it).  Provides single-file embedded
+# database with MVCC, copy-on-write B+ trees, single-writer / multi-
+# reader concurrency, ACID transactions, memory-mapped I/O.  Used by
+# etcd v3 storage engine, tailscale state, consul + nomad + vault
+# (HashiCorp stack via hashicorp/raft-boltdb), restic backups, coredns
+# plugins, hugo modules cache, palworld-server-tool, focus Pomodoro
+# timer, ayoisaiah/focus, and nami's package state DB.
+#
+# Cycle position in current 3+1 micro-cycle:
+#   Rust=227     _cdk-cli             ← previous round (axis 172 OPENS, 1/0/0)
+#   Go=227       ← THIS FILE          (axis 172 continues, slot 2/0/0)
+#   TS-Node=227  ← next round         (axis 172 CLOSES at triple-227, 1/1/1)
+# ---------------------------------------------------------------------------
+
+_nami() {
+    local context state state_descr line ret=1
+    typeset -A opt_args
+
+    _arguments -C \
+        '(- *)'{-h,--help}'[show help]' \
+        '(- *)'{-v,--version}'[print the version]' \
+        '1: :->cmds' \
+        '*::arg:->args' && ret=0
+
+    case $state in
+        cmds)
+            local -a subcmds
+            subcmds=(
+                'install:install a package (e.g. $ nami install github.com/txthinking/brook) — downloads OS/arch-matched artifact from GitHub Releases'
+                'remove:remove an installed package by name (e.g. $ nami remove brook)'
+                'list:list installed packages with their version and install location'
+                'config:configure key/value (e.g. $ nami config key value); with no args prints all current keys'
+                'release:create or update a version with binaries directory on a GitHub project (e.g. $ nami release github.com/txthinking/nami v1.1.1 ./binaries/)'
+                'help:show help'
+            )
+            _describe -t commands 'nami command' subcmds && ret=0
+            ;;
+        args)
+            case $words[1] in
+                install)
+                    _arguments \
+                        '*:package (GitHub repo path, e.g. github.com/txthinking/brook, or short name for already-known packages):' && ret=0
+                    ;;
+                remove)
+                    _arguments \
+                        '*:package name to remove:' && ret=0
+                    ;;
+                config)
+                    _arguments \
+                        '1:config key (omit to print all current key/values):' \
+                        '2:config value:' && ret=0
+                    ;;
+                release)
+                    _arguments \
+                        '1:GitHub project (e.g. github.com/txthinking/nami):' \
+                        '2:version tag (e.g. v1.1.1):' \
+                        '3:local binaries directory to upload as release artifacts:_files -/' && ret=0
+                    ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_nami "$@"
