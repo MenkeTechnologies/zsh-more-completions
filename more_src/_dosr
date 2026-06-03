@@ -1,0 +1,146 @@
+#compdef dosr chsr
+# ---------------------------------------------------------------------------
+# RootAsRole — RBAC sudo alternative with Linux capabilities support (Rust, 274★)
+#
+# upstream: https://github.com/LeChatP/RootAsRole
+# author : LeChatP
+# license: GPL-3.0
+#
+# Source-direct completion: every flag below is verbatim from src/sr/main.rs
+# USAGE const_format block (dosr binary) and src/chsr/cli/usage.rs RAR_USAGE_*
+# const_format blocks (chsr admin tool) on the RootAsRole tip.
+#
+# Direct deps from Cargo.toml (selected, when "pcre2" feature is enabled):
+#   pcre2          ^0.2 (optional)   ← canonical Rust PCRE2 binding (this
+#                                      axis) — by Andrew Gallant (BurntSushi)
+#                                      wrapping the official C PCRE2 lib;
+#                                      used here for fine-grained command-
+#                                      pattern matching in role definitions
+#                                      that benefit from Perl-flavor regex
+#   bon             (builder pattern)
+#   capctl          (Linux capability state)
+#   pty_process     (PTY for shells)
+#   landlock        (sandboxing for chsr)
+#   pest            (PEG grammar parser for chsr's command DSL)
+#
+# RootAsRole replaces sudo/su with role-based access control + Linux
+# capability mgmt + per-command policy enforcement.  `dosr` is the
+# do-as-root executor; `chsr` is the admin/role-editor tool with its own
+# domain-specific subgrammar parsed via `pest`.
+#
+# === AXIS 165 OPENER — PCRE2 / Perl-flavor regex ecosystem ===
+# Axis position: Rust=220 OPENS Axis 165 at slot 1/0/0.  Canonical Rust
+# PCRE2 binding is `pcre2-rs` by Andrew Gallant (BurntSushi — also wrote
+# ripgrep, regex, walkdir, memchr).  It wraps Philip Hazel's PCRE2 C library
+# providing the Perl-compatible regex flavor including lookarounds, atomic
+# groups, recursive patterns, conditionals — features the default Rust
+# `regex` crate (NFA-based, no lookaround) intentionally omits.
+#
+# Cycle position in current 3+1 micro-cycle:
+#   Rust=220   ← THIS FILE              (axis 165 OPENS, slot 1/0/0)
+#   Go=220     ← next round              (axis 165 continues, slot 2/0/0)
+#   TS-Node=220 ← round after            (axis 165 CLOSES at triple-220, slot 1/1/1)
+# ---------------------------------------------------------------------------
+
+_dosr() {
+    case "$service" in
+        dosr) _dosr_main ;;
+        chsr) _chsr_main ;;
+    esac
+}
+
+# `dosr [OPTIONS] [COMMAND]...` — execute privileged command via RBAC
+_dosr_main() {
+    _arguments -s -S \
+        '(-r --role)'{-r,--role=}'[select a specific role to use]:role:' \
+        '(-t --task)'{-t,--task=}'[select a task within the role (requires --role)]:task:' \
+        '(-E --preserve-env)'{-E,--preserve-env}'[preserve environment variables if matching task allows]' \
+        '(-p --prompt)'{-p,--prompt=}'[override the default password prompt (default "Password: ")]:prompt:' \
+        '(-u --user)'{-u,--user=}'[user to execute the command as]:user:_users' \
+        '(-g --group)'{-g,--group=}'[group(s) to execute the command as (comma-separated)]:groups:_groups' \
+        '(-i --info)'{-i,--info}'[display rights of executor]' \
+        '(- *)'{-v,--version}'[print dosr version]' \
+        '(- *)'{-h,--help}'[print help]' \
+        '*::command and args:_command_names -e'
+}
+
+# `chsr [command] [options]` — role manager admin tool
+_chsr_main() {
+    local context state state_descr line ret=1
+    typeset -A opt_args
+
+    local -a subcmds
+    subcmds=(
+        'list:list available items (alias: show, l)'
+        'show:alias for list'
+        'l:alias for list'
+        'role:manage roles and related operations (alias: r) — chsr role [role] add|del|show|purge|grant|revoke ...'
+        'r:alias for role'
+        'options:manage options (path/env/root/bounding/timeout/authentication/execinfo/umask)'
+        'convert:convert policy format (-r/--reconfigure /etc/security/rootasrole.json) supports json|cbor with --from'
+    )
+
+    _arguments -C \
+        '(- *)'{-h,--help}'[show help for commands and options]' \
+        '1: :->cmds' \
+        '*::arg:->args' && ret=0
+
+    case $state in
+        cmds)
+            _describe -t commands 'chsr command' subcmds && ret=0
+            ;;
+        args)
+            case $line[1] in
+                role|r)
+                    local -a rops
+                    rops=(
+                        'add:add a new role (alias: create)'
+                        'create:alias for add'
+                        'del:delete a specified role (aliases: delete, unset, d, rm)'
+                        'delete:alias for del'
+                        'unset:alias for del'
+                        'd:alias for del'
+                        'rm:alias for del'
+                        'show:show details (alias: list, l) — show actors|tasks|all'
+                        'list:alias for show'
+                        'l:alias for show'
+                        'purge:remove all items from a role (actors|tasks|all)'
+                        'grant:grant permissions to a user or group (--user / --group)'
+                        'revoke:revoke permissions from a user or group'
+                        'task:enter task subgrammar — chsr role [role] task [task] show|purge|add|del|...'
+                        'options:enter options subgrammar — chsr role [role] options [option] [op]'
+                    )
+                    _describe -t commands 'chsr role operation' rops && ret=0
+                    ;;
+                options)
+                    local -a oops
+                    oops=(
+                        'path:manage path settings (setpolicy delete-all|keep-safe|keep-unsafe|inherit / set / whitelist|wl / blacklist|bl)'
+                        'env:manage env settings (setpolicy delete-all|keep-all|inherit / set k=v,.. / keep-only / delete-only / whitelist / blacklist / checklist / setlist)'
+                        'root:defines when root user gets default privs (unset|privileged|user|inherit)'
+                        'bounding:defines when dropped caps are permanently removed (unset|strict|ignore|inherit)'
+                        'timeout:manage timeout settings (set --type tty|ppid|uid --duration HH:MM:SS --max-usage N / unset)'
+                        'authentication:defines if user needs to authenticate (unset|skip|perform|inherit)'
+                        'execinfo:defines if user sees exec settings (unset|display|hide|inherit)'
+                        'umask:defines umask for executed command (unset or 022)'
+                        'mask:alias for umask'
+                    )
+                    _describe -t commands 'chsr options' oops && ret=0
+                    ;;
+                convert)
+                    _arguments \
+                        '(-r --reconfigure)'{-r,--reconfigure}'[reconfigure /etc/security/rootasrole.json to specify the new location]' \
+                        '--from=[specify the source format]:type:(json cbor)' \
+                        '*:to_type to_file (json|cbor):' && ret=0
+                    ;;
+                list|show|l)
+                    ret=0
+                    ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_dosr "$@"
