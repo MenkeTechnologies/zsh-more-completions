@@ -1,0 +1,156 @@
+#compdef rtz
+# ============================================================================
+# rtz - Rust TimeZone: lat/lng -> timezone + admin lookup (Rust, MIT)
+#
+# Author : Aaron Roney (twitchax)
+# Upstream: https://github.com/twitchax/rtz
+# crates : rtz (binary: rtz)
+#
+# `rtz` resolves "what timezone is at this lat/lng" + "what
+# administrative boundary contains this lat/lng" queries
+# against precomputed geospatial indexes built from two
+# canonical datasets:
+#   - NED (Natural Earth Data) - low-resolution
+#     country/timezone polygons; good for fast lookups,
+#     poor at coastlines + island chains
+#   - OSM (OpenStreetMap) boundaries - high-resolution
+#     polygons with island chains, exclaves, enclaves;
+#     larger index, more accurate at edge cases
+#
+# Available as three integrations:
+#   - CLI binary (`rtz` - this file)
+#   - Rust library (`rtzlib` crate)
+#   - HTTP server (`rtz serve`)
+#
+# The CLI shape (clap derive):
+#   ned tz <lng,lat>         - timezone lookup via NED
+#                              dataset (low-res)
+#   osm tz <lng,lat>         - timezone lookup via OSM
+#                              dataset (high-res)
+#   osm admin <lng,lat>      - administrative boundary
+#                              lookup via OSM dataset
+#                              (country / region / city)
+#   dump-geojson <prefix>    - emit the timezone polygons
+#                              to GeoJSON files (debug)
+#   serve                    - run the rtz HTTP API server
+#     -c, --config-path <p>    - server config path
+#     -b, --bind-address <a>   - bind address
+#     -p, --port <n>           - bind port
+#     -s, --should-log <bool>  - enable request logging
+#
+# Coordinates are passed as a single comma-separated
+# `lng,lat` string (note: longitude first, then latitude -
+# matches the GeoJSON convention rather than the more
+# common "lat,lng" Google Maps URL convention).
+#
+# The geo lane is built on `geo` + `geo-types` (declared at
+# upstream rtz-core/Cargo.toml HEAD as part of the
+# georust/geo crate family), the canonical Rust geospatial
+# library by the georust working group (github.com/georust/
+# geo, 1700+ stars). The crate family provides typed
+# geometries (`Point`, `LineString`, `Polygon`,
+# `MultiPolygon`, `Geometry`), the standard algorithm set
+# (point-in-polygon, intersection, contains, distance,
+# centroid, convex hull, simplification), and integration
+# with the `proj` crate for projection transforms.
+# georust/geo is the uncontested Rust geospatial library -
+# every Rust GIS / mapping / location-aware project depends
+# on it for the core geometry types + algorithms. rtz uses
+# `geo`'s point-in-polygon (via the `Contains` trait) as
+# the lookup primitive: given a query (lng, lat), find
+# every timezone / admin polygon containing the point.
+#
+# ----------------------------------------------------------------------------
+# AXIS 240 :: Geospatial geometry libraries (point-in-polygon + GIS algos)
+# Round 1418 :: Rust slot 1 of 4 :: OPENS Axis 240 (round-number landmark)
+#
+# Cross-language canonical library family for this axis (proposed):
+#   Rust    : georust/geo                  - typed geometries + GIS algos
+#   Go      : golang/geo                   - Google's S2-geometry-Go +
+#                                            spherical-Earth primitives
+#                                            (alternative: paulmach/orb is
+#                                             a planar-Cartesian alternative)
+#   TS/Node : Turfjs/turf                  - modular geospatial library;
+#                                            de-facto JS Turfjs covers the
+#                                            same algorithm surface as
+#                                            georust/geo
+#
+# Axis 240 is the round-number landmark axis at round 1418.
+# Geospatial libraries are a clean spec-bound axis - the
+# OGC (Open Geospatial Consortium) Simple Features
+# specification defines the typed geometry vocabulary +
+# the standard predicate / operator set (intersects,
+# contains, distance, area, ...). Compliant libraries
+# produce bit-identical results for the same geometry +
+# predicate combination, modulo floating-point precision
+# differences.
+#
+# The structural commentary across the three lanes:
+#   - georust/geo (Rust): planar-Cartesian algorithms with
+#     optional projection via proj-crate; preferred when
+#     working in projected coordinate systems
+#   - golang/geo (Go): Google's S2-Geometry implementation
+#     in Go - spherical-Earth-native (no projection
+#     ambiguity), excellent for global-scale problems
+#     (cell-index based covering for ML feature stores,
+#     proximity queries at world scale)
+#   - Turfjs/turf (Node): planar + spherical algorithms
+#     bundled into a single npm tree; ~60 sub-packages
+#     (@turf/distance, @turf/area, @turf/buffer, ...)
+#     for tree-shaking-friendly use
+#
+# All three converge on the OGC Simple Features semantics
+# at the *predicate* level. The geometry-representation
+# differs: planar (georust/geo) vs spherical (golang/geo)
+# vs both (Turfjs). For applications that care about
+# global-scale correctness (no projection-induced area
+# distortion at the poles), the Go slot's S2 is the
+# strongest; for applications working within a single
+# projected map, the Rust slot's planar geometry is the
+# simplest. Axis 240 lands at the round-number landmark
+# with three complementary geospatial-algorithm philosophies.
+# ============================================================================
+
+_rtz() {
+    local context state state_descr line
+    typeset -A opt_args
+    local curcontext="$curcontext" ret=1
+
+    _arguments -C \
+        '(- *)'{-h,--help}'[print help]' \
+        '(- *)'{-V,--version}'[print version]' \
+        '1: :_rtz_cmds' \
+        '*::arg:->args' \
+    && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                ned)         _arguments '(- *)'{-h,--help}'[help]' '1:subcommand:(tz)' '*::arg:->_default' ;;
+                osm)         _arguments '(- *)'{-h,--help}'[help]' '1:subcommand:(tz admin)' '*::arg:->_default' ;;
+                dump-geojson) _arguments '(- *)'{-h,--help}'[help]' '1:prefix:' ;;
+                serve)       _arguments \
+                                 '(-c --config-path)'{-c,--config-path}'[server config path]:file:_files' \
+                                 '(-b --bind-address)'{-b,--bind-address}'[bind address]:addr:' \
+                                 '(-p --port)'{-p,--port}'[bind port]:port:' \
+                                 '(-s --should-log)'{-s,--should-log}'[enable request logging]:bool:(true false)' \
+                                 '(- *)'{-h,--help}'[help]' ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_rtz_cmds() {
+    local -a cmds
+    cmds=(
+        'ned:NaturalEarth Data dataset operations (low-resolution)'
+        'osm:OpenStreetMap dataset operations (high-resolution)'
+        'dump-geojson:Emit the timezone polygons to GeoJSON files'
+        'serve:Run the rtz HTTP API server'
+    )
+    _describe -t commands 'rtz command' cmds
+}
+
+_rtz "$@"
