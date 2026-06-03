@@ -1,0 +1,163 @@
+#compdef gaps-cli
+# ============================================================================
+# gaps-cli - CLI for GAPS (Gaps is an Academical Planification System) (Go, LGPL-3.0)
+#
+# Author : Loris Hermann (heig-lherman / lutonite.dev)
+# Upstream: https://github.com/heig-lherman/gaps-cli
+#
+# gaps-cli is a Cobra-based CLI for HEIG-VD (Haute Ecole d'Ingenierie
+# et de Gestion du Canton de Vaud, Switzerland) students that talks to
+# the school's GAPS academic-planification system over its internal
+# HTTP endpoints: log in with einet-AAI credentials, fetch grades /
+# absences / report card / class list as table or JSON, scrape grade
+# changes on an interval and forward them to a Discord notifier API,
+# and pull the per-semester schedule as an RFC 5545 iCalendar feed.
+#
+# The schedule lane is built on `github.com/arran4/golang-ical`,
+# declared at go.mod as `v0.2.6` (verified via gh API on HEAD). Verbatim
+# from `gaps/schedule.go` upstream:
+#
+#     package gaps
+#     import (
+#         "github.com/arran4/golang-ical"
+#     )
+#
+#     func (a *ScheduleAction) FetchSchedule() (*ics.Calendar, error) {
+#         req, err := a.cfg.buildRequest("POST", fmt.Sprintf(
+#             "/consultation/horaires/?annee=%d&trimestre=%d&type=%d&id=%d&icalendarversion=2&individual=1",
+#             a.year, a.semester, a.schedType, a.targetId,
+#         ))
+#         ...
+#         return ics.ParseCalendar(resp.Body)
+#     }
+#
+# `arran4/golang-ical` is the canonical Go iCalendar (RFC 5545) library.
+# Its `*ics.Calendar` type carries VEVENT / VTODO / VTIMEZONE component
+# slices, plus property accessors, RRULE recurrence walking, and a
+# `Serialize() string` that emits a spec-compliant document. The schedule
+# action constructs `*ics.Calendar` per-student / per-teacher / per-room
+# by parsing the response body of the GAPS horaires endpoint.
+#
+# ----------------------------------------------------------------------------
+# AXIS 196 :: iCALENDAR / RFC 5545 CALENDAR FORMAT
+# Round 1287 :: Go slot 2 of 4 :: continues Axis 196
+#
+# Cross-language canonical library family for this axis:
+#   Rust    : icalendar          (hoodie/icalendar)         [R1286 _eskom-calendar]
+#   Go      : arran4/golang-ical                            [R1287 THIS FILE]
+#   TS/Node : ical.js            (kewisch/ical.js)          [R1288 closing]
+#
+# arran4/golang-ical sits at v0.3.x at the time of writing and has
+# become the de-facto Go RFC 5545 library after the older laurent22/ical-go
+# and PuerkitoBio/purell-ish projects went stale - it implements the
+# component model (VCALENDAR / VEVENT / VTODO / VJOURNAL / VTIMEZONE),
+# the property/parameter layer (per-property TZID, ROLE, CN, etc.),
+# RRULE recurrence walking, and Serialize() round-tripping. The library
+# is dependency-free apart from the Go stdlib, which is the structural
+# differentiator vs the cheerio/parse5 stacks where the parser is a
+# vendored fork.
+#
+# gaps-cli is a real-world consumer landing a downstream calendar feed
+# into Thunderbird / Apple Calendar / Google Calendar from a closed-source
+# Swiss school API - it round-trips a Calendar through arran4's parser
+# and is exercised by HEIG-VD students every semester.
+# ============================================================================
+
+_gaps-cli() {
+    local context state state_descr line
+    typeset -A opt_args
+    local curcontext="$curcontext" ret=1
+
+    _arguments -C \
+        '--config[auth config file (default $HOME/.config/gaps-cli/gaps.yaml)]:file:_files' \
+        '--credentials[credentials config file (default $HOME/.config/gaps-cli/credentials.yaml)]:file:_files' \
+        '--log-level[logging level]:level:(panic fatal error warn info debug trace)' \
+        '--url[GAPS URL (default https://gaps.heig-vd.ch)]:url:' \
+        '(- *)'{-h,--help}'[print help]' \
+        '1: :_gaps-cli_cmds' \
+        '*::arg:->args' \
+    && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                login)       _gaps-cli_login;        ret=0 ;;
+                classes)     _gaps-cli_global;       ret=0 ;;
+                grades)      _gaps-cli_grades;       ret=0 ;;
+                absences)    _gaps-cli_absences;     ret=0 ;;
+                report-card) _gaps-cli_reportcard;   ret=0 ;;
+                scraper)     _gaps-cli_scraper;      ret=0 ;;
+                version)     _gaps-cli_global;       ret=0 ;;
+                help)        _gaps-cli_cmds;         ret=0 ;;
+                completion)  _arguments '1:shell:(bash zsh fish powershell)'; ret=0 ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_gaps-cli_cmds() {
+    local -a cmds
+    cmds=(
+        'login:Log in to GAPS for future commands'
+        'classes:Print the current class list'
+        'grades:Consult your grades'
+        'absences:Consult your absences'
+        'report-card:Consult your report card'
+        'scraper:Run grade scraper for the Discord notifier API'
+        'version:Print the current build version'
+        'completion:Generate the autocompletion script for the specified shell'
+        'help:Help about any command'
+    )
+    _describe -t commands 'gaps-cli command' cmds
+}
+
+_gaps-cli_global() {
+    _arguments '(- *)'{-h,--help}'[print help]'
+}
+
+_gaps-cli_login() {
+    _arguments \
+        '--clear-password[reset the password stored in the config file]' \
+        '(-u --username)'{-u,--username}'[einet AAI username]:username:' \
+        '--password[einet AAI password]:password:' \
+        '(- *)'{-h,--help}'[print help]'
+}
+
+_gaps-cli_grades() {
+    _arguments \
+        '(-o --format)'{-o,--format}'[output format]:format:(table json)' \
+        '--class[restrict to specific class]:class:' \
+        '(-y --year)'{-y,--year}'[academic year (e.g. 2025 for 2025-2026)]:year:' \
+        '(-s --semester)'{-s,--semester}'[academic semester]:semester:(S1 S2 all)' \
+        '(- *)'{-h,--help}'[print help]'
+}
+
+_gaps-cli_absences() {
+    _arguments \
+        '(-o --format)'{-o,--format}'[output format]:format:(table json)' \
+        '(-y --year)'{-y,--year}'[academic year]:year:' \
+        '(-s --semester)'{-s,--semester}'[semester filter]:semester:(all ete 1 2)' \
+        '(-r --rate)'{-r,--rate}'[minimum rate to display]:rate:' \
+        '(- *)'{-h,--help}'[print help]'
+}
+
+_gaps-cli_reportcard() {
+    _arguments \
+        '(-o --format)'{-o,--format}'[output format]:format:(table json)' \
+        '(- *)'{-h,--help}'[print help]'
+}
+
+_gaps-cli_scraper() {
+    _arguments \
+        '(-u --username)'{-u,--username}'[einet AAI username]:username:' \
+        '(-p --password)'{-p,--password}'[einet AAI password]:password:' \
+        '--history[history file path]:file:_files' \
+        '(-U --api-url)'{-U,--api-url}'[notifier API URL]:url:' \
+        '(-k --api-key)'{-k,--api-key}'[notifier API key]:key:' \
+        '--interval[scrape interval in seconds (default 300)]:seconds:' \
+        '(- *)'{-h,--help}'[print help]'
+}
+
+_gaps-cli "$@"
