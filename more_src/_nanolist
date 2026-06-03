@@ -1,0 +1,363 @@
+#compdef nanolist
+# ============================================================================
+# nanolist - mailing lists, the unix way - tiny
+#             Go-based mailing list manager
+#             designed to be invoked from MTA
+#             pipes (Go, BSD-3-Clause)
+#
+# Author : Henry Coles (eXeC64)
+# Upstream: https://github.com/eXeC64/nanolist
+#
+# `nanolist` is a minimalist mailing-list server
+# designed around the classic Unix "compose tiny
+# tools with pipes" philosophy. Rather than
+# operating as a long-running daemon, nanolist is
+# invoked from the MTA's per-message alias
+# configuration:
+#   - The MTA (Postfix/Exim/sendmail) is configured
+#     to forward messages addressed to <list>@<domain>
+#     into `nanolist message`
+#   - nanolist reads the message from stdin, looks
+#     up the matching list configuration in the
+#     INI config file, applies subscriber rules
+#     (open/subscriber-only + approved-posters
+#     check), and uses Go's `net/smtp` stdlib to
+#     re-send the message to each list subscriber
+#
+# Subscription is managed via email commands sent
+# to the configured command address (e.g.
+# nanolist@example.com):
+#   - Subject `subscribe <list-id>` -> add sender
+#     to list
+#   - Subject `unsubscribe <list-id>` -> remove
+#     sender from list
+#   - Subject `lists` -> reply with list of
+#     available mailing lists
+#   - Subject `help` -> reply with command help
+#
+# State is persisted in a SQLite database (via
+# mattn/go-sqlite3) containing subscriber rows
+# per list.
+#
+# Use cases:
+#   - Self-hosted mailing-list manager for small
+#     teams + open-source projects (alternative
+#     to Mailman 3's heavy Python+Django stack)
+#   - Pipe-based MTA integration without
+#     dedicated mailing-list daemon
+#   - Lightweight discussion-list infrastructure
+#     for niche communities
+#
+# Usage:
+#   nanolist <command> [--config <path>] [--debug]
+#
+# Subcommands (manually dispatched in main from
+# `flag.Arg(0)`):
+#   check                        - verify
+#                                   configuration
+#                                   (validate INI
+#                                   parsing,
+#                                   SQLite DB
+#                                   schema)
+#   message                      - process an
+#                                   incoming
+#                                   email
+#                                   message
+#                                   (reads MIME-
+#                                   formatted
+#                                   message from
+#                                   stdin)
+#
+# Flags (Go stdlib `flag` package; single-dash
+# style):
+#   -debug                       - don't send
+#                                   emails;
+#                                   print them
+#                                   to stdout
+#                                   instead
+#                                   (useful for
+#                                   testing MTA
+#                                   pipe
+#                                   integration)
+#   -config <path>               - load
+#                                   configuration
+#                                   from
+#                                   specified
+#                                   INI file
+#                                   (default
+#                                   /etc/
+#                                   nanolist.ini
+#                                   or
+#                                   $XDG_CONFIG_HOME)
+#
+# Example MTA integration (Postfix):
+#   # /etc/postfix/main.cf
+#   transport_maps = hash:/etc/postfix/transport
+#
+#   # /etc/postfix/transport
+#   list-name@example.com  nanolist:
+#
+#   # /etc/postfix/master.cf
+#   nanolist  unix - n n - - pipe
+#       flags=DRhu user=nanolist argv=/usr/local/bin/nanolist
+#         -config=/etc/nanolist.ini message
+#
+# Example nanolist.ini config:
+#   command_address = nanolist@example.com
+#   log = /var/log/nanolist.log
+#   database = /var/lib/nanolist/lists.db
+#   smtp_hostname = smtp.example.com
+#   smtp_port = 587
+#   smtp_username = nanolist@example.com
+#   smtp_password = <smtp password>
+#
+#   [list.discuss]
+#   name = "General Discussion"
+#   description = "Open discussion list"
+#   address = discuss@example.com
+#   hidden = false
+#   subscribers_only = false
+#
+#   [list.dev]
+#   name = "Developer Discussion"
+#   description = "Developer-only discussions"
+#   address = dev@example.com
+#   hidden = false
+#   subscribers_only = true
+#   posters = dev1@example.com, dev2@example.com
+#
+# The go-ini lane is built on `gopkg.in/ini.v1
+# v1.42.0` (declared verbatim at upstream go.mod
+# HEAD as a direct dep, imported as
+# `"gopkg.in/ini.v1"` in nanolist.go line 13,
+# used at config-load time to parse the INI
+# config file into the `Config` struct via
+# field tags `ini:"command_address"`,
+# `ini:"smtp_hostname"`, etc. + the
+# `[list.<id>]` section iteration for list
+# definitions), the canonical Go INI parser
+# library by Joe Chen (Unknwon) - github.com/
+# go-ini/ini.
+#
+# Joe Chen (Unknwon)'s go-ini/ini is the de-facto
+# canonical Go INI parser:
+#   - 5,000+ reverse-deps on pkg.go.dev
+#   - Field-tag-based struct mapping (`ini:
+#     "key_name"` syntax)
+#   - Section + subsection support
+#   - Read + write with comment preservation
+#   - Multiple file source loading (multi-INI
+#     overlay)
+#   - Environment variable interpolation
+#   - Type-safe key access methods (Int, Float,
+#     Bool, Duration, etc.)
+#   - Builder-style API for INI document
+#     construction
+#   - Pure Go (no C dependencies)
+#
+# go-ini's distinguishing position:
+#   - Single canonical Go INI library
+#   - No fragmentation (vs YAML's go-yaml/yaml
+#     v2/v3/v4 fragmentation, or TOML's
+#     toml.v1/v2/BurntSushi/toml competition)
+#   - INI format's simplicity (no formal RFC;
+#     just a 1990s convention) enables a
+#     single canonical implementation per
+#     ecosystem
+#
+# Joe Chen (Unknwon)'s broader Go ecosystem
+# footprint:
+#   - go-ini/ini (canonical Go INI; THIS AXIS)
+#   - go-macaron/macaron (web framework,
+#     foundational for the Gogs + early Gitea
+#     codebase)
+#   - gogs/gogs (the canonical self-hosted Git
+#     service in Go; predecessor to Gitea)
+#   - com (Go utility helpers package)
+#   - Go-related Chinese-language documentation
+#     + tutorials (Unknwon is a prolific
+#     Chinese-language Go educator)
+#
+# Joe Chen's role in Go is *application-layer
+# infrastructure* - he authored the original
+# Gogs Git service (which later forked to
+# become Gitea), the Macaron web framework that
+# powers it, and the go-ini library that Gogs
+# uses for configuration. His ecosystem
+# position is distinct from:
+#   - Klaus Post (SIMD systems)
+#   - Sergey Kamardin (specialized
+#     infrastructure)
+#   - Matt Holt (Caddy + web server tier)
+#
+# Chen's canonical position is in *Git-service
+# + Chinese-language Go ecosystem development*.
+# His libraries form the foundation of Gogs +
+# Gitea + many Chinese-language Go applications.
+#
+# nanolist uses go-ini in `nanolist.go`'s
+# `loadConfig()` function to parse the INI
+# config file:
+#   ```go
+#   import "gopkg.in/ini.v1"
+#
+#   cfg, err := ini.Load(gConfig.ConfigFile)
+#   if err != nil {
+#     log.Fatal(err)
+#   }
+#   err = cfg.MapTo(gConfig)
+#   // ...
+#   for _, section := range cfg.Sections() {
+#     if !strings.HasPrefix(section.Name(),
+#         "list.") {
+#       continue
+#     }
+#     list := &List{}
+#     section.MapTo(list)
+#     list.Id = strings.TrimPrefix(
+#       section.Name(), "list.")
+#     gConfig.Lists[list.Id] = list
+#   }
+#   ```
+# The struct-tag-based mapping pattern
+# (`ini:"key_name"`) is idiomatic go-ini usage
+# and demonstrates the library's primary value
+# add over manual INI parsing.
+#
+# ----------------------------------------------------------------------------
+# AXIS 268 :: INI configuration file parsers
+#              ([sections] + key=value lines +
+#              comment lines; informal 1990s
+#              Windows .ini convention)
+# Round 1503 :: Go slot 2 of 4 :: continues Axis 268
+#
+# Cross-language canonical library family for this axis:
+#   Rust    : rust-ini/rust-ini          [R1502 _beacn-utility]
+#             (Y. T. Chung / zonyitoo;
+#              canonical Rust INI)
+#   Go      : go-ini/ini                 [R1503 THIS FILE]
+#             (Joe Chen / Unknwon;
+#              canonical Go INI;
+#              powers Gogs + Gitea
+#              config)
+#   TS/Node : npm/ini                    [R1504 closing]
+#             (Isaac Z. Schlueter;
+#              canonical Node INI;
+#              used by npm itself for
+#              .npmrc parsing;
+#              would be Schlueter's
+#              THIRD axis closure)
+#
+# go-ini/ini is structurally interesting in this
+# axis because it's the *web-framework-adjacent
+# canonical*:
+#   - Used by Gogs (Joe Chen's own Git service)
+#   - Used by Gitea (the Gogs fork)
+#   - Used by many Chinese-language Go web
+#     applications + CMSes
+#   - Used by Macaron (Joe Chen's web
+#     framework)
+#   - Field-tag-based struct mapping is the
+#     idiomatic Go pattern (similar to
+#     encoding/json + encoding/xml +
+#     yaml.v3 + toml mapping styles)
+#
+# The three lanes form a clean spectrum of INI-
+# library canonicalization patterns:
+#
+#   - Rust (rust-ini): single-author canonical;
+#     specialized infrastructure-protocol
+#     position; powers various Rust system
+#     tools
+#   - Go (go-ini): single-author canonical;
+#     application-layer position; powers Gogs/
+#     Gitea + Chinese-language Go applications
+#   - Node (npm/ini): single-author canonical;
+#     infrastructure-tier position; used by npm
+#     itself for .npmrc + many CLI tools
+#
+# Cross-language interop at the file level - the
+# same .ini file is readable across all three
+# lanes modulo divergence on:
+#   - Quoted vs unquoted string values
+#   - Escape sequence handling
+#   - Multi-line values
+#   - Inline section keys (subsections)
+#   - Boolean variant handling
+#
+# Use-case spectrum across the three lanes (so
+# far):
+#   - beacn-utility (Rust, rust-ini): Beacn
+#     audio device Linux config UI;
+#     rust-ini generates XDG Autostart
+#     .desktop INI files
+#   - nanolist (Go, go-ini/ini): tiny Unix-
+#     pipe mailing list server; go-ini parses
+#     the SMTP + list-definition config file
+#
+# Pattern continuity from Axis 267 (ZIP) to
+# Axis 268 (INI):
+#   - Both axes have Rust individual-author/
+#     community-maintained canonical
+#   - Both axes have Go individual-author
+#     canonical
+#   - Both axes will close at the Node slot
+#     with Schlueter's npm-internal-use
+#     canonical (jszip is by Knightley but
+#     similarly massive; npm/ini is by
+#     Schlueter)
+#
+# Joe Chen (Unknwon)'s position in Go contrasts
+# with Matt Holt's (Caddy + CertMagic +
+# archives) - both are application-layer
+# foundational authors, but in different
+# verticals: Chen in Git-service + Chinese-
+# language Go education, Holt in web-server +
+# HTTPS automation.
+#
+# This brings the multi-axis canonical-Go author
+# cohort to ~9 distinct individuals + the Go
+# team itself:
+#   - Andrew Gerrand + Go team (stdlib)
+#   - Russ Cox (Go modules + crypto)
+#   - Gustavo Niemeyer (yaml.v3 + gopkg.in
+#     infrastructure)
+#   - Klaus Post (compress + reedsolomon +
+#     cpuid + asmfmt)
+#   - Sergey Kamardin (gobwas/glob + gobwas/ws
+#     + gobwas/httphead + gobwas/pool)
+#   - Anthony Starks (ajstarks/svgo + deck +
+#     dchart + openvg + gensvg)
+#   - Jeevanandam Madanagopal (go-resty +
+#     go-aah + go-model + sslmate-go)
+#   - Matt Holt (Caddy + CertMagic + archives +
+#     timeliner + acmez)
+#   - Joe Chen / Unknwon (go-ini + Macaron +
+#     Gogs + com, THIS AXIS)
+# ============================================================================
+
+_nanolist() {
+    local context state state_descr line
+    typeset -A opt_args
+    local curcontext="$curcontext" ret=1
+
+    _arguments -C \
+        '-debug[do not send emails; print to stdout instead]' \
+        '-config=[INI configuration file path]:file:_files -g "*.(ini|conf|cfg)"' \
+        '(- *)-h[print help]' \
+        '1: :_nanolist_cmds' \
+    && ret=0
+
+    return ret
+}
+
+_nanolist_cmds() {
+    local -a cmds
+    cmds=(
+        'check:verify configuration (parse INI + SQLite schema)'
+        'message:process incoming email message from stdin (MTA pipe target)'
+    )
+    _describe -t commands 'nanolist command' cmds
+}
+
+_nanolist "$@"
