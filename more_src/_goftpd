@@ -1,0 +1,212 @@
+#compdef goftpd
+# ============================================================================
+# goftpd - pure-Go FTP daemon (Go, unlicensed/source-available)
+#
+# Author : goftpd contributors
+# Upstream: https://github.com/goftpd/goftpd
+#
+# `goftpd` is a pure-Go FTP server implementation
+# inspired by glftpd (the classic Linux FTP server used
+# by warez release groups - same TLS-cert + per-user
+# password + per-IP-mask access-control model). The
+# server is single-binary, supports virtual filesystem
+# overlays, ACL-based path permissions, TLS client
+# auth, and Argon2id-hashed user password storage. Users
+# + IP allowlists are managed via subcommands on the same
+# `goftpd` binary.
+#
+# Usage:
+#   goftpd <command> [flags]
+#
+# Commands (cobra Command tree):
+#   run         - run the FTP daemon
+#   adduser     - add a user to the user database (password
+#                  hashed via Argon2id)
+#   addip       - add an IP mask to a user's allowlist
+#   gencert     - generate a self-signed TLS certificate
+#                  + key for the FTP daemon
+#   config      - validate the daemon config file
+#
+# Common flags:
+#   -c, --config <file>     - path to goftpd config file
+#                              (default site/config/goftpd.conf)
+#
+# adduser flags:
+#   -c, --config <file>     - config file path
+#   -u, --username <name>   - user to create
+#   -p, --password <pass>   - password to set (hashed with
+#                              Argon2id via alexedwards/
+#                              argon2id helper)
+#
+# addip flags:
+#   -c, --config <file>     - config file path
+#   -u, --username <name>   - target user
+#   -m, --mask <mask>       - IP mask to grant (e.g.
+#                              "*@192.168.1.*")
+#
+# gencert flags:
+#       --host <hosts>      - comma-separated hostnames /
+#                              IPs to issue the cert for
+#   -c, --tlsCert <file>    - output cert file path
+#                              (default site/config/cert.pem)
+#   -k, --tlsKey  <file>    - output key file path
+#                              (default site/config/key.pem)
+#
+# config flags:
+#   -c, --config <file>     - config file path
+#
+# Global:
+#   -h, --help              - print help
+#
+# The argon2id lane is built on `github.com/alexedwards/
+# argon2id v0.0.0-20200802152012-2464efd3196b` (declared
+# verbatim at upstream go.mod HEAD as a direct dep), the
+# canonical Go Argon2id helper by Alex Edwards
+# (alexedwards) - github.com/alexedwards/argon2id, 1100+
+# stars. The library is a thin ergonomic wrapper over
+# the core-team-maintained low-level `golang.org/x/crypto/
+# argon2` package, adding:
+#   - PHC-string format I/O
+#     `$argon2id$v=19$m=...,t=...,p=...$salt$hash`
+#   - `CreateHash(password, params)` -> PHC string with
+#     a fresh random salt
+#   - `ComparePasswordAndHash(password, phc)` -> bool
+#     for constant-time hash verification
+#   - sensible default `Params` matching OWASP's 2024
+#     Argon2id recommendation (m=64MB, t=3, p=4, len=32)
+#
+# Both alexedwards/argon2id (the ergonomic wrapper) and
+# golang.org/x/crypto/argon2 (the low-level KDF
+# implementation in the Go core team's `golang.org/x/*`
+# subrepo) are simultaneously canonical at different
+# abstraction levels: x/crypto/argon2 is the
+# implementation, alexedwards/argon2id is the
+# storage-format adapter that the broader Go ecosystem
+# actually uses for user-password storage.
+#
+# goftpd uses alexedwards/argon2id for the
+# `goftpd adduser -p <pw>` path: the supplied password
+# is hashed via `argon2id.CreateHash` with the OWASP
+# default params, producing a PHC string that's stored
+# in the user database. On FTP login, the server reads
+# the stored PHC string + verifies the client's
+# supplied password via `ComparePasswordAndHash`.
+#
+# ----------------------------------------------------------------------------
+# AXIS 244 :: Argon2 password-hash + memory-hard KDF
+# Round 1431 :: Go slot 2 of 4 :: continues Axis 244
+#
+# Cross-language canonical library family for this axis:
+#   Rust    : RustCrypto/password-hashes  [R1430 _concryptor]
+#             (argon2 crate)
+#   Go      : alexedwards/argon2id + the  [R1431 THIS FILE]
+#             core-team-maintained
+#             golang.org/x/crypto/argon2
+#   TS/Node : ranisalt/node-argon2        [R1432 closing]
+#
+# The Go slot in Axis 244 is structurally interesting
+# because of its *two-layer canonical* shape:
+#
+#   - LOW LEVEL: `golang.org/x/crypto/argon2`
+#     - core-team-maintained in the golang.org/x/*
+#       subrepository (same namespace as net/http2 +
+#       net/html + crypto/bcrypt + crypto/scrypt)
+#     - implements the RFC 9106 Argon2d / Argon2i /
+#       Argon2id KDF functions directly
+#     - exposes raw byte-slice KDF API (`argon2.IDKey(
+#       password, salt, time, memory, threads, keyLen)
+#       []byte`)
+#     - intentionally no PHC-string format - that's
+#       considered a storage-format choice, not a KDF
+#       concern
+#
+#   - HIGH LEVEL: `alexedwards/argon2id`
+#     - de-facto Go Argon2 user-facing helper
+#     - thin wrapper over x/crypto/argon2 adding PHC-
+#       string format + comparison helpers
+#     - sensible OWASP-aligned defaults so most users
+#       just call `CreateHash(pw, argon2id.DefaultParams)`
+#       without thinking about cost parameters
+#     - used by casdoor, ocis, weaviate, drakkan/sftpgo,
+#       goftpd, and the broader Go IAM ecosystem
+#
+# This two-layer pattern mirrors the structure in other
+# Go cryptography axes:
+#   - x/crypto/bcrypt vs golang-jwt's bcrypt usage
+#   - x/crypto/nacl + ory/dockertest's wrapping
+#   - x/text/encoding + go-text/textproc helpers
+#
+# In all three cases the Go core team owns the low-level
+# implementation in the x/* subrepo, and the broader
+# ecosystem builds storage-format-adapter packages on top
+# for ergonomic day-to-day use.
+#
+# Cross-language interop at the wire format level: a
+# PHC-string Argon2id hash generated by alexedwards/
+# argon2id verifies byte-identically against
+# RustCrypto/argon2's password-hash crate verify path,
+# and against ranisalt/node-argon2's verify call. All
+# three implementations track RFC 9106 + the PHC string
+# format.
+# ============================================================================
+
+_goftpd() {
+    local context state state_descr line
+    typeset -A opt_args
+    local curcontext="$curcontext" ret=1
+
+    _arguments -C \
+        '(- *)'{-h,--help}'[print help]' \
+        '1: :_goftpd_cmds' \
+        '*::arg:->args' \
+    && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                run|config)
+                    _arguments \
+                        '(-c --config)'{-c,--config}'[config file]:file:_files -g "*.conf"' \
+                        '(- *)'{-h,--help}'[print subcommand help]'
+                    ;;
+                adduser)
+                    _arguments \
+                        '(-c --config)'{-c,--config}'[config file]:file:_files -g "*.conf"' \
+                        '(-u --username)'{-u,--username}'[user to create]:user:' \
+                        '(-p --password)'{-p,--password}'[password to set (Argon2id-hashed)]:password:' \
+                        '(- *)'{-h,--help}'[print subcommand help]'
+                    ;;
+                addip)
+                    _arguments \
+                        '(-c --config)'{-c,--config}'[config file]:file:_files -g "*.conf"' \
+                        '(-u --username)'{-u,--username}'[target user]:user:' \
+                        '(-m --mask)'{-m,--mask}'[IP mask to grant]:mask:' \
+                        '(- *)'{-h,--help}'[print subcommand help]'
+                    ;;
+                gencert)
+                    _arguments \
+                        '--host[comma-separated hostnames/IPs for the cert]:hosts:' \
+                        '(-c --tlsCert)'{-c,--tlsCert}'[TLS certificate output path]:file:_files -g "*.pem"' \
+                        '(-k --tlsKey)'{-k,--tlsKey}'[TLS key output path]:file:_files -g "*.pem"' \
+                        '(- *)'{-h,--help}'[print subcommand help]'
+                    ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_goftpd_cmds() {
+    local -a cmds
+    cmds=(
+        'run:run the FTP daemon'
+        'adduser:add a user to the user database (Argon2id-hashed password)'
+        'addip:add an IP mask to a user allowlist'
+        'gencert:generate a self-signed TLS certificate + key'
+        'config:validate the daemon config file'
+    )
+    _describe -t commands 'goftpd command' cmds
+}
+
+_goftpd "$@"
