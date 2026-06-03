@@ -1,0 +1,151 @@
+#compdef parsec
+# ============================================================================
+# parsec - DHT and IPNI performance measurement tool (Go, no license)
+#
+# Author : Dennis Trautwein (Probe Lab)
+# Upstream: https://github.com/probe-lab/parsec
+#
+# `parsec` is the Probe Lab measurement tool for distributed
+# content-discovery networks - it generates content-IDs,
+# publishes them to a DHT (libp2p Kademlia) + an IPNI
+# (InterPlanetary Network Indexer), then measures the
+# resolution latency from every region the scheduler has
+# servers in. Used to produce the latency dashboards that
+# inform IPFS / Filecoin reachability + indexing-coverage
+# decisions.
+#
+# Architecture: a *scheduler* process picks per-region
+# servers + assigns content-ID publication tasks; each
+# *server* (one of: DHT publisher, IPNI publisher) executes
+# the assigned task and records measurements to Postgres
+# via sqlboiler-generated models; a *health* command runs
+# liveness checks across the cluster. Telemetry is exported
+# via a Prometheus HTTP endpoint (+ pprof) on the configured
+# telemetry host/port.
+#
+# Subcommand tree (urfave/cli):
+#   scheduler              - run as the cluster scheduler
+#                            (assigns work + tracks server health)
+#   server                 - run as a measurement server
+#     dht                    publisher: libp2p Kademlia DHT
+#     ipni                   publisher: InterPlanetary Network Indexer
+#   health                 - cluster health check
+#
+# Global flags:
+#   --debug                  - enable debug logging (alias for
+#                              --log-level 5)
+#   --log-level <0-6>        - log verbosity (overrides --debug)
+#   --telemetry-host <ip>    - Prometheus + pprof bind host
+#                              (default localhost)
+#   --telemetry-port <port>  - default 6666
+#   --dry-run                - do not write measurements to DB
+#   --db-host / --db-port    - Postgres (defaults localhost:5432)
+#   --db-name / --db-user / --db-password / --db-sslmode
+#                            - Postgres credentials
+#                              (default parsec/parsec/password/disable)
+#   --ecs-metadata-uri-v4    - ECS task metadata endpoint
+#   --ecs-metadata           - ECS metadata JSON (skips URI fetch)
+#   --aws-region             - AWS region tag for measurements
+#
+# Every flag has a matching PARSEC_<KEY> env var.
+#
+# The client_golang lane is built on `github.com/prometheus/
+# client_golang` (declared as a direct dep at upstream go.mod
+# HEAD and imported from cmd/parsec/cmd.go +
+# cmd/parsec/metrics.go), the canonical Go Prometheus client
+# maintained by the Prometheus project itself (github.com/
+# prometheus/client_golang, 5400+ stars). client_golang is
+# the *official* Prometheus Go SDK - every other Go
+# Prometheus library is either deprecated (the older
+# prometheus/client_model raw protobuf bindings) or
+# transitively depends on it. parsec uses the
+# `prometheus.DefaultRegisterer` + `prometheus.DefaultGatherer`
+# pattern with a `contrib.go.opencensus.io/exporter/
+# prometheus` shim that maps OpenCensus metrics to the
+# Prometheus registry - the legacy bridge used because the
+# parsec measurements predate the Prometheus-native
+# instrumentation in libp2p-go.
+#
+# ----------------------------------------------------------------------------
+# AXIS 235 :: Prometheus client / metrics-exporter (text-format scrape protocol)
+# Round 1404 :: Go slot 2 of 4 :: continues Axis 235
+#
+# Cross-language canonical library family for this axis:
+#   Rust    : metrics-rs/metrics +
+#             metrics-exporter-prometheus    [R1403 _lading]
+#   Go      : prometheus/client_golang       [R1404 THIS FILE]
+#   TS/Node : siimon/prom-client             [R1405 closing]
+#
+# client_golang is structurally the *spec-author-maintained*
+# canonical library for this axis - the same pattern seen at
+# Axis 207 (panva/oauth4webapi maintained by the OAuth spec
+# author) and Axis 216 (vscode-languageserver-node maintained
+# by the LSP spec author). The Prometheus project itself
+# maintains client_golang; it ships in lockstep with
+# Prometheus server releases; the wire format is
+# definitionally aligned because the SAME team writes both
+# the producer + consumer.
+#
+# Cross-language interop is therefore total at the
+# scrape-endpoint level - a Prometheus server doesn't care
+# whether the /metrics endpoint is served by Rust
+# metrics-rs, Go client_golang, or Node prom-client, the
+# bytes are byte-identical for the same metrics state.
+# The instrumentation idiom diverges per host language:
+#   - Rust: macro-based recorder (`counter!("name")`)
+#   - Go: typed struct constructor (`NewCounter()`)
+#   - Node: JS class (`new Counter({})`)
+# ============================================================================
+
+_parsec() {
+    local context state state_descr line
+    typeset -A opt_args
+    local curcontext="$curcontext" ret=1
+
+    _arguments -C \
+        '--debug[enable debug logging]' \
+        '--log-level[log verbosity (0-6, overrides --debug)]:level:(0 1 2 3 4 5 6)' \
+        '--telemetry-host[Prometheus + pprof bind host (default localhost)]:host:' \
+        '--telemetry-port[telemetry server port (default 6666)]:port:' \
+        '--dry-run[skip writing measurements to the database]' \
+        '--db-host[Postgres host]:host:' \
+        '--db-port[Postgres port]:port:' \
+        '--db-name[Postgres database name]:name:' \
+        '--db-password[Postgres password]:password:' \
+        '--db-user[Postgres user]:user:' \
+        '--db-sslmode[Postgres sslmode]:mode:(disable allow prefer require verify-ca verify-full)' \
+        '--ecs-metadata-uri-v4[ECS task metadata endpoint URI]:url:' \
+        '--ecs-metadata[ECS container metadata JSON (skips URI fetch)]:json:' \
+        '--aws-region[AWS region tag for measurements]:region:' \
+        '(- *)'{-h,--help}'[print help]' \
+        '(- *)'{-v,--version}'[print version]' \
+        '1: :_parsec_cmds' \
+        '*::arg:->args' \
+    && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                scheduler|health) _arguments '(- *)'{-h,--help}'[help]' '*:arg:' ;;
+                server)           _arguments \
+                                      '(- *)'{-h,--help}'[help]' \
+                                      '1:subcommand:(dht ipni)' \
+                                      '*::arg:->_default' ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_parsec_cmds() {
+    local -a cmds
+    cmds=(
+        'scheduler:Run as the cluster scheduler'
+        'server:Run as a measurement server (subcommands: dht, ipni)'
+        'health:Cluster health check'
+    )
+    _describe -t commands 'parsec command' cmds
+}
+
+_parsec "$@"
