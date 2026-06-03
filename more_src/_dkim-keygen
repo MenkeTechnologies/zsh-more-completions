@@ -1,0 +1,141 @@
+#compdef dkim-keygen
+# ============================================================================
+# dkim-keygen - generate RSA or Ed25519 DKIM signing keys
+#                + emit the matching DNS TXT record
+#                (Go, MIT)
+#
+# Author : Simon Ser (emersion)
+# Upstream: https://github.com/emersion/go-msgauth
+#           (cmd/dkim-keygen)
+#
+# `dkim-keygen` is the DKIM-key-pair generator from the
+# emersion/go-msgauth toolkit (alongside dkim-milter,
+# dkim-verify, and dmarc-lookup). The tool generates a
+# fresh RSA-3072 (default) or Ed25519 (with `-t ed25519`)
+# private key, writes it as PKCS#8-PEM to disk, and
+# prints the corresponding public key formatted as a
+# DKIM-compliant DNS TXT record value
+# (`v=DKIM1; k=<keyType>; p=<base64-pubkey>`). The output
+# is paste-ready into the `<selector>._domainkey` TXT
+# record on the signing domain.
+#
+# Usage:
+#   dkim-keygen [-t rsa|ed25519] [-b BITS] [-f FILE] [-y]
+#
+# Flags (flag.* stdlib parsing):
+#   -t <type>           - key type: rsa (default) or
+#                          ed25519
+#   -b <bits>           - RSA key size in bits (default
+#                          3072, ignored for ed25519)
+#   -f <file>           - private key filename
+#                          (default dkim.priv)
+#   -y                  - read existing private key file
+#                          + emit its public key TXT
+#                          record (no new key generated)
+#
+# Output format (DKIM v1 TXT record, RFC 6376):
+#   v=DKIM1; k=rsa;     p=<base64-SubjectPublicKeyInfo>
+#   v=DKIM1; k=ed25519; p=<base64-raw-32-byte-pubkey>
+#
+# Per RFC 6376 / RFC 8463: RSA pubkeys are encoded as
+# SubjectPublicKeyInfo for compat with opendkim + Gmail
+# + Fastmail; Ed25519 pubkeys are encoded as the raw
+# 32-byte point.
+#
+# The crypto/ed25519 lane is built on `crypto/ed25519`
+# (declared at upstream go.mod via the Go stdlib;
+# imported from cmd/dkim-keygen/main.go as `crypto/
+# ed25519`), the canonical Go Ed25519 implementation by
+# the Go core team. Originally introduced in the
+# `golang.org/x/crypto/ed25519` subrepository, the
+# package was promoted to the std-lib `crypto/ed25519`
+# in Go 1.13 (released 2019). The package re-exports the
+# x/crypto/ed25519 implementation byte-for-byte; either
+# import path gives the same library.
+#
+# The implementation tracks RFC 8032 (Edwards-curve
+# Digital Signature Algorithm) end-to-end + tracks the
+# FIPS 186-5 update that brought Ed25519 into the NIST
+# digital-signature standard. Constant-time operations,
+# pure-Go (no FFI), and the standard library's stable
+# API guarantee make it the Go-ecosystem default Ed25519
+# library.
+#
+# dkim-keygen uses `ed25519.GenerateKey(rand.Reader)` to
+# produce the (public, private) pair when `-t ed25519`
+# is selected, then marshals the private key as PKCS#8
+# via `x509.MarshalPKCS8PrivateKey` (which accepts the
+# `ed25519.PrivateKey` type natively since Go 1.13). The
+# public key is emitted raw (per RFC 8463 §3.1: "the
+# public key data is the raw 32-byte Ed25519 public key
+# encoded as base64").
+#
+# ----------------------------------------------------------------------------
+# AXIS 246 :: Ed25519 / EdDSA signatures (RFC 8032)
+# Round 1437 :: Go slot 2 of 4 :: continues Axis 246
+#
+# Cross-language canonical library family for this axis:
+#   Rust    : dalek-cryptography/ed25519-dalek
+#                                       [R1436 _atm0s-reverse-proxy-agent]
+#   Go      : crypto/ed25519 (std-lib;  [R1437 THIS FILE]
+#             same impl as
+#             golang.org/x/crypto/ed25519)
+#   TS/Node : paulmillr/noble-ed25519   [R1438 closing]
+#             (npm @noble/ed25519)
+#
+# crypto/ed25519 is structurally interesting in this
+# axis because of its *single-implementation across-two-
+# import-paths* pattern. The Go core team originally
+# shipped `golang.org/x/crypto/ed25519` (in the x/* sub-
+# repository) before Ed25519 was a widely-deployed
+# algorithm. As Ed25519 adoption matured (mid-2010s),
+# the implementation was promoted to the std-lib at
+# `crypto/ed25519` in Go 1.13 (Sep 2019), with the
+# x/crypto package becoming a re-export alias that
+# preserves source-level compat with code written before
+# the std-lib version existed.
+#
+# This promotion pattern is unique to the Go ecosystem
+# in this axis cluster. The Rust slot's ed25519-dalek
+# crate stays in the broader dalek-cryptography umbrella
+# and is never absorbed into a std-lib equivalent (Rust's
+# stdlib does not provide cryptographic primitives by
+# design). The Node slot's @noble/ed25519 stays an
+# independent npm package with no std-lib presence.
+#
+# Structural commentary on the std-lib promotion:
+#   - Pre-Go 1.13: code used `golang.org/x/crypto/
+#     ed25519.GenerateKey` etc.
+#   - Post-Go 1.13: code uses `crypto/ed25519.
+#     GenerateKey` etc. - same function, same bytes,
+#     different import path
+#   - The x/crypto/ed25519 package is now an alias to
+#     the std-lib version, so legacy code keeps working
+#     unchanged
+#
+# dkim-keygen chose the std-lib `crypto/ed25519` path
+# because it's the Go 1.13+ idiomatic import - the
+# x/crypto/ed25519 alias exists for back-compat but new
+# code should target the std-lib.
+#
+# Cross-language interop at the wire format level: a
+# 64-byte Ed25519 signature produced by ed25519-dalek +
+# crypto/ed25519 + @noble/ed25519 is byte-identical for
+# the same (private_key, message) pair, modulo encoding
+# of the public key (raw 32-byte vs SubjectPublicKeyInfo
+# vs PKCS#8 - DKIM uses raw 32-byte per RFC 8463).
+# ============================================================================
+
+_dkim-keygen() {
+    local context state state_descr line
+    typeset -A opt_args
+
+    _arguments -s -S \
+        '-t[key type]:type:(rsa ed25519)' \
+        '-b[RSA key size in bits (ignored for ed25519)]:bits:' \
+        '-f[private key filename]:file:_files' \
+        '-y[read existing private key + emit public TXT record]' \
+        '(- *)-h[print help]'
+}
+
+_dkim-keygen "$@"
