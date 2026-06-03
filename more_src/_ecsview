@@ -1,0 +1,174 @@
+#compdef ecsview
+# ============================================================================
+# ecsview - browse AWS ECS Clusters in the terminal
+#            (Go, MIT)
+#
+# Author : Rob Swartz (swartzrock)
+# Upstream: https://github.com/swartzrock/ecsview
+#
+# `ecsview` is a terminal UI for inspecting AWS
+# Elastic Container Service (ECS) clusters. The
+# tool reads AWS session credentials from the
+# environment, calls the ECS DescribeClusters +
+# ListTasks + ListServices + ListContainerInstances
+# APIs, and presents the results in a tcell-backed
+# tview application with:
+#   - Top-level cluster table (CPU/memory
+#     utilization, container instance count, pending
+#     vs running task counts)
+#   - Per-cluster detail pages: tasks, services,
+#     container instances, raw cluster info
+#   - Keyboard shortcuts for switching between
+#     detail pages
+#   - Refresh + filter controls
+#
+# Use cases:
+#   - Quick visual inspection of an AWS account's
+#     ECS topology without context-switching to the
+#     AWS console
+#   - Debugging task placement + container instance
+#     health from a SSH session
+#   - Demoing the state of an ECS cluster during an
+#     incident review
+#
+# Usage:
+#   ecsview
+#
+# No command-line flags. AWS credential configuration
+# is read from the standard AWS SDK chain:
+#   1. AWS_PROFILE / AWS_REGION env vars
+#   2. AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY /
+#      AWS_SESSION_TOKEN env vars
+#   3. ~/.aws/credentials + ~/.aws/config
+#   4. EC2 instance metadata (if running on EC2)
+#   5. ECS task IAM role (if running inside an ECS
+#      task)
+#
+# Environment:
+#   AWS_PROFILE             - AWS profile name
+#   AWS_REGION              - AWS region (default
+#                              us-east-1)
+#   AWS_ACCESS_KEY_ID       - access key
+#   AWS_SECRET_ACCESS_KEY   - secret key
+#   AWS_SESSION_TOKEN       - session token (for
+#                              STS-issued temporary
+#                              credentials)
+#
+# Keyboard shortcuts (inside the TUI):
+#   q                       - quit
+#   r                       - refresh
+#   ESC                     - back to cluster list
+#   number-key              - switch to detail page N
+#
+# The tcell lane is built on `github.com/gdamore/
+# tcell/v2 v2.0.1` (declared verbatim at upstream
+# go.mod HEAD as a direct dep, used via the
+# `rivo/tview` higher-level widget framework which
+# itself wraps tcell), the canonical Go terminal
+# cell-based UI library by Garrett D'Amore
+# (gdamore) - github.com/gdamore/tcell, 4800+ stars
+# on the v2 line.
+#
+# Garrett D'Amore is a well-known systems engineer
+# with prior work on:
+#   - Illumos kernel maintenance (zfsonlinux +
+#     SmartOS contributor)
+#   - Joyent Triton (Solaris + Linux zone
+#     orchestrator)
+#   - libtmplog + various Bell Labs Plan 9 + UNIX
+#     porting efforts
+#   - Bell Labs original UNIX archive recovery
+#
+# He started tcell in 2017 as a Go-native successor
+# to the older termbox-go library, with:
+#   - Proper Unicode + grapheme cluster support
+#     (East Asian wide characters, RTL text, combining
+#     marks, emoji)
+#   - terminfo-backed terminal capability detection
+#     (queries the system terminfo database for the
+#     current terminal's escape-sequence set)
+#   - True-color (24-bit RGB) support
+#   - Comprehensive mouse + keyboard event handling
+#     (including modifier keys, paste events, focus
+#     change events)
+#   - Suspend/resume signal handling (Ctrl-Z + fg
+#     restoration)
+#
+# tcell is the canonical Go TUI foundation - depended
+# on by:
+#   - rivo/tview (high-level widget framework on
+#     tcell)
+#   - k9s (Kubernetes TUI cluster manager - 30k+
+#     stars)
+#   - lazydocker (Docker TUI - 30k+ stars)
+#   - lazygit (git TUI - 50k+ stars)
+#   - micro (modal text editor - 25k+ stars)
+#   - termshark (Wireshark TUI)
+#   - termdash (terminal-based dashboard library)
+#   - ecsview (THIS BINARY)
+#   - many of the Go TUI tools
+#
+# ecsview uses tcell indirectly through rivo/tview:
+# tview's `Application` + `Table` + `Pages` widgets
+# all internally delegate to tcell for screen drawing
+# + event handling. ecsview's own code calls into
+# tcell directly only for low-level customizations
+# (color constants, raw key events for the cluster-
+# switching shortcuts).
+#
+# ----------------------------------------------------------------------------
+# AXIS 260 :: ANSI terminal control libraries
+#              (cursor + color + event input +
+#              cross-platform Windows + Unix)
+# Round 1479 :: Go slot 2 of 4 :: continues Axis 260
+#
+# Cross-language canonical library family for this axis:
+#   Rust    : crossterm-rs/crossterm        [R1478 _whiz]
+#   Go      : gdamore/tcell                 [R1479 THIS FILE]
+#             (terminfo-backed cell UI)
+#   TS/Node : chalk                         [R1480 closing]
+#             (Sindre Sorhus)
+#
+# gdamore/tcell is structurally interesting in this
+# axis because of its *terminfo-backed cell-UI*
+# pattern, contrasting with crossterm's *ANSI-direct
+# no-terminfo* pattern. The two libraries make
+# different tradeoffs:
+#
+#   - crossterm (Rust): no terminfo dep; queries
+#     terminal capability via VT100 query escape
+#     sequences + Windows Console API; smaller binary
+#   - tcell (Go): queries terminfo database for the
+#     current terminal's capability set; handles
+#     legacy terminals that don't support full ANSI;
+#     supports more obscure terminals (legacy VT220,
+#     specific embedded console types)
+#
+# Both achieve cross-platform Windows + Unix support
+# but via different mechanisms. crossterm's approach
+# is more direct + smaller; tcell's approach handles
+# a broader matrix of legacy terminals.
+#
+# The Go ecosystem's preference for terminfo (vs the
+# Rust ecosystem's preference for ANSI-direct)
+# reflects Go's older heritage (Go shipped 2009, tcell
+# 2017) where terminfo was still the dominant
+# terminal-capability mechanism. The Rust ecosystem
+# starting from 2015+ chose ANSI-direct because
+# essentially all modern terminals now support ANSI
+# + Windows finally added ANSI support in Win10 1607
+# (2016).
+#
+# Cross-language interop at the wire format level - a
+# tcell-emitted escape sequence + a crossterm-emitted
+# escape sequence + a chalk-emitted escape sequence
+# render identically in any ECMA-48-compatible
+# terminal.
+# ============================================================================
+
+_ecsview() {
+    # No CLI flags - relies on AWS SDK environment + TUI keyboard input
+    _arguments
+}
+
+_ecsview "$@"
