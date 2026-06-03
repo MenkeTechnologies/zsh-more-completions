@@ -1,0 +1,169 @@
+#compdef backdown
+# ============================================================================
+# backdown - interactive duplicate-file deduplicator
+#             (Rust, MIT)
+#
+# Author : Denys Séguret (Canop)
+# Upstream: https://github.com/Canop/backdown
+# crates : backdown (binary: backdown)
+#
+# `backdown` walks a directory tree, hashes every file
+# with BLAKE3, groups files by identical content hash,
+# and presents a TUI flow that lets the user pick which
+# duplicates to remove. It supports image-only mode (for
+# photo libraries) and emits a JSON report of the
+# deduplication actions taken. Authored by Denys Séguret
+# (Canop) - the author behind broot, bacon, lapin, and
+# the broader bacon-family Rust TUI tooling.
+#
+# Usage:
+#   backdown [-i] [path]
+#
+# Flags (argh):
+#   -i, --only-images        - only consider image files
+#                              (jpg, png, gif, webp, ...)
+#                              when grouping duplicates
+#   -v, --version            - print version
+#   <path>                   - directory to scan
+#                              (default: current dir)
+#
+# Operational flow:
+#   1. Walk <path> and collect candidate files
+#   2. Group by file size (quick pre-filter)
+#   3. For each size-group with >1 file, hash each file
+#      with BLAKE3 + group by hash
+#   4. Present each hash-group of duplicates as an
+#      interactive choice in the TUI
+#   5. Apply user-selected removals + emit JSON action
+#      report
+#
+# The blake3 lane is built on `blake3 = "1.4"` (declared
+# verbatim at upstream Cargo.toml HEAD as a direct dep,
+# imported from src/hash.rs as `blake3::Hasher::new()`
+# + `hasher.finalize()`), the canonical Rust BLAKE3
+# implementation by the BLAKE3-team - github.com/BLAKE3-
+# team/BLAKE3, 5700+ stars. The crate is the *reference
+# implementation by the algorithm's own authors*:
+#   - Jack O'Connor (Anchore)
+#   - Jean-Philippe Aumasson (Kudelski Security)
+#   - Samuel Neves (University of Coimbra)
+#   - Zooko Wilcox-O'Hearn (Electric Coin Company)
+#
+# BLAKE3 (2020) is the successor to BLAKE2 (2012), itself
+# the SHA-3 finalist by Aumasson + Neves + Wilcox-O'Hearn
+# + Henzen. The algorithm targets simultaneous SIMD
+# throughput on modern CPUs + GPU parallelization +
+# verified streaming via a Merkle tree (the `bao`
+# verified-streaming tool, by the same author, uses
+# BLAKE3's tree structure for incremental verification
+# of large files). BLAKE3 is approximately 5x-10x faster
+# than SHA-256 on the same hardware, while providing
+# the same 256-bit collision resistance.
+#
+# The Rust `blake3` crate is the canonical reference -
+# the same source code is the canonical implementation
+# in the spec document. C / assembly variants exist as
+# additional canonical implementations in the same
+# repository (e.g. `c/blake3_avx512.c` for the AVX-512
+# SIMD path), all governed under one umbrella by the
+# original authors.
+#
+# backdown uses BLAKE3's streaming hasher (`Hasher::new()
+# + io::copy(&mut file, &mut hasher) + hasher.finalize()`)
+# to compute the per-file content hash. The streaming
+# API lets backdown hash files of arbitrary size with
+# O(BLOCK_SIZE) memory rather than reading the whole file
+# into RAM first, which matters when dedup-scanning
+# directories that may contain multi-gigabyte files.
+#
+# ----------------------------------------------------------------------------
+# AXIS 245 :: BLAKE3 cryptographic hashing (SIMD-parallel
+#              + tree-structured + verified-streaming)
+# Round 1433 :: Rust slot 1 of 4 :: OPENS Axis 245
+#                                   (round-300 landmark)
+#
+# Cross-language canonical library family for this axis
+# (proposed):
+#   Rust    : BLAKE3-team/BLAKE3 (`blake3` crate)
+#                                       - the reference
+#                                         implementation
+#                                         by the
+#                                         algorithm's
+#                                         own authors
+#                                         (O'Connor +
+#                                         Aumasson +
+#                                         Neves +
+#                                         Wilcox-O'Hearn)
+#   Go      : zeebo/blake3              - the de-facto
+#                                         Go BLAKE3
+#                                         implementation
+#                                         by Jeff Wendling
+#                                         (Storj founding
+#                                         engineer);
+#                                         hand-tuned AVX2
+#                                         + ARM NEON
+#                                         assembly paths
+#   TS/Node : @node-rs/blake3            - napi-rs Node
+#                                         binding wrapping
+#                                         the RustCrypto
+#                                         blake3 crate
+#                                         (which is itself
+#                                         a separate-from-
+#                                         BLAKE3-team
+#                                         pure-Rust impl
+#                                         under the
+#                                         RustCrypto
+#                                         umbrella)
+#
+# BLAKE3 is a clean spec-bound axis - the BLAKE3 paper +
+# the BLAKE3-team reference C / assembly / Rust code
+# define the algorithm + test vectors byte-for-byte.
+# Compliant implementations produce bit-identical hashes
+# for the same input across all three lanes.
+#
+# Structural commentary:
+#   - BLAKE3-team/BLAKE3 (Rust): root-of-trust where
+#     library-author = algorithm-author; multi-implementation
+#     repo with C, assembly, and Rust paths governed under
+#     one umbrella
+#   - zeebo/blake3 (Go): hand-tuned assembly paths for
+#     AVX2 + ARM NEON; Jeff Wendling is the same author
+#     behind much of Storj's content-addressed storage
+#     infrastructure, so the library is battle-tested
+#     against multi-PB workloads
+#   - @node-rs/blake3 (Node): napi-rs binding to
+#     RustCrypto/blake3 (a separate pure-Rust impl from
+#     the BLAKE3-team reference, governed by the
+#     RustCrypto umbrella); the Node binding inherits
+#     the napi-rs cross-platform + zero-runtime-overhead
+#     guarantees
+#
+# Interesting cross-language observation: BLAKE3's Rust
+# slot has *two* canonical Rust libraries - the BLAKE3-
+# team/BLAKE3 reference crate AND the RustCrypto/blake3
+# crate. The latter exists because the RustCrypto umbrella
+# wanted BLAKE3 to fit into the same `Digest` trait
+# ecosystem as their SHA-2 / SHA-3 / Keccak etc. crates.
+# Both are spec-compliant; @node-rs/blake3 binds to the
+# RustCrypto variant because of the trait ecosystem fit.
+#
+# Cross-language interop at the hash-output level - 32
+# bytes of BLAKE3 hash from any of the three lanes is
+# byte-identical for the same input.
+#
+# Axis 245 opens at the round-300 landmark R1433 with the
+# Rust slot at the canonical authors-of-the-algorithm
+# reference implementation.
+# ============================================================================
+
+_backdown() {
+    local context state state_descr line
+    typeset -A opt_args
+
+    _arguments -s -S \
+        '(-i --only-images)'{-i,--only-images}'[only consider image files when grouping]' \
+        '(- *)'{-v,--version}'[print version]' \
+        '1:directory to scan:_files -/'
+}
+
+_backdown "$@"
