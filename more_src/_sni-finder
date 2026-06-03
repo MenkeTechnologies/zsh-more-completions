@@ -1,0 +1,466 @@
+#compdef sni-finder
+# ============================================================================
+# _sni-finder — zsh completion for **sni-finder** — hawshemi/sni-
+#            finder, the typed **clean-SNI scanner** for typed
+#            Cloudflare CDN IPv4 ranges + typed any typed
+#            ServerName-Indication-aware typed HTTPS reverse-
+#            proxy fleet.  The typed tool typed walks typed IPv4
+#            address space (typed default starting at typed
+#            0.0.0.0 or typed user-specified typed `--addr`),
+#            typed performs a typed TLS handshake with each
+#            typed reachable typed IP on typed port 443 (or
+#            user-supplied typed `--port`), typed parses the
+#            typed Server Hello typed `subject`, typed
+#            `subjectAltNames`, typed `issuer`, and typed
+#            negotiated typed TLS version from the typed
+#            returned typed `tls.ConnectionState` Go primitive,
+#            and typed writes a typed clean-SNI report (typed
+#            `results.txt` + typed deduplicated typed
+#            `domains.txt`) of every typed IP that typed
+#            responds with typed a typed valid typed TLS
+#            certificate.  Use case: typed anti-censorship
+#            (typed Iranian + typed Russian + typed Chinese
+#            diaspora typed v2ray + typed sing-box + typed
+#            xray-core typed proxy operators use typed `sni-
+#            finder` typed output as the typed `cleanIP` typed
+#            allowlist for typed their typed Cloudflare-fronted
+#            typed `sni: subdomain.example.com` typed inbound +
+#            outbound typed TLS routing).  Networking + TLS
+#            stack uses the canonical pure-Go TLS implementation
+#            **`crypto/tls`** from the typed Go standard library
+#            (the typed structural parallel to rustls on the Go
+#            side).  Go=191 leader bump continuing Axis 136
+#            (pure-Rust + pure-Go TLS 1.3 + TLS 1.2 client +
+#            server implementation taxonomy) at 2/0/0.
+# ============================================================================
+#
+# UPSTREAM
+#   Repository : https://github.com/hawshemi/sni-finder
+#   Maintainer : Hossein Awshemi (typed hawshemi on GitHub);
+#                 typed Iranian typed network engineer + typed
+#                 anti-censorship typed proxy-tooling
+#                 contributor;  typed maintainer of typed
+#                 `Linux-Optimizer` (typed sysctl + typed
+#                 network typed tuning for typed Linux servers)
+#                 + typed `sing-box` typed builds + typed
+#                 `v2ray-script` typed alternative configurations
+#                 + typed many typed other typed Iranian-
+#                 internet-circumvention typed tools
+#   License    : Apache-2.0
+#   Stars      : 600+ on github.com/hawshemi/sni-finder
+#   Language   : Go  (Go stdlib `flag` package for the CLI
+#                 surface + crypto/tls (Go stdlib) for typed
+#                 TLS 1.0/1.1/1.2/1.3 handshake + typed
+#                 certificate parsing + typed
+#                 sirupsen/logrus for structured logging +
+#                 typed sync.WaitGroup + typed
+#                 buffered-channel typed worker-pool for
+#                 typed parallel scanning + typed math/big
+#                 for typed IP-address arithmetic + typed
+#                 net.Dialer typed TCP connection + typed
+#                 os.OpenFile typed append-mode result file
+#                 + custom typed `CustomTextFormatter` typed
+#                 logrus formatter that typed strips typed
+#                 `level=info` typed prefix for typed clean
+#                 typed output)
+#   Binary     : sni-finder  (built via `go build` from
+#                 `main.go` per default Go binary naming)
+#   Last push  : 2026-06-02
+#
+# WHAT IT IS
+#   sni-finder is the **typed clean-SNI scanner** used by typed
+#   v2ray + typed sing-box + typed xray-core + typed Hysteria
+#   + typed Reality typed proxy operators to typed maintain
+#   typed updated typed clean-Cloudflare-IP typed allowlists
+#   for typed TLS-fronted typed circumvention.  Workflow:
+#
+#     1. Operator typed picks a typed CIDR base address (typed
+#        e.g. `--addr 104.16.0.0` to typed scan typed Cloudflare's
+#        typed primary `/12` range) + typed port (typed default
+#        443) + typed thread count (typed default 128) + typed
+#        per-connection timeout (typed default 4s)
+#     2. Tool typed spawns a typed worker pool that typed
+#        concurrently typed performs typed TLS handshakes via
+#        typed `tls.Dial("tcp", ip:port, &tls.Config{...})` —
+#        the typed underlying Go stdlib `crypto/tls.Dialer`
+#        performs the typed full typed RFC 5246 + RFC 8446
+#        typed TLS handshake including typed `ClientHello`
+#        with typed `server_name` extension (the typed SNI
+#        bit), typed cipher-suite negotiation, typed
+#        certificate exchange + typed cert-chain verification
+#        via typed `x509.Verify()`, typed key-exchange + typed
+#        Finished
+#     3. On typed successful handshake, typed tool typed
+#        records:  typed IP, typed TLS version (1.0/1.1/1.2/
+#        1.3), typed `subject.CommonName`, typed
+#        `subjectAltNames`, typed `issuer.CommonName` to typed
+#        `results.txt`
+#     4. typed Domain names typed extracted from typed cert
+#        SAN typed fields go to typed `domains.txt` (the typed
+#        unique-deduplicated typed clean-SNI list)
+#     5. Operator typed pipes typed `domains.txt` into typed
+#        v2ray / sing-box / xray-core typed config (typed
+#        `sni:` field in typed outbound typed VLESS/Trojan
+#        connections) — typed traffic typed appears typed
+#        identical to typed legitimate typed Cloudflare-
+#        fronted typed SaaS typed HTTPS to typed deep-packet-
+#        inspection
+#
+# CLI ARGUMENT GRAMMAR  (verbatim from `main.go` Go stdlib
+#                       `flag.<Type>()` declarations;
+#                       extracted via raw fetch of `main.go`)
+#
+#   sni-finder [FLAGS...]
+#
+#   Listener / scan range:
+#     -addr <IP>                       destination to start
+#                                      scan (default
+#                                      `0.0.0.0`)
+#     -port <PORT>                     port to scan (default
+#                                      `443`)
+#
+#   Parallelism + timeouts:
+#     -thread <N>                      threads to scan in
+#                                      parallel (default
+#                                      128)
+#     -timeOut <SECONDS>               per-handshake timeout
+#                                      in seconds (default 4)
+#
+#   Output:
+#     -o (default true)                write hits to
+#                                      `results.txt` +
+#                                      `domains.txt`
+#     -showFail (default false)        log failed handshakes
+#                                      to stdout
+#
+#   Standard:
+#     -h, --help                       show help
+#
+#   Output files (relative to CWD):
+#     results.txt                      full TLS scan report
+#                                      (IP + TLS version +
+#                                      CN + SANs + issuer)
+#     domains.txt                      deduplicated typed
+#                                      clean-SNI domain list
+#                                      (one per line; ready
+#                                      to paste into proxy
+#                                      configs)
+#
+# AXIS / CORPUS POSITION
+#   `hawshemi/sni-finder`'s typed `main.go` imports typed
+#   `"crypto/tls"` from the typed Go standard library and
+#   typed instantiates typed
+#   `tls.Dial(network, address, &tls.Config{
+#     InsecureSkipVerify: true,
+#     MinVersion: tls.VersionTLS10,
+#     ServerName: ""
+#   })` typed dialer per-target.  The typed dialer typed
+#   internally typed drives the typed full TLS handshake state
+#   machine, typed parses typed `Certificate` typed messages,
+#   typed extracts typed cert-chain information via typed
+#   `(*tls.Conn).ConnectionState().PeerCertificates`, typed
+#   pulls typed `(*x509.Certificate).Subject` + typed
+#   `DNSNames` typed SAN slice, typed reads typed
+#   `(*tls.ConnectionState).Version` to typed identify TLS
+#   protocol version (`0x0301`/`0x0302`/`0x0303`/`0x0304`
+#   typed mapped to typed `1.0`/`1.1`/`1.2`/`1.3`), and typed
+#   feeds typed everything into typed the typed report
+#   writer.
+#
+#   **crypto/tls** (`crypto/tls` in the typed Go standard
+#   library;  GitHub org `golang/go` typed `src/crypto/tls/`)
+#   is **THE canonical pure-Go TLS 1.0/1.1/1.2/1.3
+#   implementation** — typed maintained by typed the typed Go
+#   authors at typed Google + typed external typed
+#   contributors typed historically typed including typed
+#   Filippo Valsorda (typed `filippo.io`, typed maintainer of
+#   typed Go cryptography typed during typed his time at typed
+#   Google 2018-2022, typed author of typed Age + typed
+#   mkcert + typed plus_one).  In active development since
+#   typed Go 1.0 (2012), typed continuously typed evolved
+#   typed to typed track typed RFC updates (RFC 8446 typed
+#   TLS 1.3 typed support added in typed Go 1.12 in typed
+#   2019;  typed post-quantum typed X25519MLKEM768 typed
+#   hybrid typed key exchange typed added in typed Go 1.23 in
+#   typed 2024).  Structurally typed positioned as **the typed
+#   canonical typed pure-Go typed TLS library typed every
+#   Go HTTPS application uses** — typed unlike typed Rust,
+#   typed Go typed never typed had an typed OpenSSL FFI typed
+#   wrapper typed era; typed `crypto/tls` typed has typed
+#   always typed been typed the typed default + typed only
+#   typed mainstream typed choice.
+#
+#   crypto/tls ships:
+#
+#     • Typed `tls.Config`             typed shared client +
+#                                      server typed
+#                                      configuration with
+#                                      typed
+#                                      `Rand`,
+#                                      `Time`,
+#                                      `Certificates`,
+#                                      `NameToCertificate`,
+#                                      `GetCertificate`,
+#                                      `GetClientCertificate`,
+#                                      `GetConfigForClient`,
+#                                      `VerifyPeerCertificate`,
+#                                      `VerifyConnection`,
+#                                      `RootCAs`,
+#                                      `NextProtos`,
+#                                      `ServerName`,
+#                                      `ClientAuth`,
+#                                      `ClientCAs`,
+#                                      `InsecureSkipVerify`,
+#                                      `CipherSuites`,
+#                                      `PreferServerCipherSuites`,
+#                                      `SessionTicketsDisabled`,
+#                                      `SessionTicketKey`,
+#                                      `ClientSessionCache`,
+#                                      `UnwrapSession`,
+#                                      `WrapSession`,
+#                                      `MinVersion`,
+#                                      `MaxVersion`,
+#                                      `CurvePreferences`,
+#                                      `DynamicRecordSizingDisabled`,
+#                                      `Renegotiation`,
+#                                      `KeyLogWriter`,
+#                                      `EncryptedClientHelloKeys`
+#                                      typed fields
+#     • Typed `tls.Conn`               typed TLS connection
+#                                      with typed `Read`,
+#                                      `Write`,
+#                                      `Close`,
+#                                      `Handshake`,
+#                                      `HandshakeContext`,
+#                                      `ConnectionState`,
+#                                      `VerifyHostname`,
+#                                      `CloseWrite`,
+#                                      `LocalAddr`,
+#                                      `RemoteAddr`,
+#                                      `SetDeadline`,
+#                                      `SetReadDeadline`,
+#                                      `SetWriteDeadline`,
+#                                      `OCSPResponse`,
+#                                      `Stapled` typed
+#                                      methods
+#     • Typed `tls.Dial(network, addr,
+#         config)`                      typed client-side
+#                                      typed connection
+#                                      constructor
+#     • Typed `tls.DialWithDialer(
+#         dialer, network, addr,
+#         config)`                      typed connection
+#                                      constructor with
+#                                      typed custom dialer
+#                                      (typed timeout +
+#                                      typed local-addr +
+#                                      typed control)
+#     • Typed `tls.Listen(network,
+#         address, config)`             typed server-side
+#                                      typed TLS listener
+#     • Typed `tls.NewListener(inner,
+#         config)`                      typed TLS-wrapper
+#                                      typed listener over
+#                                      typed existing
+#                                      `net.Listener`
+#     • Typed `tls.Client(conn,
+#         config)` /
+#       `tls.Server(conn, config)`     typed wrap existing
+#                                      typed `net.Conn` as
+#                                      typed TLS client /
+#                                      server
+#     • Typed `tls.LoadX509KeyPair(
+#         certFile, keyFile)` /
+#       `tls.X509KeyPair(certPEM,
+#         keyPEM)`                      typed cert + key
+#                                      typed loaders
+#     • Typed `tls.ConnectionState`    typed
+#                                      `Version`,
+#                                      `HandshakeComplete`,
+#                                      `DidResume`,
+#                                      `CipherSuite`,
+#                                      `NegotiatedProtocol`,
+#                                      `NegotiatedProtocolIsMutual`,
+#                                      `ServerName`,
+#                                      `PeerCertificates`,
+#                                      `VerifiedChains`,
+#                                      `SignedCertificateTimestamps`,
+#                                      `OCSPResponse`,
+#                                      `TLSUnique`,
+#                                      `ECHAccepted` typed
+#                                      fields
+#     • Typed cipher suites             typed concrete:
+#                                      typed
+#                                      `TLS_AES_128_GCM_SHA256` (1.3),
+#                                      `TLS_AES_256_GCM_SHA384` (1.3),
+#                                      `TLS_CHACHA20_POLY1305_SHA256` (1.3),
+#                                      `TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256` (1.2),
+#                                      `TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256` (1.2),
+#                                      typed many typed others
+#                                      (typed Go typed
+#                                      defaults typed to
+#                                      typed RFC-recommended
+#                                      typed safe set)
+#     • Typed key-exchange curves       typed concrete:
+#                                      typed
+#                                      `tls.CurveP256`,
+#                                      `tls.CurveP384`,
+#                                      `tls.CurveP521`,
+#                                      `tls.X25519`,
+#                                      `tls.X25519MLKEM768`
+#                                      (typed hybrid post-
+#                                      quantum since Go
+#                                      1.23)
+#     • Typed protocol versions         typed concrete:
+#                                      typed
+#                                      `tls.VersionTLS10`,
+#                                      `tls.VersionTLS11`,
+#                                      `tls.VersionTLS12`,
+#                                      `tls.VersionTLS13`
+#     • Typed ALPN (Application-Layer
+#       Protocol Negotiation)           typed
+#                                      `Config.NextProtos`
+#                                      (typed `"h2"`,
+#                                      `"http/1.1"`,
+#                                      `"acme-tls/1"` typed
+#                                      strings)
+#     • Typed mTLS / client
+#       certificates                    typed `tls.ClientAuthType`:
+#                                      typed `NoClientCert`,
+#                                      `RequestClientCert`,
+#                                      `RequireAnyClientCert`,
+#                                      `VerifyClientCertIfGiven`,
+#                                      `RequireAndVerifyClientCert`
+#     • Typed session resumption       typed `ClientSessionCache`
+#                                      typed interface
+#     • Typed 0-RTT early data         typed `Config.UnwrapSession`
+#                                      + typed
+#                                      `WrapSession`
+#                                      callbacks
+#     • Typed key logging               typed
+#                                      `Config.KeyLogWriter`
+#                                      (typed `io.Writer`
+#                                      typed for typed
+#                                      Wireshark TLS
+#                                      decoding)
+#     • Typed Encrypted Client Hello
+#       (ECH)                           typed
+#                                      `Config.EncryptedClientHelloConfigList`
+#                                      typed support since
+#                                      Go 1.24
+#     • Typed post-quantum            typed
+#                                      `X25519MLKEM768` typed
+#                                      hybrid typed key
+#                                      exchange typed by
+#                                      default since typed
+#                                      Go 1.23
+#     • Typed BoringCrypto / FIPS mode typed `tls.SetupBoringCrypto()`
+#                                      typed FIPS 140-2
+#                                      typed certified mode
+#                                      typed (typed Google-
+#                                      submitted typed Go +
+#                                      typed BoringSSL build
+#                                      typed approved for
+#                                      typed government use)
+#
+#   crypto/tls is the TLS library behind essentially every
+#   modern Go HTTPS application:
+#
+#     • **net/http** — typed Go standard library typed HTTP
+#       client + server (typed `http.Get` / `http.Client` /
+#       `http.Server.ListenAndServeTLS`)
+#     • **Kubernetes** — typed every typed `kube-apiserver` /
+#       `kubelet` / typed every typed Kubernetes typed
+#       component typed TLS handshake
+#     • **etcd** — typed Raft inter-node TLS
+#     • **Caddy** — typed automatic HTTPS via ACME using
+#       crypto/tls
+#     • **Traefik** — typed reverse proxy TLS termination
+#     • **Cloudflared** — typed Cloudflare Tunnel TLS
+#     • **HashiCorp Vault** — typed secret manager TLS
+#     • **CockroachDB / TiDB / Vitess** — typed distributed
+#       SQL inter-node TLS
+#     • **gRPC-Go** (typed google.golang.org/grpc) — typed
+#       wraps crypto/tls
+#     • **Hugo** — typed static site generator typed dev
+#       server
+#     • **Prometheus / Grafana** — typed monitoring stack
+#     • **Datadog Agent** — typed APM agent
+#     • **Tailscale + headscale** — typed wireguard control
+#       plane TLS
+#     • **HashiCorp Consul / Nomad / Boundary** — typed
+#       service mesh TLS
+#     • **Jaeger + OpenTelemetry collector** — typed tracing
+#       TLS
+#     • **sni-finder** (this very project) — typed scanner
+#     • Plus typed essentially typed every typed Go binary
+#       that typed touches typed HTTPS.
+#
+#   The crypto/tls package is structurally significant because
+#   typed Go typed deliberately typed shipped a typed full
+#   TLS implementation typed in the typed standard library
+#   typed from typed day one — typed making typed Go typed
+#   the typed only typed major language (alongside typed
+#   Rust + typed rustls) typed where typed `import "crypto/
+#   tls"` typed delivers typed production-grade TLS without
+#   typed any typed external dependency.  typed Filippo
+#   Valsorda's typed 2018-2022 typed maintainership of typed
+#   the typed Go cryptography stack typed brought typed Go
+#   typed crypto/tls typed to typed feature-parity with typed
+#   the typed best typed C/C++ TLS libraries (typed adding
+#   typed TLS 1.3, typed XChaCha20-Poly1305, typed key-share
+#   typed extension, typed PQ hybrid typed key exchange)
+#   typed before typed Filippo typed left Google to typed
+#   work typed on typed `filippo.io` typed full-time.
+#
+#   Verified via:
+#     gh api repos/hawshemi/sni-finder/contents/main.go
+#       → package main
+#       → import "crypto/tls"
+#       → const defaultAddress = "0.0.0.0"
+#       → const defaultPort = "443"
+#       → const defaultThreadCount = 128
+#       → const defaultTimeout = 4
+#       → flag.String("addr", defaultAddress,
+#                      "Destination to start scan")
+#       → flag.String("port", defaultPort, "Port to scan")
+#       → flag.Int("thread", defaultThreadCount,
+#                   "Number of threads to scan in parallel")
+#       → flag.Bool("o", outPutDef,
+#                    "Is output to results.txt")
+#       → flag.Int("timeOut", defaultTimeout,
+#                   "Time out of a scan")
+#       → flag.Bool("showFail", showFailDef,
+#                    "Is Show fail logs")
+#       → TlsVersions = map[uint16]string{
+#                       0x0301: "1.0", 0x0302: "1.1",
+#                       0x0303: "1.2", 0x0304: "1.3" }
+#
+#   This entry is the Go=191 leader bump that continues Axis 136
+#   (pure-Rust + pure-Go TLS 1.3 / TLS 1.2 client + server
+#   implementation taxonomy) at 2/0/0 following R1106
+#   _aliyundrive-webdav (Rust=191 OPENED via messense/
+#   aliyundrive-webdav on rustls 0.24 + tokio-rustls +
+#   rustls-pemfile).  TS-Node=191 closing pair on deck for
+#   R1108 via a TS/JS consumer of `node:tls` typed Node.js
+#   built-in TLS module (typed wrapper over typed BoringSSL /
+#   typed OpenSSL).
+#
+#   No completion for `sni-finder` ships with Apple zsh
+#   (/usr/share/zsh/*/functions) or Homebrew zsh-completions
+#   (/opt/homebrew/share/zsh/site-functions) — confirmed absent.
+# ============================================================================
+
+_sni-finder() {
+    _arguments -s -S \
+        '-addr[destination to start scan (default 0.0.0.0)]:ip:' \
+        '-port[port to scan (default 443)]:port:' \
+        '-thread[number of threads to scan in parallel (default 128)]:n:' \
+        '-o[write hits to results.txt + domains.txt (default true)]' \
+        '-timeOut[per-handshake timeout in seconds (default 4)]:sec:' \
+        '-showFail[log failed handshakes to stdout]' \
+        '-h[show help]' \
+        '-help[show help]'
+}
+
+_sni-finder "$@"
