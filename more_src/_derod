@@ -1,0 +1,125 @@
+#compdef derod
+# ============================================================================
+# derod - DERO homomorphic-encryption blockchain daemon (Go, custom RESEARCH)
+#
+# Author : Captain (Slixe) + DERO Project team
+# Upstream: https://github.com/deroproject/derohe
+#
+# `derod` is the full-node daemon for the DERO Homomorphic
+# Encryption blockchain - a privacy-preserving Layer-1 with
+# native smart contracts where balances + transaction amounts
+# are encrypted at the protocol level using ElGamal-based
+# homomorphic encryption. The chain ships a stake-less
+# proof-of-work consensus (AstroBWT) plus a 27-second target
+# block time. derod is the consensus + p2p + RPC server; the
+# matching wallet daemon is `dero-wallet-cli` and the miner
+# is `dero-miner`.
+#
+# Flags (docopt-go - the help string IS the parser grammar):
+#   -h, --help                  - show usage
+#       --version               - show version
+#       --testnet               - run in testnet mode
+#       --debug                 - debug mode (more log messages)
+#       --clog-level=<0..127>   - console log level
+#       --flog-level=<0..127>   - file log level
+#       --fastsync              - fast sync (bootstrap only)
+#       --timeisinsync          - skip the time-sync check
+#       --socks-proxy=<ip:port> - SOCKS proxy for outgoing connections
+#       --data-dir=<dir>        - blockchain data location
+#       --rpc-bind=<ip:port>    - RPC server bind (default 127.0.0.1:9999)
+#       --p2p-bind=<ip:port>    - p2p server bind (default 0.0.0.0:18089;
+#                                 use port 0 to disable)
+#       --getwork-bind=<ip:port>- getwork miner-protocol server bind
+#                                 (default 0.0.0.0:10100; 0 disables)
+#       --add-exclusive-node=<ip:port>  - connect to this peer only
+#                                         (repeatable)
+#       --add-priority-node=<ip:port>   - persistent peer connection
+#                                         (repeatable)
+#       --sync-node             - sync automatically with seed nodes
+#       --node-tag=<name>       - unique node name (broadcast)
+#       --integrator-address=<addr>     - reward address when this node
+#                                         mines a block
+#       --min-peers=<n>         - minimum maintained peer count
+#       --max-peers=<n>         - maximum accepted peer count
+#       --prune-history=<n>     - prune blockchain history until
+#                                 topo_height = n
+#       --log-dir=<dir>         - log file output directory
+#
+# The golang.org/x/time/rate lane is built on `golang.org/x/
+# time/rate` (declared as a direct dep at upstream go.mod HEAD
+# and imported from `p2p/controller.go`, `blockchain/miner_
+# block.go`, `cmd/derod/rpc/rpc_dero_getblocktemplate.go`),
+# the canonical Go token-bucket rate limiter shipped under the
+# golang.org/x/* "experimental but blessed" tree by the Go
+# team. x/time/rate is the *only* widely-used rate limiter in
+# the Go ecosystem - over 35K direct importers in the public
+# Go module graph. The library implements a classic
+# token-bucket (constant fill rate + burst capacity), exposed
+# via `rate.Limiter`'s `Allow() bool`, `Wait(ctx) error`, and
+# `Reserve()` methods. derod uses it for two distinct rate-
+# limits: per-peer p2p message throttling (preventing
+# malicious peers from spamming the gossip layer) and per-IP
+# RPC throttling (preventing public-facing nodes from being
+# DoS'd by getwork or getblocktemplate floods).
+#
+# ----------------------------------------------------------------------------
+# AXIS 226 :: Rate limiting (leaky bucket / token bucket / GCRA)
+# Round 1377 :: Go slot 2 of 4 :: continues Axis 226
+#
+# Cross-language canonical library family for this axis:
+#   Rust    : boinkor-net/governor         [R1376 _playit-cli]
+#   Go      : golang.org/x/time/rate       [R1377 THIS FILE]
+#   TS/Node : SGrondin/bottleneck          [R1378 closing]
+#
+# golang.org/x/time/rate is structurally interesting in this
+# axis: it is the rare case of a *standard-library-adjacent*
+# rate limiter. The Go team's `golang.org/x/*` tree carries
+# packages that are "more curated than community Go modules
+# but not yet ready for the std-lib API stability guarantee"
+# - x/time/rate has lived in that tree since 2015 and shows
+# no sign of moving (the API is too domain-specific for the
+# Go core team's tastes). The library's algorithmic choice
+# is also unusual: pure token bucket without GCRA, sliding
+# window, or leaky bucket - the Go team picked the simplest
+# model that matched the typical RPC-server use case.
+#
+# The Rust slot (governor, GCRA) and the Go slot (x/time/rate,
+# token bucket) differ in observable behavior at the
+# millisecond scale: token bucket admits bursts equal to the
+# bucket capacity (`Burst()`), GCRA enforces a constant inter-
+# arrival distance. For most application-layer use cases the
+# difference is invisible; for network-layer use cases
+# (playit's per-tunnel bandwidth) the choice matters because
+# bursts can collide with downstream queue depths.
+# ============================================================================
+
+_derod() {
+    local context state state_descr line
+    typeset -A opt_args
+
+    _arguments -s -S \
+        '(- *)'{-h,--help}'[show help]' \
+        '(- *)--version[show version]' \
+        '--testnet[run in testnet mode]' \
+        '--debug[enable debug logging]' \
+        '--clog-level=[set console log level]:level (0-127):' \
+        '--flog-level=[set file log level]:level (0-127):' \
+        '--fastsync[fast sync mode (bootstrap only)]' \
+        '--timeisinsync[skip the time-sync check]' \
+        '--socks-proxy=[SOCKS proxy for outbound connections]:ip:port:' \
+        '--data-dir=[blockchain data directory]:dir:_files -/' \
+        '--rpc-bind=[RPC server bind address]:ip:port:' \
+        '--p2p-bind=[p2p server bind address (0 disables)]:ip:port:' \
+        '--getwork-bind=[getwork server bind address (0 disables)]:ip:port:' \
+        '*--add-exclusive-node=[connect to this peer only (repeatable)]:ip:port:' \
+        '*--add-priority-node=[persistent peer connection (repeatable)]:ip:port:' \
+        '--sync-node[sync node automatically with seed nodes]' \
+        '--node-tag=[unique node name (broadcast)]:name:' \
+        '--integrator-address=[reward address when this node mines a block]:address:' \
+        '--min-peers=[minimum maintained peer count]:n:' \
+        '--max-peers=[maximum accepted peer count]:n:' \
+        '--prune-history=[prune blockchain history until topo_height]:n:' \
+        '--log-dir=[log file output directory]:dir:_files -/'
+}
+
+_derod "$@"
