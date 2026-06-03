@@ -1,0 +1,179 @@
+#compdef llmc
+# ============================================================================
+# llmc - LLM Commit: generate Conventional-Commits-style
+#         commit messages from staged diffs via LLM
+#         (TypeScript -> Node, BSD-3-Clause)
+#
+# Author : Marc Love (marclove)
+# Upstream: https://github.com/marclove/llmc
+# npm    : llmc (binary: llmc)
+#
+# `llmc` is an "LLM Commit" CLI - it reads the staged-but-
+# unindexed diff from `git diff --cached`, sends it to a
+# configured LLM provider (Anthropic / OpenAI / Google /
+# Ollama / OpenRouter / etc.) with a Conventional-Commits
+# prompt template, and either prints the generated commit
+# message or runs `git commit` with it directly. The
+# configuration model is `llmc.toml` (parsed via
+# @iarna/toml) - the user picks provider + model +
+# temperature + optional custom prompt template, and the
+# CLI uses those defaults at run time.
+#
+# Usage:
+#   llmc                              # generate + commit
+#   llmc --message-only               # generate, print
+#                                       to stdout, no
+#                                       commit (for git
+#                                       hook wiring)
+#   llmc --no-commit                  # alias for
+#                                       --message-only
+#   llmc init                         # write a default
+#                                       llmc.toml with the
+#                                       baseline settings
+#
+# Flags (yargs):
+#   --message-only          - generate the commit message
+#                              but don't actually commit
+#                              (writes message to stdout)
+#   --no-commit             - alias for --message-only
+#   -h, --help              - print help
+#   -v, --version           - print version
+#
+# Commands:
+#   init                    - scaffold a new llmc.toml
+#                              configuration file in the
+#                              current dir with default
+#                              provider / model / prompt
+#
+# Configuration (`llmc.toml`):
+#   provider = "anthropic"     # or openai / google / ...
+#   model = "claude-3-5-sonnet"
+#   temperature = 0.2
+#   maxTokens = 1024
+#   prompt = """..."""         # optional override
+#   apiKey = "sk-..."          # or apiKeyName = "VAR"
+#
+# The @iarna/toml lane is built on `@iarna/toml ^2.2.5`
+# (declared at upstream package.json HEAD as a direct
+# dep, imported from src/message.ts as `import { parse }
+# from "@iarna/toml"`), the canonical Node TOML library
+# by Rebecca Turner (iarna, ex-npm core team) -
+# github.com/iarna/iarna-toml, 250+ stars, ~9M weekly
+# npm downloads. Despite the modest GitHub star count
+# the library is the de-facto Node TOML root-of-trust:
+# Yarn's lockfile parsing, Wrangler (Cloudflare Workers
+# CLI), Sentry's wizard, Astro's framework loader, and
+# approximately every Node tool with TOML config goes
+# through @iarna/toml.
+#
+# The library covers the TOML v1.0.0 spec end-to-end
+# (parse + stringify) and additionally retains backward
+# compat for the older TOML 0.5.0 grammar via a parser-
+# mode switch. It is intentionally pure-JS (no Wasm, no
+# native bindings) - works in Node + Deno + Bun + browser
+# + Cloudflare Workers + every other JS host environment
+# without per-host build artifacts.
+#
+# llmc uses @iarna/toml in `src/message.ts`:
+#   `parse(defaultConfigContent) as TomlConfigSchema`
+#   `parse(configContent) as TomlConfigSchema`
+# to load both the baked-in `default.toml` (provider /
+# model defaults) and the user's project-local `llmc.toml`
+# (override settings). The two are merged + validated
+# before being passed to the LLM client.
+#
+# ----------------------------------------------------------------------------
+# AXIS 243 :: TOML parsing (TOML v1.0.0 spec compliant
+#              parsers + serializers)
+# Round 1429 :: TS-Node slot 3 of 4 :: CLOSES Axis 243
+#                                       (236th axis closed)
+#
+# Cross-language canonical library family for this axis:
+#   Rust    : toml-rs/toml                 [R1427 _typsite]
+#   Go      : BurntSushi/toml              [R1428 _gokr-rsync]
+#   TS/Node : iarna/iarna-toml             [R1429 THIS FILE]
+#
+# @iarna/toml closes Axis 243 with the *high-download-
+# low-stars maintainer-by-npm-employee* pattern. The
+# three lanes form a clean spectrum of TOML library
+# governance models:
+#
+#   - Rust (toml-rs/toml): originally Alex Crichton at
+#     Mozilla (Cargo's first author); co-evolved with
+#     Cargo's TOML adoption; now maintained by toml-rs
+#     org with Ed Page as primary maintainer; depended
+#     on by all of Rust's tooling ecosystem
+#   - Go (BurntSushi/toml): Andrew Gallant single-author
+#     maintained since 2013; the unique root-of-trust
+#     where library-author = spec-conformance-suite-
+#     author (Gallant also wrote BurntSushi/toml-test)
+#   - Node (iarna/iarna-toml): Rebecca Turner (former
+#     npm CLI team) single-author maintained since 2017;
+#     low GitHub star count belies enormous npm download
+#     counts (~9M weekly) because every major Node tool
+#     with TOML config depends on it transitively
+#
+# Cross-language interop happens at the wire format level
+# - TOML is byte-text, so the same input parsed by any
+# of the three libraries produces structurally identical
+# parsed values. The BurntSushi/toml-test conformance
+# corpus formalizes this with a canonical JSON-shape
+# reference representation; all three libraries pass.
+#
+# Use-case spectrum across the three lanes:
+#   - typsite (Rust, toml-rs/toml): Typst SSG loading
+#     options.toml for compilation defaults
+#   - gokr-rsync (Go, BurntSushi/toml): pure-Go rsync
+#     daemon loading rsyncd.toml for listener + module
+#     configuration
+#   - llmc (Node, @iarna/toml): LLM-powered commit
+#     message generator loading llmc.toml for provider /
+#     model / prompt defaults
+#
+# Three lanes, three use-case shapes (typesetting SSG /
+# file-sync daemon / AI commit tool), three governance
+# models (corporate-author-then-org / single-author-also-
+# spec-author / single-author-de-facto-root-of-trust),
+# all converging on TOML v1.0.0 wire-format compatibility.
+#
+# Axis 243 closes the round 1429 cycle - 236th axis closed
+# total.
+# ============================================================================
+
+_llmc() {
+    local context state state_descr line
+    typeset -A opt_args
+    local curcontext="$curcontext" ret=1
+
+    _arguments -C \
+        '--message-only[generate message but skip the commit (write to stdout)]' \
+        '--no-commit[alias for --message-only]' \
+        '(- *)'{-h,--help}'[print help]' \
+        '(- *)'{-v,--version}'[print version]' \
+        '1: :_llmc_cmds' \
+        '*::arg:->args' \
+    && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                init)
+                    _arguments \
+                        '(- *)'{-h,--help}'[print subcommand help]'
+                    ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_llmc_cmds() {
+    local -a cmds
+    cmds=(
+        'init:scaffold a new llmc.toml configuration file with defaults'
+    )
+    _describe -t commands 'llmc command' cmds
+}
+
+_llmc "$@"
