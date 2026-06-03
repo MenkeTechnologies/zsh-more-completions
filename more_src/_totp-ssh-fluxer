@@ -1,0 +1,81 @@
+#compdef totp-ssh-fluxer
+# ============================================================================
+# totp-ssh-fluxer - SSH port fluxer using TOTP (Go, no-license / source-open)
+#
+# Author : Ben Cox (benjojo)
+# Upstream: https://github.com/benjojo/totp-ssh-fluxer
+#
+# totp-ssh-fluxer takes the sshd "change to non-standard port" form
+# of security-through-obscurity to its logical extreme: instead of
+# picking one obscure port, it rotates the active SSH port every
+# 30 seconds based on a TOTP secret shared between the server and
+# the operator's authenticator app. The daemon loops:
+#
+#   1. Generate a TOTP code from the shared secret
+#   2. Use the leading digits as the port number (clamped <= 65535)
+#   3. Add an iptables PREROUTING NAT rule redirecting that port
+#      to the real sshd port (22)
+#   4. Wait 30 seconds, remove the rule, repeat
+#
+# Established connections survive port rotation because PREROUTING
+# only affects new SYN packets - already-established connections
+# stay in the conntrack table and continue to use their original
+# port. The operator's phone shows the current "SSH port-of-the-
+# moment" via any generic TOTP authenticator app (Aegis / Authy /
+# Google Authenticator / 1Password / Bitwarden Authenticator).
+#
+# The TOTP lane is built on `github.com/pquerna/otp` (declared at
+# upstream go.mod HEAD), the canonical Go TOTP / HOTP library by
+# Paul Querna (github.com/pquerna/otp, 2900+ stars). The library
+# implements RFC 6238 (TOTP) layered on RFC 4226 (HOTP) end-to-
+# end: HMAC-SHA1/SHA256/SHA512 modes, 6-8 digit truncation, the
+# `otpauth://` URI parser + emitter, Google-Authenticator-
+# compatible QR code generation, and the `Key` / `Generate` /
+# `Validate` API surface used by every Go web framework's MFA
+# middleware. Verbatim from upstream `main.go`:
+#
+#     import (
+#         "github.com/pquerna/otp"
+#         "github.com/pquerna/otp/totp"
+#     )
+#
+#     otpkey, _ := otp.NewKeyFromURL(token)
+#     code, _ := totp.GenerateCode(otpkey.Secret(), time.Now())
+#     port, _ := strconv.ParseInt(code[:5], 10, 64)
+#     ...
+#
+# ----------------------------------------------------------------------------
+# AXIS 218 :: TOTP (RFC 6238 Time-based One-Time Password Algorithm)
+# Round 1353 :: Go slot 2 of 4 :: continues Axis 218
+#
+# Cross-language canonical library family for this axis:
+#   Rust    : storyfeet/totp-lite + constantoine/totp-rs   [R1352 _totp]
+#   Go      : pquerna/otp                                  [R1353 THIS FILE]
+#   TS/Node : yeojz/otplib                                 [R1354 closing]
+#
+# pquerna/otp has the structurally distinctive position of being
+# both an HOTP + TOTP + URI library AND a QR code emitter in a
+# single import path - the URI -> Key -> QR PNG pipeline is the
+# canonical "enroll a TOTP for a new user" flow, and pquerna's
+# library is the Go solution end-to-end. Rust + Node lanes
+# typically separate the algorithm library (totp-rs / otplib)
+# from the QR generator (qrcode-rust / node-qrcode at Axis 199).
+#
+# totp-ssh-fluxer is the canonical "creative misuse of TOTP"
+# pattern - using TOTP as a covert side-channel for something
+# other than user-facing MFA codes. Same flavor as input-method-
+# as-LSP (Axis 216 _rime_ls) and Chinese-IME-via-completion: the
+# spec is generic enough to encompass workloads the original
+# authors never anticipated.
+# ============================================================================
+
+_totp-ssh-fluxer() {
+    local context state state_descr line
+    typeset -A opt_args
+
+    _arguments -s -S \
+        '-keypath[unix path to the TOTP URI key file (default /etc/ssh-flux-key)]:file:_files' \
+        '(- *)'{-h,--help}'[print help]'
+}
+
+_totp-ssh-fluxer "$@"
