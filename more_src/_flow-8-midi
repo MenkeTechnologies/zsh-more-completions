@@ -1,0 +1,297 @@
+#compdef flow-8-midi
+# ============================================================================
+# flow-8-midi - cross-platform desktop MIDI
+#                controller GUI for the
+#                Behringer FLOW 8 mixer (Rust,
+#                GPL-3.0)
+#
+# Author : Abel Rocha Espinosa (abelroes)
+# Upstream: https://github.com/abelroes/flow-8-midi
+# crates : flow-8-midi (binary: flow-8-midi)
+#
+# `flow-8-midi` is a cross-platform desktop GUI
+# (built with the iced framework) for remotely
+# controlling the Behringer FLOW 8 digital mixer
+# via its USB MIDI interface or Bluetooth Low
+# Energy MIDI profile. The FLOW 8 is a 8-channel
+# portable digital mixer popular with streamers,
+# podcasters, and small-venue musicians; its
+# stock control software is Windows-only +
+# limited in functionality. flow-8-midi provides:
+#   - 8-channel mixer view (gain + level + pan +
+#     compressor + low-cut + 4-band EQ + sends to
+#     monitor mixes + sends to FX returns)
+#   - FX page (reverb/delay/chorus parameter
+#     control on the two onboard FX engines)
+#   - EQ page (per-channel 4-band parametric EQ
+#     with visual frequency-response curve)
+#   - Sends page (per-channel send levels to
+#     each monitor mix + FX bus)
+#   - Snapshots page (save + recall full mixer
+#     state via MIDI sysex)
+#   - Settings page (MIDI device selection +
+#     Bluetooth LE pairing)
+#
+# Connectivity:
+#   - USB MIDI (standard USB MIDI class device)
+#   - Bluetooth LE MIDI (Apple-defined BLE MIDI
+#     profile)
+#
+# Implementation:
+#   - iced 0.14 GUI framework (with tokio
+#     async-IO backend)
+#   - midir 0.10 for cross-platform MIDI I/O
+#     (ALSA on Linux + CoreMIDI on macOS +
+#     WinMM/WinRT on Windows)
+#   - btleplug 0.11 for Bluetooth LE MIDI
+#     connectivity
+#   - Custom sysex parser for FLOW 8-specific
+#     binary message formats (channel state
+#     dumps + snapshot save/recall)
+#
+# Use cases:
+#   - Linux-based studio/podcast/livestream
+#     setups using the FLOW 8 as the audio
+#     interface (the official Behringer software
+#     is Windows-only)
+#   - macOS users wanting a native desktop
+#     controller (vs Behringer's Web-based UI)
+#   - iPhone/iPad-free Bluetooth control of the
+#     FLOW 8 from a laptop
+#   - Streaming setups requiring scriptable
+#     MIDI control (snapshots + named scene
+#     recall via sysex)
+#
+# Usage:
+#   flow-8-midi
+#
+# This binary takes no command-line flags - it
+# launches the iced GUI window directly. All
+# configuration (MIDI device selection, BLE
+# pairing, preferred mixer view) happens through
+# the GUI's settings page + is persisted to the
+# OS-standard config directory:
+#   - Linux: $XDG_CONFIG_HOME/flow-8-midi/
+#   - macOS: ~/Library/Application Support/
+#     flow-8-midi/
+#   - Windows: %APPDATA%\flow-8-midi\
+#
+# Auxiliary binaries (declared as `[[bin]]`
+# entries in Cargo.toml; built separately via
+# `cargo build --bin <name>`):
+#   - analyze_names              - debug tool for
+#                                    sysex name
+#                                    decoding
+#   - calibrate                  - calibration
+#                                    tool that
+#                                    walks every
+#                                    CC + sysex
+#                                    parameter +
+#                                    dumps
+#                                    response
+#                                    timing to
+#                                    `calibration-
+#                                    data/`
+#   - digest                     - sysex message
+#                                    digest /
+#                                    hash tool
+#
+# These auxiliary binaries are not typically
+# user-invoked but are useful for FLOW 8
+# protocol reverse-engineering + firmware
+# version compatibility testing.
+#
+# The midir lane is built on `midir = "^0.10.0"`
+# with `features = ["winrt"]` (declared verbatim
+# at upstream Cargo.toml HEAD as a direct dep,
+# imported by the `service::midi` module for
+# cross-platform MIDI device enumeration +
+# input/output connection + sysex message
+# transmission), the canonical Rust cross-
+# platform MIDI library by Patrick Klein
+# (Boddlnagg) - github.com/Boddlnagg/midir.
+#
+# Patrick Klein's midir is the de-facto canonical
+# Rust MIDI library:
+#   - 700+ reverse-deps on crates.io
+#   - Cross-platform MIDI I/O abstraction
+#     (Linux ALSA + macOS CoreMIDI + Windows
+#     WinMM + Windows WinRT + JACK + WebMIDI
+#     for wasm32)
+#   - Stable callback-based input API + send-
+#     based output API
+#   - Virtual port support (Linux ALSA + macOS
+#     CoreMIDI)
+#   - Sysex (System Exclusive) message support
+#   - Bindings auto-generated from the C-level
+#     OS APIs via bindgen
+#   - Thread-safe device handles
+#
+# midir's distinguishing position vs alternatives:
+#   - midir (Klein): canonical; cross-platform;
+#     THIS AXIS
+#   - rust-midi: deprecated predecessor
+#   - portmidi-rs: PortMIDI bindings (alternative
+#     C library; less actively maintained)
+#   - midi-control: higher-level MIDI message
+#     parsing (often used with midir for I/O)
+#
+# Patrick Klein's broader Rust ecosystem
+# footprint:
+#   - midir (canonical Rust MIDI; THIS AXIS)
+#   - rust-bindgen contributor (the C-to-Rust
+#     binding-generator that midir uses for OS
+#     API access)
+#   - Various smaller utility crates around
+#     real-time audio + MIDI integration
+#
+# Klein's role in Rust is *specialized real-time
+# audio / MIDI infrastructure* - similar to
+# zonyitoo (rust-ini + Shadowsocks + bson) in
+# the *specialized protocol implementation*
+# canonical-author cluster.
+#
+# flow-8-midi uses midir in `service::midi`
+# module to:
+#   1. Enumerate MIDI input + output devices
+#      (`midir::MidiInput::new()?.ports()` for
+#      listing, `port_name()` for human-readable
+#      names)
+#   2. Connect to a selected device
+#      (`midir::MidiInput::connect(...)`)
+#   3. Send Control Change (CC) messages for
+#      real-time parameter control (level, EQ,
+#      send, mute, solo)
+#   4. Send System Exclusive (sysex) messages
+#      for snapshot save/recall + full mixer
+#      state dumps
+#   5. Receive incoming MIDI from the FLOW 8
+#      (mixer-side knob movements + button
+#      presses surface as MIDI back to the
+#      controller for two-way state sync)
+#
+# ----------------------------------------------------------------------------
+# AXIS 269 :: MIDI (Musical Instrument Digital
+#              Interface) device I/O libraries
+#              (cross-platform MIDI 1.0 spec
+#              + USB MIDI Class + sysex message
+#              handling)
+# Round 1505 :: Rust slot 1 of 4 :: OPENS Axis 269
+#
+# Cross-language canonical library family for this axis
+# (proposed):
+#   Rust    : Boddlnagg/midir              - Patrick
+#                                              Klein's
+#                                              canonical
+#                                              Rust MIDI
+#                                              library;
+#                                              cross-
+#                                              platform;
+#                                              ALSA +
+#                                              CoreMIDI +
+#                                              WinMM +
+#                                              WinRT +
+#                                              JACK +
+#                                              WebMIDI
+#   Go      : gomidi/midi                  - Marc
+#                                              Rene
+#                                              Arns'
+#                                              canonical
+#                                              Go MIDI
+#                                              library;
+#                                              wraps
+#                                              rtmidi C
+#                                              library
+#                                              via cgo
+#   TS/Node : justinlatimer/node-midi       - Justin
+#                                              Latimer's
+#                                              canonical
+#                                              Node MIDI
+#                                              library;
+#                                              also
+#                                              wraps
+#                                              rtmidi C
+#                                              library;
+#                                              native
+#                                              addon
+#                                              via
+#                                              node-gyp
+#
+# MIDI is a *spec-bound* axis - the MIDI 1.0
+# specification (MMA Technical Standard 1.0,
+# 1983; updated to MIDI 2.0 in 2020) defines the
+# wire-format protocol:
+#   - 31,250 baud serial (over MIDI DIN-5)
+#   - USB MIDI Class (USB-MIDI 1.0 spec, 1999)
+#   - Network MIDI (RTP MIDI / AppleMIDI, RFC
+#     6295)
+#   - Bluetooth LE MIDI (Apple-defined GATT
+#     profile)
+#
+# Each canonical library provides cross-platform
+# abstractions over the OS-specific MIDI APIs:
+#   - Linux: ALSA sequencer + JACK MIDI
+#   - macOS: CoreMIDI
+#   - Windows: WinMM (legacy) + WinRT (modern)
+#   - Web: Web MIDI API
+#
+# Structural commentary on the canonical libraries:
+#   - midir (Rust): pure-Rust MIDI abstraction
+#     with bindgen-generated OS bindings; no
+#     C/C++ dependency
+#   - gomidi (Go): wraps the rtmidi C++ library
+#     via cgo
+#   - node-midi (Node): wraps the rtmidi C++
+#     library via node-gyp native addon
+#
+# Notable that both Go + Node lanes wrap the
+# same underlying C/C++ library (rtmidi by Gary
+# P. Scavone). The Rust lane is the *only* lane
+# with a pure-language implementation. This is
+# the *Rust-as-only-pure-impl* pattern, parallel
+# to:
+#   - resvg (Rust SVG renderer; vs Cairo + libxml
+#     in other lanes at Axis 264)
+#   - tiny-skia (Rust 2D rasterization; vs Skia
+#     C++ in other lanes)
+#   - rustls (Rust TLS; vs OpenSSL in other
+#     lanes)
+#
+# Cross-language interop at the MIDI message
+# byte level - all three libraries send +
+# receive byte-identical MIDI messages on the
+# wire. Sysex compatibility is similarly
+# universal since the message format is defined
+# at the byte level.
+#
+# Axis 269 opens with the Rust slot at Boddlnagg/
+# midir, anchoring Klein's specialized-protocol
+# canonical position. Subsequent rounds will
+# visit the Go (gomidi/midi) + TS/Node
+# (justinlatimer/node-midi) canonicals.
+#
+# Use case spectrum for this axis:
+#   - flow-8-midi (Rust, midir): cross-platform
+#     desktop MIDI controller for the Behringer
+#     FLOW 8 digital mixer
+#
+# MIDI tooling spans the entire music-production
+# ecosystem: DAWs (Ableton Live + FL Studio +
+# Logic Pro + Reaper + Ardour) + standalone
+# instruments + hardware controllers + MIDI
+# sequencers + algorithmic composition tools.
+# The MIDI 1.0 spec's longevity (40+ years
+# since 1983) makes it one of the most-
+# implemented protocol axes in computing.
+# ============================================================================
+
+_flow-8-midi() {
+    local context state state_descr line
+    typeset -A opt_args
+
+    _arguments -s -S \
+        '(- *)'{-h,--help}'[print help]' \
+        '(- *)'{-V,--version}'[print version]'
+}
+
+_flow-8-midi "$@"
