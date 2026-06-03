@@ -1,0 +1,147 @@
+#compdef h26forge
+# ============================================================================
+# h26forge - H.264 video fuzzer + bit-level manipulator (Rust, MIT)
+#
+# Author : Willy R. Vasquez (wrv) - UT Austin SPARK Lab
+# Upstream: https://github.com/h26forge/h26forge
+#
+# h26forge is a domain-specific Rust toolchain for analyzing,
+# synthesizing, and fuzzing H.264 (and partial H.265) encoded
+# videos. Originally built for academic security research (the
+# H26Forge paper, S&P 2024) and used to find decoder bugs in
+# real-world stacks like macOS VideoToolbox, Android codec
+# fuzzers, and WebRTC playback paths. Subcommands cover the
+# full lifecycle:
+#
+#   passthrough - decode + re-encode a video unchanged (sanity test)
+#   synthesize  - JSON syntax-element file -> encoded H.264
+#   randomize   - mutate slice / NALU syntax elements on input
+#   modify      - apply targeted bit-level edits
+#   generate    - whole-cloth random video generation
+#   mux         - mux NALU stream into MP4
+#   stream      - WebRTC streaming of the produced video
+#   experimental - novel mutator experiments
+#
+# The WebRTC streaming lane is built on `webrtc = "0.9.0"`
+# (declared verbatim at upstream Cargo.toml HEAD), the canonical
+# async-Rust WebRTC stack by webrtc-rs (github.com/webrtc-rs/webrtc,
+# 5000+ stars). The library is a clean-room port of Pion's
+# Go WebRTC implementation - a full-stack RTP/RTCP + DTLS + ICE +
+# SCTP + SRTP implementation supporting the W3C WebRTC 1.0 API
+# surface: RTCPeerConnection, RTCDataChannel, RTCRtpSender /
+# RTCRtpReceiver, and the SDP offer/answer negotiation flow.
+# h26forge uses it to stream the synthesized H.264 frames to a
+# browser peer so the security researcher can confirm a decoder
+# bug actually triggers end-to-end.
+#
+# ----------------------------------------------------------------------------
+# AXIS 210 :: WEBRTC (RTC 1.0 / RFC 8825 + RTP/RTCP/SRTP/DTLS/ICE/SCTP)
+# Round 1328 :: Rust slot 1 of 4 :: OPENS Axis 210
+#
+# Cross-language canonical library family for this axis (proposed):
+#   Rust    : webrtc-rs/webrtc        - Pion port, async-Rust full-stack
+#   Go      : pion/webrtc             - the original; canonical Go WebRTC
+#   TS/Node : nodertc/node-webrtc or werift-webrtc
+#
+# All three target the W3C WebRTC 1.0 spec (R-EC 2021) plus the
+# stack of supporting IETF RFCs: RFC 8825 (WebRTC overview), RFC
+# 8829 (JSEP signaling), RFC 8839 (ICE), RFC 8840 (TURN), RFC 5764
+# (DTLS-SRTP key agreement), RFC 7714 (SRTP-AEAD). The structural
+# convergence is unusual: pion/webrtc in Go pioneered the
+# "pure-language WebRTC stack" (no libwebrtc / no Chromium /
+# no C++) design in 2018, webrtc-rs ported it to async-Rust in
+# 2020-2021 with substantial PR cross-flow between the two
+# projects, and the Node lane took longer to settle (nodertc
+# was the earlier native-binding wrapper; werift-webrtc is the
+# newer pure-TS port that also draws on pion's design).
+# ============================================================================
+
+_h26forge() {
+    local context state state_descr line
+    typeset -A opt_args
+    local curcontext="$curcontext" ret=1
+
+    _arguments -C \
+        '(-d --debug-decode)'{-d,--debug-decode}'[print decoder syntax elements]' \
+        '(-e --debug-encode)'{-e,--debug-encode}'[print encoder syntax elements]' \
+        '--silent[reduce STDOUT output]' \
+        '--perf[output performance information]' \
+        '--hevc[input is H.265 (HEVC)]' \
+        '--strict-fmo[use FMO slice group map; reject malformed]' \
+        '--safestart[prepend known-good video to output]' \
+        '--json[emit JSON of recovered syntax elements]' \
+        '--json-no-nalu[skip original NALU bytes in JSON]' \
+        '--avcc[output AVCC format as JS Uint8Array]' \
+        '--cut[NALU index to cut]:index:' \
+        '--duplicate[NALU index to duplicate]:index:' \
+        '--dupe_index[duplication target index]:index:' \
+        '--save-default-config[emit the default random-gen config]' \
+        '--mp4[mux output to MP4]' \
+        '--mp4-frag[apply MP4 fragmentation (MSE-friendly)]' \
+        '--mp4-rand-size[randomize MP4 width/height]' \
+        '--mp4-width[set MP4 width manually]:px:' \
+        '--mp4-height[set MP4 height manually]:px:' \
+        '(- *)'{-h,--help}'[print help]' \
+        '(- *)'{-V,--version}'[print version]' \
+        '1: :_h26forge_cmds' \
+        '*::arg:->args' \
+    && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                passthrough|Passthrough) _h26forge_io_cmd ;;
+                synthesize|Synthesize)   _h26forge_io_cmd ;;
+                randomize|Randomize)     _h26forge_randomize ;;
+                modify|Modify)           _h26forge_io_cmd ;;
+                generate|Generate)       _h26forge_io_cmd ;;
+                mux|Mux)                 _h26forge_io_cmd ;;
+                stream|Stream)           _h26forge_io_cmd ;;
+                experimental|Experimental) _h26forge_io_cmd ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_h26forge_cmds() {
+    local -a cmds
+    cmds=(
+        'passthrough:Decode and re-encode a video unchanged (sanity test)'
+        'synthesize:Generate H.264 from a JSON syntax-element file'
+        'randomize:Mutate syntax elements of an input H.264 video'
+        'modify:Apply targeted bit-level edits to an input'
+        'generate:Whole-cloth random H.264 generation'
+        'mux:Mux a NALU stream into MP4'
+        'stream:Stream the generated H.264 over WebRTC'
+        'experimental:Novel mutator experiments'
+    )
+    _describe -t commands 'h26forge command' cmds
+}
+
+_h26forge_io_cmd() {
+    _arguments -s -S \
+        '(-i --input)'{-i,--input}'[input file]:file:_files' \
+        '(-o --output)'{-o,--output}'[output file]:file:_files' \
+        '(- *)'{-h,--help}'[help]'
+}
+
+_h26forge_randomize() {
+    _arguments -s -S \
+        '(-i --input)'{-i,--input}'[input H.264 file]:file:_files -g "*.(h264|264)"' \
+        '(-o --output)'{-o,--output}'[output H.264 file]:file:_files -g "*.(h264|264)"' \
+        '(-a --slice-idx)'{-a,--slice-idx}'[slice index to randomize]:idx:' \
+        '--randomize-slice-header[also randomize the slice header]' \
+        '--randomize-all-slices[randomize every slice]' \
+        '--ignore-intra-pred[skip intra prediction in mutation]' \
+        '--ignore-edge-intra-pred[skip intra prediction at edges]' \
+        '--ignore-ipcm[skip IPCM macroblock types]' \
+        '(-s --seed)'{-s,--seed}'[RNG seed value]:seed:' \
+        '(-c --config)'{-c,--config}'[random-gen ranges config file]:file:_files -g "*.json"' \
+        '--film[use a film file rather than RNG]:file:_files' \
+        '--output-film[also save the film file used]' \
+        '(- *)'{-h,--help}'[help]'
+}
+
+_h26forge "$@"
