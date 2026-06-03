@@ -1,0 +1,152 @@
+#compdef mark2pdf
+# ============================================================================
+# mark2pdf - Markdown / HTML / Word -> PDF unified CLI (TypeScript, MIT)
+#
+# Author : Evan Fang (evanfang0054)
+# Upstream: https://github.com/evanfang0054/mark2pdf
+# npm    : mark2pdf
+#
+# mark2pdf is a commander.js-driven Node CLI that unifies document
+# conversion: Markdown -> PDF (with themes), HTML -> PDF, PDF merging,
+# and text extraction from PDF/Word docx documents. It is dual-mode:
+# interactive for humans and structured-JSON (`--json`) for agentic /
+# automation usage with full execution-plan + dry-run support.
+#
+# The PDF emission lane is built on `pdfkit ^0.17.1` (verified verbatim
+# against upstream package.json HEAD), the canonical Node PDF builder
+# from the foliojs org (github.com/foliojs/pdfkit, 10000+ stars). The
+# library exposes a `PDFDocument` class with a streaming, chainable
+# API (`.fontSize(...).text(...)`, `.image(...)`, `.addPage(...)`,
+# `.moveDown(...)`) that pipes to a writable stream and emits a fully
+# spec-compliant PDF 1.7 (ISO 32000-1) document. It also bundles its
+# own AFM font metrics + TrueType embedding pipeline and Unicode shaping
+# via `fontkit`, so a single import gives the entire emission stack
+# without a Puppeteer / Chromium dependency.
+#
+# ----------------------------------------------------------------------------
+# AXIS 198 :: PDF GENERATION (PDF 1.7 / ISO 32000-1)  [CLOSES]
+# Round 1294 :: TS-Node slot 3 of 4 :: CLOSES Axis 198 (191st axis closed)
+#
+# Cross-language canonical library family for this axis:
+#   Rust    : printpdf + lopdf            (fschutt + J-F-Liu)          [R1292 _markdown2pdf]
+#   Go      : signintech/gopdf            (jung-kurt successor)         [R1293 _resumeio2pdf]
+#   TS/Node : foliojs/pdfkit              (dominant Node PDF lib)       [R1294 THIS FILE]
+#
+# pdfkit is the oldest and most-used of the three (initial release 2012,
+# 10000+ stars), pre-dating both gopdf in Go (2014) and printpdf in
+# Rust (2018). It is the dependency-of-record for the entire Node-side
+# PDF-generation ecosystem: downstream wrappers include `pdfmake`
+# (declarative-document-on-top), `pdf-lib` (editing/forms), the React
+# server-side PDF renderers (`@react-pdf/renderer`), and most invoice /
+# report / certificate / e-ticket SaaS backends running on Node.
+# Cheerio, axios, csv-parse, and similar - pdfkit sits in that same
+# class of "near-universal upstream dep" for its domain. Note: pdfkit
+# is also the foundation underneath `svg-to-pdfkit` for SVG embedding
+# and underneath the React PDF stack for layout primitives.
+#
+# mark2pdf is a clean modern consumer (2026-04 push, commander v12+,
+# TypeScript, JSON mode for agentic use) that exercises the full
+# PDFDocument lifecycle: stream construction, themed rendering,
+# multi-page layout with images and code blocks, and post-emission
+# PDF merging (via a separate `merge` subcommand). The JSON output
+# mode is the giveaway that this was built for LLM-agent pipelines,
+# which is a notable structural shift in how PDF-generation CLIs are
+# shaped in the 2026 timeframe vs the human-oriented ones from 2015.
+# ============================================================================
+
+_mark2pdf() {
+    local context state state_descr line
+    typeset -A opt_args
+    local curcontext="$curcontext" ret=1
+
+    _arguments -C \
+        '--json[structured JSON output (agent mode)]' \
+        '--no-color[disable colored output]' \
+        '(-q --quiet)'{-q,--quiet}'[silent mode (errors only)]' \
+        '--no-input[disable interactive prompts]' \
+        '(-v --verbose)'{-v,--verbose}'[detailed output]' \
+        '--limit[max processed files (default 50, 0 unlimited)]:number:' \
+        '--version[print version]' \
+        '(- *)'{-h,--help}'[print help]' \
+        '1: :_mark2pdf_cmds' \
+        '*::arg:->args' \
+    && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                convert)      _mark2pdf_convert ;;
+                html)         _mark2pdf_html ;;
+                merge)        _mark2pdf_merge ;;
+                extract)      _mark2pdf_extract ;;
+                init)         _mark2pdf_init ;;
+                completion)   _arguments '1:shell:(bash zsh)' ;;
+                help)         _mark2pdf_cmds ;;
+            esac
+            ;;
+    esac
+    return ret
+}
+
+_mark2pdf_cmds() {
+    local -a cmds
+    cmds=(
+        'convert:unified entry; auto-dispatch by input type (default)'
+        'html:convert HTML to PDF'
+        'merge:merge PDF files into one'
+        'extract:extract text from PDF / Word documents'
+        'init:create config file (--global to create globally)'
+        'completion:print shell completion script'
+        'help:show help'
+    )
+    _describe -t commands 'mark2pdf command' cmds
+}
+
+_mark2pdf_convert() {
+    _arguments -s -S \
+        '(-i --input)'{-i,--input}'[input file or directory]:input:_files' \
+        '(-o --output)'{-o,--output}'[output directory]:directory:_files -/' \
+        '(-c --config)'{-c,--config}'[config file path]:config:_files' \
+        '(-t --theme)'{-t,--theme}'[PDF theme name (Markdown only)]:theme:' \
+        '--concurrent[concurrency count]:number:' \
+        '--timeout[timeout in ms]:ms:' \
+        '--page-size[PDF page size]:size:(A4 Letter A3 A5)' \
+        '--out-format[text output format (docx/pdf extract only)]:format:(txt md json)' \
+        '--dry-run[print execution plan; create nothing]' \
+        '--show-config[print final resolved config + sources]' \
+        '--report-json[write structured execution report JSON]:report file:_files' \
+        '(- *)'{-h,--help}'[show help]'
+}
+
+_mark2pdf_html() {
+    _arguments -s -S \
+        '(-i --input)'{-i,--input}'[input directory]:directory:_files -/' \
+        '(-o --output)'{-o,--output}'[output directory]:directory:_files -/' \
+        '(-c --config)'{-c,--config}'[config file path]:config:_files' \
+        '--format[page format]:format:(A4 Letter A3 A5)' \
+        '(- *)'{-h,--help}'[show help]'
+}
+
+_mark2pdf_merge() {
+    _arguments -s -S \
+        '(-i --input)'{-i,--input}'[input directory]:directory:_files -/' \
+        '(-o --output)'{-o,--output}'[output directory]:directory:_files -/' \
+        '(-c --config)'{-c,--config}'[config file path]:config:_files' \
+        '(- *)'{-h,--help}'[show help]'
+}
+
+_mark2pdf_extract() {
+    _arguments -s -S \
+        '(-i --input)'{-i,--input}'[input file or directory]:input:_files' \
+        '(-o --output)'{-o,--output}'[output directory]:directory:_files -/' \
+        '--out-format[output format]:format:(txt md json)' \
+        '(- *)'{-h,--help}'[show help]'
+}
+
+_mark2pdf_init() {
+    _arguments -s -S \
+        '(-g --global)'{-g,--global}'[create global config]' \
+        '(- *)'{-h,--help}'[show help]'
+}
+
+_mark2pdf "$@"
