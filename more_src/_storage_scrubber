@@ -1,0 +1,87 @@
+#compdef storage_scrubber
+# _storage_scrubber — Neon storage scrubber (S3 garbage-collection + metadata-integrity tool for pageserver + safekeeper backups)
+# upstream: https://github.com/neondatabase/neon
+# Subcommands + flags from storage_scrubber/src/main.rs on tip (clap-derive); bucket config comes from env (BUCKET_*).
+
+_storage_scrubber() {
+    local context state line
+    typeset -A opt_args
+    _arguments -C \
+        '(- *)'{-h,--help}'[show help]' \
+        '(- *)'{-V,--version}'[show version and exit]' \
+        '(-d --delete)'{-d,--delete}'[actually perform destructive operations (default = dry-run)]' \
+        '--controller-api=[storage-controller base URL]:url:_urls' \
+        '--controller-jwt=[JWT (scope: scrubber or admin) for controller API]:token:' \
+        '--exit-code[exit non-zero on fatal scrubber error]' \
+        '--ssl-ca-file=[trusted root CA bundle for HTTPS]:file:_files' \
+        '1: :->cmd' \
+        '*::arg:->args'
+    case $state in
+        cmd)
+            local -a subs=(
+                'find-garbage:enumerate unreferenced objects in S3 into an output JSON'
+                'purge-garbage:delete objects listed in a previously-generated garbage JSON'
+                'scan-metadata:walk metadata for a node-kind (pageserver|safekeeper) and report problems'
+                'tenant-snapshot:snapshot one tenant from S3 to a local directory'
+                'pageserver-physical-gc:physical GC of pageserver index/layer files in S3'
+                'find-large-objects:list S3 objects larger than a threshold'
+                'cron-job:bundle of physical-gc + scan-metadata for scheduled use'
+            )
+            _describe -t commands 'scrubber subcommand' subs
+            ;;
+        args)
+            case $line[1] in
+                find-garbage)
+                    _arguments \
+                        '(-n --node-kind)'{-n+,--node-kind=}'[node kind]:kind:(pageserver safekeeper)' \
+                        '(-d --depth)'{-d+,--depth=}'[traversal depth]:depth:(tenant timeline)' \
+                        '(-t --tenant-id-prefix)'{-t+,--tenant-id-prefix=}'[tenant-id prefix filter]:prefix:' \
+                        '(-o --output-path)'{-o+,--output-path=}'[output JSON path]:file:_files'
+                    ;;
+                purge-garbage)
+                    _arguments \
+                        '(-i --input-path)'{-i+,--input-path=}'[garbage JSON path]:file:_files' \
+                        '(-m --mode)'{-m+,--mode=}'[purge mode]:mode:(DeletedOnly DeletedAndMissing)' \
+                        '--min-age=[only purge entries older than this]:dur:'
+                    ;;
+                scan-metadata)
+                    _arguments \
+                        '(-n --node-kind)'{-n+,--node-kind=}'[node kind]:kind:(pageserver safekeeper)' \
+                        '(-j --json)'{-j,--json}'[emit JSON output]' \
+                        '*--tenant-id=[tenant shard id (repeatable)]:id:' \
+                        '--post[POST findings to the storage controller]' \
+                        '--dump-db-connstr=[safekeeper: debug-dump DB connstr]:connstr:' \
+                        '--dump-db-table=[safekeeper: debug-dump DB table]:table:' \
+                        '--timeline-lsns=[safekeeper: JSON list of timelines + lsns]:json:' \
+                        '--verbose[verbose output]'
+                    ;;
+                tenant-snapshot)
+                    _arguments \
+                        '--tenant-id=[tenant id]:id:' \
+                        '(-j --concurrency)'{-j+,--concurrency=}'[concurrency]:n:' \
+                        '(-o --output-path)'{-o+,--output-path=}'[snapshot output directory]:dir:_files -/'
+                    ;;
+                pageserver-physical-gc)
+                    _arguments \
+                        '*--tenant-id=[tenant shard id (repeatable)]:id:' \
+                        '--min-age=[only GC objects older than this]:dur:' \
+                        '(-m --mode)'{-m+,--mode=}'[GC mode]:mode:(IndicesOnly Full)'
+                    ;;
+                find-large-objects)
+                    _arguments \
+                        '--min-size=[size threshold in bytes]:bytes:' \
+                        '(-i --ignore-deltas)'{-i,--ignore-deltas}'[skip delta layers]' \
+                        '(-j --concurrency)'{-j+,--concurrency=}'[concurrency]:n:'
+                    ;;
+                cron-job)
+                    _arguments \
+                        '--min-age=[GC age threshold]:dur:' \
+                        '(-m --gc-mode)'{-m+,--gc-mode=}'[GC mode]:mode:(IndicesOnly Full)' \
+                        '--post[POST scan-metadata findings to storcon]'
+                    ;;
+            esac
+            ;;
+    esac
+}
+
+_storage_scrubber "$@"
