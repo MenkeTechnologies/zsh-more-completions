@@ -1,0 +1,170 @@
+#compdef orbitdb-relay-pinner
+# ============================================================================
+# orbitdb-relay-pinner - OrbitDB relay + pinning/sync
+#   service for Helia/libp2p stacks (TypeScript -> Node,
+#   MIT)
+#
+# Author : NiKrause
+# Upstream: https://github.com/NiKrause/orbitdb-relay-pinner
+# npm    : orbitdb-relay-pinner
+#
+# `orbitdb-relay-pinner` is a daemon that runs an
+# OrbitDB-compatible libp2p circuit-relay-v2 node, pins
+# replicated OrbitDB databases for clients, and provides
+# the QUIC + WebRTC + TCP + WebSocket transports needed
+# for peer connectivity. The daemon is configured almost
+# entirely via environment variables (see `.env.example`
+# at upstream for the full ~40-knob list); the CLI
+# surface is intentionally minimal.
+#
+# Usage:
+#   orbitdb-relay-pinner [--test]
+#
+# Flags:
+#   --test                  - run in self-test mode
+#                              (validates config + exits)
+#
+# Environment variables (most-common subset):
+#   RELAY_TCP_PORT          - TCP listener port (default 9091)
+#   RELAY_WS_PORT           - WebSocket listener port (default 9092)
+#   RELAY_QUIC_PORT         - QUIC listener port (default 9094)
+#   RELAY_WEBRTC_PORT       - WebRTC listener port (default 9093)
+#   RELAY_LISTEN_IPV4       - IPv4 listen address (default 0.0.0.0)
+#   RELAY_LISTEN_IPV6       - IPv6 listen address (default ::)
+#   RELAY_DISABLE_IPV6      - disable IPv6 (default false)
+#   RELAY_DISABLE_QUIC      - disable QUIC transport (default false)
+#   RELAY_DISABLE_WEBRTC    - disable WebRTC transport (default false)
+#   RELAY_DISABLE_BOOTSTRAP - skip public libp2p
+#                              bootstrap peers
+#   RELAY_REQUIRE_ORBITDB_HEADS_PROTOCOL
+#                           - reject peers that don't
+#                              advertise /orbitdb/heads/*
+#                              (default false)
+#   RELAY_CIRCUIT_HOP_TIMEOUT_MS
+#                           - hop timeout (ms; default
+#                              300000)
+#   RELAY_CIRCUIT_MAX_RESERVATIONS
+#                           - max simultaneous reservations
+#                              (default 10000)
+#   RELAY_STOP_TIMEOUT_MS   - graceful shutdown timeout
+#                              (default 20000)
+#   PUBLIC_IP               - public IP for announce-addr
+#                              rewriting
+#   VITE_APPEND_ANNOUNCE    - additional announce
+#                              multiaddrs (comma-separated)
+#
+# Signal handling:
+#   SIGINT / SIGTERM        - graceful shutdown (second
+#                              signal forces immediate
+#                              exit)
+#
+# The @chainsafe/libp2p-quic lane is built on
+# `@chainsafe/libp2p-quic ^1.1.3` (declared at upstream
+# package.json HEAD as a direct dep, used as one of the
+# libp2p transports configured by `startRelay()`), the
+# canonical Node libp2p QUIC transport by ChainSafe -
+# github.com/ChainSafe/js-libp2p-quic. The package is
+# a napi-rs binding to the underlying Rust quinn-rs
+# QUIC stack (specifically a ChainSafe fork tuned for
+# the libp2p use case: client + server roles per
+# connection, bidirectional streams as the default
+# multiplex primitive, qlog telemetry for debugging
+# libp2p peer connectivity issues).
+#
+# This makes the Node QUIC slot's canonical library a
+# *napi-rs binding to the same Rust quinn-rs stack that
+# powers Axis 249's Rust slot*. The Node binding inherits
+# quinn's RFC 9000 conformance + congestion-control
+# implementations + rustls crypto backend; the napi-rs
+# layer adds JS-callable APIs + zero-runtime-overhead
+# guarantees + cross-platform pre-built binaries (Linux
+# x64 / arm64 / musl, macOS x64 / arm64, Windows x64).
+#
+# orbitdb-relay-pinner uses @chainsafe/libp2p-quic as
+# one of the four bundled libp2p transports (alongside
+# TCP, WebSocket, and WebRTC). Each transport listens
+# on its own port + each peer dial tries all configured
+# transports concurrently, with the first-to-succeed
+# winning. QUIC is the preferred transport for peer-to-
+# peer connectivity through NATs because its UDP-based
+# transport + connection-migration semantics survive
+# IP changes that would break TCP-based connections.
+#
+# ----------------------------------------------------------------------------
+# AXIS 249 :: QUIC / RFC 9000 (UDP-based transport with
+#              TLS 1.3 integrated + multiplexed streams)
+# Round 1447 :: TS-Node slot 3 of 4 :: CLOSES Axis 249
+#                                       (242nd axis closed)
+#
+# Cross-language canonical library family for this axis:
+#   Rust    : quinn-rs/quinn              [R1445 _quicssh-rs]
+#   Go      : quic-go/quic-go             [R1446 _qw]
+#   TS/Node : @chainsafe/libp2p-quic      [R1447 THIS FILE]
+#             (napi-rs binding to quinn-rs)
+#
+# @chainsafe/libp2p-quic closes Axis 249 with the *napi-
+# rs-binding-to-the-Rust-slot* pattern. The three lanes
+# form a clean spectrum of QUIC implementation strategies:
+#
+#   - Rust (quinn-rs/quinn): native Rust implementation;
+#     sans-I/O `quinn-proto` state machine + tokio-async
+#     `quinn` wrapper; rustls or openssl crypto backend;
+#     BBR / NewReno / Cubic congestion control
+#   - Go (quic-go/quic-go): native Go implementation
+#     by Marten Seemann (former Chrome QUIC team);
+#     stdlib crypto/tls QUIC integration since Go 1.21;
+#     NewReno default + experimental Cubic
+#   - Node (@chainsafe/libp2p-quic): napi-rs binding to
+#     ChainSafe's fork of quinn-rs, tuned for the
+#     libp2p use case; inherits quinn's RFC 9000
+#     conformance + crypto stack; adds zero-runtime-
+#     overhead JS bindings + cross-platform pre-built
+#     binaries
+#
+# This Node-binds-to-Rust pattern echoes the @node-rs/
+# argon2 pattern from Axis 244 (Node binds to RustCrypto
+# argon2) and the napi-rs Snappy/XXHash patterns from
+# earlier axes - the Node ecosystem increasingly leans
+# on napi-rs as the standard cross-platform binding
+# mechanism for performance-sensitive primitives that
+# already have mature Rust implementations.
+#
+# Cross-language interop at the wire format level - the
+# IETF QUIC interop matrix validates that quinn + quic-
+# go + @chainsafe/libp2p-quic (and msquic + ngtcp2 +
+# quiche + lsquic) talk to each other across all RFC
+# 9000 features. The qlog telemetry format (RFC 9369
+# draft) provides a cross-impl debug log format.
+#
+# Use-case spectrum across the three lanes:
+#   - quicssh-rs (Rust, quinn): SSH-over-QUIC proxy
+#     bypassing TCP-22-blocking middleboxes
+#   - qw / quicwire (Go, quic-go): QUIC CONNECT-IP
+#     mesh-VPN agent for layer-3 networking with
+#     connection-migration semantics
+#   - orbitdb-relay-pinner (Node, @chainsafe/libp2p-
+#     quic): libp2p circuit-relay-v2 daemon using QUIC
+#     as one of four parallel transports for NAT-
+#     traversal peer-to-peer connectivity
+#
+# Three lanes, three use-case shapes (SSH-over-QUIC
+# proxy / IP-layer mesh VPN / p2p relay-pin daemon),
+# three implementation strategies (native Rust /
+# native Go / napi-rs binding to Rust), all converging
+# on RFC 9000 wire-format compatibility.
+#
+# Axis 249 closes the round 1447 cycle - 242nd axis closed
+# total.
+# ============================================================================
+
+_orbitdb-relay-pinner() {
+    local context state state_descr line
+    typeset -A opt_args
+
+    _arguments -s -S \
+        '--test[run in self-test mode (validate config + exit)]' \
+        '(- *)'{-h,--help}'[print help]' \
+        '(- *)'{-v,--version}'[print version]'
+}
+
+_orbitdb-relay-pinner "$@"
