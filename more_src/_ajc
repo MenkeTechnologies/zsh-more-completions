@@ -1,0 +1,119 @@
+#compdef ajc
+# ============================================================================
+# ajc - Choria Asynchronous Jobs CLI (Go, Apache-2.0)
+#
+# Author : R.I. Pienaar (Choria org)
+# Upstream: https://github.com/choria-io/asyncjobs
+#
+# ajc is the operator CLI for the Choria Asynchronous Jobs framework
+# - a distributed async-task processor backed by NATS JetStream
+# (the persistent NATS Streams subsystem). Tasks are enqueued by
+# producers, fanned out to one or more queues (each backed by a
+# JetStream consumer), and processed by worker fleets that scale
+# independently. Supports task DAG dependencies, scheduled tasks
+# (cron-style + interval), exponential-backoff retry on failure,
+# dead-letter queues, per-task TTL, and tracing integration via
+# OTLP.
+#
+# Subcommands:
+#   info     - cluster + queue + storage health
+#   task     - enqueue + inspect + retry + delete jobs
+#   queue    - queue lifecycle (create / configure / drain / delete)
+#   package  - install canned task-handler packages
+#   server   - run a worker process
+#
+# Tasks store their state in JetStream KV + Object stores; tasks
+# themselves are messages on a JetStream stream consumed by named
+# consumers. The NATS lane is built on `github.com/nats-io/nats.go`
+# (declared in go.mod at HEAD), the canonical Go NATS client by
+# Synadia / nats-io (github.com/nats-io/nats.go, 6000+ stars). The
+# client implements the full NATS wire protocol: core pub/sub,
+# request/reply, NATS JetStream (consumers + streams + key-value
+# + object stores), JetStream domains + accounts, the nkeys + JWT
+# credential model, and the new V2 KV / OS APIs.
+#
+# ----------------------------------------------------------------------------
+# AXIS 209 :: NATS MESSAGING PROTOCOL (CORE + JETSTREAM)
+# Round 1326 :: Go slot 2 of 4 :: continues Axis 209
+#
+# Cross-language canonical library family for this axis:
+#   Rust    : nats-io/nats.rs (async-nats)   [R1325 _rustfs]
+#   Go      : nats-io/nats.go                [R1326 THIS FILE]
+#   TS/Node : nats-io/nats.js                [R1327 closing]
+#
+# ajc is a NATS-native consumer that exercises both NATS core (for
+# control-plane RPC) and JetStream (for queue persistence). The
+# Choria org also maintains `nats-io/jsm.go` (JetStream management
+# library) as the higher-level abstraction over `nats.go` for
+# stream + consumer lifecycle - which ajc uses via the `asyncjobs`
+# library underneath. This is the canonical layering visible in
+# most production NATS deployments: a job framework on top of
+# `nats.go` for the data plane + `jsm.go` for the control plane.
+# ============================================================================
+
+_ajc() {
+    local context state state_descr line
+    typeset -A opt_args
+    local curcontext="$curcontext" ret=1
+
+    _arguments -C \
+        '--context[NATS context name to connect with]:name:' \
+        '--debug[enable debug-level logging]' \
+        '(- *)'{-h,--help}'[print help]' \
+        '(- *)--version[print version]' \
+        '1: :_ajc_cmds' \
+        '*::arg:->args' \
+    && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                info)     _arguments '(- *)'{-h,--help}'[help]' ;;
+                task)     _ajc_task ;;
+                queue)    _ajc_queue ;;
+                package)  _arguments '(- *)'{-h,--help}'[help]' '1:subcommand:(list install remove validate)' ;;
+                server)   _ajc_server ;;
+                help)     _ajc_cmds ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_ajc_cmds() {
+    local -a cmds
+    cmds=(
+        'info:Show cluster, queue, and storage health'
+        'task:Enqueue / inspect / retry / delete tasks'
+        'queue:Manage queues (create, configure, drain, delete)'
+        'package:Manage handler packages (install, remove, validate)'
+        'server:Run a worker server consuming a queue'
+        'help:Show help for a subcommand'
+    )
+    _describe -t commands 'ajc command' cmds
+}
+
+_ajc_task() {
+    _arguments \
+        '(- *)'{-h,--help}'[help]' \
+        '1:subcommand:(add list info retry delete watch process)' \
+        '*::arg:->_default'
+}
+
+_ajc_queue() {
+    _arguments \
+        '(- *)'{-h,--help}'[help]' \
+        '1:subcommand:(add list info configure delete drain)' \
+        '*::arg:->_default'
+}
+
+_ajc_server() {
+    _arguments -s -S \
+        '--queue[queue to consume from]:queue:' \
+        '--concurrency[worker concurrency]:n:' \
+        '--retry-limit[max retries per task]:n:' \
+        '(- *)'{-h,--help}'[help]'
+}
+
+_ajc "$@"
