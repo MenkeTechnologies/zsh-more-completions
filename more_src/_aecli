@@ -1,0 +1,248 @@
+#compdef aecli
+# ============================================================================
+# aecli - command line interface for the æternity
+#          blockchain (JavaScript -> Node, ISC)
+#
+# Author : aeternity foundation
+# Upstream: https://github.com/aeternity/aepp-cli-js
+# npm    : @aeternity/aepp-cli (binary: aecli)
+#
+# `aecli` is the official CLI for the æternity blockchain
+# - a Layer-1 BFT-PoW chain with built-in state channels,
+# Naming System (AENS), oracle service, and Sophia smart-
+# contract VM. The CLI covers the full operator surface:
+# wallet management, transaction signing, name registration
+# / auction / transfer, oracle creation + query / response,
+# contract compilation + deployment + call, raw transaction
+# building, and chain inspection.
+#
+# Usage:
+#   aecli <command> [subcommand] [args] [options]
+#
+# Top-level commands (Commander tree):
+#   account     - wallet operations (sign, sign-message,
+#                  verify-message, address, create)
+#   chain       - chain queries (top, status, ttl, play,
+#                  broadcast)
+#   contract    - Sophia contract ops (compile, encode-
+#                  calldata, decode-call-result, call,
+#                  deploy)
+#   inspect     - chain inspect operations
+#   name        - AENS name ops (full-claim, pre-claim,
+#                  claim, bid, update, extend, revoke,
+#                  transfer)
+#   oracle      - oracle ops (create, extend, create-
+#                  query, respond-query)
+#   spend       - transfer AE tokens
+#   tx          - raw transaction builder (spend, name-*,
+#                  contract-*, oracle-*)
+#   config      - print current SDK configuration
+#
+# Global options:
+#   -h, --help               - print help
+#   -V, --version            - print version
+#   -u, --url <url>          - node URL
+#       --compilerUrl <url>  - Sophia compiler URL
+#       --json               - emit JSON output
+#       --force              - skip confirmation prompts
+#
+# Wallet files (`<wallet_path>`) are keystore-format JSON
+# documents - the encrypted-with-passphrase secret key
+# + AE address pair on disk. The encryption uses Argon2id
+# as the password-based key derivation function (KDF)
+# before the AEAD layer.
+#
+# The argon2 lane is built on `argon2 ^0.41.1` (declared
+# at upstream package.json HEAD as a direct dep, imported
+# from src/utils/keystore.js as `import { hash, argon2id
+# } from 'argon2'`), the canonical Node Argon2 library
+# by Ranisalt (Filipe Rosa, the original 2016 author)
+# + ranisalt + contributors - github.com/ranisalt/node-
+# argon2, 2000+ stars. The package is a Node N-API
+# binding to the reference P-H-C/phc-winner-argon2 C
+# library (the reference implementation by Argon2's own
+# authors - Daniel Dinu, Dmitry Khovratovich, Jean-
+# Philippe Aumasson).
+#
+# N-API means the binding survives Node major-version
+# upgrades without recompile (within the N-API stability
+# promise), and the underlying P-H-C C library means the
+# crypto primitives are the spec authors' own canonical
+# implementation - the same code that won the Password
+# Hashing Competition and was subsequently standardized
+# as RFC 9106 in September 2021.
+#
+# aecli uses `argon2.hash(password, { type: argon2id })`
+# with PHC-string output to encrypt wallet secret keys
+# before persisting them to disk. The keystore JSON file
+# carries the PHC string in the `crypto.kdfparams` field
+# with `kdf: 'argon2id'` as the identifier, letting the
+# decrypt path reverse the same Argon2id KDF on wallet
+# load.
+#
+# ----------------------------------------------------------------------------
+# AXIS 244 :: Argon2 password-hash + memory-hard KDF
+# Round 1432 :: TS-Node slot 3 of 4 :: CLOSES Axis 244
+#                                       (237th axis closed,
+#                                        triple-299 landmark)
+#
+# Cross-language canonical library family for this axis:
+#   Rust    : RustCrypto/password-hashes  [R1430 _concryptor]
+#             (argon2 crate)
+#   Go      : alexedwards/argon2id + the  [R1431 _goftpd]
+#             core-team-maintained
+#             golang.org/x/crypto/argon2
+#   TS/Node : ranisalt/node-argon2        [R1432 THIS FILE]
+#
+# Ranisalt/node-argon2 closes Axis 244 with the *reference-
+# C-library-binding* pattern. The three lanes form a clean
+# spectrum of how-do-you-get-Argon2-into-your-host-language:
+#
+#   - Rust (RustCrypto/argon2): pure-Rust implementation;
+#     no FFI to libargon2-c; constant-time memory access
+#     patterns; bundled into the RustCrypto password-hashes
+#     umbrella alongside scrypt + pbkdf2 + bcrypt-pbkdf
+#   - Go (alexedwards/argon2id + x/crypto/argon2): two-
+#     layer canonical, with the core-team-maintained
+#     `golang.org/x/crypto/argon2` providing the raw KDF
+#     and alexedwards' ergonomic wrapper adding PHC-string
+#     format + comparison helpers
+#   - Node (ranisalt/node-argon2): N-API binding to the
+#     reference P-H-C C library by Argon2's own authors;
+#     the binding pattern means the crypto primitives are
+#     the spec authors' own canonical code, just wrapped
+#     in a JS-callable interface
+#
+# An interesting cross-language observation: the Rust
+# slot reimplements Argon2 in pure Rust, the Go slot
+# reimplements it in pure Go, but the Node slot binds to
+# the original C reference. This is because Node's npm
+# ecosystem has stronger tolerance for native-binding
+# packages (vs Rust's preference for pure-Rust crates and
+# Go's preference for pure-Go-cross-compile-friendly code).
+# Each ecosystem made a different choice about whether
+# binding to libargon2-c was acceptable - Rust + Go both
+# rebuilt, Node bound.
+#
+# Cross-language interop at the PHC-string wire format
+# level - a hash produced by RustCrypto/argon2 +
+# password-hash, alexedwards/argon2id, or ranisalt/node-
+# argon2 verifies byte-identically against any of the
+# others (assuming the parameter tuple is preserved).
+# The wire format:
+#   `$argon2id$v=19$m=65536,t=3,p=4$<base64-salt>$<base64-hash>`
+#
+# Use-case spectrum across the three lanes:
+#   - concryptor (Rust, RustCrypto/argon2): gigabyte-per-
+#     second AEAD file encryption with Argon2id as the
+#     password-to-key KDF for AES-256-GCM / ChaCha20-
+#     Poly1305 chunks
+#   - goftpd (Go, alexedwards/argon2id +
+#     x/crypto/argon2): pure-Go glftpd-style FTP daemon
+#     with Argon2id-hashed user passwords stored as PHC
+#     strings
+#   - aecli (Node, ranisalt/node-argon2): æternity
+#     blockchain CLI with Argon2id-encrypted wallet
+#     keystore files protecting on-disk secret keys
+#
+# Three lanes, three use-case shapes (high-throughput
+# file encryption / multi-user server password storage /
+# CLI wallet keystore), three Argon2-implementation
+# strategies (pure-Rust / pure-Go via core-team subrepo /
+# C-binding via N-API), all converging on RFC 9106 + the
+# PHC string format.
+#
+# Axis 244 closes the round 1432 cycle - 237th axis closed
+# total with the triple-299 round-number landmark
+# (Rust=299 / Go=299 / TS-Node=299).
+# ============================================================================
+
+_aecli() {
+    local context state state_descr line
+    typeset -A opt_args
+    local curcontext="$curcontext" ret=1
+
+    _arguments -C \
+        '(-u --url)'{-u,--url}'[node URL]:url:' \
+        '--compilerUrl[Sophia compiler URL]:url:' \
+        '--json[emit JSON output]' \
+        '--force[skip confirmation prompts]' \
+        '(- *)'{-h,--help}'[print help]' \
+        '(- *)'{-V,--version}'[print version]' \
+        '1: :_aecli_cmds' \
+        '*::arg:->args' \
+    && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                account)
+                    _arguments \
+                        '1:subcommand:(sign sign-message verify-message address create)' \
+                        '*::arg:_files' \
+                        '(- *)'{-h,--help}'[print help]'
+                    ;;
+                chain)
+                    _arguments \
+                        '1:subcommand:(top status ttl play broadcast)' \
+                        '(- *)'{-h,--help}'[print help]'
+                    ;;
+                contract)
+                    _arguments \
+                        '1:subcommand:(compile encode-calldata decode-call-result call deploy)' \
+                        '*::arg:_files' \
+                        '(- *)'{-h,--help}'[print help]'
+                    ;;
+                inspect)
+                    _arguments '(- *)'{-h,--help}'[print help]'
+                    ;;
+                name)
+                    _arguments \
+                        '1:subcommand:(full-claim pre-claim claim bid update extend revoke transfer)' \
+                        '*::arg:_files' \
+                        '(- *)'{-h,--help}'[print help]'
+                    ;;
+                oracle)
+                    _arguments \
+                        '1:subcommand:(create extend create-query respond-query)' \
+                        '*::arg:_files' \
+                        '(- *)'{-h,--help}'[print help]'
+                    ;;
+                spend)
+                    _arguments \
+                        '*::arg:_files' \
+                        '(- *)'{-h,--help}'[print help]'
+                    ;;
+                tx)
+                    _arguments \
+                        '1:subcommand:(spend name-preclaim name-claim name-update name-transfer name-revoke contract-deploy contract-call oracle-register oracle-extend)' \
+                        '*::arg:' \
+                        '(- *)'{-h,--help}'[print help]'
+                    ;;
+                config)
+                    _arguments '(- *)'{-h,--help}'[print help]'
+                    ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_aecli_cmds() {
+    local -a cmds
+    cmds=(
+        'account:wallet operations (sign, address, create, ...)'
+        'chain:chain queries (top, status, ttl, broadcast)'
+        'contract:Sophia contract ops (compile, deploy, call)'
+        'inspect:chain inspect operations'
+        'name:AENS name ops (claim, bid, transfer, ...)'
+        'oracle:oracle ops (create, query, respond)'
+        'spend:transfer AE tokens'
+        'tx:raw transaction builder'
+        'config:print current SDK configuration'
+    )
+    _describe -t commands 'aecli command' cmds
+}
+
+_aecli "$@"
