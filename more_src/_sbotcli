@@ -1,0 +1,164 @@
+#compdef sbotcli
+# ============================================================================
+# sbotcli - Secure Scuttlebutt (SSB) client CLI (Go, MIT)
+#
+# Author : The Go-SSB Authors (ssbc org)
+# Upstream: https://github.com/ssbc/go-ssb
+#
+# `sbotcli` is the command-line client for `go-sbot`, the Go
+# implementation of the Secure Scuttlebutt (SSB) decentralized
+# social-feed protocol. SSB is a peer-to-peer gossip protocol
+# where each user's identity is an ed25519 public key, each
+# user owns an append-only log of messages, and the network
+# topology is built from per-user "follow" graphs - the
+# friend-of-a-friend network that determines which feeds
+# propagate where.
+#
+# Architecture: muxrpc client/server over secret-handshake +
+# Boxstream. Local state in `~/.ssb-go/` (config, secret key,
+# Unix socket, offset log, indexes). Friend graph stored as a
+# typed graph using gonum/graph/simple and traversed via the
+# gonum BFS / shortest-path algorithms for hop-count-N feed
+# replication queries.
+#
+# Subcommand tree (urfave/cli/v2):
+#   alias               - manage SSB alias resolution
+#   blobs               - upload/download/list blob attachments
+#   block               - block / unblock peers
+#   friends             - friend-graph queries (hops, isFollowing,
+#                         friends, etc.)
+#   get                 - get a single message by reference
+#   getSubset           - bulk-fetch messages by query
+#   invite              - generate / accept SSB invitations
+#   logStream           - tail the global SSB log
+#   sortedStream        - sorted-stream variant
+#   typeStream          - filter the stream by message type
+#   historyStream       - per-feed history stream
+#   replicateUpto       - replicate up to a target sequence
+#   repliesStream       - reply-thread stream
+#   call                - low-level muxrpc method invocation
+#   source              - low-level source-stream invocation
+#   connect             - connect to a remote peer
+#   publish             - publish a new message
+#   groups              - private-group messaging
+#
+# Global flags:
+#   --config <file>         - path to config.toml
+#                             (default ~/.ssb-go/config.toml)
+#   --shscap <key>          - SHS-key for secret-handshake
+#                             (network capability key)
+#   --addr <ip:port>        - TCP address of the sbot
+#                             (default localhost:8008)
+#   --remotekey, --remoteKey <key>
+#                           - remote pubkey to connect to
+#                             (default: local key)
+#   --key, -k <file>        - secret-key file
+#                             (default ~/.ssb-go/secret)
+#   --unixsock <path>       - Unix socket path
+#                             (default ~/.ssb-go/socket)
+#   --verbose, --vv         - print MUXRPC packets
+#   --timeout <duration>    - request timeout
+#                             (e.g. 3s, 5m; empty = no timeout)
+#
+# The gonum/graph lane is built on `gonum.org/v1/gonum
+# v0.12.0` (declared as a direct dep at upstream go.mod HEAD
+# and used directly from graph/builder.go + graph/graph.go +
+# graph/plot.go), the canonical Go scientific-computing
+# library by the gonum project (github.com/gonum/gonum,
+# 8000+ stars). gonum is the uncontested Go answer for "I
+# need MATLAB/SciPy in Go" - it ships matrix algebra
+# (mat package), stats (stat), optimization (optimize),
+# graph algorithms (graph subpackage), and DSP (dsp/fourier).
+# The graph subpackage specifically wraps Bellman-Ford,
+# Dijkstra, Floyd-Warshall, Johnson's algorithm, Tarjan SCC,
+# Kosaraju SCC, BFS/DFS topology iteration, and ~25 other
+# algorithms behind a `graph.Graph` interface that user
+# code implements per their domain.
+#
+# go-ssb uses gonum/graph for the per-peer friend-graph: a
+# weighted DiGraph where vertices are SSB feed IDs (ed25519
+# pubkeys), edges are follow/block relationships, and edge
+# weights encode the trust level. Friend-graph queries
+# ("show me everyone within N hops of me") drive replication
+# scope decisions - a peer N hops away is gossiped to and
+# from, a peer N+1 hops away is not.
+#
+# ----------------------------------------------------------------------------
+# AXIS 230 :: Graph data structures + algorithms (typed graphs + traversal)
+# Round 1389 :: Go slot 2 of 4 :: continues Axis 230 (round-number landmark)
+#
+# Cross-language canonical library family for this axis:
+#   Rust    : petgraph/petgraph            [R1388 _cxx2flow]
+#   Go      : gonum/gonum (graph subpackage) [R1389 THIS FILE]
+#   TS/Node : jacomyal/graphology          [R1390 closing]
+#
+# gonum/graph is structurally interesting: it ships as a
+# *subpackage* of the broader gonum scientific-computing
+# library, not as a standalone graph crate. This reflects the
+# Go ecosystem's monorepo preference - gonum bundles matrix
+# algebra, statistics, optimization, FFT, and graph
+# algorithms in one tree, in the same way SciPy bundles
+# multiple scientific subpackages in Python. The Rust slot
+# (petgraph) is graph-only; the Node slot (graphology) is
+# graph-only with companion algorithm packages; only the Go
+# slot bundles graph algorithms with the broader scientific
+# stack.
+#
+# The application-layer use cases across the three lanes for
+# this axis demonstrate the breadth:
+#   - cxx2flow (Rust): control-flow graph for parsed C/C++
+#   - sbotcli (Go): per-peer friend graph for SSB
+#     replication scope
+#   - <TS slot> (closing): visualization-driven network
+#     analysis (gephi-adjacent)
+# ============================================================================
+
+_sbotcli() {
+    local context state state_descr line
+    typeset -A opt_args
+    local curcontext="$curcontext" ret=1
+
+    _arguments -C \
+        '--config[path to config.toml]:file:_files -g "*.toml"' \
+        '--shscap[SHS-key for secret-handshake (network capability)]:key:' \
+        '--addr[TCP address of the sbot]:ip:port:' \
+        '(--remotekey --remoteKey)'{--remotekey,--remoteKey}'[remote pubkey to connect to]:key:' \
+        '(-k --key)'{-k,--key}'[secret-key file]:file:_files' \
+        '--unixsock[Unix socket path]:path:_files' \
+        '(--verbose --vv)'{--verbose,--vv}'[print MUXRPC packets]' \
+        '--timeout[request timeout (e.g. 3s, 5m)]:duration:' \
+        '(- *)'{-h,--help}'[print help]' \
+        '(- *)'{-v,--version}'[print version]' \
+        '1: :_sbotcli_cmds' \
+        '*::arg:->_default' \
+    && ret=0
+
+    return ret
+}
+
+_sbotcli_cmds() {
+    local -a cmds
+    cmds=(
+        'alias:Manage SSB alias resolution'
+        'blobs:Upload, download, list blob attachments'
+        'block:Block or unblock peers'
+        'friends:Friend-graph queries (hops, isFollowing, ...)'
+        'get:Get a single message by reference'
+        'getSubset:Bulk-fetch messages by query'
+        'invite:Generate or accept SSB invitations'
+        'logStream:Tail the global SSB log stream'
+        'sortedStream:Sorted-stream variant'
+        'typeStream:Filter the stream by message type'
+        'historyStream:Per-feed history stream'
+        'replicateUpto:Replicate feed up to a target sequence'
+        'repliesStream:Reply-thread stream'
+        'call:Low-level muxrpc method invocation'
+        'source:Low-level source-stream invocation'
+        'connect:Connect to a remote peer'
+        'publish:Publish a new message'
+        'groups:Private-group messaging'
+    )
+    _describe -t commands 'sbotcli command' cmds
+}
+
+_sbotcli "$@"
