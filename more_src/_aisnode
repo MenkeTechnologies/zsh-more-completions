@@ -1,0 +1,296 @@
+#compdef aisnode
+# ============================================================================
+# aisnode - NVIDIA AIStore distributed storage
+#            server daemon (proxy or target role)
+#            (Go, MIT)
+#
+# Author : NVIDIA Corporation (NVIDIA/aistore)
+# Upstream: https://github.com/NVIDIA/aistore
+#
+# `aisnode` is the AIStore daemon - the single
+# binary that runs either as a "proxy" (cluster
+# coordinator + S3-compatible HTTP gateway) or a
+# "target" (the storage node holding actual blob
+# data on local mountpaths). AIStore is NVIDIA's
+# scalable storage system designed for AI/ML
+# training workloads (Petabyte-scale datasets read
+# at full network bandwidth into GPU clusters).
+#
+# AIStore distinguishes itself from S3/MinIO/HDFS:
+#   - Built-in ETL/transform-on-GET pipelines
+#     (transform data as it streams to the GPU)
+#   - Native PyTorch + TensorFlow dataset
+#     integration
+#   - Sharded-archive format for small-file
+#     workloads (millions of training files per
+#     bucket without filesystem-level overhead)
+#   - Erasure-coded buckets via Reed-Solomon
+#     (configurable N+K data+parity shards per
+#     object)
+#   - S3 + Google Cloud Storage + Azure Blob
+#     compatibility (target acts as gateway +
+#     cache to remote backends)
+#
+# Use cases:
+#   - GPU training data warehouse (replace HDFS/
+#     Ceph for AI workloads)
+#   - Multi-cloud unified storage gateway (cache
+#     S3/GCS/Azure data locally + serve at LAN
+#     speeds)
+#   - Self-hosted S3 with ML-specific features
+#     (ETL/transforms, sharded archives, batch
+#     reads)
+#   - PyTorch DataLoader / TensorFlow tf.data
+#     backend
+#
+# Usage:
+#   aisnode -role proxy [options]
+#   aisnode -role target [options]
+#
+# Flags (Go stdlib `flag.FlagSet` declared in
+# ais/daemon.go::initFlags); single-dash style with
+# underscore_separated names:
+#   -role <proxy|target>           - role of this
+#                                     aisnode
+#   -daemon_id <id>                - user-specified
+#                                     node ID
+#                                     (advanced
+#                                     usage)
+#   -config <path>                 - path to global
+#                                     cluster
+#                                     config JSON
+#   -local_config <path>           - path to local
+#                                     node config
+#                                     JSON
+#                                     (mountpaths,
+#                                     ports, log
+#                                     dir)
+#   -config_custom <kv>            - custom config
+#                                     overrides
+#                                     (k1=v1,k2=v2)
+#   -transient                     - do not
+#                                     persist
+#                                     customized
+#                                     (via
+#                                     -config_custom)
+#                                     configuration
+#                                     across
+#                                     restarts
+#   -standby                       - target only:
+#                                     start in
+#                                     standby mode
+#                                     (no I/O until
+#                                     primary
+#                                     promotes)
+#   -loopback                      - target only:
+#                                     allow use of
+#                                     loopback
+#                                     devices for
+#                                     mountpaths
+#                                     (testing)
+#   -start_with_lost_mountpath     - target only:
+#                                     start even
+#                                     if one or
+#                                     more
+#                                     mountpaths
+#                                     are
+#                                     unavailable
+#                                     (degraded
+#                                     mode)
+#   -ntargets <n>                  - proxy only:
+#                                     expected
+#                                     number of
+#                                     targets at
+#                                     startup (used
+#                                     for primary
+#                                     election
+#                                     timing)
+#   -skip_startup                  - skip the
+#                                     standard
+#                                     startup
+#                                     sequence
+#                                     (advanced
+#                                     debugging)
+#   -h                             - show usage
+#                                     and exit
+#
+# Example invocation:
+#   aisnode -role proxy \
+#           -config /etc/ais/global.json \
+#           -local_config /etc/ais/local.json \
+#           -ntargets 10
+#
+#   aisnode -role target \
+#           -config /etc/ais/global.json \
+#           -local_config /etc/ais/local.json
+#
+# The klauspost/reedsolomon lane is built on
+# `github.com/klauspost/reedsolomon v1.13.3`
+# (declared verbatim at upstream go.mod HEAD as a
+# direct dep, imported as
+# `"github.com/klauspost/reedsolomon"` in
+# `ec/putjogger.go` line 29 + `ec/getjogger.go`),
+# the canonical Go Reed-Solomon erasure coding
+# library by Klaus Post - github.com/klauspost/
+# reedsolomon.
+#
+# aisnode imports the `ec/` package via
+# `github.com/NVIDIA/aistore/ais` which references
+# the EC subsystem for erasure-coded bucket
+# storage. When a target receives a PUT for an
+# object in an EC-enabled bucket, the `ec/
+# putjogger.go` path streams the object through
+# `reedsolomon.NewStreamC(dataSlices,
+# paritySlices, true, true)` (the Cauchy-matrix-
+# based streaming encoder) + writes the resulting
+# data + parity shards to the cluster's distributed
+# storage layer. On GET, `ec/getjogger.go`
+# reconstructs the object from any K-of-N
+# surviving shards.
+#
+# Klaus Post's reedsolomon library distinguishing
+# features:
+#   - SIMD acceleration (AVX2 + AVX512 + SSSE3 on
+#     x86_64; NEON on aarch64) - the SIMD code is
+#     auto-generated assembly from the `_gen/`
+#     directory
+#   - Streaming + buffer-pool API for large-object
+#     encoding without per-shard allocations
+#   - Cauchy + Vandermonde matrix support for the
+#     parity generation matrix
+#   - LRC (Locally Repairable Codes) extension for
+#     reduced reconstruction cost
+#   - Hardware-accelerated GF(2^8) arithmetic via
+#     PCLMULQDQ + GFNI instructions on newer x86
+#   - Streaming + non-streaming APIs (the
+#     non-streaming API operates on slice-of-byte-
+#     slice; streaming operates on
+#     io.Reader/io.Writer pairs)
+#
+# Klaus Post is a multi-axis canonical Go author
+# joining Niemeyer + Kamardin in the Go cohort.
+# His broader footprint:
+#   - klauspost/compress (canonical Go compression
+#     library - gzip/zstd/zlib/brotli/snappy in
+#     pure Go with SIMD acceleration; depended on
+#     by Caddy + MinIO + Cloudflare's Go services +
+#     ~every Go HTTP server needing fast gzip)
+#   - klauspost/reedsolomon (canonical Go RS; THIS
+#     AXIS)
+#   - klauspost/cpuid (canonical Go CPU feature
+#     detection - depended on by Go ecosystem to
+#     detect AVX/AVX2/AVX512/NEON at runtime)
+#   - klauspost/asmfmt (asm formatting tool used
+#     by the Go assembly community)
+#   - klauspost/pgzip (parallel gzip - multi-core
+#     gzip-compatible encoder/decoder)
+#   - klauspost/readahead (async readahead
+#     buffering wrapper)
+#   - klauspost/dedup (deduplication library)
+#
+# Post's foundational role in Go differs from
+# Niemeyer's (yaml.v3 + gopkg.in) - Post's
+# position is in *SIMD-accelerated systems
+# libraries*. Together with Sergey Kamardin
+# (gobwas/glob + gobwas/ws) + Gustavo Niemeyer
+# (yaml.v3 + gopkg.in/check.v1 + gopkg.in/mgo.v2)
+# they form the multi-axis Go canonical author
+# cohort.
+#
+# Post's Go RS implementation is the source for
+# Darren Ldl's Rust port (rust-rse/reed-solomon-
+# erasure at Axis 263 Rust slot R1487 helyim) -
+# the three-step canonical lineage is:
+#   Java (Backblaze, 2015) -> Go (klauspost, 2015) ->
+#   Rust (darrenldl, 2016) -> all later Rust RS
+#   implementations
+#
+# ----------------------------------------------------------------------------
+# AXIS 263 :: Reed-Solomon erasure coding libraries
+#              (forward error correction via
+#              polynomial evaluation over Galois
+#              fields)
+# Round 1488 :: Go slot 2 of 4 :: continues Axis 263
+#
+# Cross-language canonical library family for this axis:
+#   Rust    : rust-rse/                  [R1487 _helyim]
+#             reed-solomon-erasure
+#             (Darren Ldl; Rust port of
+#              Klaus Post's Go
+#              implementation)
+#   Go      : klauspost/reedsolomon      [R1488 THIS FILE]
+#             (Klaus Post; SIMD-
+#              accelerated; the source
+#              for all later RS ports)
+#   TS/Node : ronomon/reed-solomon       [R1489 closing]
+#             (Joran Greef; pure-JS RS
+#              implementation)
+#
+# klauspost/reedsolomon is structurally interesting
+# in this axis because it's the *upstream source*
+# of the cross-language family:
+#   - It pre-dates the Rust port (which is a Rust
+#     idiomatic rewrite of the Klaus Post Go code)
+#   - It pioneered SIMD acceleration in pure-Go
+#     RS code (the AVX2 + AVX512 + NEON assembly
+#     was auto-generated from a Go DSL)
+#   - It introduced the streaming RS encoder/
+#     decoder API that the Rust port later
+#     replicated
+#
+# The three lanes form a *port-chain-canonical*
+# axis where the Go lane is the source-of-truth
+# and the Rust lane is a downstream port. This
+# pattern is unusual in the corpus - more commonly
+# the Rust lane is the source-of-truth (e.g.
+# globset at Axis 261 led the canonical
+# implementation that Go + Node later replicated).
+#
+# Use-case spectrum across the three lanes:
+#   - helyim (Rust): SeaweedFS-clone object store
+#     using reed-solomon-erasure for volume-level
+#     erasure coding
+#   - aisnode (Go, klauspost/reedsolomon, THIS
+#     FILE): NVIDIA AIStore daemon using
+#     reedsolomon for bucket-level erasure coding
+#     (configurable N+K data+parity per object)
+#
+# Cross-language interop at the wire-shard level
+# - the same (n, k, GF parameters) produce
+# byte-identical parity shards across all three
+# lanes, enabling polyglot distributed storage
+# systems where shards encoded in Go can be
+# decoded in Rust or Node.
+#
+# NVIDIA AIStore's positioning is distinctive
+# among the corpus's distributed-storage entries:
+# while helyim (Axis 263 Rust) is general-
+# purpose object storage and Backblaze's Java RS
+# implementation powers their Vault product, AIS
+# is purpose-built for AI/ML training data
+# pipelines. The ETL/transform-on-GET pipeline +
+# sharded-archive format reflect this
+# specialization - features that general-purpose
+# object stores don't typically prioritize.
+# ============================================================================
+
+_aisnode() {
+    local context state state_descr line
+    typeset -A opt_args
+
+    _arguments -s -S \
+        '-role=[role of this aisnode]:role:(proxy target)' \
+        '-daemon_id=[user-specified node ID (advanced)]:id:' \
+        '-config=[path to global cluster config JSON]:file:_files' \
+        '-local_config=[path to local node config JSON]:file:_files' \
+        '-config_custom=[custom config overrides (k1=v1,k2=v2)]:overrides:' \
+        '-transient[do not persist customized config across restarts]' \
+        '-standby[target only: start in standby mode]' \
+        '-loopback[target only: allow loopback devices for mountpaths]' \
+        '-start_with_lost_mountpath[target only: start even if mountpaths unavailable]' \
+        '-ntargets=[proxy only: expected target count at startup]:n:' \
+        '-skip_startup[skip the standard startup sequence (debugging)]' \
+        '(- *)-h[show usage and exit]'
+}
+
+_aisnode "$@"
