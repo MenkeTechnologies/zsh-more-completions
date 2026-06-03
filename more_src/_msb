@@ -1,0 +1,179 @@
+#compdef msb
+# ============================================================================
+# msb - microsandbox CLI: local-first microVM sandboxes for AI agents
+#        (Rust, Apache-2.0)
+#
+# Author : Super Rad Company
+# Upstream: https://github.com/superradcompany/microsandbox
+# crates : microsandbox-cli (binary: msb)
+#
+# `msb` is the user-facing CLI for microsandbox - a local-
+# first, microVM-backed sandbox runtime designed to give AI
+# agents safe execution environments. Each "sandbox" is a
+# microVM (Firecracker or QEMU-microvm under the hood) with
+# a copy-on-write filesystem snapshot, network policy
+# enforcement, optional GPU passthrough, and per-sandbox
+# resource limits. The architecture is closer to Docker but
+# at the VM-isolation level instead of container - the
+# trade-off is stronger isolation guarantees + slower
+# startup (~100-300ms) vs Docker's namespaces-only
+# isolation + ~10ms startup.
+#
+# Subcommand tree (clap derive, urfave-style):
+#   run <image> <cmd>          - create + run a sandbox
+#   create <image>             - boot a sandbox in background
+#   start <name>               - start a stopped sandbox
+#   stop <name>                - stop a running sandbox
+#   list / ls                  - list all sandboxes
+#   status / ps                - show sandbox status
+#   metrics                    - show live metrics for a sandbox
+#   remove / rm                - remove sandbox(es)
+#   exec <name> <cmd>          - run a command inside a sandbox
+#   copy / cp <src> <dst>      - copy files between host + sandbox
+#   logs <name>                - show captured output
+#   image                      - manage OCI images
+#                                (subcommands: ls, rm, ...)
+#   pull <image>               - download image from registry
+#   load <tar>                 - load image archive from tar
+#   save <image> <tar>         - export image to tar
+#   registry                   - manage registry credentials
+#   ssh <name>                 - SSH into a sandbox
+#                                (requires ssh feature)
+#   inspect <name>             - show full sandbox config + status
+#   volume / vol               - manage named volumes
+#   snapshot / snap            - manage disk snapshots
+#   install <bin>              - install a sandbox as a system command
+#   uninstall <bin>            - remove an installed sandbox command
+#   self                       - manage the msb installation
+#                                (subcommands: update, version, ...)
+#
+# Global flags:
+#   --tree                     - print the full command tree + exit
+#   --error / --warn / --info / --debug / --trace
+#                              - mutually-exclusive log verbosity flags
+#                                (tracing-subscriber EnvFilter under the hood)
+#
+# The opentelemetry-rust lane is built on the
+# `opentelemetry` family of crates (declared at upstream
+# workspace Cargo.toml HEAD), the canonical Rust
+# OpenTelemetry SDK maintained by the open-telemetry project
+# itself (github.com/open-telemetry/opentelemetry-rust, 2400+
+# stars). The crate family provides the OpenTelemetry trace
+# + metrics + logs API + SDK + per-exporter implementations
+# (OTLP gRPC + OTLP HTTP + Stdout). msb uses it to emit
+# distributed-tracing spans across the CLI -> sandbox-runtime
+# -> microVM boundary - each `msb run` invocation is a root
+# span that propagates through the OCI image pull, the VM
+# boot, the per-command exec inside the sandbox, and the
+# log+metrics capture back to the host.
+#
+# ----------------------------------------------------------------------------
+# AXIS 236 :: OpenTelemetry SDK (trace + metrics + logs unified observability)
+# Round 1406 :: Rust slot 1 of 4 :: OPENS Axis 236
+#
+# Cross-language canonical library family for this axis (proposed):
+#   Rust    : open-telemetry/opentelemetry-rust  - reference Rust SDK
+#   Go      : open-telemetry/opentelemetry-go    - reference Go SDK
+#   TS/Node : open-telemetry/opentelemetry-js    - reference JS SDK
+#
+# OpenTelemetry is one of the most strictly-spec-bound axes
+# in this hunt: the project ships canonical implementations
+# *per language* under a single GitHub organization
+# (open-telemetry/) with the spec authors maintaining each
+# SDK. The pattern is closer to Eclipse Paho (Axis 227 MQTT)
+# than to community-maintained canonicals - the SDKs ship
+# in lockstep with the OpenTelemetry spec releases, and
+# cross-language conformance is verified by a shared
+# semantic-conventions test suite.
+#
+# The wire-format-level interop is total: an OTLP/gRPC
+# trace exported by opentelemetry-rust is byte-identical to
+# the equivalent trace from opentelemetry-go or
+# opentelemetry-js when serialized via the official
+# protobuf schema. The receiving collector (Jaeger,
+# Tempo, Datadog Agent, Honeycomb Refinery, ...) cannot
+# distinguish which SDK produced the spans.
+#
+# The instrumentation idiom diverges per host language:
+#   - Rust: tracing-rs bridge - the `tracing` crate's span
+#     API decorates code; the opentelemetry-tracing-bridge
+#     converts those spans to OTLP exports
+#   - Go: explicit context propagation via
+#     `tracer.Start(ctx, "name")` returning a `(ctx, span)`
+#     tuple
+#   - Node: instrumentation-by-monkey-patching via
+#     `@opentelemetry/instrumentation-*` packages that wrap
+#     stdlib + popular libs automatically
+# ============================================================================
+
+_msb() {
+    local context state state_descr line
+    typeset -A opt_args
+    local curcontext="$curcontext" ret=1
+
+    _arguments -C \
+        '--tree[print the full command tree and exit]' \
+        '--error[show error-level diagnostic logs]' \
+        '--warn[show warning + error diagnostic logs]' \
+        '--info[show info + warning + error diagnostic logs]' \
+        '--debug[show debug-level diagnostic logs]' \
+        '--trace[show all diagnostic logs (most verbose)]' \
+        '(- *)'{-h,--help}'[print help]' \
+        '(- *)'{-V,--version}'[print version]' \
+        '1: :_msb_cmds' \
+        '*::arg:->args' \
+    && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                run|create|start|stop|exec|inspect|metrics|logs|pull|load|save) \
+                    _arguments '(- *)'{-h,--help}'[help]' '*:arg:' ;;
+                list|ls|status|ps|registry|volume|vol|snapshot|snap|image|self) \
+                    _arguments '(- *)'{-h,--help}'[help]' '*:arg:' ;;
+                remove|rm|copy|cp|install|uninstall|ssh) \
+                    _arguments '(- *)'{-h,--help}'[help]' '*:arg:' ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_msb_cmds() {
+    local -a cmds
+    cmds=(
+        'run:Create a sandbox from an image and run a command in it'
+        'create:Create a sandbox and boot it in the background'
+        'start:Start a stopped sandbox'
+        'stop:Stop one or more running sandboxes'
+        'list:List all sandboxes'
+        'ls:Alias for list'
+        'status:Show sandbox status'
+        'ps:Alias for status'
+        'metrics:Show live metrics for a running sandbox'
+        'remove:Remove one or more sandboxes'
+        'rm:Alias for remove'
+        'exec:Run a command in a running sandbox'
+        'copy:Copy files between the host and a sandbox'
+        'cp:Alias for copy'
+        'logs:Show captured output from a sandbox'
+        'image:Manage OCI images'
+        'pull:Download an image from a registry'
+        'load:Load an image archive from tar'
+        'save:Save cached images to a tar archive'
+        'registry:Manage registry credentials'
+        'ssh:Connect to a sandbox over SSH'
+        'inspect:Show detailed sandbox configuration and status'
+        'volume:Manage named volumes'
+        'vol:Alias for volume'
+        'snapshot:Manage disk snapshots'
+        'snap:Alias for snapshot'
+        'install:Install a sandbox as a system command'
+        'uninstall:Remove an installed sandbox command'
+        'self:Manage the msb installation'
+    )
+    _describe -t commands 'msb command' cmds
+}
+
+_msb "$@"
