@@ -1,0 +1,136 @@
+#compdef edgelinkd
+# ============================================================================
+# edgelinkd - Node-RED-compatible workflow engine reimplemented in Rust
+#              (Rust, Apache-2.0)
+#
+# Author : Li Wei (oldrev)
+# Upstream: https://github.com/oldrev/edgelinkd
+# crates : edgelink-app (binary: edgelinkd)
+#
+# EdgeLinkd is a back-end reimplementation of the Node-RED
+# flow-based programming engine in Rust. Reads the standard
+# Node-RED `flows.json` file format - the IoT visual-flow
+# tool's wire model - and executes the same node graph
+# semantics: MQTT in/out nodes, HTTP request/response nodes,
+# function nodes (executing JavaScript via rquickjs), inject
+# nodes, debug nodes, switch nodes, change nodes, template
+# nodes, etc. Trade-off vs upstream Node.js Node-RED: 10-100x
+# lower memory footprint, single static binary deployment,
+# native execution speed for built-in nodes; the cost is that
+# the long tail of community Node-RED nodes that depend on
+# Node.js-specific NPM packages won't load.
+#
+# Architecture: tokio async runtime + a hand-rolled flow
+# scheduler. Each Node-RED node maps to a Rust enum variant
+# in the registry. The MQTT in/out nodes use rumqttc as the
+# upstream MQTT client connection - this is the IoT use case
+# that defines Node-RED's primary market.
+#
+# Subcommand tree (clap derive):
+#   (default) run / list   - default action when no subcommand
+#   run [flows_path]       - run the workflow engine
+#                            --headless              no web UI
+#                            --bind <addr>           web bind
+#                                                    (default
+#                                                     127.0.0.1:1888)
+#   list                   - list all available node types
+#
+# Global flags:
+#   -v, --verbose <n>    - 0 (quiet) through 5 (very verbose); default 2
+#       --home <dir>     - EdgeLink home (default: ~/.edgelink)
+#   -l, --log-path <f>   - log-config TOML file
+#       --env <name>     - environment: 'dev' or 'prod' (default: dev)
+#   -u, --user-dir <d>   - user dir override
+#
+# The rumqttc lane is built on `rumqttc = "0.24"` (declared
+# verbatim at upstream workspace Cargo.toml HEAD), the canonical
+# Rust MQTT client by Bytebeam (github.com/bytebeamio/rumqtt,
+# 2000+ stars). rumqttc is the only mainstream Rust MQTT 3.1.1
+# + 5.0 client - covers QoS 0/1/2, persistent sessions, will
+# messages, retained messages, last-will, MQTT 5 properties +
+# reason codes, TLS via rustls or native-tls, WebSocket
+# transport. The companion `rumqttd` (broker) is the
+# matching server in the same workspace. EdgeLinkd uses
+# rumqttc as the MQTT-in and MQTT-out node implementations -
+# any Node-RED flow that publishes or subscribes to MQTT
+# topics flows through rumqttc connections.
+#
+# ----------------------------------------------------------------------------
+# AXIS 227 :: MQTT clients (IoT pub/sub messaging protocol)  [OPENS]
+# Round 1379 :: Rust slot 1 of 4 :: OPENS Axis 227
+#
+# Cross-language canonical library family for this axis (proposed):
+#   Rust    : bytebeamio/rumqtt            - rumqttc client + rumqttd broker
+#   Go      : eclipse-paho/paho.mqtt.golang - Eclipse Paho Go MQTT client
+#   TS/Node : mqttjs/MQTT.js               - reference Node MQTT client
+#
+# MQTT (MQ Telemetry Transport, IBM 1999, OASIS standard since
+# 2014) is the de-facto IoT messaging protocol: lightweight
+# publish-subscribe over TCP with three QoS levels (0=at-most-
+# once, 1=at-least-once, 2=exactly-once), persistent sessions
+# across disconnects, last-will-and-testament messages,
+# retained messages for late subscribers. Designed for
+# bandwidth-constrained device-to-broker links - the
+# fixed-header overhead is just 2 bytes, vs HTTP's ~600 bytes
+# per request.
+#
+# All three lanes target the MQTT 3.1.1 (OASIS) + 5.0 (OASIS,
+# 2019) specs. Cross-broker interop is total - an MQTT 5
+# session opened by rumqttc (Rust client) lands on a Mosquitto
+# / EMQX / HiveMQ / VerneMQ broker indistinguishably from a
+# session by paho.mqtt.golang (Go) or MQTT.js (Node). The
+# spec is the contract; the libraries are interchangeable per
+# host language.
+#
+# The IoT visual-flow ecosystem (Node-RED, EdgeLinkd, Crouton,
+# OpenHAB, Home Assistant) almost universally picks MQTT as
+# the device-to-orchestrator transport because of two
+# properties: (1) the per-device cost is near-zero (a 32KB
+# microcontroller can run an MQTT client), and (2) the
+# pub/sub topology naturally fits the "many devices report to
+# one engine" topology of consumer IoT.
+# ============================================================================
+
+_edgelinkd() {
+    local context state state_descr line
+    typeset -A opt_args
+    local curcontext="$curcontext" ret=1
+
+    _arguments -C \
+        '(-v --verbose)'{-v,--verbose}'[verbosity level (0 quiet, default 2)]:n:' \
+        '--home[EdgeLink home dir (default ~/.edgelink)]:dir:_files -/' \
+        '(-l --log-path)'{-l,--log-path}'[path to log configuration file]:file:_files -g "*.toml"' \
+        '--env[running environment]:env:(dev prod)' \
+        '(-u --user-dir)'{-u,--user-dir}'[user directory override]:dir:_files -/' \
+        '(- *)'{-h,--help}'[print help]' \
+        '(- *)'{-V,--version}'[print version]' \
+        '1: :_edgelinkd_cmds' \
+        '*::arg:->args' \
+    && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                run)  _arguments \
+                          '--headless[run in headless mode (no web server)]' \
+                          '--bind[server bind address for web interface]:addr:' \
+                          '(- *)'{-h,--help}'[help]' \
+                          '1:flows.json path:_files -g "*.json"' ;;
+                list) _arguments '(- *)'{-h,--help}'[help]' ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_edgelinkd_cmds() {
+    local -a cmds
+    cmds=(
+        'run:Run the EdgeLink workflow engine'
+        'list:List all available node types'
+    )
+    _describe -t commands 'edgelinkd command' cmds
+}
+
+_edgelinkd "$@"
