@@ -1,0 +1,111 @@
+#compdef kula
+# ============================================================================
+# kula - Lightweight self-contained Linux server monitor (Go, AGPL-3.0)
+#
+# Author : c0m4r
+# Upstream: https://github.com/c0m4r/kula
+#
+# kula is a single-binary Linux server monitor that ships a sandboxed
+# systemd-compatible daemon plus a TUI (charmbracelet/bubbletea) and a
+# web dashboard backed by live WebSocket streams. It collects CPU /
+# memory / disk / network / process / temperature metrics on a tick
+# and pushes them to web subscribers over a `gorilla/websocket` channel.
+# Authentication uses Argon2 password hashing (via the `hash-password`
+# subcommand). The "self-contained" claim is load-bearing: kula uses
+# Landlock sandboxing (`landlock-lsm/go-landlock`) to scope filesystem
+# access at runtime, has no external service deps, and bundles its
+# own SQLite-friendly tiered storage.
+#
+# The WebSocket lane is built on `github.com/gorilla/websocket v1.5.3`
+# (declared verbatim at upstream go.mod HEAD), the long-running
+# canonical Go WebSocket library by the Gorilla web toolkit org. From
+# upstream `internal/web/websocket.go`:
+#
+#     package web
+#     import (
+#         "github.com/gorilla/websocket"
+#     )
+#     type wsClient struct {
+#         conn   *websocket.Conn
+#         sendCh chan []byte
+#         ...
+#     }
+#     func (s *Server) newUpgrader() websocket.Upgrader {
+#         return websocket.Upgrader{
+#             ReadBufferSize:  1024,
+#             WriteBufferSize: 1024,
+#             CheckOrigin: func(r *http.Request) bool { ... },
+#         }
+#     }
+#
+# gorilla/websocket implements RFC 6455 (the WebSocket Protocol) end-
+# to-end: HTTP/1.1 upgrade handshake, opcode framing (text, binary,
+# close, ping, pong, continuation), client-side payload masking, the
+# close-handshake state machine, and the permessage-deflate extension
+# (RFC 7692) hooks for negotiated per-message compression. It is the
+# dependency-of-record for the Go web ecosystem - used by every
+# real-time dashboard, every Slack-style chat backend, every K8s
+# tooling daemon with a live stream surface.
+#
+# Note: in 2022 the Gorilla org maintainers announced wind-down, but
+# the project was unarchived in 2024 and the library has continued
+# pushing releases since. The community-fork alternative
+# `coder/websocket` (formerly `nhooyr/websocket`) is the cleanroom
+# next-gen contender but has not yet displaced gorilla's mind-share
+# (~22k stars vs ~3k stars on github.com/coder/websocket).
+#
+# ----------------------------------------------------------------------------
+# AXIS 201 :: WEBSOCKET PROTOCOL (RFC 6455 + RFC 7692)
+# Round 1302 :: Go slot 2 of 4 :: continues Axis 201
+#
+# Cross-language canonical library family for this axis:
+#   Rust    : snapview/tokio-tungstenite + tungstenite-rs  [R1301 _rollup-boost]
+#   Go      : gorilla/websocket  (long-running canonical)  [R1302 THIS FILE]
+#   TS/Node : websockets/ws      (canonical pure-JS RFC 6455) [R1303 closing]
+#
+# kula is the load-bearing Go consumer: a real production-style live
+# dashboard streaming metrics deltas to potentially many concurrent
+# WS subscribers. Exercises the Upgrader + per-connection goroutine
+# fan-out pattern that gorilla popularized in the early-2010s era
+# Go web ecosystem and that the entire Go ecosystem has copied since.
+# ============================================================================
+
+_kula() {
+    local context state state_descr line
+    typeset -A opt_args
+    local curcontext="$curcontext" ret=1
+
+    _arguments -C \
+        '-config[path to configuration YAML (default config.yaml)]:file:_files -g "*.yaml"' \
+        '(-v --version)'{-v,--version}'[print version and exit]' \
+        '(- *)'{-h,--help}'[show help]' \
+        '1: :_kula_cmds' \
+        '*::arg:->args' \
+    && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                serve)         _arguments '-config[config file]:file:_files -g "*.yaml"' '(- *)'{-h,--help}'[help]' ;;
+                tui)           _arguments '-config[config file]:file:_files -g "*.yaml"' '(- *)'{-h,--help}'[help]' ;;
+                hash-password) _arguments '-config[config file]:file:_files -g "*.yaml"' '(- *)'{-h,--help}'[help]' ;;
+                inspect)       _arguments '-config[config file]:file:_files -g "*.yaml"' '(- *)'{-h,--help}'[help]' ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_kula_cmds() {
+    local -a cmds
+    cmds=(
+        'serve:Start the monitoring daemon with web UI (default)'
+        'tui:Launch the terminal UI dashboard'
+        'hash-password:Generate an Argon2 password hash for the config file'
+        'inspect:Display information about storage tier files'
+    )
+    _describe -t commands 'kula command' cmds
+}
+
+_kula "$@"
