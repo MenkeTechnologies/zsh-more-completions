@@ -1,0 +1,130 @@
+#compdef create-static-map
+# ============================================================================
+# create-static-map - Render static map images from OpenStreetMap tiles
+#                      (Go, MIT)
+#
+# Author : Florian Pigorsch (flopp)
+# Upstream: https://github.com/flopp/go-staticmaps
+#
+# `create-static-map` is the CLI front-end to flopp's
+# `go-staticmaps` Go library - a Go-port of the Python
+# StaticMaps project. It downloads OpenStreetMap (or other
+# tile-provider) raster tiles for a given bounding-box or
+# center+zoom, composes them into a single PNG, and
+# overlays markers / paths / areas / circles / text
+# attribution into the rendered image. The use case is
+# embedding maps into reports, blog posts, screenshots,
+# bug-tracking attachments, or any non-interactive context
+# where a real interactive map would be overkill.
+#
+# Usage:
+#   create-static-map [options]
+#
+# Flags (jessevdk/go-flags GNU-style):
+#       --width <px>            - image width (default 512)
+#       --height <px>           - image height (default 512)
+#   -o, --output <file>         - output PNG (default map.png)
+#   -t, --type <maptype>        - tile provider type;
+#                                 use `--type list` to see all
+#   -c, --center <lat,lng>      - center coordinates
+#   -z, --zoom <n>              - zoom factor
+#   -b, --bbox <nw|se>          - bounding box: nwLATLNG|seLATLNG
+#       --background <color>    - background color (default transparent)
+#   -u, --useragent <string>    - override HTTP User-Agent
+#   -m, --marker <spec>         - marker spec (repeatable)
+#   -i, --imagemarker <spec>    - image-marker spec (repeatable)
+#   -p, --path <spec>           - path spec (repeatable)
+#   -a, --area <spec>           - area spec (repeatable)
+#   -C, --circle <spec>         - circle spec (repeatable)
+#       --thunderforestapikey   - Thunderforest tile-server API key
+#       --attribution <text>    - override attribution text
+#   -h, --help                  - print help
+#
+# Marker / path / area / circle specs use the upstream
+# go-staticmaps mini-DSL (color: prefix + comma-separated
+# attributes + lat/lng list). See the upstream README for
+# the grammar.
+#
+# The golang/geo (S2) lane is built on `github.com/golang/
+# geo/s2` (declared as a direct dep at upstream go.mod HEAD
+# and imported from create-static-map.go), the canonical
+# Go geospatial geometry library by Google + the golang
+# community (github.com/golang/geo, 1700+ stars). The
+# package is the Go port of Google's S2 Geometry Library -
+# a spherical-Earth-native geometry framework that
+# represents geographic coordinates as 3D unit vectors on a
+# unit sphere. The S2 model treats Earth's surface as a
+# sphere (not a planar projection), eliminating the
+# projection-induced distortion that bites planar-CRS
+# libraries near the poles. Each S2 cell is a hierarchical
+# quadrilateral covering on the sphere, and S2 cell IDs
+# encode quadtree positions for ultra-efficient range
+# queries.
+#
+# create-static-map uses S2 for the per-marker geometry:
+# `s2.LatLngFromDegrees(lat, lng)` converts the
+# user-supplied lat,lng strings to S2's internal
+# representation, then bounding-box clamping +
+# tile-coordinate translation happen in the S2 frame
+# before the tile compositor renders the PNG.
+#
+# ----------------------------------------------------------------------------
+# AXIS 240 :: Geospatial geometry libraries (point-in-polygon + GIS algos)
+# Round 1419 :: Go slot 2 of 4 :: continues Axis 240 (round-number landmark)
+#
+# Cross-language canonical library family for this axis:
+#   Rust    : georust/geo                  [R1418 _rtz]
+#   Go      : golang/geo (S2)              [R1419 THIS FILE]
+#   TS/Node : Turfjs/turf                  [R1420 closing]
+#
+# golang/geo is structurally interesting in this axis:
+# it is the *only* lane that adopts a spherical-Earth
+# coordinate system as the native representation. The
+# Rust slot (georust/geo) and the Node slot (Turfjs)
+# both default to planar Cartesian geometry (lat/lng
+# treated as if they were XY on a flat plane), with
+# spherical algorithms available as additional opt-in
+# packages. The S2 model is uniquely powerful for
+# global-scale problems where projection-induced
+# distortion would matter:
+#   - cell-index-based geographic feature stores (the
+#     original Google Maps use case)
+#   - proximity queries at world scale (Uber's H3 + S2
+#     pipeline)
+#   - validity-preserving operations near the poles
+#
+# Cross-language interop in Axis 240 happens at the
+# *predicate* level - "does point P lie inside polygon
+# Q" is byte-identical across the three lanes, modulo
+# floating-point precision. The geometry representation
+# is per-lane: a `geo::Polygon<f64>` from georust, a
+# `*s2.Polygon` from golang/geo, and a `Polygon` from
+# turfjs are not source-portable; the .geojson wire
+# format is the cross-library interchange medium.
+# ============================================================================
+
+_create-static-map() {
+    local context state state_descr line
+    typeset -A opt_args
+
+    _arguments -s -S \
+        '--width[image width in pixels (default 512)]:px:' \
+        '--height[image height in pixels (default 512)]:px:' \
+        '(-o --output)'{-o,--output}'[output PNG file (default map.png)]:file:_files -g "*.png"' \
+        '(-t --type)'{-t,--type}'[tile provider type (use list for all)]:type:' \
+        '(-c --center)'{-c,--center}'[center coordinates lat,lng]:latlng:' \
+        '(-z --zoom)'{-z,--zoom}'[zoom level]:n:' \
+        '(-b --bbox)'{-b,--bbox}'[bounding box nwLATLNG|seLATLNG]:bbox:' \
+        '--background[background color (default transparent)]:color:' \
+        '(-u --useragent)'{-u,--useragent}'[override HTTP User-Agent]:ua:' \
+        '*'{-m,--marker}'[add a marker (repeatable)]:marker:' \
+        '*'{-i,--imagemarker}'[add an image marker (repeatable)]:marker:' \
+        '*'{-p,--path}'[add a path (repeatable)]:path:' \
+        '*'{-a,--area}'[add an area (repeatable)]:area:' \
+        '*'{-C,--circle}'[add a circle (repeatable)]:circle:' \
+        '--thunderforestapikey[Thunderforest tile-server API key]:key:' \
+        '--attribution[override attribution text]:text:' \
+        '(- *)'{-h,--help}'[print help]'
+}
+
+_create-static-map "$@"
