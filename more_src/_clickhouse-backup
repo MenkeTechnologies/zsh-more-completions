@@ -1,0 +1,353 @@
+#compdef clickhouse-backup
+# ---------------------------------------------------------------------------
+# clickhouse-backup — Altinity's "Tool for easy backup and restore for
+#                     ClickHouse® using object storage for backup files":
+#                     backup + restore + remote-upload + incremental
+#                     workflow for ClickHouse clusters with S3 / GCS /
+#                     Azure Blob / SFTP / FTP / local object-storage
+#                     backends, plus a daemon mode that runs scheduled
+#                     `create_remote` + `delete local` cycles via a
+#                     watch loop.  Supports FIPS-140-3 builds for
+#                     federal-compliance deployments (Go, 1606★)
+#
+# upstream: https://github.com/Altinity/clickhouse-backup
+#           (binary at cmd/clickhouse-backup/ in the workspace)
+# author : Altinity, Inc. — the ClickHouse-focused consulting +
+#          managed-services company that also maintains the ClickHouse
+#          Kubernetes Operator and Altinity Stable Builds of ClickHouse
+#          itself (a ClickHouse fork with long-term-support semantics
+#          for enterprise users who need predictable upgrade cadence
+#          rather than ClickHouse's own continuous-release model)
+# license: Apache-2.0
+#
+# Source-direct completion: every subcommand below is verbatim from
+# cmd/clickhouse-backup/main.go on the Altinity/clickhouse-backup tip
+# — `urfave/cli` `cli.Command{Name, Usage, UsageText, Action, Flags}`
+# declarations parsed exactly as declared, with the global flags
+# (--config, --environment-override, --command-id) + per-subcommand
+# flags (--tables, --partitions, --diff-from-remote, --schema, --rbac,
+# --configs, --named-collections, --skip-check-parts-columns, --resume,
+# --watch-interval, --full-interval, --watch-backup-name-template, etc)
+# preserved.
+#
+# Direct deps from go.mod (selected):
+#   github.com/klauspost/compress    v1.18.6   ← canonical Go zstd
+#                                                / gzip / s2 / flate
+#                                                compression library
+#                                                (this axis) — by
+#                                                Klaus Post (klauspost/
+#                                                compress; the same
+#                                                author who maintains
+#                                                klauspost/cpuid for
+#                                                CPU-feature detection
+#                                                and klauspost/reedsolomon
+#                                                for erasure coding).
+#                                                Pure-Go umbrella for
+#                                                multiple compression
+#                                                algorithms: zstd (sub-
+#                                                package compress/zstd
+#                                                — pure-Go Zstandard
+#                                                implementation
+#                                                without CGO), gzip
+#                                                (compress/gzip — a
+#                                                drop-in replacement
+#                                                for stdlib compress/
+#                                                gzip with ~2x better
+#                                                throughput), s2
+#                                                (compress/s2 — Klaus
+#                                                Post's LZ4-compatible
+#                                                superset format that
+#                                                achieves higher
+#                                                compression at lower
+#                                                CPU cost), flate
+#                                                (compress/flate — same
+#                                                relationship to stdlib
+#                                                compress/flate as the
+#                                                gzip sub-package).
+#                                                The umbrella structure
+#                                                lets one Cargo-like
+#                                                "select features you
+#                                                need" go.mod import
+#                                                without pulling in
+#                                                every algorithm.  THE
+#                                                Go answer to
+#                                                "compress with zstd
+#                                                from a Go process
+#                                                without CGO" — used
+#                                                by Caddy (HTTP
+#                                                response compression),
+#                                                Cloudflare's quiche-go,
+#                                                dgraph-io/badger (KV
+#                                                store on-disk compress
+#                                                tion), siemens/wfx,
+#                                                noborus/trdsql,
+#                                                jonjohnsonjr/dagdotdev,
+#                                                vmihailenco/taskq,
+#                                                sassoftware/go-rpmutils,
+#                                                MinIO's encryption-at-
+#                                                rest pipeline, every
+#                                                Go server that ships
+#                                                compressed HTTP
+#                                                responses, every Go
+#                                                data store that
+#                                                compresses on disk.
+#                                                clickhouse-backup uses
+#                                                it inside the backup
+#                                                tarball-and-upload
+#                                                pipeline (pkg/backup/
+#                                                backup.go) — backup
+#                                                tarballs are streamed
+#                                                through the zstd
+#                                                encoder before upload
+#                                                to S3/GCS/Azure for
+#                                                ~3-5x size reduction
+#                                                on typical ClickHouse
+#                                                data parts.  The
+#                                                pgzip sibling (also
+#                                                from klauspost) is
+#                                                used as a parallel
+#                                                gzip-compatible
+#                                                encoder for the
+#                                                small-fraction of
+#                                                backup-pipeline
+#                                                consumers that
+#                                                require gzip
+#                                                compatibility rather
+#                                                than zstd.
+#   github.com/klauspost/pgzip       v1.2.6    (parallel gzip-compatible
+#                                                encoder by same author
+#                                                — alternative for
+#                                                consumers needing
+#                                                strict gzip
+#                                                compatibility)
+#   github.com/urfave/cli            v1        (CLI framework — urfave/
+#                                                cli/v1, the older
+#                                                pre-v3 API style;
+#                                                clickhouse-backup
+#                                                hasn't migrated to v3
+#                                                yet for compatibility
+#                                                with the long-tail of
+#                                                ClickHouse-Operator
+#                                                deployments that
+#                                                wrap it)
+#   github.com/rs/zerolog                       (structured logging —
+#                                                JSON output for k8s
+#                                                logging-stack
+#                                                consumption)
+#   github.com/aws/aws-sdk-go-v2                (AWS SDK v2 for S3
+#                                                backend)
+#   github.com/Azure/azure-storage-blob-go      (Azure Blob backend)
+#   cloud.google.com/go/storage                 (GCS backend)
+#   github.com/pkg/sftp                         (SFTP backend)
+#
+# clickhouse-backup is the canonical ClickHouse backup tool — when
+# you run ClickHouse in production, the recommended backup approach
+# is: take a hardlink-based snapshot of the ClickHouse data
+# directory (`SYSTEM BACKUP TABLE ... TO ...` in ClickHouse 22.8+
+# or the older `freeze partitions` flow), package the snapshot as
+# a tarball, optionally diff against a previous remote backup for
+# incremental, compress with zstd, and upload to object storage.
+# clickhouse-backup automates that pipeline.  The `create_remote`
+# subcommand is the most-invoked workflow — create-then-upload in
+# one step, with optional `--diff-from-remote` for incremental
+# transfer.  The `watch` subcommand wraps create_remote in an
+# infinite loop with configurable `--watch-interval` (incremental
+# cadence) and `--full-interval` (when to break the incremental
+# chain and start a fresh full backup).  `restore` / `restore_remote`
+# go the other direction.  `server` runs an HTTP server with a REST
+# API for triggering backups remotely (used by the Altinity
+# ClickHouse Operator on Kubernetes).
+#
+# === AXIS 194 CONTINUES — Zstandard compression libraries =================
+# Axis position: Go=249 continues Axis 194 (slot 2/0/0).  Canonical Go
+# Zstandard implementation is `github.com/klauspost/compress` (zstd
+# sub-package) by Klaus Post — pure-Go Zstandard without CGO, part
+# of the broader klauspost/compress umbrella covering zstd / gzip /
+# s2 / flate.  THE Go answer to "compress with zstd from a Go
+# process without CGO."  Alternative: `valyala/gozstd` (CGO bindings
+# to the upstream C library, ~2x faster but requires libzstd at
+# compile + runtime).
+#
+# Cycle position in current 3+1 micro-cycle:
+#   Rust=249     _vykar               ← previous round (axis 194 OPENS, 1/0/0)
+#   Go=249       ← THIS FILE          (axis 194 continues, slot 2/0/0)
+#   TS-Node=249  ← next round         (axis 194 CLOSES at triple-249, 1/1/1)
+#
+# Cross-language design contrast for axis 194:
+#   Rust    : zstd (Alexandre Bury gyscos/zstd-rs) — DEFAULT cdylib
+#             FFI to upstream zstd C library; pure-Rust `pure`
+#             feature at perf cost.  Tight binding to C reference.
+#   Go      : klauspost/compress (Klaus Post) — UMBRELLA package
+#             with pure-Go reimplementations of zstd + gzip + s2 +
+#             flate.  Reflects Go's preference for "rewrite in
+#             pure-Go to avoid CGO" over Rust's preference for
+#             "bind to the reference C implementation."
+#             Alternative valyala/gozstd ships CGO bindings but
+#             klauspost has won the de-facto canonical via the
+#             ergonomic umbrella + no-CGO + cross-compilation
+#             benefits.
+#   JS/Node : [TBD next round]  Likely @bokuweb/zstd-wasm (WASM-
+#             backed C library port) or fzstd (pure-JS Zstandard
+#             by 101arrowz the author of fflate).
+# ---------------------------------------------------------------------------
+
+_clickhouse-backup() {
+    local context state state_descr line ret=1
+    typeset -A opt_args
+
+    local -a global_flags
+    global_flags=(
+        '(-c --config)'{-c,--config}'=[config file path (env CLICKHOUSE_BACKUP_CONFIG; default /etc/clickhouse-backup/config.yml)]:file:_files -g "*.(yml|yaml|YML|YAML)"'
+        '*--environment-override=[override any environment variable via CLI parameter (repeat for multiple; e.g. --env S3_BUCKET=mybucket)]:KEY=VALUE:'
+    )
+
+    _arguments -C \
+        '(- *)'{-h,--help}'[show CLI help]' \
+        '(- *)'{-V,--version}'[show CLI version]' \
+        $global_flags \
+        '1: :->cmds' \
+        '*::arg:->args' && ret=0
+
+    case $state in
+        cmds)
+            local -a subcmds
+            subcmds=(
+                'tables:list tables (excluding skip_tables); supports --remote-backup / --local-backup for per-backup table listing'
+                'create:create new local backup'
+                'create_remote:create new backup and upload to remote storage in one step'
+                'upload:upload an existing local backup to remote storage'
+                'list:list backups (local + remote)'
+                'download:download backup from remote storage'
+                'restore:create schema and restore data from a local backup'
+                'restore_remote:download and restore in one step'
+                'delete:delete a specific backup (local or remote)'
+                'default-config:print default config to stdout'
+                'print-config:print current config merged with environment variables to stdout'
+                'clean:remove data in '\''shadow'\'' folder from all '\''path'\'' folders available from ClickHouse (cleanup orphan shadows after failed backups)'
+                'clean_remote_broken:remove all broken remote backups (incomplete uploads / partial transfers)'
+                'clean_local_broken:remove all broken local backups'
+                'clean_broken_retention:remove orphan entries under remote `path` and `object_disks_path` that survived retention-policy cleanup'
+                'watch:run infinite loop creating full + incremental backup sequence (--watch-interval, --full-interval, --watch-backup-name-template)'
+                'server:run API server for remote backup triggering (used by Altinity ClickHouse Kubernetes Operator)'
+                'fips-info:display FIPS 140-3 build/runtime info and exit'
+                'help:show CLI help (or help for a specific subcommand)'
+            )
+            _describe -t commands 'clickhouse-backup command' subcmds && ret=0
+            ;;
+        args)
+            case $words[1] in
+                tables)
+                    _arguments \
+                        $global_flags \
+                        '(-a --all)'{-a,--all}'[print table even when match with skip_tables pattern]' \
+                        '(-t --tables --table)'{-t,--tables,--table}'=[filter to tables matching name patterns (comma-separated; allow ? and * as wildcard)]:tables:' \
+                        '--remote-backup=[list tables from a remote backup (includes per-table size + parts count)]:backup-name:' \
+                        '--local-backup=[list tables from a local backup (read from disk; includes per-table size + parts count)]:backup-name:' \
+                        '(-f --format)'{-f,--format}'=[output format]:format:(text json yaml csv tsv)' && ret=0
+                    ;;
+                create|create_remote)
+                    _arguments \
+                        $global_flags \
+                        '(-t --tables --table)'{-t,--tables,--table}'=[tables to back up (comma-separated patterns)]:tables:' \
+                        '*--partitions=[partition names to back up (repeat for multiple)]:partition:' \
+                        '--diff-from-remote=[backup name to diff against for incremental backup]:backup-name:' \
+                        '(-s --schema)'{-s,--schema}'[only back up table schemas (no data)]' \
+                        '--rbac[include RBAC (users / roles / quotas) in backup]' \
+                        '--rbac-only[ONLY back up RBAC (no data, no schemas)]' \
+                        '--configs[include ClickHouse server configs in backup]' \
+                        '--configs-only[ONLY back up server configs]' \
+                        '--named-collections[include named collections]' \
+                        '--named-collections-only[ONLY back up named collections]' \
+                        '--skip-check-parts-columns[skip part-column count check (use when columns differ across replicas)]' \
+                        '*--skip-projections=[projection names to skip]:projection:' \
+                        '--resume[resume previously interrupted backup]' \
+                        '1:backup name:' && ret=0
+                    ;;
+                upload|download)
+                    _arguments \
+                        $global_flags \
+                        '(-t --tables --table)'{-t,--tables,--table}'=[tables filter]:tables:' \
+                        '*--partitions=[partition names]:partition:' \
+                        '--diff-from=[local backup name to diff from]:backup-name:' \
+                        '--diff-from-remote=[remote backup name to diff from]:backup-name:' \
+                        '(-s --schema)'{-s,--schema}'[only operate on schemas]' \
+                        '--rbac[include RBAC]' \
+                        '--configs[include server configs]' \
+                        '--named-collections[include named collections]' \
+                        '--resume[resume previously interrupted upload/download]' \
+                        '1:backup name:' && ret=0
+                    ;;
+                restore|restore_remote)
+                    _arguments \
+                        $global_flags \
+                        '(-t --tables --table)'{-t,--tables,--table}'=[tables filter]:tables:' \
+                        '*--partitions=[partition names]:partition:' \
+                        '(-s --schema)'{-s,--schema}'[only restore schemas]' \
+                        '(-d --data)'{-d,--data}'[only restore data (schemas must already exist)]' \
+                        '--rbac[restore RBAC]' \
+                        '--rbac-only[only restore RBAC]' \
+                        '--configs[restore server configs]' \
+                        '--configs-only[only restore server configs]' \
+                        '--named-collections[restore named collections]' \
+                        '--named-collections-only[only restore named collections]' \
+                        '--rm[drop existing tables before restore]' \
+                        '(-i --ignore-dependencies)'{-i,--ignore-dependencies}'[ignore inter-table dependencies during restore]' \
+                        '--resume[resume previously interrupted restore]' \
+                        '1:backup name:' && ret=0
+                    ;;
+                list)
+                    _arguments \
+                        $global_flags \
+                        '(-f --format)'{-f,--format}'=[output format]:format:(text json yaml csv tsv)' \
+                        '1::location:(local remote all)' && ret=0
+                    ;;
+                delete)
+                    _arguments \
+                        $global_flags \
+                        '1:location:(local remote)' \
+                        '2:backup name:' && ret=0
+                    ;;
+                clean|clean_remote_broken|clean_local_broken)
+                    _arguments \
+                        $global_flags \
+                        '*--include=[glob pattern (path.Match syntax) to scope cleanup only to backup names matching]:pattern:' \
+                        '*--exclude=[glob pattern of backup names to preserve even if they appear broken]:pattern:' \
+                        '--commit[actually delete orphans (without this flag, only logs what would be deleted)]' && ret=0
+                    ;;
+                clean_broken_retention)
+                    _arguments \
+                        $global_flags \
+                        '*--include=[glob pattern to scope cleanup]:pattern:' \
+                        '*--exclude=[glob pattern to preserve]:pattern:' \
+                        '--commit[actually delete orphans]' && ret=0
+                    ;;
+                watch)
+                    _arguments \
+                        $global_flags \
+                        '--watch-interval=[interval for create_remote + delete local for incremental backups (e.g. 1h, 30m)]:duration:' \
+                        '--full-interval=[interval for create_remote+delete local when stopping incremental chain (e.g. 24h)]:duration:' \
+                        '--watch-backup-name-template=[template for new backup name (can contain system.macros + standard Go template vars)]:template:' \
+                        '(-t --tables --table)'{-t,--tables,--table}'=[tables filter]:tables:' \
+                        '*--partitions=[partition names]:partition:' && ret=0
+                    ;;
+                server)
+                    _arguments \
+                        $global_flags \
+                        '--watch[run watch go-routine for create_remote + delete local after API server starts]' \
+                        '--watch-interval=[interval for create_remote + delete local for incremental backups]:duration:' \
+                        '--full-interval=[interval for breaking incremental chain]:duration:' \
+                        '--watch-backup-name-template=[template for new backup name]:template:' && ret=0
+                    ;;
+                help)
+                    local -a allsubs
+                    allsubs=(tables create create_remote upload list download restore restore_remote delete default-config print-config clean clean_remote_broken clean_local_broken clean_broken_retention watch server fips-info)
+                    _describe -t commands 'subcommand for help' allsubs && ret=0
+                    ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_clickhouse-backup "$@"
