@@ -1,0 +1,174 @@
+#compdef aspkg
+# ============================================================================
+# aspkg - AssemblyScript package registry CLI
+#          (TypeScript -> Node, MIT)
+#
+# Author : Roman F. (romdotdog) + Jairus Tanaka
+# Upstream: https://github.com/aspkg/cli
+# npm    : aspkg-cli (binary: aspkg)
+#
+# `aspkg` is the CLI for the AssemblyScript package
+# registry (aspkg.dev) - a curated registry of
+# AssemblyScript libraries separate from npm. The CLI
+# wraps the registry's HTTPS API:
+#   - device-flow GitHub-OAuth login + logout
+#   - whoami query of the authenticated user
+#   - publish: package the current dir, hash + sign the
+#     payload, upload to the registry's storage bucket
+#
+# Usage:
+#   aspkg <command> [options]
+#
+# Commands (yargs):
+#   publish      - publish the current AssemblyScript
+#                   package to aspkg.dev
+#   login        - device-flow GitHub-OAuth login (opens
+#                   browser + prompts for device code)
+#   logout       - log out of the registry (delete the
+#                   on-disk auth token)
+#   whoami       - print the authenticated GitHub username
+#
+# Global flags (yargs):
+#   --help       - print help
+#   --version    - print version
+#
+# The publish flow includes a content-integrity check:
+# the packaged tarball is hashed with BLAKE3 and the hash
+# is uploaded alongside the payload so the registry can
+# verify the content hasn't been tampered with mid-transit.
+#
+# The blake3 lane is built on `blake3 ^2.1.4` (declared at
+# upstream package.json HEAD as a direct dep, imported
+# from src/auth.ts as `import blake3 from "blake3"` then
+# `blake3.hash(data).toString()`), the canonical Node
+# BLAKE3 package by Connor Peet (connor4312, Microsoft
+# JS debugger engineer) - github.com/connor4312/blake3,
+# 1300+ stars. The package is a Node binding to the
+# BLAKE3-team's reference C library via WebAssembly +
+# Node N-API (a bidirectional binding - WASM for pure-JS
+# environments, N-API for native-bin-available
+# environments).
+#
+# This makes the Node slot's canonical library a *direct
+# binding to the same reference C library that powers
+# the Rust BLAKE3-team/BLAKE3 crate's C/assembly paths*.
+# The crypto primitives are the BLAKE3 algorithm authors'
+# own canonical code, just wrapped in either a Wasm
+# loader (for browser + worker contexts) or an N-API
+# binding (for Node + Bun + Deno).
+#
+# The parallel @node-rs/blake3 npm package exists as an
+# alternative canonical: it wraps the RustCrypto/blake3
+# pure-Rust crate (a separate-from-BLAKE3-team
+# implementation under the RustCrypto umbrella) via
+# napi-rs. Both blake3 (the connor4312 one) and
+# @node-rs/blake3 (the napi-rs one) are spec-compliant
+# and produce byte-identical hashes for the same input.
+# aspkg picked the connor4312 binding because of its
+# narrower install surface (single package vs napi-rs's
+# per-architecture sub-packages).
+#
+# ----------------------------------------------------------------------------
+# AXIS 245 :: BLAKE3 cryptographic hashing (SIMD-parallel
+#              + tree-structured + verified-streaming)
+# Round 1435 :: TS-Node slot 3 of 4 :: CLOSES Axis 245
+#                                       (238th axis closed)
+#
+# Cross-language canonical library family for this axis:
+#   Rust    : BLAKE3-team/BLAKE3 (`blake3`)  [R1433 _backdown]
+#   Go      : zeebo/blake3                   [R1434 _zstdzip]
+#   TS/Node : connor4312/blake3 (`blake3`    [R1435 THIS FILE]
+#             on npm) + @node-rs/blake3 as
+#             parallel canonical
+#
+# The Node slot closes Axis 245 with the *dual-canonical
+# library binding pattern*: two parallel-canonical
+# packages, both spec-compliant, picked by Node projects
+# based on install-surface tradeoffs rather than feature
+# differences.
+#
+# Structural commentary on the cross-language canonicals:
+#   - Rust (BLAKE3-team/BLAKE3): the reference impl by
+#     the algorithm's own authors (O'Connor + Aumasson +
+#     Neves + Wilcox-O'Hearn); same repo holds C +
+#     assembly + Rust paths
+#   - Go (zeebo/blake3): hand-tuned AVX2 + AVX-512 + ARM
+#     NEON assembly paths by Jeff Wendling (Storj
+#     founding engineer); independent Go reimplementation
+#     of the spec with hardware-tuned performance
+#   - Node: two parallel canonicals
+#     - connor4312/blake3 (npm `blake3`): Microsoft
+#       engineer's Wasm/N-API binding to the BLAKE3-team
+#       reference C library
+#     - @node-rs/blake3: napi-rs binding to RustCrypto's
+#       separate pure-Rust BLAKE3 implementation
+#
+# Cross-language interop at the hash-output level - 32
+# bytes of BLAKE3 hash output from any of the three lanes
+# (and either Node sub-canonical) is byte-identical for
+# the same input. The BLAKE3-team test vectors validate
+# this byte-equivalence across all implementations.
+#
+# Use-case spectrum across the three lanes:
+#   - backdown (Rust, BLAKE3-team/BLAKE3): interactive
+#     duplicate-file TUI deduplicator using BLAKE3 as
+#     the content-hash function for the dedup-grouping
+#     pass
+#   - zstdzip (Go, zeebo/blake3): ZSTD-in-ZIP compressor
+#     with multi-algorithm content hashing including
+#     BLAKE3 as one of the supported sum methods
+#   - aspkg (Node, connor4312/blake3): AssemblyScript
+#     package registry CLI using BLAKE3 to hash the
+#     packaged tarball for content-integrity verification
+#     on upload
+#
+# Three lanes, three use-case shapes (TUI dedup /
+# multi-algorithm archive hash / package-registry upload
+# integrity), three implementation strategies (reference
+# C+Rust+assembly under one umbrella / hand-tuned Go
+# assembly / Wasm-or-N-API wrapper to the reference C
+# library), all converging on byte-identical 32-byte
+# BLAKE3 hash outputs.
+#
+# Axis 245 closes the round 1435 cycle - 238th axis closed
+# total.
+# ============================================================================
+
+_aspkg() {
+    local context state state_descr line
+    typeset -A opt_args
+    local curcontext="$curcontext" ret=1
+
+    _arguments -C \
+        '(- *)--help[print help]' \
+        '(- *)--version[print version]' \
+        '1: :_aspkg_cmds' \
+        '*::arg:->args' \
+    && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                publish|login|logout|whoami)
+                    _arguments \
+                        '(- *)--help[print subcommand help]'
+                    ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_aspkg_cmds() {
+    local -a cmds
+    cmds=(
+        'publish:publish the current AssemblyScript package to aspkg.dev'
+        'login:device-flow GitHub-OAuth login'
+        'logout:log out of the registry'
+        'whoami:print the authenticated GitHub username'
+    )
+    _describe -t commands 'aspkg command' cmds
+}
+
+_aspkg "$@"
