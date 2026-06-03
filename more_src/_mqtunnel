@@ -1,0 +1,350 @@
+#compdef mqtunnel
+# ============================================================================
+# mqtunnel - TCP tunneling over MQTT (Go,
+#             Apache-2.0)
+#
+# Author : Shirou Wakayama-Sasaki (shirou)
+# Upstream: https://github.com/shirou/mqtunnel
+#
+# `mqtunnel` is a clever Go daemon that
+# encapsulates arbitrary TCP traffic inside MQTT
+# messages, enabling TCP-level connectivity
+# between two hosts that can both reach a common
+# MQTT broker but cannot reach each other
+# directly (typical NAT + firewall + corporate-
+# network scenario). The pattern:
+#   1. Each side connects to a configured MQTT
+#      broker
+#   2. The "local" side listens on a TCP port
+#      + forwards all incoming bytes via MQTT
+#      messages to a topic the remote side
+#      subscribes to
+#   3. The "remote" side receives the MQTT
+#      messages + opens an outbound TCP
+#      connection to the configured remote
+#      port, forwarding bytes in the opposite
+#      direction via a return-channel MQTT
+#      topic
+#   4. A control topic coordinates connection
+#      lifecycle (new connection IDs + close
+#      events + heartbeat)
+#
+# Use cases:
+#   - SSH/HTTPS/database access through corporate
+#     firewalls that allow only outbound HTTPS
+#     + MQTT
+#   - Self-hosted alternative to ngrok / cloudflared
+#     for NAT traversal (use any public MQTT
+#     broker as the relay)
+#   - IoT device remote-access without VPN
+#     (devices behind home routers can be reached
+#     via a public broker)
+#   - Air-gapped + corporate-managed network
+#     connectivity via the corporate-blessed
+#     MQTT broker
+#   - SCADA / industrial IoT remote-debugging
+#     access for engineers without direct
+#     factory-floor network access
+#
+# Architecture:
+#   - urfave/cli/v2 for CLI flag parsing
+#   - eclipse/paho.mqtt.golang for the MQTT
+#     transport
+#   - go.uber.org/zap for structured logging
+#   - go.opentelemetry.io/otel for distributed
+#     tracing (useful for debugging tunnel
+#     latency)
+#   - JSON config file for broker credentials +
+#     topic naming
+#   - google/uuid for per-connection IDs
+#
+# Usage:
+#   mqtunnel -c <config> [-v] [-C <control>] \
+#            [-l <local-port>] [-r <remote-port>]
+#
+# Flags (urfave/cli/v2 declarative):
+#   -c, --conf <file>             - config file
+#                                    path
+#                                    (default
+#                                    config.json;
+#                                    required)
+#   -v, --verbose                  - verbose
+#                                    logging
+#                                    (debug
+#                                    level)
+#   -C, --control <topic>          - overwrite
+#                                    MQTT
+#                                    control
+#                                    topic from
+#                                    config
+#   -l, --local <port>             - local TCP
+#                                    port to
+#                                    listen on
+#                                    (server-
+#                                    side mode)
+#   -r, --remote <port>            - remote TCP
+#                                    port to
+#                                    forward to
+#                                    (client-
+#                                    side mode)
+#   -h, --help                     - print
+#                                    urfave/cli
+#                                    help
+#       --version                  - print
+#                                    version
+#
+# Example config.json:
+#   {
+#     "Broker": "tls://mqtt.example.com:8883",
+#     "Username": "tunneluser",
+#     "Password": "<password>",
+#     "ClientID": "mqtunnel-<unique-id>",
+#     "Control": "mqtunnel/control",
+#     "QoS": 1,
+#     "CleanSession": true
+#   }
+#
+# Example invocation (server-side, listening on
+# local port 2222 to forward via MQTT):
+#   mqtunnel -c config.json -l 2222
+#
+# Example invocation (client-side, forwarding
+# from MQTT to local port 22):
+#   mqtunnel -c config.json -r 22
+#
+# Example invocation (debug with custom control
+# topic):
+#   mqtunnel -c config.json -C tunnel/debug \
+#            -v -l 9000 -r 80
+#
+# The eclipse/paho.mqtt.golang lane is built on
+# `github.com/eclipse/paho.mqtt.golang v1.4.2`
+# (declared verbatim at upstream go.mod HEAD as
+# a direct dep, imported throughout the mqtunnel
+# package for MQTT client creation + topic
+# subscription + per-connection message routing
+# + publish-callback handlers), the canonical Go
+# MQTT client library by the Eclipse Foundation's
+# Paho project - github.com/eclipse/paho.mqtt.
+# golang.
+#
+# The Eclipse Paho project's paho.mqtt.golang is
+# the de-facto canonical Go MQTT library:
+#   - Part of the Eclipse Paho umbrella (an
+#     official Eclipse Foundation project
+#     providing MQTT client implementations
+#     across many languages: Java + Python + C +
+#     C++ + JavaScript + Lua + Embedded C + Rust
+#     bindings + .NET + Go + iOS + Android)
+#   - 5,000+ reverse-deps on pkg.go.dev
+#   - MQTT v3.1.1 protocol support
+#   - Separate paho.golang module for MQTT v5
+#     support
+#   - Goroutine-based reactive client model
+#   - Auto-reconnect with configurable backoff
+#   - QoS 0/1/2 delivery guarantees
+#   - Persistent + clean session control
+#   - Last Will + Testament (LWT) support
+#   - Pluggable persistence backends (in-memory
+#     + file-based)
+#   - TLS + WebSocket transport support
+#
+# paho.mqtt.golang's distinguishing position:
+#   - Eclipse Foundation backing (vs single-author
+#     or commercial-backed alternatives)
+#   - Pure-Go networking (no cgo dependency)
+#   - Cross-language MQTT-Paho ecosystem (clients
+#     in many languages share design patterns +
+#     wire-format compliance)
+#   - Stable API since 2013; the de-facto Go
+#     MQTT choice for over a decade
+#
+# Eclipse Foundation governance:
+#   - Foundation-backed multi-maintainer project
+#   - Strict contribution license agreement (CLA)
+#     required for all contributions
+#   - Industrial-IoT focused (the Eclipse IoT
+#     working group includes Bosch + Siemens +
+#     ABB + Red Hat + IBM as major sponsors)
+#   - Sister projects: Mosquitto (canonical
+#     MQTT broker), Eclipse Hono (IoT platform),
+#     Eclipse Kura (IoT gateway framework)
+#
+# This is the *foundation-backed multi-maintainer
+# canonical* pattern - similar to:
+#   - axios/axios (Node, Axis 265): post-Zabriskie
+#     maintainer team
+#   - svg/svgo (Node, Axis 264): multi-maintainer
+#     org
+#   - go-yaml/yaml v3 (Go, Axis 262): Canonical
+#     Ltd-backed
+#
+# Distinct from the single-author canonical
+# patterns (rust-ini Chung + node-tar Schlueter
+# + jszip Knightley) where canonicality comes
+# from author longevity rather than
+# foundation/org backing.
+#
+# Shirou Wakayama-Sasaki (shirou)'s broader Go
+# ecosystem footprint:
+#   - shirou/gopsutil (canonical Go cross-
+#     platform system/process information
+#     library; ~15,000 stars; used by Prometheus
+#     node_exporter + Telegraf + ~every Go-
+#     based system-monitoring tool)
+#   - shirou/mqtunnel (THIS BINARY - TCP-over-
+#     MQTT tunnel)
+#   - Various smaller Go utility libraries
+#
+# Shirou's gopsutil is one of the most-imported
+# Go libraries in the systems-monitoring vertical
+# - it's effectively *the* canonical Go library
+# for cross-platform process / CPU / memory /
+# disk / network / sensor information. This
+# places Shirou alongside the multi-axis canonical
+# Go cohort (Klaus Post systems libs + Anthony
+# Starks visualization + Matt Holt web server)
+# as a foundational Go author.
+#
+# mqtunnel uses paho.mqtt.golang in the mqtunnel
+# package to:
+#   1. Connect to the configured MQTT broker
+#      (`mqtt.NewClient(opts)` + `client.Connect()`)
+#   2. Subscribe to the control topic for
+#      connection lifecycle messages (new conn
+#      ID + close events)
+#   3. Subscribe to per-connection data topics
+#      derived from each tunneled TCP connection's
+#      unique UUID
+#   4. Publish MQTT messages containing the
+#      TCP-stream byte payloads + per-message
+#      sequence numbers for reordering
+#   5. Handle auto-reconnect to the broker (paho's
+#      built-in reconnect policy with exponential
+#      backoff)
+#
+# ----------------------------------------------------------------------------
+# AXIS 270 :: MQTT (Message Queuing Telemetry
+#              Transport) client libraries
+#              (publish/subscribe message broker
+#              client implementing the OASIS
+#              MQTT v3.1.1 + v5.0 specifications)
+# Round 1509 :: Go slot 2 of 4 :: continues Axis 270
+#
+# Cross-language canonical library family for this axis:
+#   Rust    : bytebeamio/rumqtt           [R1508 _hms-mqtt-publish]
+#             (Bytebeam Tech; canonical
+#              Rust MQTT; client +
+#              broker from same team)
+#   Go      : eclipse/                    [R1509 THIS FILE]
+#             paho.mqtt.golang
+#             (Eclipse Foundation's Paho
+#              project; foundation-backed
+#              multi-maintainer canonical)
+#   TS/Node : mqttjs/MQTT.js              [R1510 closing]
+#             (the mqttjs maintainer
+#              team; isomorphic browser +
+#              Node)
+#
+# eclipse/paho.mqtt.golang is structurally
+# interesting in this axis because it's the
+# *foundation-backed cross-language canonical*:
+#   - Part of the Eclipse Paho umbrella (clients
+#     in Java + Python + C + C++ + JavaScript +
+#     Lua + Embedded C + Go + .NET + iOS +
+#     Android)
+#   - All Paho clients share design conventions
+#     + extensive wire-format interop testing
+#   - Eclipse Foundation governance (CLA-
+#     required, foundation-level decisions)
+#
+# This is the *single-foundation-multi-language
+# canonical* pattern - parallel to OpenSSL (TLS
+# implementations across languages) or libcurl
+# (HTTP client implementations). Few canonical
+# library axes show this pattern - most axes have
+# distinct per-language canonical authors. MQTT
+# is unusual in that the same foundation publishes
+# canonical implementations across all major
+# languages.
+#
+# Cross-language interop at the MQTT wire-protocol
+# level - all three lanes' canonicals (Bytebeam
+# rumqtt + Eclipse Paho + mqttjs) interoperate
+# with any compliant broker (Mosquitto + EMQX +
+# HiveMQ + AWS IoT Core + Azure IoT Hub + Google
+# Cloud IoT Core + the Eclipse Foundation's own
+# Mosquitto broker).
+#
+# Use-case spectrum across the lanes (so far):
+#   - hms-mqtt-publish (Rust, rumqttc): Hoymiles
+#     solar inverter -> MQTT publisher for Home
+#     Assistant
+#   - mqtunnel (Go, paho.mqtt.golang): TCP-over-
+#     MQTT tunnel for NAT traversal + corporate-
+#     firewall transit
+#
+# The Rust + Go contrast in this axis:
+#   - Rust (rumqttc): commercial-IoT-focused
+#     single-team canonical (Bytebeam)
+#   - Go (paho.mqtt.golang): foundation-backed
+#     multi-language project (Eclipse Paho)
+#
+# Both achieve canonical-library status but via
+# different governance mechanisms:
+#   - Bytebeam: commercial entity backing a Rust
+#     library
+#   - Eclipse Foundation: non-profit foundation
+#     backing a cross-language project
+#
+# Multi-axis canonical-Go author/org cohort
+# (now spanning 11 distinct individuals/orgs
+# including foundations):
+#   - Andrew Gerrand + Go team (stdlib)
+#   - Russ Cox (Go modules + crypto)
+#   - Gustavo Niemeyer (yaml.v3 + gopkg.in
+#     infrastructure)
+#   - Klaus Post (compress + reedsolomon +
+#     cpuid + asmfmt)
+#   - Sergey Kamardin (gobwas/glob + gobwas/ws +
+#     gobwas/httphead + gobwas/pool)
+#   - Anthony Starks (ajstarks/svgo + deck +
+#     dchart + openvg + gensvg)
+#   - Jeevanandam Madanagopal (go-resty +
+#     go-aah + go-model + sslmate-go)
+#   - Matt Holt (Caddy + CertMagic + archives +
+#     timeliner + acmez)
+#   - Joe Chen / Unknwon (go-ini + Macaron +
+#     Gogs + com)
+#   - Marc Rene Arns / gomidi org (gomidi/midi +
+#     connect + smf + mid + sf2)
+#   - Eclipse Foundation Paho team
+#     (paho.mqtt.golang, THIS AXIS; foundation-
+#     backed rather than individual-author)
+#
+# Bonus author cross-vertical observation: Shirou
+# Wakayama-Sasaki (this CLI's author) is also
+# the author of gopsutil (the canonical Go
+# cross-platform system/process information
+# library; used by Prometheus node_exporter +
+# Telegraf + every Go-based system-monitoring
+# tool). His role is in the *systems-monitoring
+# vertical* - canonical for process / CPU /
+# memory / disk / network / sensor information.
+# ============================================================================
+
+_mqtunnel() {
+    local context state state_descr line
+    typeset -A opt_args
+
+    _arguments -s -S \
+        '(-c --conf)'{-c,--conf}'[config file path]:file:_files -g "*.json"' \
+        '(-v --verbose)'{-v,--verbose}'[verbose logging]' \
+        '(-C --control)'{-C,--control}'[overwrite MQTT control topic]:topic:' \
+        '(-l --local)'{-l,--local}'[local TCP port to listen on]:port:' \
+        '(-r --remote)'{-r,--remote}'[remote TCP port to forward to]:port:' \
+        '(- *)'{-h,--help}'[print help]' \
+        '(- *)--version[print version]'
+}
+
+_mqtunnel "$@"
