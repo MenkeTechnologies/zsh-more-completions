@@ -1,0 +1,378 @@
+#compdef ergogen
+# ============================================================================
+# ergogen - ergonomic mechanical-keyboard
+#            layout/PCB/case generator (Node.js,
+#            MIT)
+#
+# Author : Bán Dénes (mr@zealot.hu / mrZealot)
+# Upstream: https://github.com/ergogen/ergogen
+# Homepage: https://ergogen.xyz
+# npm    : ergogen (binary: ergogen)
+#
+# `ergogen` is the de-facto canonical tool in the
+# ergonomic mechanical-keyboard hobbyist community
+# for generating complete keyboard build artifacts
+# from a single YAML config file. From a ~100-line
+# YAML spec describing key positions, key roles,
+# and design constraints, it emits:
+#   - Points: anchor-based key positions in 2D
+#     space
+#   - Outlines: case + plate outline polygons
+#     (DXF, JSCAD, or SVG)
+#   - Cases: 3D-printable case STL files (via
+#     JSCAD compilation)
+#   - PCBs: full KiCad PCB files (.kicad_pcb)
+#     with switches + diodes + microcontroller
+#     + USB footprints + routed traces
+#   - Footprints: programmatically defined
+#     switch + MCU footprints
+#
+# Output is bundled into a downloadable `.zip`
+# file (via jszip) containing all generated
+# artifacts ready for fab houses (JLCPCB, PCBWay,
+# Aisler, OSH Park) + 3D-printing services.
+#
+# Use cases:
+#   - Designing a custom ergonomic mechanical
+#     keyboard from scratch (Corne, Lily58,
+#     Kyria, Sofle, etc. all have ergogen YAMLs
+#     in the community)
+#   - Iterating on keyboard ergonomics by
+#     tweaking YAML + regenerating PCB +
+#     case in one step
+#   - Teaching keyboard PCB design without
+#     requiring KiCad expertise upfront
+#   - Generating manufacturable PCB files for
+#     JLCPCB/PCBWay assembly orders
+#
+# Usage:
+#   ergogen <config_file> [options]
+#
+# Positional:
+#   <config_file>                - YAML config
+#                                   file describing
+#                                   keyboard layout
+#                                   (required)
+#
+# Flags (yargs v17 declarative):
+#   -o, --output <dir>           - output folder
+#                                   (default
+#                                   `./output`)
+#   -d, --debug                  - debug mode
+#                                   (emits
+#                                   intermediate
+#                                   artifacts +
+#                                   verbose
+#                                   logging)
+#       --clean                  - clean output
+#                                   directory
+#                                   before parsing
+#       --svg                    - generate SVG
+#                                   outputs in
+#                                   addition to
+#                                   DXF/JSCAD/STL
+#                                   (alias
+#                                   --generate-svg)
+#       --version                - print yargs
+#                                   version
+#       --help                   - print yargs
+#                                   help
+#
+# Example invocation:
+#   ergogen corne.yaml -o ./out --clean --svg
+#   ergogen --debug kyria.yaml
+#
+# Example YAML config (corne-style 42-key split):
+#   meta:
+#     engine: 4.1.0
+#     name: my-corne
+#     author: anonymous
+#     version: 1.0.0
+#     license: MIT
+#   units:
+#     kx: cx
+#     ky: cy
+#   points:
+#     zones:
+#       matrix:
+#         columns:
+#           pinky: { rotate: 5 }
+#           ring: { spread: 19 }
+#           middle: { spread: 19, stagger: 5 }
+#           index: { spread: 19, stagger: -3 }
+#         rows:
+#           bottom:
+#           home:
+#           top:
+#   outlines:
+#     plate:
+#       - what: rectangle
+#         where: true
+#         size: [kx-0.5, ky-0.5]
+#         operation: stack
+#   pcbs:
+#     my_corne_pcb:
+#       outlines:
+#         main:
+#           outline: plate
+#       footprints:
+#         switches:
+#           what: ergogen/key
+#           where: true
+#           params:
+#             from: matrix
+#             to: row{row}
+#
+# The jszip lane is built on `jszip ^3.10.1`
+# (declared verbatim at upstream package.json
+# HEAD as a direct dep, imported as
+# `const jszip = require('jszip')` in src/cli.js
+# line 8 + used in `zip_from_dir()` helper to
+# pack/repack input folders + generate output
+# bundles), the canonical Node ZIP archive
+# library by Stuart Knightley (Stuk) -
+# github.com/Stuk/jszip.
+#
+# Stuart Knightley's jszip is the de-facto
+# canonical Node + browser ZIP archive library:
+#   - 45,000,000+ weekly npm downloads
+#   - Isomorphic: same API works in browser +
+#     Node + Deno + Bun
+#   - Promise-based async API
+#   - Streaming + in-memory + file-based read/
+#     write
+#   - Built-in deflate compression (delegates
+#     to pako, Vitaly Puzrin's pure-JS zlib
+#     port from Axis 262 YAML's nodeca/js-yaml
+#     same author)
+#   - File entry filtering by glob/regex
+#   - Per-file compression-level overrides
+#   - Comment preservation (archive-level +
+#     per-entry)
+#   - Time-stamp + permission preservation
+#   - Streaming output via Node Streams
+#
+# jszip's distinguishing position vs
+# alternatives:
+#   - jszip (Knightley): canonical; isomorphic;
+#     THIS AXIS
+#   - adm-zip: synchronous-only ZIP for Node
+#     (older API; less suitable for browser
+#     compat)
+#   - yauzl + yazl: thejoshwolfe's streaming
+#     ZIP read + write libraries (lower-level
+#     than jszip; pure-Node)
+#   - archiver: ZIP/TAR writing wrapper that
+#     uses zlib for compression
+#   - unzipper: ZIP-extraction-focused library
+#
+# jszip remains canonical via:
+#   1. Isomorphic browser + Node support
+#     (45M+ weekly downloads include browser
+#     usage)
+#   2. Promise-based async API (modern Node +
+#     async-await ergonomics)
+#   3. Foundational position in npm dependency
+#     graph (used by webpack-zip-plugin,
+#     office-document libraries, .docx/.xlsx/
+#     .pptx/.epub generators, browser PWA
+#     archive packaging)
+#   4. Pure-JS implementation (no native
+#     dependencies; works in restricted
+#     environments like Cloudflare Workers +
+#     CF Pages + Vercel Edge Runtime + AWS
+#     Lambda)
+#
+# Stuart Knightley's broader Node ecosystem
+# footprint:
+#   - jszip (canonical Node ZIP; THIS AXIS)
+#   - jszip-utils (helper functions for jszip
+#     usage)
+#   - Various web archive + file-format
+#     utilities
+#
+# Knightley's role differs from the Schlueter
+# (npm infrastructure tier) + Sorhus (microlib
+# tier) + Puzrin (document-format tier)
+# canonical-Node author cohort - Knightley's
+# position is in *specialized archive-format
+# tooling* with broad cross-environment reach.
+#
+# jszip joins the *document-format-handling*
+# Node canonical cluster alongside:
+#   - js-yaml (Puzrin; YAML)
+#   - markdown-it (Puzrin; Markdown)
+#   - svg/svgo (Belov + team; SVG optimization)
+#   - csv-parse (Vance Lucas; CSV)
+#   - mime + mime-types (Douglas Christopher
+#     Wilson; MIME types)
+#
+# ergogen uses jszip in src/cli.js's
+# `zip_from_dir()` helper + the output
+# bundling step:
+#   ```js
+#   const jszip = require('jszip')
+#
+#   const zip_from_dir = async (dir) => {
+#     const absRoot = path.resolve(dir)
+#     const filePaths = await
+#         list_files_in_dir(dir)
+#     return filePaths.reduce((z, filePath) => {
+#       const relative = filePath.replace(
+#         absRoot, '')
+#       const zipFolder = path.dirname(relative)
+#         .split(path.sep)
+#         .reduce((zf, dirName) =>
+#           zf.folder(dirName), z)
+#       zipFolder.file(path.basename(filePath),
+#         fs.createReadStream(filePath))
+#       return z
+#     }, new jszip())
+#   }
+#   ```
+# This packs the output directory (PCBs +
+# cases + outlines + footprints) into a single
+# .zip file ready for download from the
+# ergogen.xyz web UI or local CLI usage.
+#
+# ----------------------------------------------------------------------------
+# AXIS 267 :: ZIP archive libraries (PKZIP/
+#              APPNOTE.txt format parsing +
+#              writing with deflate/bzip2/zstd
+#              compression backends)
+# Round 1501 :: TS-Node slot 3 of 4 :: CLOSES Axis 267
+#                                       (260th axis closed)
+#
+# Cross-language canonical library family for this axis:
+#   Rust    : zip-rs/zip2                [R1499 _ar5iv]
+#             (Plecra + zip-rs
+#              maintainer team)
+#   Go      : archive/zip (stdlib)       [R1500 _easy-add]
+#             (Go team; language-as-
+#              canonical)
+#   TS/Node : Stuk/jszip                 [R1501 THIS FILE]
+#             (Stuart Knightley; 45M+
+#              weekly downloads;
+#              isomorphic browser +
+#              Node)
+#
+# Stuk/jszip closes Axis 267 with the
+# *isomorphic-browser-Node canonical* pattern.
+# The three lanes form a clean spectrum of ZIP-
+# library canonicalization mechanisms:
+#
+#   - Rust (zip-rs/zip2): community-org-
+#     maintained canonical; single Rust
+#     ecosystem target; pure-Rust with
+#     multiple compression backends
+#   - Go (archive/zip stdlib): language-as-
+#     canonical-provider; bundled with Go 1.0;
+#     deflate-only baseline; downstream
+#     wrappers (mholt/archives) extend to
+#     multi-format
+#   - Node (Stuk/jszip): isomorphic browser +
+#     Node canonical; 45M+ weekly downloads;
+#     promise-based async API; pure-JS for
+#     restricted environments
+#
+# Each lane's canonicalization mechanism
+# reflects the host ecosystem's library-
+# governance norms:
+#   - Rust: individual-then-community-org
+#     maintained canonical
+#   - Go: language-team-maintained stdlib
+#     canonical
+#   - Node: individual-authored isomorphic
+#     canonical with broad cross-environment
+#     reach
+#
+# Multi-axis canonical-Node author/org cohort
+# (now spanning 13 distinct individuals/orgs):
+#   - Sindre Sorhus (chalk + ~1000 microlibs)
+#   - Matt Ranney + Redis Inc. (node-redis)
+#   - Brian Carlson (node-postgres)
+#   - Andrey Sitnik (PostCSS + browserslist +
+#     nanoid)
+#   - Lovell Fuller (sharp)
+#   - Paul Miller (noble umbrella)
+#   - Devon Govett (foliojs umbrella +
+#     lightningcss)
+#   - Matteo Collina (undici + pino + fastify)
+#   - Isaac Z. Schlueter (npm CLI + node-tar +
+#     node-glob + rimraf + node-semver + ...;
+#     2 axes closed)
+#   - Vitaly Puzrin + nodeca (js-yaml +
+#     markdown-it + pako + argparse + sax +
+#     linkify-it)
+#   - Sergey Belov + svgo team (svg/svgo)
+#   - Matt Zabriskie + axios team (axios)
+#   - Stuart Knightley (jszip, THIS AXIS)
+#
+# Use-case spectrum across the three lanes:
+#   - ar5iv (Rust, zip-rs): arxiv.org HTML5
+#     paper server; zip-rs extracts arxmliv
+#     .zip archives per HTTP request
+#   - easy-add (Go, archive/zip stdlib):
+#     Dockerfile release-artifact installer;
+#     archive/zip extracts in-memory .zip
+#     archives during container image builds
+#   - ergogen (Node, jszip): ergonomic
+#     keyboard PCB+case generator; jszip
+#     packs output directories into
+#     downloadable .zip bundles
+#
+# Three lanes, three use-case shapes
+# (academic paper accessibility / container
+# image bootstrap / mechanical keyboard
+# manufacturing), three canonicalization
+# mechanisms (community-org / language-stdlib
+# / isomorphic-individual), all converging on
+# the PKZIP/APPNOTE.txt format.
+#
+# Axis 267 closes the round 1501 cycle - 260th
+# axis closed total. The three lanes
+# collectively demonstrate that ZIP archive
+# handling is universal across ecosystems with
+# different canonicalization mechanisms but
+# byte-identical wire-format compatibility.
+#
+# Pattern continuity from Axis 266 (TAR) to
+# Axis 267 (ZIP):
+#   - Both axes' Rust slot: individual-
+#     authored / community-org canonical
+#   - Both axes' Go slot: stdlib language-as-
+#     canonical
+#   - Both axes' Node slot: individual-
+#     authored canonical with massive npm
+#     reverse-dep network (node-tar via npm
+#     install graph; jszip via browser-Node
+#     isomorphism)
+#
+# This parallel structure across the two
+# archive-format axes (TAR + ZIP) reinforces
+# the observation that *ecosystem governance
+# patterns manifest consistently across
+# format-handling library axes regardless of
+# specific format*. The Rust individual-
+# authorship culture + Go stdlib-first culture
+# + Node infrastructure-via-ecosystem-effect
+# culture each produce structurally similar
+# canonical-library outcomes for both TAR and
+# ZIP.
+# ============================================================================
+
+_ergogen() {
+    local context state state_descr line
+    typeset -A opt_args
+
+    _arguments -s -S \
+        '(-o --output)'{-o,--output}'[output folder]:dir:_files -/' \
+        '(-d --debug)'{-d,--debug}'[debug mode]' \
+        '--clean[clean output directory before parsing]' \
+        '(--svg --generate-svg)'{--svg,--generate-svg}'[generate SVG outputs]' \
+        '(- *)--version[print version]' \
+        '(- *)--help[print help]' \
+        '1:config file:_files -g "*.(yaml|yml)"'
+}
+
+_ergogen "$@"
