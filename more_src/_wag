@@ -1,0 +1,131 @@
+#compdef wag
+# ============================================================================
+# wag - WireGuard 2FA + device enrolment gateway (Go, BSD-3-Clause)
+#
+# Author : NHAS
+# Upstream: https://github.com/NHAS/wag
+#
+# wag adds two-factor authentication + device-enrolment workflows
+# on top of an existing WireGuard VPN server. The daemon owns the
+# WireGuard kernel interface, mediates session activation per
+# successful 2FA challenge (TOTP / WebAuthn / OIDC), and tears
+# down sessions when the user de-authenticates or locks their
+# account. Web-admin UI for operator workflows + a per-user
+# enrolment portal for end-users to bootstrap their first device.
+#
+# The Argon2 password-hashing lane is built on `golang.org/x/crypto/argon2`
+# (declared verbatim at upstream go.mod HEAD), the Go-team-maintained
+# canonical Argon2 implementation in pure Go. It implements RFC 9106
+# end-to-end with the three variants (Argon2i, Argon2d, Argon2id),
+# the full parameter surface (memory cost m, time cost t,
+# parallelism p, salt + secret + AD), and uses the same internal
+# Blake2b primitive (also from `golang.org/x/crypto/blake2b`) that
+# the spec mandates.
+#
+# wag uses argon2 to hash user passwords for the local-account
+# auth pathway: the daemon stores PHC-format hash strings
+# (`$argon2id$v=19$m=...$<salt>$<hash>`) in its embedded BoltDB,
+# verifies on login via constant-time comparison, and rehashes
+# on parameter upgrades.
+#
+# ----------------------------------------------------------------------------
+# AXIS 208 :: ARGON2 PASSWORD HASHING (RFC 9106)
+# Round 1323 :: Go slot 2 of 4 :: continues Axis 208
+#
+# Cross-language canonical library family for this axis:
+#   Rust    : RustCrypto/argon2          [R1322 _sentryshot]
+#   Go      : golang.org/x/crypto/argon2 [R1323 THIS FILE]
+#   TS/Node : ranisalt/node-argon2       [R1324 closing]
+#
+# The Go lane's canonical library is in the `golang.org/x/crypto`
+# extended-stdlib namespace - same Go-team-maintained "vendor-
+# blessed canonical" pattern visible at Axis 207 (golang.org/x/oauth2)
+# and Axis 193 (golang.org/x/image for fonts). This is rare across
+# the three lanes: the Rust + Node ecosystems put their canonical
+# crypto primitives in community-maintained packages (RustCrypto,
+# `node-argon2`) rather than language-team-maintained ones.
+# ============================================================================
+
+_wag() {
+    local context state state_descr line
+    typeset -A opt_args
+    local curcontext="$curcontext" ret=1
+
+    _arguments -C \
+        '(- *)'{-h,--help}'[print help]' \
+        '1: :_wag_cmds' \
+        '*::arg:->args' \
+    && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                users)        _wag_users ;;
+                devices)      _wag_devices ;;
+                registration) _wag_registration ;;
+                firewall)     _wag_firewall ;;
+                start|webadmin|version|modifyconfig) _arguments '(- *)'{-h,--help}'[help]' ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_wag_cmds() {
+    local -a cmds
+    cmds=(
+        'start:Start the wag daemon (binds the WireGuard interface)'
+        'registration:Manage device-enrolment registration tokens'
+        'devices:Manage enrolled devices (list/del/lock/unlock)'
+        'users:Manage users (list/del/lock/unlock/reset-mfa)'
+        'firewall:Manage per-user firewall rules'
+        'webadmin:Manage the web-admin UI account'
+        'version:Print version'
+        'modifyconfig:Modify configuration in-place'
+    )
+    _describe -t commands 'wag command' cmds
+}
+
+_wag_users() {
+    _arguments -s -S \
+        '-username[username to act upon]:username:' \
+        '-socket[wag instance control socket]:socket:_files' \
+        '-del[delete user and all devices]' \
+        '-list[list users (filter with -username)]' \
+        '-lockaccount[lock account; deauthenticate active sessions]' \
+        '-unlockaccount[unlock a locked account]' \
+        '-reset-mfa[reset MFA; force re-enrolment]' \
+        '(- *)'{-h,--help}'[help]'
+}
+
+_wag_devices() {
+    _arguments -s -S \
+        '-username[username filter]:username:' \
+        '-socket[control socket]:socket:_files' \
+        '-list[list devices]' \
+        '-del[delete a device]' \
+        '-lock[lock a device]' \
+        '-unlock[unlock a device]' \
+        '(- *)'{-h,--help}'[help]'
+}
+
+_wag_registration() {
+    _arguments -s -S \
+        '-socket[control socket]:socket:_files' \
+        '-add[generate a new enrolment token]' \
+        '-del[revoke an enrolment token]' \
+        '-list[list pending enrolment tokens]' \
+        '-username[username for the token]:username:' \
+        '-token[token value]:token:' \
+        '(- *)'{-h,--help}'[help]'
+}
+
+_wag_firewall() {
+    _arguments -s -S \
+        '-socket[control socket]:socket:_files' \
+        '-list[list firewall state]' \
+        '(- *)'{-h,--help}'[help]'
+}
+
+_wag "$@"
