@@ -1,0 +1,168 @@
+#compdef vx
+# ---------------------------------------------------------------------------
+# vx — Vortex TUI (vortex-tui) for working with Vortex files (Rust, 2,979★)
+#
+# upstream: https://github.com/vortex-data/vortex
+# author : the Vortex contributors at vortex-data (formerly at @spiraldb,
+#          now an Incubation Stage project at LFAI & Data — the Linux
+#          Foundation's AI & Data sub-foundation)
+# license: Apache-2.0
+#
+# Source-direct completion: every subcommand and every flag below is verbatim
+# from vortex-tui/src/{lib,tree,convert,inspect,query,segments}.rs on the
+# vortex tip — clap-derive `Cli` enum, per-subcommand `*Args` structs with
+# nested `Subcommand` enums (tree → array|layout, inspect → eof|postscript|
+# footer), and the convert `Strategy` ValueEnum.
+#
+# Direct deps from vortex-tui/Cargo.toml (selected) — vortex builds on top
+# of the Apache Arrow columnar in-memory format:
+#   arrow-array, arrow-schema  ← canonical Rust Apache Arrow bindings
+#                                (this axis) — by Andrew Lamb (alamb),
+#                                Daniel Tang, the apache/arrow-rs community
+#                                (Apache Arrow Rust implementation); the
+#                                de-facto Rust columnar data layer
+#                                shared by DataFusion, Polars (internally
+#                                via its own arrow2 fork at first, now
+#                                arrow-rs upstream), Delta Lake Rust,
+#                                lance-rs, vortex itself.
+#   parquet                    (apache/arrow-rs Parquet reader/writer)
+#   datafusion                 (Apache DataFusion query engine on Arrow)
+#   vortex-datafusion          (vortex ↔ DataFusion bridge crate)
+#   crossterm + ratatui        (TUI rendering for `vx browse`)
+#   clap (derive)              (top-level CLI parser)
+#   humansize                  (human-readable byte counts in `inspect`)
+#   fuzzy-matcher              (incremental search in `browse`)
+#   tokio (rt-multi-thread)
+#   anyhow, env_logger
+#
+# vx is the standalone CLI that ships with the Vortex project — a new
+# columnar file format (positioned as a faster, more compressible
+# alternative to Parquet) plus an in-memory representation that
+# interoperates with Apache Arrow.  Used to convert Parquet → Vortex,
+# inspect file footer/postscript/EOF marker, browse arrays interactively
+# in a ratatui TUI, and run SQL queries against Vortex files via embedded
+# DataFusion (the table is bound to `data` in the SQL session).
+#
+# === AXIS 171 OPENER — columnar in-memory data formats (Apache Arrow) ====
+# Axis position: Rust=226 OPENS Axis 171 at slot 1/0/0.  Canonical Rust
+# implementation of the Apache Arrow columnar in-memory format is
+# `apache/arrow-rs` — the official Apache Arrow Rust crates including
+# `arrow-array`, `arrow-schema`, `arrow-buffer`, `arrow-cast`, plus
+# `parquet`, `arrow-flight`, and `arrow-csv`.  Maintained by Andrew Lamb
+# (alamb), Daniel Tang, Raphael Taylor-Davies, Liang-Chi Hsieh and the
+# Apache Arrow Rust community.  Every Rust dataframe / query engine /
+# columnar storage project standardizes on arrow-rs as the in-memory
+# representation: DataFusion, Polars, Delta Lake Rust, lance-rs, and now
+# Vortex with its own file format on top.
+#
+# Cycle position in current 3+1 micro-cycle:
+#   Rust=226     ← THIS FILE              (axis 171 OPENS, slot 1/0/0)
+#   Go=226       ← next round              (axis 171 continues, slot 2/0/0)
+#   TS-Node=226  ← round after             (axis 171 CLOSES at triple-226, slot 1/1/1)
+# ---------------------------------------------------------------------------
+
+_vx() {
+    local context state state_descr line ret=1
+    typeset -A opt_args
+
+    _arguments -C \
+        '(- *)'{-h,--help}'[print help]' \
+        '(- *)'--version'[print version]' \
+        '1: :->cmds' \
+        '*::arg:->args' && ret=0
+
+    case $state in
+        cmds)
+            local -a subcmds
+            subcmds=(
+                'tree:print tree views of a Vortex file (array encoding tree or layout tree)'
+                'convert:convert a Parquet file to a Vortex file (chunked on Parquet RowGroup boundaries)'
+                'browse:interactively browse a Vortex file via ratatui TUI'
+                'inspect:inspect a Vortex file footer / postscript / EOF marker'
+                'query:execute a SQL query against a Vortex file using DataFusion (table bound to `data`)'
+                'segments:display segment information for a Vortex file'
+            )
+            _describe -t commands 'vx command' subcmds && ret=0
+            ;;
+        args)
+            case $words[1] in
+                tree)
+                    _arguments \
+                        '1: :->tree_cmds' \
+                        '*::arg:->tree_args' && ret=0
+                    case $state in
+                        tree_cmds)
+                            local -a subcmds
+                            subcmds=(
+                                'array:display the array encoding tree (loads and materializes arrays)'
+                                'layout:display the layout tree structure (metadata only, no array loading)'
+                            )
+                            _describe -t commands 'vx tree mode' subcmds && ret=0
+                            ;;
+                        tree_args)
+                            case $words[1] in
+                                array)
+                                    _arguments \
+                                        '--json[output as JSON]' \
+                                        '1:Vortex file:_files -g "*.vortex"' && ret=0
+                                    ;;
+                                layout)
+                                    _arguments \
+                                        '(-v --verbose)'{-v,--verbose}'[show additional metadata information including buffer sizes (requires fetching segments)]' \
+                                        '--json[output as JSON]' \
+                                        '1:Vortex file:_files -g "*.vortex"' && ret=0
+                                    ;;
+                            esac
+                            ;;
+                    esac
+                    ;;
+                convert)
+                    _arguments \
+                        '(-s --strategy)'{-s,--strategy=}'[compression strategy (default btrblocks)]:strategy:(btrblocks compact)' \
+                        '(-q --quiet)'{-q,--quiet}'[execute quietly; no output will be printed]' \
+                        '1:Parquet file on disk to convert to Vortex:_files -g "*.parquet"' && ret=0
+                    ;;
+                browse)
+                    _arguments \
+                        '1:Vortex file:_files -g "*.vortex"' && ret=0
+                    ;;
+                inspect)
+                    _arguments \
+                        '--json[output as JSON (global to all inspect modes)]' \
+                        '1: :->inspect_cmds' \
+                        '*::arg:->inspect_args' && ret=0
+                    case $state in
+                        inspect_cmds)
+                            local -a subcmds
+                            subcmds=(
+                                'eof:read and display the EOF marker (8 bytes at end of file)'
+                                'postscript:read and display the postscript'
+                                'footer:read and display all footer segments'
+                            )
+                            _describe -t commands 'vx inspect mode (default = full footer + metadata)' subcmds && ret=0
+                            _arguments '1:Vortex file:_files -g "*.vortex"' && ret=0
+                            ;;
+                        inspect_args)
+                            _arguments \
+                                '--json[output as JSON]' \
+                                '1:Vortex file:_files -g "*.vortex"' && ret=0
+                            ;;
+                    esac
+                    ;;
+                query)
+                    _arguments \
+                        '(-s --sql)'{-s,--sql=}'[SQL query to execute against the Vortex file (table bound to `data`)]:SQL:' \
+                        '1:Vortex file:_files -g "*.vortex"' && ret=0
+                    ;;
+                segments)
+                    _arguments \
+                        '1:Vortex file:_files -g "*.vortex"' && ret=0
+                    ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_vx "$@"
