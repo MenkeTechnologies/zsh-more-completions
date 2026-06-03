@@ -1,0 +1,120 @@
+#compdef gql-iterate
+# ============================================================================
+# gql-iterate - Run a GraphQL query repeatedly with per-row variables from CSV
+#                (Node, ?)
+#
+# Author : Georg Stadler (efstajas)
+# Upstream: https://github.com/efstajas/gql-iterate
+# npm    : @efstajas/gql-iterate (binary: gql-iterate)
+#
+# `gql-iterate` is a lightweight CLI for the "I have a CSV
+# of inputs + a GraphQL query template, run it N times" use
+# case. Read a CSV file with headers matching the GraphQL
+# query's variable names, fire one GraphQL request per row
+# (with concurrency limiter via bottleneck), and emit each
+# JSON response one-per-line on stdout. Useful for bulk
+# data export, mass mutations, or quick scripts against any
+# GraphQL endpoint without writing TypeScript boilerplate.
+#
+# Usage:
+#   gql-iterate --host <url> --input <csv> --query <gql> [options]
+#
+# Flags (yargs):
+#   --host <url>             - GraphQL endpoint URL (REQUIRED)
+#   --input <csv>            - CSV file path; column headers must
+#                              match query variable names
+#                              (REQUIRED)
+#   --query <gql>            - GraphQL query file path with
+#                              variable references like $id, $email
+#                              (REQUIRED)
+#   --bearer <token>         - optional Bearer token for the
+#                              Authorization header
+#   --concurrency <n>        - parallel request count
+#                              (0 = fire all at once; default 0)
+#   -h, --help               - print help
+#   --version                - print version
+#
+# Example:
+#   $ cat users.csv
+#   id,email
+#   1,alice@example.com
+#   2,bob@example.com
+#   $ cat update-email.gql
+#   mutation UpdateEmail($id: ID!, $email: String!) {
+#     updateUser(id: $id, email: $email) { id email }
+#   }
+#   $ gql-iterate --host https://api.example.com/graphql \
+#                 --input users.csv --query update-email.gql \
+#                 --bearer $TOKEN --concurrency 5
+#
+# The graphql-request lane is built on `graphql-request
+# ^3.4.0` (declared verbatim at upstream package.json HEAD),
+# the canonical minimal Node GraphQL client by Prisma Labs
+# (later renamed graffle/graffle in 2024; package still
+# published as `graphql-request` on npm). The library is
+# the de-facto "I just want to send a GraphQL request from
+# Node without ceremony" choice - ~5 million weekly
+# downloads on npm. The API is a single async function:
+# `client.request(query, variables)` returns a typed
+# Promise resolving to the GraphQL response data. gql-
+# iterate uses this minimal surface as the per-row request
+# primitive.
+#
+# ----------------------------------------------------------------------------
+# AXIS 237 :: GraphQL clients (typed queries from .graphql files)  [CLOSES]
+# Round 1411 :: TS-Node slot 3 of 4 :: CLOSES Axis 237 (230th axis closed)
+#
+# Cross-language canonical library family for this axis:
+#   Rust    : graphql-rust/graphql-client  [R1409 _arbor-cli]
+#   Go      : Khan/genqlient               [R1410 _rggr]
+#   TS/Node : prisma-labs/graphql-request  [R1411 THIS FILE]
+#
+# graphql-request rounds out Axis 237 with the *runtime-
+# typed* end of the spectrum. The Rust + Go lanes both
+# commit to compile-time-typed codegen (graphql-client's
+# derive macro, genqlient's `go generate` step);
+# graphql-request leaves typing to the user - either as
+# `any` (untyped at runtime) or via TypeScript generics
+# the user supplies at the call site.
+#
+# The structural commentary across Axis 237:
+#   - graphql-client (Rust): compile-time codegen via
+#     derive macro, zero runtime cost for typing
+#   - genqlient (Go): build-time codegen committed to repo,
+#     zero runtime cost for typing
+#   - graphql-request (Node): runtime-typed via generics,
+#     types defined by the caller; matching codegen
+#     (graphql-codegen) ships separately
+#
+# The Node lane's pragmatic choice reflects the JS
+# ecosystem's preference for opt-in tooling over baked-in
+# codegen: many graphql-request users skip codegen entirely
+# and use `any` + manual type definitions; the more
+# rigorous users add graphql-codegen + GraphQL Code
+# Generator to produce typed query hooks at build time.
+# Both workflows are first-class.
+#
+# All three lanes produce wire-identical HTTP POST bodies
+# for the same query + variables. The receiving GraphQL
+# server cannot tell which client produced the request -
+# the spec contract is total. What diverges is the
+# producing-app's *type discipline*, not the wire format.
+#
+# Axis 237 closes at round 1411 - 230th axis closed total.
+# ============================================================================
+
+_gql-iterate() {
+    local context state state_descr line
+    typeset -A opt_args
+
+    _arguments -s -S \
+        '--host[GraphQL endpoint URL]:url:' \
+        '--input[CSV input file]:file:_files -g "*.csv"' \
+        '--query[GraphQL query file]:file:_files -g "*.(gql|graphql)"' \
+        '--bearer[Bearer token for Authorization header]:token:' \
+        '--concurrency[parallel request count (0 = fire all at once)]:n:' \
+        '(- *)'{-h,--help}'[print help]' \
+        '(- *)--version[print version]'
+}
+
+_gql-iterate "$@"
