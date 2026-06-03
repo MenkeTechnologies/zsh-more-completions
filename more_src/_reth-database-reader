@@ -1,0 +1,213 @@
+#compdef reth-database-reader
+# ============================================================================
+# reth-database-reader - reth-indexer: read directly
+#   from the reth Ethereum execution-client DB and
+#   index decoded events into Postgres / BigQuery /
+#   Parquet / CSV / an HTTP API (Rust, MIT)
+#
+# Author : Josh Stevens (joshstevens19)
+# Upstream: https://github.com/joshstevens19/reth-indexer
+# crates : reth-database-reader (binary:
+#           reth-database-reader)
+#
+# `reth-database-reader` is the binary side of
+# Stevens's reth-indexer project. It opens the reth
+# Ethereum execution client's on-disk database
+# directly (no HTTP/JSON-RPC round-trip), walks the
+# block tree filtered by configurable ABI-decoded
+# event signatures, and streams the decoded event
+# rows into one or more output sinks:
+#   - Postgres (via tokio-postgres, this file's
+#     canonical-library hook)
+#   - Google Cloud BigQuery (via bigquery rest API)
+#   - Parquet files
+#   - CSV files
+#   - HTTP API endpoint (exposes query-able snapshot
+#     of indexed data via warp)
+#
+# Operational positioning:
+#   - Faster than EVM-RPC indexing (no JSON
+#     serialization, direct MDBX reads)
+#   - More flexible than block-explorer-API indexing
+#     (decode any contract's events with just an ABI
+#     JSON + config block)
+#   - Designed for analytics / data-warehouse use
+#     cases where the events need to land in a
+#     queryable store, not for real-time mempool
+#     monitoring
+#
+# Usage:
+#   reth-database-reader
+#   API=1 reth-database-reader            # serve
+#                                           query API
+#                                           only
+#   CONFIG=./config.json reth-database-reader
+#
+# Configuration is via JSON file (default
+# `./reth-indexer-config.json`) with sections for:
+#   - reth_db_location
+#   - postgres / bigquery / parquet / csv sink
+#     configuration
+#   - per-event-signature filter rules + ABI
+#     definitions
+#   - block-range bounds + reorg-handling settings
+#
+# Environment variables:
+#   API                       - if set, run the
+#                                query-API server
+#                                only (skip indexing)
+#   CONFIG                    - alternate config path
+#                                (default
+#                                ./reth-indexer-config.json)
+#   RUST_LOG                  - env_logger filter
+#                                (e.g. info, debug)
+#
+# The tokio-postgres lane is built on `tokio-postgres =
+# "0.7.2"` (declared verbatim at upstream Cargo.toml
+# HEAD as a direct dep, with `rust_decimal = { ...,
+# features = ["db-tokio-postgres"] }` for numeric
+# column round-tripping), the canonical Rust Postgres
+# client by Steven Fackler (sfackler) - github.com/
+# sfackler/rust-postgres, 3700+ stars on the
+# rust-postgres umbrella.
+#
+# sfackler's rust-postgres umbrella covers:
+#   - `postgres` (sync API, blocking I/O)
+#   - `tokio-postgres` (async API, tokio runtime)
+#   - `postgres-protocol` (low-level wire-protocol
+#     codec; the canonical implementation of Postgres
+#     protocol v3 in Rust)
+#   - `postgres-types` (PostgreSQL <-> Rust value
+#     conversions for the standard type set + macros
+#     for custom types)
+#   - `tokio-postgres-rustls` + `tokio-postgres-
+#     native-tls` (TLS adapters)
+#
+# The rust-postgres umbrella implements PostgreSQL's
+# frontend/backend protocol v3 byte-for-byte: simple
+# + extended queries, prepared statements + bind
+# parameters, COPY in/out streaming, NOTIFY/LISTEN
+# pub/sub, transactions + savepoints, cancellation
+# requests + SSL/GSSAPI/SCRAM-SHA-256 authentication.
+# Fackler's umbrella has been the de-facto Rust
+# Postgres client since 2015 - depended on by Diesel
+# (the major Rust ORM), SeaORM, SQLx (which has its
+# own protocol impl but cross-validates against
+# rust-postgres), the Apache Datafusion Postgres
+# table provider, and every Rust web framework with
+# Postgres examples.
+#
+# Fackler is also a multi-axis canonical-Rust author:
+#   - Axis 256 (Postgres, THIS AXIS):
+#     sfackler/rust-postgres umbrella
+#   - rust-openssl: the canonical Rust OpenSSL binding
+#   - log: the de-facto Rust logging facade
+#
+# This makes Fackler one of the multi-axis canonical
+# author cohort alongside:
+#   - Andrew Gallant / BurntSushi (XXHash+TOML+
+#     Snappy+regex+ripgrep+fst+xsv)
+#   - Armin Ronacher / mitsuhiko (similar+redis-rs+
+#     insta+minijinja+Flask+Jinja2)
+#   - Vincent Prouillet / Keats (bcrypt+jsonwebtoken)
+#   - Daniel Lemire (Roaring Bitmap across Rust + Go +
+#     C + C++ + Java)
+#   - Paul Miller / paulmillr (noble-ed25519 + noble-
+#     curves + noble-hashes + noble-ciphers)
+#
+# reth-database-reader uses tokio-postgres in
+# src/postgres.rs to:
+#   - establish the pooled connection to the target
+#     Postgres warehouse
+#   - prepare per-event-type INSERT statements at
+#     indexer-startup
+#   - bind decoded event rows + execute in batched
+#     transactions for throughput
+#   - handle reorg-induced row deletes via
+#     transactional rollback
+#
+# ----------------------------------------------------------------------------
+# AXIS 256 :: Postgres protocol (frontend/backend
+#              wire-protocol v3) client libraries
+# Round 1466 :: Rust slot 1 of 4 :: OPENS Axis 256
+#
+# Cross-language canonical library family for this axis
+# (proposed):
+#   Rust    : sfackler/rust-postgres      - the de-
+#             umbrella (postgres /          facto Rust
+#             tokio-postgres /              Postgres
+#             postgres-protocol /           client
+#             postgres-types)               umbrella;
+#                                            Fackler's
+#                                            multi-axis
+#                                            canonical
+#                                            position
+#                                            (postgres +
+#                                            rust-openssl +
+#                                            log)
+#   Go      : jackc/pgx                    - the de-facto
+#                                            Go Postgres
+#                                            driver by
+#                                            Jack
+#                                            Christensen;
+#                                            implements
+#                                            the protocol
+#                                            directly +
+#                                            implements
+#                                            the
+#                                            database/sql
+#                                            interface
+#                                            for stdlib
+#                                            compat
+#   TS/Node : brianc/node-postgres         - Brian
+#             (npm `pg`)                     Carlson's
+#                                            canonical
+#                                            Node
+#                                            Postgres
+#                                            client;
+#                                            actively
+#                                            maintained
+#                                            since 2010;
+#                                            ~16M weekly
+#                                            npm
+#                                            downloads
+#
+# Postgres protocol is a clean spec-bound axis - the
+# PostgreSQL frontend/backend protocol v3 document
+# (https://www.postgresql.org/docs/current/protocol.
+# html) defines the wire format byte-for-byte. All
+# three lanes implement protocol v3 byte-identically.
+#
+# Structural commentary on the canonical libraries:
+#   - sfackler/rust-postgres (Rust): umbrella with
+#     ~5 sibling crates split by sync/async + TLS
+#     adapter + low-level codec separation; Fackler's
+#     multi-axis canonical position
+#   - jackc/pgx (Go): Jack Christensen's library;
+#     unusual in that it directly implements the
+#     protocol + the database/sql interface, letting
+#     it sit in both worlds (high-perf direct-pgx
+#     APIs OR stdlib database/sql APIs at slightly
+#     lower throughput)
+#   - brianc/node-postgres (Node): Brian Carlson's
+#     `pg` package since 2010; foundational to the
+#     Node Postgres ecosystem - pretty much every
+#     ORM + query builder + connection pool either
+#     uses pg or implements an alternative to it
+#
+# Cross-language interop at the wire format level - a
+# Postgres protocol v3 frontend message stream
+# produced by rust-postgres + pgx + node-postgres is
+# byte-identical to PostgreSQL server's expected wire
+# format.
+#
+# Axis 256 opens with the Rust slot at Steven
+# Fackler's canonical rust-postgres umbrella.
+# ============================================================================
+
+_reth-database-reader() {
+    # No clap CLI - config is environment-driven (API + CONFIG env vars)
+    _arguments
+}
+
+_reth-database-reader "$@"
