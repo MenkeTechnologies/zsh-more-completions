@@ -1,0 +1,204 @@
+#compdef wstee
+# ============================================================================
+# wstee - bidirectional tee between WebSocket endpoints
+#          (JavaScript -> Node, GPL-3.0-or-later)
+#
+# Author : danhab99
+# Upstream: https://github.com/danhab99/iwscli
+# npm    : interactive-websocket-cli
+#          (binaries: wscli + wstee)
+#
+# `wstee` is the WebSocket equivalent of Unix `tee` for
+# stream multiplexing - it accepts one or more incoming
+# WebSocket sources + one or more outgoing WebSocket
+# sinks (each can be either a `ws://` URL to dial OR
+# a bare port number to listen on as a server), and
+# bidirectionally bridges messages between the two
+# sides. Useful for:
+#   - debugging WebSocket protocols by inserting a
+#     visibility layer between client + server
+#   - load-balancing across multiple WebSocket
+#     backends
+#   - bridging legacy stdio applications to WebSocket
+#     transports via `--pipe`
+#
+# Usage:
+#   wstee --connect-incoming <port|url> [--connect-incoming ...]
+#         --connect-outgoing <port|url> [--connect-outgoing ...]
+#         [options]
+#
+# Flags (commander.js):
+#   --connect-incoming <port|address>   - WebSocket source
+#                                          (bare port =>
+#                                           listen as
+#                                           server;
+#                                           URL =>
+#                                           dial as
+#                                           client);
+#                                          repeatable
+#   --connect-outgoing <port|address>   - WebSocket sink
+#                                          (same syntax,
+#                                           repeatable)
+#   -p, --pipe                           - pipe stdin to
+#                                           outgoing +
+#                                           incoming to
+#                                           stdout
+#   -t, --tab-size <n>                   - JSON pretty-print
+#                                           indent (default 2)
+#   -i, --in <file>                      - read input from
+#                                           file (repeatable;
+#                                           requires --pipe)
+#   -o, --out <file>                     - write output to
+#                                           file
+#   -u, --ugly                           - disable
+#                                           pretty-printing
+#                                           (ignores
+#                                            --tab-size)
+#   -d, --time-format <format>           - momentjs
+#                                           timestamp format
+#                                           (default
+#                                           YYYY/MM/DD
+#                                           HH:mm:ss(SSS[ms]))
+#       --server-config <file|json>      - extra `ws.Server`
+#                                           options (JSON
+#                                           string or file
+#                                           path to JSON)
+#       --client-config <file|json>      - extra `WebSocket`
+#                                           constructor
+#                                           options (same
+#                                           syntax)
+#   -h, --help                           - print help
+#   -V, --version                        - print version
+#
+# Address shorthand:
+#   echo.websocket.org      ->  ws://echo.websocket.org
+#   9000                    ->  ws://localhost:9000 (when
+#                                used as outgoing)
+#   9000                    ->  listen on port 9000 (when
+#                                used as incoming and the
+#                                value is a bare integer)
+#
+# The ws lane is built on `ws ^7.2.0` (declared at
+# upstream package.json HEAD as a direct dep, imported
+# from bin/wstee.js as `const WebSocket = require('ws')`),
+# the canonical Node WebSocket library by Einar Otto
+# Stangvik + the @websockets GitHub org - github.com/
+# websockets/ws, 22000+ stars, ~70M weekly npm downloads.
+# The library has been the de-facto Node WebSocket
+# implementation since 2011 - virtually every Node
+# package using WebSocket either depends on `ws`
+# directly or through a wrapper (express-ws, socket.io's
+# `ws` engine, graphql-ws, @fastify/websocket,
+# faye-websocket-node, isomorphic-ws, primus, ...).
+#
+# ws implements RFC 6455 end-to-end + the
+# permessage-deflate extension (RFC 7692) + the
+# autobahn-test-suite conformance corpus. Pure-JS
+# default implementation with optional performance
+# addons available as separate npm packages:
+#   - bufferutil: native bindings for high-throughput
+#     frame masking + unmasking (auto-detected by ws if
+#     installed)
+#   - utf-8-validate: native bindings for fast UTF-8
+#     validation (auto-detected)
+# Both addons live under the @websockets GitHub org
+# alongside the main ws package, governed by the same
+# maintainer rotation.
+#
+# wstee uses `new WebSocket(url, config)` for outgoing
+# client connections + `new WebSocket.Server({ port,
+# ...config })` for incoming server listeners. The
+# bidirectional bridge is built on top of these
+# primitives via two `EventEmitter`-based message
+# pipelines (one per direction).
+#
+# ----------------------------------------------------------------------------
+# AXIS 248 :: WebSocket / RFC 6455 (bidirectional
+#              full-duplex framing over HTTP/1.1 Upgrade)
+# Round 1444 :: TS-Node slot 3 of 4 :: CLOSES Axis 248
+#                                       (241st axis closed)
+#
+# Cross-language canonical library family for this axis:
+#   Rust    : snapview/tokio-tungstenite  [R1442 _phantasm]
+#             (+ snapview/tungstenite-rs)
+#   Go      : gorilla/websocket           [R1443 _telsocket]
+#   TS/Node : websockets/ws               [R1444 THIS FILE]
+#
+# websockets/ws closes Axis 248 with the *uninterrupted-
+# 14-year-canonical* pattern. The three lanes form a
+# clean spectrum of WebSocket library maintenance
+# trajectories:
+#
+#   - Rust (snapview/tokio-tungstenite): split-by-
+#     concern engineering with separate protocol-engine
+#     + transport-adapter crates; consistent
+#     maintenance since 2018
+#   - Go (gorilla/websocket): notable 2022-2023
+#     archive-then-unarchive arc; the only library in
+#     the cluster with a dramatic governance
+#     interruption
+#   - Node (websockets/ws): the most boring + stable
+#     maintenance story of the three; one canonical
+#     library, one GitHub org, one consistent API
+#     surface since 2011 (with no archive interruption,
+#     no successor competition, no major API breaks
+#     across 14 years of npm history)
+#
+# This stability is partly explained by ws's narrow
+# scope: it doesn't try to be a framework, it doesn't
+# try to provide higher-level abstractions, it just
+# implements RFC 6455 well + lets the broader Node
+# ecosystem wrap it for higher-level use. Libraries
+# like socket.io (real-time framework), graphql-ws
+# (GraphQL subscriptions), and y-websocket (Yjs CRDT
+# transport) all use ws as the underlying transport
+# without trying to displace it.
+#
+# Cross-language interop at the wire format level - a
+# tokio-tungstenite client connects to a gorilla/
+# websocket server, exchanges messages with a ws
+# server, etc. RFC 6455 framing is byte-identical
+# across all three lanes, validated by the autobahn-
+# test-suite ~500 behavior-test vectors that all three
+# implementations pass.
+#
+# Use-case spectrum across the three lanes:
+#   - phantasm (Rust, tokio-tungstenite): gRPC-receiver +
+#     WebSocket-coordinator approval gateway for AI
+#     agent workflows
+#   - telsocket (Go, gorilla/websocket): Telnet-style
+#     line-mode interactive WebSocket client
+#   - wstee (Node, ws): bidirectional WebSocket
+#     stream multiplexer / tee
+#
+# Three lanes, three use-case shapes (approval gateway /
+# interactive REPL client / stream-multiplexing tee),
+# three maintenance-trajectory stories (split-by-concern
+# stable / archive-then-unarchive / uninterrupted
+# 14-year canonical), all converging on RFC 6455 wire-
+# format compatibility.
+#
+# Axis 248 closes the round 1444 cycle - 241st axis closed
+# total.
+# ============================================================================
+
+_wstee() {
+    local context state state_descr line
+    typeset -A opt_args
+
+    _arguments -s -S \
+        '*--connect-incoming[WebSocket source (port to listen / URL to dial)]:port-or-url:' \
+        '*--connect-outgoing[WebSocket sink (port to listen / URL to dial)]:port-or-url:' \
+        '(-p --pipe)'{-p,--pipe}'[pipe stdin <-> outgoing / incoming <-> stdout]' \
+        '(-t --tab-size)'{-t,--tab-size}'[JSON pretty-print indent (default 2)]:n:' \
+        '*'{-i,--in}'[read input from file (repeatable; requires --pipe)]:file:_files' \
+        '(-o --out)'{-o,--out}'[write output to file]:file:_files' \
+        '(-u --ugly)'{-u,--ugly}'[disable pretty-printing]' \
+        '(-d --time-format)'{-d,--time-format}'[momentjs timestamp format]:format:' \
+        '--server-config[extra ws.Server options (JSON string or file path)]:json:_files' \
+        '--client-config[extra WebSocket constructor options]:json:_files' \
+        '(- *)'{-h,--help}'[print help]' \
+        '(- *)'{-V,--version}'[print version]'
+}
+
+_wstee "$@"
