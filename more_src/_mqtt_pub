@@ -1,0 +1,143 @@
+#compdef mqtt_pub mqtt_sub
+# ============================================================================
+# mqtt_pub / mqtt_sub - publish / subscribe CLIs from MQTT.js (Node, MIT)
+#
+# Author : Adam Rudd + mqttjs maintainers
+# Upstream: https://github.com/mqttjs/MQTT.js
+# npm    : mqtt (binaries: mqtt + mqtt_pub + mqtt_sub)
+#
+# MQTT.js is the de-facto Node MQTT 3.1.1 + 5.0 client library;
+# the `mqtt` npm package ships three command-line tools as
+# bundled bins:
+#
+#   mqtt_pub  - publish a single message (or stream from stdin)
+#               to a topic on an MQTT broker
+#   mqtt_sub  - subscribe to a topic and print every received
+#               message payload to stdout
+#   mqtt      - umbrella front-end that dispatches `mqtt pub`
+#               and `mqtt sub` subcommands to the above
+#
+# Both bins share the same connection flags (broker target +
+# auth + TLS); pub adds payload / retain / stdin-mode flags;
+# sub adds verbose-mode + keepalive flags.
+#
+# Flags (minimist, shared between pub and sub unless noted):
+#   -h, --hostname, --host <host>   - broker hostname (default localhost)
+#   -p, --port <port>               - broker port
+#   -t, --topic <topic>             - topic (or first positional)
+#   -q, --qos <0|1|2>               - QoS level
+#   -u, --username <user>           - broker username
+#   -P, --password <pass>           - broker password
+#   -i, --id, --clientId <id>       - MQTT client id
+#   -C, -l, --protocol <name>       - mqtt|mqtts|ws|wss
+#       --key <file>                - TLS client key file
+#       --cert <file>               - TLS client cert file
+#       --ca, --cafile <file>       - TLS CA file
+#       --insecure                  - skip TLS cert verification
+#       --will-topic <t>            - LWT topic
+#       --will-message <m>          - LWT payload
+#       --will-qos <0|1|2>          - LWT QoS
+#       --will-retain               - LWT retain flag
+#   -H, --help                      - print help
+#
+# pub-only:
+#   -m, --message <msg>             - payload (or second positional)
+#   -r, --retain                    - retain flag on publish
+#   -s, --stdin                     - read payload from stdin
+#   -M, --multiline                 - one publish per line of stdin
+#
+# sub-only:
+#   -c, --clean                     - clean-session flag
+#   -k, --keepalive <sec>           - keep-alive interval
+#   -v, --verbose                   - print "topic payload" instead of just payload
+#
+# These bins are the Node-ecosystem equivalents of mosquitto's
+# `mosquitto_pub` + `mosquitto_sub` - same one-shot semantics,
+# bundled with the MQTT.js client library that powers most
+# Node-based MQTT consumers (Home Assistant addons, MQTT
+# bridges, AWS IoT SDK examples, ...).
+#
+# ----------------------------------------------------------------------------
+# AXIS 227 :: MQTT clients (IoT pub/sub messaging protocol)  [CLOSES]
+# Round 1381 :: TS-Node slot 3 of 4 :: CLOSES Axis 227 (220th axis closed)
+#
+# Cross-language canonical library family for this axis:
+#   Rust    : bytebeamio/rumqtt              [R1379 _edgelinkd]
+#   Go      : eclipse-paho/paho.mqtt.golang  [R1380 _lucky]
+#   TS/Node : mqttjs/MQTT.js                 [R1381 THIS FILE]
+#
+# MQTT.js is structurally interesting: unlike Eclipse Paho's
+# umbrella-of-implementations (one canonical client per
+# language all under the same Eclipse Foundation roof), MQTT.js
+# is a *community-maintained* canonical that grew organically
+# from Adam Rudd's original 2012 implementation into the most
+# downloaded MQTT library on npm (~3M weekly downloads, ~10x
+# any competitor). The Eclipse Paho JavaScript implementation
+# exists but is a near-abandoned project; MQTT.js won the
+# JavaScript-ecosystem election by activity + adoption rather
+# than by spec-author endorsement.
+#
+# The cross-language consistency across this axis is total at
+# the wire level (MQTT 5 CONNECT packets are byte-identical
+# regardless of which client emits them) but diverges sharply
+# at the API surface:
+#   - rumqttc: typed Builder pattern for connect options,
+#     Tokio AsyncWrite/AsyncRead transport
+#   - paho.mqtt.golang: ClientOptions struct + channel-based
+#     message delivery
+#   - MQTT.js: EventEmitter-based API ('message', 'connect',
+#     'error' events), Promise-based commands
+#
+# Each lane's API maps to its host language's idiomatic
+# concurrency model. The wire format is the universal
+# contract; the API surface is the per-language vernacular.
+#
+# Axis 227 closes the round 1381 cycle - 220th axis closed
+# total this hunt.
+# ============================================================================
+
+_mqtt_pub() {
+    local context state state_descr line
+    typeset -A opt_args
+
+    local -a common_args pub_args sub_args
+    common_args=(
+        '(-h --hostname --host)'{-h,--hostname,--host}'[broker hostname (default localhost)]:host:'
+        '(-p --port)'{-p,--port}'[broker port]:port:'
+        '(-t --topic)'{-t,--topic}'[MQTT topic]:topic:'
+        '(-q --qos)'{-q,--qos}'[QoS level]:qos:(0 1 2)'
+        '(-u --username)'{-u,--username}'[broker username]:user:'
+        '(-P --password)'{-P,--password}'[broker password]:password:'
+        '(-i --id --clientId)'{-i,--id,--clientId}'[MQTT client id]:id:'
+        '(-C -l --protocol)'{-C,-l,--protocol}'[transport protocol]:protocol:(mqtt mqtts ws wss)'
+        '--key[TLS client key file]:file:_files'
+        '--cert[TLS client certificate file]:file:_files'
+        '(--ca --cafile)'{--ca,--cafile}'[TLS CA file]:file:_files'
+        '--insecure[skip TLS certificate verification]'
+        '--will-topic[Last-Will topic]:topic:'
+        '--will-message[Last-Will payload]:msg:'
+        '--will-qos[Last-Will QoS]:qos:(0 1 2)'
+        '--will-retain[Last-Will retain flag]'
+        '(- *)'{-H,--help}'[print help]'
+    )
+
+    pub_args=(
+        '(-m --message)'{-m,--message}'[payload to publish]:msg:'
+        '(-r --retain)'{-r,--retain}'[set retain flag on publish]'
+        '(-s --stdin)'{-s,--stdin}'[read payload from stdin]'
+        '(-M --multiline)'{-M,--multiline}'[one publish per line of stdin]'
+    )
+
+    sub_args=(
+        '(-c --clean)'{-c,--clean}'[clean-session flag (default true)]'
+        '(-k --keepalive)'{-k,--keepalive}'[keep-alive interval (seconds)]:sec:'
+        '(-v --verbose)'{-v,--verbose}'[print "topic payload" instead of just payload]'
+    )
+
+    case "$service" in
+        mqtt_pub) _arguments -s -S $common_args $pub_args '*:topic and message:' ;;
+        mqtt_sub) _arguments -s -S $common_args $sub_args '*:topic:' ;;
+    esac
+}
+
+_mqtt_pub "$@"
