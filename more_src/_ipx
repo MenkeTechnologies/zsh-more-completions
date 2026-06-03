@@ -1,0 +1,282 @@
+#compdef ipx
+# ============================================================================
+# ipx - high-performance image optimization HTTP
+#        server (TypeScript -> Node, MIT)
+#
+# Author : unjs (UnJS - the broader Nuxt-adjacent
+#           tooling collective)
+# Upstream: https://github.com/unjs/ipx
+# npm    : ipx (binary: ipx)
+#
+# `ipx` is an HTTP image optimization microservice
+# that serves on-the-fly-transformed images from
+# either a filesystem source directory OR allowed
+# remote HTTP(s) domains. The transformation
+# pipeline is URL-driven: a request like
+# `/_ipx/w_300,f_webp/photo.jpg` resizes the source
+# image to 300px wide + converts to WebP, with
+# response caching keyed on the transformation URL
+# fragment.
+#
+# Architecture:
+#   - HTTP server (h3-based) accepts transformation
+#     requests
+#   - URL fragment parser decodes transformation
+#     directives (w_300 = width, f_webp = format,
+#     q_80 = quality, etc.)
+#   - Source storage adapters pull raw images from
+#     local FS or allowed HTTP(s) hosts
+#   - libvips (via lovell/sharp Node binding) performs
+#     the transformation
+#   - HTTP response headers carry Cache-Control +
+#     ETag for downstream CDN caching
+#   - SSRF protection: external URLs only accepted
+#     for hosts in the --domains allowlist
+#
+# Used by:
+#   - Nuxt Image (the official Nuxt 3 image module)
+#   - Vue Img (Vue 3 image module)
+#   - Many static-site generators in the unjs +
+#     Nuxt + Astro + Vite ecosystem
+#
+# Usage:
+#   ipx <command> [options]
+#
+# Commands:
+#   serve                  - start the IPX HTTP
+#                             server
+#
+# Serve flags (parseArgs via node:util):
+#   --dir <dir>            - source directory for
+#                             FS storage (env:
+#                             IPX_FS_DIR, default:
+#                             cwd)
+#   --domains <list>       - allowed HTTP source
+#                             domains, comma-
+#                             separated (env:
+#                             IPX_HTTP_DOMAINS)
+#   --port <number>        - listen port (env: PORT,
+#                             default: 3000)
+#   --host <host>          - bind address (env:
+#                             HOST, default:
+#                             0.0.0.0)
+#   -h, --help             - print help
+#   -v, --version          - print version
+#
+# Environment:
+#   IPX_FS_DIR             - filesystem source dir
+#   IPX_FS_MAX_AGE         - FS source Cache-
+#                             Control max-age
+#                             (default 300s)
+#   IPX_HTTP_DOMAINS       - allowed HTTP domains
+#   IPX_HTTP_MAX_AGE       - HTTP source max-age
+#                             (default 300s)
+#   IPX_HTTP_FETCH_OPTIONS - extra fetch options
+#                             (timeout, headers, ...)
+#   PORT                   - listen port
+#   HOST                   - bind address
+#
+# URL transformation directives (subset; full list
+# in upstream docs):
+#   w_<n>                  - width (px)
+#   h_<n>                  - height (px)
+#   q_<n>                  - quality (1-100)
+#   f_<fmt>                - output format: webp /
+#                             avif / png / jpeg / gif
+#   fit_<mode>             - fit mode: cover /
+#                             contain / fill / inside
+#                             / outside
+#   pos_<pos>              - position: center / top /
+#                             bottom / left / right /
+#                             ...
+#   bg_<color>             - background color (when
+#                             fit != cover)
+#   blur_<n>               - Gaussian blur sigma
+#   sharpen_<n>            - unsharp mask
+#   rotate_<deg>           - rotate by degrees
+#   flip / flop            - vertical / horizontal
+#                             flip
+#   grayscale / negate     - color filters
+#
+# Example URLs:
+#   /_ipx/w_300/photo.jpg
+#   /_ipx/w_300,h_200,fit_cover/photo.jpg
+#   /_ipx/w_1200,f_avif,q_70/path/to/image.png
+#
+# The lovell/sharp lane is built on `sharp ^0.34.3`
+# (declared at upstream package.json HEAD as a direct
+# dep, used via the IPX transformer pipeline as
+# `sharp(buffer).resize({...}).webp({...}).toBuffer()`),
+# the canonical Node high-performance image
+# processing library by Lovell Fuller - github.com/
+# lovell/sharp, 30000+ stars on the main repo.
+#
+# sharp is an N-API binding to libvips - a streaming
+# image-processing C library by John Cupitt at
+# Kew Gardens originally + now Imperial College
+# London. libvips's distinguishing feature is its
+# *demand-driven streaming pixel pipeline*: instead
+# of loading the entire image into memory + applying
+# transformations sequentially, libvips processes
+# the image as a stream of pixel chunks flowing
+# through the transformation graph, requiring only
+# the memory needed for the current chunk + a small
+# look-ahead buffer.
+#
+# This means sharp can:
+#   - Process huge images (gigapixel-scale) in
+#     megabyte-scale memory
+#   - Maintain high throughput by overlapping I/O +
+#     pixel processing
+#   - Avoid OOM kills on memory-constrained
+#     environments (Docker containers, AWS Lambda,
+#     Cloudflare Workers)
+#
+# Compared to alternatives:
+#   - jimp (pure-JS): no native binding required;
+#     ~10-30x slower; OOM on large images; cleaner
+#     deployment (no node-gyp)
+#   - gm (binding to GraphicsMagick CLI): subprocess-
+#     based; slower per-operation but no native
+#     compilation; requires gm CLI on system PATH
+#   - canvas (binding to Cairo/Pango): primarily for
+#     drawing; less optimized for image
+#     transformation; complex deployment
+#   - sharp (binding to libvips): fastest +
+#     lowest-memory; N-API binding survives Node
+#     major version upgrades; ~30x faster than
+#     ImageMagick at common operations
+#
+# sharp is by far the highest-volume Node image
+# library by weekly downloads (~14M weekly downloads
+# of `sharp`, ~3.5M weekly downloads of
+# `@img/sharp-linux-x64`, etc.), having been the
+# de-facto canonical for ~10 years (since Fuller
+# started it in 2013).
+#
+# Lovell Fuller's broader ecosystem footprint:
+#   - sharp (canonical Node image)
+#   - @img/sharp-* prebuilt binaries (cross-platform
+#     prebuilt distributions)
+#   - libvips's Node JavaScript bindings (the
+#     underlying C library)
+#
+# ipx uses sharp throughout the transformation
+# pipeline:
+#   - `sharp(input).metadata()` for source-image
+#     introspection
+#   - `sharp(input).resize({width, height, fit, ...})`
+#     for the geometry pass
+#   - `sharp(input).toFormat(format, {quality, ...})`
+#     for the format-conversion pass
+#   - `sharp(input).rotate(deg)` + `flip()` + `flop()`
+#     + `blur()` + `sharpen()` for individual
+#     directive transforms
+#
+# ----------------------------------------------------------------------------
+# AXIS 259 :: Image processing libraries (multi-format
+#              decoders + encoders + transformation
+#              primitives)
+# Round 1477 :: TS-Node slot 3 of 4 :: CLOSES Axis 259
+#                                       (252nd axis closed)
+#
+# Cross-language canonical library family for this axis:
+#   Rust    : image-rs/image                [R1475 _wpc]
+#             umbrella
+#   Go      : disintegration/imaging        [R1476 _watermark-to-image]
+#             (stdlib extension)
+#   TS/Node : lovell/sharp                  [R1477 THIS FILE]
+#             (libvips binding)
+#
+# lovell/sharp closes Axis 259 with the *native-
+# library-binding* pattern. The three lanes form a
+# clean spectrum of image-processing implementation
+# strategies:
+#
+#   - Rust (image-rs/image): pure-Rust multi-format
+#     umbrella; tree-shaking-friendly with optional
+#     features per format; no FFI
+#   - Go (disintegration/imaging): stdlib extension
+#     adding transformation primitives on top of the
+#     Go stdlib's `image/*` packages; pure-Go
+#   - Node (lovell/sharp): N-API binding to libvips
+#     C library; demand-driven streaming pixel
+#     pipeline; ~30x faster than alternatives at
+#     common operations
+#
+# Each lane reflects a fundamental tradeoff in its
+# host ecosystem:
+#   - Rust prefers pure-Rust libraries (no FFI)
+#   - Go prefers pure-Go stdlib-extending libraries
+#     (no FFI; cross-compile-friendly)
+#   - Node accepts native bindings when they deliver
+#     order-of-magnitude perf wins (sharp's libvips
+#     binding is the canonical example)
+#
+# Cross-language interop at the wire format level - a
+# PNG / JPEG / GIF / TIFF / WebP file decoded by
+# image-rs + disintegration/imaging + lovell/sharp
+# produces structurally identical pixel data
+# (modulo per-decoder color management for embedded
+# ICC profiles).
+#
+# Use-case spectrum across the three lanes:
+#   - wpc (Rust, image-rs): wallpaper rotator with
+#     image-rs for dimension validation + grayscale +
+#     luminance extraction
+#   - watermark-to-image (Go, disintegration/imaging):
+#     batch PNG watermark applier
+#   - ipx (Node, sharp): HTTP image optimization
+#     microservice with URL-driven transformation
+#     pipeline + libvips streaming
+#
+# Three lanes, three use-case shapes (desktop
+# wallpaper / batch watermark / HTTP optimizer),
+# three implementation strategies (pure-Rust /
+# stdlib-extension Go / libvips C-binding Node), all
+# converging on the same image format
+# specifications.
+#
+# Axis 259 closes the round 1477 cycle - 252nd axis
+# closed total.
+# ============================================================================
+
+_ipx() {
+    local context state state_descr line
+    typeset -A opt_args
+    local curcontext="$curcontext" ret=1
+
+    _arguments -C \
+        '(- *)'{-h,--help}'[print help]' \
+        '(- *)'{-v,--version}'[print version]' \
+        '1: :_ipx_cmds' \
+        '*::arg:->args' \
+    && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                serve)
+                    _arguments \
+                        '--dir[source directory for FS storage]:dir:_files -/' \
+                        '--domains[allowed HTTP source domains (comma-separated)]:list:' \
+                        '--port[listen port (default 3000)]:port:' \
+                        '--host[bind address (default 0.0.0.0)]:host:' \
+                        '(- *)'{-h,--help}'[print help]'
+                    ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_ipx_cmds() {
+    local -a cmds
+    cmds=(
+        'serve:start the IPX HTTP image optimization server'
+    )
+    _describe -t commands 'ipx command' cmds
+}
+
+_ipx "$@"
