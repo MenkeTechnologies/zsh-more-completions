@@ -1,0 +1,185 @@
+#compdef purple
+# ============================================================================
+# purple - Terminal SSH manager: keeps ~/.ssh/config in sync with cloud infra
+#          (Rust, MIT)
+#
+# Author : Eric Kochenderfer (erickochen)
+# Upstream: https://github.com/erickochen/purple
+# crates : purple-ssh (binary: purple)
+#
+# `purple` is a ratatui TUI SSH client that treats ~/.ssh/config
+# as the canonical host list and bidirectionally syncs it with
+# cloud-provider inventories: spin up a VM on DigitalOcean / AWS
+# EC2 / GCP / Azure / Hetzner / Vultr / Linode / UpCloud /
+# Proxmox VE / Scaleway / Tailscale / Oracle Cloud / OVHcloud /
+# Leaseweb / i3D.net / TransIP and the new host appears in your
+# Host alias list automatically. Destroy the VM and the entry
+# dims. Search hundreds of hosts via fuzzy match, transfer
+# files via SFTP, manage Docker/Podman containers over SSH,
+# sign HashiCorp Vault SSH certificates.
+#
+# Subcommand tree (clap derive):
+#   (default)            - launch TUI / connect by [ALIAS]
+#   add <user@host:port> - quick-add a host to ~/.ssh/config
+#   import [file]        - import hosts from file / known_hosts
+#   sync [provider]      - sync from cloud provider inventories
+#   provider             - manage cloud provider configurations
+#                          subcommands: add, list, remove
+#   tunnel               - manage SSH tunnels
+#                          subcommands: list, add, remove, start
+#   password             - manage OS-keychain SSH passwords
+#                          subcommands: set, remove
+#   snippet              - manage command snippets for hosts
+#                          subcommands: list, add, remove, run
+#   update               - update purple to latest version
+#   mcp                  - MCP server for AI-agent SSH integration
+#                          --read-only / --no-audit / --audit-log <path>
+#   theme                - manage color themes
+#                          subcommands: list, set
+#   vault                - HashiCorp Vault SSH-cert ops
+#                          subcommands: sign
+#   logs                 - view/manage log file (--tail / --clear)
+#   whats-new            - print release notes since prior version
+#                          --since <version>
+#
+# Global flags:
+#   [ALIAS]              - connect to host by alias (or TUI filter)
+#   -c, --connect <a>    - connect directly, skip TUI
+#   -l, --list           - list all configured hosts
+#   --config <path>      - SSH config path (default ~/.ssh/config)
+#   --demo               - launch with demo data
+#   --completions <sh>   - emit shell completion script
+#   --theme <name>       - override theme for this session
+#   --verbose            - debug-level logging (~/.purple/purple.log)
+#
+# The nucleo-matcher lane is built on `nucleo-matcher = "0.3"`
+# (declared verbatim at upstream Cargo.toml HEAD), the canonical
+# Rust fuzzy-string matcher by Pascal Kuthe + the helix-editor
+# team (github.com/helix-editor/nucleo, 600+ stars). nucleo is
+# the modern Rust fuzzy matcher that replaced fuzzy-matcher
+# (Lucas Mart's earlier crate) as the de-facto choice across
+# the Helix-editor-adjacent ecosystem - same Smith-Waterman-
+# inspired scoring as fzf's algorithm v2, ported to safe Rust
+# with SIMD bonus-character matching, designed specifically to
+# drive the Helix file picker (which competes with fzf at
+# scale). purple uses nucleo-matcher to power its inline TUI
+# host-list filter - thousands of cloud hosts can be filtered
+# in under 10ms per keystroke without breaking the ratatui
+# render loop.
+#
+# ----------------------------------------------------------------------------
+# AXIS 225 :: Fuzzy string matching (fzf-quality scoring + ranking)  [OPENS]
+# Round 1373 :: Rust slot 1 of 4 :: OPENS Axis 225
+#
+# Cross-language canonical library family for this axis (proposed):
+#   Rust    : helix-editor/nucleo          - fzf-grade matcher,
+#                                            Helix's picker engine
+#   Go      : lithammer/fuzzysearch        - simple Go fuzzy matcher
+#                                            (alternative: sahilm/fuzzy
+#                                             port of fzf's algorithm)
+#   TS/Node : krisk/Fuse                   - de-facto JS fuzzy
+#                                            (alternative: nexucis/fuzzy
+#                                             or fzf-for-js)
+#
+# Fuzzy matching is one of the rare axes where the *algorithm*
+# is the canonical artifact, not the library: every mainstream
+# implementation in the last decade traces back to fzf's
+# algorithm-v2 paper (Junegunn Choi, 2017). nucleo (Rust),
+# sahilm/fuzzy (Go), and fzf-for-js are all ports of fzf's
+# Smith-Waterman-with-bonuses scoring. The shape of the
+# bonus weights, the gap penalty, the prefix/suffix bonuses,
+# and the case-sensitivity flag thresholds are all identical
+# across the three lanes - the cross-language consistency is
+# byte-for-byte at the score level.
+#
+# The picker-engine pattern: every modern terminal tool that
+# needs interactive fuzzy filtering (file pickers, command
+# palettes, host selectors, package browsers) ships a fuzzy
+# matcher behind the scenes. The matcher is invisible to the
+# user but defines the entire UX. nucleo is the killer
+# instance because it's *both* fast enough for live-typing on
+# 100K+ items AND ships score breakdowns that drive
+# UI-visible highlighting of matched characters.
+# ============================================================================
+
+_purple() {
+    local context state state_descr line
+    typeset -A opt_args
+    local curcontext="$curcontext" ret=1
+
+    _arguments -C \
+        '(-c --connect)'{-c,--connect}'[connect directly to a host by alias (skip TUI)]:alias:' \
+        '(-l --list)'{-l,--list}'[list all configured hosts]' \
+        '--config[path to SSH config file]:file:_files' \
+        '--demo[launch with demo data]' \
+        '--completions[generate shell completions]:shell:(bash zsh fish powershell elvish)' \
+        '--theme[override theme for this session]:theme:' \
+        '--verbose[enable verbose (debug) logging]' \
+        '(- *)'{-V,--version}'[print version]' \
+        '(- *)'{-h,--help}'[print help]' \
+        '1: :_purple_cmds_or_alias' \
+        '*::arg:->args' \
+    && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                add)        _arguments '(-a --alias)'{-a,--alias}'[alias for the host]:alias:' '(-k --key)'{-k,--key}'[path to identity file]:file:_files' '(- *)'{-h,--help}'[help]' '1:user@host:port:' ;;
+                import)     _arguments '--known_hosts[import from ~/.ssh/known_hosts]' '(-g --group)'{-g,--group}'[group label for imported hosts]:group:' '(- *)'{-h,--help}'[help]' '1:file:_files' ;;
+                sync)       _arguments '--dry_run[preview changes without modifying config]' '--remove[remove hosts that no longer exist on the provider]' '(- *)'{-h,--help}'[help]' '1:provider:' ;;
+                provider)   _purple_sub provider 'add:Add a cloud provider configuration' 'list:List configured providers' 'remove:Remove a provider configuration' ;;
+                tunnel)     _purple_sub tunnel 'list:List SSH tunnels' 'add:Add an SSH tunnel' 'remove:Remove an SSH tunnel' 'start:Start an SSH tunnel' ;;
+                password)   _purple_sub password 'set:Set a password in the keychain' 'remove:Remove a stored password' ;;
+                snippet)    _purple_sub snippet 'list:List snippets' 'add:Add a snippet' 'remove:Remove a snippet' 'run:Run a snippet on a host' ;;
+                update)     _arguments '(- *)'{-h,--help}'[help]' ;;
+                mcp)        _arguments \
+                                '--read-only[restrict tools to read-only operations (recommended for agents)]' \
+                                '--no-audit[disable the MCP audit log]' \
+                                '--audit-log[custom path for the MCP audit log]:path:_files' \
+                                '(- *)'{-h,--help}'[help]' ;;
+                theme)      _purple_sub theme 'list:List available themes' 'set:Set the active theme' ;;
+                vault)      _purple_sub vault 'sign:Sign an SSH certificate via Vault SSH secrets engine' ;;
+                logs)       _arguments '--tail[follow log output in real time]' '--clear[delete the log file]' '(- *)'{-h,--help}'[help]' ;;
+                whats-new)  _arguments '--since[only include entries newer than this version]:version:' '(- *)'{-h,--help}'[help]' ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_purple_cmds_or_alias() {
+    local -a cmds
+    cmds=(
+        'add:Quick-add a host (purple add user@host:port --alias myserver)'
+        'import:Import hosts from a file or known_hosts'
+        'sync:Sync hosts from cloud providers (DO/AWS/GCP/Azure/Hetzner/...)'
+        'provider:Manage cloud provider configurations'
+        'tunnel:Manage SSH tunnels'
+        'password:Manage passwords in the OS keychain for SSH hosts'
+        'snippet:Manage command snippets for quick execution on hosts'
+        'update:Update purple to the latest version'
+        'mcp:Start MCP server (Model Context Protocol) for AI agent integration'
+        'theme:Manage color themes'
+        'vault:HashiCorp Vault SSH secrets engine operations'
+        'logs:View or manage log file'
+        'whats-new:Print release notes since a prior version'
+    )
+    _describe -t commands 'purple command' cmds
+}
+
+# Render a subcommand-with-sub group: takes the parent name + sub specs
+_purple_sub() {
+    local parent=$1; shift
+    local -a sub=("$@")
+    _arguments \
+        '(- *)'{-h,--help}'[help]' \
+        '1:subcommand:->sub' \
+        '*::arg:->_default'
+
+    case $state in
+        sub) _describe -t commands "$parent subcommand" sub ;;
+    esac
+}
+
+_purple "$@"
