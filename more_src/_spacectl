@@ -1,0 +1,140 @@
+#compdef spacectl
+# ============================================================================
+# spacectl - Spacelift IaC platform CLI (Go, MIT)
+#
+# Author : Spacelift (spacelift-io)
+# Upstream: https://github.com/spacelift-io/spacectl
+#
+# spacectl is the official Spacelift CLI for managing Infrastructure-
+# as-Code stacks via the Spacelift GraphQL API: stack lifecycle,
+# Terraform/OpenTofu/Pulumi/CloudFormation/Kubernetes runs, modules,
+# providers, policies, blueprints, templates, worker pools, and audit
+# trails. Authentication flows through API keys -> short-lived JWTs;
+# every request to the GraphQL endpoint carries a JWT in the
+# Authorization header.
+#
+# The JWT codec lane is built on `github.com/golang-jwt/jwt/v4 v4.5.2`
+# (declared verbatim at upstream go.mod HEAD), the canonical Go JWT
+# library by the golang-jwt org (github.com/golang-jwt/jwt, 9000+
+# stars). The library is the cleanroom fork of the long-running
+# dgrijalva/jwt-go project which the original maintainer archived
+# in 2021 with full handoff to the golang-jwt org; the v4 line
+# carries the post-handoff API hardening (typed claims, parser
+# options, custom validators) without breaking the v3 wire format.
+#
+# Verbatim from upstream `client/session/api_key.go` (one of several
+# session implementations exercising JWT):
+#
+#     import "github.com/golang-jwt/jwt/v4"
+#     claims := &jwt.RegisteredClaims{...}
+#     token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+#     signed, err := token.SignedString(key)
+#
+# Spacelift exchanges the user's API key + secret for a session JWT
+# via the GraphQL `apiKeyUser` mutation, then attaches the JWT to
+# every subsequent GraphQL request via the gqlgenc client. The CLI
+# inspects + refreshes the JWT through the golang-jwt parser when
+# the cached profile token nears expiry.
+#
+# ----------------------------------------------------------------------------
+# AXIS 202 :: JSON WEB TOKEN (RFC 7519 + RFC 7515 + RFC 7518)
+# Round 1305 :: Go slot 2 of 4 :: continues Axis 202
+#
+# Cross-language canonical library family for this axis:
+#   Rust    : Keats/jsonwebtoken              [R1304 _jwtui]
+#   Go      : golang-jwt/jwt                  [R1305 THIS FILE]
+#   TS/Node : auth0/node-jsonwebtoken         [R1306 closing]
+#
+# golang-jwt/jwt's history is structurally interesting: it is the
+# only one of the three canonical libraries that survived a
+# maintainer transition. dgrijalva/jwt-go was the original Go JWT
+# library (2014); when the maintainer stepped back in 2021, the
+# community-maintained golang-jwt fork inherited the entire user
+# base in weeks (the import path-redirect `dgrijalva/jwt-go ->
+# golang-jwt/jwt/v4` was a one-line migration). This is the same
+# pattern as gorilla/websocket's 2022-2024 wind-down + un-archive
+# and shows up across the long-lived Go OSS ecosystem more than
+# in Rust or Node.
+# ============================================================================
+
+_spacectl() {
+    local context state state_descr line
+    typeset -A opt_args
+    local curcontext="$curcontext" ret=1
+
+    _arguments -C \
+        '(- *)'{-h,--help}'[print help]' \
+        '(- *)'{-V,--version}'[print version]' \
+        '1: :_spacectl_cmds' \
+        '*::arg:->args' \
+    && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                profile)        _spacectl_profile ;;
+                stack)          _spacectl_simple_sub stack ;;
+                module)         _spacectl_simple_sub module ;;
+                provider)       _spacectl_simple_sub provider ;;
+                workerpools)    _spacectl_simple_sub workerpools ;;
+                blueprint)      _spacectl_simple_sub blueprint ;;
+                template)       _spacectl_simple_sub template ;;
+                policy)         _spacectl_simple_sub policy ;;
+                audittrail)     _spacectl_simple_sub audittrail ;;
+                mcp)            _spacectl_simple_sub mcp ;;
+                api)            _spacectl_api ;;
+                whoami|version|run-external-dependency|help) _arguments '(- *)'{-h,--help}'[help]' ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_spacectl_cmds() {
+    local -a cmds
+    cmds=(
+        'profile:Manage Spacelift authentication profiles'
+        'whoami:Print current authenticated identity'
+        'version:Print client + Spacelift instance version'
+        'api:Make ad-hoc GraphQL API queries'
+        'module:Manage Terraform modules'
+        'stack:Manage IaC stacks (runs, environment, locks, deletion)'
+        'provider:Manage custom Terraform providers'
+        'run-external-dependency:Mark external dependency satisfied for a run'
+        'workerpools:Manage worker pools'
+        'blueprint:Manage stack blueprints'
+        'template:Manage blueprint templates'
+        'policy:Manage policies (login / push / approval / etc)'
+        'audittrail:Manage audit-trail webhooks'
+        'mcp:Run as a Model Context Protocol server'
+    )
+    _describe -t commands 'spacectl command' cmds
+}
+
+_spacectl_profile() {
+    _arguments \
+        '(- *)'{-h,--help}'[help]' \
+        '1:subcommand:((login\:"Log in and create a profile" logout\:"Log out and remove profile" list\:"List configured profiles" select\:"Select active profile" current\:"Print active profile" export-token\:"Export the session JWT"))' \
+        '*::arg:->_default'
+}
+
+_spacectl_api() {
+    _arguments -s -S \
+        '--query[GraphQL query]:query:' \
+        '--queryfile[GraphQL query file]:file:_files -g "*.(graphql|gql)"' \
+        '--variables[GraphQL variables JSON]:json:' \
+        '--variablesfile[GraphQL variables JSON file]:file:_files -g "*.json"' \
+        '--header[extra HTTP header (KEY=VALUE)]:header:' \
+        '(- *)'{-h,--help}'[help]'
+}
+
+_spacectl_simple_sub() {
+    local sub=$1
+    _arguments \
+        '(- *)'{-h,--help}'[help]' \
+        '1:subcommand:(list show create delete update enable disable lock unlock confirm deploy trigger preview environment local-preview)' \
+        '*::arg:->_default'
+}
+
+_spacectl "$@"
