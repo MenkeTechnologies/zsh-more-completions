@@ -1,0 +1,139 @@
+#compdef mitex
+# ============================================================================
+# mitex - LaTeX-to-Typst transpiler CLI (Rust, Apache-2.0)
+#
+# Author : Myriad-Dreamin / OrangeX4 / mgt / Shichien
+# Upstream: https://github.com/mitex-rs/mitex
+# crates : mitex-cli (binary name: mitex)
+#
+# mitex (Minimal TeX Equations) is a LaTeX subset transpiler that
+# emits Typst source. Built primarily for math/equation portability
+# - the goal is to let Typst documents embed verbatim LaTeX math
+# blocks (\begin{align}, \frac, \binom, \int, etc.) and have them
+# rendered identically in the Typst typesetting pipeline. Powered
+# by a logos-based lexer + rowan red-green CST + spec-driven macro
+# expansion. Ships an embedded "command specification" - a
+# prebuilt table of every LaTeX command's expected shape (arity,
+# operand types, environment vs command, aliases) - that
+# determines how each LaTeX construct maps to Typst.
+#
+# Subcommands (clap derive):
+#   compile [c] <input> [output]   - transpile LaTeX -> Typst
+#                                     -w <dir>   workspace root
+#                                     -i <file>  entry file
+#                                     -o <file>  output file
+#                                     --stage syntax|document
+#   completion <shell>             - emit shell completion script
+#   manual <dest>                  - emit man pages to <dest>
+#   spec generate                  - regenerate the command spec archive
+#
+# The rkyv lane is built on `rkyv = "0.7.42"` (declared at upstream
+# workspace Cargo.toml HEAD and enabled by default in `mitex-spec`
+# via `default = ["serde", "rkyv", "rkyv-validation"]`), the
+# canonical Rust zero-copy archive library by David Koloski
+# (github.com/rkyv/rkyv, 3000+ stars). rkyv archives typed Rust
+# structs into a `&[u8]` buffer that can be mmap'd from disk and
+# dereferenced *in place* with zero deserialization cost - the
+# Archived<T> shape is a separate type with the same field layout
+# as T, accessed via offset pointers. mitex uses rkyv for the
+# compile-time-generated LaTeX command spec: the spec is built
+# once via the `spec generate` subcommand into a binary archive
+# that mitex-cli embeds at compile time + reads on every invocation
+# without parsing overhead. This pattern (compile-time data table
+# baked as rkyv archive) is the killer use case for rkyv vs.
+# alternatives like bincode/postcard - the cost shifts entirely
+# from runtime parse to build-time generate.
+#
+# ----------------------------------------------------------------------------
+# AXIS 220 :: Typed binary archive formats with zero-copy mmap access  [OPENS]
+# Round 1358 :: Rust slot 1 of 4 :: OPENS Axis 220 (round-number landmark)
+#
+# Cross-language canonical library family for this axis (proposed):
+#   Rust    : rkyv/rkyv                    - zero-copy archive of typed structs
+#   Go      : capnproto/go-capnp           - Cap'n Proto: zero-copy mmap-friendly
+#                                            schema-driven binary format
+#   TS/Node : capnp-es OR @msgpack/msgpack - parallel capnp or MessagePack
+#
+# Axis 220 is the round-number landmark axis: each lane picks the
+# *de-facto* binary format for its ecosystem when the use case is
+# "ship a precomputed data table as a binary blob the program can
+# mmap + read without a parse step." rkyv occupies that slot in
+# Rust because it's the only library that gives you typed struct
+# access (`Archived<MySpec>` looks structurally identical to
+# `MySpec`) directly from an unparsed &[u8]. Cap'n Proto fills
+# the same slot in Go + TS - schema-driven, fixed-layout pointers,
+# zero-parse access. MessagePack is the looser TS alternative
+# when the schema is dynamic.
+#
+# The structural commentary here: rkyv is *unusual* in the Rust
+# ecosystem because it eschews the typical serde-everywhere
+# pattern. rkyv defines its own derive macros and its own trait
+# system (`Archive`, `Serialize`, `Deserialize` - rkyv versions,
+# not serde versions). The cost is that rkyv types don't compose
+# with the serde ecosystem; the benefit is that the archived form
+# is a *direct* struct read with no overhead - serde-based
+# alternatives (bincode/postcard/ciborium) all require running a
+# deserializer to materialize values.
+# ============================================================================
+
+_mitex() {
+    local context state state_descr line
+    typeset -A opt_args
+    local curcontext="$curcontext" ret=1
+
+    _arguments -C \
+        '(-V --version)'{-V,--version}'[print version]' \
+        '--VV[print version in format]:format:(none none-with-vergen full-with-vergen json json-plain)' \
+        '(- *)'{-h,--help}'[print help]' \
+        '1: :_mitex_cmds' \
+        '*::arg:->args' \
+    && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                compile|c)
+                    _arguments \
+                        '(-w --workspace)'{-w,--workspace}'[path to workspace (default ".")]:dir:_files -/' \
+                        '(-i --input)'{-i,--input}'[entry .tex file]:file:_files -g "*.tex"' \
+                        '(-o --output)'{-o,--output}'[output .typ file]:file:_files -g "*.typ"' \
+                        '--stage[compile stage]:stage:(syntax document)' \
+                        '(- *)'{-h,--help}'[help]' \
+                        '1:input file:_files -g "*.tex"' \
+                        '2:output file:_files -g "*.typ"'
+                    ;;
+                completion)
+                    _arguments \
+                        '(- *)'{-h,--help}'[help]' \
+                        '1:shell:(bash elvish fish powershell zsh)'
+                    ;;
+                manual)
+                    _arguments \
+                        '(- *)'{-h,--help}'[help]' \
+                        '1:output directory:_files -/'
+                    ;;
+                spec)
+                    _arguments \
+                        '(- *)'{-h,--help}'[help]' \
+                        '1:subcommand:(generate)'
+                    ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_mitex_cmds() {
+    local -a cmds
+    cmds=(
+        'compile:Run MiTeX transpiler (LaTeX -> Typst)'
+        'c:Alias for compile'
+        'completion:Generate a shell completion script'
+        'manual:Generate man pages'
+        'spec:Subcommands about MiTeX command specification (generate)'
+    )
+    _describe -t commands 'mitex command' cmds
+}
+
+_mitex "$@"
