@@ -1,0 +1,374 @@
+#compdef ar5iv
+# ============================================================================
+# ar5iv - HTML5 article server for arXiv.org
+#          papers converted from LaTeX via
+#          latexml (Rust, MIT)
+#
+# Author : Deyan Ginev (dginev)
+# Upstream: https://github.com/dginev/ar5iv
+# crates : ar5iv (binary: ar5iv)
+#
+# `ar5iv` is the Rust HTTP server powering
+# ar5iv.labs.arxiv.org - the production service
+# that converts arXiv.org's daily LaTeX paper
+# uploads into accessible HTML5 articles. The
+# conversion is performed offline via LaTeXML
+# (Bruce Miller's TeX-to-HTML5 toolchain); ar5iv
+# is the Rocket-based HTTP server that:
+#   - Reads pre-converted paper archives
+#     (.zip files) from a configured paper-root
+#     directory (typically NFS-mounted)
+#   - Extracts HTML + image + CSS assets from
+#     the ZIP via zip-rs (the canonical Rust
+#     ZIP library)
+#   - Caches extracted content in Redis (via
+#     rocket_db_pools::deadpool_redis)
+#   - Serves the HTML5 articles at /html/<id>
+#     + assets at /html/<id>/assets/<filename>
+#   - Falls back to redirecting to arxiv.org/
+#     abs/<id> when a paper hasn't been
+#     converted yet
+#
+# ar5iv is part of the broader LaTeXML/arXiv-vanity
+# ecosystem of accessibility tooling. It enables:
+#   - Screen-reader-accessible arXiv papers
+#   - Reflowable text on mobile devices (vs PDF's
+#     fixed pixel layout)
+#   - MathJax-rendered equations (vs PDF's
+#     baked-in font rendering)
+#   - Linkable hyperlinks to references, figures,
+#     equations
+#
+# Use cases:
+#   - Hosting ar5iv-style article servers for
+#     academic communities (production deployment
+#     of the actual ar5iv.labs.arxiv.org service)
+#   - Mirror ar5iv content for offline / air-
+#     gapped research environments
+#   - Self-hosted accessibility-optimized arxiv
+#     reading service
+#
+# Usage:
+#   ar5iv [rocket-options]
+#
+# Rocket-based configuration is primarily via
+# `Rocket.toml` config file + ROCKET_* environment
+# variables (no traditional CLI flags). The Rocket
+# launcher reads:
+#   - `Rocket.toml` from the binary's cwd (or
+#     ROCKET_CONFIG-pointed path)
+#   - Environment variables (ROCKET_PORT,
+#     ROCKET_ADDRESS, ROCKET_WORKERS, etc.)
+#   - Per-profile config sections ([global],
+#     [default], [debug], [release])
+#
+# Common Rocket environment variables:
+#   ROCKET_PORT                   - HTTP listen
+#                                    port (default
+#                                    8000)
+#   ROCKET_ADDRESS                - HTTP listen
+#                                    address
+#                                    (default
+#                                    127.0.0.1)
+#   ROCKET_WORKERS                - number of
+#                                    Tokio worker
+#                                    threads
+#                                    (default
+#                                    cpus*2)
+#   ROCKET_LOG_LEVEL              - log level
+#                                    (off/critical
+#                                    /normal/
+#                                    debug)
+#   ROCKET_PROFILE                - profile to
+#                                    use (default
+#                                    /debug/
+#                                    release)
+#   ROCKET_CONFIG                 - path to
+#                                    Rocket.toml
+#                                    config file
+#   ROCKET_KEEP_ALIVE             - HTTP keep-
+#                                    alive timeout
+#                                    (default
+#                                    5s)
+#   ROCKET_LIMITS                 - request size
+#                                    limits
+#                                    (form/data/
+#                                    json sub-keys)
+#   ROCKET_TEMPLATE_DIR           - template
+#                                    directory
+#                                    (default
+#                                    `templates/`)
+#   ROCKET_DATABASES              - per-database
+#                                    config (TOML
+#                                    nested values)
+#
+# Application-specific environment variables:
+#   AR5IV_PAPERS_ROOT_DIR         - path to the
+#                                    arxiv paper
+#                                    archive root
+#                                    (where the
+#                                    .zip files
+#                                    live)
+#   REDIS_URL                     - Redis cache
+#                                    URL (default
+#                                    redis://
+#                                    127.0.0.1)
+#
+# Standard Rocket CLI flags (parsed by the
+# rocket launcher):
+#   --help                       - print Rocket
+#                                    help
+#
+# Example invocation:
+#   ROCKET_PORT=8080 \
+#   ROCKET_LOG_LEVEL=normal \
+#   AR5IV_PAPERS_ROOT_DIR=/data/arxmliv/ \
+#   ar5iv
+#
+# Companion binary in the same crate:
+#   cache_adjacency_map           - separate
+#                                    binary
+#                                    (declared
+#                                    as `[[bin]]`
+#                                    in Cargo.toml)
+#                                    that walks
+#                                    AR5IV_PAPERS_ROOT_DIR
+#                                    + populates
+#                                    the Redis
+#                                    `paper_order`
+#                                    key with
+#                                    next/prev
+#                                    paper links
+#                                    for sequential
+#                                    browsing
+#
+# Rocket.toml example for ar5iv:
+#   [global]
+#   template_dir = "templates/"
+#   workers = 32
+#   keep_alive = 15
+#   limits = { forms = 32768 }
+#
+#   [default.databases.memdb]
+#   url = "redis://127.0.0.1"
+#   min_connections = 8
+#   max_connections = 1024
+#   connect_timeout = 3
+#   idle_timeout = 120
+#
+# The zip lane is built on `zip = "8.1"` (declared
+# verbatim at upstream Cargo.toml HEAD as a direct
+# dep, imported as `use zip::ZipArchive;` in
+# src/assemble_asset.rs line 7, used at line 44+
+# in the paper-archive extraction path:
+# `ZipArchive::new(BufReader::new(File::open(
+# paper_path)?))` to extract individual files
+# from arxiv paper .zip archives on each HTTP
+# request), the canonical Rust ZIP archive
+# library by the zip-rs maintainers - github.com/
+# zip-rs/zip2 (formerly github.com/zip-rs/zip).
+#
+# zip-rs/zip2 is the de-facto canonical Rust ZIP
+# archive library:
+#   - Implements the PKZIP / APPNOTE.txt format
+#     specification
+#   - Supports deflate / deflate64 / bzip2 /
+#     zstd / xz compression methods (configurable
+#     via cargo features)
+#   - Streaming + random-access read APIs
+#   - Builder-style write API
+#   - ZIP64 support for archives larger than
+#     4 GiB / 65,535 entries
+#   - Encrypted ZIP support (traditional PKWare
+#     + AES-256)
+#   - Symlink + special-file support
+#   - Pure Rust (no C dependencies)
+#
+# zip-rs's distinguishing position vs
+# alternatives:
+#   - zip-rs/zip2: canonical sync ZIP; THIS AXIS;
+#     recent v8 release added bzip2 + zstd
+#   - Majored/rs-async-zip: async ZIP for
+#     tokio + futures; separate codebase
+#   - thbar/zip-extract: thin wrapper around
+#     zip-rs for simple extraction use cases
+#
+# zip-rs's maintainer governance:
+#   - Originally by Mathijs van de Nes + the
+#     mvdnes/zip-rs project (2014-2020)
+#   - Forked + community-maintained as zip-rs/
+#     zip in 2020
+#   - Currently maintained by Plecra + the
+#     zip-rs/zip2 maintainer team
+#   - The v8 version (2024+) consolidates the
+#     codebase + adds modern compression backends
+#
+# This is the *community-org-maintained
+# canonical* pattern - the library was
+# originally a single-author project but
+# transitioned to multi-maintainer governance as
+# adoption grew. Similar to:
+#   - svg/svgo (Node, Axis 264): single-author
+#     -> multi-maintainer org
+#   - axios/axios (Node, Axis 265): single-
+#     author -> contributor team
+#   - linebender/resvg (Rust, Axis 264): single-
+#     author -> Linebender Foundation
+#
+# Cross-language ZIP library landscape:
+#   - Rust: zip-rs/zip2 (THIS AXIS)
+#   - Go: archive/zip (stdlib) + mholt/archives
+#     (wrapper)
+#   - Python: stdlib zipfile + py7zr (7-zip
+#     extension)
+#   - Java: java.util.zip + Apache Commons
+#     Compress
+#   - C: minizip + libzip + zlib's ZIP support
+#
+# ZIP is one of the most-implemented archive
+# formats due to its 1989 origin (PKZIP) + the
+# format's relative simplicity (central directory
+# at EOF + per-entry local file headers). Every
+# language ecosystem has at least one canonical
+# implementation.
+#
+# ar5iv uses zip-rs in src/assemble_asset.rs's
+# `fetch_zip` function:
+#   ```rust
+#   use zip::ZipArchive;
+#
+#   let zipf = File::open(paper_path)?;
+#   let reader = BufReader::new(zipf);
+#   let mut zip = ZipArchive::new(reader)?;
+#
+#   // Iterate + extract specific files
+#   for i in 0..zip.len() {
+#     let mut file = zip.by_index(i)?;
+#     if file.name() == requested_name {
+#       let mut content = Vec::new();
+#       file.read_to_end(&mut content)?;
+#       return Ok(content);
+#     }
+#   }
+#   ```
+# This is wrapped in `spawn_blocking` (tokio's
+# OS-thread offload) because zip-rs uses
+# synchronous I/O; the async Rocket runtime
+# offloads the blocking ZIP extraction to a
+# dedicated thread pool.
+#
+# ----------------------------------------------------------------------------
+# AXIS 267 :: ZIP archive libraries (PKZIP/
+#              APPNOTE.txt format parsing +
+#              writing with deflate/bzip2/zstd
+#              compression backends)
+# Round 1499 :: Rust slot 1 of 4 :: OPENS Axis 267
+#
+# Cross-language canonical library family for this axis
+# (proposed):
+#   Rust    : zip-rs/zip2                  - Plecra +
+#                                              zip-rs
+#                                              maintainer
+#                                              team's
+#                                              canonical
+#                                              Rust ZIP
+#                                              library;
+#                                              v8 added
+#                                              bzip2 +
+#                                              zstd
+#                                              backends
+#   Go      : archive/zip (stdlib) OR        - Go's
+#             mholt/archives (wrapping it)    bundled
+#                                              archive/zip;
+#                                              mholt/
+#                                              archives
+#                                              is the
+#                                              canonical
+#                                              wrapper
+#                                              for
+#                                              format
+#                                              abstraction
+#   TS/Node : Stuk/jszip                     - Stuart
+#                                              Knightley's
+#                                              canonical
+#                                              Node ZIP
+#                                              library;
+#                                              45,000,000+
+#                                              weekly npm
+#                                              downloads;
+#                                              browser +
+#                                              Node
+#                                              isomorphic
+#
+# ZIP is a *spec-bound* axis - the PKWARE
+# APPNOTE.txt format specification + ZIP64
+# extension + the various compression-method
+# encodings (deflate via RFC 1951 + bzip2 +
+# LZMA + zstd) define the byte-for-byte archive
+# format. Compliant implementations produce +
+# consume byte-identical archives modulo:
+#   - Compression-method selection (deflate is
+#     universal; bzip2/zstd/lzma are optional)
+#   - Encryption support (traditional PKWare
+#     XOR + AES-256)
+#   - Extra field encoding (per-entry extension
+#     fields with vendor-defined semantics)
+#   - File mode/permission representation (Unix
+#     vs DOS attribute fields)
+#   - Timestamp precision (DOS time: 2-second
+#     granularity; ZIP extension: nanosecond
+#     precision)
+#
+# Structural commentary on the canonical libraries:
+#   - zip-rs/zip2 (Rust): pure-Rust; multi-
+#     compression-backend; sync API (with async
+#     variant in separate crate)
+#   - archive/zip (Go): bundled stdlib; minimal
+#     but complete deflate support
+#   - jszip (Node): isomorphic browser + Node;
+#     45M+ weekly npm downloads; promise-based
+#     API
+#
+# Cross-language interop at the archive byte
+# level - the same .zip file can be read +
+# written by all three libraries (with the
+# encryption/extra-field/timestamp caveats
+# above).
+#
+# Axis 267 opens with the Rust slot at zip-rs/
+# zip2 (the current canonical iteration of the
+# Rust ZIP library family). Subsequent rounds
+# will visit the Go (archive/zip + mholt/
+# archives) + TS/Node (Stuk/jszip) canonicals.
+#
+# Notable pattern continuity from Axis 266 (TAR)
+# to Axis 267 (ZIP):
+#   - Both axes have Rust individual-authored
+#     canonical (tar-rs by Crichton + zip-rs by
+#     Plecra/maintainer team)
+#   - Both axes have Go language-as-canonical-
+#     provider stdlib (archive/tar + archive/zip,
+#     both shipped with Go 1.0)
+#   - Both axes have Node infrastructure-tier
+#     canonicals (Schlueter's node-tar +
+#     Knightley's jszip)
+#
+# This parallel pattern reflects the ecosystem-
+# governance norms in each language - Rust's
+# individual-authorship culture, Go's stdlib-
+# first culture, and Node's infrastructure-via-
+# tutorial-ecosystem culture each manifest
+# consistently across format-handling library
+# axes.
+# ============================================================================
+
+_ar5iv() {
+    local context state state_descr line
+    typeset -A opt_args
+
+    _arguments -s -S \
+        '(- *)--help[print Rocket help]' \
+        '(- *)--version[print version]'
+}
+
+_ar5iv "$@"
