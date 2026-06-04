@@ -1,0 +1,358 @@
+#compdef apns2
+# ============================================================================
+# apns2 - Apple Push Notification Service (APNs)
+#          HTTP/2 push provider CLI for sending
+#          push notifications to iOS / tvOS /
+#          Safari / macOS apps (Go, MIT)
+#
+# Author : Adam Jones (sideshow)
+# Upstream: https://github.com/sideshow/apns2
+# CLI    : `apns2` (cmd/apns2/main.go)
+#
+# `apns2` is a CLI wrapper around the canonical
+# Go Apple Push Notification Service (APNs)
+# library by Adam Jones. The library provides
+# Go implementations of:
+#   - HTTP/2-based APNs Provider API (Apple's
+#     binary-protocol APNs Legacy API was
+#     deprecated in 2020; HTTP/2 + JWT is the
+#     only supported path now)
+#   - Token-based authentication (JWT-signed with
+#     Apple Developer team credentials)
+#   - Certificate-based authentication (legacy
+#     PEM cert+key approach)
+#   - Production + Development (sandbox) endpoint
+#     selection
+#   - Connection pooling for high-throughput
+#     batch notification senders
+#
+# Apple's APNs requires HTTP/2 + ALPN-negotiated
+# h2 protocol identifier. The Go library uses
+# `golang.org/x/net/http2` to configure the
+# `http.Transport` for HTTP/2 client connections.
+# The library handles:
+#   - HTTP/2 connection multiplexing (Apple
+#     allows ~1500 concurrent streams per
+#     connection)
+#   - Stream-level flow control
+#   - HPACK header compression for the APNs
+#     headers (apns-topic + apns-id + apns-
+#     expiration + apns-priority + ...)
+#   - HTTP/2 server PING + RST_STREAM error
+#     handling
+#
+# Use cases:
+#   - Apple Push Notification sending from
+#     Go backends (notification scheduling
+#     services + mass-push deployments)
+#   - CLI ad-hoc push notification testing
+#     during iOS app development
+#   - One-shot notification scripts for
+#     server-side cron jobs (e.g., daily
+#     reminder pushes)
+#   - Integration testing of APNs payload
+#     formats
+#
+# Usage:
+#   apns2 -c <cert.pem> -t <bundle-id> [-m mode]
+#   # then send notifications via stdin
+#   # in the format:
+#   # <DeviceToken> <APNS Payload JSON>
+#
+# Flags (alecthomas/kingpin v2):
+#   -c, --certificate-path <path>  - path to PEM
+#                                     certificate
+#                                     file
+#                                     (required;
+#                                     concatenated
+#                                     cert + key)
+#   -t, --topic <bundle-id>        - APNs topic
+#                                     (typically
+#                                     the app's
+#                                     iOS bundle
+#                                     identifier;
+#                                     required)
+#   -m, --mode <prod|dev>          - APNs server
+#                                     mode (
+#                                     production
+#                                     or
+#                                     development;
+#                                     default
+#                                     production)
+#       --help                     - print
+#                                     kingpin
+#                                     help
+#       --version                  - print
+#                                     version
+#
+# Stdin protocol:
+#   Each line: <DeviceToken> <APNS Payload JSON>
+#   Example:
+#     aff0c63d...371e5d0 {"aps":{"alert":"Hello"}}
+#     ee72b22c...9f6e8d4 {"aps":{"alert":"Hi"}}
+#
+# Stdout protocol:
+#   Per-line response status:
+#     200: ''
+#     410: 'Unregistered'
+#     400: 'BadDeviceToken'
+#
+# Example invocation:
+#   # Production push with PEM cert
+#   echo 'aff0c63d... {"aps":{"alert":"Hello"}}' | \
+#     apns2 -c ~/AuthKey_ABCDE12345.pem \
+#           -t com.example.MyApp \
+#           -m production
+#
+#   # Development sandbox (for Xcode debug
+#   # builds)
+#   echo 'aff0c63d... {"aps":{"alert":"Test"}}' | \
+#     apns2 -c ~/AuthKey.pem \
+#           -t com.example.MyApp \
+#           -m development
+#
+#   # Batch from file
+#   cat tokens-and-payloads.txt | \
+#     apns2 -c cert.pem -t com.example.MyApp
+#
+# The golang.org/x/net/http2 lane is built on
+# `golang.org/x/net v0.33.0` (declared verbatim
+# at upstream go.mod HEAD as a direct dep, with
+# `golang.org/x/net/http2` imported by the
+# apns2 client.go for HTTP/2 transport
+# configuration via
+# `http2.ConfigureTransport(transport)` to
+# enable HTTP/2 in the underlying `http.Client`
+# used for APNs Provider API requests), the
+# canonical Go HTTP/2 library by the Go team.
+#
+# The Go team's `golang.org/x/net/http2` is the
+# de-facto canonical Go HTTP/2 library:
+#   - Pure-Go implementation of IETF RFC 7540
+#     (HTTP/2)
+#   - HPACK (RFC 7541) header compression
+#   - Client + server modes
+#   - Integrated automatically into Go's
+#     `net/http` stdlib for HTTPS clients +
+#     servers (Go's `http.Transport` and
+#     `http.Server` use http2 transparently
+#     when TLS is enabled)
+#   - h2c (HTTP/2 cleartext over TCP without TLS)
+#     support via `http2.NewHandler(handler,
+#     &http2.Server{})`
+#   - Stream multiplexing + flow control
+#   - Server push support (deprecated in RFC
+#     9113 but still supported by the library)
+#   - ALPN-negotiable
+#
+# Notable: Go's HTTP/2 implementation is in
+# `golang.org/x/net/http2` rather than the
+# stdlib `net/http` package directly. The
+# `net/http` package imports http2 lazily +
+# configures it automatically for HTTPS
+# connections - so most Go programs use HTTP/2
+# implicitly via `http.Get(url)` without
+# needing to import http2 explicitly. Direct
+# `golang.org/x/net/http2` imports are needed
+# for:
+#   - h2c (HTTP/2 cleartext) servers (no TLS)
+#   - Custom HTTP/2 connection configuration
+#     (max concurrent streams, frame size, etc.)
+#   - Server push (rare; deprecated by browsers
+#     but still in the protocol spec)
+#   - HTTP/2-only servers (refusing HTTP/1.1
+#     fallback)
+#
+# golang.org/x/net/http2 governance:
+#   - Maintained by the Go core team
+#     (Brad Fitzpatrick was the original
+#     author; he's now at Tailscale but the
+#     code remains canonical)
+#   - Part of the golang.org/x/net "supplementary"
+#     library (semi-official Go subrepository
+#     for code that needs more frequent releases
+#     than the stdlib release cycle allows)
+#   - Hosted at github.com/golang/net
+#   - The same Brad Fitzpatrick (bradfitz) also
+#     authored memcached's Go bindings,
+#     gomemcache, and contributed extensively
+#     to the Go stdlib's net/http package
+#
+# Brad Fitzpatrick's broader Go ecosystem
+# footprint (the bradfitz Go infrastructure
+# tier):
+#   - golang.org/x/net (canonical
+#     supplementary network library; THIS AXIS
+#     via http2)
+#   - golang.org/x/sys (canonical
+#     supplementary syscall library)
+#   - LiveJournal + memcached origin (created
+#     in Perl, ported to many languages
+#     including Go)
+#   - gomemcache (canonical Go memcached
+#     client)
+#   - perkeep / camlistore (content-addressable
+#     storage)
+#   - Now at Tailscale (canonical Go-based
+#     WireGuard VPN service; cross-cuts with
+#     Caddy's Matt Holt at the network proxy
+#     vertical)
+#
+# Fitzpatrick's role in Go is *foundational
+# networking + storage infrastructure*:
+#   - golang.org/x/net (http2 + bidi text +
+#     idna + websocket + ipv4/ipv6 + ...)
+#   - gomemcache (canonical memcached client)
+#   - Tailscale (canonical Go WireGuard mesh
+#     VPN; also uses h2 + http2 internally)
+#
+# Multi-axis canonical-Go author/org cohort
+# extension (now spanning 15 distinct
+# individuals/orgs):
+#   - + Brad Fitzpatrick / Go team
+#     (golang.org/x/net/http2; THIS AXIS;
+#     extends the Go team's stdlib canonical
+#     position into the supplementary x/net
+#     library)
+#
+# Notable cross-axis observation: Brad
+# Fitzpatrick has been credited in multiple
+# canonical positions:
+#   - Go team contributor (Russ Cox + Adam
+#     Langley + Filippo Valsorda + Roland
+#     Shoemaker + Brad Fitzpatrick)
+#   - Tailscale founder (a Go-based product
+#     adopting Caddy-style HTTPS automation +
+#     custom WireGuard userspace)
+#   - golang.org/x/net + golang.org/x/sys
+#     maintainer (the semi-official Go
+#     subrepositories)
+#
+# This positions Fitzpatrick as a
+# foundational-multi-vertical Go canonical
+# author. His libraries are in the dependency
+# graph of essentially every Go networking
+# program (via golang.org/x/net).
+#
+# apns2 uses golang.org/x/net/http2 in its
+# client.go via:
+#   ```go
+#   import (
+#       "golang.org/x/net/http2"
+#       "net/http"
+#   )
+#
+#   transport := &http.Transport{
+#       TLSClientConfig: &tls.Config{
+#           Certificates: []tls.Certificate{
+#               *cert,
+#           },
+#       },
+#   }
+#   if err := http2.ConfigureTransport(
+#       transport); err != nil {
+#       return nil, err
+#   }
+#   client := &http.Client{Transport: transport}
+#
+#   // Use client to POST to APNs:
+#   resp, err := client.Post(
+#       "https://api.push.apple.com/3/device/" +
+#           token,
+#       "application/json", payload)
+#   ```
+# The `http2.ConfigureTransport` call enables
+# HTTP/2 for the transport with ALPN
+# negotiation. Without this call, the
+# transport would default to HTTP/1.1 (because
+# the Go stdlib's automatic HTTP/2 negotiation
+# is only enabled when no `TLSClientConfig` is
+# provided - manual TLS config disables the
+# automatic upgrade).
+#
+# ----------------------------------------------------------------------------
+# AXIS 275 :: HTTP/2 protocol libraries (IETF
+#              RFC 7540 HTTP/2 + RFC 7541 HPACK
+#              header compression + RFC 7838
+#              Alt-Svc service discovery)
+# Round 1524 :: Go slot 2 of 4 :: continues Axis 275
+#
+# Cross-language canonical library family for this axis:
+#   Rust    : hyperium/h2                  [R1523 _fairy-client]
+#             (Carl Lerche; foundational
+#              async-substrate; substrate
+#              of every Rust HTTP server)
+#   Go      : golang.org/x/net/http2       [R1524 THIS FILE]
+#             (Brad Fitzpatrick + Go team;
+#              integrated into net/http
+#              stdlib; supplementary x/net
+#              library)
+#   TS/Node : node:http2 (stdlib)          [R1525 closing]
+#             (Node team; uses nghttp2 C
+#              library internally; stdlib
+#              since Node 8.4 / 2017)
+#
+# golang.org/x/net/http2 is structurally
+# interesting in this axis because it's the
+# *semi-stdlib language-extension canonical*:
+#   - Not in the core stdlib (Go's release
+#     cycle would slow down http2 evolution
+#     too much)
+#   - Maintained as part of golang.org/x/net
+#     (the semi-official Go subrepository)
+#   - Automatically integrated into net/http
+#     for HTTPS clients/servers (Go programs
+#     use HTTP/2 without explicitly importing
+#     http2)
+#   - Direct import required for h2c +
+#     advanced HTTP/2 configuration
+#
+# This is the *language-extension canonical*
+# pattern - distinct from:
+#   - Pure stdlib (Go's archive/tar + Go's
+#     crypto/tls): no language-extension
+#     library needed
+#   - Pure language-as-canonical (Rust quiche +
+#     Rust rustls): individual-author or
+#     enterprise canonical
+#   - Language-runtime extension (Node http2
+#     stdlib): added to stdlib after community
+#     fragmentation
+#
+# Go's pattern of using golang.org/x/* for
+# supplementary canonical libraries reflects
+# Go's stdlib release cycle (one stdlib
+# release per 6 months) being too slow for
+# protocol libraries that need more frequent
+# updates. golang.org/x/net is essentially
+# "Go stdlib v2" for networking.
+#
+# Cross-language interop at the HTTP/2 wire-
+# protocol level - all three lanes interoperate
+# with any compliant HTTP/2 endpoint (Nginx +
+# Apache + Caddy + AWS ALB + Cloudflare + Google
+# Frontend + every other production HTTP/2
+# server).
+#
+# Use-case spectrum across the lanes (so far):
+#   - fairy-client (Rust, h2): distributed
+#     storage client using HTTP/2 for client +
+#     server protocol with direct h2 API
+#   - apns2 (Go, golang.org/x/net/http2):
+#     Apple Push Notification Service HTTP/2
+#     client for iOS/tvOS/Safari/macOS push
+# ============================================================================
+
+_apns2() {
+    local context state state_descr line
+    typeset -A opt_args
+
+    _arguments -s -S \
+        '(-c --certificate-path)'{-c,--certificate-path}'[path to PEM certificate file (required)]:file:_files -g "*.(pem|p12)"' \
+        '(-t --topic)'{-t,--topic}'[APNs topic (iOS bundle identifier; required)]:bundle-id:' \
+        '(-m --mode)'{-m,--mode}'[APNs server mode]:mode:(production development)' \
+        '(- *)--help[print help]' \
+        '(- *)--version[print version]'
+}
+
+_apns2 "$@"
