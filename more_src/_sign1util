@@ -1,0 +1,627 @@
+#compdef sign1util attach_receipt
+# ============================================================================
+# sign1util / attach_receipt - Microsoft
+#                               COSE_Sign1 (RFC
+#                               9052) document
+#                               signing +
+#                               manipulation
+#                               (Go, MIT)
+#
+# Author : Microsoft Confidential Computing team
+# Upstream: https://github.com/microsoft/cosesign1go
+#
+# `sign1util` is Microsoft's reference CLI for
+# creating, validating, and inspecting
+# COSE_Sign1 documents - the IETF-standardized
+# (RFC 9052) CBOR-based digital signature
+# envelope used extensively in:
+#   - Confidential computing attestation
+#     reports (Intel SGX + AMD SEV-SNP)
+#   - Azure Confidential Container policy
+#     signatures (Azure CC ACI uses COSE_Sign1
+#     to sign security policies; this CLI is
+#     the canonical signer for those policies)
+#   - SCITT (Supply Chain Integrity, Transparency
+#     and Trust; IETF working group, RFC 9952)
+#     transparency service receipts
+#   - W3C WebAuthn attestation
+#   - COVID-19 EU Digital Green Certificates
+#   - Verifiable Credentials (DID-X509 method)
+#   - CWT (CBOR Web Token, RFC 8392) signed
+#     tokens
+#
+# `attach_receipt` is a companion CLI that
+# rewrites a COSE_Sign1 envelope's unprotected
+# `receipts` header (label 394) - useful for
+# adding SCITT transparency-service receipts
+# to existing signatures after-the-fact (the
+# standard SCITT receipt-issuance flow).
+#
+# Distinguishing features vs alternatives:
+#   - **Reference implementation** (microsoft/
+#     cosesign1go is the de-facto reference
+#     for Azure Confidential Container policy
+#     signing; Azure CC documentation cites
+#     this tool)
+#   - **DID-X509 support** (the canonical Go
+#     implementation of the did:x509 method
+#     used for Azure CC policy issuer
+#     identification; relies on Microsoft/
+#     didx509go)
+#   - **CCF receipt validation** (Confidential
+#     Consortium Framework attestation-backed
+#     receipts; CCF nodes serve TLS certs
+#     backed by attestation rather than public
+#     CAs)
+#   - **JWKS-based receipt issuer trust**
+#     (receipts validated against issuer JWKS
+#     endpoints with hostname allow-listing)
+#   - **Verbatim CBOR round-trip** (the
+#     attach_receipt binary preserves
+#     protected-header bytes + signature bytes
+#     exactly across receipt manipulation;
+#     critical for signature validity
+#     preservation)
+#
+# Use cases:
+#   - Sign an Azure Confidential Container
+#     security policy (mandatory before deploy)
+#   - Verify a COSE_Sign1 envelope's signature
+#     + certificate chain validity + did:x509
+#     issuer identity
+#   - Pretty-print a COSE_Sign1 envelope's
+#     protected + unprotected headers for
+#     debugging
+#   - Inspect attached SCITT transparency-
+#     service receipts
+#   - Attach a receipt from a SCITT transparency
+#     service to a previously-signed COSE_Sign1
+#     envelope
+#   - Extract the leaf certificate + key from
+#     a COSE_Sign1 envelope's x5chain header
+#   - Validate did:x509 method resolution for
+#     issuer identification
+#
+# Usage:
+#   sign1util [--log-level <lvl>] <subcommand> [flags]
+#   attach_receipt -in <env> -out <env> (-donor <env> | -receipt <blob>)
+#
+# `sign1util` global flag:
+#   --log-level <level>            - logrus log
+#                                     level (trace
+#                                     + debug +
+#                                     info + warn
+#                                     + error +
+#                                     fatal +
+#                                     panic;
+#                                     default
+#                                     info)
+#
+# `sign1util` subcommands (urfave/cli/v1):
+#   create                         - create a
+#                                     new
+#                                     COSE_Sign1
+#                                     envelope
+#                                     from
+#                                     claims +
+#                                     key +
+#                                     cert chain
+#     --claims <file>              - JSON file
+#                                     with
+#                                     claims
+#                                     payload
+#     --content-type <ct>          - claims
+#                                     content
+#                                     type
+#                                     (e.g.
+#                                     application
+#                                     /json)
+#     --chain <pem>                - PEM cert
+#                                     chain
+#                                     file
+#     --key <pem>                  - PEM
+#                                     private
+#                                     key file
+#     --algo <algorithm>           - signature
+#                                     algorithm
+#                                     (ES256 +
+#                                     ES384 +
+#                                     ES512 +
+#                                     PS256 +
+#                                     PS384 +
+#                                     PS512)
+#     --out <file>                 - output
+#                                     COSE_Sign1
+#                                     envelope
+#                                     path
+#     --salt <hex>                 - hex-
+#                                     encoded
+#                                     salt (PSS
+#                                     algorithms)
+#     --issuer <did>               - issuer
+#                                     did:x509
+#                                     string
+#     --feed <feed>                - feed ID
+#                                     string
+#                                     (SCITT
+#                                     concept)
+#     -v, --verbose                - verbose
+#                                     output
+#
+#   check                          - validate a
+#                                     COSE_Sign1
+#                                     envelope's
+#                                     signature
+#                                     + chain
+#                                     + did:x509
+#                                     resolution
+#                                     + optionally
+#                                     receipts
+#     --in <file>                  - input
+#                                     COSE_Sign1
+#                                     envelope
+#     --chain <pem>                - PEM cert
+#                                     chain
+#                                     for
+#                                     validation
+#     --did <did>                  - expected
+#                                     did:x509
+#                                     issuer
+#     --verbose                    - verbose
+#                                     output
+#     --require-receipt-from <dom> - require a
+#                                     receipt
+#                                     from this
+#                                     issuer
+#                                     domain
+#                                     (SCITT
+#                                     transparency
+#                                     service
+#                                     issuer)
+#
+#   print                          - pretty-
+#                                     print a
+#                                     COSE_Sign1
+#                                     envelope's
+#                                     headers +
+#                                     claims +
+#                                     receipts
+#     --in <file>                  - input
+#                                     COSE_Sign1
+#                                     envelope
+#     --validate-receipts          - validate
+#                                     all
+#                                     attached
+#                                     receipts
+#                                     (triggers
+#                                     network
+#                                     JWKS
+#                                     fetches)
+#     --allow-jwks-domain <dom>    - additional
+#                                     JWKS
+#                                     domain
+#                                     allow-list
+#                                     (repeatable)
+#     --require-receipt-from <dom> - require a
+#                                     receipt
+#                                     from this
+#                                     issuer
+#                                     domain
+#
+#   leaf                           - extract
+#                                     leaf cert
+#                                     + key
+#                                     from a
+#                                     COSE_Sign1
+#                                     envelope
+#                                     x5chain
+#                                     header
+#     --in <file>                  - input
+#                                     COSE_Sign1
+#                                     envelope
+#     --keyout <pem>               - output PEM
+#                                     key file
+#     --certout <pem>              - output PEM
+#                                     cert file
+#     --verbose                    - verbose
+#                                     output
+#
+#   did-x509                       - resolve a
+#                                     did:x509
+#                                     identifier
+#                                     against
+#                                     a cert
+#                                     chain
+#     --in <did>                   - did:x509
+#                                     string to
+#                                     resolve
+#     --fingerprint-algorithm <a>  - fingerprint
+#                                     algorithm
+#                                     (sha256 +
+#                                     sha384 +
+#                                     sha512;
+#                                     default
+#                                     sha256)
+#     --chain <pem>                - PEM cert
+#                                     chain to
+#                                     resolve
+#                                     against
+#     -i, --index <n>              - chain
+#                                     element
+#                                     index
+#                                     (default
+#                                     0)
+#     --policy <policy>            - policy
+#                                     constraint
+#                                     string
+#     --verbose                    - verbose
+#                                     output
+#
+#   chain                          - extract
+#                                     cert
+#                                     chain
+#                                     from
+#                                     COSE_Sign1
+#                                     envelope
+#     --in <file>                  - input
+#                                     COSE_Sign1
+#                                     envelope
+#     --out <pem>                  - output PEM
+#                                     cert
+#                                     chain
+#                                     file
+#
+# `attach_receipt` flags (Go stdlib flag):
+#   -in <file>                     - input
+#                                     COSE_Sign1
+#                                     envelope
+#   -out <file>                    - output
+#                                     COSE_Sign1
+#                                     envelope
+#                                     (with
+#                                     attached
+#                                     receipt)
+#   -donor <file>                  - donor
+#                                     COSE_Sign1
+#                                     envelope
+#                                     to steal
+#                                     receipts
+#                                     from
+#                                     (alternative
+#                                     to
+#                                     -receipt)
+#   -receipt <file>                - raw
+#                                     COSE_Sign1
+#                                     receipt
+#                                     blob to
+#                                     attach
+#                                     (alternative
+#                                     to
+#                                     -donor)
+#
+# Example invocations:
+#   # sign an Azure CC security policy
+#   sign1util create \
+#     --claims policy.json \
+#     --content-type 'application/json' \
+#     --chain leaf-chain.pem \
+#     --key leaf.key \
+#     --algo ES256 \
+#     --issuer 'did:x509:0:sha256:abc...' \
+#     --feed example-feed \
+#     --out policy.cose
+#
+#   # validate signature + did:x509 + cert chain
+#   sign1util check \
+#     --in policy.cose \
+#     --chain root-chain.pem \
+#     --did 'did:x509:0:sha256:abc...'
+#
+#   # pretty-print envelope headers + payload
+#   sign1util print --in policy.cose
+#
+#   # validate attached SCITT receipts
+#   sign1util print --in policy.cose \
+#     --validate-receipts \
+#     --allow-jwks-domain scitt.example.com
+#
+#   # extract leaf certificate + key
+#   sign1util leaf \
+#     --in policy.cose \
+#     --keyout leaf.key \
+#     --certout leaf.crt
+#
+#   # extract full x5chain
+#   sign1util chain \
+#     --in policy.cose \
+#     --out chain.pem
+#
+#   # resolve did:x509 against a chain
+#   sign1util did-x509 \
+#     --in 'did:x509:0:sha256:abc...' \
+#     --chain leaf-chain.pem \
+#     --index 0
+#
+#   # attach a receipt from donor envelope
+#   attach_receipt \
+#     -in policy.cose \
+#     -out policy-with-receipt.cose \
+#     -donor donor-with-receipt.cose
+#
+#   # attach a raw receipt blob
+#   attach_receipt \
+#     -in policy.cose \
+#     -out policy-with-receipt.cose \
+#     -receipt receipt.bin
+#
+# The fxamacker/cbor lane is built on
+# `github.com/fxamacker/cbor/v2 v2.4.0`
+# (declared verbatim at upstream go.mod HEAD
+# as a direct dep, imported by `pkg/
+# cosesign1/` + `cmd/attach_receipt/` for
+# COSE_Sign1 envelope CBOR encoding +
+# decoding + verbatim round-trip handling of
+# protected-header byte strings), the
+# canonical Go CBOR library by Faye Amacker -
+# github.com/fxamacker/cbor.
+#
+# fxamacker/cbor is the de-facto canonical
+# Go CBOR library:
+#   - **Pure-Go implementation** (no CGO)
+#   - **RFC 8949 compliant** (the IETF
+#     canonical CBOR spec)
+#   - **Highest fuzz coverage** in any Go
+#     CBOR implementation (continuous fuzz
+#     testing via Go's native fuzzing
+#     framework)
+#   - **Zero-allocation decoding** for primitive
+#     types (critical for high-throughput CBOR
+#     parsing in attestation pipelines)
+#   - **Tag system** (CBOR's semantic tag
+#     numbers for dates + bignums + URIs +
+#     custom application-specific types)
+#   - **CTAP2 + COSE + CWT + WebAuthn
+#     compliance modes** (enforces format
+#     restrictions for these specific specs)
+#   - **2,500+ stars on github.com/fxamacker/
+#     cbor**
+#   - ~9,000 reverse-deps on pkg.go.dev (one
+#     of the most-imported Go libraries in
+#     the security + crypto space)
+#
+# fxamacker/cbor's distinguishing position vs
+# Go CBOR alternatives:
+#   - fxamacker/cbor (Amacker): canonical;
+#     RFC 8949; multiple spec compliance
+#     modes; THIS AXIS
+#   - ugorji/go/codec: multi-format codec
+#     (CBOR + MessagePack + JSON + BinaryC);
+#     higher complexity; less CBOR-spec-
+#     strict
+#   - jeevatkm/go-cbor: older alternative
+#     pure-Go CBOR; less maintained
+#   - whyrusleeping/cbor-gen: code generator
+#     producing fast CBOR codecs; used by
+#     Filecoin/IPLD; smaller scope than
+#     fxamacker/cbor
+#
+# Faye Amacker is a long-time Go cryptography
+# engineer + has been the primary maintainer
+# of fxamacker/cbor since the library's
+# inception. Amacker's broader Go ecosystem
+# footprint:
+#   - fxamacker/cbor (canonical Go CBOR;
+#     THIS AXIS)
+#   - fxamacker/webauthn (Go WebAuthn server
+#     library; uses fxamacker/cbor for
+#     CTAP2/COSE_Key handling)
+#
+# Amacker's role in Go is *security + RFC-
+# bound binary format infrastructure*. The
+# CBOR library is foundational to many
+# Go-based security tools:
+#   - go-cose (the Veraison Go COSE library;
+#     uses fxamacker/cbor for COSE wire
+#     encoding)
+#   - veraison/swid (SWID/CoSWID library)
+#   - veraison/corim (CoRIM library)
+#   - microsoft/cosesign1go (THIS BINARY)
+#   - hf/nitrite (AWS Nitro Enclave
+#     attestation)
+#   - Microsoft's Azure Confidential Computing
+#     stack
+#
+# Multi-axis canonical-Go author/org cohort
+# extension (now spanning 20 distinct
+# individuals/orgs after R1539):
+#   - + Faye Amacker (fxamacker/cbor +
+#     fxamacker/webauthn; THIS AXIS;
+#     canonical Go CBOR + RFC 8949 +
+#     security spec compliance)
+#
+# Amacker's joining the canonical-Go cohort
+# at the *security RFC implementation*
+# level reinforces the pattern of
+# *individual-canonical-author + foundational-
+# RFC-implementation* documented across the
+# corpus.
+#
+# sign1util uses fxamacker/cbor for:
+#   - COSE_Sign1 envelope encoding + decoding
+#     (the entire signed envelope is a
+#     4-element CBOR array per RFC 9052)
+#   - Protected header byte-string preservation
+#     (the protected header is itself a CBOR-
+#     encoded bytestring; must be passed
+#     verbatim to signature verification)
+#   - Unprotected header map handling (the
+#     receipts header label 394 contains an
+#     array of nested COSE_Sign1 envelopes)
+#   - CBOR tag handling (the COSE_Sign1 tag
+#     is 18 = 0xd2; optional in the envelope
+#     prefix)
+#
+# attach_receipt's `rawSign1` struct uses
+# fxamacker/cbor's `cbor:",toarray"` struct
+# tag for CBOR-array (vs CBOR-map) encoding -
+# this is the canonical fxamacker/cbor
+# pattern for COSE wire-format structures.
+#
+# This is the canonical use case for
+# fxamacker/cbor in production security
+# infrastructure: precise spec-compliant
+# CBOR encoding/decoding where signature
+# byte-exactness preservation is critical
+# (any byte-level transformation of the
+# protected header would invalidate the
+# signature).
+#
+# ----------------------------------------------------------------------------
+# AXIS 280 :: CBOR (Concise Binary Object
+#              Representation) libraries
+#              (RFC 8949 binary
+#              serialization format;
+#              schemaless self-describing
+#              wire format; tagged value
+#              system for semantic types)
+# Round 1539 :: Go slot 2 of 4 :: continues Axis 280
+#
+# Cross-language canonical library family for
+# this axis:
+#   Rust    : enarx/ciborium             [R1538 _memfaultd]
+#             (Nathaniel McCallum + Enarx
+#              project; canonical Rust CBOR;
+#              serde-integrated; TEE
+#              attestation lineage)
+#   Go      : fxamacker/cbor             [R1539 THIS FILE]
+#             (Faye Amacker; canonical Go
+#              CBOR; RFC 8949 + COSE +
+#              CTAP2 + WebAuthn compliance
+#              modes)
+#   TS/Node : hildjj/node-cbor           [R1540 closing]
+#             (Joe Hildebrand; canonical
+#              Node CBOR; original Node CBOR
+#              implementation)
+#
+# Use-case spectrum across the lanes (so far):
+#   - memfaultd (Rust, ciborium): embedded
+#     Linux device telemetry MAR archive
+#     header serialization + TEE attestation
+#     reports
+#   - sign1util/attach_receipt (Go, fxamacker/
+#     cbor): COSE_Sign1 (RFC 9052) document
+#     signing for Azure Confidential
+#     Container policy + SCITT supply-chain
+#     attestation
+#
+# Both use cases share the *confidential
+# computing + attestation* deployment
+# pattern - CBOR's combination of:
+#   - Small binary size (critical for TEE
+#     attestation report transmission)
+#   - Canonical encoding (RFC 8949 specifies
+#     deterministic encoding; required for
+#     reproducible signatures)
+#   - Tag-based semantic typing (COSE +
+#     CWT + EAT use CBOR tags extensively)
+# makes it the *de-facto choice for
+# attestation + signed payload formats* in
+# production confidential computing.
+# ============================================================================
+
+_sign1util() {
+    local context state state_descr line
+    typeset -A opt_args
+    local curcontext="$curcontext" ret=1
+
+    case $service in
+        sign1util)
+            _arguments -C \
+                '--log-level=[logrus log level]:level:(trace debug info warn error fatal panic)' \
+                '1: :_sign1util_cmds' \
+                '*::arg:->args' \
+            && ret=0
+
+            case $state in
+                args)
+                    case $words[1] in
+                        create)
+                            _arguments \
+                                '--claims=[JSON claims file]:file:_files -g "*.json"' \
+                                '--content-type=[claims content type]:type:' \
+                                '--chain=[PEM cert chain]:file:_files -g "*.pem"' \
+                                '--key=[PEM private key]:file:_files -g "*.pem"' \
+                                '--algo=[signature algorithm]:algo:(ES256 ES384 ES512 PS256 PS384 PS512)' \
+                                '--out=[output COSE_Sign1 envelope]:file:_files' \
+                                '--salt=[hex-encoded salt (PSS)]:hex:' \
+                                '--issuer=[issuer did:x509]:did:' \
+                                '--feed=[feed ID]:feed:' \
+                                '(-v --verbose)'{-v,--verbose}'[verbose]'
+                            ;;
+                        check)
+                            _arguments \
+                                '--in=[input COSE_Sign1 envelope]:file:_files' \
+                                '--chain=[PEM cert chain]:file:_files -g "*.pem"' \
+                                '--did=[expected did:x509 issuer]:did:' \
+                                '--verbose[verbose]' \
+                                '--require-receipt-from=[required receipt issuer domain]:domain:'
+                            ;;
+                        print)
+                            _arguments \
+                                '--in=[input COSE_Sign1 envelope]:file:_files' \
+                                '--validate-receipts[validate attached receipts]' \
+                                '*--allow-jwks-domain=[additional JWKS domain allow-list]:domain:' \
+                                '--require-receipt-from=[required receipt issuer domain]:domain:'
+                            ;;
+                        leaf)
+                            _arguments \
+                                '--in=[input COSE_Sign1 envelope]:file:_files' \
+                                '--keyout=[output PEM key]:file:_files' \
+                                '--certout=[output PEM cert]:file:_files' \
+                                '--verbose[verbose]'
+                            ;;
+                        did-x509)
+                            _arguments \
+                                '--in=[did:x509 string to resolve]:did:' \
+                                '--fingerprint-algorithm=[fingerprint algorithm]:algo:(sha256 sha384 sha512)' \
+                                '--chain=[PEM cert chain]:file:_files -g "*.pem"' \
+                                '(-i --index)'{-i,--index}'=[chain element index]:n:' \
+                                '--policy=[policy constraint]:policy:' \
+                                '--verbose[verbose]'
+                            ;;
+                        chain)
+                            _arguments \
+                                '--in=[input COSE_Sign1 envelope]:file:_files' \
+                                '--out=[output PEM cert chain]:file:_files'
+                            ;;
+                    esac
+                    ;;
+            esac
+            ;;
+        attach_receipt)
+            _arguments \
+                '-in=[input COSE_Sign1 envelope]:file:_files' \
+                '-out=[output COSE_Sign1 envelope (with attached receipt)]:file:_files' \
+                '-donor=[donor envelope to steal receipts from]:file:_files' \
+                '-receipt=[raw COSE_Sign1 receipt blob to attach]:file:_files' \
+            && ret=0
+            ;;
+    esac
+
+    return ret
+}
+
+_sign1util_cmds() {
+    local -a cmds
+    cmds=(
+        'create:create a new COSE_Sign1 envelope from claims + key + cert chain'
+        'check:validate a COSE_Sign1 signature + chain + did:x509 + optional receipts'
+        'print:pretty-print a COSE_Sign1 envelope headers + claims + receipts'
+        'leaf:extract leaf cert + key from a COSE_Sign1 envelope x5chain header'
+        'did-x509:resolve a did:x509 identifier against a cert chain'
+        'chain:extract cert chain from COSE_Sign1 envelope'
+    )
+    _describe -t commands 'sign1util command' cmds
+}
+
+_sign1util "$@"
