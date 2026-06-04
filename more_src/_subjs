@@ -1,0 +1,328 @@
+#compdef subjs
+# ============================================================================
+# subjs - extract JavaScript file URLs from
+#          a list of subdomains / URLs
+#          (Go, MIT)
+#
+# Author : Corben Leo (lc)
+# Upstream: https://github.com/lc/subjs
+#
+# `subjs` is a Go CLI for automated extraction
+# of JavaScript file URLs from a list of
+# subdomains or URLs. Used heavily in
+# authorized security testing workflows:
+#   - Bug bounty reconnaissance (Hackerone +
+#     Bugcrowd + Intigriti programs)
+#   - Web application security audits of
+#     own infrastructure
+#   - CTF challenges involving web app
+#     analysis
+#   - JavaScript supply-chain audits (which
+#     JS files does this application load
+#     + from where + are any from
+#     untrusted CDNs)
+#
+# Workflow:
+#   1. Crawler (e.g. `gau` / `waybackurls`)
+#      produces a list of URLs/subdomains
+#   2. `subjs` fetches each URL + parses
+#      the HTML
+#   3. For each fetched HTML page, scrapes
+#      <script src="..."> attribute values
+#      via goquery's CSS selector engine
+#   4. Outputs unique JavaScript file URLs
+#      to stdout (one per line)
+#   5. Downstream tools (e.g. `secretfinder`
+#      / `linkfinder`) consume the JS URLs
+#      for secret + endpoint extraction
+#
+# Distinguishing features vs alternatives:
+#   - **Concurrent workers** (-c flag;
+#     default 10 parallel HTTP fetchers
+#     for fast scanning)
+#   - **Stdin pipeline mode** (no input file
+#     = read from stdin; suitable for
+#     shell pipelines from gau/
+#     waybackurls/subfinder/etc.)
+#   - **Custom User-Agent** (-ua flag for
+#     bypassing User-Agent-based WAF rules
+#     or for tracking attribution)
+#   - **Configurable timeout** (-t flag;
+#     default 15 seconds for slow sites)
+#   - **Single-file Go binary** (cross-
+#     compiles to all platforms; no
+#     runtime deps)
+#
+# Use cases:
+#   - Bug bounty: discover all JavaScript
+#     files loaded by a target's
+#     subdomains (input from `gau` or
+#     `waybackurls`)
+#   - Security audit of own SaaS
+#     application: enumerate JS supply
+#     chain (which CDNs + which third-
+#     party trackers load)
+#   - CTF challenge: extract JS files for
+#     secret discovery
+#   - Web archive analysis: which JS files
+#     did historical snapshots of a site
+#     load (combine with Wayback Machine
+#     URLs)
+#
+# Usage:
+#   subjs [options]
+#   cat urls.txt | subjs        # stdin
+#
+# Flags (Go stdlib flag):
+#   -i <file>                      - input
+#                                     file
+#                                     containing
+#                                     URLs
+#                                     (one per
+#                                     line)
+#   -ua <string>                   - User-
+#                                     Agent
+#                                     to send
+#                                     in HTTP
+#                                     requests
+#   -c <n>                         - number of
+#                                     concurrent
+#                                     workers
+#                                     (default
+#                                     10)
+#   -t <n>                         - timeout
+#                                     in
+#                                     seconds
+#                                     for HTTP
+#                                     client
+#                                     (default
+#                                     15)
+#   -version                       - show
+#                                     version
+#
+# Example invocations:
+#   # Read URLs from file + extract JS URLs
+#   subjs -i urls.txt
+#
+#   # Pipeline from gau (Get All URLs)
+#   gau example.com | subjs
+#
+#   # Pipeline from waybackurls
+#   waybackurls example.com | subjs
+#
+#   # Pipeline from subfinder
+#   subfinder -d example.com -silent | \
+#     httpx -silent | subjs
+#
+#   # Custom User-Agent + 50 workers + 30s
+#   # timeout
+#   subjs -ua 'Mozilla/5.0 (security-audit)' \
+#     -c 50 -t 30 -i urls.txt
+#
+#   # Full bug bounty pipeline
+#   subfinder -d target.com -silent | \
+#     httpx -silent | \
+#     subjs -c 50 | \
+#     sort -u > js-urls.txt
+#
+#   # Show version
+#   subjs -version
+#
+# The PuerkitoBio/goquery lane is built on
+# `github.com/PuerkitoBio/goquery v1.6.0`
+# (declared verbatim at upstream go.mod HEAD
+# as the project's sole non-stdlib dep,
+# imported by `runner/subjs/runner.go` for
+# parsing fetched HTML + extracting <script
+# src="..."> attributes via CSS selectors),
+# the canonical Go HTML scraping library by
+# Martin Angers (PuerkitoBio) - github.com/
+# PuerkitoBio/goquery.
+#
+# PuerkitoBio/goquery is the de-facto
+# canonical Go HTML scraping library:
+#   - **jQuery-style API** (the `$` /
+#     Selection methods adapted to Go;
+#     same API conventions as jQuery +
+#     cheerio + scraper)
+#   - **Built on golang.org/x/net/html**
+#     (the official Go stdlib-extension
+#     HTML5 parser; the same parser used
+#     by goldmark + many Go HTML tools)
+#   - **CSS selector support** (via the
+#     andybalholm/cascadia CSS selector
+#     library; the canonical Go CSS
+#     selector matching engine)
+#   - **Pure-Go implementation** (no CGO)
+#   - **Document traversal API** (Find +
+#     Filter + Each + Map + Children +
+#     Parent + Siblings)
+#   - **Manipulation API** (Append + Prepend
+#     + Remove + ReplaceWith + Wrap +
+#     Unwrap; for round-trip HTML
+#     editing)
+#   - **15,000+ stars on github.com/
+#     PuerkitoBio/goquery**
+#   - **~17,000 reverse-deps on
+#     pkg.go.dev (one of the most-
+#     imported Go libraries in the
+#     web-scraping + HTML-processing
+#     space)**
+#
+# PuerkitoBio/goquery's distinguishing
+# position vs Go HTML scraping
+# alternatives:
+#   - PuerkitoBio/goquery (Angers):
+#     canonical; jQuery-style API;
+#     cascadia-backed; THIS AXIS
+#   - golang.org/x/net/html: low-level
+#     HTML5 parser (Go stdlib extension);
+#     not a scraping API; goquery builds
+#     on it
+#   - andybalholm/cascadia: CSS selector
+#     library (used by goquery);
+#     standalone for non-goquery use
+#     cases
+#   - PuerkitoBio/fetchbot (also Angers):
+#     polite + concurrent web crawler;
+#     pairs with goquery for full
+#     crawl-and-scrape pipelines
+#
+# Martin Angers (PuerkitoBio) is a long-time
+# Go ecosystem contributor specializing in
+# HTML + web crawling + parsing:
+#   - **PuerkitoBio/goquery** (canonical
+#     Go HTML scraping; THIS AXIS)
+#   - **PuerkitoBio/fetchbot** (concurrent
+#     web crawler; ~800 stars; pairs
+#     with goquery)
+#   - **PuerkitoBio/purell** (URL
+#     normalization library; the Go
+#     equivalent of RFC 3986 + RFC
+#     3987 URL normalization rules)
+#   - **PuerkitoBio/throttled** (HTTP
+#     rate limiting middleware)
+#   - **PuerkitoBio/martini-clean**
+#     (pre-1.0 Go web framework
+#     experiment)
+#
+# Angers's role in Go is *web crawling +
+# HTML processing + URL handling
+# infrastructure*. His library family
+# forms a coordinated crawl-and-scrape
+# stack (fetchbot for crawling + goquery
+# for parsing + purell for URL
+# normalization). Few canonical-Go
+# authors maintain such a cohesive
+# multi-library vertical stack.
+#
+# Multi-axis canonical-Go author/org cohort
+# extension (now spanning 25 distinct
+# individuals/orgs after R1554):
+#   - + Martin Angers (PuerkitoBio;
+#     goquery + fetchbot + purell +
+#     throttled; THIS AXIS; canonical
+#     Go HTML scraping + web crawling
+#     vertical stack)
+#
+# Angers joining the canonical-Go cohort
+# at the *vertical-stack canonical
+# author* level extends the pattern of
+# *coordinated multi-library single-
+# author* contributions documented
+# across the corpus.
+#
+# Notable: the goquery + cheerio + scraper
+# convergence on the jQuery-style API
+# (documented in R1553 axis-opener
+# header) is structurally distinctive.
+# The jQuery $ + chained-method API
+# became the de-facto pattern for HTML
+# scraping across Rust + Go + Node
+# despite all three being independent
+# implementations with different
+# underlying parsers (html5ever +
+# golang.org/x/net/html + htmlparser2).
+#
+# jQuery's influence on HTML scraping
+# API design is one of the strongest
+# documented examples of cross-language
+# API convention propagation in the
+# corpus.
+#
+# subjs uses goquery for:
+#   - Parsing each fetched HTML response
+#   - Selecting all <script src="..."> +
+#     <script type="..." src="..."> tags
+#     via CSS selector `script[src]`
+#   - Extracting the src attribute value
+#     for each match
+#   - Filtering for valid JS file URLs
+#     (skipping inline scripts + data:
+#     URLs)
+#
+# This is the canonical use case for
+# goquery in production security tools:
+# CSS-selector-based extraction of
+# specific HTML attributes from large
+# volumes of fetched pages.
+#
+# ----------------------------------------------------------------------------
+# AXIS 285 :: HTML parsing + scraping
+#              libraries
+#              (HTML5 spec-compliant
+#              parsers + CSS selector
+#              engines for web scraping +
+#              full-text extraction + DOM
+#              manipulation)
+# Round 1554 :: Go slot 2 of 4 :: continues Axis 285
+#
+# Cross-language canonical library family
+# for this axis:
+#   Rust    : causal-agent/scraper       [R1553 _feedr]
+#             (Charles Edward Pax;
+#              canonical Rust HTML
+#              scraping; built on
+#              Mozilla Servo html5ever +
+#              selectors)
+#   Go      : PuerkitoBio/goquery        [R1554 THIS FILE]
+#             (Martin Angers; canonical
+#              Go HTML scraping; jQuery-
+#              style API; cascadia-
+#              backed; 15,000+ stars)
+#   TS/Node : cheeriojs/cheerio          [R1555 closing]
+#             (Felix Böhm + maintainers;
+#              canonical Node HTML
+#              scraping; jQuery-style
+#              API; the original)
+#
+# Use-case spectrum across the lanes (so far):
+#   - feedr (Rust, scraper): RSS reader
+#     full-text extraction pipeline
+#     (parsing fetched article HTML for
+#     main-content isolation)
+#   - subjs (Go, goquery): bug bounty +
+#     authorized security testing
+#     JavaScript file URL extraction
+#     from subdomain + URL lists
+#
+# Both use cases share the *CSS-selector-
+# based HTML extraction* pattern - apply
+# CSS selectors to fetched HTML +
+# extract specific attribute values or
+# inner content for downstream
+# processing. This is the canonical
+# scraping deployment pattern across
+# production Rust + Go tooling.
+# ============================================================================
+
+_subjs() {
+    _arguments \
+        '-i+[input file containing URLs]:file:_files' \
+        '-ua+[User-Agent to send in HTTP requests]:user-agent:' \
+        '-c+[number of concurrent workers (default 10)]:n:' \
+        '-t+[timeout in seconds for HTTP client (default 15)]:seconds:' \
+        '-version[show version]'
+}
+
+_subjs "$@"
