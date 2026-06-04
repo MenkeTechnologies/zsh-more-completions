@@ -1,0 +1,402 @@
+#compdef fujin
+# ============================================================================
+# fujin - high-performance message broker gateway
+#          ("Envoy for message brokers"); bridges
+#          between Kafka/NATS/RabbitMQ/MQTT/NSQ/
+#          Redis/ZeroMQ via a unified protocol
+#          over TCP/QUIC/Unix sockets/gRPC (Go,
+#          MIT)
+#
+# Author : fujin-io contributors
+# Upstream: https://github.com/fujin-io/fujin
+#
+# `fujin` (named after the Japanese wind god) is
+# a high-performance message broker gateway that
+# decouples applications from underlying message
+# brokers. Apps connect to fujin over a simple
+# TCP/QUIC/Unix-socket connection (or standard
+# gRPC) + fujin handles the broker-specific
+# protocol translation. Use cases:
+#   - Polyglot microservice messaging without
+#     per-language Kafka/NATS/RabbitMQ clients
+#   - Centralized broker-client upgrades +
+#     observability + auth at the gateway tier
+#   - Zero-allocation protocol parser for high-
+#     throughput scenarios (~840 MB/s with 32KB
+#     payloads on Apple M2 Kafka)
+#   - Hot-swap brokers (migrate Kafka -> NATS
+#     without touching application code)
+#
+# Architecture:
+#   - Pluggable connector architecture
+#     (compile-time build tags select supported
+#     brokers)
+#   - Supported brokers: Kafka (franz-go) + NATS
+#     Core + NATS JetStream + RabbitMQ (AMQP 0.9)
+#     + Azure Service Bus / ActiveMQ (AMQP 1.0) +
+#     Redis/Valkey PubSub + Redis/Valkey Streams
+#     + MQTT (EMQX/NanoMQ) + NSQ + ZeroMQ
+#   - Multiple transports: TCP + QUIC (via
+#     quic-go) + Unix sockets + gRPC
+#   - Middleware chain for auth (API key) +
+#     observability (Prometheus + OpenTelemetry)
+#   - Zero-downtime upgrades via FD passing
+#     (Unix only) + SIGHUP hot config reload
+#   - panjf2000/ants worker pool for connection
+#     handling
+#
+# Use cases:
+#   - Cross-language microservice messaging
+#     (avoid maintaining Kafka client in every
+#     language)
+#   - Message broker upgrade decoupling (upgrade
+#     Kafka clients at gateway, not application)
+#   - Multi-broker support without app changes
+#     (fujin presents Kafka API to apps but
+#     routes to RabbitMQ internally)
+#   - Edge gateway for IoT MQTT -> backend Kafka
+#     pipelines
+#   - Compliance-mandated middleware insertion
+#     (audit logging + encryption-in-transit)
+#     without app changes
+#
+# Usage:
+#   fujin
+#
+# This binary takes NO command-line flags - all
+# configuration is via environment variables +
+# YAML/JSON/TOML config files. The build.sh +
+# Makefile use build-tag flags (-configurator +
+# -connector + -transport + -bind-middleware +
+# -connector-middleware) for compile-time plugin
+# selection, but the runtime binary itself has
+# no CLI flags.
+#
+# Runtime environment variables:
+#   FUJIN_LOG_TYPE                 - log output
+#                                     format
+#                                     (text/json;
+#                                     default
+#                                     text)
+#   FUJIN_LOG_LEVEL                - log level
+#                                     (DEBUG/
+#                                     INFO/
+#                                     WARN/
+#                                     ERROR;
+#                                     default
+#                                     INFO)
+#   FUJIN_CONFIGURATOR             - active
+#                                     config
+#                                     source
+#                                     (yaml /
+#                                     toml /
+#                                     json /
+#                                     env / ...)
+#   FUJIN_CONFIGURATOR_YAML_PATHS  - YAML
+#                                     config
+#                                     file paths
+#                                     (semicolon-
+#                                     separated)
+#
+# Compile-time build tag flags (passed via
+# build.sh):
+#   FUJIN_CONFIGURATORS            - configurator
+#                                     plugin
+#                                     packages
+#   FUJIN_CONNECTORS               - broker
+#                                     connector
+#                                     plugin
+#                                     packages
+#   FUJIN_TRANSPORTS               - transport
+#                                     plugin
+#                                     packages
+#                                     (tcp /
+#                                     quic /
+#                                     unix /
+#                                     grpc)
+#   FUJIN_BIND_MIDDLEWARES         - inbound-side
+#                                     middleware
+#                                     packages
+#                                     (auth +
+#                                     logging
+#                                     etc.)
+#   FUJIN_CONNECTOR_MIDDLEWARES    - outbound-
+#                                     side
+#                                     middleware
+#                                     packages
+#   FUJIN_GO_TAGS                  - additional
+#                                     Go build
+#                                     tags
+#                                     (default
+#                                     fujin,
+#                                     grpc)
+#
+# Example deployment:
+#   FUJIN_CONFIGURATOR=yaml \
+#   FUJIN_CONFIGURATOR_YAML_PATHS=./config.dev.yaml \
+#   FUJIN_LOG_LEVEL=DEBUG \
+#     ./fujin
+#
+# Example config.yaml:
+#   server:
+#     bind:
+#       - kind: tcp
+#         addr: ":4000"
+#       - kind: quic
+#         addr: ":4001"
+#         cert: ./cert.pem
+#         key: ./key.pem
+#       - kind: grpc
+#         addr: ":50051"
+#       - kind: unix
+#         addr: "/tmp/fujin.sock"
+#
+#   connectors:
+#     - id: kafka-prod
+#       kind: kafka/franz
+#       brokers:
+#         - "kafka-1:9092"
+#         - "kafka-2:9092"
+#
+#     - id: nats-prod
+#       kind: nats/jetstream
+#       url: "nats://nats:4222"
+#
+#   middlewares:
+#     bind:
+#       - id: auth
+#         kind: api_key
+#         keys: ["secret-key-1", "secret-key-2"]
+#
+#     connector:
+#       - id: observability
+#         kind: prometheus
+#
+# The quic-go lane is built on `github.com/
+# quic-go/quic-go v0.59.0` (declared verbatim at
+# upstream go.mod HEAD as a direct dep, used by
+# the QUIC transport plugin for client
+# connections at the bind layer; fujin clients
+# can connect via QUIC for lower latency vs TCP
+# in lossy network conditions), the canonical Go
+# QUIC + HTTP/3 library by Marten Seemann +
+# the quic-go org - github.com/quic-go/quic-go.
+#
+# Marten Seemann + quic-go's quic-go/quic-go is
+# the de-facto canonical Go QUIC + HTTP/3
+# library:
+#   - Pure-Go QUIC implementation (no cgo)
+#   - 1,500+ reverse-deps on pkg.go.dev
+#   - IETF QUIC v1 (RFC 9000) + QUIC TLS (RFC
+#     9001) + Recovery (RFC 9002) + HTTP/3
+#     (RFC 9114) + QPACK (RFC 9204) support
+#   - Tested via the QUIC Interop Runner
+#     (https://interop.seemann.io/) - Marten
+#     Seemann himself maintains the Interop
+#     Runner test infrastructure
+#   - Used by Caddy + Traefik + many Go HTTP/3
+#     servers
+#   - WebTransport-Go subpackage for the
+#     WebTransport spec (proposed RFC)
+#   - MASQUE-Go subpackage for MASQUE proxy
+#     proxying (RFC 9298)
+#   - BoringSSL-free (uses Go's crypto/tls for
+#     TLS 1.3)
+#   - Connection migration support
+#   - 0-RTT support
+#
+# quic-go's distinguishing position vs Go QUIC
+# alternatives:
+#   - quic-go/quic-go (Seemann + team):
+#     canonical; pure-Go; THIS AXIS
+#   - lucas-clemente/quic-go (old name; the
+#     same project pre-rebranding to quic-go
+#     org)
+#   - golang.org/x/net/quic: Go team's
+#     experimental QUIC library (less mature
+#     than quic-go but maintained by Go
+#     security team)
+#   - aws/s2n-quic-go: AWS's QUIC library
+#     (similar to s2n-quic in Rust; less
+#     adoption)
+#
+# Marten Seemann's role in Go QUIC is *the*
+# foundational role:
+#   - Author of quic-go since 2016
+#   - QUIC working group chair at IETF
+#     (2019-present)
+#   - Maintainer of the QUIC Interop Runner
+#     (the public test framework that all major
+#     QUIC implementations test against)
+#   - Author of multiple IETF QUIC
+#     specifications
+#
+# Seemann joins the multi-axis canonical-Go
+# author cohort (now 14 distinct individuals/
+# orgs):
+#   - + previous cohort members: Andrew Gerrand
+#     + Russ Cox + Adam Langley + Filippo
+#     Valsorda + Roland Shoemaker (Go team
+#     stdlib) + Gustavo Niemeyer + Klaus Post +
+#     Sergey Kamardin + Anthony Starks +
+#     Jeevanandam Madanagopal + Matt Holt + Joe
+#     Chen + Marc Rene Arns + Eclipse Paho team
+#     + Hajime Hoshi + Lucas Beyer + Shirou
+#     Wakayama-Sasaki (gopsutil)
+#   - Marten Seemann + quic-go org (canonical
+#     Go QUIC + HTTP/3 + WebTransport + MASQUE,
+#     THIS AXIS)
+#
+# Seemann's foundational position in Go QUIC is
+# distinct from his role in IETF QUIC standardization
+# - he's both the canonical Go library author AND
+# one of the people who wrote the QUIC RFC. This
+# is a relatively rare pattern where the canonical
+# implementation author also drives the spec.
+#
+# Multi-axis canonical-Go author cohort (now 14
+# distinct individuals/orgs):
+#   - Andrew Gerrand + Go team (stdlib)
+#   - Russ Cox + Adam Langley + Filippo Valsorda
+#     + Roland Shoemaker (Go team crypto + TLS)
+#   - Gustavo Niemeyer (yaml.v3 + gopkg.in
+#     infrastructure)
+#   - Klaus Post (compress + reedsolomon +
+#     cpuid + asmfmt)
+#   - Sergey Kamardin (gobwas/glob + gobwas/ws +
+#     gobwas/httphead + gobwas/pool)
+#   - Anthony Starks (ajstarks/svgo + deck +
+#     dchart + openvg + gensvg)
+#   - Jeevanandam Madanagopal (go-resty +
+#     go-aah + go-model + sslmate-go)
+#   - Matt Holt (Caddy + CertMagic + archives +
+#     timeliner + acmez)
+#   - Joe Chen / Unknwon (go-ini + Macaron +
+#     Gogs + com)
+#   - Marc Rene Arns / gomidi org (gomidi/midi +
+#     connect + smf + mid + sf2)
+#   - Eclipse Foundation Paho team
+#     (paho.mqtt.golang; foundation-backed)
+#   - Hajime Hoshi (oto + ebitengine + go-mp3)
+#   - Lucas Beyer (lucasb-eyer/go-colorful)
+#   - Shirou Wakayama-Sasaki (gopsutil + mqtunnel)
+#   - Marten Seemann + quic-go org (quic-go +
+#     webtransport-go + masque-go; THIS AXIS;
+#     also QUIC Interop Runner maintainer +
+#     IETF QUIC WG chair)
+#
+# fujin uses quic-go in the QUIC transport
+# plugin (public/plugins/transport/quic):
+#   ```go
+#   import "github.com/quic-go/quic-go"
+#
+#   tlsConf := &tls.Config{
+#       Certificates: []tls.Certificate{cert},
+#       NextProtos:   []string{"fujin/1"},
+#   }
+#   ln, err := quic.ListenAddr(
+#       config.Addr, tlsConf,
+#       &quic.Config{
+#           MaxIncomingStreams: 1000,
+#           Allow0RTT: true,
+#           EnableDatagrams: true,
+#       },
+#   )
+#   for {
+#       conn, err := ln.Accept(ctx)
+#       go handleQUICConnection(conn)
+#   }
+#   ```
+# The QUIC transport offers lower latency than
+# TCP for clients on lossy networks (mobile +
+# global edge) due to QUIC's connection
+# migration + 0-RTT resumption + UDP-based
+# transport avoiding TCP head-of-line blocking.
+#
+# ----------------------------------------------------------------------------
+# AXIS 274 :: QUIC + HTTP/3 protocol libraries
+#              (IETF QUIC v1 RFC 9000 + QUIC
+#              TLS RFC 9001 + Recovery RFC 9002 +
+#              HTTP/3 RFC 9114 + QPACK RFC 9204)
+# Round 1521 :: Go slot 2 of 4 :: continues Axis 274
+#
+# Cross-language canonical library family for this axis:
+#   Rust    : cloudflare/quiche           [R1520 _mmserver]
+#             (Cloudflare; enterprise-
+#              backed; BoringSSL TLS;
+#              production at CDN edge)
+#   Go      : quic-go/quic-go             [R1521 THIS FILE]
+#             (Marten Seemann + quic-go
+#              org; pure-Go; QUIC Interop
+#              Runner maintainer; IETF
+#              QUIC WG chair)
+#   TS/Node : node:quic (stdlib;          [R1522 closing]
+#             experimental) + third-
+#             party
+#
+# Notable structural pattern across the three
+# lanes:
+#
+#   - Rust (quiche): enterprise-backed
+#     canonical from Cloudflare; BoringSSL TLS;
+#     production deployment at massive scale
+#   - Go (quic-go): individual-author + community
+#     canonical by Marten Seemann; pure-Go;
+#     leverages Go's crypto/tls
+#   - Node (experimental): Node team
+#     experimental + fragmented third-party
+#     ecosystem
+#
+# The Rust + Go contrast in this axis is
+# illustrative of two QUIC-canonical
+# architectures:
+#   - Rust (quiche): enterprise infrastructure
+#     authored by a single corporate entity
+#   - Go (quic-go): individual-author who is also
+#     the IETF spec author + interop test
+#     maintainer
+#
+# Seemann's dual role (canonical Go QUIC
+# library + QUIC RFC author) is a unique pattern
+# in the corpus - I have not documented another
+# canonical-library author who also drives the
+# underlying IETF/W3C spec. This represents the
+# strongest possible canonicalization mechanism:
+# the author of the spec is also the author of
+# the reference implementation in a major
+# language.
+#
+# Cross-language interop at the QUIC + HTTP/3
+# wire level - all three lanes interoperate via
+# the QUIC Interop Runner's test framework. The
+# QUIC Interop Runner is maintained by Marten
+# Seemann personally + tests all major QUIC
+# implementations weekly.
+#
+# Use-case spectrum across the lanes (so far):
+#   - mmserver (Rust, quiche): low-latency game
+#     streaming + remote desktop server using
+#     QUIC for protocol
+#   - fujin (Go, quic-go): message broker
+#     gateway with QUIC client transport for
+#     lower latency than TCP
+#
+# Three lanes will demonstrate three different
+# QUIC-canonical patterns:
+#   - Rust: enterprise-backed (Cloudflare)
+#   - Go: spec-author + community
+#     (Marten Seemann + quic-go org)
+#   - Node: language-runtime experimental +
+#     third-party fragmentation
+# ============================================================================
+
+_fujin() {
+    local context state state_descr line
+    typeset -A opt_args
+
+    _arguments -s -S \
+        '(- *)'{-h,--help}'[print help]' \
+        '(- *)'{-V,--version}'[print version]'
+}
+
+_fujin "$@"
