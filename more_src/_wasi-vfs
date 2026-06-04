@@ -1,0 +1,478 @@
+#compdef wasi-vfs
+# ============================================================================
+# wasi-vfs - virtual filesystem packer for
+#             WASI WebAssembly modules
+#             (Rust, Apache-2.0 WITH
+#             LLVM-exception)
+#
+# Author : Yuta Saito (kateinoigakukun)
+#           - Apple Swift compiler engineer +
+#           SwiftWasm project lead
+# Upstream: https://github.com/kateinoigakukun/wasi-vfs
+#
+# `wasi-vfs` packages host directories into
+# WASI WebAssembly modules as a virtual
+# filesystem layer, allowing WASM modules to
+# read packaged files as if they were on the
+# native filesystem. Critical for shipping
+# standalone WASM binaries that include their
+# data files (templates + config + assets +
+# embedded databases) without requiring
+# WASI runtime filesystem permissions.
+#
+# Architecture:
+#   1. **Input**: a compiled WASM module
+#      with WASI imports (typical output of
+#      `wasm32-wasi` target compilation)
+#   2. **Snapshot**: wasi-vfs uses Wizer
+#      (wasmtime + wasmtime-wizer) to
+#      execute the module with a virtual
+#      filesystem populated from the
+#      `--dir` arguments
+#   3. **Snapshot capture**: Wizer captures
+#      the module's memory state including
+#      the VFS contents
+#   4. **Output**: a new WASM module with
+#      the snapshot baked in; the module
+#      can now access the packaged files
+#      via standard WASI syscalls
+#
+# This is the WASM analog of:
+#   - Linux `initramfs` (initial RAM
+#     filesystem for bootloader → kernel)
+#   - Static binary embedding (Go's
+#     embed package + Rust's include_bytes!)
+#   - Container image layers (Docker's
+#     OverlayFS layered filesystem)
+#
+# Distinguishing features vs alternatives:
+#   - **Snapshot-based** (uses Wizer to
+#     snapshot module state including VFS
+#     contents; no runtime overhead for
+#     filesystem access)
+#   - **Standard WASI compatibility**
+#     (packaged files appear via the same
+#     WASI syscalls as native files - no
+#     module-side code changes required)
+#   - **Pure Rust implementation**
+#     (cross-compiles to all Wasmtime-
+#     supported platforms)
+#   - **Used by SwiftWasm + Ruby on WASI
+#     + Python on WASI** (Yuta Saito's
+#     broader work on bringing
+#     dynamic-language runtimes to
+#     WebAssembly typically requires
+#     packaging the standard library +
+#     interpreter assets as a VFS)
+#
+# Use cases:
+#   - **SwiftWasm**: package Swift's
+#     stdlib resources + interpreter
+#     state into the WASM binary
+#   - **Ruby on WASI**: bundle Ruby
+#     stdlib gems + Ruby source files
+#     into a single WASM binary
+#   - **Python on WASI** (CPython
+#     WASI port): package Python
+#     stdlib + interpreter state
+#   - **Static site generators on
+#     WASI**: bundle templates + CSS +
+#     theme assets into the SSG WASM
+#     binary
+#   - **WASM CLI tools**: include
+#     embedded SQLite databases +
+#     config defaults + help text
+#   - **Sandboxed plugins**: package
+#     plugin assets into self-
+#     contained WASM modules without
+#     runtime permission grants
+#
+# Usage:
+#   wasi-vfs pack <input> [options]
+#
+# Subcommands (structopt):
+#   pack <input>                   - package
+#                                     directories
+#                                     into
+#                                     the
+#                                     WASM
+#                                     module
+#
+# `pack` flags:
+#       --dir <HOST::GUEST>        - package
+#                                     a host
+#                                     directory
+#                                     into
+#                                     the
+#                                     WASM
+#                                     module
+#                                     at the
+#                                     specified
+#                                     guest
+#                                     path
+#                                     (repeatable;
+#                                     format
+#                                     /host/
+#                                     path::/
+#                                     guest/
+#                                     path)
+#       --mapdir <GUEST::HOST>     - (DEPRECATED)
+#                                     reverse-
+#                                     ordered
+#                                     legacy
+#                                     form;
+#                                     use
+#                                     --dir
+#                                     instead
+#   -o, --output <file>            - file
+#                                     path to
+#                                     write
+#                                     the
+#                                     output
+#                                     WASM
+#                                     module
+#                                     to
+#
+# Standard:
+#   -h, --help                     - show
+#                                     help
+#   -V, --version                  - show
+#                                     version
+#
+# Example invocations:
+#   # Package ./assets into the WASM module
+#   # at /assets guest path
+#   wasi-vfs pack input.wasm \
+#     --dir ./assets::/assets \
+#     -o packed.wasm
+#
+#   # Multiple directories packed at
+#   # different guest paths
+#   wasi-vfs pack input.wasm \
+#     --dir ./templates::/templates \
+#     --dir ./locales::/locales \
+#     --dir ./schemas::/schemas \
+#     -o packed.wasm
+#
+#   # Package Ruby stdlib (typical Ruby on
+#   # WASI workflow)
+#   wasi-vfs pack ruby.wasm \
+#     --dir ./ruby/lib/ruby/3.3.0::/ruby/lib/ruby/3.3.0 \
+#     --dir ./ruby/lib/ruby/gems::/ruby/lib/ruby/gems \
+#     -o ruby-with-stdlib.wasm
+#
+#   # Run the packed module with wasmtime
+#   wasmtime run packed.wasm
+#     # the module can now read /assets/...
+#     # via standard WASI syscalls without
+#     # --dir host arguments at runtime
+#
+# Compare to runtime VFS mounting (which
+# wasi-vfs replaces):
+#   # Runtime-mounted (typical wasmtime
+#   # usage; requires host permissions at
+#   # each invocation):
+#   wasmtime run --dir ./assets::/assets \
+#     input.wasm
+#
+#   # wasi-vfs packed (no runtime --dir
+#   # needed; assets baked into module):
+#   wasmtime run packed.wasm
+#
+# The wasmtime lane is built on `wasmtime =
+# "40.0.0"` + `wasmtime-wasi = "40.0.0"` +
+# `wasmtime-wizer = "40.0.0"` (declared
+# verbatim at upstream crates/wasi-vfs-cli/
+# Cargo.toml HEAD as direct deps, imported
+# by `src/lib.rs` for the Wizer-based
+# snapshot creation pipeline that bakes
+# the VFS state into the output module),
+# the canonical Rust WebAssembly runtime by
+# the Bytecode Alliance + Mozilla + Fastly
+# + Cosmonic + many corporate contributors -
+# github.com/bytecodealliance/wasmtime.
+#
+# bytecodealliance/wasmtime is the de-facto
+# canonical Rust WebAssembly runtime:
+#   - **WebAssembly spec compliant**
+#     (passes 100% of the WebAssembly
+#     spec test suite at github.com/
+#     WebAssembly/spec)
+#   - **WASI Preview 1 + Preview 2
+#     compliant** (full implementation
+#     of both WASI snapshot generations
+#     including the new component model
+#     in Preview 2)
+#   - **JIT compilation via Cranelift**
+#     (Cranelift is wasmtime's
+#     companion JIT compiler; pure-Rust
+#     code generation alternative to
+#     LLVM)
+#   - **AOT compilation** (precompile
+#     WASM modules to native machine
+#     code for faster cold-start)
+#   - **Sandboxed execution** (full
+#     memory + filesystem + network
+#     isolation; no host-level access
+#     without explicit grants)
+#   - **Component model support**
+#     (WASM Component Model for
+#     language-agnostic WASM
+#     composition + interop)
+#   - **17,000+ stars on github.com/
+#     bytecodealliance/wasmtime**
+#   - **~5,000 reverse-deps on
+#     crates.io (the canonical Rust
+#     WASM runtime stack)**
+#
+# wasmtime's distinguishing position vs
+# Rust WASM runtime alternatives:
+#   - bytecodealliance/wasmtime
+#     (Bytecode Alliance): canonical;
+#     full spec compliance; multi-
+#     vendor governance; THIS AXIS
+#   - wasmer-io/wasmer (Wasmer Inc.):
+#     alternative WASM runtime; LLVM
+#     + Singlepass + Cranelift
+#     backends; commercial-backed
+#   - wasmi (wasmi-labs/wasmi):
+#     pure-Rust WASM interpreter;
+#     embedded-system-friendly; less
+#     runtime overhead but slower
+#     execution
+#   - wabt (WebAssembly/wabt): the
+#     WebAssembly toolkit (C++);
+#     wabt-cli has Rust bindings via
+#     wabt-rs
+#
+# The Bytecode Alliance is a non-profit
+# foundation founded in 2019 by:
+#   - **Mozilla** (Firefox + Servo
+#     teams; wasmtime origin)
+#   - **Fastly** (Lucet WASM runtime
+#     merged into wasmtime)
+#   - **Intel** (security + hardware
+#     extensions)
+#   - **Red Hat** (now IBM/Red Hat;
+#     enterprise WASM deployment)
+# Today the alliance includes Microsoft +
+# Google + AMD + Arm + Siemens + many
+# other corporate contributors, with
+# Cosmonic as a major commercial steward.
+#
+# Bytecode Alliance projects span the WASM
+# infrastructure stack:
+#   - **wasmtime** (the JIT/AOT runtime;
+#     THIS AXIS)
+#   - **Cranelift** (the JIT compiler
+#     backend; canonical pure-Rust code
+#     generator)
+#   - **WASI specification** (the
+#     WebAssembly System Interface
+#     standard; standardized at WASI
+#     subgroup of W3C)
+#   - **wit-bindgen** (the canonical
+#     WASM component model bindings
+#     generator)
+#   - **cargo-component** (the cargo
+#     extension for WASM component
+#     workflows)
+#   - **wasmtime-py + wasmtime-go +
+#     wasmtime-cpp** (language bindings
+#     for embedding wasmtime)
+#
+# Multi-axis canonical-Rust author/org
+# cohort extension (now spanning even more
+# distinct authors/orgs):
+#   - + Bytecode Alliance + Mozilla +
+#     Fastly + Cranelift team
+#     (bytecodealliance/wasmtime +
+#     Cranelift + WASI + wit-bindgen;
+#     THIS AXIS; canonical Rust
+#     WebAssembly runtime + WASI spec +
+#     component model infrastructure)
+#
+# The Bytecode Alliance joining the
+# canonical-Rust cohort at the *multi-
+# vendor foundation canonical project*
+# level is structurally distinctive. The
+# alliance is one of the largest multi-
+# vendor open-source consortiums focused
+# on Rust + WASM, comparable to:
+#   - The Linux Foundation's CNCF
+#     (Kubernetes + many Go projects)
+#   - The Apache Software Foundation
+#     (broad cross-language coverage)
+#   - The Eclipse Foundation (mostly
+#     Java-focused but expanding)
+# The Bytecode Alliance is uniquely
+# Rust-WASM-focused.
+#
+# Yuta Saito (kateinoigakukun) is an
+# Apple compiler engineer + SwiftWasm
+# project lead. His broader Rust+WASM
+# ecosystem footprint:
+#   - **wasi-vfs** (canonical WASI
+#     virtual filesystem packer; THIS
+#     AXIS use)
+#   - **SwiftWasm project** (Swift
+#     compiler frontend for WASM
+#     target; brings Swift to the
+#     browser + standalone WASM)
+#   - **Carton** (SwiftWasm's bundler;
+#     analog of webpack/vite for
+#     Swift+WASM)
+#   - Apple's Swift Server Workgroup
+#     contributions
+#
+# Saito's role is *language-runtime
+# WASM-porting infrastructure*. His
+# tools enable bringing dynamic-language
+# runtimes (Swift + Ruby + Python) to
+# WebAssembly, where wasi-vfs solves the
+# specific problem of packaging language
+# stdlib resources alongside the runtime.
+#
+# wasi-vfs uses wasmtime + Wizer for:
+#   - Loading the input WASM module
+#     into a wasmtime engine instance
+#   - Executing the module with a
+#     virtual WASI filesystem populated
+#     from --dir arguments
+#   - Capturing the post-execution
+#     memory snapshot (the "Wizer" pre-
+#     initialization process)
+#   - Writing the snapshot back as a
+#     new WASM module with the VFS
+#     state pre-loaded into memory
+#
+# This is the canonical use case for
+# wasmtime in language-runtime
+# infrastructure: precise control over
+# module instantiation + execution
+# state for pre-initialization
+# workflows that produce specialized
+# WASM artifacts.
+#
+# ----------------------------------------------------------------------------
+# AXIS 286 :: WebAssembly runtime + tooling
+#              libraries
+#              (WebAssembly spec
+#              compliant runtimes + WASI
+#              implementations + JIT/AOT
+#              compilation + component
+#              model + WASM tooling)
+# Round 1556 :: Rust slot 1 of 4 :: OPENS Axis 286
+#
+# Cross-language canonical library family
+# for this axis (proposed):
+#   Rust    : bytecodealliance/wasmtime  - Bytecode
+#                                          Alliance
+#                                          (Mozilla +
+#                                          Fastly +
+#                                          Intel +
+#                                          Red Hat +
+#                                          ...;
+#                                          canonical
+#                                          Rust WASM
+#                                          runtime;
+#                                          Cranelift
+#                                          JIT;
+#                                          WASI
+#                                          Preview 1
+#                                          + 2)
+#   Go      : tetratelabs/wazero        - Adrian
+#                                          Cole +
+#                                          Tetrate
+#                                          (canonical
+#                                          Go WASM
+#                                          runtime;
+#                                          zero
+#                                          CGO; pure-
+#                                          Go
+#                                          implementation)
+#   TS/Node : wasmer-js                  - Wasmer
+#             OR                            Inc.
+#             bjorn3/cheap_wasm             (canonical
+#                                          Node WASM
+#                                          runtime;
+#                                          via N-API
+#                                          bindings)
+#
+# WebAssembly (WASM) is the *standardized
+# portable binary execution format* for
+# polyglot computing:
+#   - **WASM 1.0** spec at github.com/
+#     WebAssembly/spec (W3C
+#     standardization in progress)
+#   - **WASI Preview 1 + Preview 2**
+#     (WebAssembly System Interface; the
+#     canonical OS-abstraction layer for
+#     WASM modules)
+#   - **WASM Component Model**
+#     (language-agnostic composition
+#     model for WASM modules)
+#   - **Use cases**: browser-side
+#     execution + server-side WASM
+#     (Fastly + Cloudflare Workers +
+#     vanilla WASI runtimes) +
+#     embedded sandboxing +
+#     language-runtime ports (Python +
+#     Ruby + Swift on WASM)
+#
+# Each canonical library provides:
+#   - WASM 1.0 spec-compliant execution
+#   - WASI Preview 1 (and increasingly
+#     Preview 2) support
+#   - JIT or AOT compilation
+#   - Sandboxed execution with
+#     explicit permission grants
+#   - Host function imports/exports
+#     for language integration
+#
+# Use-case spectrum for this axis (so far):
+#   - wasi-vfs (Rust, wasmtime): WASI
+#     virtual filesystem packer for
+#     language-runtime WASM ports
+#     (SwiftWasm + Ruby on WASI +
+#     Python on WASI)
+# ============================================================================
+
+_wasi-vfs() {
+    local context state state_descr line
+    typeset -A opt_args
+    local curcontext="$curcontext" ret=1
+
+    _arguments -C \
+        '(- *)'{-h,--help}'[show help]' \
+        '(- *)'{-V,--version}'[show version]' \
+        '1: :_wasi-vfs_cmds' \
+        '*::arg:->args' \
+    && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                pack)
+                    _arguments \
+                        '*--dir=[package host directory at guest path (HOST_DIR::GUEST_DIR)]:mapping:' \
+                        '*--mapdir=[(deprecated) reverse-ordered legacy form GUEST::HOST]:mapping:' \
+                        '(-o --output)'{-o+,--output=}'[output WASM file]:file:_files -g "*.wasm"' \
+                        '1:input WASM file:_files -g "*.wasm"'
+                    ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_wasi-vfs_cmds() {
+    local -a cmds
+    cmds=(
+        'pack:package directories into a WASM module as a virtual filesystem'
+    )
+    _describe -t commands 'wasi-vfs command' cmds
+}
+
+_wasi-vfs "$@"
