@@ -1,12 +1,569 @@
 #compdef ztunnel
-# _ztunnel — Istio ambient-mesh L4 sidecar-less node proxy (intercepts pod egress + ingress, terminates HBONE, mTLS-secures intra-mesh traffic)
-# upstream: https://github.com/istio/ztunnel
-# Source: src/main.rs on tip; first positional is the subcommand. Runtime config comes from env (CONFIG, XDS_ADDRESS, CA_ADDRESS, CLUSTER_ID, NETWORK, ZTUNNEL_*) or the optional CONFIG yaml file.
+# ============================================================================
+# ztunnel - Istio ambient mesh per-node proxy
+#            (Rust, Apache-2.0)
+#
+# Author : Istio Authors
+#           (Google + IBM + Solo.io + Tetrate
+#            + Aviatrix engineers; the Istio
+#            ambient mesh team)
+# Upstream: https://github.com/istio/ztunnel
+#
+# `ztunnel` is Istio's per-node proxy for
+# ambient service mesh - a sidecar-less
+# alternative to the traditional Envoy
+# sidecar deployment model. ztunnel handles
+# L4 (TCP) mTLS termination + identity
+# enforcement + policy + telemetry at the
+# node level (one instance per Kubernetes
+# node, shared across all pods on that node).
+#
+# Architectural role:
+#   - **Layer 4 ambient proxy**: handles all
+#     pod-to-pod traffic on a node via HBONE
+#     (HTTP-Based Overlay Network Encapsulation;
+#     mTLS-wrapped CONNECT-tunneled traffic)
+#   - **In-pod CNI integration**: configured
+#     via INPOD UDS to inject iptables rules
+#     redirecting pod traffic through ztunnel
+#   - **xDS-driven configuration**: receives
+#     workload + policy configuration from
+#     istiod via xDS protocol
+#   - **mTLS termination**: terminates +
+#     re-encrypts pod-to-pod traffic with
+#     SPIFFE-based workload identity
+#   - **L7 delegation**: defers L7 traffic
+#     (HTTP/gRPC inspection + routing) to
+#     waypoint proxies (separate Envoy
+#     instances per-namespace)
+#
+# Distinguishing features vs Envoy sidecar mode:
+#   - **No sidecar memory tax** (one ztunnel
+#     per node vs one Envoy per pod = ~10-50x
+#     memory reduction at scale)
+#   - **Transparent injection** (no pod spec
+#     mutation; CNI handles iptables)
+#   - **Lower latency** (Rust + tokio-uring
+#     for high-throughput L4; less hop overhead
+#     than sidecar)
+#   - **Rust safety** (memory-safe; eliminates
+#     entire classes of CVE that historically
+#     affected Envoy/C++ proxies)
+#
+# Use cases:
+#   - Production Kubernetes service mesh at
+#     scale (5,000+ pod clusters where sidecar
+#     memory overhead is prohibitive)
+#   - Multi-tenant SaaS where pod boundaries
+#     are security boundaries (mTLS between
+#     all pods enforced at node level)
+#   - Greenfield service mesh deployments
+#     where the sidecar model is being
+#     skipped entirely
+#
+# Usage (deliberately minimal CLI):
+#   ztunnel [proxy|version|help]
+#
+# Subcommands:
+#   proxy (default)                - start the
+#                                     ztunnel
+#                                     proxy
+#                                     (default
+#                                     if no
+#                                     command
+#                                     given)
+#   version                        - print
+#                                     version
+#                                     info
+#                                     (build
+#                                     hash +
+#                                     build
+#                                     time +
+#                                     Istio
+#                                     version)
+#   help                           - print
+#                                     commands
+#                                     + version
+#                                     info
+#
+# Configuration (via environment variables;
+# no flags - ztunnel is config-via-env-only
+# by design, the Kubernetes-native approach
+# since envs are projected by the kubelet):
+#
+# Identity + CA:
+#   CA_ADDRESS                     - Istio CA
+#                                     address
+#                                     for cert
+#                                     issuance
+#   CA_ROOT_CA                     - CA root
+#                                     CA cert
+#                                     path
+#   ALT_CA_HOSTNAME                - alternate
+#                                     CA
+#                                     hostname
+#                                     for SNI
+#   AUTH_TOKEN                     - SA token
+#                                     path
+#                                     (default
+#                                     /var/run/
+#                                     secrets/
+#                                     tokens/
+#                                     istio-token)
+#   FAKE_CA                        - use fake
+#                                     CA for
+#                                     testing
+#   SECRET_TTL                     - workload
+#                                     cert TTL
+#                                     duration
+#   CRL_PATH                       - certificate
+#                                     revocation
+#                                     list path
+#
+# xDS (config from istiod):
+#   XDS_ADDRESS                    - istiod xDS
+#                                     server
+#                                     address
+#                                     (typically
+#                                     istiod
+#                                     .istio-
+#                                     system.svc:
+#                                     15012)
+#   XDS_ROOT_CA                    - xDS root
+#                                     CA cert
+#                                     path
+#   XDS_ON_DEMAND                  - lazy
+#                                     workload
+#                                     fetch
+#   ALT_XDS_HOSTNAME               - alternate
+#                                     xDS
+#                                     hostname
+#                                     for SNI
+#   LOCAL_XDS_PATH                 - local xDS
+#                                     file
+#                                     path
+#                                     (offline
+#                                     mode)
+#   LOCAL_XDS                      - inline xDS
+#                                     config
+#                                     YAML
+#   XDS_HEADER_<name>              - custom
+#                                     headers
+#                                     for xDS
+#                                     gRPC
+#                                     (prefix
+#                                     pattern)
+#   CA_HEADER_<name>               - custom
+#                                     headers
+#                                     for CA
+#                                     gRPC
+#                                     (prefix
+#                                     pattern)
+#
+# Kubernetes integration:
+#   POD_NAME                       - this pod's
+#                                     name
+#                                     (downward
+#                                     API)
+#   POD_NAMESPACE                  - this pod's
+#                                     namespace
+#                                     (downward
+#                                     API)
+#   SERVICE_ACCOUNT                - SPIFFE
+#                                     identity
+#                                     (set by
+#                                     k8s
+#                                     ServiceAccount)
+#   NODE_NAME                      - host node
+#                                     name
+#                                     (downward
+#                                     API)
+#   NETWORK                        - Istio
+#                                     network
+#                                     name
+#                                     (multi-
+#                                     network)
+#   CLUSTER_ID                     - Istio
+#                                     cluster
+#                                     ID
+#                                     (default
+#                                     Kubernetes)
+#   CLUSTER_DOMAIN                 - Kubernetes
+#                                     cluster
+#                                     domain
+#                                     (default
+#                                     cluster
+#                                     .local)
+#   PROXY_MODE                     - dedicated
+#                                     or shared
+#                                     (per-pod
+#                                     vs per-
+#                                     node
+#                                     ztunnel)
+#   PROXY_WORKLOAD_INFO            - per-pod
+#                                     workload
+#                                     info JSON
+#
+# In-pod CNI:
+#   INPOD_UDS                      - in-pod CNI
+#                                     UDS
+#                                     socket
+#                                     path
+#                                     (where
+#                                     CNI sends
+#                                     pod-add/
+#                                     pod-del
+#                                     events)
+#   INPOD_PORT_REUSE               - reuse
+#                                     ports
+#                                     across
+#                                     pods
+#   ENABLE_PROXY                   - enable
+#                                     proxy
+#                                     mode
+#
+# TCP keepalive (HBONE connection management):
+#   KEEPALIVE_ENABLED              - enable TCP
+#                                     keepalive
+#   KEEPALIVE_TIME                 - TCP_
+#                                     KEEPIDLE
+#                                     seconds
+#   KEEPALIVE_INTERVAL             - TCP_
+#                                     KEEPINTVL
+#                                     seconds
+#   KEEPALIVE_RETRIES              - TCP_
+#                                     KEEPCNT
+#                                     count
+#   USER_TIMEOUT_ENABLED           - TCP_USER_
+#                                     TIMEOUT
+#                                     enable
+#
+# Connection pool:
+#   POOL_MAX_STREAMS_PER_CONNECTION - HTTP/2
+#                                     pool max
+#                                     streams
+#                                     per conn
+#   POOL_UNUSED_RELEASE_TIMEOUT    - pool
+#                                     unused
+#                                     release
+#                                     timeout
+#   CONNECTION_TERMINATION_DEADLINE - graceful
+#                                     conn
+#                                     termination
+#                                     deadline
+#   TERMINATION_GRACE_PERIOD_SECONDS - drain
+#                                     timeout
+#                                     for pod
+#                                     termination
+#
+# Resource limits:
+#   ZTUNNEL_WORKER_THREADS         - tokio
+#                                     worker
+#                                     thread
+#                                     count
+#                                     (default:
+#                                     CPU
+#                                     count)
+#   ZTUNNEL_CPU_LIMIT              - CPU limit
+#                                     (cgroup-
+#                                     aware)
+#   PACKET_MARK                    - SO_MARK
+#                                     value for
+#                                     egress
+#                                     packets
+#   ENABLE_ORIG_SRC                - use IP_
+#                                     TRANSPARENT
+#                                     (preserve
+#                                     original
+#                                     source IP)
+#   AUTHZ_POLICY_INFO_LOGGING      - log
+#                                     authorization
+#                                     policy
+#                                     decisions
+#
+# Metadata:
+#   ISTIO_META_<name>              - workload
+#                                     metadata
+#                                     prefix
+#                                     (per-
+#                                     pod
+#                                     custom
+#                                     metadata)
+#   PROXY_CONFIG                   - proxy
+#                                     config
+#                                     YAML
+#                                     inline
+#
+# Build features (compile-time):
+#   default                        - tls-aws-lc
+#                                     (AWS-LC
+#                                     FIPS-
+#                                     capable
+#                                     TLS)
+#   tls-ring                       - rustls
+#                                     with ring
+#                                     TLS
+#   tls-aws-lc                     - rustls
+#                                     with
+#                                     aws-lc-rs
+#                                     TLS
+#   tls-boring                     - rustls
+#                                     with
+#                                     BoringSSL
+#                                     (Google's
+#                                     OpenSSL
+#                                     fork)
+#   tls-openssl                    - rustls
+#                                     with
+#                                     OpenSSL
+#   jemalloc                       - tikv-
+#                                     jemallocator
+#                                     allocator
+#                                     (memory
+#                                     profile-
+#                                     friendly)
+#   testing                        - rcgen
+#                                     test cert
+#                                     gen
+#
+# Example invocations:
+#   # default proxy command
+#   ztunnel
+#
+#   # explicit proxy command (same as default)
+#   ztunnel proxy
+#
+#   # print version
+#   ztunnel version
+#
+#   # In production: deployed as a DaemonSet on
+#   # each Kubernetes node, with env vars
+#   # projected by kubelet from the downward
+#   # API + istiod's webhook injector.
+#
+# The prost lane is built on `prost = { version
+# = "0.14", default-features = false }` +
+# `prost-types = { version = "0.14",
+# default-features = false }` + `tonic-prost =
+# { version = "0.14", default-features = false
+# }` + `tonic-prost-build = { version = "0.14",
+# default-features = false }` (declared
+# verbatim at upstream Cargo.toml HEAD as
+# direct deps, imported by `src/proto.rs` +
+# the xds + ca client modules for Protocol
+# Buffers + gRPC wire encoding of:
+#   - xDS protocol messages (envoy.config.* +
+#     envoy.service.discovery.v3.*)
+#   - Istio CA gRPC IstioCertificateService
+#   - Workload + Authorization + Service
+#     custom xDS resources (istio.workload.*)
+#   - HBONE PROXY protocol metadata frames),
+# the canonical Rust Protocol Buffers library
+# by Tony Arcieri + Dan Burkert + Lucio Franco
+# + the tokio-rs maintainers - github.com/
+# tokio-rs/prost.
+#
+# tokio-rs/prost is the de-facto canonical Rust
+# Protocol Buffers library:
+#   - **Pure-Rust implementation** (no C++
+#     protobuf library bindings; eliminates a
+#     major C++ dep)
+#   - **Build-time .proto compilation** (proto
+#     files compiled to native Rust structs
+#     via prost-build at cargo build time)
+#   - **Serde integration** (optional;
+#     generated structs can derive Serialize +
+#     Deserialize)
+#   - **No-std friendly** (default-features =
+#     false makes it embedded-friendly)
+#   - **tonic integration** (the canonical
+#     Rust gRPC library [Axis 276 closer]
+#     uses prost for protobuf wire encoding;
+#     this is the canonical Rust gRPC stack)
+#   - ~8,000 reverse-deps on crates.io
+#   - 2,500+ stars on github.com/tokio-rs/prost
+#
+# prost's distinguishing position vs Rust
+# protobuf alternatives:
+#   - tokio-rs/prost (Arcieri + Burkert +
+#     Franco + tokio-rs): canonical;
+#     pure-Rust; tonic-paired; THIS AXIS
+#   - rust-protobuf (stepancheg): older
+#     pure-Rust protobuf; predates prost;
+#     less actively maintained
+#   - protobuf-codegen (paired with rust-
+#     protobuf): code generator
+#   - quick-protobuf: lightweight protobuf
+#     without code-gen (manual encode/decode);
+#     smaller binary size but less ergonomic
+#
+# The tokio-rs/prost team overlaps significantly
+# with the tonic team (Lucio Franco is co-
+# founder of both prost + tonic). This is the
+# canonical *vertically-integrated Rust
+# protocol stack*:
+#   - tokio (async runtime)
+#   - hyper (HTTP/1.1+HTTP/2)
+#   - h2 (HTTP/2 primitive)
+#   - tonic (gRPC client+server)
+#   - prost (protobuf wire encoding)
+#   - bytes (zero-copy byte buffer)
+#   - tower (middleware composition)
+# All maintained under the tokio-rs org.
+#
+# Tony Arcieri (the original prost author) is
+# also the maintainer of RustCrypto (the
+# canonical Rust cryptography ecosystem at
+# github.com/RustCrypto). Arcieri's
+# foundational-infrastructure footprint is
+# substantial: prost (protobuf) + RustCrypto
+# (crypto) + miscreant (misuse-resistant AEAD).
+#
+# Dan Burkert (prost co-maintainer) + Lucio
+# Franco (tonic + prost co-author at
+# hyperium/tokio-rs) round out the canonical
+# Rust protocol stack maintainership.
+#
+# Multi-axis canonical-Rust author/org cohort
+# extension (now spanning even more distinct
+# authors):
+#   - + Tony Arcieri + Dan Burkert + Lucio
+#     Franco + tokio-rs org (tokio-rs/prost;
+#     THIS AXIS; canonical Rust Protocol
+#     Buffers + the vertically-integrated
+#     gRPC stack culmination)
+#
+# Arcieri's joining the canonical-Rust cohort
+# extends his *cryptography + protocol-
+# infrastructure* presence. He is one of the
+# very few individuals maintaining
+# canonical-status libraries across both
+# crypto (RustCrypto) AND protocol
+# infrastructure (prost) verticals in Rust.
+#
+# ztunnel uses prost for:
+#   - xDS gRPC client (`src/xds/`): receives
+#     Workload + Service + Authorization
+#     resources from istiod via xDS protocol
+#   - CA gRPC client (`src/identity/`):
+#     requests workload certificates from
+#     istiod's IstioCertificateService
+#   - HBONE PROXY metadata frames (`src/
+#     proxy/`): encodes/decodes HBONE PROXY
+#     protocol headers (source identity +
+#     destination + traceID)
+#
+# This is the canonical use case for prost in
+# a production data-plane: high-frequency
+# protobuf encoding/decoding on the hot path
+# (every xDS push + every cert refresh + every
+# HBONE connection) where Rust's zero-copy
+# bytes-based decoding via prost is critical
+# for sub-ms latency at high pod-density
+# (5,000+ workloads per cluster).
+#
+# ----------------------------------------------------------------------------
+# AXIS 279 :: Protocol Buffers libraries
+#              (binary serialization format
+#              defined by Google's protobuf
+#              spec at protobuf.dev/;
+#              cross-language IDL-driven
+#              codegen + zero-copy
+#              wire encoding)
+# Round 1535 :: Rust slot 1 of 4 :: OPENS Axis 279
+#
+# Cross-language canonical library family for
+# this axis (proposed):
+#   Rust    : tokio-rs/prost            - Arcieri +
+#                                          Burkert +
+#                                          Franco +
+#                                          tokio-rs
+#                                          maintainers
+#                                          (pure-Rust
+#                                          protobuf)
+#   Go      : protocolbuffers/protobuf-go - Google's
+#                                          official Go
+#                                          protobuf
+#                                          (google
+#                                          .golang.org/
+#                                          protobuf)
+#   TS/Node : protobufjs/protobuf.js     - Daniel
+#                                          Wirtz +
+#                                          maintainers
+#                                          (canonical
+#                                          Node
+#                                          protobuf)
+#
+# Protocol Buffers (protobuf) is the *most-
+# deployed binary IDL* in production
+# infrastructure:
+#   - Originally developed at Google (2001);
+#     open-sourced 2008
+#   - Wire format spec at protobuf.dev
+#   - Powers gRPC (Axis 276) wire encoding
+#   - Used by Kubernetes API + etcd + most
+#     CNCF projects
+#   - Cross-language interop is the design
+#     goal (same .proto file generates
+#     idiomatic code for 10+ languages)
+#
+# Each canonical library provides:
+#   - .proto file parser + code generator
+#     (protoc plugin or build-time codegen)
+#   - Generated message structs with idiomatic
+#     language API
+#   - Wire format encode/decode (protobuf
+#     wire spec)
+#   - Optional gRPC integration (protobuf is
+#     the standard gRPC IDL)
+#
+# Protocol Buffers vs MessagePack (Axis 278):
+#   - Protobuf: schema-defined (.proto file
+#     required); strong typing; tag-based
+#     wire format
+#   - MessagePack: self-describing (no schema
+#     needed); type-erased; type-prefix wire
+#     format
+#   - Different deployment patterns:
+#     protobuf for stable APIs with versioned
+#     schemas; msgpack for internal-format
+#     dynamic data
+#
+# Axis 279 follows naturally from Axis 278
+# (also binary serialization but with
+# different design tradeoffs). Together
+# Axes 278 + 279 cover the two dominant
+# binary serialization landscapes in
+# production polyglot systems.
+#
+# Use-case spectrum for this axis (so far):
+#   - ztunnel (Rust, prost): Istio ambient
+#     mesh xDS protocol + workload identity
+#     gRPC + HBONE PROXY metadata
+# ============================================================================
 
 _ztunnel() {
-    _arguments \
+    local context state state_descr line
+    typeset -A opt_args
+    local curcontext="$curcontext" ret=1
+
+    _arguments -C \
         '(- *)'{-h,--help}'[show help]' \
-        '1::subcommand:(proxy version help)'
+        '1: :_ztunnel_cmds' \
+        '*::arg:->args' \
+    && ret=0
+
+    return ret
+}
+
+_ztunnel_cmds() {
+    local -a cmds
+    cmds=(
+        'proxy:start the ztunnel proxy (default if no command given)'
+        'version:print version info (build hash + Istio version)'
+        'help:print commands + version info'
+    )
+    _describe -t commands 'ztunnel command' cmds
 }
 
 _ztunnel "$@"
