@@ -1,0 +1,450 @@
+#compdef democratic-csi
+# ============================================================================
+# democratic-csi - Kubernetes CSI (Container
+#                   Storage Interface) driver
+#                   framework for ZFS-based +
+#                   iSCSI + NFS + SMB storage
+#                   backends (Node.js, MIT)
+#
+# Author : Travis Glenn Hansen (travisghansen)
+# Upstream: https://github.com/democratic-csi/democratic-csi
+#
+# `democratic-csi` is a Kubernetes Container
+# Storage Interface (CSI) driver framework that
+# implements the CSI v1.0 to v1.11 specifications
+# for multiple storage backends. CSI is the
+# canonical Kubernetes interface for plug-in
+# storage drivers - every storage system from
+# AWS EBS to vSphere to Ceph to TrueNAS uses CSI
+# to integrate with Kubernetes' Persistent Volume
+# Claim (PVC) workflow.
+#
+# democratic-csi provides drivers for:
+#   - TrueNAS / FreeNAS (iSCSI + NFS + SMB
+#     volumes)
+#   - Synology NAS (iSCSI + NFS volumes)
+#   - Local-Hostpath (host-directory volumes)
+#   - ZFS-based local + remote backends
+#   - Generic ZFS-API drivers
+#   - Many other ZFS-aware storage systems
+#
+# Architecture:
+#   - gRPC server implementing CSI's spec-defined
+#     Identity + Controller + Node services
+#     (the three CSI gRPC service categories)
+#   - Listens on TCP + Unix socket transports
+#     (both simultaneously supported)
+#   - Pluggable driver layer (controller-side
+#     volume provisioning + node-side mount
+#     orchestration)
+#   - @grpc/grpc-js + @grpc/proto-loader for
+#     the gRPC stack
+#   - @kubernetes/client-node for Kubernetes API
+#     interactions
+#   - yargs for CLI argument parsing with env-
+#     var binding via the DEMOCRATIC_CSI prefix
+#   - YAML-based driver configuration files
+#
+# Use cases:
+#   - Self-hosted Kubernetes with TrueNAS
+#     storage backend (popular homelab setup)
+#   - Synology NAS as a Kubernetes PVC backend
+#   - ZFS-based storage volumes on bare-metal
+#     Kubernetes clusters
+#   - Multi-tenant Kubernetes clusters with
+#     isolated storage namespaces
+#
+# Usage:
+#   democratic-csi --driver-config-file <file> \
+#                  --csi-version <version> \
+#                  --csi-name <name> \
+#                  --csi-mode <mode> \
+#                  [--server-address <addr>]
+#                  [--server-port <port>]
+#                  [--server-socket <path>]
+#                  [--log-level <level>]
+#
+# Required flags (yargs declarative; DEMOCRATIC_
+# CSI_ env-var binding):
+#       --driver-config-file <file>
+#                                  - YAML
+#                                     driver
+#                                     configuration
+#                                     file
+#                                     (REQUIRED;
+#                                     env:
+#                                     DEMOCRATIC_
+#                                     CSI_DRIVER_
+#                                     CONFIG_
+#                                     FILE)
+#       --csi-version <version>    - CSI spec
+#                                     version
+#                                     (0.2.0 -
+#                                     1.11.0;
+#                                     REQUIRED)
+#       --csi-name <name>          - name for
+#                                     driver
+#                                     registration
+#                                     with k8s
+#                                     (REQUIRED)
+#       --csi-mode <modes>         - controller
+#                                     and/or
+#                                     node
+#                                     services
+#                                     (default:
+#                                     controller
+#                                     + node;
+#                                     REQUIRED)
+#
+# Listener flags (at least one required):
+#       --server-address <addr>    - TCP listen
+#                                     address
+#                                     (e.g.
+#                                     0.0.0.0)
+#       --server-port <port>       - TCP listen
+#                                     port
+#       --server-socket <path>     - Unix
+#                                     socket
+#                                     file path
+#       --server-socket-permissions-mode <mode>
+#                                  - socket
+#                                     file
+#                                     permissions
+#                                     (default
+#                                     0600;
+#                                     OS
+#                                     default
+#                                     would be
+#                                     0755)
+#
+# Logging:
+#       --log-level <level>        - log
+#                                     verbosity
+#                                     (error/
+#                                     warn/info/
+#                                     verbose/
+#                                     debug/
+#                                     silly;
+#                                     default
+#                                     info)
+#
+# Standard flags:
+#       --help                     - print
+#                                     help
+#       --version                  - print
+#                                     version
+#
+# Example invocations:
+#   # Run as both controller + node services on
+#   # a Unix socket
+#   democratic-csi \
+#     --driver-config-file=/etc/csi/truenas-iscsi.yaml \
+#     --csi-version=1.11.0 \
+#     --csi-name=org.democratic-csi.truenas-iscsi \
+#     --csi-mode=controller --csi-mode=node \
+#     --server-socket=/csi/csi.sock
+#
+#   # Controller-only on TCP for high-availability
+#   # deployments
+#   democratic-csi \
+#     --driver-config-file=/etc/csi/synology.yaml \
+#     --csi-version=1.10.0 \
+#     --csi-name=org.democratic-csi.synology \
+#     --csi-mode=controller \
+#     --server-address=0.0.0.0 \
+#     --server-port=8080
+#
+#   # Debug logging for development
+#   democratic-csi \
+#     --driver-config-file=local.yaml \
+#     --csi-version=1.11.0 \
+#     --csi-name=local-test \
+#     --csi-mode=controller --csi-mode=node \
+#     --server-socket=/tmp/csi.sock \
+#     --log-level=debug
+#
+# Example driver-config-file (YAML):
+#   driver: freenas-iscsi
+#   instance_id: "production"
+#   httpConnection:
+#     protocol: https
+#     host: truenas.local
+#     port: 443
+#     apiKey: "1-..."
+#   zfs:
+#     datasetParentName: tank/k8s/volumes
+#     detachedSnapshotsDatasetParentName:
+#       tank/k8s/snapshots
+#     zvolCompression: lz4
+#     zvolDedup: "off"
+#     zvolEnableReservation: false
+#     zvolBlocksize: "16K"
+#   iscsi:
+#     targetPortal: "truenas.local:3260"
+#     interface: ""
+#     namePrefix: csi-
+#     nameSuffix: "-clustername"
+#     targetGroups:
+#       - targetGroupPortalGroup: 1
+#         targetGroupInitiatorGroup: 1
+#         targetGroupAuthType: None
+#
+# The @grpc/grpc-js lane is built on `@grpc/
+# grpc-js ^1.8.4` + `@grpc/proto-loader ^0.7.0`
+# (declared verbatim at upstream package.json
+# HEAD as direct deps, imported by `src/utils/
+# grpc.js` for the gRPC server stack +
+# protocol-buffer codegen + service binding
+# for CSI's Identity + Controller + Node
+# services), the canonical Node gRPC library
+# by Google + the gRPC community - github.com/
+# grpc/grpc-node.
+#
+# Google + the gRPC community's grpc-node has
+# two flavors:
+#   - @grpc/grpc-js: pure-JavaScript
+#     implementation (newer; preferred for new
+#     deployments; smaller install footprint;
+#     better compatibility with edge runtimes
+#     like Cloudflare Workers + Vercel Edge)
+#   - grpc: C++ binding to libgrpc (older;
+#     historical default; deprecated in favor of
+#     @grpc/grpc-js since 2021)
+#
+# Notable: @grpc/grpc-js is the *first canonical
+# Node implementation in this trifecta* that
+# uses a pure-language implementation - not a
+# C-FFI binding. This contrasts with:
+#   - Axis 273 (TLS): node:tls wraps OpenSSL
+#   - Axis 274 (QUIC): matrixai/quic wraps Rust
+#   - Axis 275 (HTTP/2): node:http2 wraps
+#     nghttp2
+#
+# At Axis 276 (gRPC), the Node canonical is
+# pure-JS. This is because @grpc/grpc-js is
+# built on Node's stdlib http2 (which itself
+# wraps nghttp2) - so the FFI is already at
+# the http2 stdlib layer. @grpc/grpc-js only
+# adds JavaScript-level gRPC semantics
+# (service methods + streaming + interceptors +
+# metadata + compression) over the
+# pure-Node-http2 transport.
+#
+# The pure-JS gRPC layer is performant enough
+# because the protocol-byte-handling work is
+# done by nghttp2 + Node's V8 + libuv. gRPC
+# semantics (method dispatch + protobuf
+# serialization + interceptor chains) are
+# JavaScript-level operations that don't need
+# native acceleration.
+#
+# @grpc/grpc-js's distinguishing features vs
+# alternatives:
+#   - @grpc/grpc-js (Google): canonical;
+#     pure-JS; THIS AXIS
+#   - grpc (deprecated): C++ binding to
+#     libgrpc; superseded by @grpc/grpc-js
+#   - nice-grpc: alternative pure-JS gRPC client
+#     + server with TypeScript-first API; less
+#     adoption
+#   - connectrpc (Bufbuild): Connect protocol
+#     implementation with gRPC interoperability
+#
+# Google + the gRPC community's broader Node
+# ecosystem footprint (the grpc-node org):
+#   - @grpc/grpc-js (canonical pure-JS gRPC;
+#     THIS AXIS)
+#   - @grpc/proto-loader (canonical Node
+#     protobuf loader for gRPC services)
+#   - @grpc/grpc-tools (compiler binaries for
+#     generating Node gRPC stubs from .proto
+#     files)
+#   - @grpc/reflection (gRPC server reflection
+#     support)
+#
+# Same governance model as grpc-go (Axis 276
+# Go slot):
+#   - Maintained by the Google gRPC team +
+#     external contributors
+#   - Hosted at github.com/grpc/grpc-node
+#   - Part of the broader github.com/grpc
+#     multi-language gRPC project
+#
+# democratic-csi uses @grpc/grpc-js in src/
+# utils/grpc.js:
+#   ```js
+#   const grpc = require('@grpc/grpc-js');
+#   const protoLoader = require(
+#       '@grpc/proto-loader');
+#
+#   const packageDef = protoLoader.loadSync(
+#       PROTO_PATH, {
+#           keepCase: true,
+#           longs: String,
+#           enums: String,
+#           defaults: true,
+#           oneofs: true,
+#       });
+#   const protoDescriptor = grpc.
+#       loadPackageDefinition(packageDef);
+#   const csi = protoDescriptor.csi.v1;
+#
+#   const server = new grpc.Server();
+#   server.addService(csi.Controller.service,
+#       controllerHandlers);
+#   server.addService(csi.Node.service,
+#       nodeHandlers);
+#   server.addService(csi.Identity.service,
+#       identityHandlers);
+#
+#   // Listen on TCP and/or Unix socket
+#   server.bindAsync('unix:/csi/csi.sock',
+#       grpc.ServerCredentials.createInsecure(),
+#       (err, port) => {
+#           server.start();
+#       });
+#   ```
+# The CSI specification's three required gRPC
+# services (Identity + Controller + Node) are
+# bound to the @grpc/grpc-js server + Kubernetes
+# kubelet + the CSI controller pod
+# communicates with this server via Unix socket
+# (for node service) and TCP (for controller
+# service).
+#
+# ----------------------------------------------------------------------------
+# AXIS 276 :: gRPC protocol libraries (HTTP/2
+#              + protocol buffer codegen +
+#              service definition + streaming
+#              + bidi-streaming + reflection)
+# Round 1528 :: TS-Node slot 3 of 4 :: CLOSES Axis 276
+#                                       (269th axis closed)
+#
+# Cross-language canonical library family for this axis:
+#   Rust    : hyperium/tonic            [R1526 _dft]
+#             (Lucio Franco + hyperium
+#              org; built on hyper + h2 +
+#              tokio)
+#   Go      : grpc/grpc-go              [R1527 _arion]
+#             (Google + gRPC community;
+#              corporate-foundation-backed
+#              reference implementation)
+#   TS/Node : @grpc/grpc-js             [R1528 THIS FILE]
+#             (Google + gRPC community;
+#              pure-JS implementation;
+#              succeeds the deprecated C++
+#              binding `grpc` package)
+#
+# @grpc/grpc-js closes Axis 276 with the
+# *pure-JS-on-top-of-stdlib-FFI* pattern. The
+# three lanes demonstrate three distinct gRPC-
+# canonical architectures:
+#
+#   - Rust (tonic): individual-author canonical
+#     within the hyperium org; pure-Rust
+#   - Go (grpc-go): Google reference
+#     implementation; pure-Go
+#   - Node (@grpc/grpc-js): Google reference
+#     implementation; pure-JS on top of
+#     node:http2 stdlib (which itself wraps
+#     nghttp2 C library)
+#
+# This is the *first axis in the corpus where
+# the Node canonical is BOTH pure-JS AND a
+# Google reference implementation*. Past Node
+# canonicals have been:
+#   - Pure-JS by individual authors (most
+#     microlibs)
+#   - Pure-JS by org maintainer teams (svgo +
+#     axios + jszip + ...)
+#   - C-FFI by Node team (node:tls + node:http2)
+#   - N-API binding to Rust (matrixai/quic)
+#
+# @grpc/grpc-js is unique in being pure-JS
+# *and* Google reference *and* the Node lane
+# of a Google cross-language gRPC project. The
+# pure-JS implementation is possible because
+# the protocol-byte-handling work is done by
+# node:http2 (Axis 275) + V8 + libuv - the gRPC
+# layer above just needs to coordinate
+# service method dispatch + protobuf
+# serialization + interceptor chains, which
+# are all efficient in JavaScript.
+#
+# Cross-language interop at the gRPC wire-
+# protocol level - all three lanes interoperate
+# with any compliant gRPC server/client. This
+# is fundamental to gRPC's design as a
+# polyglot RPC framework.
+#
+# Use-case spectrum across the three lanes:
+#   - dft (Rust, tonic via flightsql feature):
+#     DataFusion TUI + FlightSQL gRPC server
+#   - arion (Go, google.golang.org/grpc):
+#     gRPC toolkit generating postgal + mock
+#     server binaries from .pb.go files
+#   - democratic-csi (Node, @grpc/grpc-js):
+#     Kubernetes CSI driver framework
+#     implementing CSI Identity + Controller +
+#     Node gRPC services for ZFS/NFS/iSCSI/SMB
+#     storage backends
+#
+# Three lanes, three use-case shapes (analytics
+# SQL serving / API testing toolkit /
+# Kubernetes storage driver), three gRPC-
+# canonical patterns (grassroots hyperium /
+# Google reference Go / Google reference
+# pure-JS Node), all converging on the gRPC
+# spec.
+#
+# Axis 276 closes the round 1528 cycle - 269th
+# axis closed total.
+#
+# Notable that the past four axes (273 TLS +
+# 274 QUIC + 275 HTTP/2 + 276 gRPC) form a
+# complete *modern HTTP API protocol stack*:
+#   - TLS (Axis 273): transport security
+#   - QUIC (Axis 274): next-gen reliable
+#     transport
+#   - HTTP/2 (Axis 275): multiplexed binary
+#     framing layer
+#   - gRPC (Axis 276): high-level RPC layer
+#     on top of HTTP/2
+#
+# Together these axes cover the entire modern
+# HTTP API stack from TLS handshake at the
+# bottom to gRPC service method dispatch at
+# the top. Each lane in each axis has been
+# documented with its canonical author + library
+# + cross-language interop story.
+#
+# Multi-axis canonical-Node author/org cohort
+# extension (unchanged at 18 distinct
+# individuals/orgs since Google's grpc-node is
+# part of the existing Google contribution to
+# Node):
+#   - + Google + grpc-node community (THIS AXIS
+#     extends Google's Node contributions
+#     alongside Node team's stdlib canonical
+#     position)
+# ============================================================================
+
+_democratic-csi() {
+    local context state state_descr line
+    typeset -A opt_args
+
+    _arguments -s -S \
+        '--driver-config-file=[YAML driver config file (required)]:file:_files -g "*.(yaml|yml)"' \
+        '--csi-version=[CSI spec version]:version:(0.2.0 0.3.0 1.0.0 1.1.0 1.2.0 1.3.0 1.4.0 1.5.0 1.6.0 1.7.0 1.8.0 1.9.0 1.10.0 1.11.0)' \
+        '--csi-name=[driver registration name]:name:' \
+        '*--csi-mode=[controller and/or node services]:mode:(controller node)' \
+        '--server-address=[TCP listen address]:addr:' \
+        '--server-port=[TCP listen port]:port:' \
+        '--server-socket=[Unix socket file path]:file:_files' \
+        '--server-socket-permissions-mode=[socket file permissions]:mode:' \
+        '--log-level=[log verbosity]:level:(error warn info verbose debug silly)' \
+        '(- *)--help[print help]' \
+        '(- *)--version[print version]'
+}
+
+_democratic-csi "$@"
