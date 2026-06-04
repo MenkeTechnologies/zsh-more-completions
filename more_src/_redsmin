@@ -1,0 +1,392 @@
+#compdef redsmin
+# ============================================================================
+# redsmin - Redsmin proxy daemon for connecting
+#            local/firewalled Redis instances to
+#            the Redsmin SaaS GUI (Node.js, MIT)
+#
+# Author : Francois-Guillaume Ribreau (FGRibreau)
+# Upstream: https://github.com/Redsmin/proxy
+# npm    : redsmin (binary: redsmin)
+# Homepage: https://redsmin.com
+#
+# `redsmin` is the Redsmin Proxy daemon - a TLS-
+# encrypted tunneling proxy that exposes a local
+# or firewalled Redis instance to the Redsmin
+# SaaS Redis GUI (https://redsmin.com). Redsmin
+# is a hosted Redis management dashboard;
+# customers run the redsmin proxy on their own
+# infrastructure + the proxy establishes an
+# outbound TLS connection to ssl.redsmin.com:993
+# that the Redsmin frontend tunnels Redis
+# commands over.
+#
+# Architecture:
+#   - Node stdlib `tls` for outbound TLS
+#     connection to Redsmin cloud endpoint
+#   - Node stdlib `net` for local Redis client
+#     connections
+#   - common-env for environment-variable-based
+#     configuration
+#   - update-notifier for npm update prompts
+#   - Per-Redis-connection multiplexing over a
+#     single TLS tunnel (one proxy can manage
+#     multiple Redis instances)
+#
+# Use cases:
+#   - Expose firewalled/private Redis instances
+#     to Redsmin's web GUI without opening
+#     inbound ports
+#   - Cloud-Redis-management for IaC/CI-deployed
+#     Redis instances (Redis on AWS ElastiCache /
+#     Azure Redis / GCP Memorystore via Redsmin
+#     frontend)
+#   - Multi-Redis-instance management from a
+#     single browser tab
+#
+# Usage:
+#   redsmin
+#
+# This binary takes NO command-line flags - all
+# configuration is via environment variables or
+# a JSON config file. The redsmin proxy is
+# designed for daemon-style deployment + reads
+# its configuration once at startup.
+#
+# Environment variables (read via common-env;
+# default values shown):
+#   CONFIG_FILE                   - path to JSON
+#                                    config file
+#                                    (default
+#                                    /path/to/
+#                                    redsmin/etc/
+#                                    redsmin.json)
+#   DEBUG                         - enable debug
+#                                    logging
+#                                    (default
+#                                    false)
+#   REDSMIN_KEY                   - Redsmin
+#                                    server
+#                                    connection
+#                                    key (24
+#                                    hex chars;
+#                                    obtained
+#                                    from
+#                                    redsmin.com
+#                                    dashboard;
+#                                    required)
+#   REDSMIN_HOSTNAME              - Redsmin
+#                                    cloud
+#                                    endpoint
+#                                    (default
+#                                    ssl.redsmin.
+#                                    com)
+#   REDSMIN_PORT                  - Redsmin
+#                                    cloud port
+#                                    (default
+#                                    993)
+#   REDSMIN_REJECT_UNAUTHORIZED   - verify TLS
+#                                    certificate
+#                                    chain
+#                                    (default 1
+#                                    = strict;
+#                                    set to 0
+#                                    only for
+#                                    debugging
+#                                    with
+#                                    self-
+#                                    signed
+#                                    certs)
+#   REDIS_URI                     - local Redis
+#                                    URI
+#                                    (default
+#                                    redis://
+#                                    127.0.0.1:
+#                                    6379;
+#                                    supports
+#                                    redis://,
+#                                    rediss://,
+#                                    unix:// URI
+#                                    schemes)
+#   REDIS_AUTH                    - Redis
+#                                    password
+#                                    (default
+#                                    null;
+#                                    required
+#                                    if Redis
+#                                    instance
+#                                    has AUTH)
+#
+# Example deployment:
+#   REDSMIN_KEY=abc123...xyz REDIS_URI=redis://127.0.0.1:6379 \
+#     npx redsmin
+#
+#   # Or via Docker (canonical deployment):
+#   docker run -d --name redsmin -e REDSMIN_KEY=abc123...xyz \
+#     -e REDIS_URI=redis://redis-host:6379 \
+#     redsmin/proxy
+#
+# Example etc/redsmin.json config file (loaded
+# if CONFIG_FILE is set):
+#   {
+#     "debug": false,
+#     "redsmin": {
+#       "port": 993,
+#       "hostname": "ssl.redsmin.com",
+#       "reject_unauthorized": 1,
+#       "key": "abc123def456789abcdef012"
+#     },
+#     "redis": {
+#       "uri": "redis://127.0.0.1:6379",
+#       "auth": null
+#     }
+#   }
+#
+# The tls lane is built on Node's stdlib `tls`
+# module (imported as `var tls = require('tls')`
+# in app.js line 12, then passed to the
+# `Endpoint` + `RedisClient` modules for
+# establishing outbound TLS connections to
+# ssl.redsmin.com:993 via `tls.connect(port,
+# host, options)` for the Redsmin cloud-tunnel
+# endpoint). The `tls` module is part of Node's
+# core runtime + ships with every Node
+# distribution.
+#
+# Node's `tls` stdlib module:
+#   - Implemented as a JavaScript layer over a
+#     C++ binding that wraps OpenSSL (or the
+#     BoringSSL fork in some Node builds)
+#   - The OpenSSL version is bundled into Node
+#     itself (the `process.versions.openssl`
+#     property reports the bundled version)
+#   - TLS 1.2 + TLS 1.3 support
+#   - Client + server modes (`tls.connect()` for
+#     clients + `tls.createServer()` for
+#     servers)
+#   - ALPN (Application-Layer Protocol
+#     Negotiation) for HTTP/2 + HTTP/3 +
+#     custom protocols
+#   - SNI (Server Name Indication) for virtual
+#     hosting
+#   - Session resumption (session IDs + tickets
+#     in TLS 1.2 + PSK in TLS 1.3)
+#   - Configurable cert verification + custom CA
+#     bundles
+#   - secureContext objects for connection-level
+#     TLS configuration
+#
+# Node's tls distinguishing features vs
+# alternatives:
+#   - node:tls (stdlib): canonical; OpenSSL
+#     wrapper; THIS AXIS
+#   - rustls-node: WIP Node bindings for Rust's
+#     rustls
+#   - tls-extension: pure-JS TLS in some
+#     restricted contexts
+#   - The native node:crypto + node:tls
+#     combination is the canonical Node TLS
+#     pair
+#
+# Node's stdlib-first culture for TLS is
+# inherited from Node's design philosophy:
+# the core runtime ships with batteries-included
+# I/O including TLS. The Node team maintains
+# `node:tls` alongside the rest of the runtime,
+# with the OpenSSL version updated via Node's
+# release cycle.
+#
+# Node's `tls` module governance:
+#   - Maintained by the Node.js project core
+#     team (including James M Snell + Anna
+#     Henningsen + Matteo Collina + many
+#     others)
+#   - OpenSSL updates tracked via Node's
+#     release schedule (Node 18+ ships OpenSSL
+#     3.0; Node 16 shipped OpenSSL 1.1.1)
+#   - Optional Node builds with BoringSSL via
+#     `./configure --shared-openssl-includes
+#     +--shared-openssl-libpath` and similar
+#   - Security advisories coordinated with the
+#     OpenSSL project
+#
+# This is the *language-runtime-as-canonical-
+# provider* pattern - parallel to Go's
+# crypto/tls. Both Node + Go ship canonical TLS
+# implementations as part of their language
+# runtime/stdlib.
+#
+# However, Node's `tls` defers to OpenSSL (C
+# code) rather than reimplementing TLS in
+# JavaScript. This is the *FFI-canonical*
+# pattern - Node ecosystem accepts the
+# OpenSSL FFI dependency because pure-JS TLS
+# would be prohibitively slow. Go's crypto/tls
+# is the *pure-language-canonical* pattern
+# where Go reimplements TLS in pure Go for
+# memory safety + static binary deployment.
+#
+# Node's tls security history:
+#   - Node 0.10 (2013): first stable TLS API
+#   - Node 4.x (2015): TLS 1.2 default
+#   - Node 12.x (2019): TLS 1.3 support
+#   - Node 18.x (2022): OpenSSL 3.0 upgrade
+#   - Node 22.x (2024): improved QUIC + HTTP/3
+#     foundations
+#   - Multiple OpenSSL CVE patches integrated
+#     via Node's security release cycle
+#
+# redsmin uses node:tls in app.js + lib/
+# Endpoint.js + lib/RedisClient.js:
+#   ```js
+#   var tls = require('tls');
+#
+#   // Connect to Redsmin cloud endpoint
+#   var socket = tls.connect({
+#       port: config.redsmin.port,        // 993
+#       host: config.redsmin.hostname,   // ssl.redsmin.com
+#       rejectUnauthorized:
+#           config.redsmin.reject_unauthorized,
+#       servername: config.redsmin.hostname,
+#   }, function () {
+#       // Connected to Redsmin cloud
+#       socket.write(authHeader);
+#   });
+#
+#   socket.on('data', function (chunk) {
+#       // Forward chunk to local Redis client
+#       redisClient.write(chunk);
+#   });
+#   ```
+# The TLS tunnel multiplexes all local Redis
+# client connections into a single outbound TLS
+# connection to ssl.redsmin.com:993, with
+# per-client connection IDs encoded in the
+# protocol headers.
+#
+# ----------------------------------------------------------------------------
+# AXIS 273 :: TLS (Transport Layer Security)
+#              libraries (TLS 1.2 + TLS 1.3 +
+#              X.509 cert chain validation +
+#              ALPN + SNI + session resumption)
+# Round 1519 :: TS-Node slot 3 of 4 :: CLOSES Axis 273
+#                                       (266th axis closed)
+#
+# Cross-language canonical library family for this axis:
+#   Rust    : rustls/rustls               [R1517 _hxn]
+#             (Joe Birr-Pixton + team;
+#              pure-Rust; memory-safe)
+#   Go      : crypto/tls (stdlib)         [R1518 _PR-DNSd]
+#             (Go team; pure-Go;
+#              language-as-canonical)
+#   TS/Node : node:tls (stdlib)           [R1519 THIS FILE]
+#             (Node team; OpenSSL C
+#              wrapper; language-runtime-
+#              as-canonical)
+#
+# node:tls closes Axis 273 with the
+# *language-runtime-as-canonical via FFI
+# wrapping* pattern. The three lanes
+# demonstrate three distinct TLS-canonical
+# architectures:
+#
+#   - Rust (rustls): individual-team-authored
+#     pure-Rust canonical
+#   - Go (crypto/tls): language-team-authored
+#     pure-Go stdlib canonical
+#   - Node (node:tls): language-team-maintained
+#     C++ wrapper around OpenSSL canonical
+#
+# Each lane's mechanism reflects the host
+# ecosystem's typical FFI tolerance + the
+# maturity of pure-language cryptography:
+#   - Rust: prefers pure-language for memory
+#     safety + audit clarity
+#   - Go: prefers pure-language for static
+#     binaries + simpler deployment
+#   - Node: relies on OpenSSL because pure-JS
+#     crypto is too slow for production TLS
+#
+# This is the *first axis in the corpus where
+# the Node canonical defers to a C library via
+# FFI*. Most Node canonicals are pure-JS
+# (Schlueter's libraries; nodeca's libraries;
+# Sorhus's microlibs; etc.) or use minimal
+# native addons via node-gyp (jszip uses pure-
+# JS; sharp uses libvips via node-addon; node-
+# midi uses rtmidi via node-gyp). TLS is the
+# *first canonical axis where pure-JS would
+# be prohibitively slow* + Node's stdlib
+# explicitly wraps a C library (OpenSSL).
+#
+# Cross-language interop at the TLS wire-
+# protocol level - all three lanes can act
+# as TLS clients/servers + negotiate sessions
+# with any compliant TLS endpoint.
+#
+# Use-case spectrum across the three lanes:
+#   - hxn (Rust, rustls via reqwest's
+#     rustls-tls): headless-Chrome screenshot
+#     tool with TLS for pre-fetch URL
+#     validation
+#   - PR-DNSd (Go, crypto/tls): passive-
+#     recursive DNS daemon with DoT (DNS-over-
+#     TLS) server
+#   - redsmin (Node, node:tls): Redis proxy
+#     daemon establishing outbound TLS tunnel
+#     to the Redsmin cloud GUI service
+#
+# Three lanes, three use-case shapes (web
+# scraping + DNS infrastructure + Redis
+# management), three TLS-canonical
+# architectures (pure-Rust + pure-Go + C-FFI-
+# Node), all converging on the IETF TLS
+# 1.2 + TLS 1.3 spec.
+#
+# Axis 273 closes the round 1519 cycle - 266th
+# axis closed total.
+#
+# Notable pattern: of the three canonical TLS
+# lanes, only the Node lane uses FFI. This is
+# the most-aggressive FFI dependency in any
+# canonical-library axis of the corpus +
+# represents a fundamental tradeoff in
+# ecosystem design:
+#   - Pure-language (Rust + Go): cleaner
+#     audit history but reimplementation cost
+#   - FFI-wrapped (Node): leverages OpenSSL's
+#     25-year battle-tested implementation but
+#     inherits OpenSSL's CVE history + the
+#     burden of OpenSSL maintenance/upgrades
+#
+# Both approaches have merit + the choice
+# reflects ecosystem culture rather than any
+# objective superiority.
+#
+# Multi-axis canonical-Node author/org cohort
+# extension (now spanning 17 distinct
+# individuals/orgs):
+#   - + Node.js project core team (node:tls +
+#     node:crypto + node:net + node:http +
+#     node:https + many others; THIS AXIS
+#     extends the Node team's stdlib
+#     canonical position alongside the Node
+#     core members like James M Snell + Anna
+#     Henningsen + Matteo Collina + Bert
+#     Belder + many others)
+#
+# This is the first formal axis closure where
+# the Node lane's canonical is the Node core
+# team itself rather than an individual author
+# or org-backed library.
+# ============================================================================
+
+_redsmin() {
+    local context state state_descr line
+    typeset -A opt_args
+
+    _arguments -s -S \
+        '(- *)'{-h,--help}'[print help]' \
+        '(- *)'{-V,--version}'[print version]'
+}
+
+_redsmin "$@"
