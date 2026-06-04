@@ -1,0 +1,425 @@
+#compdef otpauth
+# ============================================================================
+# otpauth - Google Authenticator migration QR
+#            decoder (Go, ISC)
+#
+# Author : Dimitri Sokolyuk (dim13)
+# Upstream: https://github.com/dim13/otpauth
+#
+# `otpauth` decodes Google Authenticator's
+# "Export accounts" migration QR codes
+# (otpauth-migration://offline?data=...) into
+# individual otpauth:// URLs (one per OTP
+# secret). The migration format is a base64-
+# encoded Protocol Buffers message containing
+# all OTP secrets + algorithms + digits +
+# counters - effectively the bulk-export wire
+# format used when transferring OTPs between
+# Google Authenticator instances.
+#
+# Distinguishing features vs alternatives:
+#   - **Pure CLI** (no GUI required; runs
+#     headless on servers + automation
+#     pipelines)
+#   - **Local-only decoding** (no third-party
+#     web service; OTP secrets never leave
+#     the machine)
+#   - **HTTP server mode** (browser-viewable
+#     QR codes + live TOTP values via
+#     localhost:6060)
+#   - **Reverse encoding** (convert a list of
+#     individual otpauth:// URLs BACK into a
+#     migration QR code for re-import)
+#   - **Cache-aware** (writes decoded protobuf
+#     payload to `migration.bin` for faster
+#     repeat invocations)
+#   - **prototext dump** (for debugging the
+#     raw migration protobuf message)
+#
+# Use cases:
+#   - Migrate OTP secrets from Google
+#     Authenticator to a password manager
+#     (1Password + Bitwarden + KeePassXC +
+#     Aegis)
+#   - Back up OTP secrets to encrypted
+#     storage (decoded otpauth:// URLs are
+#     portable across all RFC-6238-compliant
+#     authenticators)
+#   - Audit which OTP accounts are stored in
+#     Google Authenticator (some users have
+#     orphaned/forgotten OTPs)
+#   - Test OTP code generation (`-eval`
+#     prints current TOTP values for each
+#     account)
+#   - Build a migration QR for distributing
+#     OTPs to a new device (the `-rev` flag
+#     does the reverse conversion)
+#
+# Usage:
+#   otpauth -link <migration-url> [flags]
+#   otpauth -workdir <dir> [flags]
+#
+# Flags (Go stdlib flag package):
+#   -link <url>                    - Google
+#                                     Authenticator
+#                                     migration
+#                                     URL
+#                                     (required
+#                                     on first
+#                                     run; the
+#                                     scanned
+#                                     QR code
+#                                     content
+#                                     starting
+#                                     with
+#                                     otpauth-
+#                                     migration:
+#                                     //)
+#   -workdir <dir>                 - working
+#                                     directory
+#                                     for
+#                                     cache +
+#                                     output
+#                                     files
+#                                     (default
+#                                     current
+#                                     directory)
+#   -http <addr>                   - serve
+#                                     HTTP UI
+#                                     showing
+#                                     each OTP's
+#                                     QR code +
+#                                     live
+#                                     TOTP
+#                                     value
+#                                     (e.g.
+#                                     localhost:
+#                                     6060)
+#   -eval                          - evaluate
+#                                     OTPs +
+#                                     print
+#                                     current
+#                                     TOTP
+#                                     codes to
+#                                     stdout
+#   -qr                            - generate
+#                                     individual
+#                                     QR PNG
+#                                     files
+#                                     (one per
+#                                     OTP
+#                                     account)
+#   -rev                           - reverse
+#                                     QR code:
+#                                     generate
+#                                     migration
+#                                     PNG from
+#                                     cache
+#   -info                          - display
+#                                     migration
+#                                     batch
+#                                     metadata
+#                                     (batch
+#                                     ID +
+#                                     batch
+#                                     size +
+#                                     batch
+#                                     index)
+#   -dump                          - dump
+#                                     migration
+#                                     data as
+#                                     prototext
+#                                     (Google's
+#                                     human-
+#                                     readable
+#                                     protobuf
+#                                     debug
+#                                     format)
+#   -h, -help                      - print
+#                                     help
+#
+# Workflow:
+#   1. In Google Authenticator app: Settings >
+#      Transfer accounts > Export accounts
+#   2. Take a screenshot of the displayed QR
+#      code (one or more depending on account
+#      count)
+#   3. Decode the QR with any QR scanner to
+#      get the otpauth-migration:// URL
+#   4. Run otpauth with -link <url>:
+#      otpauth -link 'otpauth-migration://offline?data=...'
+#   5. otpauth caches the decoded payload to
+#      ./migration.bin
+#   6. Subsequent runs use the cache (no -link
+#      needed) and can produce different
+#      output formats:
+#        otpauth -qr           # individual QR PNGs
+#        otpauth -eval         # current TOTP codes
+#        otpauth -http :6060   # browser UI
+#        otpauth -dump         # debug prototext
+#
+# Example invocations:
+#   # initial decode + cache
+#   otpauth -link 'otpauth-migration://offline?data=CjsKCgkSE...'
+#
+#   # generate individual QR PNGs
+#   otpauth -qr -workdir ./otp-backup
+#
+#   # live HTTP UI with TOTP codes
+#   otpauth -http localhost:6060 -workdir ./otp-backup
+#
+#   # evaluate current TOTP values
+#   otpauth -eval -workdir ./otp-backup
+#
+#   # reverse: build migration QR from cache
+#   otpauth -rev -workdir ./otp-backup
+#
+#   # display batch metadata
+#   otpauth -info -workdir ./otp-backup
+#
+# Security considerations:
+#   - migration.bin contains all OTP secrets
+#     in protobuf wire format; treat it like
+#     a password file
+#   - The cache uses mode 0600 (owner read+
+#     write only)
+#   - HTTP server mode binds to localhost by
+#     default; do not bind to 0.0.0.0 unless
+#     behind authentication
+#   - Generated QR PNG files contain raw OTP
+#     secrets; do not store unencrypted on
+#     shared filesystems
+#
+# The google.golang.org/protobuf lane is built
+# on `google.golang.org/protobuf v1.36.11`
+# (declared verbatim at upstream go.mod HEAD
+# as a direct dep, imported by `migration/`
+# for Unmarshal + Marshal of the
+# MigrationPayload message defined in
+# migration/migration.proto), the official Go
+# Protocol Buffers library by Google -
+# github.com/protocolbuffers/protobuf-go.
+#
+# google.golang.org/protobuf is the *official*
+# Google Go protobuf library:
+#   - Maintained directly by Google's protobuf
+#     team
+#   - Pure-Go reflection-based encode/decode
+#     (no CGO; no C++ protobuf bindings)
+#   - Supersedes the older `github.com/golang/
+#     protobuf` v1 (APIv1 is now in maintenance
+#     mode; APIv2 at google.golang.org/
+#     protobuf is the canonical)
+#   - Provides protoreflect (reflection over
+#     protobuf messages at runtime)
+#   - Powers gRPC-Go wire encoding (the
+#     canonical Go gRPC implementation uses
+#     this library)
+#   - Hosted at github.com/protocolbuffers/
+#     protobuf-go (under the official
+#     protocolbuffers GitHub org)
+#   - ~50,000 reverse-deps on pkg.go.dev (one
+#     of the highest-volume Go libraries)
+#
+# google.golang.org/protobuf's distinguishing
+# position vs Go protobuf alternatives:
+#   - protocolbuffers/protobuf-go (Google):
+#     OFFICIAL canonical; APIv2; THIS AXIS
+#   - github.com/golang/protobuf (Google
+#     legacy): APIv1; maintenance mode; many
+#     existing codebases still use it but new
+#     code should use protobuf-go
+#   - gogoproto (gogo/protobuf): forked
+#     protobuf code generator with extensive
+#     code-gen options; less actively
+#     maintained; the Cosmos SDK + some
+#     blockchain projects still rely on it
+#   - vtprotobuf (planetscale/vtprotobuf):
+#     code-generator on top of protobuf-go
+#     emitting faster generated code (used
+#     in performance-critical gRPC services)
+#
+# The official protocolbuffers org also
+# maintains canonical implementations for
+# C++ + Java + Python + Ruby + PHP + C# +
+# Objective-C - the full Google-supported
+# protobuf language matrix.
+#
+# Cross-language canonical-author parallel:
+#   - Rust   : Arcieri + Burkert + Franco +
+#              tokio-rs org (third-party
+#              pure-Rust implementation of
+#              Google's protobuf spec)
+#   - Go     : Google's protobuf team (the
+#              SPEC AUTHOR'S OWN canonical
+#              Go implementation - distinct
+#              from Rust's third-party
+#              implementation pattern)
+#   - TS-Node: protobufjs maintainers (third-
+#              party Node implementation)
+#
+# Go uniquely has the spec author's own
+# canonical implementation, similar to how
+# Node uniquely had the spec author's own
+# canonical implementation in Axis 278
+# (MessagePack: Furuhashi's msgpack/msgpack-
+# javascript was both spec author + canonical
+# Node implementation).
+#
+# Across Axes 278 + 279, the *spec-author
+# canonical implementation* pattern appears
+# in different lanes:
+#   - Axis 278 MessagePack: TS-Node lane
+#     (Furuhashi)
+#   - Axis 279 Protocol Buffers: Go lane
+#     (Google's protobuf team)
+# This is consistent with each spec's
+# language-of-origin: MessagePack originated
+# in Ruby/JavaScript ecosystem; protobuf
+# originated at Google with Go as a primary
+# target language.
+#
+# Multi-axis canonical-Go author/org cohort
+# extension (now spanning 19 distinct
+# individuals/orgs after R1536):
+#   - + Google protobuf team / protocol-
+#     buffers org (protocolbuffers/protobuf-
+#     go; THIS AXIS; SPEC-AUTHOR canonical
+#     Go implementation of Protocol Buffers)
+#
+# Google's protobuf team joins the canonical-
+# Go cohort at the *spec-author canonical
+# implementation* level. This is the second
+# canonical-Go entry from Google after the
+# canonical-Go gRPC implementation (grpc/
+# grpc-go was the Axis 276 Go canonical).
+# Google has the most canonical-Go entries
+# of any organization (gRPC-Go + protobuf-go;
+# the foundational gRPC stack).
+#
+# otpauth uses google.golang.org/protobuf for:
+#   - Unmarshal of the MigrationPayload
+#     message decoded from the migration URL's
+#     data parameter
+#   - Marshal for the reverse operation
+#     (building a migration URL from cached
+#     payload)
+#   - prototext.Marshal for the -dump output
+#     (human-readable protobuf debug format)
+#   - protoreflect for OTP parameter iteration
+#     (iterating over MigrationPayload's
+#     OtpParameters field)
+#
+# Build-time uses protoc-gen-go via the
+# Go 1.24 `tool` directive (the new
+# canonical way to declare protoc plugins in
+# Go modules; replaces the older
+# tools.go pattern).
+#
+# The migration.proto file defines:
+#   ```proto
+#   message MigrationPayload {
+#     repeated OtpParameters otp_parameters = 1;
+#     int32 version = 2;
+#     int32 batch_size = 3;
+#     int32 batch_index = 4;
+#     int32 batch_id = 5;
+#   }
+#   message OtpParameters {
+#     bytes secret = 1;
+#     string name = 2;
+#     string issuer = 3;
+#     Algorithm algorithm = 4;
+#     DigitCount digits = 5;
+#     OtpType type = 6;
+#     int64 counter = 7;
+#   }
+#   enum Algorithm { ALGO_UNSPECIFIED = 0; ALGO_SHA1 = 1; ... }
+#   enum DigitCount { DIGITS_UNSPECIFIED = 0; DIGITS_SIX = 1; DIGITS_EIGHT = 2; }
+#   enum OtpType { TYPE_UNSPECIFIED = 0; TYPE_HOTP = 1; TYPE_TOTP = 2; }
+#   ```
+# This is a canonical use of Protocol Buffers
+# for a stable wire format: Google's
+# Authenticator team defined the schema once
+# + the wire format is now decodeable by any
+# protobuf-compatible language. otpauth's
+# Go-based decoder is one of many community
+# implementations of this same wire format
+# (other community implementations exist in
+# Python + Rust + JavaScript).
+#
+# ----------------------------------------------------------------------------
+# AXIS 279 :: Protocol Buffers libraries
+#              (binary serialization format
+#              defined by Google's protobuf
+#              spec at protobuf.dev/;
+#              cross-language IDL-driven
+#              codegen + zero-copy
+#              wire encoding)
+# Round 1536 :: Go slot 2 of 4 :: continues Axis 279
+#
+# Cross-language canonical library family for
+# this axis:
+#   Rust    : tokio-rs/prost             [R1535 _ztunnel]
+#             (Arcieri + Burkert + Franco +
+#              tokio-rs maintainers;
+#              third-party pure-Rust
+#              implementation of Google's
+#              protobuf spec)
+#   Go      : protocolbuffers/protobuf-go [R1536 THIS FILE]
+#             (Google's protobuf team;
+#              SPEC-AUTHOR canonical Go
+#              implementation;
+#              google.golang.org/protobuf)
+#   TS/Node : protobufjs/protobuf.js     [R1537 closing]
+#             (Daniel Wirtz + maintainers;
+#              canonical Node protobuf;
+#              third-party implementation)
+#
+# Use-case spectrum across the lanes (so far):
+#   - ztunnel (Rust, prost): Istio ambient
+#     mesh xDS + workload identity gRPC +
+#     HBONE PROXY metadata
+#   - otpauth (Go, protobuf-go): Google
+#     Authenticator migration QR decoder
+#     (decoding Google's own protobuf wire
+#     format for OTP transport)
+#
+# Cross-lane use-case observation: both use
+# cases involve *decoding Google-defined
+# protobuf wire formats*:
+#   - ztunnel decodes Istio + Envoy xDS
+#     protocol (Envoy started at Lyft but
+#     the protobuf-typed xDS API is now
+#     CNCF-maintained with Google
+#     participation)
+#   - otpauth decodes Google Authenticator
+#     migration payload (pure Google
+#     protobuf schema)
+# Together they illustrate Google protobuf's
+# canonical role as the *production binary
+# IDL* across the polyglot infrastructure
+# landscape.
+# ============================================================================
+
+_otpauth() {
+    local context state state_descr line
+    typeset -A opt_args
+    local curcontext="$curcontext" ret=1
+
+    _arguments \
+        '-link[migration URL (otpauth-migration://...)]:url:' \
+        '-workdir[working directory for cache + output]:dir:_files -/' \
+        '-http[serve HTTP UI at addr]:addr:' \
+        '-eval[evaluate OTPs + print current TOTP codes]' \
+        '-qr[generate individual QR PNG files]' \
+        '-rev[reverse QR code: build migration PNG from cache]' \
+        '-info[display batch metadata]' \
+        '-dump[dump migration data as prototext]' \
+        '(- *)'{-h,-help}'[show help]' \
+    && ret=0
+
+    return ret
+}
+
+_otpauth "$@"
