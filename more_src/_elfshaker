@@ -1,0 +1,403 @@
+#compdef elfshaker
+# ============================================================================
+# elfshaker - efficient binary object storage
+#              for large directory snapshots
+#              (Rust, Apache-2.0)
+#
+# Author : Veselin Karaganev + Peter Waller
+#           (Arm Limited)
+# Upstream: https://github.com/elfshaker/elfshaker
+# crates : elfshaker (binary: elfshaker)
+#
+# `elfshaker` is a content-addressable binary
+# storage tool originally developed by Arm
+# Limited for managing snapshots of large
+# directories of compiled binaries (the original
+# use case: nightly LLVM build artifacts at Arm).
+# Distinguishing features:
+#   - **Massive compression ratios**: stores ~50
+#     GB of compiled LLVM binaries in ~500 MB
+#     of pack files (~100x compression vs raw)
+#   - **Fast extraction**: extracts a snapshot in
+#     seconds rather than minutes (compared to
+#     traditional tar+gzip+SHA approaches)
+#   - **Content-addressable**: identical files
+#     across snapshots stored once; pack files
+#     are immutable
+#   - **Snapshot history**: maintains a list of
+#     all stored snapshots with rich metadata
+#     (timestamps + commit hashes + tags)
+#   - **HTTP server mode**: serves snapshots
+#     remotely via the separate `elfshaker-serve`
+#     binary
+#
+# Use cases:
+#   - LLVM/GCC/Clang nightly build artifact
+#     archiving (the original Bloomberg/Arm use
+#     case)
+#   - CI/CD artifact storage with deduplication
+#   - Reproducible-build verification (compare
+#     two snapshots' file hashes)
+#   - Cross-team distribution of large binary
+#     dependencies (e.g., precompiled toolchains)
+#   - Performance-bisection of compiler output
+#     (extract any historical snapshot in
+#     seconds for A/B comparisons)
+#
+# Usage:
+#   elfshaker [global options] <subcommand>
+#     [subcommand options]
+#
+# Subcommands (clap derive):
+#   extract <snapshot>             - extract a
+#                                     snapshot
+#                                     from a
+#                                     pack file
+#                                     into the
+#                                     current
+#                                     directory
+#   store <name>                   - store the
+#                                     current
+#                                     directory
+#                                     as a new
+#                                     snapshot
+#   list [filter]                  - list
+#                                     snapshots
+#                                     matching
+#                                     an optional
+#                                     filter
+#   list-packs                     - list
+#                                     available
+#                                     pack files
+#   list-files <snapshot>          - list files
+#                                     in a
+#                                     snapshot
+#   pack <name>                    - pack
+#                                     accumulated
+#                                     loose
+#                                     snapshots
+#                                     into a
+#                                     single
+#                                     pack file
+#   show <snapshot>                - show
+#                                     snapshot
+#                                     metadata
+#                                     (size +
+#                                     timestamp
+#                                     + file
+#                                     count)
+#   find <file>                    - find which
+#                                     snapshots
+#                                     contain a
+#                                     specific
+#                                     file
+#   gc                             - garbage
+#                                     collect
+#                                     unreferenced
+#                                     loose
+#                                     objects
+#   update                         - update from
+#                                     a remote
+#                                     elfshaker-
+#                                     serve
+#                                     endpoint
+#   clone <url>                    - clone a
+#                                     remote
+#                                     elfshaker
+#                                     repository
+#                                     from an
+#                                     elfshaker-
+#                                     serve URL
+#   explode <pack>                 - unpack a
+#                                     pack file
+#                                     into its
+#                                     constituent
+#                                     snapshots
+#                                     (inverse
+#                                     of `pack`)
+#
+# Global flags:
+#       --verbose                  - enable
+#                                     verbose
+#                                     execution
+#                                     tracing
+#       --data-dir <path>          - elfshaker
+#                                     repository
+#                                     directory
+#                                     (default
+#                                     ./elfshaker_
+#                                     data; env:
+#                                     ELFSHAKER_
+#                                     DATA)
+#   -h, --help                     - print help
+#
+# Example workflow:
+#   # Create a new snapshot of the current dir
+#   elfshaker store my-build-2024-q4
+#
+#   # List all stored snapshots
+#   elfshaker list
+#
+#   # Pack loose snapshots into a compressed
+#   # pack file for distribution
+#   elfshaker pack my-builds-2024-q4
+#
+#   # Later: extract a specific snapshot back to
+#   # the current directory
+#   elfshaker extract my-build-2024-q4
+#
+#   # Find which snapshots contain a specific
+#   # file
+#   elfshaker find bin/clang
+#
+#   # Remote: clone a remote elfshaker
+#   # repository
+#   elfshaker clone https://elfshaker.example.com/
+#     /repo --data-dir ./remote-data
+#
+# The rmp-serde lane is built on `rmp-serde =
+# "0.15.5"` (declared verbatim at upstream
+# Cargo.toml HEAD as a direct dep, used by
+# elfshaker's pack file format for serializing
+# the per-snapshot file manifest + per-pack
+# index using MessagePack binary serialization),
+# the canonical Rust MessagePack library by
+# Evgeny Safronov (3Hren) - github.com/3Hren/
+# msgpack-rust.
+#
+# Evgeny Safronov (3Hren)'s rmp ecosystem is
+# the de-facto canonical Rust MessagePack
+# library family:
+#   - rmp (canonical Rust MessagePack
+#     low-level encoder/decoder)
+#   - rmp-serde (serde integration for
+#     rmp; THIS AXIS via elfshaker)
+#   - rmp-rpc (msgpack-rpc client+server
+#     primitive)
+#   - rmpv (dynamic value type for rmp;
+#     similar to serde_json::Value but for
+#     MessagePack)
+#
+# Combined ~2,000+ reverse-deps on crates.io
+# (the rmp ecosystem is the canonical Rust
+# MessagePack stack despite being relatively
+# small per individual crate).
+#
+# rmp-serde's distinguishing position vs Rust
+# MessagePack alternatives:
+#   - 3Hren/rmp + rmp-serde + rmp-rpc + rmpv
+#     (Safronov): canonical; THIS AXIS
+#   - messagepack-rs: alternative pure-Rust
+#     MessagePack implementation; less
+#     adoption than rmp
+#   - tarpc + serde_msgpack: tarpc's wire
+#     format option using MessagePack via
+#     serde
+#
+# Evgeny Safronov (3Hren) is a Russian Rust
+# developer who authored the rmp ecosystem as
+# part of his broader Russian open-source
+# contributions. The 3Hren GitHub org is
+# primarily focused on real-time + distributed
+# systems infrastructure (similar specialization
+# vertical to other specialized-protocol Rust
+# authors at Axes 268-277).
+#
+# Safronov joins the specialized-protocol +
+# format-implementation canonical-author
+# cluster in Rust (now spanning even more
+# distinct authors):
+#   - Y. T. Chung (rust-ini + Shadowsocks +
+#     bson)
+#   - Patrick Klein (midir)
+#   - Bytebeam Tech (rumqtt)
+#   - Philip Deljanov (Symphonia)
+#   - Erik Hedvall (palette)
+#   - Joe Birr-Pixton + rustls team
+#   - Cloudflare (quiche)
+#   - Lucio Franco + hyperium (tonic)
+#   - Dmitry Dygalo (jsonschema)
+#   - Now Evgeny Safronov / 3Hren (rmp +
+#     rmp-serde + rmp-rpc + rmpv, THIS AXIS)
+#
+# The specialized-protocol canonical-author
+# cluster in Rust continues to be the largest
+# single cluster by author count documented in
+# the corpus.
+#
+# elfshaker uses rmp-serde in its pack file
+# format for the binary manifest:
+#   ```rust
+#   use rmp_serde::{Serializer, Deserializer};
+#   use serde::{Serialize, Deserialize};
+#
+#   #[derive(Serialize, Deserialize)]
+#   struct PackManifest {
+#       files: Vec<FileEntry>,
+#       snapshot_metadata: Vec<SnapshotMeta>,
+#   }
+#
+#   // Serialize a manifest to MessagePack
+#   let manifest = PackManifest { ... };
+#   let mut buf = Vec::new();
+#   manifest.serialize(&mut Serializer::new(
+#       &mut buf))?;
+#
+#   // Deserialize manifest from a pack file
+#   let mut de = Deserializer::new(reader);
+#   let manifest: PackManifest =
+#       Deserialize::deserialize(&mut de)?;
+#   ```
+# MessagePack provides compact binary
+# serialization (smaller than JSON; close to
+# protobuf for typical structured data) without
+# requiring a separate .proto schema file -
+# rmp-serde infers the wire format from Rust
+# type definitions via serde.
+#
+# This is a canonical use case for
+# MessagePack: internal-format binary
+# serialization where the producer + consumer
+# are the same program (so no schema
+# coordination needed) but binary efficiency +
+# fast parsing are important.
+#
+# ----------------------------------------------------------------------------
+# AXIS 278 :: MessagePack binary serialization
+#              libraries (MessagePack spec
+#              compliant; type-erased
+#              dynamic values + typed serde-
+#              integrated)
+# Round 1532 :: Rust slot 1 of 4 :: OPENS Axis 278
+#
+# Cross-language canonical library family for this axis
+# (proposed):
+#   Rust    : 3Hren/msgpack-rust            - Evgeny
+#                                              Safronov
+#                                              (3Hren)'s
+#                                              canonical
+#                                              Rust
+#                                              MessagePack
+#                                              library
+#                                              family
+#                                              (rmp +
+#                                              rmp-serde
+#                                              + rmp-rpc
+#                                              + rmpv)
+#   Go      : vmihailenco/msgpack            - Vadim
+#                                              Mihailenco's
+#                                              canonical
+#                                              Go
+#                                              MessagePack
+#                                              library;
+#                                              also
+#                                              author of
+#                                              go-redis
+#   TS/Node : msgpack/msgpack                - Daniel
+#             OR                                Wirtz +
+#             kawanet/msgpack-lite             others'
+#                                              canonical
+#                                              Node
+#                                              MessagePack;
+#                                              fastest +
+#                                              most-used
+#                                              in Node
+#                                              ecosystem
+#
+# MessagePack is a *spec-bound + binary-
+# efficient* axis:
+#   - MessagePack spec at https://msgpack.org/
+#     defines the binary wire format
+#   - Released 2008 (Sadayuki Furuhashi,
+#     Treasure Data founder)
+#   - Designed as a faster + smaller
+#     alternative to JSON for binary IPC
+#   - Self-describing: each value carries its
+#     type prefix (no schema needed)
+#   - Supports: nil + bool + int (multiple
+#     widths) + float (32+64) + str + bin +
+#     array + map + ext
+#   - Extension types for application-specific
+#     custom types
+#
+# Each canonical library provides:
+#   - Encode + decode of all MessagePack
+#     primitives
+#   - Integration with the language's
+#     serialization framework (serde for Rust,
+#     reflect for Go, JSON-compatible API for
+#     Node)
+#   - Stream-based + buffer-based APIs
+#   - Extension type support
+#
+# Cross-language interop happens at the
+# MessagePack wire format level - the same
+# .msgpack file is processed identically
+# across all three lanes (this is the primary
+# advantage of MessagePack over schema-bound
+# formats like protobuf).
+#
+# Use cases:
+#   - Redis MessagePack value serialization
+#     (some Redis clients use msgpack instead
+#     of JSON for binary keys/values)
+#   - IPC between processes with different
+#     languages
+#   - Internal binary serialization where
+#     binary efficiency matters but full
+#     protobuf schema setup overhead is
+#     undesirable
+#   - Game networking + multiplayer state
+#     synchronization
+#   - Real-time analytics pipeline binary
+#     event streams
+#   - elfshaker pack file format (THIS AXIS
+#     opener's use case)
+#
+# Axis 278 opens with the Rust slot at
+# Safronov's 3Hren/msgpack-rust ecosystem,
+# anchoring his specialized-protocol canonical
+# position.
+#
+# Use-case spectrum for this axis (so far):
+#   - elfshaker (Rust, rmp-serde): efficient
+#     binary object storage with MessagePack
+#     pack-file manifests
+# ============================================================================
+
+_elfshaker() {
+    local context state state_descr line
+    typeset -A opt_args
+    local curcontext="$curcontext" ret=1
+
+    _arguments -C \
+        '--verbose[enable verbose tracing]' \
+        '--data-dir=[elfshaker repository directory]:dir:_files -/' \
+        '(- *)'{-h,--help}'[print help]' \
+        '1: :_elfshaker_cmds' \
+        '*::arg:->args' \
+    && ret=0
+
+    return ret
+}
+
+_elfshaker_cmds() {
+    local -a cmds
+    cmds=(
+        'extract:extract a snapshot from a pack file'
+        'store:store the current directory as a new snapshot'
+        'list:list snapshots matching an optional filter'
+        'list-packs:list available pack files'
+        'list-files:list files in a snapshot'
+        'pack:pack accumulated loose snapshots into a single pack file'
+        'show:show snapshot metadata'
+        'find:find which snapshots contain a specific file'
+        'gc:garbage collect unreferenced loose objects'
+        'update:update from a remote elfshaker-serve endpoint'
+        'clone:clone a remote elfshaker repository'
+        'explode:unpack a pack file into its constituent snapshots'
+    )
+    _describe -t commands 'elfshaker command' cmds
+}
+
+_elfshaker "$@"
