@@ -1,0 +1,117 @@
+#compdef upash
+# upash-cli - Hash passwords directly from the terminal
+#
+# Upstream: https://github.com/simonepri/upash-cli
+# Library:  https://github.com/simonepri/upash (540+ stars, Apache-2.0/MIT)
+# Author:   Simone Primarosa (@simonepri)
+# License:  MIT
+# Mentioned in: https://github.com/sindresorhus/awesome-nodejs#security
+#
+# Multi-algorithm password hashing CLI built atop the PHC string format family
+# (@phc/bcrypt, @phc/argon2, @phc/scrypt, @phc/pbkdf2).  The bcrypt backend is
+# `@phc/bcrypt`, which wraps the canonical Node binding to OpenBSD bcrypt --
+# kelektiv/node.bcrypt.js (Nick Campbell, ~7800 stars).
+#
+# Source-direct extraction from cli.js (meow flags block) and readme.md
+# Usage block:
+#   https://github.com/simonepri/upash-cli/blob/master/cli.js
+#   https://github.com/simonepri/upash-cli/blob/master/readme.md
+#
+# Sub-commands (positional):
+#   hash    <algorithm> <password>
+#   verify  [<algorithm>] <hash> <password>
+#
+# Algorithms supported:  argon2 | scrypt | bcrypt | pbkdf2
+#
+# Flags (meow type: number/string -- accepts --flag=value or --flag value):
+#   argon2  : --variant --iterations --memory --parallelism
+#   scrypt  : --blocksize --cost --parallelism
+#   bcrypt  : --rounds
+#   pbkdf2  : --iterations --digest <sha1|sha256|sha512>
+
+local curcontext=$curcontext state state_descr line ret=1
+typeset -A opt_args
+
+_upash_algorithms() {
+    local -a algs
+    algs=(
+        'argon2:Argon2 PHC (variant d|i|id) via @phc/argon2'
+        'scrypt:scrypt PHC via @phc/scrypt'
+        'bcrypt:bcrypt PHC via @phc/bcrypt -> kelektiv/node.bcrypt.js (OpenBSD bcrypt)'
+        'pbkdf2:PBKDF2 PHC (sha1|sha256|sha512 digest) via @phc/pbkdf2'
+    )
+    _describe -t algorithms 'algorithm' algs
+}
+
+_upash_argon2_variants() {
+    local -a variants
+    variants=(
+        'd:Argon2d - data-dependent (faster, no side-channel resistance)'
+        'i:Argon2i - data-independent (side-channel resistant)'
+        'id:Argon2id - hybrid (recommended; RFC 9106 default)'
+    )
+    _describe -t variants 'argon2 variant' variants
+}
+
+_upash_pbkdf2_digests() {
+    local -a digests
+    digests=(
+        'sha1:SHA-1 HMAC (legacy, avoid for new deployments)'
+        'sha256:SHA-256 HMAC (recommended baseline)'
+        'sha512:SHA-512 HMAC (recommended for high-entropy outputs)'
+    )
+    _describe -t digests 'pbkdf2 digest' digests
+}
+
+_arguments -C \
+    '(- *)--help[show usage banner and exit]' \
+    '(- *)--version[print upash-cli package version]' \
+    '--variant=[argon2 variant: d | i | id]:variant:_upash_argon2_variants' \
+    '--iterations=[argon2/pbkdf2 iteration count]:iterations:' \
+    '--memory=[argon2 memory cost in kibibytes (KiB)]:memory KiB:' \
+    '--parallelism=[argon2/scrypt degree of parallelism]:parallelism:' \
+    '--blocksize=[scrypt block size r (RFC 7914 r parameter)]:blocksize:' \
+    '--cost=[scrypt CPU/memory cost N (must be a power of 2)]:cost N:' \
+    '--rounds=[bcrypt log2 cost; total iterations = 2^rounds (typical 10-12)]:rounds:' \
+    '--digest=[pbkdf2 HMAC digest function]:digest:_upash_pbkdf2_digests' \
+    '1: :->subcommand' \
+    '*:: :->args' \
+    && ret=0
+
+case $state in
+    subcommand)
+        local -a subcommands
+        subcommands=(
+            'hash:hash <algorithm> <password> -- produce PHC string'
+            'verify:verify [<algorithm>] <hash> <password> -- check a candidate password'
+        )
+        _describe -t subcommands 'upash sub-command' subcommands && ret=0
+        ;;
+    args)
+        case $line[1] in
+            hash)
+                # upash hash <algorithm> <password>
+                case $CURRENT in
+                    2) _upash_algorithms && ret=0 ;;
+                    3) _message -e password 'plaintext password to hash' && ret=0 ;;
+                    *) _message -e 'no further positional args' 'hash takes exactly 2 positional args' ;;
+                esac
+                ;;
+            verify)
+                # upash verify [<algorithm>] <hash> <password>
+                # algorithm name is optional - PHC string carries the id
+                case $CURRENT in
+                    2) _alternative \
+                            'algorithms:algorithm (optional - PHC string self-identifies):_upash_algorithms' \
+                            'hash:hash string ($argon2id$..., $2b$..., $scrypt$..., $pbkdf2-sha256$...): ' \
+                            && ret=0 ;;
+                    3) _message -e value 'hash string or plaintext password' && ret=0 ;;
+                    4) _message -e password 'plaintext password to verify against hash' && ret=0 ;;
+                    *) _message -e 'no further positional args' 'verify takes 2 or 3 positional args' ;;
+                esac
+                ;;
+        esac
+        ;;
+esac
+
+return ret
