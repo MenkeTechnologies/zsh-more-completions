@@ -1,0 +1,616 @@
+#compdef noip-duc
+# ============================================================================
+# noip-duc - No-IP Dynamic Update Client
+#             (Rust, Apache-2.0)
+#
+# Author : No-IP Team
+# Upstream: GitLab at gitlab.com/noip/noip-duc
+#           (GitHub mirror: github.com/hcoona/
+#           noip-duc)
+#
+# `noip-duc` is the *official* dynamic DNS
+# update client for No-IP (www.noip.com),
+# rewritten in Rust to replace the legacy
+# noip2 C client. Keeps a No-IP hostname's
+# A record pointed at the current public IP
+# of the host running the daemon, even as
+# the host's ISP-assigned IP changes (the
+# canonical DDNS use case for residential +
+# small-business networks behind dynamic-IP
+# ISPs).
+#
+# Architecture:
+#   1. Discover public IP via configurable
+#      methods (DNS query to No-IP's lookup
+#      servers + HTTP request + AWS EC2
+#      metadata + static IP for testing +
+#      custom HTTP URL)
+#   2. Compare to last-known IP from
+#      previous check
+#   3. If changed: call No-IP's update API
+#      with the new IP + the configured
+#      hostname(s)
+#   4. Run an optional --exec-on-change
+#      command (with {{CURRENT_IP}} +
+#      {{LAST_IP}} substitutions) for
+#      side-effects (mail notification +
+#      Slack ping + firewall reload + DNS
+#      propagation check)
+#   5. Sleep for --check-interval (default
+#      5 minutes; minimum 2 minutes
+#      enforced)
+#
+# Distinguishing features vs alternatives:
+#   - **Official No-IP team implementation**
+#     (the Rust rewrite is maintained by
+#     No-IP's own team at GitLab; replaces
+#     the legacy noip2 C client)
+#   - **Multi-method public IP discovery**
+#     (--ip-method takes a comma-separated
+#     fallback list: dns + http +
+#     http-port-8245 + aws-metadata +
+#     static + custom HTTP URL)
+#   - **Custom DNS lookups** (dns:
+#     <nameserver>:<port>:<qname>:<record-
+#     type> allows specifying any DNS
+#     server + query name for the IP
+#     lookup)
+#   - **Daemon mode** (Unix --daemonize
+#     with --daemon-user + --daemon-group
+#     + --daemon-pid-file for systemd /
+#     systemv init integration)
+#   - **Environment variable config**
+#     (every flag has a NOIP_* env var
+#     equivalent; suitable for Docker +
+#     Kubernetes ConfigMap deployments)
+#   - **noip2 migration** (--import reads
+#     the legacy noip2 config from
+#     /etc/no-ip2.conf and prints
+#     equivalent environment variable
+#     settings for the new client)
+#   - **Update Group support** (recommended
+#     auth method: per-hostname-group
+#     credentials instead of full account
+#     credentials)
+#   - **One-shot mode** (--once verifies
+#     credentials + updates IP + exits;
+#     useful for cron-based DDNS without
+#     a daemon)
+#
+# Use cases:
+#   - Home server DDNS (residential ISP
+#     assigns dynamic IPs; No-IP hostname
+#     tracks the current IP)
+#   - Remote access infrastructure (VPN
+#     servers + jump hosts behind dynamic
+#     IPs)
+#   - SOHO routers running OpenWrt/DD-WRT
+#     (cross-compile for MIPS/ARM)
+#   - Small-business sites behind dynamic
+#     IP DSL/cable connections
+#   - IoT deployments where each device
+#     needs a stable hostname despite
+#     mobile carrier IP rotation
+#
+# Usage:
+#   noip-duc [options]
+#
+# Required (or via env vars):
+#   -u, --username <user>          - No-IP
+#                                     account
+#                                     username
+#                                     (use
+#                                     Update
+#                                     Group
+#                                     credentials
+#                                     for
+#                                     better
+#                                     security;
+#                                     env:
+#                                     NOIP_
+#                                     USERNAME)
+#   -p, --password <pass>          - No-IP
+#                                     account
+#                                     password
+#                                     (env:
+#                                     NOIP_
+#                                     PASSWORD)
+#
+# Common options:
+#   -g, --hostnames <list>         - comma-
+#                                     separated
+#                                     list of
+#                                     groups
+#                                     + hostnames
+#                                     to update
+#                                     (env:
+#                                     NOIP_
+#                                     HOSTNAMES)
+#       --check-interval <dur>     - how often
+#                                     to check
+#                                     for new IP
+#                                     (humantime
+#                                     format:
+#                                     5m + 1h +
+#                                     30s;
+#                                     minimum
+#                                     2m;
+#                                     default
+#                                     5m;
+#                                     env:
+#                                     NOIP_
+#                                     CHECK_
+#                                     INTERVAL)
+#       --http-timeout <dur>       - timeout
+#                                     for
+#                                     HTTP
+#                                     requests
+#                                     (default
+#                                     10s;
+#                                     env:
+#                                     NOIP_
+#                                     HTTP_
+#                                     TIMEOUT)
+#       --once                     - find
+#                                     public
+#                                     IP +
+#                                     send
+#                                     update +
+#                                     exit
+#                                     (good
+#                                     for
+#                                     credential
+#                                     verification)
+#
+# Public IP discovery:
+#       --ip-method <list>         - comma-
+#                                     separated
+#                                     methods
+#                                     tried in
+#                                     order
+#                                     until a
+#                                     public
+#                                     IP is
+#                                     found
+#                                     (default
+#                                     "dns,
+#                                     http,
+#                                     http-port-
+#                                     8245";
+#                                     env:
+#                                     NOIP_IP_
+#                                     METHOD)
+#
+#   IP method values:
+#     aws-metadata                 - AWS EC2
+#                                     instance
+#                                     metadata
+#                                     URL
+#                                     (queries
+#                                     169.254
+#                                     .169.254
+#                                     for
+#                                     elastic
+#                                     IP)
+#     dns                          - No-IP's
+#                                     DNS
+#                                     public
+#                                     IP
+#                                     lookup
+#                                     (queries
+#                                     No-IP's
+#                                     resolver
+#                                     for the
+#                                     querying
+#                                     IP)
+#     dns:<srv>:<port>:<qname>:<rt> - custom
+#                                     DNS
+#                                     lookup
+#                                     (e.g.
+#                                     dns:8.8
+#                                     .8.8:53:
+#                                     myip
+#                                     .opendns
+#                                     .com:A)
+#     http                         - No-IP's
+#                                     HTTP
+#                                     method on
+#                                     port 80
+#     http-port-8245               - No-IP's
+#                                     HTTP
+#                                     method on
+#                                     port
+#                                     8245
+#                                     (alt
+#                                     port
+#                                     for
+#                                     firewalled
+#                                     networks)
+#     static:<ip>                  - always
+#                                     use this
+#                                     IP
+#                                     (helpful
+#                                     with
+#                                     --once)
+#     HTTP URL                     - any HTTP
+#                                     URL that
+#                                     returns
+#                                     only an
+#                                     IP
+#                                     address
+#                                     (e.g.
+#                                     https://
+#                                     api
+#                                     .ipify
+#                                     .org)
+#
+# IP change callback:
+#   -e, --exec-on-change <cmd>     - shell
+#                                     command
+#                                     to run
+#                                     on IP
+#                                     change
+#                                     (env:
+#                                     NOIP_
+#                                     EXEC_
+#                                     ON_
+#                                     CHANGE)
+#       - CURRENT_IP + LAST_IP env vars set
+#       - {{CURRENT_IP}} + {{LAST_IP}}
+#         placeholder substitution in the
+#         command string
+#       - Run via sh (Unix) or cmd (Windows)
+#
+# Logging:
+#   -v, --verbose                  - increase
+#                                     logging
+#                                     verbosity
+#                                     (repeatable:
+#                                     -v +
+#                                     -vv +
+#                                     -vvv)
+#   -l, --log-level <level>        - explicit
+#                                     log
+#                                     level
+#                                     (trace +
+#                                     debug +
+#                                     info +
+#                                     warn +
+#                                     error +
+#                                     critical;
+#                                     overrides
+#                                     --verbose;
+#                                     env:
+#                                     NOIP_
+#                                     LOG_
+#                                     LEVEL)
+#
+# Daemon mode (Unix only):
+#       --daemonize                - fork into
+#                                     the
+#                                     background
+#       --daemon-user <user>       - drop to
+#                                     this
+#                                     user
+#                                     when
+#                                     daemonizing
+#                                     (env:
+#                                     NOIP_
+#                                     DAEMON_
+#                                     USER)
+#       --daemon-group <group>     - drop to
+#                                     this
+#                                     group
+#                                     when
+#                                     daemonizing
+#                                     (env:
+#                                     NOIP_
+#                                     DAEMON_
+#                                     GROUP)
+#       --daemon-pid-file <path>   - write
+#                                     PID
+#                                     file
+#                                     when
+#                                     daemonizing
+#                                     (env:
+#                                     NOIP_
+#                                     DAEMON_
+#                                     PID_FILE)
+#
+# Migration:
+#       --import [path]            - import
+#                                     config
+#                                     from
+#                                     legacy
+#                                     noip2 +
+#                                     print
+#                                     as env
+#                                     variables
+#                                     (default
+#                                     path:
+#                                     /etc/
+#                                     no-ip2
+#                                     .conf)
+#
+# Help + version:
+#   -h, --help                     - show help
+#   -V, --version                  - show
+#                                     version
+#
+# Example invocations:
+#   # interactive run with credentials on
+#   # command line
+#   noip-duc -u alice -p s3cr3t \
+#     -g home.ddns.net,office.ddns.net
+#
+#   # one-shot run (verifies credentials +
+#   # updates + exits)
+#   noip-duc -u alice -p s3cr3t \
+#     -g home.ddns.net --once
+#
+#   # daemonize on Linux
+#   noip-duc -u alice -p s3cr3t \
+#     -g home.ddns.net \
+#     --daemonize \
+#     --daemon-user nobody \
+#     --daemon-pid-file /var/run/noip-duc.pid
+#
+#   # use environment variables (Docker /
+#   # Kubernetes deployment style)
+#   NOIP_USERNAME=alice \
+#   NOIP_PASSWORD=s3cr3t \
+#   NOIP_HOSTNAMES=home.ddns.net \
+#   noip-duc
+#
+#   # custom IP discovery via Google DNS
+#   noip-duc -u alice -p s3cr3t -g home.ddns.net \
+#     --ip-method 'dns:8.8.8.8:53:o-o.myaddr.l.google.com:TXT'
+#
+#   # call hook on IP change
+#   noip-duc -u alice -p s3cr3t -g home.ddns.net \
+#     -e 'curl -X POST https://hooks.slack.com/...
+#         -d "IP changed to {{CURRENT_IP}}"'
+#
+#   # migrate from legacy noip2
+#   noip-duc --import /etc/no-ip2.conf \
+#     > /etc/default/noip-duc
+#
+#   # AWS Elastic IP discovery (for EC2)
+#   noip-duc -u alice -p s3cr3t -g aws.ddns.net \
+#     --ip-method aws-metadata
+#
+# The hickory-resolver lane is built on
+# `hickory-resolver = "^0.24"` (declared
+# verbatim at upstream Cargo.toml HEAD as a
+# direct dep, imported by `src/public_ip/`
+# for the DNS-based public IP discovery
+# method - querying No-IP's authoritative
+# DNS resolver for the client's source IP),
+# the canonical Rust DNS library by
+# Benjamin Fry + the Hickory DNS project
+# (formerly Trust-DNS) - github.com/
+# hickory-dns/hickory-dns.
+#
+# hickory-dns/hickory-resolver is the
+# de-facto canonical Rust DNS library:
+#   - **Pure-Rust implementation** (no C
+#     library dependencies; no libresolv
+#     or libunbound bindings)
+#   - **Full DNS protocol coverage** (RFC
+#     1035 + extensions for DNSSEC + EDNS0
+#     + DoH + DoT + DoQ)
+#   - **DNSSEC validation** (full DNSSEC
+#     chain validation in pure Rust)
+#   - **Multiple transports** (UDP + TCP +
+#     DNS-over-TLS (RFC 7858) + DNS-over-
+#     HTTPS (RFC 8484) + DNS-over-QUIC
+#     (RFC 9250))
+#   - **Async-first** (tokio-based;
+#     non-blocking resolution)
+#   - **System resolver replacement**
+#     (drop-in replacement for std's
+#     ToSocketAddrs / DNS resolution;
+#     reqwest's "hickory-dns" feature
+#     uses this)
+#   - **Subprojects**: hickory-resolver
+#     (client lib) + hickory-proto
+#     (wire format) + hickory-server
+#     (recursive/authoritative server) +
+#     hickory-dns (the DNS server
+#     binary)
+#   - 4,200+ stars on github.com/
+#     hickory-dns/hickory-dns
+#   - ~10,000 reverse-deps on crates.io
+#     (the canonical Rust DNS stack)
+#
+# hickory-resolver's distinguishing position
+# vs Rust DNS alternatives:
+#   - hickory-dns/hickory-* (Fry +
+#     Bluejekyll team): canonical;
+#     pure-Rust; full protocol coverage;
+#     THIS AXIS
+#   - domain (NLnet Labs): alternative
+#     pure-Rust DNS with strong DNSSEC
+#     focus; less broadly adopted than
+#     hickory
+#   - dns-parser: low-level DNS message
+#     parsing; no resolver
+#   - resolv: thin libc bindings for
+#     macOS/Linux's libresolv
+#
+# Benjamin Fry (Bluejekyll) is the original
+# author of trust-dns (the project's name
+# before the December 2023 rename to
+# Hickory DNS for trademark reasons). The
+# project moved from the trust-dns
+# organization to the hickory-dns
+# organization at that time; all crates
+# were renamed (trust-dns-resolver →
+# hickory-resolver + trust-dns-proto →
+# hickory-proto + trust-dns-server →
+# hickory-server).
+#
+# Fry's broader Rust ecosystem footprint:
+#   - hickory-dns/hickory-dns (the
+#     complete canonical Rust DNS stack;
+#     THIS AXIS - server + resolver +
+#     proto)
+#   - Bluejekyll's various Rust security
+#     + cryptography contributions
+#
+# Fry's role in Rust is *foundational
+# networking infrastructure + DNS
+# protocol implementation*. The
+# Hickory project's scope - covering
+# client + server + protocol - makes
+# it analogous to BIND9 in the C
+# world: a complete DNS stack
+# maintained as a unified project.
+#
+# Multi-axis canonical-Rust author/org
+# cohort extension (now spanning even
+# more distinct authors):
+#   - + Benjamin Fry + Hickory DNS
+#     project (hickory-resolver +
+#     hickory-proto + hickory-server +
+#     hickory-dns binary; THIS AXIS;
+#     canonical Rust DNS stack;
+#     formerly Trust-DNS)
+#
+# Fry's joining the canonical-Rust cohort
+# at the *foundational networking
+# infrastructure + protocol
+# implementation* level reinforces the
+# vertically-integrated-stack pattern
+# seen at:
+#   - tokio-rs/* (Axes 273-279: tokio +
+#     hyper + h2 + tonic + prost +
+#     rustls)
+#   - hickory-dns/* (THIS AXIS:
+#     resolver + proto + server)
+# Both are unified projects covering
+# multiple sub-libraries under a single
+# canonical project umbrella.
+#
+# noip-duc uses hickory-resolver for:
+#   - The 'dns' ip_method (queries No-IP's
+#     authoritative DNS resolver to
+#     determine the client's source IP)
+#   - The 'dns:<srv>:<port>:<qname>:<rt>'
+#     custom DNS lookups (specifies any
+#     DNS server + query name + record
+#     type for IP discovery)
+#
+# This is the canonical use case for
+# hickory-resolver: programmatic DNS
+# queries within a Rust application
+# where the system resolver is
+# insufficient (e.g., needing to
+# specify a custom resolver server,
+# request specific record types, or
+# bypass system DNS caches).
+#
+# ----------------------------------------------------------------------------
+# AXIS 282 :: DNS (Domain Name System)
+#              libraries
+#              (RFC 1035 + extensions:
+#              EDNS0 + DNSSEC + DoH/DoT/
+#              DoQ; resolver + protocol +
+#              authoritative server
+#              implementations)
+# Round 1544 :: Rust slot 1 of 4 :: OPENS Axis 282
+#
+# Cross-language canonical library family
+# for this axis (proposed):
+#   Rust    : hickory-dns/hickory-resolver - Benjamin
+#                                            Fry +
+#                                            Bluejekyll
+#                                            team
+#                                            (canonical
+#                                            Rust DNS
+#                                            stack;
+#                                            formerly
+#                                            trust-dns;
+#                                            renamed
+#                                            2023)
+#   Go      : miekg/dns                  - Miek
+#                                            Gieben
+#                                            (RFC
+#                                            author;
+#                                            canonical
+#                                            Go DNS;
+#                                            powers
+#                                            CoreDNS +
+#                                            most Go
+#                                            DNS
+#                                            tools)
+#   TS/Node : mafintosh/dns-packet       - Mathias
+#             OR                            Buus +
+#             dns2/song940                  alternatives
+#                                            (Node DNS
+#                                            implementations)
+#
+# DNS is the *foundational name resolution
+# protocol of the internet*:
+#   - RFC 1035 (1987; the foundational
+#     DNS spec)
+#   - 30+ extension RFCs covering DNSSEC
+#     (RFC 4033 + 4034 + 4035) + EDNS0
+#     (RFC 6891) + DNS-over-TLS (RFC
+#     7858) + DNS-over-HTTPS (RFC 8484)
+#     + DNS-over-QUIC (RFC 9250)
+#   - Foundational dependency of every
+#     internet-connected application
+#
+# Each canonical library provides:
+#   - DNS message wire format encoding/
+#     decoding
+#   - Recursive + authoritative resolver
+#     capability
+#   - Multiple transport support (UDP +
+#     TCP + DoT + DoH + DoQ)
+#   - DNSSEC validation (some libraries)
+#   - Async or sync APIs
+#
+# DNS-specific architectural patterns:
+#   - Resolver vs server: most use cases
+#     need resolver-only; authoritative
+#     server is a narrower use case
+#   - Sync vs async: async DNS is critical
+#     for high-fanout services (every TCP
+#     connection needs a DNS lookup first)
+#   - System resolver vs custom: most apps
+#     defer to libc's resolver (getaddrinfo);
+#     custom libraries are needed when
+#     specifying alternate servers,
+#     bypassing caches, or supporting
+#     newer transports (DoT/DoH/DoQ)
+#
+# Use-case spectrum for this axis (so far):
+#   - noip-duc (Rust, hickory-resolver):
+#     dynamic DNS update client public IP
+#     discovery via custom DNS queries
+# ============================================================================
+
+_noip-duc() {
+    _arguments \
+        '(-u --username)'{-u+,--username=}'[No-IP username]:user:' \
+        '(-p --password)'{-p+,--password=}'[No-IP password]:pass:' \
+        '(-g --hostnames)'{-g+,--hostnames=}'[comma-separated hostnames/groups]:hosts:' \
+        '--check-interval=[check interval (humantime; min 2m)]:dur:' \
+        '--http-timeout=[HTTP request timeout]:dur:' \
+        '--daemonize[fork into the background (Unix only)]' \
+        '--daemon-user=[drop to this user when daemonizing]:user:_users' \
+        '--daemon-group=[drop to this group when daemonizing]:group:_groups' \
+        '--daemon-pid-file=[write PID file when daemonizing]:file:_files' \
+        '*-v[increase logging verbosity (repeatable)]' \
+        '(-l --log-level)'{-l+,--log-level=}'[explicit log level]:level:(trace debug info warn error critical)' \
+        '(-e --exec-on-change)'{-e+,--exec-on-change=}'[shell command to run on IP change]:cmd:' \
+        '--ip-method=[comma-separated public IP discovery methods]:list:' \
+        '--once[run once + exit]' \
+        '--import=[import config from legacy noip2]::file:_files' \
+        '(- *)'{-h,--help}'[show help]' \
+        '(- *)'{-V,--version}'[show version]'
+}
+
+_noip-duc "$@"
