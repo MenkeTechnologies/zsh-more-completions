@@ -1,0 +1,432 @@
+#compdef okolors
+# ============================================================================
+# okolors - generate color palettes from images
+#            via k-means clustering in the Oklab
+#            perceptually-uniform color space
+#            (Rust, MIT OR Apache-2.0)
+#
+# Author : Ian Manske (IanManske)
+# Upstream: https://github.com/IanManske/Okolors
+# crates : okolors-cli (binary: okolors)
+#
+# `okolors` extracts a representative color
+# palette from an input image by:
+#   1. Loading the image (JPEG / PNG / GIF / WebP
+#      / QOI supported via the `image` crate)
+#   2. Sub-sampling pixels proportional to image
+#      size + a configurable sampling factor
+#   3. Converting the sampled sRGB pixels into
+#      the Oklab perceptually-uniform color space
+#      (via the `palette` crate's color-space
+#      conversion machinery)
+#   4. Running k-means clustering with a
+#      configurable cluster count (the palette
+#      size) over the Oklab samples
+#   5. Optionally re-mapping cluster centers to
+#      additional lightness levels in Okhsl
+#   6. Printing the resulting palette in one of
+#      three output formats (hex / RGB triples /
+#      true-color terminal swatches)
+#
+# Why Oklab? Oklab (developed by Björn Ottosson
+# in 2020) is a *perceptually uniform* color
+# space where Euclidean distance approximates
+# human perception of color difference. Unlike
+# CIELAB (which has known hue-shift issues + is
+# tuned to specific viewing conditions), Oklab is
+# designed for digital screens + provides better
+# results for image-derived palette extraction.
+#
+# Use cases:
+#   - Theme generation for ricing/customization
+#     (Linux desktop color schemes derived from
+#     wallpapers; pywal alternative with better
+#     color perception)
+#   - Brand color extraction from logo + photo
+#     references (graphic-design palette
+#     starting point)
+#   - Album-art-derived player UI tinting
+#     (Spotify's "from album art" UI effect)
+#   - Procedural game art palettization
+#     (constrain rendered output to N-color
+#     limit)
+#
+# Usage:
+#   okolors <image> [options]
+#
+# Positional argument:
+#   <image>                        - path to
+#                                     input
+#                                     image
+#                                     (JPEG /
+#                                     PNG /
+#                                     GIF /
+#                                     WebP /
+#                                     QOI;
+#                                     required)
+#
+# Flags (clap derive):
+#   -k <n>                         - max colors
+#                                     in palette
+#                                     (range
+#                                     [1, 256];
+#                                     default 8)
+#   -o, --output <format>          - output
+#                                     format
+#                                     (hex/rgb/
+#                                     swatch;
+#                                     default
+#                                     hex)
+#   -c, --colorize <fg|bg>         - color the
+#                                     foreground
+#                                     or
+#                                     background
+#                                     of each
+#                                     printed
+#                                     color
+#                                     (default
+#                                     no color)
+#   -s, --sort <order>             - sort order
+#                                     (h=hue,
+#                                     s=saturation,
+#                                     l=lightness,
+#                                     n=number-
+#                                     of-pixels
+#                                     descending;
+#                                     default
+#                                     n)
+#   -r, --reverse                  - reverse
+#                                     the
+#                                     printed
+#                                     order
+#   -l, --lightness-levels <csv>   - additional
+#                                     Okhsl
+#                                     lightness
+#                                     levels
+#                                     (comma-
+#                                     separated;
+#                                     range
+#                                     [0.0,
+#                                     100.0])
+#       --no-avg-lightness         - skip
+#                                     average-
+#                                     lightness
+#                                     output
+#                                     (useful
+#                                     when only
+#                                     --lightness-
+#                                     levels are
+#                                     wanted)
+#   -w, --lightness-weight <f>     - scale
+#                                     factor for
+#                                     lightness
+#                                     component
+#                                     during
+#                                     color-
+#                                     distance
+#                                     calculation
+#                                     (range
+#                                     [0.0,
+#                                     1.0];
+#                                     default
+#                                     0.325)
+#   -f, --sampling-factor <f>      - proportion
+#                                     of image
+#                                     to sample
+#                                     (default
+#                                     0.5)
+#   -n, --max-samples <n>          - hard cap
+#                                     on k-means
+#                                     sample
+#                                     count
+#                                     (overrides
+#                                     -f's
+#                                     proportional
+#                                     sampling
+#                                     for large
+#                                     images)
+#       --batch-size <n>           - k-means
+#                                     batch
+#                                     size
+#                                     (smaller
+#                                     = more
+#                                     accurate
+#                                     but
+#                                     slower;
+#                                     threads
+#                                     feature
+#                                     only)
+#       --seed <u64>               - RNG seed
+#                                     for
+#                                     reproducible
+#                                     k-means
+#                                     results
+#   -t, --threads <n>              - thread
+#                                     count
+#                                     (0=auto;
+#                                     default
+#                                     0)
+#       --verbose                  - print
+#                                     stage
+#                                     timings
+#                                     to stderr
+#   -h, --help                     - print
+#                                     help
+#   -V, --version                  - print
+#                                     version
+#
+# Example invocations:
+#   okolors wallpaper.jpg
+#   okolors -k 12 -o swatch -c bg cover.png
+#   okolors -s h -r -k 16 logo.png
+#   okolors --verbose --lightness-levels 25,50,75 \
+#           --no-avg-lightness photo.jpg
+#   okolors -w 0.15 -k 6 -f 1.0 detail.png
+#
+# Output format examples:
+#   hex:    #1a2b3c
+#   rgb:    rgb(26, 43, 60)
+#   swatch: terminal background-colored
+#           whitespace blocks
+#
+# The palette lane is built on `palette = "0.7.6"`
+# with `default-features = false` (declared
+# verbatim at upstream Cargo.toml HEAD as a
+# direct workspace dep, imported as
+# `use palette::{FromColor, Okhsl, Oklab, Srgb}`
+# in src/main.rs for color-space conversions
+# from sRGB <-> Oklab <-> Okhsl during the
+# k-means clustering + palette extraction
+# pipeline), the canonical Rust color manipulation
+# library by Erik Hedvall (Ogeon) - github.com/
+# Ogeon/palette.
+#
+# Erik Hedvall's Ogeon/palette is the de-facto
+# canonical Rust color manipulation library:
+#   - 1,000+ reverse-deps on crates.io
+#   - Comprehensive color space support: sRGB +
+#     linear RGB + CIE XYZ + CIE Lab + CIE Lch +
+#     HSL + HSV + HSI + Yxy + Oklab + Okhsl +
+#     Okhsv + Luma (gray)
+#   - Type-safe color space encoding (each color
+#     space is a distinct Rust type; conversions
+#     require explicit `FromColor` calls)
+#   - Const-generic color components (f32 / f64
+#     / u8 / u16 / u32)
+#   - Color blending + interpolation + gradient
+#     generation
+#   - Color difference + matching (CIE2000,
+#     CIE94, CIE76, CMC)
+#   - Color appearance models
+#   - Pure Rust (no C dependencies)
+#   - no_std-compatible (embedded support)
+#
+# palette's distinguishing position vs Rust
+# color-manipulation alternatives:
+#   - palette (Ogeon): canonical; type-safe
+#     color-space encoding; comprehensive
+#     coverage; THIS AXIS
+#   - hsl: HSL-specific minimal crate
+#   - rgb: RGB-pixel-byte-level utilities
+#   - csscolorparser: CSS color string parser
+#   - color-art: simpler API but less
+#     comprehensive
+#
+# palette's canonical status comes from:
+#   1. First-class Oklab + Okhsl support (the
+#      modern perceptually-uniform color spaces)
+#   2. Type-safe color-space encoding (prevents
+#      mixing-up sRGB / linear / CIE coordinates)
+#   3. no_std support (works in embedded + WASM
+#      + edge runtimes)
+#   4. Constant-generic component types
+#     (compile-time choice of f32 / f64 / u8)
+#   5. Comprehensive documentation + design-
+#     decision-driven API
+#
+# Erik Hedvall's broader Rust ecosystem
+# footprint:
+#   - Ogeon/palette (canonical Rust color
+#     manipulation; THIS AXIS)
+#   - Various smaller crates around color
+#     pipelines + image processing
+#
+# Hedvall's role in Rust is *specialized color-
+# pipeline canonical infrastructure* - similar
+# vertically-focused canonical position to:
+#   - Philip Deljanov (Symphonia at Axis 271):
+#     multi-codec audio decoding
+#   - Patrick Klein (midir at Axis 269): MIDI
+#     I/O
+#   - Y. T. Chung (rust-ini + Shadowsocks +
+#     bson at Axis 268): specialized
+#     protocols
+#   - Bytebeam Tech (rumqtt at Axis 270):
+#     MQTT IoT
+#
+# These specialized-protocol canonical authors
+# form a distinct cluster from the broader
+# foundational-library authors (Tolnay + Crichton
+# + Gallant + Reizner + McArthur). Each owns a
+# specific format/protocol vertical without
+# spanning multiple unrelated verticals.
+#
+# okolors uses palette in src/main.rs:
+#   ```rust
+#   use palette::{FromColor, Okhsl, Oklab, Srgb};
+#
+#   // For each cluster center (Oklab):
+#   let okhsl: Okhsl = Okhsl::from_color(oklab);
+#
+#   // Sort by hue (h), saturation (s), or
+#   // lightness (l) component
+#   match sort_order {
+#       Sort::H => clusters.sort_by(|a, b|
+#           a.hue.partial_cmp(&b.hue).unwrap()),
+#       Sort::S => clusters.sort_by(|a, b|
+#           a.saturation.partial_cmp(&b.saturation)
+#               .unwrap()),
+#       Sort::L => clusters.sort_by(|a, b|
+#           a.lightness.partial_cmp(&b.lightness)
+#               .unwrap()),
+#       _ => {} // n = count-based, already sorted
+#   }
+#
+#   // Output as sRGB hex
+#   let srgb: Srgb<u8> = Srgb::from_color(oklab)
+#       .into_format();
+#   println!("#{:02x}{:02x}{:02x}",
+#       srgb.red, srgb.green, srgb.blue);
+#   ```
+# The Oklab clustering preserves perceptual
+# uniformity (so similar-looking colors cluster
+# together regardless of sRGB-encoded distance),
+# producing more visually-pleasing palettes than
+# naive sRGB k-means.
+#
+# ----------------------------------------------------------------------------
+# AXIS 272 :: Color manipulation + color space
+#              conversion libraries (sRGB +
+#              linear RGB + CIE XYZ + CIE Lab +
+#              HSL + Oklab + Okhsl + color
+#              difference + interpolation)
+# Round 1514 :: Rust slot 1 of 4 :: OPENS Axis 272
+#
+# Cross-language canonical library family for this axis
+# (proposed):
+#   Rust    : Ogeon/palette                  - Erik
+#                                              Hedvall's
+#                                              canonical
+#                                              Rust color
+#                                              manipulation
+#                                              library;
+#                                              type-safe
+#                                              color
+#                                              space
+#                                              encoding;
+#                                              first-class
+#                                              Oklab
+#   Go      : lucasb-eyer/go-colorful        - Lucas
+#                                              Beyer's
+#                                              canonical
+#                                              Go color
+#                                              manipulation
+#                                              library;
+#                                              CIE +
+#                                              HSL +
+#                                              HSV +
+#                                              Lab +
+#                                              Luv
+#   TS/Node : Qix-/color                     - Heather
+#                                              Arthur's
+#                                              canonical
+#                                              Node color
+#                                              manipulation
+#                                              library;
+#                                              wraps the
+#                                              color-name
+#                                              + color-
+#                                              string +
+#                                              color-
+#                                              convert
+#                                              libraries
+#
+# Color manipulation is a *spec-bound + multi-
+# representation* axis:
+#   - sRGB (IEC 61966-2-1: 1999): the standard
+#     web/screen color space
+#   - CIE XYZ (CIE 1931): the foundation
+#     color space for perceptual color models
+#   - CIE Lab + Lch (CIE 1976 + 2000): the
+#     perceptually-uniform-ish CIE color spaces
+#   - Oklab + Okhsl (Ottosson 2020): the
+#     modern perceptually-uniform color spaces
+#     designed for digital screens
+#   - HSL / HSV / HSI (Smith 1978 + variants):
+#     intuitive but perceptually-non-uniform
+#     transformations of RGB
+#
+# Each canonical library provides type-safe (or
+# at least namespaced) abstractions over these
+# representations with conversion routines that
+# follow standard formulas.
+#
+# Cross-language interop at the color-coordinate
+# level - sRGB hex codes + RGB triples are
+# byte-identical across all three lanes. Lab +
+# Oklab coordinates require floating-point
+# precision but produce equivalent results
+# within FP error tolerances.
+#
+# Axis 272 opens with the Rust slot at Hedvall's
+# Ogeon/palette, anchoring his specialized color-
+# pipeline canonical position. Subsequent rounds
+# will visit the Go (lucasb-eyer/go-colorful) +
+# TS/Node (Qix-/color) canonicals.
+#
+# Color-manipulation libraries are foundational
+# infrastructure for:
+#   - Graphic design tools (Inkscape + GIMP +
+#     Krita + Affinity Designer + Figma)
+#   - Game engines (palette manipulation for
+#     pixel art + procedural-color-generation)
+#   - Web/CSS tooling (color-blender + theme
+#     generators + accessibility-contrast
+#     checkers)
+#   - Image processing pipelines (white-balance
+#     correction + color grading + tone mapping)
+#   - Color-blind accessibility tools
+#     (simulation + adaptation)
+#   - Print/PDF generation (CMYK conversion for
+#     pre-press workflows)
+#
+# Use-case spectrum for this axis (so far):
+#   - okolors (Rust, palette): image -> palette
+#     extraction via Oklab k-means clustering
+# ============================================================================
+
+_okolors() {
+    local context state state_descr line
+    typeset -A opt_args
+
+    _arguments -s -S \
+        '-k+[max colors in palette (range [1,256])]:n:' \
+        '(-o --output)'{-o,--output}'[output format]:format:(hex rgb swatch)' \
+        '(-c --colorize)'{-c,--colorize}'[colorize foreground or background]:where:(fg bg)' \
+        '(-s --sort)'{-s,--sort}'[sort order]:order:(h s l n)' \
+        '(-r --reverse)'{-r,--reverse}'[reverse printed order]' \
+        '(-l --lightness-levels)'{-l,--lightness-levels}'[additional Okhsl lightness levels (CSV)]:csv:' \
+        '--no-avg-lightness[skip average-lightness output]' \
+        '(-w --lightness-weight)'{-w,--lightness-weight}'[lightness scale factor for color distance]:f:' \
+        '(-f --sampling-factor)'{-f,--sampling-factor}'[proportion of image to sample]:f:' \
+        '(-n --max-samples)'{-n,--max-samples}'[hard cap on k-means sample count]:n:' \
+        '--batch-size=[k-means batch size]:n:' \
+        '--seed=[RNG seed for reproducible results]:u64:' \
+        '(-t --threads)'{-t,--threads}'[thread count (0=auto)]:n:' \
+        '--verbose[print stage timings to stderr]' \
+        '(- *)'{-h,--help}'[print help]' \
+        '(- *)'{-V,--version}'[print version]' \
+        '1:image:_files -g "*.(jpg|jpeg|png|gif|webp|qoi|JPG|JPEG|PNG|GIF|WEBP|QOI)"'
+}
+
+_okolors "$@"
