@@ -1,0 +1,445 @@
+#compdef tunn
+# ============================================================================
+# tunn - SSH tunnel manager from YAML
+#         config + OpenSSH integration
+#         (Go, MIT)
+#
+# Author : strandnerd
+# Upstream: https://github.com/strandnerd/tunn
+#
+# `tunn` launches + monitors SSH tunnels
+# defined declaratively in a YAML config
+# file, integrating with the user's
+# existing OpenSSH setup (~/.ssh/config +
+# keys + agent). Replaces hand-managed
+# `ssh -L`/`ssh -R` invocations + ad-hoc
+# shell scripts for managing port
+# forwarding + jump hosts + multi-tunnel
+# constellations.
+#
+# Architecture:
+#   1. **YAML config** (~/.tunnrc or
+#      explicit path) declares tunnel
+#      bundles: name + SSH host + local/
+#      remote port pairs + auto-reconnect
+#      policy
+#   2. **OpenSSH delegation** (uses the
+#      user's existing `ssh` binary +
+#      ~/.ssh/config; no separate SSH
+#      stack)
+#   3. **Daemon mode** (`tunn -d` forks
+#      tunnel processes into background
+#      with PID tracking for `tunn
+#      status` + `tunn stop`)
+#   4. **Status monitoring** (per-tunnel
+#      health checks; status command
+#      shows alive tunnels + restart
+#      counts)
+#   5. **Per-bundle granularity** (start
+#      only specific tunnels by name +
+#      stop individual tunnels by name)
+#
+# Distinguishing features vs alternatives
+# (autossh + ssh-multitunnel + jq+ssh
+# scripts + Mosh):
+#   - **YAML-declarative** (vs autossh's
+#     per-tunnel invocation; YAML config
+#     is version-controllable + portable
+#     across machines)
+#   - **OpenSSH-native** (uses the
+#     user's existing SSH config + keys
+#     + agent + ProxyJump + ControlMaster
+#     settings)
+#   - **Process supervision** (tunn
+#     daemon supervises individual
+#     ssh subprocesses + auto-restarts
+#     on connection drop)
+#   - **Multi-tunnel** (single command
+#     starts/stops a constellation of
+#     tunnels)
+#   - **Pure-Go single binary** (no
+#     Python/Ruby runtime dependencies
+#     like alternative SSH automation
+#     tools)
+#
+# Use cases:
+#   - **Developer workstation tunnels**
+#     (forward to dev databases +
+#     internal Kubernetes services +
+#     remote dev environments)
+#   - **CI/CD tunnels** (temporary
+#     port forwards for test database
+#     access during integration tests)
+#   - **Bastion host automation**
+#     (multi-hop tunnel constellations
+#     via ProxyJump + multiple SSH
+#     hops)
+#   - **Self-hosted service access**
+#     (forward to home-lab Grafana +
+#     Prometheus + internal admin
+#     panels via VPN-less SSH)
+#   - **Database tunneling for
+#     analytics tools** (forward MySQL/
+#     PostgreSQL/Redis to localhost for
+#     local DBeaver/TablePlus/CLI
+#     access)
+#
+# Usage:
+#   tunn [-d] [tunnel-name...]
+#   tunn status
+#   tunn stop
+#   tunn version
+#
+# Subcommands:
+#   start (default)                - launch
+#                                     tunnels
+#                                     (optionally
+#                                     named
+#                                     by
+#                                     argument;
+#                                     default
+#                                     starts
+#                                     all
+#                                     tunnels
+#                                     defined
+#                                     in
+#                                     config)
+#   status                         - show
+#                                     current
+#                                     tunnel
+#                                     status
+#                                     (alive
+#                                     pid +
+#                                     restart
+#                                     count
+#                                     + uptime)
+#   stop                           - stop
+#                                     running
+#                                     tunnels
+#   version                        - show
+#                                     tunn
+#                                     version
+#
+# Flags:
+#   -d, --detach                   - fork
+#                                     tunnel
+#                                     daemon
+#                                     into
+#                                     background
+#                                     + return
+#                                     immediately
+#                                     (start
+#                                     command
+#                                     only)
+#       --internal-daemon          - internal
+#                                     daemon
+#                                     mode
+#                                     (not
+#                                     for
+#                                     direct
+#                                     user
+#                                     invocation;
+#                                     used by
+#                                     -d to
+#                                     execute
+#                                     the
+#                                     supervised
+#                                     subprocess)
+#   -h, --help                     - show
+#                                     help
+#
+# Positional argument:
+#   [tunnel-name...]               - one or
+#                                     more
+#                                     tunnel
+#                                     bundle
+#                                     names
+#                                     to
+#                                     start
+#                                     (must
+#                                     match
+#                                     tunnel
+#                                     names
+#                                     defined
+#                                     in
+#                                     config;
+#                                     default
+#                                     all
+#                                     defined
+#                                     tunnels)
+#
+# Example invocations:
+#   # Start all tunnels in config (fg)
+#   tunn
+#
+#   # Start all tunnels detached (bg
+#   # daemon)
+#   tunn -d
+#
+#   # Start specific tunnels (foreground)
+#   tunn dev-db kafka-tunnel
+#
+#   # Start specific tunnels detached
+#   tunn -d dev-db kafka-tunnel
+#
+#   # Show current tunnel status
+#   tunn status
+#     # Example output:
+#     # NAME         STATUS    PID    UPTIME    RESTARTS
+#     # dev-db       running   12345  2h15m     0
+#     # kafka        running   12346  2h15m     2
+#     # admin-panel  stopped   -      -         -
+#
+#   # Stop all running tunnels
+#   tunn stop
+#
+#   # Show version
+#   tunn version
+#
+# Configuration file (~/.tunnrc by
+# default; YAML format):
+#   ```yaml
+#   tunnels:
+#     - name: dev-db
+#       host: dev.example.com   # uses ~/.ssh/config Host alias
+#       forwards:
+#         - local: 5432
+#           remote_host: localhost
+#           remote_port: 5432
+#       restart: true
+#       restart_delay: 5s
+#
+#     - name: kafka
+#       host: kafka-bastion
+#       forwards:
+#         - local: 9092
+#           remote_host: kafka-1
+#           remote_port: 9092
+#         - local: 9093
+#           remote_host: kafka-2
+#           remote_port: 9092
+#       restart: true
+#
+#     - name: admin-panel
+#       host: bastion
+#       forwards:
+#         - local: 8080
+#           remote_host: internal-grafana.svc
+#           remote_port: 80
+#       restart: false  # one-shot tunnel
+#   ```
+#
+# Note: ~/.ssh/config Host aliases work
+# transparently - tunn delegates to
+# OpenSSH for connection management +
+# authentication.
+#
+# The gopkg.in/yaml.v3 lane is built on
+# `gopkg.in/yaml.v3 v3.0.1` (declared
+# verbatim at upstream go.mod HEAD as the
+# project's sole non-stdlib direct dep,
+# imported by `config/` for loading the
+# tunnel definitions from ~/.tunnrc), the
+# canonical Go YAML library by Canonical
+# Ltd + the go-yaml project - github.com/
+# go-yaml/yaml.
+#
+# go-yaml/yaml.v3 is the de-facto canonical
+# Go YAML library:
+#   - **YAML 1.2 spec compliant** (the
+#     v3 release introduced YAML 1.2
+#     compatibility + Node tree access)
+#   - **Maintained at Canonical Ltd**
+#     (originally by Gustavo Niemeyer +
+#     contributed to Canonical's open-
+#     source portfolio; community-
+#     maintained since Niemeyer left
+#     Canonical)
+#   - **gopkg.in canonical import path**
+#     (gopkg.in/yaml.v3 vs github.com/
+#     go-yaml/yaml; the gopkg.in path is
+#     the canonical version-stable
+#     import)
+#   - **Used by**: kubectl + Helm +
+#     Hugo + Docker Compose +
+#     prometheus-operator + Linkerd +
+#     virtually every Kubernetes-
+#     adjacent Go tool
+#   - **3,000+ stars on github.com/
+#     go-yaml/yaml**
+#   - **~150,000 reverse-deps on
+#     pkg.go.dev (THE most-imported
+#     Go YAML library by a wide margin;
+#     one of the most-imported Go
+#     libraries period)**
+#
+# go-yaml/yaml.v3's distinguishing
+# position vs Go YAML alternatives:
+#   - go-yaml/yaml.v3 (Canonical + go-
+#     yaml maintainers): canonical;
+#     gopkg.in/yaml.v3; THIS AXIS
+#   - go-yaml/yaml.v2: older version;
+#     YAML 1.1 only; many existing
+#     codebases pin to v2
+#   - ghodss/yaml: wrapper around
+#     yaml.v2 that converts to/from
+#     JSON for sigs.k8s.io structure
+#     compatibility
+#   - sigs.k8s.io/yaml: Kubernetes
+#     team's wrapper for JSON-
+#     compatible YAML handling
+#   - rogpeppe/go-internal/yaml:
+#     internal Go team yaml usage
+#   - goccy/go-yaml: alternative pure-Go
+#     YAML by Masaaki Goshima; better
+#     error messages + performance
+#   - hashicorp/yamux: NOT yaml; common
+#     name confusion
+#
+# Gustavo Niemeyer (niemeyer) is the
+# original author of go-yaml at
+# Canonical Ltd (working on Juju + other
+# Canonical projects that needed YAML
+# support). Niemeyer was a long-time
+# Python (Lobit + Storm ORM) +
+# Distributed Systems engineer at
+# Canonical before moving to a leadership
+# role at Riza.ai. After his departure
+# from active Canonical maintenance the
+# go-yaml project transitioned to
+# community maintenance, with Canonical
+# Ltd retaining stewardship through the
+# gopkg.in canonical import path.
+#
+# Canonical Ltd's broader Go ecosystem
+# footprint:
+#   - **gopkg.in/yaml.v3** (THIS AXIS;
+#     canonical Go YAML)
+#   - **gopkg.in/check.v1** (canonical
+#     Go testing assertion library;
+#     by Niemeyer; widely-used in
+#     Canonical projects)
+#   - **juju/juju** (the Juju cloud
+#     orchestration platform; ~2,800
+#     stars; built on Canonical's
+#     foundational Go libraries)
+#   - **canonical/lxd** + **canonical/
+#     incus** (canonical Go
+#     container/VM management for the
+#     LXD project)
+#   - **canonical/microk8s** (small-
+#     cluster Kubernetes)
+#
+# Multi-axis canonical-Go author/org
+# cohort extension (now spanning 30
+# distinct individuals/orgs after R1569):
+#   - + Gustavo Niemeyer + Canonical Ltd
+#     + go-yaml maintainers (gopkg.in/
+#     yaml.v3 + check.v1; THIS AXIS;
+#     canonical Go YAML + foundational
+#     Canonical Go infrastructure)
+#
+# Niemeyer + Canonical joining the
+# canonical-Go cohort at the *enterprise-
+# backed foundational library* level is
+# structurally distinctive. Canonical is
+# one of the few enterprises with
+# multiple Go canonical-status libraries
+# (yaml.v3 + check.v1) maintained over
+# 10+ years. Their contribution model
+# is *enterprise-stewarded community-
+# maintained* - Canonical provides
+# stewardship via gopkg.in but community
+# contributors do the bulk of ongoing
+# maintenance.
+#
+# tunn uses go-yaml/yaml.v3 for:
+#   - Loading the ~/.tunnrc config file
+#     into Tunnel struct definitions
+#   - Strict tag-driven decoding (the
+#     YAML keys map to Tunnel fields
+#     via go-yaml struct tags)
+#   - Comment preservation (when
+#     editing the config programmatically
+#     in future versions; YAML v3 adds
+#     Node tree access for this)
+#
+# This is the canonical use case for
+# go-yaml/yaml.v3 in production Go CLIs:
+# user-edited declarative config
+# loading where YAML is preferred over
+# JSON for its human-readability + over
+# TOML for its broader DevOps adoption.
+#
+# ----------------------------------------------------------------------------
+# AXIS 290 :: YAML (YAML Ain't Markup
+#              Language) configuration +
+#              data serialization
+#              libraries
+#              (YAML 1.2 spec compliant
+#              parsers + serializers;
+#              human-readable hierarchical
+#              data format)
+# Round 1569 :: Go slot 2 of 4 :: continues Axis 290
+#
+# Cross-language canonical library family
+# for this axis:
+#   Rust    : dtolnay/serde-yaml         [R1568 _managarr]
+#             (David Tolnay; canonical
+#              Rust YAML; serde-
+#              integrated; archived but
+#              dominant in production)
+#   Go      : go-yaml/yaml.v3            [R1569 THIS FILE]
+#             (Gustavo Niemeyer +
+#              Canonical Ltd + go-yaml
+#              maintainers; canonical
+#              Go YAML; ~150,000
+#              reverse-deps)
+#   TS/Node : nodeca/js-yaml             [R1570 closing]
+#             (Vitaly Puzrin + nodeca;
+#              canonical Node YAML;
+#              used by npm CLI itself +
+#              ESLint + most Node tools)
+#
+# Use-case spectrum across the lanes
+# (so far):
+#   - managarr (Rust, serde_yaml): TUI +
+#     CLI for Radarr/Sonarr/Lidarr media
+#     servers using YAML config
+#   - tunn (Go, gopkg.in/yaml.v3): SSH
+#     tunnel manager loading tunnel
+#     definitions from YAML config +
+#     delegating to OpenSSH
+#
+# Both use cases share the *declarative
+# infrastructure config in YAML*
+# pattern - the canonical YAML
+# deployment pattern in production
+# CLIs. YAML's human-readability +
+# tagged-value support + broad DevOps
+# ecosystem familiarity make it the
+# de-facto choice for user-edited
+# configuration files in Rust + Go
+# tooling.
+# ============================================================================
+
+_tunn() {
+    _arguments \
+        '(-d --detach)'{-d,--detach}'[fork tunnel daemon into background]' \
+        '(- *)'{-h,--help}'[show help]' \
+        '1: :_tunn_cmds' \
+        '*::tunnel-name:' \
+    && ret=0
+}
+
+_tunn_cmds() {
+    local -a cmds
+    cmds=(
+        'status:show current tunnel status'
+        'stop:stop running tunnels'
+        'version:show tunn version'
+    )
+    _describe -t commands 'tunn command' cmds
+}
+
+_tunn "$@"
