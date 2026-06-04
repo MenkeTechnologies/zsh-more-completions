@@ -1,0 +1,480 @@
+#compdef wzprof
+# ============================================================================
+# wzprof - WebAssembly profiler based on
+#          wazero (CPU + memory profiling
+#          for WASM modules)
+#          (Go, Apache-2.0)
+#
+# Author : Dispatch / stealthrocket
+#           (originally stealthrocket;
+#           rebranded to Dispatch in 2024)
+# Upstream: https://github.com/dispatchrun/wzprof
+#
+# `wzprof` profiles WebAssembly modules
+# running under wazero, producing pprof-
+# format CPU + memory profiles for analysis
+# in standard Go pprof tooling. Bridges the
+# Go pprof ecosystem to WASM workloads:
+#   - **CPU profiling**: samples WASM
+#     instruction execution + maps to Go
+#     pprof Profile format
+#   - **Memory profiling**: tracks heap
+#     allocations + in-use memory snapshots
+#   - **HTTP pprof endpoint** (--pprof-addr):
+#     exposes profiles for live capture by
+#     `go tool pprof http://host:port/
+#     debug/pprof/profile`
+#   - **File output**: write CPU + memory
+#     profiles to disk for later analysis
+#   - **Host vs guest profiling**: --host
+#     flag profiles the host (Go) instead
+#     of the guest (WASM); useful for
+#     measuring wazero runtime overhead
+#
+# Use cases:
+#   - Performance analysis of WASM modules
+#     (find hot functions + memory
+#     allocation hotspots)
+#   - Comparing WASM compilation strategies
+#     (interpreter vs compiler; different
+#     toolchain output)
+#   - CI performance regression detection
+#     (capture profiles + compare with
+#     pprof diff)
+#   - Debugging memory leaks in WASM
+#     modules (--inuse snapshots)
+#   - Profiling WASM-based serverless
+#     functions (e.g., Wasmtime/Spin
+#     modules locally before deployment)
+#
+# Usage:
+#   wzprof [flags] <wasm-module> [module-args...]
+#
+# Profile output:
+#   -cpuprofile <file>             - write CPU
+#                                     profile
+#                                     to file
+#                                     before
+#                                     exiting
+#                                     (pprof
+#                                     format)
+#   -memprofile <file>             - write
+#                                     memory
+#                                     profile
+#                                     to file
+#                                     before
+#                                     exiting
+#                                     (pprof
+#                                     format)
+#   -pprof-addr <addr>             - address
+#                                     to
+#                                     expose
+#                                     a pprof
+#                                     HTTP
+#                                     endpoint
+#                                     (e.g.
+#                                     localhost
+#                                     :6060)
+#
+# Sampling:
+#   -sample <0.0-1.0>              - profile
+#                                     sampling
+#                                     rate
+#                                     (default
+#                                     1/19 ≈
+#                                     0.053;
+#                                     match
+#                                     Go
+#                                     runtime
+#                                     /pprof's
+#                                     default)
+#
+# Profile targets:
+#   -host                          - profile
+#                                     the host
+#                                     (Go)
+#                                     instead
+#                                     of the
+#                                     guest
+#                                     (WASM
+#                                     module)
+#   -iowait                        - include
+#                                     time
+#                                     spent
+#                                     waiting
+#                                     on I/O
+#                                     in guest
+#                                     CPU
+#                                     profile
+#                                     (otherwise
+#                                     blocked
+#                                     calls
+#                                     excluded)
+#   -inuse                         - include
+#                                     snapshots
+#                                     of
+#                                     in-use
+#                                     memory
+#                                     (experimental)
+#
+# WASI configuration:
+#   -mount <list>                  - comma-
+#                                     separated
+#                                     list of
+#                                     directories
+#                                     to mount
+#                                     into the
+#                                     WASM
+#                                     module
+#                                     (format
+#                                     HOST_DIR
+#                                     :GUEST_
+#                                     DIR[:ro]
+#                                     for
+#                                     read-
+#                                     only)
+#
+# Output control:
+#   -verbose                       - enable
+#                                     more
+#                                     output
+#   -version                       - print
+#                                     wzprof
+#                                     version
+#
+# Example invocations:
+#   # CPU profile a WASM module to file
+#   wzprof -cpuprofile cpu.pprof \
+#     my-module.wasm
+#
+#   # Memory profile + file output
+#   wzprof -memprofile mem.pprof \
+#     my-module.wasm
+#
+#   # Both CPU + memory
+#   wzprof -cpuprofile cpu.pprof \
+#     -memprofile mem.pprof \
+#     my-module.wasm
+#
+#   # Live HTTP pprof endpoint
+#   wzprof -pprof-addr localhost:6060 \
+#     my-module.wasm
+#     # In another terminal:
+#     # go tool pprof http://localhost:6060/
+#     #   debug/pprof/profile
+#
+#   # Pass arguments to the WASM module
+#   wzprof -cpuprofile cpu.pprof \
+#     my-module.wasm \
+#     --input data.txt --verbose
+#
+#   # Mount host directories
+#   wzprof -mount /data:/data:ro \
+#     -cpuprofile cpu.pprof \
+#     my-module.wasm
+#
+#   # Mount multiple directories
+#   wzprof -mount /input:/in:ro,/output:/out \
+#     my-module.wasm
+#
+#   # Custom sampling rate (5%)
+#   wzprof -cpuprofile cpu.pprof \
+#     -sample 0.05 my-module.wasm
+#
+#   # Include I/O wait time in CPU profile
+#   wzprof -cpuprofile cpu.pprof -iowait \
+#     my-module.wasm
+#
+#   # Profile the host (Go runtime) not the
+#   # guest WASM module
+#   wzprof -host -cpuprofile host-cpu.pprof \
+#     my-module.wasm
+#
+#   # Show version
+#   wzprof -version
+#
+# Analyzing profiles:
+#   # View CPU profile interactively
+#   go tool pprof cpu.pprof
+#
+#   # Generate flame graph
+#   go tool pprof -http=:8080 cpu.pprof
+#
+#   # Top 10 hottest functions
+#   go tool pprof -top -cum cpu.pprof | head -20
+#
+#   # Compare two profiles
+#   go tool pprof -base cpu-before.pprof \
+#     cpu-after.pprof
+#
+# The tetratelabs/wazero lane is built on
+# `github.com/tetratelabs/wazero v1.5.0`
+# (declared verbatim at upstream go.mod
+# HEAD as a direct dep, imported by `cmd/
+# wzprof/main.go` for the WASM module
+# instantiation + execution + the
+# experimental.FunctionListenerFactory
+# hook system that wzprof uses for
+# profiling instrumentation), the canonical
+# pure-Go WebAssembly runtime by Tetrate +
+# Adrian Cole + the wazero team -
+# github.com/tetratelabs/wazero.
+#
+# tetratelabs/wazero is the de-facto
+# canonical Go WebAssembly runtime:
+#   - **Zero CGO** (pure-Go implementation;
+#     no C compiler required for builds;
+#     no LLVM dependency)
+#   - **Single binary distribution**
+#     (cross-compiles to all Go-supported
+#     platforms without external
+#     dependencies)
+#   - **WebAssembly spec compliant**
+#     (passes 100% of the WebAssembly
+#     spec test suite)
+#   - **WASI Preview 1 + Preview 2**
+#     (full WASI snapshot generation
+#     support)
+#   - **Compiler + interpreter modes**
+#     (Compiler: AOT compilation to
+#     native via Go's plan9-style
+#     assembler for speed; Interpreter:
+#     pure-Go interpreter for
+#     portability where the compiler
+#     mode is unavailable)
+#   - **Experimental hooks** (the
+#     experimental.FunctionListenerFactory
+#     API used by wzprof for profiling
+#     instrumentation; also used by
+#     wazero-based debuggers + tracers)
+#   - **5,800+ stars on github.com/
+#     tetratelabs/wazero**
+#   - **~3,000 reverse-deps on
+#     pkg.go.dev (the canonical Go
+#     WASM stack)**
+#
+# wazero's distinguishing position vs Go
+# WASM runtime alternatives:
+#   - tetratelabs/wazero (Cole + team):
+#     canonical; zero-CGO; pure-Go;
+#     THIS AXIS
+#   - bytecodealliance/wasmtime-go: Go
+#     bindings to wasmtime via CGO; full
+#     wasmtime feature set; CGO required
+#   - wasmerio/wasmer-go: Go bindings to
+#     wasmer via CGO; commercial-backed
+#   - perlin-network/life: older pure-Go
+#     WASM interpreter; less actively
+#     maintained
+#   - wapc/wapc-go: waPC (waPC = "WebAssembly
+#     Procedure Calls"); higher-level RPC
+#     framework built on top of wasm
+#     runtimes; smaller scope
+#
+# Adrian Cole is a long-time observability
+# + service mesh engineer at Tetrate
+# (originally OpenZipkin co-creator +
+# Brave-tracing author at Twitter +
+# SoundCloud + Pivotal). His work on
+# wazero brings the *zero-dependency
+# pure-Go runtime* philosophy from his
+# distributed-tracing libraries (which
+# emphasized zero-allocation + low
+# overhead) to WASM execution.
+#
+# Tetrate is a service mesh + cloud-
+# native infrastructure company founded
+# by Istio + Envoy contributors. Tetrate's
+# wazero is positioned as the Go-friendly
+# WASM runtime for the Istio + Envoy WASM
+# extension ecosystem (Envoy's WASM
+# filter chain runs in a WASM runtime,
+# and wazero is the natural choice for
+# Go-based control planes embedding
+# WASM execution).
+#
+# Multi-axis canonical-Go author/org cohort
+# extension (now spanning 26 distinct
+# individuals/orgs after R1557):
+#   - + Adrian Cole + Tetrate +
+#     wazero team (tetratelabs/wazero;
+#     THIS AXIS; canonical Go WASM
+#     runtime + zero-CGO pure-Go
+#     implementation + WASI Preview
+#     1+2 support)
+#
+# Cole + Tetrate joining the canonical-Go
+# cohort at the *zero-CGO foundational
+# infrastructure* level extends the
+# pattern of *production-quality pure-Go
+# alternatives to CGO-bound libraries*.
+# wazero's emergence has driven a broader
+# trend of replacing CGO-dependent Go
+# libraries with pure-Go alternatives
+# (e.g., zstd via klauspost/compress
+# instead of DataDog/zstd's CGO; SQLite
+# via modernc.org/sqlite instead of
+# mattn/go-sqlite3 CGO).
+#
+# Notable: wazero's pure-Go implementation
+# is *uniquely Go-philosophy-aligned* in
+# the WASM runtime landscape. wasmtime
+# (Rust) + wasmer (Rust + Node bindings)
+# + V8 + SpiderMonkey all rely on
+# significant C/C++ infrastructure. wazero
+# is the only major WASM runtime that
+# follows the Go community's strong
+# preference for CGO-free dependencies.
+#
+# wzprof uses wazero for:
+#   - WASM module compilation (via
+#     wazero's compiler mode for
+#     production profiling speed)
+#   - WASI Preview 1 host module
+#     instantiation (wasi_snapshot_
+#     preview1 import resolution)
+#   - The experimental.FunctionListener
+#     Factory hook that wzprof's CPU +
+#     memory profilers attach to for
+#     function-entry/exit
+#     instrumentation
+#   - WASI filesystem mounting via the
+#     WithFSConfig + --mount flag
+#
+# This is the canonical use case for
+# wazero in production Go tooling:
+# embedding WASM execution with custom
+# instrumentation (profiling +
+# tracing + observability) where
+# the zero-CGO requirement matters
+# for distribution (single Go binary
+# without C toolchain dependency).
+#
+# ----------------------------------------------------------------------------
+# AXIS 286 :: WebAssembly runtime + tooling
+#              libraries
+#              (WebAssembly spec
+#              compliant runtimes + WASI
+#              implementations + JIT/AOT
+#              compilation + component
+#              model + WASM tooling)
+# Round 1557 :: Go slot 2 of 4 :: continues Axis 286
+#
+# Cross-language canonical library family
+# for this axis:
+#   Rust    : bytecodealliance/wasmtime  [R1556 _wasi-vfs]
+#             (Bytecode Alliance;
+#              canonical Rust WASM
+#              runtime; Cranelift JIT;
+#              multi-vendor governance)
+#   Go      : tetratelabs/wazero        [R1557 THIS FILE]
+#             (Adrian Cole + Tetrate;
+#              canonical Go WASM runtime;
+#              ZERO CGO; pure-Go
+#              implementation; 5,800+
+#              stars)
+#   TS/Node : wasmerio/wasmer-js        [R1558 closing]
+#             (Wasmer Inc.; canonical
+#              Node WASM runtime;
+#              WebAssembly.Memory +
+#              Module + Instance
+#              native bindings)
+#
+# Notable: ALL THREE canonical libraries
+# implement the same WebAssembly 1.0
+# spec + WASI Preview 1 + (increasingly)
+# Preview 2. This is the *spec-anchored
+# canonical runtime* pattern - cross-
+# language interop is guaranteed at the
+# WASM binary level (the same .wasm file
+# executes identically across all three
+# runtimes).
+#
+# Architectural pattern: each lane's
+# canonical library reflects its
+# language community's idioms:
+#   - Rust wasmtime: comprehensive
+#     feature set; multi-vendor
+#     foundation governance; Cranelift
+#     pure-Rust compiler
+#   - Go wazero: zero-CGO foundational
+#     pure-Go implementation; aligned
+#     with Go's no-C dependency
+#     preference
+#   - Node wasmer-js: native bindings
+#     to the Wasmer runtime (Rust);
+#     leverages V8's existing
+#     WebAssembly API as the JavaScript
+#     surface
+#
+# Spec authorship distribution for WASM
+# (Axis 286):
+#   - WASM spec: WebAssembly Community
+#     Group at W3C (Mozilla + Microsoft
+#     + Google + Apple participants;
+#     cross-vendor)
+#   - WASI spec: Bytecode Alliance +
+#     WASI subgroup (Mozilla + Fastly +
+#     Intel + others)
+#   - Rust canonical: Bytecode Alliance
+#     (spec-author canonical
+#     implementation; THIS axis's spec
+#     authorship + canonical
+#     implementation alignment is in
+#     the Rust lane)
+#   - Go canonical: Cole + Tetrate
+#     (third-party implementation)
+#   - Node canonical: Wasmer Inc.
+#     (third-party implementation)
+#
+# Like Axis 282 (DNS; Gieben as RFC-co-
+# author canonical Go DNS implementer)
+# and Axis 279 (Protocol Buffers;
+# Google as spec author + canonical Go
+# implementer), Axis 286 has a SPEC-
+# AUTHOR-CANONICAL convergence in the
+# Rust lane: the Bytecode Alliance both
+# stewards the WASI spec AND maintains
+# the canonical Rust implementation
+# (wasmtime).
+#
+# Use-case spectrum across the lanes (so far):
+#   - wasi-vfs (Rust, wasmtime): WASI
+#     virtual filesystem packer for
+#     language-runtime WASM ports
+#     (SwiftWasm + Ruby on WASI +
+#     Python on WASI)
+#   - wzprof (Go, wazero): WASM
+#     profiler for performance
+#     analysis of WASM modules running
+#     under wazero
+#
+# Both use cases share the *tooling-
+# infrastructure-on-top-of-runtime*
+# pattern - building developer tools
+# (filesystem packer + profiler) on
+# top of the underlying WASM runtime
+# rather than embedding the runtime
+# in an application. This is a
+# canonical pattern for WASM runtime
+# adoption: the runtime is the
+# foundation; specialized tools are
+# built on top.
+# ============================================================================
+
+_wzprof() {
+    _arguments \
+        '-pprof-addr=[expose pprof HTTP endpoint]:addr:' \
+        '-cpuprofile=[write CPU profile to file]:file:_files' \
+        '-memprofile=[write memory profile to file]:file:_files' \
+        '-sample=[profile sampling rate (0.0-1.0)]:rate:' \
+        '-host[profile the host (Go) instead of the guest (WASM)]' \
+        '-iowait[include time waiting on I/O in CPU profile]' \
+        '-inuse[include snapshots of in-use memory (experimental)]' \
+        '-mount=[directories to mount (HOST:GUEST[:ro], comma-separated)]:mounts:' \
+        '-verbose[enable more output]' \
+        '-version[print wzprof version]' \
+        '*:wasm file + args:_files -g "*.wasm"'
+}
+
+_wzprof "$@"
