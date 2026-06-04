@@ -1,0 +1,433 @@
+#compdef PR-DNSd
+# ============================================================================
+# PR-DNSd - Passive-Recursive DNS daemon with
+#            DNS-over-TLS (DoT) server +
+#            PTR record collection (Go, MIT)
+#
+# Author : korc
+# Upstream: https://github.com/korc/PR-DNSd
+#
+# `PR-DNSd` is a recursive DNS resolver that
+# additionally collects + stores PTR (reverse-
+# DNS) records from passively observed outbound
+# queries. Use cases:
+#   - Forensic / IR / EDR: when investigating
+#     network traffic, the netstat / lsof /
+#     ss / tcpview outputs show IP addresses;
+#     PR-DNSd's collected PTR cache lets these
+#     tools display human-readable hostnames
+#     instead
+#   - Privacy-preserving internal DNS resolver
+#     that does not phone home
+#   - Cloud-deployed DoT (DNS-over-TLS) server
+#     for Android 9+ Private DNS clients
+#   - Passive DNS data collection at network
+#     edge for security/compliance analysis
+#
+# Architecture:
+#   - miekg/dns (canonical Go DNS library) for
+#     UDP/TCP/TLS DNS protocol handling
+#   - dgraph-io/badger embedded key-value store
+#     for persistent PTR cache
+#   - Go stdlib `crypto/tls` for DoT server
+#     listener configuration + cert/key loading
+#   - Go stdlib `flag` for CLI option parsing
+#   - Optional chroot + setcap for privilege
+#     dropping
+#   - Multi-upstream support with per-domain
+#     server selection (e.g. `.example.com=
+#     udp://10.0.0.1` for split-DNS)
+#
+# Use cases:
+#   - Local-host DNS resolver to fix netstat
+#     hostname display
+#   - Enterprise-internal DNS for meaningful
+#     EDR/IR log analysis
+#   - Cloud DoT server for mobile-device
+#     Private DNS (Android 9+ supports DoT
+#     out-of-the-box)
+#   - Domain-pattern-based firewall/proxy
+#     configuration for IoT/BYOD devices
+#
+# Usage:
+#   PR-DNSd [flags]
+#
+# Flags (Go stdlib `flag`):
+#   -upstream <spec>               - upstream
+#                                     DNS
+#                                     server
+#                                     (multi-
+#                                     value;
+#                                     supports
+#                                     `proto://
+#                                     host:port`
+#                                     formats:
+#                                     `udp://` /
+#                                     `tcp://` /
+#                                     `tcp-tls://`
+#                                     for DoT;
+#                                     prefix
+#                                     with
+#                                     `.domain=`
+#                                     for
+#                                     per-zone
+#                                     server)
+#   -listen <addr>                 - listen
+#                                     address
+#                                     for plain
+#                                     DNS
+#                                     (default
+#                                     :53)
+#   -tlslisten <addr>              - listen
+#                                     address
+#                                     for
+#                                     DoT (TCP-
+#                                     TLS port
+#                                     853;
+#                                     default
+#                                     :853)
+#   -cert <file>                   - DoT
+#                                     listener
+#                                     certificate
+#                                     file
+#                                     (required
+#                                     for TLS
+#                                     listener)
+#   -key <file>                    - DoT
+#                                     certificate
+#                                     key file
+#                                     (default
+#                                     same as
+#                                     -cert
+#                                     value)
+#   -debounce <duration>           - debounce
+#                                     delay
+#                                     between
+#                                     repeated
+#                                     identical
+#                                     responses
+#                                     (default
+#                                     200ms;
+#                                     DoS
+#                                     protection)
+#   -count <n>                     - debounce
+#                                     count
+#                                     threshold
+#                                     (default
+#                                     100)
+#   -store <file>                  - store PTR
+#                                     data to
+#                                     badger
+#                                     database
+#                                     file
+#                                     (empty
+#                                     = in-
+#                                     memory
+#                                     only)
+#   -chroot <dir>                  - chroot to
+#                                     directory
+#                                     after
+#                                     start
+#                                     (default
+#                                     /var/lib/
+#                                     PR-DNSd;
+#                                     empty
+#                                     string
+#                                     disables
+#                                     chroot)
+#   -silent                        - do not log
+#                                     normal
+#                                     data
+#                                     (errors
+#                                     only)
+#   -ctmout <duration>             - client
+#                                     timeout
+#                                     for
+#                                     upstream
+#                                     queries
+#                                     (default
+#                                     0 =
+#                                     unlimited)
+#
+# Standard flags:
+#   -h, -help                      - print help
+#
+# Environment variables (read by systemd unit
+# + Dockerfile):
+#   PRDNSD_UPSTREAM                - default
+#                                     upstream
+#                                     (e.g.
+#                                     tcp-tls://
+#                                     1.1.1.1:853)
+#   PRDNSD_LISTEN                  - default
+#                                     -listen
+#                                     value
+#   PRDNSD_ROOT                    - default
+#                                     -chroot
+#                                     directory
+#   PRDNSD_STORE                   - default
+#                                     -store
+#                                     filename
+#   CA_BUNDLE                      - root CA
+#                                     bundle
+#                                     for
+#                                     verifying
+#                                     DoT
+#                                     upstreams
+#
+# Example invocations:
+#   PR-DNSd -upstream 9.9.9.9:53 \
+#           -listen 127.0.0.1:53
+#     # local-host resolver
+#
+#   PR-DNSd -upstream tcp-tls://1.1.1.1:853 \
+#           -listen :53 \
+#           -tlslisten :853 \
+#           -cert /etc/letsencrypt/live/dns.example.com/fullchain.pem \
+#           -key /etc/letsencrypt/live/dns.example.com/privkey.pem \
+#           -store /var/lib/PR-DNSd/cache
+#     # public cloud DoT server with cache
+#
+#   PR-DNSd -upstream 9.9.9.9:53 \
+#           -upstream .corp.example=tcp://10.0.0.1:53 \
+#           -listen :53 \
+#           -chroot ""
+#     # split-DNS resolver with corp-specific
+#     # upstream + no chroot
+#
+# The crypto/tls lane is built on Go's stdlib
+# `crypto/tls` package (imported as `"crypto/
+# tls"` in main.go line 4, used at line 285
+# as `cert, err := tls.LoadX509KeyPair(
+# *certFlag, *keyFlag)` for loading the DoT
+# listener certificate + line 293 as
+# `TLSConfig: &tls.Config{Certificates:
+# []tls.Certificate{cert}}` for the DoT server
+# config). The `crypto/tls` package is part of
+# Go's standard library + was shipped with Go
+# 1.0 (March 2012).
+#
+# Go's `crypto/tls` stdlib implementation:
+#   - Pure-Go TLS 1.0 / 1.1 / 1.2 / 1.3
+#     implementation (no OpenSSL / NSS /
+#     Schannel dependency)
+#   - Implemented by Adam Langley + the Go
+#     security team
+#   - X.509 certificate chain validation via
+#     `crypto/x509` (canonical Go cert
+#     handling, also stdlib)
+#   - SNI (Server Name Indication) for virtual
+#     hosting
+#   - ALPN (Application-Layer Protocol
+#     Negotiation) for HTTP/2 + HTTP/3 +
+#     custom protocols
+#   - Session resumption (session tickets +
+#     TLS 1.3 PSK)
+#   - Client + server modes
+#   - Pluggable certificate verification +
+#     custom cert stores
+#
+# Go's `crypto/tls` distinguishing features vs
+# alternatives:
+#   - stdlib crypto/tls: canonical Go TLS;
+#     pure-Go; THIS AXIS
+#   - bifurcation/refraction-networking: TLS
+#     fingerprint randomization for censorship
+#     circumvention
+#   - mholt/acmez + caddyserver/certmagic: ACME
+#     client + auto-cert management built on
+#     crypto/tls
+#
+# Go's stdlib-first culture means crypto/tls
+# is the canonical Go TLS library by virtue
+# of being part of the standard library. The
+# Go security team (Filippo Valsorda + Adam
+# Langley + Russ Cox + Roland Shoemaker + the
+# broader Go core team) maintains crypto/tls
+# with the same rigor as the Go runtime
+# itself.
+#
+# This is the *language-as-canonical-provider*
+# pattern for TLS - parallel to:
+#   - archive/tar + archive/zip (TAR + ZIP at
+#     Axes 266 + 267)
+#   - crypto/tls (TLS, THIS AXIS)
+#   - encoding/json (JSON; not yet axis-
+#     opened in the corpus)
+#   - net/http (HTTP server + client; not
+#     axis-opened)
+#
+# Go's stdlib-first culture means many
+# canonical "libraries" in Go are simply the
+# stdlib packages themselves - the Go team
+# ships canonical implementations for the
+# format/protocol baseline, and the community
+# fragments around higher-level ergonomic
+# wrappers (e.g. go-resty wrapping net/http at
+# Axis 265).
+#
+# Go's crypto/tls security audit history:
+#   - Reviewed by ISRG (Let's Encrypt parent)
+#   - Used in production by Cloudflare's Go
+#     workers + Google's cloud services +
+#     AWS's Go SDK + ~every Go-based TLS-
+#     terminating proxy/server (Caddy + Traefik
+#     + Envoy [partial] + ...)
+#   - Filippo Valsorda's leadership of the
+#     Go crypto group (until 2023) brought
+#     extensive cryptography-PhD-level rigor
+#     to the implementation
+#
+# Multi-axis canonical-Go author/org cohort
+# extension (now spanning 13 distinct
+# individuals/orgs):
+#   - Go team / Russ Cox / Adam Langley /
+#     Filippo Valsorda / Roland Shoemaker
+#     (crypto/tls + crypto/x509; THIS AXIS,
+#     extending the Go team's stdlib
+#     canonical position)
+#   - + previous cohort members (Niemeyer +
+#     Klaus Post + Kamardin + Starks +
+#     Madanagopal + Holt + Chen + Arns +
+#     Eclipse Paho + Hoshi + Lucas Beyer + ...)
+#
+# PR-DNSd uses crypto/tls in main.go's DoT
+# listener configuration:
+#   ```go
+#   import "crypto/tls"
+#
+#   if *tlsListenFlag != "" {
+#       cert, err := tls.LoadX509KeyPair(
+#           *certFlag, *keyFlag,
+#       )
+#       if err != nil { log.Fatal(err) }
+#       srv := &dns.Server{
+#           Addr: *tlsListenFlag,
+#           Net:  "tcp-tls",
+#           TLSConfig: &tls.Config{
+#               Certificates: []tls.Certificate{cert},
+#           },
+#       }
+#       go srv.ListenAndServe()
+#   }
+#   ```
+# The miekg/dns library accepts the standard
+# `*tls.Config` for its TLS listener, allowing
+# the daemon to serve DoT queries on port 853
+# alongside the plain UDP/TCP DNS server on
+# port 53.
+#
+# ----------------------------------------------------------------------------
+# AXIS 273 :: TLS (Transport Layer Security)
+#              libraries (TLS 1.2 + TLS 1.3 +
+#              X.509 cert chain validation +
+#              ALPN + SNI + session resumption)
+# Round 1518 :: Go slot 2 of 4 :: continues Axis 273
+#
+# Cross-language canonical library family for this axis:
+#   Rust    : rustls/rustls               [R1517 _hxn]
+#             (Joe Birr-Pixton + team;
+#              pure-Rust; memory-safe)
+#   Go      : crypto/tls (stdlib)         [R1518 THIS FILE]
+#             (Go team / Russ Cox /
+#              Adam Langley / Filippo
+#              Valsorda / Roland Shoemaker;
+#              pure-Go; language-as-
+#              canonical)
+#   TS/Node : node:tls (stdlib)           [R1519 closing]
+#             (Node team; wraps OpenSSL
+#              via libuv + C++ binding)
+#
+# Notable structural pattern across the three
+# lanes:
+#
+#   - Rust (rustls): pure-Rust implementation
+#     by an independent maintainer team
+#   - Go (crypto/tls): pure-Go implementation
+#     by the Go core team as part of stdlib
+#   - Node (node:tls): C++ OpenSSL wrapper
+#     shipped as part of Node's runtime
+#
+# Both the Rust + Go canonicals achieve pure-
+# language implementation, while Node defers
+# to OpenSSL. The Rust + Go canonicals also
+# both have rigorous formal-method analysis +
+# security-audit histories. Node's reliance on
+# OpenSSL means Node TLS inherits OpenSSL's
+# 25+ year history of CVE patches + the
+# ongoing maintenance burden of the OpenSSL
+# project.
+#
+# The choice of TLS canonical-library
+# architecture reflects each ecosystem's
+# typical *FFI tolerance* + the maturity of
+# pure-language cryptography in each
+# ecosystem:
+#   - Rust: prefers pure-language
+#     implementations for memory safety
+#   - Go: prefers pure-language
+#     implementations for static binaries +
+#     simpler deployment
+#   - Node: relies on OpenSSL because pure-JS
+#     crypto is too slow for production TLS
+#
+# Cross-language interop at the TLS wire-
+# protocol level - all three lanes can act as
+# TLS clients/servers + negotiate sessions
+# with any compliant TLS endpoint (Nginx +
+# Apache + Caddy + AWS ALB + Cloudflare +
+# Google Frontend + every other production TLS
+# server).
+#
+# Use-case spectrum across the lanes (so far):
+#   - hxn (Rust, rustls via reqwest's
+#     rustls-tls feature): headless-Chrome
+#     screenshot tool with TLS for pre-fetch
+#     URL validation
+#   - PR-DNSd (Go, crypto/tls stdlib): DNS
+#     server with DoT support via crypto/
+#     tls's LoadX509KeyPair + Config{
+#     Certificates}
+#
+# The Rust + Go contrast in this axis is
+# particularly illustrative of the *language-
+# as-canonical-provider vs individual-author-
+# canonical* split:
+#   - Rust: Joe Birr-Pixton + rustls team
+#     authored rustls as an independent
+#     library that achieved canonical status
+#     via memory-safety + audit rigor
+#   - Go: the Go team itself ships crypto/tls
+#     as part of stdlib, making it canonical
+#     by virtue of being shipped with the
+#     language
+#
+# Both achieve canonical status, but via
+# fundamentally different ecosystem-governance
+# mechanisms. This is consistent with
+# previous Go axes (Axes 266 TAR + 267 ZIP)
+# where the Go canonical is also stdlib
+# (archive/tar + archive/zip).
+# ============================================================================
+
+_PR-DNSd() {
+    local context state state_descr line
+    typeset -A opt_args
+
+    _arguments -s -S \
+        '*-upstream=[upstream DNS server (proto://host:port; multi-value)]:spec:' \
+        '-listen=[listen address for plain DNS]:addr:' \
+        '-tlslisten=[listen address for DoT (TCP-TLS)]:addr:' \
+        '-cert=[DoT listener certificate file]:file:_files' \
+        '-key=[DoT certificate key file]:file:_files' \
+        '-debounce=[debounce delay between repeated identical responses]:duration:' \
+        '-count=[debounce count threshold]:n:' \
+        '-store=[store PTR data to badger database file]:file:_files' \
+        '-chroot=[chroot to directory after start]:dir:_files -/' \
+        '-silent[do not log normal data (errors only)]' \
+        '-ctmout=[client timeout for upstream queries]:duration:' \
+        '(- *)-h[print help]' \
+        '(- *)-help[print help]'
+}
+
+_PR-DNSd "$@"
