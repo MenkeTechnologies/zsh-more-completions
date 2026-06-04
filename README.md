@@ -24,11 +24,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![zsh](https://img.shields.io/badge/zsh-plugin-cyan.svg)](https://github.com/MenkeTechnologies/zpwr)
 
-<<<<<<< Updated upstream
-### `[THE LARGEST CURATED ZSH COMPLETION CORPUS IN EXISTENCE // 32,257 FILES]`
-=======
-### `[THE LARGEST CURATED ZSH COMPLETION CORPUS IN EXISTENCE // 32,241 FILES]`
->>>>>>> Stashed changes
+### `[THE LARGEST CURATED ZSH COMPLETION CORPUS IN EXISTENCE // 32,268 FILES]`
 
 > *"Every CLI you've heard of, completed. Plus several you haven't."*
 
