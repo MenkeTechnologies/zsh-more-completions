@@ -1,0 +1,363 @@
+#compdef fairy-client
+# ============================================================================
+# fairy-client - distributed storage client for
+#                 the Fairy compute + storage
+#                 engine; uses HTTP/2 + FUSE
+#                 mounting (Rust, Apache-2.0)
+#
+# Author : beinan + contributors
+# Upstream: https://github.com/beinan/fairy
+# crates : fairy_client (binary: fairy-client)
+#
+# `fairy-client` is the client side of Fairy, a
+# distributed compute + storage engine in Rust.
+# Fairy aims to provide a unified compute +
+# storage abstraction (similar to Alluxio + Apache
+# Ozone + Spark + Trino concepts) with native
+# Rust performance + tokio/monoio async runtime
+# integration. The client component:
+#   - FUSE filesystem mount for accessing the
+#     distributed storage as a regular Unix
+#     directory tree
+#   - HTTP/2-based client protocol talking to the
+#     Fairy server (via the h2 crate's direct API)
+#   - AWS S3 backend integration (aws-config +
+#     aws-sdk-s3)
+#   - Monoio (Bytedance's io_uring async runtime)
+#     for the network I/O path
+#   - Mount passthrough mode for development +
+#     testing (mount a source directory as if it
+#     were the distributed storage)
+#
+# Use cases:
+#   - Distributed compute workloads accessing
+#     shared storage (Spark / Trino / Presto-
+#     style data lake access)
+#   - High-throughput object storage with FUSE
+#     POSIX interface
+#   - Development + testing of Fairy server
+#     deployments via the passthrough mount
+#
+# Architecture:
+#   - monoio (Bytedance io_uring async runtime)
+#     for the network I/O path
+#   - tokio for FUSE + filesystem operations
+#   - h2 (canonical Rust HTTP/2 by Carl Lerche)
+#     for the client/server protocol
+#   - fuser for FUSE kernel interface
+#   - aws-config + aws-sdk-s3 for S3 backend
+#
+# Usage:
+#   fairy-client [-d] <subcommand> [args]
+#
+# Global flags:
+#   -d, --debug                    - increase
+#                                     trace
+#                                     verbosity
+#                                     (count;
+#                                     -d / -dd /
+#                                     -ddd)
+#   -h, --help                     - print help
+#   -V, --version                  - print
+#                                     version
+#
+# Subcommands (clap derive):
+#   mount <mountpoint>             - mount the
+#                                     Fairy
+#                                     distributed
+#                                     storage as
+#                                     a FUSE
+#                                     filesystem
+#                                     at the
+#                                     specified
+#                                     mountpoint
+#   mount-passthrough <mountpoint> <source>
+#                                  - passthrough
+#                                     mount: FUSE
+#                                     mount that
+#                                     proxies all
+#                                     I/O to the
+#                                     source
+#                                     directory
+#                                     (development
+#                                     + testing
+#                                     mode without
+#                                     a real
+#                                     Fairy
+#                                     server)
+#
+# Example invocations:
+#   fairy-client mount /mnt/fairy
+#     # mount Fairy distributed storage at
+#     # /mnt/fairy
+#
+#   fairy-client -dd mount-passthrough \
+#     /mnt/test /home/user/source-data
+#     # passthrough mount with verbose trace
+#
+# The h2 lane is built on `h2 = "0.3"` (declared
+# verbatim at the upstream workspace Cargo.toml
+# HEAD as a workspace-level dep, transitively
+# required by `fairy-client` via the workspace
+# inheritance pattern, used directly in src/
+# main.rs as `h2::client::handshake(tcp_wrapper)`
+# for the HTTP/2 client handshake to the Fairy
+# server at 127.0.0.1:5928 + `h2::client::
+# SendRequest::send_request` for sending PUT/GET
+# requests over the persistent HTTP/2
+# connection), the canonical Rust HTTP/2 protocol
+# library by Carl Lerche (hyperium org) -
+# github.com/hyperium/h2.
+#
+# Carl Lerche + hyperium's h2 crate is the
+# de-facto canonical Rust HTTP/2 library:
+#   - Pure-Rust IETF RFC 7540 (HTTP/2)
+#     implementation
+#   - HPACK (RFC 7541) header compression
+#     support
+#   - Client + server modes
+#   - Stream-level flow control + multiplexing
+#   - Server push support
+#   - ALPN-negotiable
+#   - 4,000+ reverse-deps on crates.io
+#   - Used by hyper (canonical Rust HTTP at Axis
+#     265) for HTTP/2 protocol support
+#   - Used by tonic (gRPC client + server) +
+#     reqwest + axum + warp + virtually every
+#     Rust HTTP/2-speaking server
+#
+# h2's distinguishing position vs Rust HTTP/2
+# alternatives:
+#   - hyperium/h2 (Lerche): canonical;
+#     transitively required by hyper + every
+#     downstream Rust HTTP server; THIS AXIS
+#   - quinn (Rust QUIC at Axis 274 alternative):
+#     QUIC + HTTP/3 stack; supersedes h2 for
+#     HTTP/3 traffic
+#   - actix-http: actix-web's internal HTTP
+#     implementation; not externally used
+#
+# Carl Lerche's role in Rust async + networking
+# is *the* foundational role:
+#   - Co-author of tokio (canonical Rust async
+#     runtime; with Alex Crichton)
+#   - Author of bytes (canonical efficient byte
+#     buffer for tokio)
+#   - Author of mio (Metal I/O; tokio's low-
+#     level event loop substrate)
+#   - Author of h2 (canonical Rust HTTP/2;
+#     THIS AXIS)
+#   - Author of tower (canonical Rust async
+#     service abstraction; gRPC + middleware
+#     foundation)
+#   - Author of tower-http (HTTP middleware for
+#     tower services)
+#   - Co-maintainer of hyper alongside Sean
+#     McArthur
+#   - Author of slab (canonical Rust object pool)
+#   - Author of clog (Rust changelog tool)
+#   - Co-founder of the tokio-rs organization
+#
+# Lerche's role in the Rust ecosystem is *async
+# runtime + HTTP/2 + networking-substrate
+# canonical infrastructure*. He occupies a
+# unique position: every Rust async server
+# transitively depends on his code (tokio +
+# bytes + mio + h2 + tower + ...).
+#
+# Lerche extends the *foundational-infrastructure
+# canonical-author* cluster alongside:
+#   - David Tolnay (proc-macros + serialization
+#     + serde + thiserror + ...)
+#   - Alex Crichton (build tooling + compression
+#     + cargo + cc + tar; co-tokio with Lerche)
+#   - Sean McArthur (hyper + reqwest + warp +
+#     http + http-body; co-hyper with Lerche)
+#   - Andrew Gallant (regex + ripgrep + globset
+#     + ...)
+#   - Yevhenii Reizner (resvg + tiny-skia + ...)
+#
+# Carl Lerche is the *async-substrate* canonical
+# author whose code is in the dependency graph
+# of essentially every Rust async program. His
+# work on tokio + bytes + mio + h2 + tower forms
+# the substrate for nearly every Rust networking
+# server in production.
+#
+# fairy-client uses h2 in src/main.rs:
+#   ```rust
+#   use h2;
+#   let tcp = TcpStream::connect("127.0.0.1:5928")
+#       .await.unwrap();
+#   let tcp_wrapper = StreamWrapper::new(tcp);
+#   let (client, h2_conn) = h2::client::handshake(
+#       tcp_wrapper).await.unwrap();
+#
+#   // Spawn task to drive the HTTP/2 connection
+#   monoio::spawn(async move {
+#       if let Err(e) = h2_conn.await {
+#           println!("GOT ERR={e:?}");
+#       }
+#   });
+#
+#   // Send HTTP/2 requests
+#   let mut client = client.ready().await.unwrap();
+#   let request = http::Request::builder()
+#       .uri("/get/1111").body(()).unwrap();
+#   let response = client.send_request(request,
+#       true).unwrap();
+#   ```
+# The h2 crate provides direct HTTP/2 framing +
+# stream management + HPACK header compression
+# at a layer below the higher-level hyper crate.
+#
+# Note: most Rust HTTP servers use h2 *through*
+# hyper rather than directly. fairy-client is
+# unusual in that it uses h2 directly without
+# the hyper higher-level layer, giving it more
+# control over the HTTP/2 protocol details +
+# potentially lower overhead.
+#
+# ----------------------------------------------------------------------------
+# AXIS 275 :: HTTP/2 protocol libraries (IETF
+#              RFC 7540 HTTP/2 + RFC 7541 HPACK
+#              header compression + RFC 7838
+#              Alt-Svc service discovery)
+# Round 1523 :: Rust slot 1 of 4 :: OPENS Axis 275
+#
+# Cross-language canonical library family for this axis
+# (proposed):
+#   Rust    : hyperium/h2                   - Carl
+#                                              Lerche's
+#                                              canonical
+#                                              Rust HTTP/2
+#                                              library;
+#                                              substrate
+#                                              of every
+#                                              Rust HTTP
+#                                              server +
+#                                              client
+#   Go      : golang.org/x/net/http2        - Go team's
+#                                              (Brad
+#                                              Fitzpatrick
+#                                              et al.)
+#                                              canonical
+#                                              HTTP/2
+#                                              library;
+#                                              integrated
+#                                              into Go's
+#                                              net/http
+#                                              stdlib
+#                                              automatically
+#                                              for
+#                                              HTTPS
+#                                              clients +
+#                                              servers
+#   TS/Node : node:http2 (stdlib)           - Node team's
+#                                              canonical
+#                                              HTTP/2
+#                                              implementation
+#                                              shipped
+#                                              with
+#                                              Node 8.4+
+#                                              (2017); uses
+#                                              nghttp2 C
+#                                              library
+#                                              internally
+#
+# HTTP/2 is a *spec-bound + mature* axis:
+#   - IETF RFC 7540 standardized in May 2015
+#   - HPACK (RFC 7541) standardized
+#     simultaneously
+#   - ~75% of web traffic uses HTTP/2 as of
+#     2024 (Cloudflare Radar + W3Techs data;
+#     HTTP/3 has been growing at HTTP/2's
+#     expense)
+#   - Universal browser support since Edge 12 +
+#     Chrome 41 + Firefox 36 + Safari 9
+#   - Universal CDN + server support
+#
+# Each canonical library provides:
+#   - Binary frame format (HEADERS + DATA +
+#     SETTINGS + PING + GOAWAY + RST_STREAM +
+#     WINDOW_UPDATE + PRIORITY + PUSH_PROMISE +
+#     CONTINUATION)
+#   - HPACK header compression
+#   - Stream multiplexing within a connection
+#   - Server push (RFC 7540 deprecated push in
+#     2022 but the protocol-level support
+#     remains)
+#   - Flow control at stream + connection level
+#   - ALPN negotiation for "h2" identifier
+#
+# Cross-language interop at the HTTP/2 wire
+# level - all three lanes interoperate with any
+# compliant HTTP/2 endpoint (Nginx + Apache +
+# Caddy + AWS ALB + Cloudflare + Google Frontend
+# + every other production HTTP/2 server).
+#
+# Axis 275 opens with the Rust slot at Lerche's
+# hyperium/h2, anchoring his foundational async-
+# substrate canonical position. This is Lerche's
+# first explicit axis closure even though his
+# code (tokio + bytes + mio) has been a
+# transitive dep of every Rust async tool
+# previously closed in the corpus.
+#
+# Notable parallel to Axis 273 (TLS) + Axis 274
+# (HTTP/3 + QUIC): HTTP/2 is the *previous-
+# generation* transport that HTTP/3 + QUIC are
+# replacing at the protocol level. HTTP/2
+# remains dominant (75% web traffic) while HTTP/3
+# is still growing (25-30%). The three protocols
+# layer cleanly: HTTP/2 over TLS over TCP;
+# HTTP/3 over QUIC over UDP.
+#
+# Use case spectrum for this axis (so far):
+#   - fairy-client (Rust, h2): distributed
+#     storage client using HTTP/2 for client +
+#     server protocol with direct h2 API usage
+# ============================================================================
+
+_fairy-client() {
+    local context state state_descr line
+    typeset -A opt_args
+    local curcontext="$curcontext" ret=1
+
+    _arguments -C \
+        '*'{-d,--debug}'[increase trace verbosity (count)]' \
+        '(- *)'{-h,--help}'[print help]' \
+        '(- *)'{-V,--version}'[print version]' \
+        '1: :_fairy-client_cmds' \
+        '*::arg:->args' \
+    && ret=0
+
+    case $state in
+        args)
+            case $words[1] in
+                mount)
+                    _arguments \
+                        '1:mountpoint:_files -/'
+                    ;;
+                mount-passthrough)
+                    _arguments \
+                        '1:mountpoint:_files -/' \
+                        '2:source:_files -/'
+                    ;;
+            esac
+            ;;
+    esac
+
+    return ret
+}
+
+_fairy-client_cmds() {
+    local -a cmds
+    cmds=(
+        'mount:mount Fairy distributed storage as a FUSE filesystem'
+        'mount-passthrough:passthrough FUSE mount for development/testing'
+    )
+    _describe -t commands 'fairy-client command' cmds
+}
+
+_fairy-client "$@"
