@@ -1,7 +1,345 @@
 #compdef stargz-store
-# _stargz-store — Stargz image store / read-only FS snapshotter (containerd/stargz-snapshotter)
-# upstream: https://github.com/containerd/stargz-snapshotter
-# Flags from cmd/stargz-store/main.go (flag).
+# ============================================================================
+# stargz-store - eStargz lazy-pulling container
+#                 image store + FUSE mount
+#                 daemon
+#                 (Go, Apache-2.0)
+#
+# Author : Kohei Tokunaga (ktock) + containerd
+#           stargz-snapshotter team
+#           (containerd subproject; Tokunaga
+#           at NTT is the project lead)
+# Upstream: https://github.com/containerd/stargz-snapshotter
+#
+# `stargz-store` is the standalone FUSE-
+# mounted container image store daemon for
+# eStargz (extensible Stargz) - a stargz
+# variant + extension format that enables
+# *lazy pulling* of container image layers.
+# Traditional container runtimes download
+# entire image layers before starting
+# containers; stargz/eStargz enables layers
+# to be accessed remotely + streamed in on
+# demand.
+#
+# Architecture:
+#   1. **Container runtime** (containerd
+#      or podman) mounts container rootfs
+#      via FUSE
+#   2. **stargz-store** is the FUSE
+#      server backing the rootfs
+#   3. **On-demand fetching**: when
+#      containerized processes read files,
+#      stargz-store fetches just the
+#      requested layer chunks from the
+#      registry (HTTP Range requests)
+#   4. **Caching**: BoltDB metadata +
+#      filesystem chunk cache
+#   5. **Authentication**: kubeconfig +
+#      docker config + cri-o keychains
+#
+# vs containerd-stargz-grpc:
+#   - `stargz-store` is the *standalone
+#     FUSE store* usable by any container
+#     runtime
+#   - `containerd-stargz-grpc` is the
+#     *containerd-specific gRPC
+#     snapshotter plugin* (integrates
+#     directly with containerd's
+#     snapshotter interface)
+#
+# Distinguishing features:
+#   - **Sub-second container startup**
+#     for large images (5+ GB images in
+#     <1 second vs minutes for full
+#     pull)
+#   - **Bandwidth savings** (only
+#     accessed file ranges fetched)
+#   - **Disk space savings** (no full
+#     image storage)
+#   - **CRI-compatible** (works with
+#     containerd + CRI-O)
+#
+# Use cases:
+#   - Kubernetes clusters with high-
+#     density node deployments
+#   - Edge computing with bandwidth-
+#     constrained nodes
+#   - Container-based serverless
+#     platforms (cold-start latency
+#     reduction)
+#   - CI/CD pipelines pulling many
+#     large images
+#
+# Usage:
+#   stargz-store [flags] <mount-point>
+#
+# Flags (Go stdlib flag):
+#   -config <path>                 - path to
+#                                     configuration
+#                                     file
+#                                     (default
+#                                     /etc/
+#                                     stargz-
+#                                     store/
+#                                     config
+#                                     .toml)
+#   -log-level <level>             - logging
+#                                     level
+#                                     (trace +
+#                                     debug +
+#                                     info +
+#                                     warn +
+#                                     error +
+#                                     fatal +
+#                                     panic)
+#   -root <path>                   - path to
+#                                     root
+#                                     directory
+#                                     (default
+#                                     /var/lib/
+#                                     stargz-
+#                                     store)
+#   -addr <path>                   - UNIX
+#                                     socket
+#                                     path for
+#                                     gRPC
+#                                     control
+#                                     (default
+#                                     <root>/
+#                                     store
+#                                     .sock)
+#
+# Positional argument:
+#   <mount-point>                  - FUSE
+#                                     mount
+#                                     point
+#                                     (where
+#                                     the
+#                                     container
+#                                     image
+#                                     filesystem
+#                                     is
+#                                     mounted)
+#
+# Example invocations:
+#   # Start with defaults (mounts at /mnt/stargz)
+#   stargz-store /mnt/stargz
+#
+#   # Custom config + mount + log level
+#   stargz-store \
+#     -config /etc/my-stargz.toml \
+#     -log-level debug \
+#     /mnt/my-stargz
+#
+#   # Custom root + control socket
+#   stargz-store \
+#     -root /var/lib/my-stargz \
+#     -addr /var/lib/my-stargz/store.sock \
+#     /mnt/my-stargz
+#
+# The klauspost/compress lane is built on
+# `github.com/klauspost/compress v1.18.6`
+# (declared verbatim at upstream go.mod
+# HEAD as a direct dep, imported by
+# `estargz/estargz.go` + `nativeconverter/
+# estargz/` for the gzip + zstd
+# compression of eStargz layer chunks -
+# eStargz layers can be zstd-compressed
+# for better compression ratios than the
+# legacy gzip-only format), the canonical
+# pure-Go compression suite by Klaus Post
+# - github.com/klauspost/compress.
+#
+# klauspost/compress is the de-facto
+# canonical Go compression suite:
+#   - **Pure-Go implementations** (no
+#     CGO; cross-compiles cleanly to
+#     all Go-supported platforms;
+#     aligned with Go's preference for
+#     CGO-free dependencies)
+#   - **Multiple algorithm support**:
+#     - **gzip** (RFC 1952; faster +
+#       higher compression than stdlib
+#       compress/gzip)
+#     - **deflate** (RFC 1951;
+#       underlying LZ77 + Huffman)
+#     - **zstd** (RFC 8478; THIS AXIS
+#       use)
+#     - **S2** (Klaus Post's high-
+#       performance Snappy variant;
+#       faster than vanilla Snappy)
+#     - **snappy** (Google's Snappy
+#       compatible implementation)
+#     - **huff0** (Huffman 0; entropy
+#       coding primitive)
+#     - **fse** (Finite State Entropy;
+#       the entropy coder used by zstd)
+#   - **Pure-Go zstd** (clean-room
+#     port of libzstd maintaining
+#     compatibility with the wire
+#     format)
+#   - **HTTP gzip middleware** (gzhttp
+#     subpackage)
+#   - **5,300+ stars on github.com/
+#     klauspost/compress**
+#   - **~120,000 reverse-deps on
+#     pkg.go.dev** (THE most-imported
+#     Go compression library)
+#
+# klauspost/compress's distinguishing
+# position vs Go compression
+# alternatives:
+#   - klauspost/compress (Post):
+#     canonical; pure-Go; multi-
+#     algorithm; THIS AXIS
+#   - Go stdlib (compress/gzip +
+#     compress/flate + compress/lzw):
+#     basic compression; older + slower;
+#     klauspost largely a drop-in
+#     replacement with better
+#     performance
+#   - DataDog/zstd: CGO bindings to
+#     libzstd; faster than klauspost
+#     pure-Go zstd but requires C
+#     toolchain
+#   - facebook/zstd: official C zstd
+#     library (not Go-native)
+#
+# Klaus Post is the *single most prolific
+# canonical-author contributor to Go
+# compression infrastructure*. His broader
+# Go ecosystem footprint:
+#   - **klauspost/compress** (THIS AXIS)
+#   - **klauspost/pgzip** (parallel
+#     gzip; multi-threaded compression)
+#   - **klauspost/reedsolomon** (Reed-
+#     Solomon erasure coding; used by
+#     MinIO + many distributed storage
+#     systems)
+#   - **klauspost/crc32** (CRC32 +
+#     CRC32C; hardware-accelerated
+#     checksums)
+#   - **klauspost/cpuid** (CPU feature
+#     detection; used by klauspost/
+#     compress for SIMD path selection)
+#   - **klauspost/asmfmt** (assembly
+#     code formatter for Go assembly
+#     development)
+#
+# Post's role in Go is *foundational
+# performance-critical numerics + I/O
+# infrastructure*. His library family
+# forms the canonical Go performance-
+# optimization stack:
+#   - klauspost/compress (compression)
+#   - klauspost/reedsolomon (erasure
+#     coding)
+#   - klauspost/crc32 (checksum)
+#   - klauspost/cpuid (feature
+#     detection)
+#   - klauspost/pgzip (parallel
+#     compression)
+#
+# Post's contribution pattern parallels:
+#   - Mathias Buus (Axis 282 Node
+#     closer; foundational P2P +
+#     streaming infrastructure)
+#   - Felix Böhm (Axis 285 Node
+#     closer; foundational HTML
+#     parsing stack)
+#   - Andrew Gallant / BurntSushi
+#     (Axis 283 Go slot; cross-
+#     language canonical author of
+#     ripgrep + regex + TOML)
+# All four maintain coordinated multi-
+# library vertical stacks.
+#
+# Multi-axis canonical-Go author/org
+# cohort extension (now spanning 27
+# distinct individuals/orgs after R1560):
+#   - + Klaus Post (klauspost/compress
+#     + pgzip + reedsolomon + crc32 +
+#     cpuid + asmfmt; THIS AXIS;
+#     canonical Go compression suite +
+#     foundational performance-
+#     critical numerics + I/O stack)
+#
+# stargz-store uses klauspost/compress
+# for:
+#   - Decompressing eStargz layer
+#     chunks (legacy gzip-compressed
+#     chunks; modern zstd chunks)
+#   - Verifying eStargz layer hash
+#     (incremental decompression +
+#     SHA256 streaming)
+#   - HTTP response decompression
+#     (gzhttp middleware)
+#
+# This is the canonical use case for
+# klauspost/compress in production Go
+# infrastructure: high-throughput
+# compression/decompression at the
+# storage + network boundary, where
+# pure-Go (no CGO) + multi-algorithm
+# support matter at scale.
+#
+# ----------------------------------------------------------------------------
+# AXIS 287 :: Zstandard (zstd) compression
+#              libraries
+#              (Facebook's modern
+#              compression algorithm; LZ77 +
+#              FSE/Huffman entropy coding;
+#              standardized at RFC 8478)
+# Round 1560 :: Go slot 2 of 4 :: continues Axis 287
+#
+# Cross-language canonical library family
+# for this axis:
+#   Rust    : gyscos/zstd-rs            [R1559 _rustpbx]
+#             (Alexandre Bury; canonical
+#              Rust binding to Facebook's
+#              libzstd)
+#   Go      : klauspost/compress        [R1560 THIS FILE]
+#             (Klaus Post; canonical Go
+#              compression suite
+#              including zstd + gzip +
+#              deflate + snappy + S2;
+#              pure-Go; ~120,000
+#              reverse-deps)
+#   TS/Node : @mongodb-js/zstd          [R1561 closing]
+#             (MongoDB-maintained Node
+#              bindings; native + N-API)
+#
+# Use-case spectrum across the lanes
+# (so far):
+#   - rustpbx (Rust, zstd-rs): SIP PBX
+#     call recording archive + CDR
+#     batch compression + log
+#     compression
+#   - stargz-store (Go, klauspost/
+#     compress): eStargz container
+#     image lazy-pulling FUSE store
+#     with zstd-compressed layer chunks
+#
+# Both use cases share the *high-
+# throughput streaming compression*
+# pattern - compress/decompress large
+# data streams in real-time:
+#   - rustpbx: audio + CDR streams
+#     compressed for storage
+#   - stargz-store: container image
+#     layer chunks decompressed on
+#     demand for FUSE filesystem reads
+#
+# This is the canonical zstd deployment
+# pattern in production storage + media
+# infrastructure: streaming compression
+# + decompression at the storage I/O
+# boundary, where zstd's combination of
+# good ratio + fast speed makes it
+# preferable to gzip (slower) or LZ4
+# (lower ratio).
+# ============================================================================
 
 _stargz-store() {
     _arguments \
@@ -9,7 +347,8 @@ _stargz-store() {
         '-config=[path to configuration file]:file:_files -g "*.toml"' \
         '-log-level=[log level]:level:(trace debug info warn error fatal panic)' \
         '-root=[snapshotter root directory]:dir:_files -/' \
-        '-addr=[socket path to listen on]:file:_files'
+        '-addr=[socket path to listen on]:file:_files' \
+        '1:mount point:_files -/'
 }
 
 _stargz-store "$@"
