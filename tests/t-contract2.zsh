@@ -19,10 +19,12 @@
     # silently catastrophic for completion discoverability. Allow
     # #autoload (one shared helper file _language_codes uses it).
     local bad=0
-    local f firstline
-    for f in "$pluginDir/more_src/"_*; do
-        firstline=$(head -1 "$f")
-        [[ "$firstline" = '#compdef'* || "$firstline" = '#autoload'* ]] || (( bad += 1 )) || true
+    local f firstline d
+    for d in more_src more_src2 more_src3; do
+        for f in "$pluginDir/$d/"_*; do
+            firstline=$(head -1 "$f")
+            [[ "$firstline" = '#compdef'* || "$firstline" = '#autoload'* ]] || (( bad += 1 )) || true
+        done
     done
     assert $bad equals 0
 }
@@ -68,7 +70,7 @@
     # on more_src (~14k+ files).
     local dir count
     local missing=""
-    for dir in src override_src man_src architecture_src more_src; do
+    for dir in src override_src man_src architecture_src more_src more_src2 more_src3; do
         count=$(find "$pluginDir/$dir" -maxdepth 1 -name "_*" -type f 2>/dev/null | head -1 | wc -l | tr -d ' ' || true)
         [[ "$count" -ge 1 ]] || missing="$missing $dir:0"
     done

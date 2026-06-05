@@ -58,6 +58,16 @@
     assert $state equals 0
 }
 
+@test 'plugin.zsh adds more_src2 to fpath' {
+    run grep -cF '/more_src2"' "$pluginFile"
+    assert $state equals 0
+}
+
+@test 'plugin.zsh adds more_src3 to fpath' {
+    run grep -cF '/more_src3"' "$pluginFile"
+    assert $state equals 0
+}
+
 @test 'plugin.zsh prepends override_src to fpath' {
     local count
     count=$(grep -cF '__zsh_more_comp_dir $fpath)' "$pluginFile")
@@ -111,6 +121,14 @@
 
 @test 'more_src directory exists' {
     assert "$pluginDir/more_src" is_dir
+}
+
+@test 'more_src2 directory exists' {
+    assert "$pluginDir/more_src2" is_dir
+}
+
+@test 'more_src3 directory exists' {
+    assert "$pluginDir/more_src3" is_dir
 }
 
 @test 'architecture_src directory exists' {

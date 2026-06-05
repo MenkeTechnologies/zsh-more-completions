@@ -43,11 +43,13 @@
 }
 
 @test 'more_src' {
-    local f
-    for f in "$pluginDir/more_src/"_*(.); do
-        [[ ${f:e} == zwc ]] && continue
-        run zsh -n "$f"
-        assert $state equals 0
+    local f d
+    for d in more_src more_src2 more_src3; do
+        for f in "$pluginDir/$d/"_*(.); do
+            [[ ${f:e} == zwc ]] && continue
+            run zsh -n "$f"
+            assert $state equals 0
+        done
     done
 }
 

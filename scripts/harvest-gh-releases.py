@@ -28,6 +28,21 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 REPO = pathlib.Path(os.environ.get("REPO", pathlib.Path(__file__).resolve().parents[1]))
 MORE = REPO / "more_src"
+MORE2 = REPO / "more_src2"
+MORE3 = REPO / "more_src3"
+
+def bucket_for(name: str) -> pathlib.Path:
+    # Split more_src into 3 dirs (a-h -> more_src, i-r -> more_src2, s-z -> more_src3)
+    # to keep each under 10k files (zsh chokes above ~10k entries per fpath dir).
+    stem = name[1:] if name.startswith('_') else name
+    if not stem:
+        return MORE
+    c = stem[0].lower()
+    if 'i' <= c <= 'r':
+        return MORE2
+    if 's' <= c <= 'z':
+        return MORE3
+    return MORE
 SRC = REPO / "src"
 BLPATH = REPO / "blacklist.txt"
 TESTPATH = REPO / "tests/t-more-src-existence.zsh"
@@ -73,7 +88,7 @@ def load_blacklist() -> set[str]:
 
 def existing_basenames() -> set[str]:
     out: set[str] = set()
-    for d in (MORE, SRC):
+    for d in (MORE, MORE2, MORE3, SRC):
         if d.is_dir():
             out.update(p.name for p in d.iterdir() if p.is_file() and p.name.startswith("_"))
     return out
@@ -352,7 +367,7 @@ def install_completion(
         f"# Harvested: {time.strftime('%Y-%m-%d', time.gmtime())}\n",
     ]
     rest = [l for i, l in enumerate(lines) if i != compdef_idx]
-    out = MORE / dest
+    out = bucket_for(dest) / dest
     out.write_text(lines[compdef_idx] + "".join(headers) + "".join(rest), encoding="utf-8")
     if not zsh_nf(out):
         out.unlink(missing_ok=True)
