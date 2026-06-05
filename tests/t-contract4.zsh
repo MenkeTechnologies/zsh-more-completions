@@ -34,13 +34,13 @@
     assert $(( first + last + prepend + append )) equals 0
 }
 
-@test 'all four trailing fpath dirs are wired: src, more_src, man_src, architecture_src' {
-    # Pin: the four append-dirs are a curated set; dropping any one
+@test 'all six trailing fpath dirs are wired: src, more_src, more_src2, more_src3, man_src, architecture_src' {
+    # Pin: the trailing append-dirs are a curated set; dropping any one
     # leaks the matching corpus from fpath and silently breaks tab
     # completion for hundreds of commands. Verify each name appears.
     local count
-    count=$(grep -oE '"\$1/(src|more_src|man_src|architecture_src)"' "$pluginFile" | sort -u | wc -l | tr -d ' ')
-    assert "$count" same_as '4'
+    count=$(grep -oE '"\$1/(src|more_src|more_src2|more_src3|man_src|architecture_src)"' "$pluginFile" | sort -u | wc -l | tr -d ' ')
+    assert "$count" same_as '6'
 }
 
 @test 'fpath append is GUARDED by reverse-search so re-source is idempotent' {

@@ -24,7 +24,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![zsh](https://img.shields.io/badge/zsh-plugin-cyan.svg)](https://github.com/MenkeTechnologies/zpwr)
 
-### `[THE LARGEST CURATED ZSH COMPLETION CORPUS IN EXISTENCE // 33,175 FILES]`
+### `[THE LARGEST CURATED ZSH COMPLETION CORPUS IN EXISTENCE // 37,135 FILES]`
 
 > *"Every CLI you've heard of, completed. Plus several you haven't."*
 
@@ -72,7 +72,9 @@ Directory layout:
 
 ```
 src/              main completions
-more_src/         additional completions
+more_src/         additional completions (0-9, a-h)
+more_src2/        additional completions (i-r)  split to keep dir under 10k entries
+more_src3/        additional completions (s-z)  split to keep dir under 10k entries
 man_src/          completions parsed from man pages
 override_src/     overrides (prepended to fpath)
 architecture_src/ cross-architecture toolchains

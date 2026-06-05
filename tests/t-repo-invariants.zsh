@@ -124,7 +124,7 @@
 
 @test 'more_src contains underscore completion files' {
     local n
-    n=$(find "$pluginDir/more_src" -maxdepth 1 -name '_*' -type f 2>/dev/null | wc -l | tr -d ' ')
+    n=$(find "$pluginDir/more_src" "$pluginDir/more_src2" "$pluginDir/more_src3" -maxdepth 1 -name '_*' -type f 2>/dev/null | wc -l | tr -d ' ')
     assert $n is_greater_than 100
 }
 
@@ -150,7 +150,7 @@
 
 @test 'more_src and src do not ship _git-* files that shadow override_src/_git' {
     local f verb subdir shadows=0
-    for subdir in more_src src; do
+    for subdir in more_src more_src2 more_src3 src; do
         for f in "$pluginDir/$subdir"/_git-*(N); do
             verb=${${f:t}#_}
             verb=${verb%.sh}

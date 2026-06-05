@@ -20,6 +20,21 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 REPO = pathlib.Path(os.environ.get("REPO", pathlib.Path(__file__).resolve().parents[1]))
 MORE = REPO / "more_src"
+MORE2 = REPO / "more_src2"
+MORE3 = REPO / "more_src3"
+
+def bucket_for(name: str) -> pathlib.Path:
+    # Split more_src into 3 dirs (a-h -> more_src, i-r -> more_src2, s-z -> more_src3)
+    # to keep each under 10k files (zsh chokes above ~10k entries per fpath dir).
+    stem = name[1:] if name.startswith('_') else name
+    if not stem:
+        return MORE
+    c = stem[0].lower()
+    if 'i' <= c <= 'r':
+        return MORE2
+    if 's' <= c <= 'z':
+        return MORE3
+    return MORE
 BLPATH = REPO / "blacklist.txt"
 LOCAL_CANDIDATES = pathlib.Path(os.environ.get("LOCAL_CANDIDATES", "/tmp/candidates.tsv"))
 UA = "MenkeTechnologies-zsh-more-completions-harvest/1.0"
@@ -132,7 +147,7 @@ def trial_zsh_completion_syntax(dest: str, body: str, source_url: str, repo_disp
 
 
 def write_file(dest: str, body: str, source_url: str, repo_display: str) -> None:
-    out = MORE / dest
+    out = bucket_for(dest) / dest
     rendered = _render_with_headers(body, source_url, repo_display)
     if rendered is None:
         # Fallback: write as-is so the caller's zsh_nf check can reject it.
@@ -245,8 +260,8 @@ def try_install(
         return None
     dest, stems = hit
     write_file(dest, body, source_url, repo_display)
-    if not zsh_nf(MORE / dest):
-        (MORE / dest).unlink(missing_ok=True)
+    if not zsh_nf(bucket_for(dest) / dest):
+        (bucket_for(dest) / dest).unlink(missing_ok=True)
         return None
     written_dests.add(dest)
     existing.add(dest)

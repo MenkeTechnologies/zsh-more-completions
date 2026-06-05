@@ -39,6 +39,21 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 REPO = pathlib.Path(os.environ.get("REPO", pathlib.Path(__file__).resolve().parents[1]))
 MORE = REPO / "more_src"
+MORE2 = REPO / "more_src2"
+MORE3 = REPO / "more_src3"
+
+def bucket_for(name: str) -> pathlib.Path:
+    # Split more_src into 3 dirs (a-h -> more_src, i-r -> more_src2, s-z -> more_src3)
+    # to keep each under 10k files (zsh chokes above ~10k entries per fpath dir).
+    stem = name[1:] if name.startswith('_') else name
+    if not stem:
+        return MORE
+    c = stem[0].lower()
+    if 'i' <= c <= 'r':
+        return MORE2
+    if 's' <= c <= 'z':
+        return MORE3
+    return MORE
 BLPATH = REPO / "blacklist.txt"
 TESTPATH = REPO / "tests/t-more-src-existence.zsh"
 CACHE = pathlib.Path(os.environ.get("CRATES_CACHE", "/tmp/crates-cli-cache.json"))
@@ -341,7 +356,7 @@ def write_completion(
 ) -> None:
     # zsh's compinit requires `#compdef` on line 1. Pull the #compdef line out,
     # write it first, then the provenance header, then the rest of the body.
-    out = MORE / dest
+    out = bucket_for(dest) / dest
     body = body.lstrip("﻿")
     lines = body.splitlines(keepends=True)
     compdef_idx = next(
@@ -391,8 +406,8 @@ def try_install_capture(
     if dest in existing or dest in written:
         return None
     write_completion(dest, body, crate, version, repository, cap["probe_args"])
-    if not zsh_nf(MORE / dest):
-        (MORE / dest).unlink(missing_ok=True)
+    if not zsh_nf(bucket_for(dest) / dest):
+        (bucket_for(dest) / dest).unlink(missing_ok=True)
         return None
     written.add(dest)
     existing.add(dest)

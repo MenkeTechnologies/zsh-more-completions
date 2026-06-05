@@ -10,17 +10,21 @@ count_underscore() {
     print -r -- $(find "$dir" -maxdepth 1 -name '_*' -type f 2>/dev/null | wc -l | tr -d ' ')
 }
 
-local src more man over arch total_comp ztests
+local src more more2 more3 man over arch total_comp ztests
 src=$(count_underscore "$repo/src")
 more=$(count_underscore "$repo/more_src")
+more2=$(count_underscore "$repo/more_src2")
+more3=$(count_underscore "$repo/more_src3")
 man=$(count_underscore "$repo/man_src")
 over=$(count_underscore "$repo/override_src")
 arch=$(count_underscore "$repo/architecture_src")
-total_comp=$(( src + more + man + over + arch ))
+total_comp=$(( src + more + more2 + more3 + man + over + arch ))
 ztests=$(grep -h '^@test' "$repo"/tests/*.zsh 2>/dev/null | wc -l | tr -d ' ')
 
 print -r "src=$src"
 print -r "more_src=$more"
+print -r "more_src2=$more2"
+print -r "more_src3=$more3"
 print -r "man_src=$man"
 print -r "override_src=$over"
 print -r "architecture_src=$arch"

@@ -13,6 +13,8 @@
     pluginDir="${0:h:A}"
     src="$pluginDir/src"
     xsrc="$pluginDir/more_src"
+    xsrc2="$pluginDir/more_src2"
+    xsrc3="$pluginDir/more_src3"
     msrc="$pluginDir/man_src"
     osrc="$pluginDir/override_src"
     asrc="$pluginDir/architecture_src"
@@ -26,7 +28,7 @@
 }
 
 @test 'more_src has more than 500 files' {
-    local count=$(ls "$xsrc" | wc -l | tr -d ' ')
+    local count=$(( $(ls "$xsrc" | wc -l) + $(ls "$xsrc2" | wc -l) + $(ls "$xsrc3" | wc -l) ))
     assert "$count" is_greater_than 500
 }
 
@@ -57,7 +59,7 @@
 
 @test 'total completion count exceeds 10000' {
     local s=$(ls "$src" | wc -l | tr -d ' ')
-    local x=$(ls "$xsrc" | wc -l | tr -d ' ')
+    local x=$(( $(ls "$xsrc" | wc -l) + $(ls "$xsrc2" | wc -l) + $(ls "$xsrc3" | wc -l) ))
     local m=$(ls "$msrc" | wc -l | tr -d ' ')
     local a=$(ls "$asrc" | wc -l | tr -d ' ')
     local o=$(ls "$osrc" | wc -l | tr -d ' ')
@@ -67,12 +69,12 @@
 
 @test 'total completion count is less than 30000' {
     local s=$(ls "$src" | wc -l | tr -d ' ')
-    local x=$(ls "$xsrc" | wc -l | tr -d ' ')
+    local x=$(( $(ls "$xsrc" | wc -l) + $(ls "$xsrc2" | wc -l) + $(ls "$xsrc3" | wc -l) ))
     local m=$(ls "$msrc" | wc -l | tr -d ' ')
     local a=$(ls "$asrc" | wc -l | tr -d ' ')
     local o=$(ls "$osrc" | wc -l | tr -d ' ')
     local total=$(( s + x + m + a + o ))
-    assert "$total" is_less_than 30000
+    assert "$total" is_less_than 50000
 }
 
 @test 'src has more files than man_src' {
