@@ -71,6 +71,7 @@ Tool names for the completion corpus were harvested from:
 - **NCO** (netCDF Operators) — `ncatted`, `ncbo`, `ncra`, `ncrcat`, `ncrename`, etc.; canonical short/long option help text extracted from `nco/nco/src/nco/nco_ctl.c` `nco_usg_prn()` and per-operator man pages at https://github.com/nco/nco
 - **GDAL / OGR utilities** — geospatial raster + vector toolkit binaries from `OSGeo/gdal/apps/` (`nearblack`, `gdal_footprint`, `sozip`, `gnmanalyse`, `gnmmanage`, …); option lists verified against the per-tool reference docs at https://gdal.org/en/stable/programs/ and the upstream `apps/` C++ argparse setup
 - **CERN ROOT** (HEP data analysis) — `rootbrowse`, `rootcp`, `rootls`, `rootmkdir`, `rootmv`, `rootrm`, `rootnb`, `rootcling`, `rootreadspeed`, `rootdrawtree`, `rooteventselector`, `rootprint`, `rootslimtree`, `hadd`, `h2root` — argparse setups read from `root-project/root/main/python/*.py` and `main/src/*.cxx` at https://github.com/root-project/root
+- **ISC BIND 9** (DNS) — `named*`, `rndc*`, `dnssec-*`, `nsec3hash`, `named-nzd2nzf`, `delv`, `mdig`, `arpaname`, `tsig-keygen`, `dnstap-read`, `ddns-confgen` — synopsis + flag tables harvested from the per-tool `.rst` manpage sources under `bin/dnssec/`, `bin/named/`, `bin/tools/` at https://github.com/isc-projects/bind9
 
 Directory layout:
 
