@@ -73,7 +73,7 @@ Tool names for the completion corpus were harvested from:
 - **CERN ROOT** (HEP data analysis) — `rootbrowse`, `rootcp`, `rootls`, `rootmkdir`, `rootmv`, `rootrm`, `rootnb`, `rootcling`, `rootreadspeed`, `rootdrawtree`, `rooteventselector`, `rootprint`, `rootslimtree`, `hadd`, `h2root` — argparse setups read from `root-project/root/main/python/*.py` and `main/src/*.cxx` at https://github.com/root-project/root
 - **ISC BIND 9** (DNS) — `named*`, `rndc*`, `dnssec-*`, `nsec3hash`, `named-nzd2nzf`, `delv`, `mdig`, `arpaname`, `tsig-keygen`, `dnstap-read`, `ddns-confgen` — synopsis + flag tables harvested from the per-tool `.rst` manpage sources under `bin/dnssec/`, `bin/named/`, `bin/tools/` at https://github.com/isc-projects/bind9
 - **EPICS Channel Access** (particle-accelerator control) — `caget`, `caput`, `cainfo`, `camonitor` — flag tables harvested from each tool's `usage()` printf block in `epics-base/epics-base/modules/ca/src/tools/*.c` at https://github.com/epics-base/epics-base
-- **CFEngine** (config management) — `cf-agent`, etc.; short/long option pairs + HINTS strings read from `cfengine/core/cf-agent/cf-agent.c` (and sibling daemons') `OPTIONS[]`/`HINTS[]` getopt_long tables at https://github.com/cfengine/core
+- **CFEngine** (config management) — `cf-agent`, `cf-promises`, `cf-execd`, `cf-monitord`, `cf-serverd`, `cf-key`, `cf-check`; short/long option pairs + HINTS strings read from `cfengine/core/cf-*/cf-*.c` (and `cf-serverd-functions.c`) `OPTIONS[]`/`HINTS[]` getopt_long tables at https://github.com/cfengine/core
 
 Directory layout:
 
