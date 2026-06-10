@@ -76,6 +76,7 @@ Tool names for the completion corpus were harvested from:
 - **CFEngine** (config management) — every `cf-*` binary in upstream (`cf-agent`, `cf-promises`, `cf-execd`, `cf-monitord`, `cf-serverd`, `cf-runagent`, `cf-key`, `cf-net`, `cf-secret`, `cf-testd`, `cf-upgrade`, `cf-check`); short/long option pairs + HINTS strings read from each binary's `cfengine/core/cf-*/cf-*.c` source (cf-serverd from `cf-serverd-functions.c`, cf-upgrade from `cf-upgrade/command_line.c`) `OPTIONS[]`/`HINTS[]` getopt_long tables at https://github.com/cfengine/core
 - **VoIP / SIP stacks** — `fs_cli` (FreeSWITCH; `signalwire/freeswitch libs/esl/fs_cli.c` `usage_str`), `kamcmd`+`kamctl` (Kamailio; `kamailio/kamailio utils/kamcmd/kamcmd.c` `help_msg` and `utils/kamctl/kamctl` dispatch table), `baresip` (`baresip/baresip src/main.c` `usage()`), `rtpengine` (`sipwise/rtpengine daemon/main.c` `GOptionEntry[]`)
 - **Seismology / miniSEED** — IRIS/EarthScope CLI suite (`msi`, `dataselect`, `mseed2sac`, `slinktool`, `slarchive`); flag tables harvested from each tool's `usage()` function in `EarthScope/{msi,dataselect,slinktool,slarchive}/src/*.c` and `iris-edu/mseed2sac/src/mseed2sac.c`
+- **ROS 1 (Noetic)** — robotics middleware CLIs (`roscore`, `rosrun`, `rosbag`, `rostopic`, `rosnode`); subcommand tables read from `ros/ros_comm noetic-devel tools/*/src/**/__init__.py` (`_fullusage()`/`rosbag_main.RosbagCmds`) and `ros/ros noetic-devel tools/rosbash/scripts/rosrun`
 
 Directory layout:
 
