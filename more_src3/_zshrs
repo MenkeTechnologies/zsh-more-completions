@@ -1,17 +1,47 @@
 #compdef zshrs
 # Documentation: https://github.com/MenkeTechnologies/zshrs
-# Reference accessed: 2026-05-21
-# Verified: zshrs bins/zshrs.rs --help block (`zshrs --help` output)
-# at HEAD on main. Flag set ported directly from the in-source help
-# text; -o OPTION accepts any named zsh option (delegated to _options).
+# Reference accessed: 2026-06-09
+# Verified: zshrs bins/zshrs.rs flag-parse arms at HEAD on main.
+# -o OPTION delegates to _options for any named zsh option.
 
 local curcontext=$curcontext state state_descr line expl not='!'
 typeset -A opt_args
 
 [[ $CURRENT = 2 ]] && not=''
 
+# Per-session cache of every LSP-known canonical name (builtins /
+# keywords / options / specials / compsys / extensions / operators).
+# Three layered sources (first hit wins):
+#   1. `$ZSHRS_LSP_WORDS_FILE` env override — for power-users who keep
+#      a custom word-list at a known path.
+#   2. The committed static snapshot at the completions dir's sibling
+#      `lsp_completion_words.txt` — mirrors stryke's same-named file;
+#      regenerate with `scripts/gen_lsp_completion_words.sh`.
+#   3. Dynamic `zshrs --names` fallback for fresh checkouts where the
+#      snapshot hasn't been generated yet (spawns the binary once
+#      per shell session — ~30 ms cold).
+if (( ! ${+_zshrs_doc_names_cache} )); then
+    _zshrs_doc_names_cache=()
+    local _zshrs_words_file
+    if [[ -n "${ZSHRS_LSP_WORDS_FILE:-}" && -r "$ZSHRS_LSP_WORDS_FILE" ]]; then
+        _zshrs_words_file="$ZSHRS_LSP_WORDS_FILE"
+    else
+        # Resolve the path relative to this completer file (`$0`).
+        _zshrs_words_file="${${(%):-%x}:A:h}/lsp_completion_words.txt"
+    fi
+    if [[ -r "$_zshrs_words_file" ]]; then
+        _zshrs_doc_names_cache=( ${(f)"$(<$_zshrs_words_file)"} )
+    else
+        _zshrs_doc_names_cache=( ${(f)"$(command zshrs --names 2>/dev/null)"} )
+    fi
+fi
+
 _arguments -S -s : \
-  ${not}'--emulate[specify emulation mode]:mode:(zsh sh ksh csh)' \
+  ${not}'--emulate[specify emulation mode]:mode:(zsh sh ksh csh bash)' \
+  '--bash[parity-mode drop-in for /bin/bash (caches OFF, daemon OFF)]' \
+  '--ksh[parity-mode drop-in for /bin/ksh (ksh-93)]' \
+  '--sh[parity-mode drop-in for /bin/sh / POSIX (alias of --posix)]' \
+  '--csh[parity-mode drop-in for /bin/csh]' \
   '*-o+[set named option]:option:_options' \
   '*+o+[unset named option]:option:_options' \
   '(1 -s --shinstdin)'{-s,--shinstdin}'[read commands from standard input]' \
@@ -20,30 +50,40 @@ _arguments -S -s : \
   '(-)--help[show help message and exit]' \
   '(-)--version[show version number and exit]' \
   '(-)--doctor[full diagnostic report of shell health, caches, and performance]' \
-  '(-)--dump-reflection[emit JSON of builtins/keywords/options for IntelliJ plugin]' \
-  '(-)--docs[render the LSP hover card for a builtin/keyword/option]:symbol name' \
-  '(-)--lsp[start LSP server on stdio for editor integration]' \
-  '(-)--dap[start DAP debug adapter; connects back to IDE listener]:host\:port' \
-  '--dump-tokens[emit one TOKNAME<tab>TOKSTR line per lexer token]:output file:_files' \
-  '--dump-ast[emit parser AST as canonical S-expression]:output file:_files' \
-  '--dump-wordcode[emit wordcode emitter output]:output file:_files' \
-  '--dump-zwc[inspect compiled .zwc cache (list or one fn)]:zwc file:_files -g "*.zwc"' \
-  '--disasm[print fusevm opcodes for each compiled unit before VM run]' \
-  '--zsh[identical-behaviour drop-in for /bin/zsh (compat-test entrypoint)]' \
-  '--bash[identical-behaviour drop-in for /bin/bash]' \
-  '--ksh[identical-behaviour drop-in for /bin/ksh (ksh-93)]' \
-  '--posix[identical-behaviour drop-in for /bin/sh (Bourne / dash)]' \
-  '--zsh-compat[alias of --zsh (legacy spelling)]' \
+  '--disasm[print fusevm bytecode to stdout before each VM run]' \
+  '--zsh-compat[enable zsh compatibility mode (use .zcompdump, fpath scanning)]' \
+  '--zsh[alias for --zsh-compat]' \
+  '--posix[POSIX strict mode (no SQLite, no worker pool, no zsh extensions)]' \
   '--no-rcs[do not source startup files]' \
   '-f[equivalent to --no-rcs]' \
   '-i[force interactive mode]' \
-  '-l[force login shell mode]' \
-  '-v[verbose (equivalent to --verbose)]' \
-  '-x[xtrace (equivalent to --xtrace)]' \
+  '(-l --login)'{-l,--login}'[force login shell mode]' \
+  '(-v --verbose)'{-v,--verbose}'[verbose (log every command before execution)]' \
+  '(-x --xtrace)'{-x,--xtrace}'[xtrace (print expanded commands to stderr)]' \
+  '--dump-zwc[dump .zwc file info]:zwc file:_files -g "*.zwc"' \
+  '--dump-tokens[dump lexer tokens for a script]:script:_files' \
+  '--dump-ast[dump parser AST as S-expression]:script:_files' \
+  '--dump-wordcode[dump wordcode emitter output]:script:_files' \
+  '--dump-reflection[emit the JSON consumed by the IntelliJ reflection tool window]' \
+  '--dump-reference-html[emit the HTML chapter sections for docs/reference.html]' \
+  '--names[print every LSP-known canonical name, one per line]' \
+  '--gen-docs[walk PATH for shell sources, emit Markdown module docs]:path:_directories' \
+  '--out[output directory for --gen-docs (default `docs/`)]:dir:_directories' \
+  '--docs[render the LSP hover card for NAME]:name:->docnames' \
+  '--color[ANSI color in --docs output]:mode:(auto always never)' \
+  '--lsp[run the in-process LSP server over stdio]' \
+  '--dap[run the in-process DAP debugger]:host\:port' \
   '(-)1:script file:_files' \
   '*::script arguments:->args' -- && return 0
 
 case $state in
+  (docnames)
+    # Compsys-internal `_describe` would group these by category
+    # (builtin / keyword / option / …) but we don't have the per-
+    # entry kind at the shell level — `zshrs --names` is name-only
+    # for speed. `_values` is fine for a flat list.
+    _values 'zshrs doc name' "${_zshrs_doc_names_cache[@]}"
+    ;;
   (args)
     if [[ -n ${opt_args[(I)-c|-s|--shinstdin]} ]]; then
       _files
