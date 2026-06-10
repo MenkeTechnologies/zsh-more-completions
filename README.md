@@ -74,6 +74,7 @@ Tool names for the completion corpus were harvested from:
 - **ISC BIND 9** (DNS) — `named*`, `rndc*`, `dnssec-*`, `nsec3hash`, `named-nzd2nzf`, `delv`, `mdig`, `arpaname`, `tsig-keygen`, `dnstap-read`, `ddns-confgen` — synopsis + flag tables harvested from the per-tool `.rst` manpage sources under `bin/dnssec/`, `bin/named/`, `bin/tools/` at https://github.com/isc-projects/bind9
 - **EPICS Channel Access** (particle-accelerator control) — `caget`, `caput`, `cainfo`, `camonitor` — flag tables harvested from each tool's `usage()` printf block in `epics-base/epics-base/modules/ca/src/tools/*.c` at https://github.com/epics-base/epics-base
 - **CFEngine** (config management) — every `cf-*` binary in upstream (`cf-agent`, `cf-promises`, `cf-execd`, `cf-monitord`, `cf-serverd`, `cf-runagent`, `cf-key`, `cf-net`, `cf-secret`, `cf-testd`, `cf-upgrade`, `cf-check`); short/long option pairs + HINTS strings read from each binary's `cfengine/core/cf-*/cf-*.c` source (cf-serverd from `cf-serverd-functions.c`, cf-upgrade from `cf-upgrade/command_line.c`) `OPTIONS[]`/`HINTS[]` getopt_long tables at https://github.com/cfengine/core
+- **VoIP / SIP stacks** — `fs_cli` (FreeSWITCH; `signalwire/freeswitch libs/esl/fs_cli.c` `usage_str`), `kamcmd`+`kamctl` (Kamailio; `kamailio/kamailio utils/kamcmd/kamcmd.c` `help_msg` and `utils/kamctl/kamctl` dispatch table), `baresip` (`baresip/baresip src/main.c` `usage()`), `rtpengine` (`sipwise/rtpengine daemon/main.c` `GOptionEntry[]`)
 
 Directory layout:
 
