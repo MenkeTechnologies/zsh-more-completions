@@ -78,6 +78,7 @@ Tool names for the completion corpus were harvested from:
 - **Seismology / miniSEED** — IRIS/EarthScope CLI suite (`msi`, `dataselect`, `mseed2sac`, `slinktool`, `slarchive`); flag tables harvested from each tool's `usage()` function in `EarthScope/{msi,dataselect,slinktool,slarchive}/src/*.c` and `iris-edu/mseed2sac/src/mseed2sac.c`
 - **ROS 1 (Noetic)** — robotics middleware CLIs (`roscore`, `rosrun`, `rosbag`, `rostopic`, `rosnode`, `roslaunch`, `rosparam`, `rosservice`, `rospack`, `rosmsg`/`rossrv`); subcommand tables read from `ros/ros_comm noetic-devel tools/*/src/**/__init__.py` (`_fullusage()`/`rosbag_main.RosbagCmds`), `ros/rospack noetic-devel src/rospack.cpp Rospack::usage()`, and `ros/ros noetic-devel tools/rosbash/scripts/rosrun`
 - **MAVLink / drones** — `mavproxy.py` (ground station/proxy; `ArduPilot/MAVProxy MAVProxy/mavproxy.py` `OptionParser`) plus pymavlink analysis + code-gen tools (`mavlogdump.py`, `mavgraph.py`, `mavextract.py`, `mavflightmodes.py`, `mavgen.py`, `mavflighttime.py`, `mavfft.py`, `magfit.py`, `extract_parms.py`) at `ArduPilot/pymavlink tools/*.py` `ArgumentParser` setups
+- **Quantum chemistry (Grimme group)** — `xtb` (GFN-xTB semiempirical QM at `grimme-lab/xtb`), `crest` (conformer ensemble search at `crest-lab/crest`), `censo` (ensemble sorting at `grimme-lab/CENSO`), `dftd4` (D4 dispersion at `dftd4/dftd4`), plus `packmol` (MD box packing at `m3g/packmol`); flag tables read from each project's CLI parser / readthedocs commandline page
 
 Directory layout:
 
