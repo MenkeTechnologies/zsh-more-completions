@@ -1,6 +1,9 @@
 #compdef stryke st s
 # Documentation: https://man.archlinux.org/search?q=stryke
-# Reference accessed: 2026-05-16
+# Reference accessed: 2026-06-09
+# Verified: strykelang/main.rs dispatcher (args[1] subcommand arms)
+# at HEAD on main; pkg subcommands cross-checked against
+# strykelang/pkg/commands.rs::dispatch.
 
 # Zsh completion for stryke / s — a Perl interpreter written in Rust
 #
@@ -9,14 +12,22 @@
 #   s convert [-i] [-d DELIM] FILE...        — convert Perl to stryke syntax with |> pipes
 #   s deconvert [-i] FILE...                 — convert stryke back to Perl syntax
 #   s fmt [-i] FILE...                       — format stryke source files
+#   s minify [-i] FILE...                    — strip comments/POD/whitespace, collapse statements onto one line
 #   s check FILE...                          — parse + compile without executing
 #   s disasm [--jit] FILE                    — disassemble bytecode
 #   s profile [--flame] [--json] FILE        — run with profiling
 #   s bench [FILE|DIR]                       — run benchmark files
-#   s test [FILE|DIR]                        — run test files
+#   s test [FILE|DIR]                        — run test files (alias: t)
 #   s init [NAME]                            — scaffold project in cwd (stryke.toml + lib/, t/, benches/)
 #   s new NAME                               — scaffold a new project at ./NAME/
-#   s install [--offline]                    — resolve manifest, populate stryke.lock + ~/.stryke/store
+#   s install [--offline]                    — resolve manifest, populate stryke.lock + ~/.stryke/store (alias: i)
+#   s install -g SPEC                        — global install (PATH | gh:owner/repo | github.com/.../@VER)
+#   s uninstall -g NAME                      — drop a global pin + its launchers (alias: un)
+#   s list -g                                — list global packages, launchers, orphans (alias: ls)
+#   s update [NAME] [--offline]              — re-resolve manifest + rewrite stryke.lock (alias: up, upgrade)
+#   s publish [--dry-run]                    — push package to registry (alias: pub)
+#   s use -g NAME@VERSION                    — switch which installed version `use Foo` resolves to
+#   s gc -g [--dry-run]                      — delete store entries no longer pinned
 #   s add NAME[@VER] [flags]                 — add a dep to stryke.toml; reruns install
 #   s remove NAME                            — drop a dep from stryke.toml; reruns install
 #   s tree                                   — print resolved dep graph from stryke.lock
@@ -26,6 +37,7 @@
 #   s lsp                                    — start Language Server Protocol
 #   s completions [SHELL]                    — emit shell completions
 #   s ast FILE                               — dump AST as JSON
+#   s gen-docs [PATH] [--out DIR]            — generate Markdown module docs (.md per source)
 #   s docs [TOPIC]                           — documentation browser
 #   s serve [PORT] [SCRIPT]                  — HTTP server
 #   s run [SCRIPT]                           — run main.stk
@@ -61,11 +73,12 @@ _stryke_debug_flags() {
     'v[verbose: use abs path when printing file names]'
 }
 
-# `s build [--project DIR] SCRIPT [-o OUT]` — bake a Perl script into a standalone executable
+# `s build [--project DIR] SCRIPT [-o OUT] [--mcp-server]` — bake a Perl script into a standalone executable
 _stryke_build() {
   _arguments -s -S \
     '(-o --output)'{-o+,--output=}'[output binary path]:output:_files' \
     '(-p --project)'{-p+,--project=}'[bundle project directory (main.stk + lib/)]:directory:_directories' \
+    '--mcp-server[wrap output as an MCP server over stdio JSON-RPC]' \
     '(-h --help)'{-h,--help}'[show s build usage]' \
     '1:script file:_files -g "*.stk *.pl *.pm"'
 }
@@ -75,6 +88,14 @@ _stryke_fmt() {
   _arguments -s -S \
     '(-i --in-place)'{-i,--in-place}'[rewrite files in place]' \
     '(-h --help)'{-h,--help}'[show s fmt usage]' \
+    '*:stryke files:_files -g "*.stk *.pl *.pm"'
+}
+
+# `s minify [-i] FILE...` — minify stryke source (one-line output)
+_stryke_minify() {
+  _arguments -s -S \
+    '(-i --in-place)'{-i,--in-place}'[rewrite files in place]' \
+    '(-h --help)'{-h,--help}'[show s minify usage]' \
     '*:stryke files:_files -g "*.stk *.pl *.pm"'
 }
 
@@ -137,6 +158,49 @@ _stryke_new() {
 # Pull dep names from the project's stryke.toml so `s remove`/`s info` complete
 # with the real dep set instead of arbitrary words. Walks up from cwd to find
 # the manifest. Cheap (just grep over a small TOML file).
+# Names from ~/.stryke/installed.toml — used by `s use -g`, `s uninstall -g`.
+# Falls back to scanning the store dir when installed.toml is absent (old
+# layouts pre-v0.16.30 didn't have the pin file).
+_stryke_global_pkg_names() {
+  local idx="${STRYKE_HOME:-$HOME/.stryke}/installed.toml"
+  local -a names
+  if [[ -f "$idx" ]]; then
+    names=(${(f)"$(awk -F'"' '/^name = /{print $2}' "$idx" 2>/dev/null)"})
+  fi
+  if (( ${#names} == 0 )); then
+    local store="${STRYKE_HOME:-$HOME/.stryke}/store"
+    [[ -d "$store" ]] || return
+    names=(${(f)"$(command ls "$store" 2>/dev/null | awk -F@ 'NF==2{print $1}' | sort -u)"})
+  fi
+  _describe 'installed package' names
+}
+
+# Versions present in ~/.stryke/store/<name>@*/ — used by `s use -g name@<TAB>`.
+# `$1` is the package name extracted from the partial spec.
+_stryke_global_pkg_versions() {
+  local name="$1"
+  [[ -n "$name" ]] || return
+  local store="${STRYKE_HOME:-$HOME/.stryke}/store"
+  [[ -d "$store" ]] || return
+  local -a versions
+  versions=(${(f)"$(command ls "$store" 2>/dev/null | awk -F@ -v n="$name" 'NF==2 && $1==n {print $2}' | sort -ru)"})
+  (( ${#versions} == 0 )) && return
+  local -a tagged
+  local v
+  for v in $versions; do tagged+=("$name@$v"); done
+  _describe 'installed version' tagged
+}
+
+# Combined NAME and NAME@VERSION completer for `s use -g`. If the current
+# word contains `@`, suggest matching versions; otherwise suggest names.
+_stryke_global_pkg_spec() {
+  if [[ "$PREFIX" == *@* ]]; then
+    _stryke_global_pkg_versions "${PREFIX%%@*}"
+  else
+    _stryke_global_pkg_names
+  fi
+}
+
 _stryke_pkg_dep_names() {
   local manifest_dir="$PWD"
   while [[ "$manifest_dir" != "/" && ! -f "$manifest_dir/stryke.toml" ]]; do
@@ -156,11 +220,62 @@ _stryke_pkg_dep_names() {
   _describe 'project dep' deps
 }
 
-# `s install [--offline]` — resolve manifest deps + write stryke.lock.
+# `s install [--offline] | install -g SPEC`
+#   no -g: resolve manifest deps + write stryke.lock
+#   -g:    install a package globally; SPEC is PATH | gh:owner/repo |
+#          github.com/owner/repo | https://github.com/owner/repo (with
+#          optional @VERSION)
 _stryke_install() {
   _arguments -s -S \
+    '(-g --global)'{-g,--global}'[install globally into ~/.stryke/store + installed.toml]' \
     '--offline[only use cached packages; never fetch]' \
-    '(-h --help)'{-h,--help}'[show s install usage]'
+    '(-h --help)'{-h,--help}'[show s install usage]' \
+    '*: :->install_arg'
+  case $state in
+    install_arg)
+      # If `-g`/`--global` is on the line, the positional is a SPEC; otherwise
+      # `install` takes no positional args (resolves the project manifest).
+      if (( ${words[(I)-g]} || ${words[(I)--global]} )); then
+        _alternative \
+          'paths:local package dir:_directories' \
+          'github:github.com/owner/repo:( gh:MenkeTechnologies/stryke-gui github.com/MenkeTechnologies/stryke-gui https://github.com/MenkeTechnologies/stryke-gui )'
+      fi
+      ;;
+  esac
+}
+
+# `s uninstall -g NAME` — drop a global pin + its launchers.
+_stryke_uninstall() {
+  _arguments -s -S \
+    '(-g --global)'{-g,--global}'[uninstall global package]' \
+    '(-h --help)'{-h,--help}'[show s uninstall usage]' \
+    '1:package name:_stryke_global_pkg_names'
+}
+
+# `s list -g` — list global packages, launchers, orphans. No positional args.
+_stryke_list() {
+  _arguments -s -S \
+    '(-g --global)'{-g,--global}'[list global packages/launchers/orphans]' \
+    '(-h --help)'{-h,--help}'[show s list usage]'
+}
+
+# `s use -g NAME@VERSION` — switch which installed version a standalone
+# `use Foo` resolves to. NAME completes from installed.toml; once `@` is
+# typed, VERSION completes from `~/.stryke/store/NAME@*/` (highest first).
+_stryke_use() {
+  _arguments -s -S \
+    '(-g --global)'{-g,--global}'[switch the global pin]' \
+    '(-h --help)'{-h,--help}'[show s use usage]' \
+    '1:package spec:_stryke_global_pkg_spec'
+}
+
+# `s gc -g [--dry-run]` — delete every ~/.stryke/store/<name>@<ver>/ not
+# pinned by installed.toml. `-n`/`--dry-run` previews without touching disk.
+_stryke_gc() {
+  _arguments -s -S \
+    '(-g --global)'{-g,--global}'[garbage-collect orphan store entries]' \
+    '(-n --dry-run)'{-n,--dry-run}'[preview without removing]' \
+    '(-h --help)'{-h,--help}'[show s gc usage]'
 }
 
 # `s add NAME[@VER] [--dev|--group=NAME] [--path=DIR] [--features=...]`
@@ -195,6 +310,104 @@ _stryke_info() {
     '1:dep name:_stryke_pkg_dep_names'
 }
 
+# `s update [NAME] [--offline]` — re-resolve manifest deps and rewrite
+# stryke.lock. Optional NAME limits the update to a single dep. Aliased
+# as `up` / `upgrade` (npm-style shorthands).
+_stryke_update() {
+  _arguments -s -S \
+    '--offline[only use cached packages; never fetch]' \
+    '(-h --help)'{-h,--help}'[show s update usage]' \
+    '1:dep name to update (optional):_stryke_pkg_dep_names'
+}
+
+# `s publish [--dry-run] [--registry=URL]` — push the package to the
+# registry (endpoint not deployed yet — command emits a clear stub).
+# Aliased as `pub`.
+_stryke_publish() {
+  _arguments -s -S \
+    '--dry-run[verify without pushing]' \
+    '--registry=[alternate registry URL]:url:' \
+    '(-h --help)'{-h,--help}'[show s publish usage]'
+}
+
+# `s yank NAME@VER` — yank a published version from the registry.
+_stryke_yank() {
+  _arguments -s -S \
+    '--registry=[alternate registry URL]:url:' \
+    '(-h --help)'{-h,--help}'[show s yank usage]' \
+    '1:package spec (NAME@VERSION):'
+}
+
+# `s outdated` — list installed deps newer than stryke.lock.
+_stryke_outdated() {
+  _arguments -s -S \
+    '(-h --help)'{-h,--help}'[show s outdated usage]'
+}
+
+# `s audit` — security audit of resolved dep tree.
+_stryke_audit() {
+  _arguments -s -S \
+    '(-h --help)'{-h,--help}'[show s audit usage]'
+}
+
+# `s vendor` — populate ./vendor/ for offline / hermetic builds.
+_stryke_vendor() {
+  _arguments -s -S \
+    '(-h --help)'{-h,--help}'[show s vendor usage]'
+}
+
+# `s clean` — remove caches and build artifacts.
+_stryke_clean() {
+  _arguments -s -S \
+    '--all[also remove ~/.stryke/store entries]' \
+    '(-h --help)'{-h,--help}'[show s clean usage]'
+}
+
+# `s search QUERY` — search the registry for packages.
+_stryke_search() {
+  _arguments -s -S \
+    '--registry=[alternate registry URL]:url:' \
+    '--limit=[max number of results]:n:' \
+    '(-h --help)'{-h,--help}'[show s search usage]' \
+    '1:query:'
+}
+
+# `s agent [-c CFG] [--controller HOST:PORT] [--port N]` — worker side of
+# the distributed load-testing harness.
+_stryke_agent() {
+  _arguments -s -S \
+    '(-c --config)'{-c+,--config=}'[YAML config file]:file:_files -g "*.yml *.yaml"' \
+    '--controller=[controller host:port to connect to]:host\:port:' \
+    '--port=[explicit port for incoming control channel]:port:' \
+    '(-h --help)'{-h,--help}'[show s agent usage]'
+}
+
+# `s controller [--bind HOST] [--port N]` — REPL that drives a fleet of
+# `s agent` workers.
+_stryke_controller() {
+  _arguments -s -S \
+    '(-b --bind)'{-b+,--bind=}'[host to bind on (default 0.0.0.0)]:host:_hosts' \
+    '(-p --port)'{-p+,--port=}'[port to listen on (default 9999)]:port:' \
+    '(-h --help)'{-h,--help}'[show s controller usage]'
+}
+
+# `s ai [PROMPT|--system MSG]` — AI helper (OPENAI_API_KEY / ANTHROPIC_API_KEY).
+_stryke_ai() {
+  _arguments -s -S \
+    '--model=[model name]:name:' \
+    '--system=[system prompt]:msg:' \
+    '--stream[stream tokens to stdout]' \
+    '--json[emit raw JSON response]' \
+    '--image[treat positional as image generation prompt]' \
+    '--transcribe[transcribe audio file (positional)]' \
+    '--speak[TTS: synthesize speech from prompt]' \
+    '(-o --output)'{-o+,--output=}'[output file (for --image / --speak)]:file:_files' \
+    '--size=[image size (e.g. 1024x1024)]:size:' \
+    '--voice=[TTS voice]:voice:' \
+    '(-h --help)'{-h,--help}'[show s ai usage]' \
+    '*:prompt words:'
+}
+
 # `s pkg <subcommand>` — dispatcher mirror for the package commands above.
 _stryke_pkg() {
   local curcontext="$curcontext" state line
@@ -208,23 +421,54 @@ _stryke_pkg() {
       pkg_subcmds=(
         'init:scaffold project in cwd'
         'new:scaffold project at ./NAME/'
-        'install:resolve deps + write stryke.lock'
+        'install:resolve deps + write stryke.lock (alias: i; with -g: install a package globally)'
+        'i:alias for install'
+        'uninstall:drop a global pin + its launchers (alias: un; requires -g)'
+        'un:alias for uninstall'
+        'list:list global packages, launchers, orphans (alias: ls; requires -g)'
+        'ls:alias for list'
+        'update:re-resolve manifest + rewrite stryke.lock (alias: up, upgrade)'
+        'up:alias for update'
+        'upgrade:alias for update'
+        'publish:push package to registry (alias: pub)'
+        'pub:alias for publish'
+        'yank:yank a published version from the registry'
+        'use:switch which installed version `use Foo` resolves to (requires -g NAME@VERSION)'
+        'gc:delete store entries no longer pinned (requires -g)'
         'add:add a dep to stryke.toml'
         'remove:drop a dep from stryke.toml'
         'tree:print resolved dep graph'
         'info:show lockfile entry for a dep'
+        'outdated:list installed deps newer than stryke.lock'
+        'audit:security audit of resolved dep tree'
+        'vendor:vendor deps into ./vendor/ for offline builds'
+        'clean:remove caches and build artifacts'
+        'search:search the registry for packages'
       )
       _describe 'pkg subcommand' pkg_subcmds
       ;;
     pkg_args)
       case $line[1] in
-        init)    _stryke_init ;;
-        new)     _stryke_new ;;
-        install) _stryke_install ;;
-        add)     _stryke_add ;;
-        remove)  _stryke_remove ;;
-        tree)    _stryke_tree ;;
-        info)    _stryke_info ;;
+        init)      _stryke_init ;;
+        new)       _stryke_new ;;
+        install|i) _stryke_install ;;
+        uninstall|un) _stryke_uninstall ;;
+        list|ls)   _stryke_list ;;
+        use)       _stryke_use ;;
+        gc)        _stryke_gc ;;
+        add)       _stryke_add ;;
+        remove)    _stryke_remove ;;
+        tree)      _stryke_tree ;;
+        info)      _stryke_info ;;
+        test|t)    _stryke_test ;;
+        update|up|upgrade) _stryke_update ;;
+        publish|pub) _stryke_publish ;;
+        yank)      _stryke_yank ;;
+        outdated)  _stryke_outdated ;;
+        audit)     _stryke_audit ;;
+        vendor)    _stryke_vendor ;;
+        clean)     _stryke_clean ;;
+        search)    _stryke_search ;;
       esac
       ;;
   esac
@@ -269,6 +513,16 @@ _stryke_ast() {
   _arguments -s -S \
     '(-h --help)'{-h,--help}'[show s ast usage]' \
     '1:script file:_files -g "*.stk *.pl *.pm"'
+}
+
+# `s gen-docs [PATH] [--out DIR]` — walk a project tree and generate
+# Markdown module docs (one .md per source + index.md). Default PATH
+# is `.`; default --out is `docs/`.
+_stryke_gen_docs() {
+  _arguments -s -S \
+    '(-h --help)'{-h,--help}'[show s gen-docs usage]' \
+    '(-o --out)'{-o,--out}'[output directory (default: docs/)]:dir:_files -/' \
+    '1:source root:_files -/'
 }
 
 # `s docs [FLAGS|TOPIC]` — built-in documentation browser.
@@ -420,24 +674,46 @@ _stryke() {
         'build:compile script/project into standalone binary'
         'run:run ./main.stk or specified script'
         'prun:run multiple files in parallel'
-        'test:run tests in t/'
+        'test:run tests in t/ (alias: t)'
+        't:alias for test'
         'bench:run benchmarks in bench/'
         'check:parse + compile without executing'
         'disasm:disassemble bytecode'
         'profile:run with profiling'
         'fmt:format stryke source files'
+        'minify:strip comments/POD/whitespace, collapse to one line w/ `;`'
         'init:scaffold project in cwd (stryke.toml + dirs)'
         'new:scaffold a new project at ./NAME/'
-        'install:resolve deps + write stryke.lock'
+        'install:resolve deps + write stryke.lock (alias: i; with -g: install a package globally)'
+        'i:alias for install'
+        'uninstall:drop a global pin + its launchers (alias: un; requires -g)'
+        'un:alias for uninstall'
+        'list:list global packages, launchers, orphans (alias: ls; requires -g)'
+        'ls:alias for list'
+        'update:re-resolve manifest + rewrite stryke.lock (alias: up, upgrade)'
+        'up:alias for update'
+        'upgrade:alias for update'
+        'publish:push package to registry (alias: pub)'
+        'pub:alias for publish'
+        'yank:yank a published version from the registry'
+        'outdated:list installed deps newer than stryke.lock'
+        'audit:security audit of resolved dep tree'
+        'vendor:vendor deps into ./vendor/ for offline builds'
+        'clean:remove caches and build artifacts'
+        'search:search the registry for packages'
         'add:add a dep to stryke.toml'
         'remove:drop a dep from stryke.toml'
         'tree:print resolved dep graph from stryke.lock'
         'info:show lockfile entry + store path for a dep'
         'pkg:package-manager subcommand dispatcher'
+        'agent:distributed load-testing agent (worker side)'
+        'controller:distributed load-testing controller REPL'
+        'ai:AI helper (prompt-driven code generation / explanation)'
         'repl:start interactive REPL'
         'lsp:start Language Server Protocol'
         'completions:emit shell completions'
         'ast:dump AST as JSON'
+        'gen-docs:generate Markdown module docs for every source file'
         'convert:convert Perl to stryke syntax'
         'deconvert:convert stryke to Perl syntax'
         'docs:documentation browser'
@@ -452,18 +728,32 @@ _stryke() {
       case $line[1] in
         build)     _stryke_build ;;
         fmt)       _stryke_fmt ;;
+        minify)    _stryke_minify ;;
         check)     _stryke_check ;;
         disasm)    _stryke_disasm ;;
         profile)   _stryke_profile ;;
         bench)     _stryke_bench ;;
-        test)      _stryke_test ;;
+        test|t)    _stryke_test ;;
         init)      _stryke_init ;;
         new)       _stryke_new ;;
-        install)   _stryke_install ;;
+        install|i) _stryke_install ;;
+        uninstall|un) _stryke_uninstall ;;
+        list|ls)   _stryke_list ;;
         add)       _stryke_add ;;
         remove)    _stryke_remove ;;
         tree)      _stryke_tree ;;
         info)      _stryke_info ;;
+        update|up|upgrade) _stryke_update ;;
+        publish|pub) _stryke_publish ;;
+        yank)      _stryke_yank ;;
+        outdated)  _stryke_outdated ;;
+        audit)     _stryke_audit ;;
+        vendor)    _stryke_vendor ;;
+        clean)     _stryke_clean ;;
+        search)    _stryke_search ;;
+        agent)     _stryke_agent ;;
+        controller) _stryke_controller ;;
+        ai)        _stryke_ai ;;
         pkg)       _stryke_pkg ;;
         repl)      _stryke_repl ;;
         run)       _stryke_run ;;
@@ -471,6 +761,7 @@ _stryke() {
         lsp)       _stryke_lsp ;;
         completions) _stryke_completions ;;
         ast)       _stryke_ast ;;
+        gen-docs)  _stryke_gen_docs ;;
         convert)   _stryke_convert ;;
         deconvert) _stryke_deconvert ;;
         docs)      _stryke_docs ;;
