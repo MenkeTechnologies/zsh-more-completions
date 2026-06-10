@@ -77,7 +77,7 @@ Tool names for the completion corpus were harvested from:
 - **VoIP / SIP stacks** — `fs_cli` (FreeSWITCH; `signalwire/freeswitch libs/esl/fs_cli.c` `usage_str`), `kamcmd`+`kamctl` (Kamailio; `kamailio/kamailio utils/kamcmd/kamcmd.c` `help_msg` and `utils/kamctl/kamctl` dispatch table), `baresip` (`baresip/baresip src/main.c` `usage()`), `rtpengine` (`sipwise/rtpengine daemon/main.c` `GOptionEntry[]`)
 - **Seismology / miniSEED** — IRIS/EarthScope CLI suite (`msi`, `dataselect`, `mseed2sac`, `slinktool`, `slarchive`); flag tables harvested from each tool's `usage()` function in `EarthScope/{msi,dataselect,slinktool,slarchive}/src/*.c` and `iris-edu/mseed2sac/src/mseed2sac.c`
 - **ROS 1 (Noetic)** — robotics middleware CLIs (`roscore`, `rosrun`, `rosbag`, `rostopic`, `rosnode`, `roslaunch`, `rosparam`, `rosservice`, `rospack`, `rosmsg`/`rossrv`); subcommand tables read from `ros/ros_comm noetic-devel tools/*/src/**/__init__.py` (`_fullusage()`/`rosbag_main.RosbagCmds`), `ros/rospack noetic-devel src/rospack.cpp Rospack::usage()`, and `ros/ros noetic-devel tools/rosbash/scripts/rosrun`
-- **MAVLink / drones** — `mavproxy.py` (ground station/proxy; `ArduPilot/MAVProxy MAVProxy/mavproxy.py` `OptionParser`) plus pymavlink analysis tools (`mavlogdump.py`, `mavgraph.py`, `mavextract.py`, `mavflightmodes.py`) at `ArduPilot/pymavlink tools/*.py` `ArgumentParser` setups
+- **MAVLink / drones** — `mavproxy.py` (ground station/proxy; `ArduPilot/MAVProxy MAVProxy/mavproxy.py` `OptionParser`) plus pymavlink analysis + code-gen tools (`mavlogdump.py`, `mavgraph.py`, `mavextract.py`, `mavflightmodes.py`, `mavgen.py`, `mavflighttime.py`, `mavfft.py`, `magfit.py`, `extract_parms.py`) at `ArduPilot/pymavlink tools/*.py` `ArgumentParser` setups
 
 Directory layout:
 
