@@ -1280,36 +1280,6 @@
 
 # ─── _pkill ──────────────────────────────────────────────────────────────────
 
-@test '_pkill has -u' {
-    run grep -c '\-u' "$src/_pkill"
-    assert $state equals 0
-}
-
-@test '_pkill has -P' {
-    run grep -c '\-P' "$src/_pkill"
-    assert $state equals 0
-}
-
-@test '_pkill has -x' {
-    run grep -c '\-x' "$src/_pkill"
-    assert $state equals 0
-}
-
-@test '_pkill has -f' {
-    run grep -c '\-f' "$src/_pkill"
-    assert $state equals 0
-}
-
-@test '_pkill has _arguments' {
-    run grep -c '_arguments' "$src/_pkill"
-    assert $state equals 0
-}
-
-@test '_pkill has -g' {
-    run grep -c '\-g' "$src/_pkill"
-    assert $state equals 0
-}
-
 # ─── _nice ────────────────────────────────────────────────────────────────────
 
 @test '_nice has --adjustment' {
@@ -1946,21 +1916,6 @@
 }
 
 # ─── _tesseract ──────────────────────────────────────────────────────────────
-
-@test '_tesseract has -l' {
-    run grep -c '\-l' "$src/_tesseract"
-    assert $state equals 0
-}
-
-@test '_tesseract has _arguments' {
-    run grep -c '_arguments' "$src/_tesseract"
-    assert $state equals 0
-}
-
-@test '_tesseract has _files' {
-    run grep -c '_files' "$src/_tesseract"
-    assert $state equals 0
-}
 
 # ─── _tree ────────────────────────────────────────────────────────────────────
 

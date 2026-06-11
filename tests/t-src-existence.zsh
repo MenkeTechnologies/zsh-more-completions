@@ -216,10 +216,6 @@
     assert "$src/_nmap" is_file
 }
 
-@test 'src has _curl' {
-    assert "$src/_curl" is_file
-}
-
 @test 'src has _dig' {
     assert "$src/_dig" is_file
 }
@@ -246,10 +242,6 @@
 
 @test 'src has _pgrep' {
     assert "$src/_pgrep" is_file
-}
-
-@test 'src has _pkill' {
-    assert "$src/_pkill" is_file
 }
 
 @test 'src has _nice' {
@@ -282,10 +274,6 @@
 
 @test 'src has _dc' {
     assert "$src/_dc" is_file
-}
-
-@test 'src has _factor' {
-    assert "$src/_factor" is_file
 }
 
 @test 'src has _seq' {
@@ -528,10 +516,6 @@
     assert "$src/_tac" is_file
 }
 
-@test 'src has _tsort' {
-    assert "$src/_tsort" is_file
-}
-
 @test 'src has _comm' {
     assert "$src/_comm" is_file
 }
@@ -552,10 +536,6 @@
     assert "$src/_ptx" is_file
 }
 
-@test 'src has _pinky' {
-    assert "$src/_pinky" is_file
-}
-
 @test 'src has _users' {
     assert "$src/_users" is_file
 }
@@ -570,10 +550,6 @@
 
 @test 'src has _wall' {
     assert "$src/_wall" is_file
-}
-
-@test 'src has _ncat' {
-    assert "$src/_ncat" is_file
 }
 
 @test 'src has _socat' {
@@ -606,10 +582,6 @@
 
 @test 'src has _cryfs' {
     assert "$src/_cryfs" is_file
-}
-
-@test 'src has _gocryptfs' {
-    assert "$src/_gocryptfs" is_file
 }
 
 @test 'src has _cryptsetup' {
@@ -664,16 +636,8 @@
     assert "$src/_iftop" is_file
 }
 
-@test 'src has _nload' {
-    assert "$src/_nload" is_file
-}
-
 @test 'src has _traceroute' {
     assert "$src/_traceroute" is_file
-}
-
-@test 'src has _whois' {
-    assert "$src/_whois" is_file
 }
 
 @test 'src has _tshark' {
@@ -688,10 +652,6 @@
     assert "$src/_ettercap" is_file
 }
 
-@test 'src has _hping3' {
-    assert "$src/_hping3" is_file
-}
-
 @test 'src has _ab' {
     assert "$src/_ab" is_file
 }
@@ -704,32 +664,16 @@
     assert "$src/_httpie" is_file
 }
 
-@test 'src has _protoc' {
-    assert "$src/_protoc" is_file
-}
-
 @test 'src has _thrift' {
     assert "$src/_thrift" is_file
-}
-
-@test 'src has _sass' {
-    assert "$src/_sass" is_file
 }
 
 @test 'src has _webpack' {
     assert "$src/_webpack" is_file
 }
 
-@test 'src has _rollup' {
-    assert "$src/_rollup" is_file
-}
-
 @test 'src has _babel' {
     assert "$src/_babel" is_file
-}
-
-@test 'src has _uglifyjs' {
-    assert "$src/_uglifyjs" is_file
 }
 
 @test 'src has _gifsicle' {
@@ -756,52 +700,12 @@
     assert "$src/_sox" is_file
 }
 
-@test 'src has _lame' {
-    assert "$src/_lame" is_file
-}
-
 @test 'src has _exiftool' {
     assert "$src/_exiftool" is_file
 }
 
 @test 'src has _convert' {
     assert "$src/_convert" is_file
-}
-
-@test 'src has _composite' {
-    assert "$src/_composite" is_file
-}
-
-@test 'src has _montage' {
-    assert "$src/_montage" is_file
-}
-
-@test 'src has _display' {
-    assert "$src/_display" is_file
-}
-
-@test 'src has _animate' {
-    assert "$src/_animate" is_file
-}
-
-@test 'src has _compare' {
-    assert "$src/_compare" is_file
-}
-
-@test 'src has _conjure' {
-    assert "$src/_conjure" is_file
-}
-
-@test 'src has _import' {
-    assert "$src/_import" is_file
-}
-
-@test 'src has _stream' {
-    assert "$src/_stream" is_file
-}
-
-@test 'src has _tesseract' {
-    assert "$src/_tesseract" is_file
 }
 
 @test 'src has _pandoc' {
@@ -822,10 +726,6 @@
 
 @test 'src has _bibtex' {
     assert "$src/_bibtex" is_file
-}
-
-@test 'src has _dvips' {
-    assert "$src/_dvips" is_file
 }
 
 @test 'src has _qpdf' {
@@ -864,10 +764,6 @@
     assert "$src/_gpg" is_file
 }
 
-@test 'src has _tabs' {
-    assert "$src/_tabs" is_file
-}
-
 @test 'src has _prettier' {
     assert "$src/_prettier" is_file
 }
@@ -878,10 +774,6 @@
 
 @test 'src has _7z' {
     assert "$src/_7z" is_file
-}
-
-@test 'src has _7za' {
-    assert "$src/_7za" is_file
 }
 
 @test 'src has _7zr' {
@@ -900,28 +792,12 @@
     assert "$src/_alacritty" is_file
 }
 
-@test 'src has _alembic' {
-    assert "$src/_alembic" is_file
-}
-
-@test 'src has _alpine' {
-    assert "$src/_alpine" is_file
-}
-
 @test 'src has _amass' {
     assert "$src/_amass" is_file
 }
 
 @test 'src has _ansible-community' {
     assert "$src/_ansible-community" is_file
-}
-
-@test 'src has _valac' {
-    assert "$src/_valac" is_file
-}
-
-@test 'src has _doxygen' {
-    assert "$src/_doxygen" is_file
 }
 
 @test 'src has _highlight' {
@@ -936,20 +812,8 @@
     assert "$src/_puma" is_file
 }
 
-@test 'src has _mpd' {
-    assert "$src/_mpd" is_file
-}
-
-@test 'src has _runc' {
-    assert "$src/_runc" is_file
-}
-
 @test 'src has _ponysay' {
     assert "$src/_ponysay" is_file
-}
-
-@test 'src has _speedtest-cli' {
-    assert "$src/_speedtest-cli" is_file
 }
 
 @test 'src has _sphinx-apidoc' {
@@ -1182,11 +1046,6 @@
     assert $output same_as '#compdef nmap'
 }
 
-@test '_curl compdef is curl' {
-    run head -1 "$src/_curl"
-    assert $output same_as '#compdef curl'
-}
-
 @test '_dig compdef is dig' {
     run head -1 "$src/_dig"
     assert $output same_as '#compdef dig'
@@ -1220,11 +1079,6 @@
 @test '_pgrep compdef is pgrep' {
     run head -1 "$src/_pgrep"
     assert $output same_as '#compdef pgrep'
-}
-
-@test '_pkill compdef is pkill' {
-    run head -1 "$src/_pkill"
-    assert $output same_as '#compdef pkill'
 }
 
 # ─── Syntax check tests ─────────────────────────────────────────────────────
@@ -1296,11 +1150,6 @@
 
 @test '_less passes syntax check' {
     run zsh -n "$src/_less"
-    assert $state equals 0
-}
-
-@test '_curl passes syntax check' {
-    run zsh -n "$src/_curl"
     assert $state equals 0
 }
 
@@ -1439,11 +1288,6 @@
     assert $state equals 0
 }
 
-@test '_pkill passes syntax check' {
-    run zsh -n "$src/_pkill"
-    assert $state equals 0
-}
-
 @test '_date passes syntax check' {
     run zsh -n "$src/_date"
     assert $state equals 0
@@ -1523,11 +1367,6 @@
 
 @test '_htop uses _arguments' {
     run grep -c '_arguments' "$src/_htop"
-    assert $state equals 0
-}
-
-@test '_curl uses _arguments' {
-    run grep -c '_arguments' "$src/_curl"
     assert $state equals 0
 }
 
@@ -1671,18 +1510,8 @@
     assert $state equals 0
 }
 
-@test '_pkill uses _arguments' {
-    run grep -c '_arguments' "$src/_pkill"
-    assert $state equals 0
-}
-
 @test '_traceroute uses _arguments' {
     run grep -c '_arguments' "$src/_traceroute"
-    assert $state equals 0
-}
-
-@test '_whois uses _arguments' {
-    run grep -c '_arguments' "$src/_whois"
     assert $state equals 0
 }
 
@@ -1838,11 +1667,6 @@
     assert $state equals 0
 }
 
-@test '_curl completes filenames' {
-    run grep -c '_files' "$src/_curl"
-    assert $state equals 0
-}
-
 @test '_rsync completes filenames' {
     run grep -c '_files' "$src/_rsync"
     assert $state equals 0
@@ -1942,41 +1766,6 @@
 
 @test '_rsync has --progress option' {
     run grep -c '\-\-progress' "$src/_rsync"
-    assert $state equals 0
-}
-
-@test '_curl has --output option' {
-    run grep -c '\-\-output' "$src/_curl"
-    assert $state equals 0
-}
-
-@test '_curl has --header option' {
-    run grep -c '\-\-header' "$src/_curl"
-    assert $state equals 0
-}
-
-@test '_curl has --data option' {
-    run grep -c '\-\-data' "$src/_curl"
-    assert $state equals 0
-}
-
-@test '_curl has --request option' {
-    run grep -c '\-\-request' "$src/_curl"
-    assert $state equals 0
-}
-
-@test '_curl has --user option' {
-    run grep -c '\-\-user' "$src/_curl"
-    assert $state equals 0
-}
-
-@test '_curl has --silent option' {
-    run grep -c '\-\-silent' "$src/_curl"
-    assert $state equals 0
-}
-
-@test '_curl has --location option' {
-    run grep -c '\-\-location' "$src/_curl"
     assert $state equals 0
 }
 

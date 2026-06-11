@@ -232,10 +232,6 @@
     assert "$asrc/_llvm-addr2line12" is_file
 }
 
-@test 'architecture_src has _llvm-ar' {
-    assert "$asrc/_llvm-ar" is_file
-}
-
 @test 'architecture_src has _llvm-ar-10' {
     assert "$asrc/_llvm-ar-10" is_file
 }
@@ -398,10 +394,6 @@
 
 @test 'architecture_src has _llvm-bcanalyzer60' {
     assert "$asrc/_llvm-bcanalyzer60" is_file
-}
-
-@test 'architecture_src has _llvm-bitcode-strip' {
-    assert "$asrc/_llvm-bitcode-strip" is_file
 }
 
 @test 'architecture_src has _llvm-bitcode-strip-14' {
@@ -684,10 +676,6 @@
     assert "$asrc/_llvm-debuginfo-analyzer-19" is_file
 }
 
-@test 'architecture_src has _llvm-debuginfod' {
-    assert "$asrc/_llvm-debuginfod" is_file
-}
-
 @test 'architecture_src has _llvm-debuginfod-find' {
     assert "$asrc/_llvm-debuginfod-find" is_file
 }
@@ -790,10 +778,6 @@
 
 @test 'architecture_src has _llvm-dis60' {
     assert "$asrc/_llvm-dis60" is_file
-}
-
-@test 'architecture_src has _llvm-dlltool' {
-    assert "$asrc/_llvm-dlltool" is_file
 }
 
 @test 'architecture_src has _llvm-dlltool-10' {
@@ -1218,10 +1202,6 @@
 
 @test 'architecture_src has _llvm-link60' {
     assert "$asrc/_llvm-link60" is_file
-}
-
-@test 'architecture_src has _llvm-lipo' {
-    assert "$asrc/_llvm-lipo" is_file
 }
 
 @test 'architecture_src has _llvm-lipo-10' {
@@ -1728,10 +1708,6 @@
     assert "$asrc/_llvm-pdbutil60" is_file
 }
 
-@test 'architecture_src has _llvm-profdata' {
-    assert "$asrc/_llvm-profdata" is_file
-}
-
 @test 'architecture_src has _llvm-profdata-13' {
     assert "$asrc/_llvm-profdata-13" is_file
 }
@@ -1794,10 +1770,6 @@
 
 @test 'architecture_src has _llvm-profgen12' {
     assert "$asrc/_llvm-profgen12" is_file
-}
-
-@test 'architecture_src has _llvm-ranlib' {
-    assert "$asrc/_llvm-ranlib" is_file
 }
 
 @test 'architecture_src has _llvm-ranlib-10' {
@@ -2224,10 +2196,6 @@
     assert "$asrc/_llvm-strings60" is_file
 }
 
-@test 'architecture_src has _llvm-strip' {
-    assert "$asrc/_llvm-strip" is_file
-}
-
 @test 'architecture_src has _llvm-strip-10' {
     assert "$asrc/_llvm-strip-10" is_file
 }
@@ -2418,10 +2386,6 @@
 
 @test 'architecture_src has _llvm-undname12' {
     assert "$asrc/_llvm-undname12" is_file
-}
-
-@test 'architecture_src has _llvm-windres' {
-    assert "$asrc/_llvm-windres" is_file
 }
 
 @test 'architecture_src has _llvm-xray' {

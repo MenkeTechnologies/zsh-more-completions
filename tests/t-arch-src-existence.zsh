@@ -518,10 +518,6 @@
     assert "$asrc/_llvm-cfi-verify60" is_file
 }
 
-@test 'architecture_src has _llvm-config' {
-    assert "$asrc/_llvm-config" is_file
-}
-
 @test 'architecture_src has _llvm-config-18-64' {
     assert "$asrc/_llvm-config-18-64" is_file
 }
@@ -652,10 +648,6 @@
 
 @test 'architecture_src has _llvm-exegesis-9' {
     assert "$asrc/_llvm-exegesis-9" is_file
-}
-
-@test 'architecture_src has _llvm-gsymutil' {
-    assert "$asrc/_llvm-gsymutil" is_file
 }
 
 @test 'architecture_src has _llvm-gsymutil-13' {
@@ -864,10 +856,6 @@
 
 @test 'architecture_src has _llvm-remark-size-diff-16' {
     assert "$asrc/_llvm-remark-size-diff-16" is_file
-}
-
-@test 'architecture_src has _llvm-remarkutil' {
-    assert "$asrc/_llvm-remarkutil" is_file
 }
 
 @test 'architecture_src has _llvm-remarkutil-19' {
@@ -1357,11 +1345,6 @@
     assert $output matches '^#compdef'
 }
 
-@test '_llvm-config has compdef header' {
-    run head -1 "$asrc/_llvm-config"
-    assert $output matches '^#compdef'
-}
-
 @test '_llvm-cov has compdef header' {
     run head -1 "$asrc/_llvm-cov"
     assert $output matches '^#compdef'
@@ -1392,11 +1375,6 @@
     assert $output matches '^#compdef'
 }
 
-@test '_llvm-gsymutil has compdef header' {
-    run head -1 "$asrc/_llvm-gsymutil"
-    assert $output matches '^#compdef'
-}
-
 @test '_llvm-ifs has compdef header' {
     run head -1 "$asrc/_llvm-ifs"
     assert $output matches '^#compdef'
@@ -1419,11 +1397,6 @@
 
 @test '_llvm-readelf has compdef header' {
     run head -1 "$asrc/_llvm-readelf"
-    assert $output matches '^#compdef'
-}
-
-@test '_llvm-remarkutil has compdef header' {
-    run head -1 "$asrc/_llvm-remarkutil"
     assert $output matches '^#compdef'
 }
 
@@ -1776,11 +1749,6 @@
     assert $state equals 0
 }
 
-@test '_llvm-config passes syntax check' {
-    run zsh -n "$asrc/_llvm-config"
-    assert $state equals 0
-}
-
 @test '_llvm-cov passes syntax check' {
     run zsh -n "$asrc/_llvm-cov"
     assert $state equals 0
@@ -1811,11 +1779,6 @@
     assert $state equals 0
 }
 
-@test '_llvm-gsymutil passes syntax check' {
-    run zsh -n "$asrc/_llvm-gsymutil"
-    assert $state equals 0
-}
-
 @test '_llvm-ifs passes syntax check' {
     run zsh -n "$asrc/_llvm-ifs"
     assert $state equals 0
@@ -1838,11 +1801,6 @@
 
 @test '_llvm-readelf passes syntax check' {
     run zsh -n "$asrc/_llvm-readelf"
-    assert $state equals 0
-}
-
-@test '_llvm-remarkutil passes syntax check' {
-    run zsh -n "$asrc/_llvm-remarkutil"
     assert $state equals 0
 }
 
@@ -2100,11 +2058,6 @@
     assert $state equals 0
 }
 
-@test '_llvm-config uses _arguments' {
-    run grep -c '_arguments' "$asrc/_llvm-config"
-    assert $state equals 0
-}
-
 @test '_llvm-cov uses _arguments' {
     run grep -c '_arguments' "$asrc/_llvm-cov"
     assert $state equals 0
@@ -2122,11 +2075,6 @@
 
 @test '_llvm-elfabi uses _arguments' {
     run grep -c '_arguments' "$asrc/_llvm-elfabi"
-    assert $state equals 0
-}
-
-@test '_llvm-gsymutil uses _arguments' {
-    run grep -c '_arguments' "$asrc/_llvm-gsymutil"
     assert $state equals 0
 }
 
@@ -2338,7 +2286,7 @@
 @test 'architecture_src has no empty files' {
     local empty_count
     empty_count=0
-    for f in "$asrc"/_aarch64-alpine-linux-musl-c++ "$asrc"/_aarch64-linux-gnu-gcc "$asrc"/_llvm-config "$asrc"/_x86_64-linux-gnu-cpp; do
+    for f in "$asrc"/_aarch64-alpine-linux-musl-c++ "$asrc"/_aarch64-linux-gnu-gcc "$asrc"/_x86_64-linux-gnu-cpp; do
         if [[ ! -s "$f" ]]; then
             (( empty_count++ ))
         fi

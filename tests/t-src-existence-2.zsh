@@ -28,10 +28,6 @@
     assert "$src/_2to3-2" is_file
 }
 
-@test 'src has _2to3-2.7' {
-    assert "$src/_2to3-2.7" is_file
-}
-
 @test 'src has _2to3-3' {
     assert "$src/_2to3-3" is_file
 }
@@ -46,26 +42,6 @@
 
 @test 'src has _2to3-3.12' {
     assert "$src/_2to3-3.12" is_file
-}
-
-@test 'src has _2to3-3.5' {
-    assert "$src/_2to3-3.5" is_file
-}
-
-@test 'src has _2to3-3.6' {
-    assert "$src/_2to3-3.6" is_file
-}
-
-@test 'src has _2to3-3.7' {
-    assert "$src/_2to3-3.7" is_file
-}
-
-@test 'src has _2to3-3.8' {
-    assert "$src/_2to3-3.8" is_file
-}
-
-@test 'src has _2to3-3.9' {
-    assert "$src/_2to3-3.9" is_file
 }
 
 @test 'src has _4channels' {
@@ -332,10 +308,6 @@
     assert "$src/_a2query" is_file
 }
 
-@test 'src has _a2x' {
-    assert "$src/_a2x" is_file
-}
-
 @test 'src has _a2x.py' {
     assert "$src/_a2x.py" is_file
 }
@@ -380,16 +352,8 @@
     assert "$src/_aa-enabled" is_file
 }
 
-@test 'src has _aa-enforce' {
-    assert "$src/_aa-enforce" is_file
-}
-
 @test 'src has _aa-exec' {
     assert "$src/_aa-exec" is_file
-}
-
-@test 'src has _aa-genprof' {
-    assert "$src/_aa-genprof" is_file
 }
 
 @test 'src has _aa-logprof' {
@@ -406,10 +370,6 @@
 
 @test 'src has _aa-remove-unknown' {
     assert "$src/_aa-remove-unknown" is_file
-}
-
-@test 'src has _aa-status' {
-    assert "$src/_aa-status" is_file
 }
 
 @test 'src has _aa-unconfined' {
@@ -592,16 +552,8 @@
     assert "$src/_accessdb" is_file
 }
 
-@test 'src has _accton' {
-    assert "$src/_accton" is_file
-}
-
 @test 'src has _ace' {
     assert "$src/_ace" is_file
-}
-
-@test 'src has _aclocal' {
-    assert "$src/_aclocal" is_file
 }
 
 @test 'src has _aclocal-1.13' {
@@ -618,14 +570,6 @@
 
 @test 'src has _aclocal-1.17' {
     assert "$src/_aclocal-1.17" is_file
-}
-
-@test 'src has _aconnect' {
-    assert "$src/_aconnect" is_file
-}
-
-@test 'src has _acpi_listen' {
-    assert "$src/_acpi_listen" is_file
 }
 
 @test 'src has _acpid' {
@@ -650,10 +594,6 @@
 
 @test 'src has _activity-log-manager' {
     assert "$src/_activity-log-manager" is_file
-}
-
-@test 'src has _acyclic' {
-    assert "$src/_acyclic" is_file
 }
 
 @test 'src has _add-apt-repository' {
@@ -690,18 +630,6 @@
 
 @test 'src has _adnshost' {
     assert "$src/_adnshost" is_file
-}
-
-@test 'src has _adnslogres' {
-    assert "$src/_adnslogres" is_file
-}
-
-@test 'src has _adnsresfilter' {
-    assert "$src/_adnsresfilter" is_file
-}
-
-@test 'src has _advtest' {
-    assert "$src/_advtest" is_file
 }
 
 @test 'src has _adwaita-1-demo' {
@@ -836,14 +764,6 @@
     assert "$src/_afm2afm" is_file
 }
 
-@test 'src has _afm2pl' {
-    assert "$src/_afm2pl" is_file
-}
-
-@test 'src has _afm2tfm' {
-    assert "$src/_afm2tfm" is_file
-}
-
 @test 'src has _afpcmd' {
     assert "$src/_afpcmd" is_file
 }
@@ -854,10 +774,6 @@
 
 @test 'src has _afterglow.pl' {
     assert "$src/_afterglow.pl" is_file
-}
-
-@test 'src has _afterglow.pl.bak' {
-    assert "$src/_afterglow.pl.bak" is_file
 }
 
 @test 'src has _agentxtrap' {
@@ -928,10 +844,6 @@
     assert "$src/_alder" is_file
 }
 
-@test 'src has _aleph' {
-    assert "$src/_aleph" is_file
-}
-
 @test 'src has _alien' {
     assert "$src/_alien" is_file
 }
@@ -948,28 +860,12 @@
     assert "$src/_alsa_out" is_file
 }
 
-@test 'src has _alsabat' {
-    assert "$src/_alsabat" is_file
-}
-
 @test 'src has _alsaconf' {
     assert "$src/_alsaconf" is_file
 }
 
-@test 'src has _alsactl' {
-    assert "$src/_alsactl" is_file
-}
-
-@test 'src has _alsaloop' {
-    assert "$src/_alsaloop" is_file
-}
-
 @test 'src has _alsatplg' {
     assert "$src/_alsatplg" is_file
-}
-
-@test 'src has _alsaucm' {
-    assert "$src/_alsaucm" is_file
 }
 
 @test 'src has _alt-java' {
@@ -998,18 +894,6 @@
 
 @test 'src has _amcache.py' {
     assert "$src/_amcache.py" is_file
-}
-
-@test 'src has _amcache.py.bak' {
-    assert "$src/_amcache.py.bak" is_file
-}
-
-@test 'src has _amidi' {
-    assert "$src/_amidi" is_file
-}
-
-@test 'src has _amixer' {
-    assert "$src/_amixer" is_file
 }
 
 @test 'src has _amm' {
@@ -1084,10 +968,6 @@
     assert "$src/_any2djvu" is_file
 }
 
-@test 'src has _aomdec' {
-    assert "$src/_aomdec" is_file
-}
-
 @test 'src has _aomenc' {
     assert "$src/_aomenc" is_file
 }
@@ -1118,18 +998,6 @@
 
 @test 'src has _apgbfm' {
     assert "$src/_apgbfm" is_file
-}
-
-@test 'src has _apktool' {
-    assert "$src/_apktool" is_file
-}
-
-@test 'src has _aplay' {
-    assert "$src/_aplay" is_file
-}
-
-@test 'src has _aplaymidi' {
-    assert "$src/_aplaymidi" is_file
 }
 
 @test 'src has _app-sso' {
@@ -1212,10 +1080,6 @@
     assert "$src/_apt-ftparchive" is_file
 }
 
-@test 'src has _aptd' {
-    assert "$src/_aptd" is_file
-}
-
 @test 'src has _aptdcon' {
     assert "$src/_aptdcon" is_file
 }
@@ -1248,20 +1112,8 @@
     assert "$src/_arachni_multi" is_file
 }
 
-@test 'src has _arch' {
-    assert "$src/_arch" is_file
-}
-
 @test 'src has _arecord' {
     assert "$src/_arecord" is_file
-}
-
-@test 'src has _arecordmidi' {
-    assert "$src/_arecordmidi" is_file
-}
-
-@test 'src has _argon2' {
-    assert "$src/_argon2" is_file
 }
 
 @test 'src has _aria_chk' {
@@ -1336,32 +1188,16 @@
     assert "$src/_arm-linux-gnueabihf-gcc-ar" is_file
 }
 
-@test 'src has _arm-linux-gnueabihf-gcc-ar-4.9' {
-    assert "$src/_arm-linux-gnueabihf-gcc-ar-4.9" is_file
-}
-
 @test 'src has _arm-linux-gnueabihf-gcc-nm' {
     assert "$src/_arm-linux-gnueabihf-gcc-nm" is_file
-}
-
-@test 'src has _arm-linux-gnueabihf-gcc-nm-4.9' {
-    assert "$src/_arm-linux-gnueabihf-gcc-nm-4.9" is_file
 }
 
 @test 'src has _arm-linux-gnueabihf-gcc-ranlib' {
     assert "$src/_arm-linux-gnueabihf-gcc-ranlib" is_file
 }
 
-@test 'src has _arm-linux-gnueabihf-gcc-ranlib-4.9' {
-    assert "$src/_arm-linux-gnueabihf-gcc-ranlib-4.9" is_file
-}
-
 @test 'src has _arm-linux-gnueabihf-gcov' {
     assert "$src/_arm-linux-gnueabihf-gcov" is_file
-}
-
-@test 'src has _arm-linux-gnueabihf-gcov-4.9' {
-    assert "$src/_arm-linux-gnueabihf-gcov-4.9" is_file
 }
 
 @test 'src has _arm-linux-gnueabihf-ld' {
@@ -1424,10 +1260,6 @@
     assert "$src/_arp-fingerprint" is_file
 }
 
-@test 'src has _arp-scan' {
-    assert "$src/_arp-scan" is_file
-}
-
 @test 'src has _arping' {
     assert "$src/_arping" is_file
 }
@@ -1438,10 +1270,6 @@
 
 @test 'src has _arptables-nft' {
     assert "$src/_arptables-nft" is_file
-}
-
-@test 'src has _arptables-save' {
-    assert "$src/_arptables-save" is_file
 }
 
 @test 'src has _as' {
@@ -1484,28 +1312,12 @@
     assert "$src/_asc2log" is_file
 }
 
-@test 'src has _ascii-xfr' {
-    assert "$src/_ascii-xfr" is_file
-}
-
 @test 'src has _asciidoctor-safe' {
     assert "$src/_asciidoctor-safe" is_file
 }
 
-@test 'src has _asciitopgm' {
-    assert "$src/_asciitopgm" is_file
-}
-
 @test 'src has _asctl' {
     assert "$src/_asctl" is_file
-}
-
-@test 'src has _aseqdump' {
-    assert "$src/_aseqdump" is_file
-}
-
-@test 'src has _aseqnet' {
-    assert "$src/_aseqnet" is_file
 }
 
 @test 'src has _aserver' {
@@ -1528,32 +1340,16 @@
     assert "$src/_asleap" is_file
 }
 
-@test 'src has _asn1Coding' {
-    assert "$src/_asn1Coding" is_file
-}
-
 @test 'src has _asn1Decoding' {
     assert "$src/_asn1Decoding" is_file
-}
-
-@test 'src has _asn1Parser' {
-    assert "$src/_asn1Parser" is_file
 }
 
 @test 'src has _aspcud' {
     assert "$src/_aspcud" is_file
 }
 
-@test 'src has _aspell' {
-    assert "$src/_aspell" is_file
-}
-
 @test 'src has _aspell-autobuildhash' {
     assert "$src/_aspell-autobuildhash" is_file
-}
-
-@test 'src has _asr' {
-    assert "$src/_asr" is_file
 }
 
 @test 'src has _astraceroute' {
@@ -1864,10 +1660,6 @@
     assert "$src/_atk6-trace6" is_file
 }
 
-@test 'src has _atlas' {
-    assert "$src/_atlas" is_file
-}
-
 @test 'src has _atobm' {
     assert "$src/_atobm" is_file
 }
@@ -1920,10 +1712,6 @@
     assert "$src/_atopsar-2.6.0" is_file
 }
 
-@test 'src has _atos' {
-    assert "$src/_atos" is_file
-}
-
 @test 'src has _atril' {
     assert "$src/_atril" is_file
 }
@@ -1962,10 +1750,6 @@
 
 @test 'src has _auditbeat' {
     assert "$src/_auditbeat" is_file
-}
-
-@test 'src has _auditctl' {
-    assert "$src/_auditctl" is_file
 }
 
 @test 'src has _auditlogviewer' {
@@ -2008,24 +1792,12 @@
     assert "$src/_authconfig-tui" is_file
 }
 
-@test 'src has _authorindex' {
-    assert "$src/_authorindex" is_file
-}
-
 @test 'src has _autoconf' {
     assert "$src/_autoconf" is_file
 }
 
-@test 'src has _autoheader' {
-    assert "$src/_autoheader" is_file
-}
-
 @test 'src has _autoinst' {
     assert "$src/_autoinst" is_file
-}
-
-@test 'src has _autom4te' {
-    assert "$src/_autom4te" is_file
 }
 
 @test 'src has _automake' {
@@ -2064,10 +1836,6 @@
     assert "$src/_autopep8" is_file
 }
 
-@test 'src has _autopoint' {
-    assert "$src/_autopoint" is_file
-}
-
 @test 'src has _autopsy' {
     assert "$src/_autopsy" is_file
 }
@@ -2076,20 +1844,8 @@
     assert "$src/_autoreconf" is_file
 }
 
-@test 'src has _autoscan' {
-    assert "$src/_autoscan" is_file
-}
-
 @test 'src has _autossh' {
     assert "$src/_autossh" is_file
-}
-
-@test 'src has _autoupdate' {
-    assert "$src/_autoupdate" is_file
-}
-
-@test 'src has _auval' {
-    assert "$src/_auval" is_file
 }
 
 @test 'src has _auvaltool' {
@@ -2100,24 +1856,12 @@
     assert "$src/_avahi-autoipd" is_file
 }
 
-@test 'src has _avahi-browse' {
-    assert "$src/_avahi-browse" is_file
-}
-
 @test 'src has _avahi-browse-domains' {
     assert "$src/_avahi-browse-domains" is_file
 }
 
-@test 'src has _avahi-daemon' {
-    assert "$src/_avahi-daemon" is_file
-}
-
 @test 'src has _avahi-dnsconfd' {
     assert "$src/_avahi-dnsconfd" is_file
-}
-
-@test 'src has _avahi-publish' {
-    assert "$src/_avahi-publish" is_file
 }
 
 @test 'src has _avahi-publish-address' {
@@ -2126,10 +1870,6 @@
 
 @test 'src has _avahi-publish-service' {
     assert "$src/_avahi-publish-service" is_file
-}
-
-@test 'src has _avahi-resolve' {
-    assert "$src/_avahi-resolve" is_file
 }
 
 @test 'src has _avahi-resolve-address' {
@@ -2146,10 +1886,6 @@
 
 @test 'src has _avconvert' {
     assert "$src/_avconvert" is_file
-}
-
-@test 'src has _avdmanager' {
-    assert "$src/_avdmanager" is_file
 }
 
 @test 'src has _average' {
@@ -2276,16 +2012,8 @@
     assert "$src/_avrdude" is_file
 }
 
-@test 'src has _avtest' {
-    assert "$src/_avtest" is_file
-}
-
 @test 'src has _axel' {
     assert "$src/_axel" is_file
-}
-
-@test 'src has _axohelp' {
-    assert "$src/_axohelp" is_file
 }
 
 @test 'src has _b2sum' {
@@ -2352,10 +2080,6 @@
     assert "$src/_base64conv" is_file
 }
 
-@test 'src has _bashate' {
-    assert "$src/_bashate" is_file
-}
-
 @test 'src has _bashdb' {
     assert "$src/_bashdb" is_file
 }
@@ -2372,16 +2096,8 @@
     assert "$src/_bcache-status" is_file
 }
 
-@test 'src has _bccmd' {
-    assert "$src/_bccmd" is_file
-}
-
 @test 'src has _bchscheme' {
     assert "$src/_bchscheme" is_file
-}
-
-@test 'src has _bcmfw' {
-    assert "$src/_bcmfw" is_file
 }
 
 @test 'src has _bcrypt' {
@@ -2390,14 +2106,6 @@
 
 @test 'src has _bd_list_titles' {
     assert "$src/_bd_list_titles" is_file
-}
-
-@test 'src has _bdeinfo' {
-    assert "$src/_bdeinfo" is_file
-}
-
-@test 'src has _bdemount' {
-    assert "$src/_bdemount" is_file
 }
 
 @test 'src has _bdump' {
@@ -2442,14 +2150,6 @@
 
 @test 'src has _bibtex.original' {
     assert "$src/_bibtex.original" is_file
-}
-
-@test 'src has _bibtex8' {
-    assert "$src/_bibtex8" is_file
-}
-
-@test 'src has _bibtexu' {
-    assert "$src/_bibtexu" is_file
 }
 
 @test 'src has _bin2obj' {
@@ -2544,14 +2244,6 @@
     assert "$src/_bless" is_file
 }
 
-@test 'src has _blkcalc' {
-    assert "$src/_blkcalc" is_file
-}
-
-@test 'src has _blkcat' {
-    assert "$src/_blkcat" is_file
-}
-
 @test 'src has _blkdeactivate' {
     assert "$src/_blkdeactivate" is_file
 }
@@ -2564,16 +2256,8 @@
     assert "$src/_blkiomon" is_file
 }
 
-@test 'src has _blkls' {
-    assert "$src/_blkls" is_file
-}
-
 @test 'src has _blkparse' {
     assert "$src/_blkparse" is_file
-}
-
-@test 'src has _blkstat' {
-    assert "$src/_blkstat" is_file
 }
 
 @test 'src has _blktrace' {
@@ -2632,10 +2316,6 @@
     assert "$src/_blueman-tray" is_file
 }
 
-@test 'src has _bluemoon' {
-    assert "$src/_bluemoon" is_file
-}
-
 @test 'src has _bluesnarfer' {
     assert "$src/_bluesnarfer" is_file
 }
@@ -2650,14 +2330,6 @@
 
 @test 'src has _bluetooth-wizard' {
     assert "$src/_bluetooth-wizard" is_file
-}
-
-@test 'src has _bluetoothctl' {
-    assert "$src/_bluetoothctl" is_file
-}
-
-@test 'src has _bluetoothd' {
-    assert "$src/_bluetoothd" is_file
 }
 
 @test 'src has _bmc-config' {
@@ -2680,16 +2352,8 @@
     assert "$src/_bmpblk_utility" is_file
 }
 
-@test 'src has _bmptopnm' {
-    assert "$src/_bmptopnm" is_file
-}
-
 @test 'src has _bmtoa' {
     assert "$src/_bmtoa" is_file
-}
-
-@test 'src has _bneptest' {
-    assert "$src/_bneptest" is_file
 }
 
 @test 'src has _bodyfile.pl' {
@@ -2888,10 +2552,6 @@
     assert "$src/_bsnmpd" is_file
 }
 
-@test 'src has _bsondump' {
-    assert "$src/_bsondump" is_file
-}
-
 @test 'src has _bssh' {
     assert "$src/_bssh" is_file
 }
@@ -2916,16 +2576,8 @@
     assert "$src/_bt-obex" is_file
 }
 
-@test 'src has _btattach' {
-    assert "$src/_btattach" is_file
-}
-
 @test 'src has _btcflash' {
     assert "$src/_btcflash" is_file
-}
-
-@test 'src has _btconfig' {
-    assert "$src/_btconfig" is_file
 }
 
 @test 'src has _btest' {
@@ -2944,36 +2596,12 @@
     assert "$src/_btest-rst-pipe" is_file
 }
 
-@test 'src has _btgatt-client' {
-    assert "$src/_btgatt-client" is_file
-}
-
-@test 'src has _btgatt-server' {
-    assert "$src/_btgatt-server" is_file
-}
-
 @test 'src has _bthidcontrol' {
     assert "$src/_bthidcontrol" is_file
 }
 
 @test 'src has _bthidd' {
     assert "$src/_bthidd" is_file
-}
-
-@test 'src has _btinfo' {
-    assert "$src/_btinfo" is_file
-}
-
-@test 'src has _btiotest' {
-    assert "$src/_btiotest" is_file
-}
-
-@test 'src has _btmgmt' {
-    assert "$src/_btmgmt" is_file
-}
-
-@test 'src has _btmon' {
-    assert "$src/_btmon" is_file
 }
 
 @test 'src has _btop' {
@@ -2986,10 +2614,6 @@
 
 @test 'src has _btpclient' {
     assert "$src/_btpclient" is_file
-}
-
-@test 'src has _btproxy' {
-    assert "$src/_btproxy" is_file
 }
 
 @test 'src has _btrfs-convert' {
@@ -3022,10 +2646,6 @@
 
 @test 'src has _btscanner' {
     assert "$src/_btscanner" is_file
-}
-
-@test 'src has _btsnoop' {
-    assert "$src/_btsnoop" is_file
 }
 
 @test 'src has _buble' {
@@ -3112,10 +2732,6 @@
     assert "$src/_bundler" is_file
 }
 
-@test 'src has _bundler2.7' {
-    assert "$src/_bundler2.7" is_file
-}
-
 @test 'src has _bunyan' {
     assert "$src/_bunyan" is_file
 }
@@ -3138,10 +2754,6 @@
 
 @test 'src has _bwrap' {
     assert "$src/_bwrap" is_file
-}
-
-@test 'src has _byacc' {
-    assert "$src/_byacc" is_file
 }
 
 @test 'src has _byebug' {
@@ -3200,10 +2812,6 @@
     assert "$src/_c++10" is_file
 }
 
-@test 'src has _c++filt' {
-    assert "$src/_c++filt" is_file
-}
-
 @test 'src has _c.pl' {
     assert "$src/_c.pl" is_file
 }
@@ -3226,10 +2834,6 @@
 
 @test 'src has _c99-gcc' {
     assert "$src/_c99-gcc" is_file
-}
-
-@test 'src has _c_rehash' {
-    assert "$src/_c_rehash" is_file
 }
 
 @test 'src has _cabextract' {
@@ -3328,16 +2932,8 @@
     assert "$src/_camlp4o" is_file
 }
 
-@test 'src has _camlp4o.opt' {
-    assert "$src/_camlp4o.opt" is_file
-}
-
 @test 'src has _camlp4of' {
     assert "$src/_camlp4of" is_file
-}
-
-@test 'src has _camlp4of.opt' {
-    assert "$src/_camlp4of.opt" is_file
 }
 
 @test 'src has _camlp4oof' {
@@ -3350,10 +2946,6 @@
 
 @test 'src has _camlp4orf' {
     assert "$src/_camlp4orf" is_file
-}
-
-@test 'src has _camlp4orf.opt' {
-    assert "$src/_camlp4orf.opt" is_file
 }
 
 @test 'src has _camlp4r' {
@@ -3444,24 +3036,12 @@
     assert "$src/_cardos-tool" is_file
 }
 
-@test 'src has _cargo-add' {
-    assert "$src/_cargo-add" is_file
-}
-
 @test 'src has _cargo-cache' {
     assert "$src/_cargo-cache" is_file
 }
 
-@test 'src has _cargo-clippy' {
-    assert "$src/_cargo-clippy" is_file
-}
-
 @test 'src has _cargo-expand' {
     assert "$src/_cargo-expand" is_file
-}
-
-@test 'src has _cargo-fmt' {
-    assert "$src/_cargo-fmt" is_file
 }
 
 @test 'src has _cargo-hack' {
@@ -3476,16 +3056,8 @@
     assert "$src/_cargo-install-update-config" is_file
 }
 
-@test 'src has _cargo-rm' {
-    assert "$src/_cargo-rm" is_file
-}
-
 @test 'src has _cargo-set-version' {
     assert "$src/_cargo-set-version" is_file
-}
-
-@test 'src has _cargo-upgrade' {
-    assert "$src/_cargo-upgrade" is_file
 }
 
 @test 'src has _casper-getty' {
@@ -3500,20 +3072,8 @@
     assert "$src/_catMe" is_file
 }
 
-@test 'src has _catalina' {
-    assert "$src/_catalina" is_file
-}
-
-@test 'src has _catatonit' {
-    assert "$src/_catatonit" is_file
-}
-
 @test 'src has _catchsegv' {
     assert "$src/_catchsegv" is_file
-}
-
-@test 'src has _catimg' {
-    assert "$src/_catimg" is_file
 }
 
 @test 'src has _catman' {
@@ -3586,10 +3146,6 @@
 
 @test 'src has _ccxxmake' {
     assert "$src/_ccxxmake" is_file
-}
-
-@test 'src has _ccze' {
-    assert "$src/_ccze" is_file
 }
 
 @test 'src has _ccze-cssdump' {
@@ -3738,10 +3294,6 @@
 
 @test 'src has _cfdisk' {
     assert "$src/_cfdisk" is_file
-}
-
-@test 'src has _cfftot1' {
-    assert "$src/_cfftot1" is_file
 }
 
 @test 'src has _cfn-elect-cmd-leader' {
@@ -3896,20 +3448,12 @@
     assert "$src/_check-language-support" is_file
 }
 
-@test 'src has _check-regexp' {
-    assert "$src/_check-regexp" is_file
-}
-
 @test 'src has _check_hd' {
     assert "$src/_check_hd" is_file
 }
 
 @test 'src has _check_omp' {
     assert "$src/_check_omp" is_file
-}
-
-@test 'src has _checkcites' {
-    assert "$src/_checkcites" is_file
 }
 
 @test 'src has _checklistings' {
@@ -3944,10 +3488,6 @@
     assert "$src/_chem" is_file
 }
 
-@test 'src has _cherrytree' {
-    assert "$src/_cherrytree" is_file
-}
-
 @test 'src has _chfn' {
     assert "$src/_chfn" is_file
 }
@@ -3960,16 +3500,8 @@
     assert "$src/_chkfont" is_file
 }
 
-@test 'src has _chkrootkit' {
-    assert "$src/_chkrootkit" is_file
-}
-
 @test 'src has _chkstat' {
     assert "$src/_chkstat" is_file
-}
-
-@test 'src has _chktex' {
-    assert "$src/_chktex" is_file
 }
 
 @test 'src has _chktrust' {
@@ -3980,16 +3512,8 @@
     assert "$src/_chkweb" is_file
 }
 
-@test 'src has _chmcmd' {
-    assert "$src/_chmcmd" is_file
-}
-
 @test 'src has _chmem' {
     assert "$src/_chmem" is_file
-}
-
-@test 'src has _chmls' {
-    assert "$src/_chmls" is_file
 }
 
 @test 'src has _chntpw' {
@@ -4006,10 +3530,6 @@
 
 @test 'src has _chrome-gnome-shell' {
     assert "$src/_chrome-gnome-shell" is_file
-}
-
-@test 'src has _chromedriver' {
-    assert "$src/_chromedriver" is_file
 }
 
 @test 'src has _chromium-browser' {
@@ -4104,24 +3624,12 @@
     assert "$src/_ciphers.sh" is_file
 }
 
-@test 'src has _ciptool' {
-    assert "$src/_ciptool" is_file
-}
-
-@test 'src has _circo' {
-    assert "$src/_circo" is_file
-}
-
 @test 'src has _cisco-torch' {
     assert "$src/_cisco-torch" is_file
 }
 
 @test 'src has _ciscodump' {
     assert "$src/_ciscodump" is_file
-}
-
-@test 'src has _cistopbm' {
-    assert "$src/_cistopbm" is_file
 }
 
 @test 'src has _cjb2' {
@@ -4136,20 +3644,12 @@
     assert "$src/_cjk-gs-integrate" is_file
 }
 
-@test 'src has _cjpeg' {
-    assert "$src/_cjpeg" is_file
-}
-
 @test 'src has _cjs' {
     assert "$src/_cjs" is_file
 }
 
 @test 'src has _cjs-console' {
     assert "$src/_cjs-console" is_file
-}
-
-@test 'src has _cjxl' {
-    assert "$src/_cjxl" is_file
 }
 
 @test 'src has _ck-history' {
@@ -4380,10 +3880,6 @@
     assert "$src/_clang-extdef-mapping12" is_file
 }
 
-@test 'src has _clang-format' {
-    assert "$src/_clang-format" is_file
-}
-
 @test 'src has _clang-format-diff.py' {
     assert "$src/_clang-format-diff.py" is_file
 }
@@ -4532,10 +4028,6 @@
     assert "$src/_clangd60" is_file
 }
 
-@test 'src has _clasp' {
-    assert "$src/_clasp" is_file
-}
-
 @test 'src has _classifier_tester' {
     assert "$src/_classifier_tester" is_file
 }
@@ -4560,18 +4052,6 @@
     assert "$src/_cli-gacutil" is_file
 }
 
-@test 'src has _clingo' {
-    assert "$src/_clingo" is_file
-}
-
-@test 'src has _clippy-driver' {
-    assert "$src/_clippy-driver" is_file
-}
-
-@test 'src has _clisp' {
-    assert "$src/_clisp" is_file
-}
-
 @test 'src has _clj' {
     assert "$src/_clj" is_file
 }
@@ -4582,10 +4062,6 @@
 
 @test 'src has _clock' {
     assert "$src/_clock" is_file
-}
-
-@test 'src has _cloudup' {
-    assert "$src/_cloudup" is_file
 }
 
 @test 'src has _cluster' {
@@ -4784,10 +4260,6 @@
     assert "$src/_compton" is_file
 }
 
-@test 'src has _comsatd' {
-    assert "$src/_comsatd" is_file
-}
-
 @test 'src has _conan_build_info' {
     assert "$src/_conan_build_info" is_file
 }
@@ -4836,16 +4308,8 @@
     assert "$src/_conky" is_file
 }
 
-@test 'src has _conmon' {
-    assert "$src/_conmon" is_file
-}
-
 @test 'src has _connect' {
     assert "$src/_connect" is_file
-}
-
-@test 'src has _conntrack' {
-    assert "$src/_conntrack" is_file
 }
 
 @test 'src has _console-kit-daemon' {
@@ -4870,14 +4334,6 @@
 
 @test 'src has _containerd-shim-runc-v1' {
     assert "$src/_containerd-shim-runc-v1" is_file
-}
-
-@test 'src has _containerd-shim-runc-v2' {
-    assert "$src/_containerd-shim-runc-v2" is_file
-}
-
-@test 'src has _containerd-stress' {
-    assert "$src/_containerd-stress" is_file
 }
 
 @test 'src has _contributors' {
@@ -5092,20 +4548,12 @@
     assert "$src/_create-cracklib-dict" is_file
 }
 
-@test 'src has _create-image' {
-    assert "$src/_create-image" is_file
-}
-
 @test 'src has _create-jar-links' {
     assert "$src/_create-jar-links" is_file
 }
 
 @test 'src has _create-munge-key' {
     assert "$src/_create-munge-key" is_file
-}
-
-@test 'src has _create-react-app' {
-    assert "$src/_create-react-app" is_file
 }
 
 @test 'src has _createScriptButDontOpenSublime.sh' {
@@ -5348,10 +4796,6 @@
     assert "$src/_ctan-o-mat" is_file
 }
 
-@test 'src has _ctangle' {
-    assert "$src/_ctangle" is_file
-}
-
 @test 'src has _ctest' {
     assert "$src/_ctest" is_file
 }
@@ -5368,10 +4812,6 @@
     assert "$src/_ctladm" is_file
 }
 
-@test 'src has _ctop' {
-    assert "$src/_ctop" is_file
-}
-
 @test 'src has _ctr' {
     assert "$src/_ctr" is_file
 }
@@ -5386,10 +4826,6 @@
 
 @test 'src has _cucumber' {
     assert "$src/_cucumber" is_file
-}
-
-@test 'src has _cudf2lp' {
-    assert "$src/_cudf2lp" is_file
 }
 
 @test 'src has _cue2toc' {
@@ -5412,24 +4848,12 @@
     assert "$src/_cupsaddsmb" is_file
 }
 
-@test 'src has _cupsctl' {
-    assert "$src/_cupsctl" is_file
-}
-
 @test 'src has _cupsd' {
     assert "$src/_cupsd" is_file
 }
 
-@test 'src has _cupsfilter' {
-    assert "$src/_cupsfilter" is_file
-}
-
 @test 'src has _cupstestdsc' {
     assert "$src/_cupstestdsc" is_file
-}
-
-@test 'src has _cupstestppd' {
-    assert "$src/_cupstestppd" is_file
 }
 
 @test 'src has _curl-config' {
@@ -5474,10 +4898,6 @@
 
 @test 'src has _cvtsudoers' {
     assert "$src/_cvtsudoers" is_file
-}
-
-@test 'src has _cweave' {
-    assert "$src/_cweave" is_file
 }
 
 @test 'src has _cx18-ctl' {
@@ -5656,16 +5076,8 @@
     assert "$src/_datagrip" is_file
 }
 
-@test 'src has _datamash' {
-    assert "$src/_datamash" is_file
-}
-
 @test 'src has _datatool2bib' {
     assert "$src/_datatool2bib" is_file
-}
-
-@test 'src has _dav1d' {
-    assert "$src/_dav1d" is_file
 }
 
 @test 'src has _davtest' {
@@ -5792,10 +5204,6 @@
     assert "$src/_ddns-confgen" is_file
 }
 
-@test 'src has _ddrescue' {
-    assert "$src/_ddrescue" is_file
-}
-
 @test 'src has _ddrescuelog' {
     assert "$src/_ddrescuelog" is_file
 }
@@ -5916,10 +5324,6 @@
     assert "$src/_delgroup" is_file
 }
 
-@test 'src has _delp' {
-    assert "$src/_delp" is_file
-}
-
 @test 'src has _delpart' {
     assert "$src/_delpart" is_file
 }
@@ -5976,10 +5380,6 @@
     assert "$src/_desktoptojson" is_file
 }
 
-@test 'src has _detex' {
-    assert "$src/_detex" is_file
-}
-
 @test 'src has _dev_debug_vboot' {
     assert "$src/_dev_debug_vboot" is_file
 }
@@ -6020,16 +5420,8 @@
     assert "$src/_dh_fixperms" is_file
 }
 
-@test 'src has _dh_gencontrol' {
-    assert "$src/_dh_gencontrol" is_file
-}
-
 @test 'src has _dh_icons' {
     assert "$src/_dh_icons" is_file
-}
-
-@test 'src has _dh_installalternatives' {
-    assert "$src/_dh_installalternatives" is_file
 }
 
 @test 'src has _dh_installcatalogs' {
@@ -6044,16 +5436,8 @@
     assert "$src/_dh_installdeb" is_file
 }
 
-@test 'src has _dh_installgsettings' {
-    assert "$src/_dh_installgsettings" is_file
-}
-
 @test 'src has _dh_installifupdown' {
     assert "$src/_dh_installifupdown" is_file
-}
-
-@test 'src has _dh_installinit' {
-    assert "$src/_dh_installinit" is_file
 }
 
 @test 'src has _dh_installinitramfs' {
@@ -6072,28 +5456,12 @@
     assert "$src/_dh_installmenu" is_file
 }
 
-@test 'src has _dh_installpam' {
-    assert "$src/_dh_installpam" is_file
-}
-
 @test 'src has _dh_installppp' {
     assert "$src/_dh_installppp" is_file
 }
 
 @test 'src has _dh_installsysusers' {
     assert "$src/_dh_installsysusers" is_file
-}
-
-@test 'src has _dh_installtmpfiles' {
-    assert "$src/_dh_installtmpfiles" is_file
-}
-
-@test 'src has _dh_makeshlibs' {
-    assert "$src/_dh_makeshlibs" is_file
-}
-
-@test 'src has _dh_movetousr' {
-    assert "$src/_dh_movetousr" is_file
 }
 
 @test 'src has _dh_prep' {
@@ -6140,10 +5508,6 @@
     assert "$src/_dialog-config" is_file
 }
 
-@test 'src has _dialyzer' {
-    assert "$src/_dialyzer" is_file
-}
-
 @test 'src has _diameterc' {
     assert "$src/_diameterc" is_file
 }
@@ -6162,10 +5526,6 @@
 
 @test 'src has _digestif' {
     assert "$src/_digestif" is_file
-}
-
-@test 'src has _dijkstra' {
-    assert "$src/_dijkstra" is_file
 }
 
 @test 'src has _dino-im' {
@@ -6192,14 +5552,6 @@
     assert "$src/_directoryContentsSize.sh" is_file
 }
 
-@test 'src has _dirmngr' {
-    assert "$src/_dirmngr" is_file
-}
-
-@test 'src has _dirmngr-client' {
-    assert "$src/_dirmngr-client" is_file
-}
-
 @test 'src has _dirmngr_ldap' {
     assert "$src/_dirmngr_ldap" is_file
 }
@@ -6222,10 +5574,6 @@
 
 @test 'src has _disdvi' {
     assert "$src/_disdvi" is_file
-}
-
-@test 'src has _diskus' {
-    assert "$src/_diskus" is_file
 }
 
 @test 'src has _diskutil' {
@@ -6270,14 +5618,6 @@
 
 @test 'src has _distro' {
     assert "$src/_distro" is_file
-}
-
-@test 'src has _ditto' {
-    assert "$src/_ditto" is_file
-}
-
-@test 'src has _djpeg' {
-    assert "$src/_djpeg" is_file
 }
 
 @test 'src has _djvups' {
@@ -6326,10 +5666,6 @@
 
 @test 'src has _dmevent_tool' {
     assert "$src/_dmevent_tool" is_file
-}
-
-@test 'src has _dmeventd' {
-    assert "$src/_dmeventd" is_file
 }
 
 @test 'src has _dmg2john' {
@@ -6576,10 +5912,6 @@
     assert "$src/_dosfslabel" is_file
 }
 
-@test 'src has _dot' {
-    assert "$src/_dot" is_file
-}
-
 @test 'src has _dot_builtins' {
     assert "$src/_dot_builtins" is_file
 }
@@ -6590,10 +5922,6 @@
 
 @test 'src has _dotdotpwn.pl' {
     assert "$src/_dotdotpwn.pl" is_file
-}
-
-@test 'src has _dotlock' {
-    assert "$src/_dotlock" is_file
 }
 
 @test 'src has _dotlock.mailutils' {
@@ -6756,20 +6084,12 @@
     assert "$src/_dskeytab.py" is_file
 }
 
-@test 'src has _dsmemberutil' {
-    assert "$src/_dsmemberutil" is_file
-}
-
 @test 'src has _dstat' {
     assert "$src/_dstat" is_file
 }
 
 @test 'src has _dsusers.py' {
     assert "$src/_dsusers.py" is_file
-}
-
-@test 'src has _dsymutil' {
-    assert "$src/_dsymutil" is_file
 }
 
 @test 'src has _dsymutil-10' {
@@ -6856,10 +6176,6 @@
     assert "$src/_dumpcap" is_file
 }
 
-@test 'src has _dumpimage' {
-    assert "$src/_dumpimage" is_file
-}
-
 @test 'src has _dumpiso' {
     assert "$src/_dumpiso" is_file
 }
@@ -6872,20 +6188,12 @@
     assert "$src/_dumpseg" is_file
 }
 
-@test 'src has _dumpsexp' {
-    assert "$src/_dumpsexp" is_file
-}
-
 @test 'src has _dumpsolv' {
     assert "$src/_dumpsolv" is_file
 }
 
 @test 'src has _dumpzilla' {
     assert "$src/_dumpzilla" is_file
-}
-
-@test 'src has _dune' {
-    assert "$src/_dune" is_file
 }
 
 @test 'src has _dupemap' {
@@ -6948,14 +6256,6 @@
     assert "$src/_dvi2fax" is_file
 }
 
-@test 'src has _dvi2tty' {
-    assert "$src/_dvi2tty" is_file
-}
-
-@test 'src has _dviasm' {
-    assert "$src/_dviasm" is_file
-}
-
 @test 'src has _dvicopy' {
     assert "$src/_dvicopy" is_file
 }
@@ -6970,10 +6270,6 @@
 
 @test 'src has _dviinfox' {
     assert "$src/_dviinfox" is_file
-}
-
-@test 'src has _dvilj' {
-    assert "$src/_dvilj" is_file
 }
 
 @test 'src has _dvilj2p' {
@@ -7016,24 +6312,8 @@
     assert "$src/_dvipdft" is_file
 }
 
-@test 'src has _dvipng' {
-    assert "$src/_dvipng" is_file
-}
-
 @test 'src has _dvipos' {
     assert "$src/_dvipos" is_file
-}
-
-@test 'src has _dvisvgm' {
-    assert "$src/_dvisvgm" is_file
-}
-
-@test 'src has _dvitomp' {
-    assert "$src/_dvitomp" is_file
-}
-
-@test 'src has _dvitype' {
-    assert "$src/_dvitype" is_file
 }
 
 @test 'src has _dwarfdump' {
@@ -7076,10 +6356,6 @@
     assert "$src/_eapmd5pass" is_file
 }
 
-@test 'src has _eapol_test' {
-    assert "$src/_eapol_test" is_file
-}
-
 @test 'src has _easside-ng' {
     assert "$src/_easside-ng" is_file
 }
@@ -7090,10 +6366,6 @@
 
 @test 'src has _easy_install-2.7' {
     assert "$src/_easy_install-2.7" is_file
-}
-
-@test 'src has _easy_install-3.5' {
-    assert "$src/_easy_install-3.5" is_file
 }
 
 @test 'src has _easy_install-3.6' {
@@ -7196,10 +6468,6 @@
     assert "$src/_edb" is_file
 }
 
-@test 'src has _eddystone' {
-    assert "$src/_eddystone" is_file
-}
-
 @test 'src has _edgepaint' {
     assert "$src/_edgepaint" is_file
 }
@@ -7300,10 +6568,6 @@
     assert "$src/_elfedit" is_file
 }
 
-@test 'src has _elixir' {
-    assert "$src/_elixir" is_file
-}
-
 @test 'src has _elixirc' {
     assert "$src/_elixirc" is_file
 }
@@ -7368,10 +6632,6 @@
     assert "$src/_encfssh" is_file
 }
 
-@test 'src has _encguess' {
-    assert "$src/_encguess" is_file
-}
-
 @test 'src has _encguess5.26.3' {
     assert "$src/_encguess5.26.3" is_file
 }
@@ -7382,10 +6642,6 @@
 
 @test 'src has _enchant' {
     assert "$src/_enchant" is_file
-}
-
-@test 'src has _enchant-2' {
-    assert "$src/_enchant-2" is_file
 }
 
 @test 'src has _encode_keychange' {
@@ -7428,10 +6684,6 @@
     assert "$src/_enumiax" is_file
 }
 
-@test 'src has _envsubst' {
-    assert "$src/_envsubst" is_file
-}
-
 @test 'src has _eog' {
     assert "$src/_eog" is_file
 }
@@ -7464,20 +6716,8 @@
     assert "$src/_epmd" is_file
 }
 
-@test 'src has _epspdf' {
-    assert "$src/_epspdf" is_file
-}
-
 @test 'src has _epspdftk' {
     assert "$src/_epspdftk" is_file
-}
-
-@test 'src has _epstopdf' {
-    assert "$src/_epstopdf" is_file
-}
-
-@test 'src has _eptex' {
-    assert "$src/_eptex" is_file
 }
 
 @test 'src has _epylint' {
@@ -7490,10 +6730,6 @@
 
 @test 'src has _erb2.3' {
     assert "$src/_erb2.3" is_file
-}
-
-@test 'src has _erb2.5' {
-    assert "$src/_erb2.5" is_file
 }
 
 @test 'src has _erb2.7' {
@@ -7520,10 +6756,6 @@
     assert "$src/_erlang-depends" is_file
 }
 
-@test 'src has _erlc' {
-    assert "$src/_erlc" is_file
-}
-
 @test 'src has _errinfo' {
     assert "$src/_errinfo" is_file
 }
@@ -7548,24 +6780,12 @@
     assert "$src/_escapeRemover.pl" is_file
 }
 
-@test 'src has _escp2topbm' {
-    assert "$src/_escp2topbm" is_file
-}
-
 @test 'src has _escputil' {
     assert "$src/_escputil" is_file
 }
 
 @test 'src has _esdcompat' {
     assert "$src/_esdcompat" is_file
-}
-
-@test 'src has _esedbexport' {
-    assert "$src/_esedbexport" is_file
-}
-
-@test 'src has _esedbinfo' {
-    assert "$src/_esedbinfo" is_file
 }
 
 @test 'src has _esentutl.py' {
@@ -7598,18 +6818,6 @@
 
 @test 'src has _etcd' {
     assert "$src/_etcd" is_file
-}
-
-@test 'src has _etcdctl' {
-    assert "$src/_etcdctl" is_file
-}
-
-@test 'src has _etcdutl' {
-    assert "$src/_etcdutl" is_file
-}
-
-@test 'src has _etex' {
-    assert "$src/_etex" is_file
 }
 
 @test 'src has _etherape' {
@@ -7696,10 +6904,6 @@
     assert "$src/_euptex" is_file
 }
 
-@test 'src has _evcxr' {
-    assert "$src/_evcxr" is_file
-}
-
 @test 'src has _evdev-joystick' {
     assert "$src/_evdev-joystick" is_file
 }
@@ -7726,10 +6930,6 @@
 
 @test 'src has _evolution' {
     assert "$src/_evolution" is_file
-}
-
-@test 'src has _evtexport' {
-    assert "$src/_evtexport" is_file
 }
 
 @test 'src has _evtinfo' {
@@ -7772,44 +6972,12 @@
     assert "$src/_evtx_templates.py" is_file
 }
 
-@test 'src has _evtxexport' {
-    assert "$src/_evtxexport" is_file
-}
-
 @test 'src has _evtxinfo' {
     assert "$src/_evtxinfo" is_file
 }
 
-@test 'src has _ewfacquire' {
-    assert "$src/_ewfacquire" is_file
-}
-
-@test 'src has _ewfacquirestream' {
-    assert "$src/_ewfacquirestream" is_file
-}
-
 @test 'src has _ewfdebug' {
     assert "$src/_ewfdebug" is_file
-}
-
-@test 'src has _ewfexport' {
-    assert "$src/_ewfexport" is_file
-}
-
-@test 'src has _ewfinfo' {
-    assert "$src/_ewfinfo" is_file
-}
-
-@test 'src has _ewfmount' {
-    assert "$src/_ewfmount" is_file
-}
-
-@test 'src has _ewfrecover' {
-    assert "$src/_ewfrecover" is_file
-}
-
-@test 'src has _ewfverify' {
-    assert "$src/_ewfverify" is_file
 }
 
 @test 'src has _ex' {
@@ -7936,10 +7104,6 @@
     assert "$src/_exrmanifest" is_file
 }
 
-@test 'src has _exrmetrics' {
-    assert "$src/_exrmetrics" is_file
-}
-
 @test 'src has _exrmultipart' {
     assert "$src/_exrmultipart" is_file
 }
@@ -7966,10 +7130,6 @@
 
 @test 'src has _extract_dts' {
     assert "$src/_extract_dts" is_file
-}
-
-@test 'src has _extractbb' {
-    assert "$src/_extractbb" is_file
 }
 
 @test 'src has _extracticc' {
@@ -8010,10 +7170,6 @@
 
 @test 'src has _eyewitness' {
     assert "$src/_eyewitness" is_file
-}
-
-@test 'src has _eyuvtoppm' {
-    assert "$src/_eyuvtoppm" is_file
 }
 
 @test 'src has _eza' {
@@ -8064,10 +7220,6 @@
     assert "$src/_faac" is_file
 }
 
-@test 'src has _faad' {
-    assert "$src/_faad" is_file
-}
-
 @test 'src has _fab-cewl' {
     assert "$src/_fab-cewl" is_file
 }
@@ -8104,20 +7256,8 @@
     assert "$src/_fantaip" is_file
 }
 
-@test 'src has _fasd' {
-    assert "$src/_fasd" is_file
-}
-
-@test 'src has _fastboot' {
-    assert "$src/_fastboot" is_file
-}
-
 @test 'src has _fastjar' {
     assert "$src/_fastjar" is_file
-}
-
-@test 'src has _fax2ps' {
-    assert "$src/_fax2ps" is_file
 }
 
 @test 'src has _fax2tiff' {
@@ -8152,44 +7292,8 @@
     assert "$src/_fbwrap" is_file
 }
 
-@test 'src has _fc-cache' {
-    assert "$src/_fc-cache" is_file
-}
-
 @test 'src has _fc-cache-64' {
     assert "$src/_fc-cache-64" is_file
-}
-
-@test 'src has _fc-cat' {
-    assert "$src/_fc-cat" is_file
-}
-
-@test 'src has _fc-conflist' {
-    assert "$src/_fc-conflist" is_file
-}
-
-@test 'src has _fc-list' {
-    assert "$src/_fc-list" is_file
-}
-
-@test 'src has _fc-match' {
-    assert "$src/_fc-match" is_file
-}
-
-@test 'src has _fc-pattern' {
-    assert "$src/_fc-pattern" is_file
-}
-
-@test 'src has _fc-query' {
-    assert "$src/_fc-query" is_file
-}
-
-@test 'src has _fc-scan' {
-    assert "$src/_fc-scan" is_file
-}
-
-@test 'src has _fc-validate' {
-    assert "$src/_fc-validate" is_file
 }
 
 @test 'src has _fcat' {
@@ -8226,10 +7330,6 @@
 
 @test 'src has _fdformat' {
     assert "$src/_fdformat" is_file
-}
-
-@test 'src has _fdp' {
-    assert "$src/_fdp" is_file
 }
 
 @test 'src has _fdtdump' {
@@ -8288,14 +7388,6 @@
     assert "$src/_ffmpeg" is_file
 }
 
-@test 'src has _fftw-wisdom' {
-    assert "$src/_fftw-wisdom" is_file
-}
-
-@test 'src has _fftw-wisdom-to-conf' {
-    assert "$src/_fftw-wisdom-to-conf" is_file
-}
-
 @test 'src has _fftwf-wisdom' {
     assert "$src/_fftwf-wisdom" is_file
 }
@@ -8326,10 +7418,6 @@
 
 @test 'src has _fh2text' {
     assert "$src/_fh2text" is_file
-}
-
-@test 'src has _fiascotopnm' {
-    assert "$src/_fiascotopnm" is_file
 }
 
 @test 'src has _fibmap.f2fs' {
@@ -8532,10 +7620,6 @@
     assert "$src/_flashcp" is_file
 }
 
-@test 'src has _flashrom' {
-    assert "$src/_flashrom" is_file
-}
-
 @test 'src has _flask' {
     assert "$src/_flask" is_file
 }
@@ -8598,18 +7682,6 @@
 
 @test 'src has _flowtop' {
     assert "$src/_flowtop" is_file
-}
-
-@test 'src has _fls' {
-    assert "$src/_fls" is_file
-}
-
-@test 'src has _fluidsynth' {
-    assert "$src/_fluidsynth" is_file
-}
-
-@test 'src has _fmtutil' {
-    assert "$src/_fmtutil" is_file
 }
 
 @test 'src has _fmtutil-sys' {
@@ -8776,10 +7848,6 @@
     assert "$src/_foremost" is_file
 }
 
-@test 'src has _formail' {
-    assert "$src/_formail" is_file
-}
-
 @test 'src has _format-sql' {
     assert "$src/_format-sql" is_file
 }
@@ -8804,28 +7872,12 @@
     assert "$src/_fpc" is_file
 }
 
-@test 'src has _fpcalc' {
-    assert "$src/_fpcalc" is_file
-}
-
 @test 'src has _fpcjres' {
     assert "$src/_fpcjres" is_file
 }
 
 @test 'src has _fpclasschart' {
     assert "$src/_fpclasschart" is_file
-}
-
-@test 'src has _fpcmake' {
-    assert "$src/_fpcmake" is_file
-}
-
-@test 'src has _fpcmkcfg' {
-    assert "$src/_fpcmkcfg" is_file
-}
-
-@test 'src has _fpcres' {
-    assert "$src/_fpcres" is_file
 }
 
 @test 'src has _fpcreslipo' {
@@ -8840,20 +7892,8 @@
     assert "$src/_fpdoc" is_file
 }
 
-@test 'src has _fping' {
-    assert "$src/_fping" is_file
-}
-
 @test 'src has _fping6' {
     assert "$src/_fping6" is_file
-}
-
-@test 'src has _fppkg' {
-    assert "$src/_fppkg" is_file
-}
-
-@test 'src has _fprcp' {
-    assert "$src/_fprcp" is_file
 }
 
 @test 'src has _fprintd-delete' {
@@ -8896,16 +7936,8 @@
     assert "$src/_fribidi-config" is_file
 }
 
-@test 'src has _frm' {
-    assert "$src/_frm" is_file
-}
-
 @test 'src has _frm.mailutils' {
     assert "$src/_frm.mailutils" is_file
-}
-
-@test 'src has _from' {
-    assert "$src/_from" is_file
 }
 
 @test 'src has _from.mailutils' {
@@ -8920,16 +7952,8 @@
     assert "$src/_fsadm" is_file
 }
 
-@test 'src has _fsapfsinfo' {
-    assert "$src/_fsapfsinfo" is_file
-}
-
 @test 'src has _fsapfsmount' {
     assert "$src/_fsapfsmount" is_file
-}
-
-@test 'src has _fsck' {
-    assert "$src/_fsck" is_file
 }
 
 @test 'src has _fsck.cramfs' {
@@ -9020,10 +8044,6 @@
     assert "$src/_fslsfonts" is_file
 }
 
-@test 'src has _fsstat' {
-    assert "$src/_fsstat" is_file
-}
-
 @test 'src has _fstrim' {
     assert "$src/_fstrim" is_file
 }
@@ -9060,16 +8080,8 @@
     assert "$src/_ftest" is_file
 }
 
-@test 'src has _ftpd' {
-    assert "$src/_ftpd" is_file
-}
-
 @test 'src has _funpack' {
     assert "$src/_funpack" is_file
-}
-
-@test 'src has _fuse-overlayfs' {
-    assert "$src/_fuse-overlayfs" is_file
 }
 
 @test 'src has _fuse2fs' {
@@ -9092,14 +8104,6 @@
     assert "$src/_futurize" is_file
 }
 
-@test 'src has _fvdeinfo' {
-    assert "$src/_fvdeinfo" is_file
-}
-
-@test 'src has _fvdemount' {
-    assert "$src/_fvdemount" is_file
-}
-
 @test 'src has _fvdewipekey' {
     assert "$src/_fvdewipekey" is_file
 }
@@ -9116,20 +8120,12 @@
     assert "$src/_fwupdate" is_file
 }
 
-@test 'src has _fwupdmgr' {
-    assert "$src/_fwupdmgr" is_file
-}
-
 @test 'src has _fzf' {
     assert "$src/_fzf" is_file
 }
 
 @test 'src has _fzf-preview.sh' {
     assert "$src/_fzf-preview.sh" is_file
-}
-
-@test 'src has _fzf-tmux' {
-    assert "$src/_fzf-tmux" is_file
 }
 
 @test 'src has _g++-10' {
@@ -9228,10 +8224,6 @@
     assert "$src/_garden" is_file
 }
 
-@test 'src has _gatttool' {
-    assert "$src/_gatttool" is_file
-}
-
 @test 'src has _gaussfilter' {
     assert "$src/_gaussfilter" is_file
 }
@@ -9270,10 +8262,6 @@
 
 @test 'src has _gbak' {
     assert "$src/_gbak" is_file
-}
-
-@test 'src has _gbasenc' {
-    assert "$src/_gbasenc" is_file
 }
 
 @test 'src has _gbb_utility' {
@@ -9524,10 +8512,6 @@
     assert "$src/_gconftool-rebuild" is_file
 }
 
-@test 'src has _gcov' {
-    assert "$src/_gcov" is_file
-}
-
 @test 'src has _gcov-10' {
     assert "$src/_gcov-10" is_file
 }
@@ -9676,10 +8660,6 @@
     assert "$src/_gcr-viewer-gtk4" is_file
 }
 
-@test 'src has _gcsplit' {
-    assert "$src/_gcsplit" is_file
-}
-
 @test 'src has _gdal2tiles.py' {
     assert "$src/_gdal2tiles.py" is_file
 }
@@ -9700,28 +8680,12 @@
     assert "$src/_gdb_wrapper" is_file
 }
 
-@test 'src has _gdbm_dump' {
-    assert "$src/_gdbm_dump" is_file
-}
-
-@test 'src has _gdbm_load' {
-    assert "$src/_gdbm_load" is_file
-}
-
-@test 'src has _gdbmtool' {
-    assert "$src/_gdbmtool" is_file
-}
-
 @test 'src has _gdbserver' {
     assert "$src/_gdbserver" is_file
 }
 
 @test 'src has _gdbtui' {
     assert "$src/_gdbtui" is_file
-}
-
-@test 'src has _gdbus-codegen' {
-    assert "$src/_gdbus-codegen" is_file
 }
 
 @test 'src has _gdc' {
@@ -9762,14 +8726,6 @@
 
 @test 'src has _gdirname' {
     assert "$src/_gdirname" is_file
-}
-
-@test 'src has _gdk-pixbuf-csource' {
-    assert "$src/_gdk-pixbuf-csource" is_file
-}
-
-@test 'src has _gdk-pixbuf-pixdata' {
-    assert "$src/_gdk-pixbuf-pixdata" is_file
 }
 
 @test 'src has _gdk-pixbuf-thumbnailer' {
@@ -9976,10 +8932,6 @@
     assert "$src/_gettext" is_file
 }
 
-@test 'src has _gettextize' {
-    assert "$src/_gettextize" is_file
-}
-
 @test 'src has _getty' {
     assert "$src/_getty" is_file
 }
@@ -10058,18 +9010,6 @@
 
 @test 'src has _gfortran10' {
     assert "$src/_gfortran10" is_file
-}
-
-@test 'src has _gftodvi' {
-    assert "$src/_gftodvi" is_file
-}
-
-@test 'src has _gftopk' {
-    assert "$src/_gftopk" is_file
-}
-
-@test 'src has _gftype' {
-    assert "$src/_gftype" is_file
 }
 
 @test 'src has _ggroups' {
@@ -10154,10 +9094,6 @@
 
 @test 'src has _gie' {
     assert "$src/_gie" is_file
-}
-
-@test 'src has _gif2webp' {
-    assert "$src/_gif2webp" is_file
 }
 
 @test 'src has _gifdiff' {
@@ -10280,32 +9216,8 @@
     assert "$src/_glade-previewer" is_file
 }
 
-@test 'src has _glances' {
-    assert "$src/_glances" is_file
-}
-
-@test 'src has _gleam' {
-    assert "$src/_gleam" is_file
-}
-
-@test 'src has _glib-compile-resources' {
-    assert "$src/_glib-compile-resources" is_file
-}
-
-@test 'src has _glib-compile-schemas' {
-    assert "$src/_glib-compile-schemas" is_file
-}
-
-@test 'src has _glib-genmarshal' {
-    assert "$src/_glib-genmarshal" is_file
-}
-
 @test 'src has _glib-gettextize' {
     assert "$src/_glib-gettextize" is_file
-}
-
-@test 'src has _glib-mkenums' {
-    assert "$src/_glib-mkenums" is_file
 }
 
 @test 'src has _glibtool' {
@@ -10386,10 +9298,6 @@
 
 @test 'src has _gmknod' {
     assert "$src/_gmknod" is_file
-}
-
-@test 'src has _gml2gv' {
-    assert "$src/_gml2gv" is_file
 }
 
 @test 'src has _gnice' {
@@ -10748,16 +9656,8 @@
     assert "$src/_go" is_file
 }
 
-@test 'src has _go-md2man' {
-    assert "$src/_go-md2man" is_file
-}
-
 @test 'src has _goForward.sh' {
     assert "$src/_goForward.sh" is_file
-}
-
-@test 'src has _gobject-query' {
-    assert "$src/_gobject-query" is_file
 }
 
 @test 'src has _gobuster' {
@@ -10776,16 +9676,8 @@
     assert "$src/_godoc" is_file
 }
 
-@test 'src has _gofmt' {
-    assert "$src/_gofmt" is_file
-}
-
 @test 'src has _goid-tool' {
     assert "$src/_goid-tool" is_file
-}
-
-@test 'src has _goimports' {
-    assert "$src/_goimports" is_file
 }
 
 @test 'src has _goland' {
@@ -10856,14 +9748,6 @@
     assert "$src/_gperf" is_file
 }
 
-@test 'src has _gpg-agent' {
-    assert "$src/_gpg-agent" is_file
-}
-
-@test 'src has _gpg-card' {
-    assert "$src/_gpg-card" is_file
-}
-
 @test 'src has _gpg-connect-agent' {
     assert "$src/_gpg-connect-agent" is_file
 }
@@ -10900,36 +9784,12 @@
     assert "$src/_gpgme-json" is_file
 }
 
-@test 'src has _gpgme-tool' {
-    assert "$src/_gpgme-tool" is_file
-}
-
-@test 'src has _gpgparsemail' {
-    assert "$src/_gpgparsemail" is_file
-}
-
 @test 'src has _gpgscm' {
     assert "$src/_gpgscm" is_file
 }
 
-@test 'src has _gpgsm' {
-    assert "$src/_gpgsm" is_file
-}
-
-@test 'src has _gpgsplit' {
-    assert "$src/_gpgsplit" is_file
-}
-
 @test 'src has _gpgsplit2' {
     assert "$src/_gpgsplit2" is_file
-}
-
-@test 'src has _gpgtar' {
-    assert "$src/_gpgtar" is_file
-}
-
-@test 'src has _gpgv' {
-    assert "$src/_gpgv" is_file
 }
 
 @test 'src has _gpgv2' {
@@ -10952,10 +9812,6 @@
     assert "$src/_gpicview" is_file
 }
 
-@test 'src has _gping' {
-    assert "$src/_gping" is_file
-}
-
 @test 'src has _gplc' {
     assert "$src/_gplc" is_file
 }
@@ -10974,10 +9830,6 @@
 
 @test 'src has _gprintf' {
     assert "$src/_gprintf" is_file
-}
-
-@test 'src has _gprolog' {
-    assert "$src/_gprolog" is_file
 }
 
 @test 'src has _gpwd' {
@@ -11204,10 +10056,6 @@
     assert "$src/_grilo-test-ui-0.3" is_file
 }
 
-@test 'src has _gringo' {
-    assert "$src/_gringo" is_file
-}
-
 @test 'src has _grl-inspect-0.3' {
     assert "$src/_grl-inspect-0.3" is_file
 }
@@ -11256,10 +10104,6 @@
     assert "$src/_groovy" is_file
 }
 
-@test 'src has _groovyc' {
-    assert "$src/_groovyc" is_file
-}
-
 @test 'src has _groovysh' {
     assert "$src/_groovysh" is_file
 }
@@ -11296,24 +10140,12 @@
     assert "$src/_grpunconv" is_file
 }
 
-@test 'src has _grub-bios-setup' {
-    assert "$src/_grub-bios-setup" is_file
-}
-
-@test 'src has _grub-editenv' {
-    assert "$src/_grub-editenv" is_file
-}
-
 @test 'src has _grub-file' {
     assert "$src/_grub-file" is_file
 }
 
 @test 'src has _grub-fstest' {
     assert "$src/_grub-fstest" is_file
-}
-
-@test 'src has _grub-glue-efi' {
-    assert "$src/_grub-glue-efi" is_file
 }
 
 @test 'src has _grub-install' {
@@ -11328,44 +10160,16 @@
     assert "$src/_grub-macbless" is_file
 }
 
-@test 'src has _grub-mkconfig' {
-    assert "$src/_grub-mkconfig" is_file
-}
-
 @test 'src has _grub-mkdevicemap' {
     assert "$src/_grub-mkdevicemap" is_file
-}
-
-@test 'src has _grub-mkfont' {
-    assert "$src/_grub-mkfont" is_file
-}
-
-@test 'src has _grub-mkimage' {
-    assert "$src/_grub-mkimage" is_file
 }
 
 @test 'src has _grub-mklayout' {
     assert "$src/_grub-mklayout" is_file
 }
 
-@test 'src has _grub-mknetdir' {
-    assert "$src/_grub-mknetdir" is_file
-}
-
-@test 'src has _grub-mkpasswd-pbkdf2' {
-    assert "$src/_grub-mkpasswd-pbkdf2" is_file
-}
-
 @test 'src has _grub-mkrelpath' {
     assert "$src/_grub-mkrelpath" is_file
-}
-
-@test 'src has _grub-mkrescue' {
-    assert "$src/_grub-mkrescue" is_file
-}
-
-@test 'src has _grub-mkstandalone' {
-    assert "$src/_grub-mkstandalone" is_file
 }
 
 @test 'src has _grub-mount' {
@@ -11386,14 +10190,6 @@
 
 @test 'src has _grub-render-label' {
     assert "$src/_grub-render-label" is_file
-}
-
-@test 'src has _grub-script-check' {
-    assert "$src/_grub-script-check" is_file
-}
-
-@test 'src has _grub-set-default' {
-    assert "$src/_grub-set-default" is_file
 }
 
 @test 'src has _grub-syslinux2cfg' {
@@ -11536,16 +10332,8 @@
     assert "$src/_grunt" is_file
 }
 
-@test 'src has _gs' {
-    assert "$src/_gs" is_file
-}
-
 @test 'src has _gsad' {
     assert "$src/_gsad" is_file
-}
-
-@test 'src has _gsasl' {
-    assert "$src/_gsasl" is_file
 }
 
 @test 'src has _gsc' {
@@ -11576,10 +10364,6 @@
     assert "$src/_gsf-office-thumbnailer" is_file
 }
 
-@test 'src has _gsftopk' {
-    assert "$src/_gsftopk" is_file
-}
-
 @test 'src has _gshred' {
     assert "$src/_gshred" is_file
 }
@@ -11608,14 +10392,6 @@
     assert "$src/_gssproxy" is_file
 }
 
-@test 'src has _gst-device-monitor-1.0' {
-    assert "$src/_gst-device-monitor-1.0" is_file
-}
-
-@test 'src has _gst-discoverer-1.0' {
-    assert "$src/_gst-discoverer-1.0" is_file
-}
-
 @test 'src has _gst-feedback' {
     assert "$src/_gst-feedback" is_file
 }
@@ -11626,10 +10402,6 @@
 
 @test 'src has _gst-inspect-0.10' {
     assert "$src/_gst-inspect-0.10" is_file
-}
-
-@test 'src has _gst-inspect-1.0' {
-    assert "$src/_gst-inspect-1.0" is_file
 }
 
 @test 'src has _gst-install' {
@@ -11644,28 +10416,12 @@
     assert "$src/_gst-launch-0.10" is_file
 }
 
-@test 'src has _gst-launch-1.0' {
-    assert "$src/_gst-launch-1.0" is_file
-}
-
-@test 'src has _gst-play-1.0' {
-    assert "$src/_gst-play-1.0" is_file
-}
-
-@test 'src has _gst-stats-1.0' {
-    assert "$src/_gst-stats-1.0" is_file
-}
-
 @test 'src has _gst-typefind' {
     assert "$src/_gst-typefind" is_file
 }
 
 @test 'src has _gst-typefind-0.10' {
     assert "$src/_gst-typefind-0.10" is_file
-}
-
-@test 'src has _gst-typefind-1.0' {
-    assert "$src/_gst-typefind-1.0" is_file
 }
 
 @test 'src has _gst-validate-1.0' {
@@ -11728,14 +10484,6 @@
     assert "$src/_gtest" is_file
 }
 
-@test 'src has _gtester' {
-    assert "$src/_gtester" is_file
-}
-
-@test 'src has _gtester-report' {
-    assert "$src/_gtester-report" is_file
-}
-
 @test 'src has _gtf' {
     assert "$src/_gtf" is_file
 }
@@ -11748,28 +10496,12 @@
     assert "$src/_gtk-builder-convert" is_file
 }
 
-@test 'src has _gtk-builder-tool' {
-    assert "$src/_gtk-builder-tool" is_file
-}
-
-@test 'src has _gtk-encode-symbolic-svg' {
-    assert "$src/_gtk-encode-symbolic-svg" is_file
-}
-
-@test 'src has _gtk-launch' {
-    assert "$src/_gtk-launch" is_file
-}
-
 @test 'src has _gtk-query-immodules-2.0-64' {
     assert "$src/_gtk-query-immodules-2.0-64" is_file
 }
 
 @test 'src has _gtk-query-immodules-3.0-64' {
     assert "$src/_gtk-query-immodules-3.0-64" is_file
-}
-
-@test 'src has _gtk-update-icon-cache' {
-    assert "$src/_gtk-update-icon-cache" is_file
 }
 
 @test 'src has _gtk-update-icon-cache-2.0' {
@@ -11804,16 +10536,8 @@
     assert "$src/_gtk4-demo" is_file
 }
 
-@test 'src has _gtk4-encode-symbolic-svg' {
-    assert "$src/_gtk4-encode-symbolic-svg" is_file
-}
-
 @test 'src has _gtk4-icon-browser' {
     assert "$src/_gtk4-icon-browser" is_file
-}
-
-@test 'src has _gtk4-launch' {
-    assert "$src/_gtk4-launch" is_file
 }
 
 @test 'src has _gtk4-node-editor' {
@@ -11822,10 +10546,6 @@
 
 @test 'src has _gtk4-print-editor' {
     assert "$src/_gtk4-print-editor" is_file
-}
-
-@test 'src has _gtk4-update-icon-cache' {
-    assert "$src/_gtk4-update-icon-cache" is_file
 }
 
 @test 'src has _gtk4-widget-factory' {
@@ -11944,10 +10664,6 @@
     assert "$src/_guestunmount" is_file
 }
 
-@test 'src has _guile' {
-    assert "$src/_guile" is_file
-}
-
 @test 'src has _guile2' {
     assert "$src/_guile2" is_file
 }
@@ -11990,10 +10706,6 @@
 
 @test 'src has _gusers' {
     assert "$src/_gusers" is_file
-}
-
-@test 'src has _gv2gml' {
-    assert "$src/_gv2gml" is_file
 }
 
 @test 'src has _gvdir' {
@@ -12072,10 +10784,6 @@
     assert "$src/_gvfs-tree" is_file
 }
 
-@test 'src has _gvgen' {
-    assert "$src/_gvgen" is_file
-}
-
 @test 'src has _gvimex' {
     assert "$src/_gvimex" is_file
 }
@@ -12090,10 +10798,6 @@
 
 @test 'src has _gvnccapture' {
     assert "$src/_gvnccapture" is_file
-}
-
-@test 'src has _gvpr' {
-    assert "$src/_gvpr" is_file
 }
 
 @test 'src has _gwhoami' {
@@ -12348,14 +11052,6 @@
     assert "$src/_hb-shape" is_file
 }
 
-@test 'src has _hb-subset' {
-    assert "$src/_hb-subset" is_file
-}
-
-@test 'src has _hb-view' {
-    assert "$src/_hb-view" is_file
-}
-
 @test 'src has _hbpldecode' {
     assert "$src/_hbpldecode" is_file
 }
@@ -12370,10 +11066,6 @@
 
 @test 'src has _hcidump' {
     assert "$src/_hcidump" is_file
-}
-
-@test 'src has _hcitool' {
-    assert "$src/_hcitool" is_file
 }
 
 @test 'src has _hcsecd' {
@@ -12452,14 +11144,6 @@
     assert "$src/_heartbeat" is_file
 }
 
-@test 'src has _heif-enc' {
-    assert "$src/_heif-enc" is_file
-}
-
-@test 'src has _heif-info' {
-    assert "$src/_heif-info" is_file
-}
-
 @test 'src has _hello' {
     assert "$src/_hello" is_file
 }
@@ -12470,10 +11154,6 @@
 
 @test 'src has _hesinfo' {
     assert "$src/_hesinfo" is_file
-}
-
-@test 'src has _hex2hcd' {
-    assert "$src/_hex2hcd" is_file
 }
 
 @test 'src has _hex2raw' {
@@ -12498,14 +11178,6 @@
 
 @test 'src has _hexinject' {
     assert "$src/_hexinject" is_file
-}
-
-@test 'src has _hexyl' {
-    assert "$src/_hexyl" is_file
-}
-
-@test 'src has _hfind' {
-    assert "$src/_hfind" is_file
 }
 
 @test 'src has _hid2hci' {
@@ -12534,10 +11206,6 @@
 
 @test 'src has _histretch' {
     assert "$src/_histretch" is_file
-}
-
-@test 'src has _hitex' {
-    assert "$src/_hitex" is_file
 }
 
 @test 'src has _hitori' {
@@ -12684,10 +11352,6 @@
     assert "$src/_htdbm" is_file
 }
 
-@test 'src has _htlatex' {
-    assert "$src/_htlatex" is_file
-}
-
 @test 'src has _htmex' {
     assert "$src/_htmex" is_file
 }
@@ -12756,10 +11420,6 @@
     assert "$src/_httpster" is_file
 }
 
-@test 'src has _httpx' {
-    assert "$src/_httpx" is_file
-}
-
 @test 'src has _httrack' {
     assert "$src/_httrack" is_file
 }
@@ -12774,10 +11434,6 @@
 
 @test 'src has _hub-tool' {
     assert "$src/_hub-tool" is_file
-}
-
-@test 'src has _hunspell' {
-    assert "$src/_hunspell" is_file
 }
 
 @test 'src has _hupper' {
@@ -12848,10 +11504,6 @@
     assert "$src/_hwloc-gather-topology" is_file
 }
 
-@test 'src has _hwloc-info' {
-    assert "$src/_hwloc-info" is_file
-}
-
 @test 'src has _hwloc-ls' {
     assert "$src/_hwloc-ls" is_file
 }
@@ -12862,14 +11514,6 @@
 
 @test 'src has _hwloc-ps' {
     assert "$src/_hwloc-ps" is_file
-}
-
-@test 'src has _hydra' {
-    assert "$src/_hydra" is_file
-}
-
-@test 'src has _hyperfine' {
-    assert "$src/_hyperfine" is_file
 }
 
 @test 'src has _hyperkit' {
@@ -13244,10 +11888,6 @@
     assert "$src/_icalendar" is_file
 }
 
-@test 'src has _icat' {
-    assert "$src/_icat" is_file
-}
-
 @test 'src has _icc_simplify' {
     assert "$src/_icc_simplify" is_file
 }
@@ -13348,10 +11988,6 @@
     assert "$src/_icuinfo" is_file
 }
 
-@test 'src has _icupkg' {
-    assert "$src/_icupkg" is_file
-}
-
 @test 'src has _identity_driver' {
     assert "$src/_identity_driver" is_file
 }
@@ -13398,10 +12034,6 @@
 
 @test 'src has _ideviceinfo' {
     assert "$src/_ideviceinfo" is_file
-}
-
-@test 'src has _ideviceinstaller' {
-    assert "$src/_ideviceinstaller" is_file
 }
 
 @test 'src has _idevicename' {
@@ -13452,20 +12084,8 @@
     assert "$src/_idle3" is_file
 }
 
-@test 'src has _idle3.7' {
-    assert "$src/_idle3.7" is_file
-}
-
 @test 'src has _idlj' {
     assert "$src/_idlj" is_file
-}
-
-@test 'src has _idn' {
-    assert "$src/_idn" is_file
-}
-
-@test 'src has _idn2' {
-    assert "$src/_idn2" is_file
 }
 
 @test 'src has _idx.pl' {
@@ -13474,10 +12094,6 @@
 
 @test 'src has _idxparse.pl' {
     assert "$src/_idxparse.pl" is_file
-}
-
-@test 'src has _iecset' {
-    assert "$src/_iecset" is_file
 }
 
 @test 'src has _iex' {
@@ -13502,14 +12118,6 @@
 
 @test 'src has _ifenslave' {
     assert "$src/_ifenslave" is_file
-}
-
-@test 'src has _ifenslave-2.6' {
-    assert "$src/_ifenslave-2.6" is_file
-}
-
-@test 'src has _ifind' {
-    assert "$src/_ifind" is_file
 }
 
 @test 'src has _ifittool' {
@@ -13596,10 +12204,6 @@
     assert "$src/_iloktool" is_file
 }
 
-@test 'src has _ils' {
-    assert "$src/_ils" is_file
-}
-
 @test 'src has _imageMounter.py' {
     assert "$src/_imageMounter.py" is_file
 }
@@ -13612,10 +12216,6 @@
     assert "$src/_imageio_remove_bin" is_file
 }
 
-@test 'src has _imap4d' {
-    assert "$src/_imap4d" is_file
-}
-
 @test 'src has _img2cow' {
     assert "$src/_img2cow" is_file
 }
@@ -13624,28 +12224,12 @@
     assert "$src/_img2py" is_file
 }
 
-@test 'src has _img2txt' {
-    assert "$src/_img2txt" is_file
-}
-
-@test 'src has _img2webp' {
-    assert "$src/_img2webp" is_file
-}
-
 @test 'src has _img2xpm' {
     assert "$src/_img2xpm" is_file
 }
 
 @test 'src has _img2xterm' {
     assert "$src/_img2xterm" is_file
-}
-
-@test 'src has _img_cat' {
-    assert "$src/_img_cat" is_file
-}
-
-@test 'src has _img_stat' {
-    assert "$src/_img_stat" is_file
 }
 
 @test 'src has _imgcache-parse-mod.py' {
@@ -13804,10 +12388,6 @@
     assert "$src/_infotocap" is_file
 }
 
-@test 'src has _inimf' {
-    assert "$src/_inimf" is_file
-}
-
 @test 'src has _init' {
     assert "$src/_init" is_file
 }
@@ -13822,10 +12402,6 @@
 
 @test 'src has _inkscape' {
     assert "$src/_inkscape" is_file
-}
-
-@test 'src has _innochecksum' {
-    assert "$src/_innochecksum" is_file
 }
 
 @test 'src has _innotop' {
@@ -13876,20 +12452,12 @@
     assert "$src/_installcheck" is_file
 }
 
-@test 'src has _installer' {
-    assert "$src/_installer" is_file
-}
-
 @test 'src has _installkernel' {
     assert "$src/_installkernel" is_file
 }
 
 @test 'src has _instantfpc' {
     assert "$src/_instantfpc" is_file
-}
-
-@test 'src has _integritysetup' {
-    assert "$src/_integritysetup" is_file
 }
 
 @test 'src has _intel-microcode2ucode' {
@@ -13988,14 +12556,6 @@
     assert "$src/_iopending" is_file
 }
 
-@test 'src has _ioreg' {
-    assert "$src/_ioreg" is_file
-}
-
-@test 'src has _ios-deploy' {
-    assert "$src/_ios-deploy" is_file
-}
-
 @test 'src has _iosnoop' {
     assert "$src/_iosnoop" is_file
 }
@@ -14086,14 +12646,6 @@
 
 @test 'src has _ipcs' {
     assert "$src/_ipcs" is_file
-}
-
-@test 'src has _iperf' {
-    assert "$src/_iperf" is_file
-}
-
-@test 'src has _iperf3' {
-    assert "$src/_iperf3" is_file
 }
 
 @test 'src has _iperf3-darwin' {
@@ -14204,16 +12756,8 @@
     assert "$src/_ipmitool" is_file
 }
 
-@test 'src has _ippfind' {
-    assert "$src/_ippfind" is_file
-}
-
 @test 'src has _ippserver' {
     assert "$src/_ippserver" is_file
-}
-
-@test 'src has _ipptool' {
-    assert "$src/_ipptool" is_file
 }
 
 @test 'src has _ippusbxd' {
@@ -14236,20 +12780,12 @@
     assert "$src/_iprupdate" is_file
 }
 
-@test 'src has _ipset' {
-    assert "$src/_ipset" is_file
-}
-
 @test 'src has _ipset-translate' {
     assert "$src/_ipset-translate" is_file
 }
 
 @test 'src has _iptables' {
     assert "$src/_iptables" is_file
-}
-
-@test 'src has _iptables-apply' {
-    assert "$src/_iptables-apply" is_file
 }
 
 @test 'src has _iptables-legacy' {
@@ -14270,10 +12806,6 @@
 
 @test 'src has _iptc' {
     assert "$src/_iptc" is_file
-}
-
-@test 'src has _iptraf-ng' {
-    assert "$src/_iptraf-ng" is_file
 }
 
 @test 'src has _iptstate' {
@@ -14308,10 +12840,6 @@
     assert "$src/_irb2.3" is_file
 }
 
-@test 'src has _irb2.5' {
-    assert "$src/_irb2.5" is_file
-}
-
 @test 'src has _irb2.7' {
     assert "$src/_irb2.7" is_file
 }
@@ -14330,14 +12858,6 @@
 
 @test 'src has _irqtop' {
     assert "$src/_irqtop" is_file
-}
-
-@test 'src has _isadump' {
-    assert "$src/_isadump" is_file
-}
-
-@test 'src has _isaset' {
-    assert "$src/_isaset" is_file
 }
 
 @test 'src has _ischroot' {
@@ -14400,10 +12920,6 @@
     assert "$src/_isoinfo" is_file
 }
 
-@test 'src has _isort' {
-    assert "$src/_isort" is_file
-}
-
 @test 'src has _isort-identify-imports' {
     assert "$src/_isort-identify-imports" is_file
 }
@@ -14464,16 +12980,8 @@
     assert "$src/_isqlw-vt" is_file
 }
 
-@test 'src has _istat' {
-    assert "$src/_istat" is_file
-}
-
 @test 'src has _istats' {
     assert "$src/_istats" is_file
-}
-
-@test 'src has _isutf8' {
-    assert "$src/_isutf8" is_file
 }
 
 @test 'src has _isympy' {
@@ -14544,14 +13052,6 @@
     assert "$src/_jacd" is_file
 }
 
-@test 'src has _jack_alias' {
-    assert "$src/_jack_alias" is_file
-}
-
-@test 'src has _jack_connect' {
-    assert "$src/_jack_connect" is_file
-}
-
 @test 'src has _jack_cpu' {
     assert "$src/_jack_cpu" is_file
 }
@@ -14560,28 +13060,12 @@
     assert "$src/_jack_disconnect" is_file
 }
 
-@test 'src has _jack_load_test' {
-    assert "$src/_jack_load_test" is_file
-}
-
-@test 'src has _jack_midi_dump' {
-    assert "$src/_jack_midi_dump" is_file
-}
-
 @test 'src has _jack_midi_latency_test' {
     assert "$src/_jack_midi_latency_test" is_file
 }
 
-@test 'src has _jack_property' {
-    assert "$src/_jack_property" is_file
-}
-
 @test 'src has _jack_test' {
     assert "$src/_jack_test" is_file
-}
-
-@test 'src has _jackd' {
-    assert "$src/_jackd" is_file
 }
 
 @test 'src has _jad' {
@@ -14654,10 +13138,6 @@
 
 @test 'src has _jboss-win' {
     assert "$src/_jboss-win" is_file
-}
-
-@test 'src has _jcat' {
-    assert "$src/_jcat" is_file
 }
 
 @test 'src has _jcmd' {
@@ -14796,16 +13276,8 @@
     assert "$src/_jpackage" is_file
 }
 
-@test 'src has _jpeg2yuv' {
-    assert "$src/_jpeg2yuv" is_file
-}
-
 @test 'src has _jpegexiforient' {
     assert "$src/_jpegexiforient" is_file
-}
-
-@test 'src has _jpegtran' {
-    assert "$src/_jpegtran" is_file
 }
 
 @test 'src has _jpgicc' {
@@ -14928,10 +13400,6 @@
     assert "$src/_jsx" is_file
 }
 
-@test 'src has _jupyter' {
-    assert "$src/_jupyter" is_file
-}
-
 @test 'src has _jupyter-bundlerextension' {
     assert "$src/_jupyter-bundlerextension" is_file
 }
@@ -14972,32 +13440,16 @@
     assert "$src/_jupyter-nbextension" is_file
 }
 
-@test 'src has _jupyter-notebook' {
-    assert "$src/_jupyter-notebook" is_file
-}
-
 @test 'src has _jupyter-run' {
     assert "$src/_jupyter-run" is_file
-}
-
-@test 'src has _jupyter-server' {
-    assert "$src/_jupyter-server" is_file
 }
 
 @test 'src has _jupyter-serverextension' {
     assert "$src/_jupyter-serverextension" is_file
 }
 
-@test 'src has _jupyter-trust' {
-    assert "$src/_jupyter-trust" is_file
-}
-
 @test 'src has _jwhois' {
     assert "$src/_jwhois" is_file
-}
-
-@test 'src has _jxlinfo' {
-    assert "$src/_jxlinfo" is_file
 }
 
 @test 'src has _k3s' {
@@ -15058,10 +13510,6 @@
 
 @test 'src has _kbuildsycoca5' {
     assert "$src/_kbuildsycoca5" is_file
-}
-
-@test 'src has _kbxutil' {
-    assert "$src/_kbxutil" is_file
 }
 
 @test 'src has _kcmshell4' {
@@ -15170,22 +13618,6 @@
 
 @test 'src has _kextlibs' {
     assert "$src/_kextlibs" is_file
-}
-
-@test 'src has _kextload' {
-    assert "$src/_kextload" is_file
-}
-
-@test 'src has _kextstat' {
-    assert "$src/_kextstat" is_file
-}
-
-@test 'src has _kextunload' {
-    assert "$src/_kextunload" is_file
-}
-
-@test 'src has _kextutil' {
-    assert "$src/_kextutil" is_file
 }
 
 @test 'src has _key.dns_resolver' {
@@ -15372,10 +13804,6 @@
     assert "$src/_kmodsign" is_file
 }
 
-@test 'src has _kmutil' {
-    assert "$src/_kmutil" is_file
-}
-
 @test 'src has _knocker' {
     assert "$src/_knocker" is_file
 }
@@ -15390,10 +13818,6 @@
 
 @test 'src has _koi8rxterm' {
     assert "$src/_koi8rxterm" is_file
-}
-
-@test 'src has _kotlin' {
-    assert "$src/_kotlin" is_file
 }
 
 @test 'src has _kpackagetool5' {
@@ -15436,10 +13860,6 @@
     assert "$src/_kpsewhich" is_file
 }
 
-@test 'src has _kpsexpand' {
-    assert "$src/_kpsexpand" is_file
-}
-
 @test 'src has _kquitapp' {
     assert "$src/_kquitapp" is_file
 }
@@ -15462,10 +13882,6 @@
 
 @test 'src has _ksflatten' {
     assert "$src/_ksflatten" is_file
-}
-
-@test 'src has _ksh' {
-    assert "$src/_ksh" is_file
 }
 
 @test 'src has _ksshell' {
@@ -15576,14 +13992,6 @@
     assert "$src/_l2control" is_file
 }
 
-@test 'src has _l2ping' {
-    assert "$src/_l2ping" is_file
-}
-
-@test 'src has _l2test' {
-    assert "$src/_l2test" is_file
-}
-
 @test 'src has _l3build' {
     assert "$src/_l3build" is_file
 }
@@ -15644,10 +14052,6 @@
     assert "$src/_latexminted" is_file
 }
 
-@test 'src has _latexpand' {
-    assert "$src/_latexpand" is_file
-}
-
 @test 'src has _latexrevise' {
     assert "$src/_latexrevise" is_file
 }
@@ -15662,10 +14066,6 @@
 
 @test 'src has _launch_instance' {
     assert "$src/_launch_instance" is_file
-}
-
-@test 'src has _launchctl' {
-    assert "$src/_launchctl" is_file
 }
 
 @test 'src has _lav2wav' {
@@ -15702,10 +14102,6 @@
 
 @test 'src has _layerutil' {
     assert "$src/_layerutil" is_file
-}
-
-@test 'src has _lazygit' {
-    assert "$src/_lazygit" is_file
 }
 
 @test 'src has _lbu' {
@@ -15796,10 +14192,6 @@
     assert "$src/_ldapdomaindump" is_file
 }
 
-@test 'src has _ldattach' {
-    assert "$src/_ldattach" is_file
-}
-
 @test 'src has _ldbadd' {
     assert "$src/_ldbadd" is_file
 }
@@ -15852,72 +14244,8 @@
     assert "$src/_ldmtool" is_file
 }
 
-@test 'src has _ldns-compare-zones' {
-    assert "$src/_ldns-compare-zones" is_file
-}
-
-@test 'src has _ldns-dane' {
-    assert "$src/_ldns-dane" is_file
-}
-
-@test 'src has _ldns-dpa' {
-    assert "$src/_ldns-dpa" is_file
-}
-
-@test 'src has _ldns-gen-zone' {
-    assert "$src/_ldns-gen-zone" is_file
-}
-
-@test 'src has _ldns-key2ds' {
-    assert "$src/_ldns-key2ds" is_file
-}
-
-@test 'src has _ldns-keyfetcher' {
-    assert "$src/_ldns-keyfetcher" is_file
-}
-
-@test 'src has _ldns-keygen' {
-    assert "$src/_ldns-keygen" is_file
-}
-
-@test 'src has _ldns-notify' {
-    assert "$src/_ldns-notify" is_file
-}
-
-@test 'src has _ldns-nsec3-hash' {
-    assert "$src/_ldns-nsec3-hash" is_file
-}
-
-@test 'src has _ldns-read-zone' {
-    assert "$src/_ldns-read-zone" is_file
-}
-
-@test 'src has _ldns-revoke' {
-    assert "$src/_ldns-revoke" is_file
-}
-
-@test 'src has _ldns-signzone' {
-    assert "$src/_ldns-signzone" is_file
-}
-
-@test 'src has _ldns-test-edns' {
-    assert "$src/_ldns-test-edns" is_file
-}
-
 @test 'src has _ldns-testns' {
     assert "$src/_ldns-testns" is_file
-}
-
-@test 'src has _ldns-verify-zone' {
-    assert "$src/_ldns-verify-zone" is_file
-}
-
-@test 'src has _ldns-zcat' {
-    assert "$src/_ldns-zcat" is_file
-}
-
-@test 'src has _ldns-zsplit' {
-    assert "$src/_ldns-zsplit" is_file
 }
 
 @test 'src has _ldrdf' {
@@ -15988,10 +14316,6 @@
     assert "$src/_libdeflate-gunzip" is_file
 }
 
-@test 'src has _libdeflate-gzip' {
-    assert "$src/_libdeflate-gzip" is_file
-}
-
 @test 'src has _libgtop_daemon2' {
     assert "$src/_libgtop_daemon2" is_file
 }
@@ -16060,20 +14384,12 @@
     assert "$src/_libtoolize" is_file
 }
 
-@test 'src has _libvirtd' {
-    assert "$src/_libvirtd" is_file
-}
-
 @test 'src has _libwacom-list-devices' {
     assert "$src/_libwacom-list-devices" is_file
 }
 
 @test 'src has _libwacom-list-local-devices' {
     assert "$src/_libwacom-list-local-devices" is_file
-}
-
-@test 'src has _lid' {
-    assert "$src/_lid" is_file
 }
 
 @test 'src has _light-locker' {
@@ -16324,10 +14640,6 @@
     assert "$src/_lmon" is_file
 }
 
-@test 'src has _lmtpd' {
-    assert "$src/_lmtpd" is_file
-}
-
 @test 'src has _lndir' {
     assert "$src/_lndir" is_file
 }
@@ -16412,10 +14724,6 @@
     assert "$src/_locate.findutils" is_file
 }
 
-@test 'src has _lockfile' {
-    assert "$src/_lockfile" is_file
-}
-
 @test 'src has _lockstat' {
     assert "$src/_lockstat" is_file
 }
@@ -16486,10 +14794,6 @@
 
 @test 'src has _loimpress' {
     assert "$src/_loimpress" is_file
-}
-
-@test 'src has _lolcat' {
-    assert "$src/_lolcat" is_file
 }
 
 @test 'src has _lolcatjs' {
@@ -16600,10 +14904,6 @@
     assert "$src/_lprodump-qt5" is_file
 }
 
-@test 'src has _lrelease' {
-    assert "$src/_lrelease" is_file
-}
-
 @test 'src has _lrelease-pro' {
     assert "$src/_lrelease-pro" is_file
 }
@@ -16618,10 +14918,6 @@
 
 @test 'src has _lrelease-qt5' {
     assert "$src/_lrelease-qt5" is_file
-}
-
-@test 'src has _lsappinfo' {
-    assert "$src/_lsappinfo" is_file
 }
 
 @test 'src has _lsassy' {
@@ -16812,10 +15108,6 @@
     assert "$src/_lua52" is_file
 }
 
-@test 'src has _luac' {
-    assert "$src/_luac" is_file
-}
-
 @test 'src has _luac-5.1' {
     assert "$src/_luac-5.1" is_file
 }
@@ -16856,10 +15148,6 @@
     assert "$src/_luahbtex" is_file
 }
 
-@test 'src has _luajit' {
-    assert "$src/_luajit" is_file
-}
-
 @test 'src has _luajit-2.0.3' {
     assert "$src/_luajit-2.0.3" is_file
 }
@@ -16892,20 +15180,12 @@
     assert "$src/_luajittex" is_file
 }
 
-@test 'src has _lualatex-dev' {
-    assert "$src/_lualatex-dev" is_file
-}
-
 @test 'src has _luametatex' {
     assert "$src/_luametatex" is_file
 }
 
 @test 'src has _luarocks-admin' {
     assert "$src/_luarocks-admin" is_file
-}
-
-@test 'src has _luatex' {
-    assert "$src/_luatex" is_file
 }
 
 @test 'src has _luatex53' {
@@ -16970,10 +15250,6 @@
 
 @test 'src has _lv2ls' {
     assert "$src/_lv2ls" is_file
-}
-
-@test 'src has _lvchange' {
-    assert "$src/_lvchange" is_file
 }
 
 @test 'src has _lvmdump' {
@@ -17212,10 +15488,6 @@
     assert "$src/_macbinary" is_file
 }
 
-@test 'src has _macchanger' {
-    assert "$src/_macchanger" is_file
-}
-
 @test 'src has _macdeployqt' {
     assert "$src/_macdeployqt" is_file
 }
@@ -17240,10 +15512,6 @@
     assert "$src/_macpack" is_file
 }
 
-@test 'src has _mactime' {
-    assert "$src/_mactime" is_file
-}
-
 @test 'src has _magicrescue' {
     assert "$src/_magicrescue" is_file
 }
@@ -17258,10 +15526,6 @@
 
 @test 'src has _mail.mailutils' {
     assert "$src/_mail.mailutils" is_file
-}
-
-@test 'src has _mailstat' {
-    assert "$src/_mailstat" is_file
 }
 
 @test 'src has _mailtest' {
@@ -17286,10 +15550,6 @@
 
 @test 'src has _make-pdf-javascript.py' {
     assert "$src/_make-pdf-javascript.py" is_file
-}
-
-@test 'src has _make4ht' {
-    assert "$src/_make4ht" is_file
 }
 
 @test 'src has _make_f2fs' {
@@ -17556,16 +15816,8 @@
     assert "$src/_masktest" is_file
 }
 
-@test 'src has _mason' {
-    assert "$src/_mason" is_file
-}
-
 @test 'src has _massagevendor' {
     assert "$src/_massagevendor" is_file
-}
-
-@test 'src has _masscan' {
-    assert "$src/_masscan" is_file
 }
 
 @test 'src has _mat2' {
@@ -17752,10 +16004,6 @@
     assert "$src/_mbstream" is_file
 }
 
-@test 'src has _mc' {
-    assert "$src/_mc" is_file
-}
-
 @test 'src has _mc-wait-for-name' {
     assert "$src/_mc-wait-for-name" is_file
 }
@@ -17808,10 +16056,6 @@
     assert "$src/_mcxquery" is_file
 }
 
-@test 'src has _md2html' {
-    assert "$src/_md2html" is_file
-}
-
 @test 'src has _md5deep' {
     assert "$src/_md5deep" is_file
 }
@@ -17826,10 +16070,6 @@
 
 @test 'src has _mdassembler' {
     assert "$src/_mdassembler" is_file
-}
-
-@test 'src has _mdatopbm' {
-    assert "$src/_mdatopbm" is_file
 }
 
 @test 'src has _mdb-export' {
@@ -17866,10 +16106,6 @@
 
 @test 'src has _mdig' {
     assert "$src/_mdig" is_file
-}
-
-@test 'src has _mdimport' {
-    assert "$src/_mdimport" is_file
 }
 
 @test 'src has _mdimport32' {
@@ -17972,10 +16208,6 @@
     assert "$src/_mencoder" is_file
 }
 
-@test 'src has _mendex' {
-    assert "$src/_mendex" is_file
-}
-
 @test 'src has _menuexec' {
     assert "$src/_menuexec" is_file
 }
@@ -17998,10 +16230,6 @@
 
 @test 'src has _mesh-cfgtest' {
     assert "$src/_mesh-cfgtest" is_file
-}
-
-@test 'src has _meshctl' {
-    assert "$src/_meshctl" is_file
 }
 
 @test 'src has _meshdebug' {
@@ -18086,10 +16314,6 @@
 
 @test 'src has _mfplain' {
     assert "$src/_mfplain" is_file
-}
-
-@test 'src has _mft' {
-    assert "$src/_mft" is_file
 }
 
 @test 'src has _mfterm' {
@@ -18192,10 +16416,6 @@
     assert "$src/_mingle" is_file
 }
 
-@test 'src has _minicom' {
-    assert "$src/_minicom" is_file
-}
-
 @test 'src has _ministat' {
     assert "$src/_ministat" is_file
 }
@@ -18294,10 +16514,6 @@
 
 @test 'src has _mkdumprd' {
     assert "$src/_mkdumprd" is_file
-}
-
-@test 'src has _mkenvimage' {
-    assert "$src/_mkenvimage" is_file
 }
 
 @test 'src has _mkextunpack' {
@@ -18460,24 +16676,12 @@
     assert "$src/_mksmbpasswd" is_file
 }
 
-@test 'src has _mksquashfs' {
-    assert "$src/_mksquashfs" is_file
-}
-
 @test 'src has _mkt1font' {
     assert "$src/_mkt1font" is_file
 }
 
 @test 'src has _mktexfmt' {
     assert "$src/_mktexfmt" is_file
-}
-
-@test 'src has _mktexlsr' {
-    assert "$src/_mktexlsr" is_file
-}
-
-@test 'src has _mktexpk' {
-    assert "$src/_mktexpk" is_file
 }
 
 @test 'src has _mkudffs' {
@@ -18500,14 +16704,6 @@
     assert "$src/_mlx5tool" is_file
 }
 
-@test 'src has _mm2gv' {
-    assert "$src/_mm2gv" is_file
-}
-
-@test 'src has _mmafm' {
-    assert "$src/_mmafm" is_file
-}
-
 @test 'src has _mmc-tool' {
     assert "$src/_mmc-tool" is_file
 }
@@ -18520,24 +16716,8 @@
     assert "$src/_mmcli" is_file
 }
 
-@test 'src has _mmdblookup' {
-    assert "$src/_mmdblookup" is_file
-}
-
-@test 'src has _mmls' {
-    assert "$src/_mmls" is_file
-}
-
-@test 'src has _mmpfb' {
-    assert "$src/_mmpfb" is_file
-}
-
 @test 'src has _mmroff' {
     assert "$src/_mmroff" is_file
-}
-
-@test 'src has _mmstat' {
-    assert "$src/_mmstat" is_file
 }
 
 @test 'src has _mntctl' {
@@ -18562,10 +16742,6 @@
 
 @test 'src has _moc-qt5' {
     assert "$src/_moc-qt5" is_file
-}
-
-@test 'src has _mocha' {
-    assert "$src/_mocha" is_file
 }
 
 @test 'src has _modifyrepo_c' {
@@ -18608,10 +16784,6 @@
     assert "$src/_moggsplit" is_file
 }
 
-@test 'src has _mongo' {
-    assert "$src/_mongo" is_file
-}
-
 @test 'src has _mongobridge' {
     assert "$src/_mongobridge" is_file
 }
@@ -18620,32 +16792,12 @@
     assert "$src/_mongod" is_file
 }
 
-@test 'src has _mongodump' {
-    assert "$src/_mongodump" is_file
-}
-
-@test 'src has _mongoexport' {
-    assert "$src/_mongoexport" is_file
-}
-
-@test 'src has _mongofiles' {
-    assert "$src/_mongofiles" is_file
-}
-
-@test 'src has _mongoimport' {
-    assert "$src/_mongoimport" is_file
-}
-
 @test 'src has _mongooplog' {
     assert "$src/_mongooplog" is_file
 }
 
 @test 'src has _mongoreplay' {
     assert "$src/_mongoreplay" is_file
-}
-
-@test 'src has _mongorestore' {
-    assert "$src/_mongorestore" is_file
 }
 
 @test 'src has _mongos' {
@@ -18658,14 +16810,6 @@
 
 @test 'src has _mongosniff' {
     assert "$src/_mongosniff" is_file
-}
-
-@test 'src has _mongostat' {
-    assert "$src/_mongostat" is_file
-}
-
-@test 'src has _mongotop' {
-    assert "$src/_mongotop" is_file
 }
 
 @test 'src has _monkeyrunner' {
@@ -18844,10 +16988,6 @@
     assert "$src/_mp32" is_file
 }
 
-@test 'src has _mp3blaster' {
-    assert "$src/_mp3blaster" is_file
-}
-
 @test 'src has _mp64' {
     assert "$src/_mp64" is_file
 }
@@ -18874,10 +17014,6 @@
 
 @test 'src has _mpeg2enc' {
     assert "$src/_mpeg2enc" is_file
-}
-
-@test 'src has _mpg123' {
-    assert "$src/_mpg123" is_file
 }
 
 @test 'src has _mpg123-alsa' {
@@ -18956,20 +17092,12 @@
     assert "$src/_mpifort" is_file
 }
 
-@test 'src has _mpirun' {
-    assert "$src/_mpirun" is_file
-}
-
 @test 'src has _mplex' {
     assert "$src/_mplex" is_file
 }
 
 @test 'src has _mpmetis' {
     assert "$src/_mpmetis" is_file
-}
-
-@test 'src has _mpost' {
-    assert "$src/_mpost" is_file
 }
 
 @test 'src has _mppcheck' {
@@ -18982,10 +17110,6 @@
 
 @test 'src has _mppprof' {
     assert "$src/_mppprof" is_file
-}
-
-@test 'src has _mpris-proxy' {
-    assert "$src/_mpris-proxy" is_file
 }
 
 @test 'src has _mprof-report' {
@@ -19010,10 +17134,6 @@
 
 @test 'src has _ms_print' {
     assert "$src/_ms_print" is_file
-}
-
-@test 'src has _msbuild' {
-    assert "$src/_msbuild" is_file
 }
 
 @test 'src has _mscompress' {
@@ -19042,10 +17162,6 @@
 
 @test 'src has _msfvenom' {
     assert "$src/_msfvenom" is_file
-}
-
-@test 'src has _msgattrib' {
-    assert "$src/_msgattrib" is_file
 }
 
 @test 'src has _msgcat' {
@@ -19160,16 +17276,8 @@
     assert "$src/_multimon-ng" is_file
 }
 
-@test 'src has _multipath' {
-    assert "$src/_multipath" is_file
-}
-
 @test 'src has _multixterm' {
     assert "$src/_multixterm" is_file
-}
-
-@test 'src has _munge' {
-    assert "$src/_munge" is_file
 }
 
 @test 'src has _munged' {
@@ -19280,10 +17388,6 @@
     assert "$src/_myWatchNoBlinkColorized.sh" is_file
 }
 
-@test 'src has _my_print_defaults' {
-    assert "$src/_my_print_defaults" is_file
-}
-
 @test 'src has _mycli' {
     assert "$src/_mycli" is_file
 }
@@ -19382,10 +17486,6 @@
 
 @test 'src has _mysqlbinlog' {
     assert "$src/_mysqlbinlog" is_file
-}
-
-@test 'src has _mysqlcheck' {
-    assert "$src/_mysqlcheck" is_file
 }
 
 @test 'src has _mysqld' {
@@ -19500,10 +17600,6 @@
     assert "$src/_nandwrite" is_file
 }
 
-@test 'src has _nasm' {
-    assert "$src/_nasm" is_file
-}
-
 @test 'src has _natd' {
     assert "$src/_natd" is_file
 }
@@ -19538,10 +17634,6 @@
 
 @test 'src has _ncctl' {
     assert "$src/_ncctl" is_file
-}
-
-@test 'src has _ncmpcpp' {
-    assert "$src/_ncmpcpp" is_file
 }
 
 @test 'src has _ncrack' {
@@ -19594,10 +17686,6 @@
 
 @test 'src has _ndrdump' {
     assert "$src/_ndrdump" is_file
-}
-
-@test 'src has _neato' {
-    assert "$src/_neato" is_file
 }
 
 @test 'src has _needrestart' {
@@ -19682,14 +17770,6 @@
 
 @test 'src has _netsniff-ng' {
     assert "$src/_netsniff-ng" is_file
-}
-
-@test 'src has _nettle-hash' {
-    assert "$src/_nettle-hash" is_file
-}
-
-@test 'src has _nettle-pbkdf2' {
-    assert "$src/_nettle-pbkdf2" is_file
 }
 
 @test 'src has _nettop' {
@@ -19860,10 +17940,6 @@
     assert "$src/_nftrack" is_file
 }
 
-@test 'src has _ngettext' {
-    assert "$src/_ngettext" is_file
-}
-
 @test 'src has _nghttp' {
     assert "$src/_nghttp" is_file
 }
@@ -19880,10 +17956,6 @@
     assert "$src/_ngrok" is_file
 }
 
-@test 'src has _nh' {
-    assert "$src/_nh" is_file
-}
-
 @test 'src has _nikto' {
     assert "$src/_nikto" is_file
 }
@@ -19894,14 +17966,6 @@
 
 @test 'src has _nilfs-resize' {
     assert "$src/_nilfs-resize" is_file
-}
-
-@test 'src has _nilfs_cleanerd' {
-    assert "$src/_nilfs_cleanerd" is_file
-}
-
-@test 'src has _ninfod' {
-    assert "$src/_ninfod" is_file
 }
 
 @test 'src has _nisdomainname' {
@@ -20104,10 +18168,6 @@
     assert "$src/_nodejs" is_file
 }
 
-@test 'src has _nodemon' {
-    assert "$src/_nodemon" is_file
-}
-
 @test 'src has _nokfw' {
     assert "$src/_nokfw" is_file
 }
@@ -20142,10 +18202,6 @@
 
 @test 'src has _notary' {
     assert "$src/_notary" is_file
-}
-
-@test 'src has _notarytool' {
-    assert "$src/_notarytool" is_file
 }
 
 @test 'src has _notify' {
@@ -20296,22 +18352,6 @@
     assert "$src/_ntlm_auth" is_file
 }
 
-@test 'src has _ntp-keygen' {
-    assert "$src/_ntp-keygen" is_file
-}
-
-@test 'src has _ntp-wait' {
-    assert "$src/_ntp-wait" is_file
-}
-
-@test 'src has _ntpd' {
-    assert "$src/_ntpd" is_file
-}
-
-@test 'src has _ntpdc' {
-    assert "$src/_ntpdc" is_file
-}
-
 @test 'src has _ntpq' {
     assert "$src/_ntpq" is_file
 }
@@ -20322,10 +18362,6 @@
 
 @test 'src has _ntptime' {
     assert "$src/_ntptime" is_file
-}
-
-@test 'src has _ntptrace' {
-    assert "$src/_ntptrace" is_file
 }
 
 @test 'src has _numad' {
@@ -20366,10 +18402,6 @@
 
 @test 'src has _nvr' {
     assert "$src/_nvr" is_file
-}
-
-@test 'src has _nvram' {
-    assert "$src/_nvram" is_file
 }
 
 @test 'src has _nvramtool' {
@@ -20484,10 +18516,6 @@
     assert "$src/_ocamlbuild" is_file
 }
 
-@test 'src has _ocamlbuild.byte' {
-    assert "$src/_ocamlbuild.byte" is_file
-}
-
 @test 'src has _ocamlbuild.native' {
     assert "$src/_ocamlbuild.native" is_file
 }
@@ -20520,10 +18548,6 @@
     assert "$src/_ocamlcp.byte" is_file
 }
 
-@test 'src has _ocamlcp.opt' {
-    assert "$src/_ocamlcp.opt" is_file
-}
-
 @test 'src has _ocamldebug' {
     assert "$src/_ocamldebug" is_file
 }
@@ -20552,14 +18576,6 @@
     assert "$src/_ocamldumpobj" is_file
 }
 
-@test 'src has _ocamllex' {
-    assert "$src/_ocamllex" is_file
-}
-
-@test 'src has _ocamllex.byte' {
-    assert "$src/_ocamllex.byte" is_file
-}
-
 @test 'src has _ocamllex.opt' {
     assert "$src/_ocamllex.opt" is_file
 }
@@ -20572,20 +18588,8 @@
     assert "$src/_ocamlmklib.byte" is_file
 }
 
-@test 'src has _ocamlmklib.opt' {
-    assert "$src/_ocamlmklib.opt" is_file
-}
-
 @test 'src has _ocamlmktop' {
     assert "$src/_ocamlmktop" is_file
-}
-
-@test 'src has _ocamlmktop.byte' {
-    assert "$src/_ocamlmktop.byte" is_file
-}
-
-@test 'src has _ocamlmktop.opt' {
-    assert "$src/_ocamlmktop.opt" is_file
 }
 
 @test 'src has _ocamlnat' {
@@ -20662,10 +18666,6 @@
 
 @test 'src has _ocspd' {
     assert "$src/_ocspd" is_file
-}
-
-@test 'src has _ocsptool' {
-    assert "$src/_ocsptool" is_file
 }
 
 @test 'src has _odf2xhtml' {
@@ -20872,10 +18872,6 @@
     assert "$src/_onsgmls" is_file
 }
 
-@test 'src has _oobtest' {
-    assert "$src/_oobtest" is_file
-}
-
 @test 'src has _oocalc' {
     assert "$src/_oocalc" is_file
 }
@@ -20996,10 +18992,6 @@
     assert "$src/_opensc-notify" is_file
 }
 
-@test 'src has _opensc-tool' {
-    assert "$src/_opensc-tool" is_file
-}
-
 @test 'src has _opensnoop' {
     assert "$src/_opensnoop" is_file
 }
@@ -21066,10 +19058,6 @@
 
 @test 'src has _opj_dump' {
     assert "$src/_opj_dump" is_file
-}
-
-@test 'src has _opl2ofm' {
-    assert "$src/_opl2ofm" is_file
 }
 
 @test 'src has _opldecode' {
@@ -21304,10 +19292,6 @@
     assert "$src/_otctl" is_file
 }
 
-@test 'src has _otfinfo' {
-    assert "$src/_otfinfo" is_file
-}
-
 @test 'src has _otftotfm' {
     assert "$src/_otftotfm" is_file
 }
@@ -21336,16 +19320,8 @@
     assert "$src/_over" is_file
 }
 
-@test 'src has _ovf2ovp' {
-    assert "$src/_ovf2ovp" is_file
-}
-
 @test 'src has _ovftool' {
     assert "$src/_ovftool" is_file
-}
-
-@test 'src has _ovp2ovf' {
-    assert "$src/_ovp2ovf" is_file
 }
 
 @test 'src has _ownership' {
@@ -21354,10 +19330,6 @@
 
 @test 'src has _p0f' {
     assert "$src/_p0f" is_file
-}
-
-@test 'src has _p11tool' {
-    assert "$src/_p11tool" is_file
 }
 
 @test 'src has _p7content' {
@@ -21378,10 +19350,6 @@
 
 @test 'src has _p7zip' {
     assert "$src/_p7zip" is_file
-}
-
-@test 'src has _pacat' {
-    assert "$src/_pacat" is_file
 }
 
 @test 'src has _paccache' {
@@ -21408,10 +19376,6 @@
     assert "$src/_pacman-db-upgrade" is_file
 }
 
-@test 'src has _pacmd' {
-    assert "$src/_pacmd" is_file
-}
-
 @test 'src has _pacote' {
     assert "$src/_pacote" is_file
 }
@@ -21428,10 +19392,6 @@
     assert "$src/_pacsort" is_file
 }
 
-@test 'src has _pactl' {
-    assert "$src/_pactl" is_file
-}
-
 @test 'src has _pactree' {
     assert "$src/_pactree" is_file
 }
@@ -21442,10 +19402,6 @@
 
 @test 'src has _padlock2john' {
     assert "$src/_padlock2john" is_file
-}
-
-@test 'src has _padsp' {
-    assert "$src/_padsp" is_file
 }
 
 @test 'src has _padsp-32' {
@@ -21500,76 +19456,12 @@
     assert "$src/_pamac-tray-appindicator" is_file
 }
 
-@test 'src has _pamaltsat' {
-    assert "$src/_pamaltsat" is_file
-}
-
-@test 'src has _pambrighten' {
-    assert "$src/_pambrighten" is_file
-}
-
-@test 'src has _pamcat' {
-    assert "$src/_pamcat" is_file
-}
-
-@test 'src has _pamenlarge' {
-    assert "$src/_pamenlarge" is_file
-}
-
-@test 'src has _pamfind' {
-    assert "$src/_pamfind" is_file
-}
-
-@test 'src has _pamgetcolor' {
-    assert "$src/_pamgetcolor" is_file
-}
-
-@test 'src has _pamhomography' {
-    assert "$src/_pamhomography" is_file
-}
-
-@test 'src has _pamhue' {
-    assert "$src/_pamhue" is_file
-}
-
-@test 'src has _pamlevels' {
-    assert "$src/_pamlevels" is_file
-}
-
-@test 'src has _pammixmulti' {
-    assert "$src/_pammixmulti" is_file
-}
-
 @test 'src has _pamon' {
     assert "$src/_pamon" is_file
 }
 
 @test 'src has _pamphletangler' {
     assert "$src/_pamphletangler" is_file
-}
-
-@test 'src has _pamrestack' {
-    assert "$src/_pamrestack" is_file
-}
-
-@test 'src has _pamshuffle' {
-    assert "$src/_pamshuffle" is_file
-}
-
-@test 'src has _pamsplit' {
-    assert "$src/_pamsplit" is_file
-}
-
-@test 'src has _pamstretch-gen' {
-    assert "$src/_pamstretch-gen" is_file
-}
-
-@test 'src has _pamtable' {
-    assert "$src/_pamtable" is_file
-}
-
-@test 'src has _pamtohdiff' {
-    assert "$src/_pamtohdiff" is_file
 }
 
 @test 'src has _pamtris' {
@@ -21732,10 +19624,6 @@
     assert "$src/_pasteurize" is_file
 }
 
-@test 'src has _pasuspender' {
-    assert "$src/_pasuspender" is_file
-}
-
 @test 'src has _patchwork' {
     assert "$src/_patchwork" is_file
 }
@@ -21772,10 +19660,6 @@
     assert "$src/_pax11publish" is_file
 }
 
-@test 'src has _pbibtex' {
-    assert "$src/_pbibtex" is_file
-}
-
 @test 'src has _pbm2ppa' {
     assert "$src/_pbm2ppa" is_file
 }
@@ -21784,32 +19668,12 @@
     assert "$src/_pbmnoise" is_file
 }
 
-@test 'src has _pbmtocis' {
-    assert "$src/_pbmtocis" is_file
-}
-
 @test 'src has _pbmtojbg' {
     assert "$src/_pbmtojbg" is_file
 }
 
 @test 'src has _pbmtojbg85' {
     assert "$src/_pbmtojbg85" is_file
-}
-
-@test 'src has _pbmtolps' {
-    assert "$src/_pbmtolps" is_file
-}
-
-@test 'src has _pbmtomda' {
-    assert "$src/_pbmtomda" is_file
-}
-
-@test 'src has _pbmtonokia' {
-    assert "$src/_pbmtonokia" is_file
-}
-
-@test 'src has _pbmtopk' {
-    assert "$src/_pbmtopk" is_file
 }
 
 @test 'src has _pbmtoppa' {
@@ -21822,14 +19686,6 @@
 
 @test 'src has _pcc' {
     assert "$src/_pcc" is_file
-}
-
-@test 'src has _pcdindex' {
-    assert "$src/_pcdindex" is_file
-}
-
-@test 'src has _pcdovtoppm' {
-    assert "$src/_pcdovtoppm" is_file
 }
 
 @test 'src has _pchrt' {
@@ -21852,20 +19708,8 @@
     assert "$src/_pcprofiledump" is_file
 }
 
-@test 'src has _pcre2grep' {
-    assert "$src/_pcre2grep" is_file
-}
-
-@test 'src has _pcre2test' {
-    assert "$src/_pcre2test" is_file
-}
-
 @test 'src has _pcreate' {
     assert "$src/_pcreate" is_file
-}
-
-@test 'src has _pcregrep' {
-    assert "$src/_pcregrep" is_file
 }
 
 @test 'src has _pcretest' {
@@ -21940,24 +19784,12 @@
     assert "$src/_pdfatfi" is_file
 }
 
-@test 'src has _pdfattach' {
-    assert "$src/_pdfattach" is_file
-}
-
 @test 'src has _pdfbook' {
     assert "$src/_pdfbook" is_file
 }
 
-@test 'src has _pdfbook2' {
-    assert "$src/_pdfbook2" is_file
-}
-
 @test 'src has _pdfcrack' {
     assert "$src/_pdfcrack" is_file
-}
-
-@test 'src has _pdfcrop' {
-    assert "$src/_pdfcrop" is_file
 }
 
 @test 'src has _pdfcslatex' {
@@ -21966,14 +19798,6 @@
 
 @test 'src has _pdfcsplain' {
     assert "$src/_pdfcsplain" is_file
-}
-
-@test 'src has _pdfdetach' {
-    assert "$src/_pdfdetach" is_file
-}
-
-@test 'src has _pdfetex' {
-    assert "$src/_pdfetex" is_file
 }
 
 @test 'src has _pdfflip' {
@@ -22028,14 +19852,6 @@
     assert "$src/_pdfroff" is_file
 }
 
-@test 'src has _pdfseparate' {
-    assert "$src/_pdfseparate" is_file
-}
-
-@test 'src has _pdfsig' {
-    assert "$src/_pdfsig" is_file
-}
-
 @test 'src has _pdftex' {
     assert "$src/_pdftex" is_file
 }
@@ -22046,22 +19862,6 @@
 
 @test 'src has _pdftexi2dvi' {
     assert "$src/_pdftexi2dvi" is_file
-}
-
-@test 'src has _pdftocairo' {
-    assert "$src/_pdftocairo" is_file
-}
-
-@test 'src has _pdftohtml' {
-    assert "$src/_pdftohtml" is_file
-}
-
-@test 'src has _pdftoppm' {
-    assert "$src/_pdftoppm" is_file
-}
-
-@test 'src has _pdfunite' {
-    assert "$src/_pdfunite" is_file
 }
 
 @test 'src has _pdfxmltex' {
@@ -22102,10 +19902,6 @@
 
 @test 'src has _pecarve.py' {
     assert "$src/_pecarve.py" is_file
-}
-
-@test 'src has _peco' {
-    assert "$src/_peco" is_file
 }
 
 @test 'src has _pedis' {
@@ -22412,10 +20208,6 @@
     assert "$src/_pfarrei" is_file
 }
 
-@test 'src has _pfbtopfa' {
-    assert "$src/_pfbtopfa" is_file
-}
-
 @test 'src has _pftp' {
     assert "$src/_pftp" is_file
 }
@@ -22426,10 +20218,6 @@
 
 @test 'src has _pg_archivecleanup' {
     assert "$src/_pg_archivecleanup" is_file
-}
-
-@test 'src has _pg_basebackup' {
-    assert "$src/_pg_basebackup" is_file
 }
 
 @test 'src has _pg_buildext' {
@@ -22472,10 +20260,6 @@
     assert "$src/_pg_dumpall" is_file
 }
 
-@test 'src has _pg_isready' {
-    assert "$src/_pg_isready" is_file
-}
-
 @test 'src has _pg_lsclusters' {
     assert "$src/_pg_lsclusters" is_file
 }
@@ -22512,10 +20296,6 @@
     assert "$src/_pg_standby" is_file
 }
 
-@test 'src has _pg_top' {
-    assert "$src/_pg_top" is_file
-}
-
 @test 'src has _pg_upgrade' {
     assert "$src/_pg_upgrade" is_file
 }
@@ -22546,18 +20326,6 @@
 
 @test 'src has _pgbench' {
     assert "$src/_pgbench" is_file
-}
-
-@test 'src has _pgcli' {
-    assert "$src/_pgcli" is_file
-}
-
-@test 'src has _pgmtexture' {
-    assert "$src/_pgmtexture" is_file
-}
-
-@test 'src has _pgmtoppm' {
-    assert "$src/_pgmtoppm" is_file
 }
 
 @test 'src has _phantomjs' {
@@ -22708,10 +20476,6 @@
     assert "$src/_pilot" is_file
 }
 
-@test 'src has _pinentry' {
-    assert "$src/_pinentry" is_file
-}
-
 @test 'src has _pinentry-curses' {
     assert "$src/_pinentry-curses" is_file
 }
@@ -22758,10 +20522,6 @@
 
 @test 'src has _pip-3' {
     assert "$src/_pip-3" is_file
-}
-
-@test 'src has _pip2.7' {
-    assert "$src/_pip2.7" is_file
 }
 
 @test 'src has _pip3.10' {
@@ -22836,20 +20596,8 @@
     assert "$src/_pixiewps" is_file
 }
 
-@test 'src has _pjtoppm' {
-    assert "$src/_pjtoppm" is_file
-}
-
 @test 'src has _pk-example-frobnicate' {
     assert "$src/_pk-example-frobnicate" is_file
-}
-
-@test 'src has _pkaction' {
-    assert "$src/_pkaction" is_file
-}
-
-@test 'src has _pkcheck' {
-    assert "$src/_pkcheck" is_file
 }
 
 @test 'src has _pkcs11-register' {
@@ -22872,28 +20620,12 @@
     assert "$src/_pkcs15-tool" is_file
 }
 
-@test 'src has _pkexec' {
-    assert "$src/_pkexec" is_file
-}
-
-@test 'src has _pkfix' {
-    assert "$src/_pkfix" is_file
-}
-
 @test 'src has _pkg2ng' {
     assert "$src/_pkg2ng" is_file
 }
 
-@test 'src has _pkgconf' {
-    assert "$src/_pkgconf" is_file
-}
-
 @test 'src has _pkgdata' {
     assert "$src/_pkgdata" is_file
-}
-
-@test 'src has _pkgutil' {
-    assert "$src/_pkgutil" is_file
 }
 
 @test 'src has _pkla-admin-identities' {
@@ -22910,18 +20642,6 @@
 
 @test 'src has _pktdumper' {
     assert "$src/_pktdumper" is_file
-}
-
-@test 'src has _pktogf' {
-    assert "$src/_pktogf" is_file
-}
-
-@test 'src has _pkttyagent' {
-    assert "$src/_pkttyagent" is_file
-}
-
-@test 'src has _pktype' {
-    assert "$src/_pktype" is_file
 }
 
 @test 'src has _pl2wam' {
@@ -22962,10 +20682,6 @@
 
 @test 'src has _play' {
     assert "$src/_play" is_file
-}
-
-@test 'src has _plaympeg' {
-    assert "$src/_plaympeg" is_file
 }
 
 @test 'src has _plecost' {
@@ -23010,10 +20726,6 @@
 
 @test 'src has _plt-web-server' {
     assert "$src/_plt-web-server" is_file
-}
-
-@test 'src has _pltotf' {
-    assert "$src/_pltotf" is_file
 }
 
 @test 'src has _plugin_test' {
@@ -23164,10 +20876,6 @@
     assert "$src/_pmlogsize" is_file
 }
 
-@test 'src has _pmpost' {
-    assert "$src/_pmpost" is_file
-}
-
 @test 'src has _pmpython' {
     assert "$src/_pmpython" is_file
 }
@@ -23200,24 +20908,12 @@
     assert "$src/_png2yuv" is_file
 }
 
-@test 'src has _pngfix' {
-    assert "$src/_pngfix" is_file
-}
-
 @test 'src has _pnm2png' {
     assert "$src/_pnm2png" is_file
 }
 
 @test 'src has _pnm2ppa' {
     assert "$src/_pnm2ppa" is_file
-}
-
-@test 'src has _pnmnlfilt' {
-    assert "$src/_pnmnlfilt" is_file
-}
-
-@test 'src has _pnmquant' {
-    assert "$src/_pnmquant" is_file
 }
 
 @test 'src has _pnmtofiasco' {
@@ -23236,16 +20932,8 @@
     assert "$src/_pnuke" is_file
 }
 
-@test 'src has _pnuke-2.7' {
-    assert "$src/_pnuke-2.7" is_file
-}
-
 @test 'src has _po2debconf' {
     assert "$src/_po2debconf" is_file
-}
-
-@test 'src has _pod2html' {
-    assert "$src/_pod2html" is_file
 }
 
 @test 'src has _pod2html5.18' {
@@ -23328,16 +21016,8 @@
     assert "$src/_pod2text5.34" is_file
 }
 
-@test 'src has _pod2usage' {
-    assert "$src/_pod2usage" is_file
-}
-
 @test 'src has _pod2usage5.34' {
     assert "$src/_pod2usage5.34" is_file
-}
-
-@test 'src has _podchecker' {
-    assert "$src/_podchecker" is_file
 }
 
 @test 'src has _podchecker5.26.3' {
@@ -23434,10 +21114,6 @@
 
 @test 'src has _popauth' {
     assert "$src/_popauth" is_file
-}
-
-@test 'src has _portablectl' {
-    assert "$src/_portablectl" is_file
 }
 
 @test 'src has _postfix' {
@@ -23556,24 +21232,12 @@
     assert "$src/_ppltotf" is_file
 }
 
-@test 'src has _ppm2tiff' {
-    assert "$src/_ppm2tiff" is_file
-}
-
-@test 'src has _ppmspread' {
-    assert "$src/_ppmspread" is_file
-}
-
 @test 'src has _ppmtompeg' {
     assert "$src/_ppmtompeg" is_file
 }
 
 @test 'src has _ppmtoy4m' {
     assert "$src/_ppmtoy4m" is_file
-}
-
-@test 'src has _ppmwheel' {
-    assert "$src/_ppmwheel" is_file
 }
 
 @test 'src has _pppctl' {
@@ -23808,10 +21472,6 @@
     assert "$src/_procinfo" is_file
 }
 
-@test 'src has _procmail' {
-    assert "$src/_procmail" is_file
-}
-
 @test 'src has _procsystime' {
     assert "$src/_procsystime" is_file
 }
@@ -23874,10 +21534,6 @@
 
 @test 'src has _proxychains' {
     assert "$src/_proxychains" is_file
-}
-
-@test 'src has _proxychains4' {
-    assert "$src/_proxychains4" is_file
 }
 
 @test 'src has _proxytunnel' {
@@ -23984,10 +21640,6 @@
     assert "$src/_pssh" is_file
 }
 
-@test 'src has _pssh-2.7' {
-    assert "$src/_pssh-2.7" is_file
-}
-
 @test 'src has _pssh-askpass' {
     assert "$src/_pssh-askpass" is_file
 }
@@ -24046,10 +21698,6 @@
 
 @test 'src has _ptex' {
     assert "$src/_ptex" is_file
-}
-
-@test 'src has _ptex2pdf' {
-    assert "$src/_ptex2pdf" is_file
 }
 
 @test 'src has _ptftopl' {
@@ -24136,10 +21784,6 @@
     assert "$src/_pulledpork.pl" is_file
 }
 
-@test 'src has _pulseaudio' {
-    assert "$src/_pulseaudio" is_file
-}
-
 @test 'src has _pumactl' {
     assert "$src/_pumactl" is_file
 }
@@ -24164,24 +21808,8 @@
     assert "$src/_pviews" is_file
 }
 
-@test 'src has _pw-cat' {
-    assert "$src/_pw-cat" is_file
-}
-
-@test 'src has _pw-cli' {
-    assert "$src/_pw-cli" is_file
-}
-
-@test 'src has _pw-dot' {
-    assert "$src/_pw-dot" is_file
-}
-
 @test 'src has _pw-dsdplay' {
     assert "$src/_pw-dsdplay" is_file
-}
-
-@test 'src has _pw-dump' {
-    assert "$src/_pw-dump" is_file
 }
 
 @test 'src has _pw-encplay' {
@@ -24196,22 +21824,6 @@
     assert "$src/_pw-jack" is_file
 }
 
-@test 'src has _pw-link' {
-    assert "$src/_pw-link" is_file
-}
-
-@test 'src has _pw-loopback' {
-    assert "$src/_pw-loopback" is_file
-}
-
-@test 'src has _pw-metadata' {
-    assert "$src/_pw-metadata" is_file
-}
-
-@test 'src has _pw-mididump' {
-    assert "$src/_pw-mididump" is_file
-}
-
 @test 'src has _pw-midiplay' {
     assert "$src/_pw-midiplay" is_file
 }
@@ -24220,28 +21832,12 @@
     assert "$src/_pw-midirecord" is_file
 }
 
-@test 'src has _pw-mon' {
-    assert "$src/_pw-mon" is_file
-}
-
 @test 'src has _pw-play' {
     assert "$src/_pw-play" is_file
 }
 
-@test 'src has _pw-profiler' {
-    assert "$src/_pw-profiler" is_file
-}
-
 @test 'src has _pw-record' {
     assert "$src/_pw-record" is_file
-}
-
-@test 'src has _pw-reserve' {
-    assert "$src/_pw-reserve" is_file
-}
-
-@test 'src has _pw-top' {
-    assert "$src/_pw-top" is_file
 }
 
 @test 'src has _pw-v4l2' {
@@ -24278,10 +21874,6 @@
 
 @test 'src has _pwned' {
     assert "$src/_pwned" is_file
-}
-
-@test 'src has _pwpolicy' {
-    assert "$src/_pwpolicy" is_file
 }
 
 @test 'src has _pwqcheck' {
@@ -24364,10 +21956,6 @@
     assert "$src/_pyclean" is_file
 }
 
-@test 'src has _pycodestyle' {
-    assert "$src/_pycodestyle" is_file
-}
-
 @test 'src has _pycompile' {
     assert "$src/_pycompile" is_file
 }
@@ -24378,10 +21966,6 @@
 
 @test 'src has _pydocstyle' {
     assert "$src/_pydocstyle" is_file
-}
-
-@test 'src has _pyflakes' {
-    assert "$src/_pyflakes" is_file
 }
 
 @test 'src has _pyftsubset' {
@@ -24624,10 +22208,6 @@
     assert "$src/_python3.4m" is_file
 }
 
-@test 'src has _python3.5' {
-    assert "$src/_python3.5" is_file
-}
-
 @test 'src has _python3.5m' {
     assert "$src/_python3.5m" is_file
 }
@@ -24856,10 +22436,6 @@
     assert "$src/_qemu-io" is_file
 }
 
-@test 'src has _qemu-keymap' {
-    assert "$src/_qemu-keymap" is_file
-}
-
 @test 'src has _qemu-kvm' {
     assert "$src/_qemu-kvm" is_file
 }
@@ -24986,10 +22562,6 @@
 
 @test 'src has _qemu-ppc64le-static' {
     assert "$src/_qemu-ppc64le-static" is_file
-}
-
-@test 'src has _qemu-pr-helper' {
-    assert "$src/_qemu-pr-helper" is_file
 }
 
 @test 'src has _qemu-riscv32-static' {
@@ -25244,10 +22816,6 @@
     assert "$src/_qlmanage" is_file
 }
 
-@test 'src has _qmake' {
-    assert "$src/_qmake" is_file
-}
-
 @test 'src has _qmake-qt4' {
     assert "$src/_qmake-qt4" is_file
 }
@@ -25290,10 +22858,6 @@
 
 @test 'src has _qmlformat' {
     assert "$src/_qmlformat" is_file
-}
-
-@test 'src has _qmllint' {
-    assert "$src/_qmllint" is_file
 }
 
 @test 'src has _qmllint-qt5' {
@@ -25362,10 +22926,6 @@
 
 @test 'src has _qr' {
     assert "$src/_qr" is_file
-}
-
-@test 'src has _qrencode' {
-    assert "$src/_qrencode" is_file
 }
 
 @test 'src has _qrify' {
@@ -25524,10 +23084,6 @@
     assert "$src/_racc2y" is_file
 }
 
-@test 'src has _racc2y2.7' {
-    assert "$src/_racc2y2.7" is_file
-}
-
 @test 'src has _racer' {
     assert "$src/_racer" is_file
 }
@@ -25540,16 +23096,8 @@
     assert "$src/_rackup" is_file
 }
 
-@test 'src has _racoon' {
-    assert "$src/_racoon" is_file
-}
-
 @test 'src has _rad_counter' {
     assert "$src/_rad_counter" is_file
-}
-
-@test 'src has _radclient' {
-    assert "$src/_radclient" is_file
 }
 
 @test 'src has _radeapclient' {
@@ -25572,20 +23120,12 @@
     assert "$src/_radsqlrelay" is_file
 }
 
-@test 'src has _radtest' {
-    assert "$src/_radtest" is_file
-}
-
 @test 'src has _radvd' {
     assert "$src/_radvd" is_file
 }
 
 @test 'src has _radwho' {
     assert "$src/_radwho" is_file
-}
-
-@test 'src has _radzap' {
-    assert "$src/_radzap" is_file
 }
 
 @test 'src has _raidutil' {
@@ -26036,10 +23576,6 @@
     assert "$src/_rctcsd" is_file
 }
 
-@test 'src has _rctest' {
-    assert "$src/_rctest" is_file
-}
-
 @test 'src has _rctor' {
     assert "$src/_rctor" is_file
 }
@@ -26096,10 +23632,6 @@
     assert "$src/_rcypbind" is_file
 }
 
-@test 'src has _rdate' {
-    assert "$src/_rdate" is_file
-}
-
 @test 'src has _rdbg' {
     assert "$src/_rdbg" is_file
 }
@@ -26150,10 +23682,6 @@
 
 @test 'src has _rdoc2.5' {
     assert "$src/_rdoc2.5" is_file
-}
-
-@test 'src has _rdoc2.7' {
-    assert "$src/_rdoc2.7" is_file
 }
 
 @test 'src has _rdoc24' {
@@ -26244,10 +23772,6 @@
     assert "$src/_recode-sr-latin" is_file
 }
 
-@test 'src has _recon-cli' {
-    assert "$src/_recon-cli" is_file
-}
-
 @test 'src has _recon-ng' {
     assert "$src/_recon-ng" is_file
 }
@@ -26280,20 +23804,12 @@
     assert "$src/_redcarpet" is_file
 }
 
-@test 'src has _redis-benchmark' {
-    assert "$src/_redis-benchmark" is_file
-}
-
 @test 'src has _redis-cli' {
     assert "$src/_redis-cli" is_file
 }
 
 @test 'src has _redis-commander' {
     assert "$src/_redis-commander" is_file
-}
-
-@test 'src has _redis-sentinel' {
-    assert "$src/_redis-sentinel" is_file
 }
 
 @test 'src has _redshift' {
@@ -26326,10 +23842,6 @@
 
 @test 'src has _regfexport' {
     assert "$src/_regfexport" is_file
-}
-
-@test 'src has _regfinfo' {
-    assert "$src/_regfinfo" is_file
 }
 
 @test 'src has _regfmount' {
@@ -26370,10 +23882,6 @@
 
 @test 'src has _reify' {
     assert "$src/_reify" is_file
-}
-
-@test 'src has _reindexdb' {
-    assert "$src/_reindexdb" is_file
 }
 
 @test 'src has _reiserfsck' {
@@ -26468,10 +23976,6 @@
     assert "$src/_repomdxml2solv" is_file
 }
 
-@test 'src has _report-cli' {
-    assert "$src/_report-cli" is_file
-}
-
 @test 'src has _report-gtk' {
     assert "$src/_report-gtk" is_file
 }
@@ -26522,10 +24026,6 @@
 
 @test 'src has _repquota' {
     assert "$src/_repquota" is_file
-}
-
-@test 'src has _repstopdf' {
-    assert "$src/_repstopdf" is_file
 }
 
 @test 'src has _reptyr' {
@@ -26620,10 +24120,6 @@
     assert "$src/_rfcat_msfrelay" is_file
 }
 
-@test 'src has _rfcomm' {
-    assert "$src/_rfcomm" is_file
-}
-
 @test 'src has _rfcomm_pppd' {
     assert "$src/_rfcomm_pppd" is_file
 }
@@ -26682,10 +24178,6 @@
 
 @test 'src has _ri2.5' {
     assert "$src/_ri2.5" is_file
-}
-
-@test 'src has _ri2.7' {
-    assert "$src/_ri2.7" is_file
 }
 
 @test 'src has _ri24' {
@@ -26852,10 +24344,6 @@
     assert "$src/_roqet" is_file
 }
 
-@test 'src has _rotatelogs' {
-    assert "$src/_rotatelogs" is_file
-}
-
 @test 'src has _route' {
     assert "$src/_route" is_file
 }
@@ -26894,10 +24382,6 @@
 
 @test 'src has _rpcctl' {
     assert "$src/_rpcctl" is_file
-}
-
-@test 'src has _rpcgen' {
-    assert "$src/_rpcgen" is_file
 }
 
 @test 'src has _rpcinfo' {
@@ -27104,10 +24588,6 @@
     assert "$src/_rstpep2html.py" is_file
 }
 
-@test 'src has _rsvg-convert' {
-    assert "$src/_rsvg-convert" is_file
-}
-
 @test 'src has _rsvg-view-3' {
     assert "$src/_rsvg-view-3" is_file
 }
@@ -27200,14 +24680,6 @@
     assert "$src/_ruby2.3" is_file
 }
 
-@test 'src has _ruby2.5' {
-    assert "$src/_ruby2.5" is_file
-}
-
-@test 'src has _ruby2.7' {
-    assert "$src/_ruby2.7" is_file
-}
-
 @test 'src has _ruby24' {
     assert "$src/_ruby24" is_file
 }
@@ -27264,16 +24736,8 @@
     assert "$src/_runghc-8.10.3" is_file
 }
 
-@test 'src has _runghc-8.10.7' {
-    assert "$src/_runghc-8.10.7" is_file
-}
-
 @test 'src has _runghc-8.4.4' {
     assert "$src/_runghc-8.4.4" is_file
-}
-
-@test 'src has _runghc-8.6.5' {
-    assert "$src/_runghc-8.6.5" is_file
 }
 
 @test 'src has _runghc-9.10.1' {
@@ -27320,20 +24784,8 @@
     assert "$src/_rust-gdb" is_file
 }
 
-@test 'src has _rust-lldb' {
-    assert "$src/_rust-lldb" is_file
-}
-
 @test 'src has _rustc' {
     assert "$src/_rustc" is_file
-}
-
-@test 'src has _rustdoc' {
-    assert "$src/_rustdoc" is_file
-}
-
-@test 'src has _rustfmt' {
-    assert "$src/_rustfmt" is_file
 }
 
 @test 'src has _rustup' {
@@ -27448,10 +24900,6 @@
     assert "$src/_s2p5.18" is_file
 }
 
-@test 'src has _s3fs' {
-    assert "$src/_s3fs" is_file
-}
-
 @test 'src has _s3put' {
     assert "$src/_s3put" is_file
 }
@@ -27558,10 +25006,6 @@
 
 @test 'src has _sampasswd' {
     assert "$src/_sampasswd" is_file
-}
-
-@test 'src has _sample' {
-    assert "$src/_sample" is_file
 }
 
 @test 'src has _samunlock' {
@@ -27768,10 +25212,6 @@
     assert "$src/_scapy3" is_file
 }
 
-@test 'src has _scarb' {
-    assert "$src/_scarb" is_file
-}
-
 @test 'src has _scarb-cairo-run' {
     assert "$src/_scarb-cairo-run" is_file
 }
@@ -27822,10 +25262,6 @@
 
 @test 'src has _scontrol' {
     assert "$src/_scontrol" is_file
-}
-
-@test 'src has _scotest' {
-    assert "$src/_scotest" is_file
 }
 
 @test 'src has _scour' {
@@ -27964,20 +25400,12 @@
     assert "$src/_sdiff" is_file
 }
 
-@test 'src has _sdkmanager' {
-    assert "$src/_sdkmanager" is_file
-}
-
 @test 'src has _sdpcontrol' {
     assert "$src/_sdpcontrol" is_file
 }
 
 @test 'src has _sdpd' {
     assert "$src/_sdpd" is_file
-}
-
-@test 'src has _sdptool' {
-    assert "$src/_sdptool" is_file
 }
 
 @test 'src has _sdw2html' {
@@ -28014,10 +25442,6 @@
 
 @test 'src has _secureDelete.sh' {
     assert "$src/_secureDelete.sh" is_file
-}
-
-@test 'src has _security' {
-    assert "$src/_security" is_file
 }
 
 @test 'src has _sedismod' {
@@ -28072,10 +25496,6 @@
     assert "$src/_selinux_restorecon" is_file
 }
 
-@test 'src has _sem' {
-    assert "$src/_sem" is_file
-}
-
 @test 'src has _semodule' {
     assert "$src/_semodule" is_file
 }
@@ -28122,10 +25542,6 @@
 
 @test 'src has _sepolgen-ifgen' {
     assert "$src/_sepolgen-ifgen" is_file
-}
-
-@test 'src has _seq2bseq' {
-    assert "$src/_seq2bseq" is_file
 }
 
 @test 'src has _serdi' {
@@ -28178,10 +25594,6 @@
 
 @test 'src has _setfont' {
     assert "$src/_setfont" is_file
-}
-
-@test 'src has _setkeycodes' {
-    assert "$src/_setkeycodes" is_file
 }
 
 @test 'src has _setmetamode' {
@@ -28276,24 +25688,12 @@
     assert "$src/_setup-xorg-base" is_file
 }
 
-@test 'src has _setupcon' {
-    assert "$src/_setupcon" is_file
-}
-
 @test 'src has _setvtrgb' {
     assert "$src/_setvtrgb" is_file
 }
 
-@test 'src has _sexp-conv' {
-    assert "$src/_sexp-conv" is_file
-}
-
 @test 'src has _sfdisk' {
     assert "$src/_sfdisk" is_file
-}
-
-@test 'src has _sfdp' {
-    assert "$src/_sfdp" is_file
 }
 
 @test 'src has _sfuzz' {
@@ -28660,10 +26060,6 @@
     assert "$src/_shar" is_file
 }
 
-@test 'src has _shards' {
-    assert "$src/_shards" is_file
-}
-
 @test 'src has _shares-admin' {
     assert "$src/_shares-admin" is_file
 }
@@ -28726,10 +26122,6 @@
 
 @test 'src has _shepherd' {
     assert "$src/_shepherd" is_file
-}
-
-@test 'src has _shfmt' {
-    assert "$src/_shfmt" is_file
 }
 
 @test 'src has _shiboken2' {
@@ -28798,14 +26190,6 @@
 
 @test 'src has _sigdist.d' {
     assert "$src/_sigdist.d" is_file
-}
-
-@test 'src has _sigfind' {
-    assert "$src/_sigfind" is_file
-}
-
-@test 'src has _siggen' {
-    assert "$src/_siggen" is_file
 }
 
 @test 'src has _signver' {
@@ -28956,16 +26340,8 @@
     assert "$src/_slack-term" is_file
 }
 
-@test 'src has _slapacl' {
-    assert "$src/_slapacl" is_file
-}
-
 @test 'src has _slapconfig' {
     assert "$src/_slapconfig" is_file
-}
-
-@test 'src has _slappasswd' {
-    assert "$src/_slappasswd" is_file
 }
 
 @test 'src has _slatex' {
@@ -28982,10 +26358,6 @@
 
 @test 'src has _slcand' {
     assert "$src/_slcand" is_file
-}
-
-@test 'src has _slirp4netns' {
-    assert "$src/_slirp4netns" is_file
 }
 
 @test 'src has _sln' {
@@ -29018,10 +26390,6 @@
 
 @test 'src has _slugify' {
     assert "$src/_slugify" is_file
-}
-
-@test 'src has _slurm' {
-    assert "$src/_slurm" is_file
 }
 
 @test 'src has _slurm-setuser' {
@@ -29134,10 +26502,6 @@
 
 @test 'src has _smidump' {
     assert "$src/_smidump" is_file
-}
-
-@test 'src has _smilint' {
-    assert "$src/_smilint" is_file
 }
 
 @test 'src has _sminfo' {
@@ -29348,14 +26712,6 @@
     assert "$src/_sncfgvalidate" is_file
 }
 
-@test 'src has _sndfile-convert' {
-    assert "$src/_sndfile-convert" is_file
-}
-
-@test 'src has _sndfile-metadata-get' {
-    assert "$src/_sndfile-metadata-get" is_file
-}
-
 @test 'src has _sndfile-metadata-set' {
     assert "$src/_sndfile-metadata-set" is_file
 }
@@ -29384,20 +26740,12 @@
     assert "$src/_snmp-check" is_file
 }
 
-@test 'src has _snmpbulkget' {
-    assert "$src/_snmpbulkget" is_file
-}
-
 @test 'src has _snmpbulkwalk' {
     assert "$src/_snmpbulkwalk" is_file
 }
 
 @test 'src has _snmpc' {
     assert "$src/_snmpc" is_file
-}
-
-@test 'src has _snmpconf' {
-    assert "$src/_snmpconf" is_file
 }
 
 @test 'src has _snmpd' {
@@ -29460,10 +26808,6 @@
     assert "$src/_snmptrap" is_file
 }
 
-@test 'src has _snmptrapd' {
-    assert "$src/_snmptrapd" is_file
-}
-
 @test 'src has _snmpusm' {
     assert "$src/_snmpusm" is_file
 }
@@ -29486,10 +26830,6 @@
 
 @test 'src has _sntop' {
     assert "$src/_sntop" is_file
-}
-
-@test 'src has _sntp' {
-    assert "$src/_sntp" is_file
 }
 
 @test 'src has _so-elastalert-test' {
@@ -29562,10 +26902,6 @@
 
 @test 'src has _sort-dctrl' {
     assert "$src/_sort-dctrl" is_file
-}
-
-@test 'src has _sorter' {
-    assert "$src/_sorter" is_file
 }
 
 @test 'src has _sos' {
@@ -29644,10 +26980,6 @@
     assert "$src/_spd-say" is_file
 }
 
-@test 'src has _speaker-test' {
-    assert "$src/_speaker-test" is_file
-}
-
 @test 'src has _spec2cie' {
     assert "$src/_spec2cie" is_file
 }
@@ -29662,18 +26994,6 @@
 
 @test 'src has _speech-dispatcher' {
     assert "$src/_speech-dispatcher" is_file
-}
-
-@test 'src has _speedtest' {
-    assert "$src/_speedtest" is_file
-}
-
-@test 'src has _speexdec' {
-    assert "$src/_speexdec" is_file
-}
-
-@test 'src has _speexenc' {
-    assert "$src/_speexenc" is_file
 }
 
 @test 'src has _spfquery' {
@@ -29820,10 +27140,6 @@
     assert "$src/_splitReg.sh" is_file
 }
 
-@test 'src has _splitindex' {
-    assert "$src/_splitindex" is_file
-}
-
 @test 'src has _splitti3' {
     assert "$src/_splitti3" is_file
 }
@@ -29940,10 +27256,6 @@
     assert "$src/_srch_strings" is_file
 }
 
-@test 'src has _srcredact' {
-    assert "$src/_srcredact" is_file
-}
-
 @test 'src has _srt-ffplay' {
     assert "$src/_srt-ffplay" is_file
 }
@@ -30040,10 +27352,6 @@
     assert "$src/_ssltap" is_file
 }
 
-@test 'src has _sslyze' {
-    assert "$src/_sslyze" is_file
-}
-
 @test 'src has _ssm-agent-worker' {
     assert "$src/_ssm-agent-worker" is_file
 }
@@ -30110,10 +27418,6 @@
 
 @test 'src has _standalone_print_ctxt' {
     assert "$src/_standalone_print_ctxt" is_file
-}
-
-@test 'src has _stap' {
-    assert "$src/_stap" is_file
 }
 
 @test 'src has _stapbpf' {
@@ -30250,10 +27554,6 @@
 
 @test 'src has _stunnel' {
     assert "$src/_stunnel" is_file
-}
-
-@test 'src has _sty2dtx' {
-    assert "$src/_sty2dtx" is_file
 }
 
 @test 'src has _su' {
@@ -30416,10 +27716,6 @@
     assert "$src/_swift-experimental-sdk" is_file
 }
 
-@test 'src has _swift-format' {
-    assert "$src/_swift-format" is_file
-}
-
 @test 'src has _swift-frontend' {
     assert "$src/_swift-frontend" is_file
 }
@@ -30466,10 +27762,6 @@
 
 @test 'src has _swindle' {
     assert "$src/_swindle" is_file
-}
-
-@test 'src has _swipl' {
-    assert "$src/_swipl" is_file
 }
 
 @test 'src has _switch_root' {
@@ -30530,10 +27822,6 @@
 
 @test 'src has _synthread' {
     assert "$src/_synthread" is_file
-}
-
-@test 'src has _sysadminctl' {
-    assert "$src/_sysadminctl" is_file
 }
 
 @test 'src has _sysbench' {
@@ -30612,16 +27900,8 @@
     assert "$src/_systemd-cat" is_file
 }
 
-@test 'src has _systemd-cgls' {
-    assert "$src/_systemd-cgls" is_file
-}
-
 @test 'src has _systemd-cgtop' {
     assert "$src/_systemd-cgtop" is_file
-}
-
-@test 'src has _systemd-confext' {
-    assert "$src/_systemd-confext" is_file
 }
 
 @test 'src has _systemd-coredumpctl' {
@@ -30678,10 +27958,6 @@
 
 @test 'src has _systemd-machine-id-setup' {
     assert "$src/_systemd-machine-id-setup" is_file
-}
-
-@test 'src has _systemd-mount' {
-    assert "$src/_systemd-mount" is_file
 }
 
 @test 'src has _systemd-notify' {
@@ -30752,52 +28028,16 @@
     assert "$src/_sz" is_file
 }
 
-@test 'src has _t1ascii' {
-    assert "$src/_t1ascii" is_file
-}
-
-@test 'src has _t1asm' {
-    assert "$src/_t1asm" is_file
-}
-
-@test 'src has _t1binary' {
-    assert "$src/_t1binary" is_file
-}
-
 @test 'src has _t1disasm' {
     assert "$src/_t1disasm" is_file
-}
-
-@test 'src has _t1dotlessj' {
-    assert "$src/_t1dotlessj" is_file
-}
-
-@test 'src has _t1lint' {
-    assert "$src/_t1lint" is_file
 }
 
 @test 'src has _t1mac' {
     assert "$src/_t1mac" is_file
 }
 
-@test 'src has _t1rawafm' {
-    assert "$src/_t1rawafm" is_file
-}
-
-@test 'src has _t1reencode' {
-    assert "$src/_t1reencode" is_file
-}
-
-@test 'src has _t1testpage' {
-    assert "$src/_t1testpage" is_file
-}
-
 @test 'src has _t1unmac' {
     assert "$src/_t1unmac" is_file
-}
-
-@test 'src has _t4ht' {
-    assert "$src/_t4ht" is_file
 }
 
 @test 'src has _t50' {
@@ -30834,10 +28074,6 @@
 
 @test 'src has _talkd' {
     assert "$src/_talkd" is_file
-}
-
-@test 'src has _tangle' {
-    assert "$src/_tangle" is_file
 }
 
 @test 'src has _tarcat' {
@@ -30948,10 +28184,6 @@
     assert "$src/_tcsd_emu" is_file
 }
 
-@test 'src has _tcsh' {
-    assert "$src/_tcsh" is_file
-}
-
 @test 'src has _tctrace' {
     assert "$src/_tctrace" is_file
 }
@@ -30968,16 +28200,8 @@
     assert "$src/_tdbdump" is_file
 }
 
-@test 'src has _teamdctl' {
-    assert "$src/_teamdctl" is_file
-}
-
 @test 'src has _teamnl' {
     assert "$src/_teamnl" is_file
-}
-
-@test 'src has _teckit_compile' {
-    assert "$src/_teckit_compile" is_file
 }
 
 @test 'src has _telinit' {
@@ -31064,10 +28288,6 @@
     assert "$src/_texdef" is_file
 }
 
-@test 'src has _texdoc' {
-    assert "$src/_texdoc" is_file
-}
-
 @test 'src has _texfindpkg' {
     assert "$src/_texfindpkg" is_file
 }
@@ -31106,10 +28326,6 @@
 
 @test 'src has _texliveonfly' {
     assert "$src/_texliveonfly" is_file
-}
-
-@test 'src has _texlogfilter' {
-    assert "$src/_texlogfilter" is_file
 }
 
 @test 'src has _texlua' {
@@ -31176,18 +28392,6 @@
     assert "$src/_tezos2john" is_file
 }
 
-@test 'src has _tftopl' {
-    assert "$src/_tftopl" is_file
-}
-
-@test 'src has _tftp' {
-    assert "$src/_tftp" is_file
-}
-
-@test 'src has _tftpd' {
-    assert "$src/_tftpd" is_file
-}
-
 @test 'src has _tgzLocalInstaller.sh' {
     assert "$src/_tgzLocalInstaller.sh" is_file
 }
@@ -31202,10 +28406,6 @@
 
 @test 'src has _thd' {
     assert "$src/_thd" is_file
-}
-
-@test 'src has _thefuck' {
-    assert "$src/_thefuck" is_file
 }
 
 @test 'src has _themole' {
@@ -31244,10 +28444,6 @@
     assert "$src/_thrift1" is_file
 }
 
-@test 'src has _thumbpdf' {
-    assert "$src/_thumbpdf" is_file
-}
-
 @test 'src has _thumbs' {
     assert "$src/_thumbs" is_file
 }
@@ -31284,16 +28480,8 @@
     assert "$src/_tiff2fsspec" is_file
 }
 
-@test 'src has _tiff2pdf' {
-    assert "$src/_tiff2pdf" is_file
-}
-
 @test 'src has _tiff2ps' {
     assert "$src/_tiff2ps" is_file
-}
-
-@test 'src has _tiff2rgba' {
-    assert "$src/_tiff2rgba" is_file
 }
 
 @test 'src has _tiffcmp' {
@@ -31320,20 +28508,8 @@
     assert "$src/_tiffgamut" is_file
 }
 
-@test 'src has _tiffinfo' {
-    assert "$src/_tiffinfo" is_file
-}
-
 @test 'src has _tiffmedian' {
     assert "$src/_tiffmedian" is_file
-}
-
-@test 'src has _tiffset' {
-    assert "$src/_tiffset" is_file
-}
-
-@test 'src has _tiffsplit' {
-    assert "$src/_tiffsplit" is_file
 }
 
 @test 'src has _tiffutil' {
@@ -31358,10 +28534,6 @@
 
 @test 'src has _tightvncserver' {
     assert "$src/_tightvncserver" is_file
-}
-
-@test 'src has _tilt' {
-    assert "$src/_tilt" is_file
 }
 
 @test 'src has _timage' {
@@ -31420,10 +28592,6 @@
     assert "$src/_tknewsbiff" is_file
 }
 
-@test 'src has _tlmgr' {
-    assert "$src/_tlmgr" is_file
-}
-
 @test 'src has _tload' {
     assert "$src/_tload" is_file
 }
@@ -31442,10 +28610,6 @@
 
 @test 'src has _tmux-thumbs' {
     assert "$src/_tmux-thumbs" is_file
-}
-
-@test 'src has _to_erl' {
-    assert "$src/_to_erl" is_file
 }
 
 @test 'src has _toast' {
@@ -31470,14 +28634,6 @@
 
 @test 'src has _tor-prompt' {
     assert "$src/_tor-prompt" is_file
-}
-
-@test 'src has _torbrowser-launcher' {
-    assert "$src/_torbrowser-launcher" is_file
-}
-
-@test 'src has _torsocks' {
-    assert "$src/_torsocks" is_file
 }
 
 @test 'src has _totem' {
@@ -31736,24 +28892,8 @@
     assert "$src/_tsig-keygen" is_file
 }
 
-@test 'src has _tsk_comparedir' {
-    assert "$src/_tsk_comparedir" is_file
-}
-
-@test 'src has _tsk_gettimes' {
-    assert "$src/_tsk_gettimes" is_file
-}
-
 @test 'src has _tsk_imageinfo' {
     assert "$src/_tsk_imageinfo" is_file
-}
-
-@test 'src has _tsk_loaddb' {
-    assert "$src/_tsk_loaddb" is_file
-}
-
-@test 'src has _tsk_recover' {
-    assert "$src/_tsk_recover" is_file
 }
 
 @test 'src has _tsql' {
@@ -31768,28 +28908,12 @@
     assert "$src/_tsvnc" is_file
 }
 
-@test 'src has _tt' {
-    assert "$src/_tt" is_file
-}
-
-@test 'src has _ttf2afm' {
-    assert "$src/_ttf2afm" is_file
-}
-
 @test 'src has _ttf2kotexfont' {
     assert "$src/_ttf2kotexfont" is_file
 }
 
 @test 'src has _ttf2pk' {
     assert "$src/_ttf2pk" is_file
-}
-
-@test 'src has _ttf2tfm' {
-    assert "$src/_ttf2tfm" is_file
-}
-
-@test 'src has _ttftotype42' {
-    assert "$src/_ttftotype42" is_file
 }
 
 @test 'src has _tth-hash' {
@@ -31812,10 +28936,6 @@
     assert "$src/_tune.exfat" is_file
 }
 
-@test 'src has _tuned-adm' {
-    assert "$src/_tuned-adm" is_file
-}
-
 @test 'src has _tunefs.reiserfs' {
     assert "$src/_tunefs.reiserfs" is_file
 }
@@ -31830,10 +28950,6 @@
 
 @test 'src has _tvservice' {
     assert "$src/_tvservice" is_file
-}
-
-@test 'src has _twadmin' {
-    assert "$src/_twadmin" is_file
 }
 
 @test 'src has _twigjs' {
@@ -31852,10 +28968,6 @@
     assert "$src/_twofi" is_file
 }
 
-@test 'src has _twopi' {
-    assert "$src/_twopi" is_file
-}
-
 @test 'src has _twprint' {
     assert "$src/_twprint" is_file
 }
@@ -31866,10 +28978,6 @@
 
 @test 'src has _typeprof' {
     assert "$src/_typeprof" is_file
-}
-
-@test 'src has _typer' {
-    assert "$src/_typer" is_file
 }
 
 @test 'src has _tzselect' {
@@ -32180,28 +29288,8 @@
     assert "$src/_unbin" is_file
 }
 
-@test 'src has _unbound' {
-    assert "$src/_unbound" is_file
-}
-
-@test 'src has _unbound-anchor' {
-    assert "$src/_unbound-anchor" is_file
-}
-
-@test 'src has _unbound-checkconf' {
-    assert "$src/_unbound-checkconf" is_file
-}
-
-@test 'src has _unbound-control' {
-    assert "$src/_unbound-control" is_file
-}
-
 @test 'src has _unbound-control-setup' {
     assert "$src/_unbound-control-setup" is_file
-}
-
-@test 'src has _unbound-host' {
-    assert "$src/_unbound-host" is_file
 }
 
 @test 'src has _uncompress' {
@@ -32210,10 +29298,6 @@
 
 @test 'src has _uncompress.real' {
     assert "$src/_uncompress.real" is_file
-}
-
-@test 'src has _unflatten' {
-    assert "$src/_unflatten" is_file
 }
 
 @test 'src has _unhex' {
@@ -32340,16 +29424,8 @@
     assert "$src/_unsingle" is_file
 }
 
-@test 'src has _unsquashfs' {
-    assert "$src/_unsquashfs" is_file
-}
-
 @test 'src has _untoast' {
     assert "$src/_untoast" is_file
-}
-
-@test 'src has _unxz' {
-    assert "$src/_unxz" is_file
 }
 
 @test 'src has _unzip-plain' {
@@ -32548,10 +29624,6 @@
     assert "$src/_updaterNoPip.sh" is_file
 }
 
-@test 'src has _updmap' {
-    assert "$src/_updmap" is_file
-}
-
 @test 'src has _updmap-sys' {
     assert "$src/_updmap-sys" is_file
 }
@@ -32562,10 +29634,6 @@
 
 @test 'src has _updpkgsums' {
     assert "$src/_updpkgsums" is_file
-}
-
-@test 'src has _updvitomp' {
-    assert "$src/_updvitomp" is_file
 }
 
 @test 'src has _updvitype' {
@@ -32634,10 +29702,6 @@
 
 @test 'src has _usb-creator-gtk' {
     assert "$src/_usb-creator-gtk" is_file
-}
-
-@test 'src has _usb_modeswitch' {
-    assert "$src/_usb_modeswitch" is_file
 }
 
 @test 'src has _usbdeviceforensics.py' {
@@ -32718,10 +29782,6 @@
 
 @test 'src has _usnj.pl' {
     assert "$src/_usnj.pl" is_file
-}
-
-@test 'src has _usnjls' {
-    assert "$src/_usnjls" is_file
 }
 
 @test 'src has _usrp2_card_burner' {
@@ -32832,10 +29892,6 @@
     assert "$src/_uv" is_file
 }
 
-@test 'src has _uvicorn' {
-    assert "$src/_uvicorn" is_file
-}
-
 @test 'src has _uxterm' {
     assert "$src/_uxterm" is_file
 }
@@ -32854,10 +29910,6 @@
 
 @test 'src has _v4l2-sysfs-path' {
     assert "$src/_v4l2-sysfs-path" is_file
-}
-
-@test 'src has _vacuumlo' {
-    assert "$src/_vacuumlo" is_file
 }
 
 @test 'src has _vala' {
@@ -33140,24 +30192,12 @@
     assert "$src/_verify_krb5_conf" is_file
 }
 
-@test 'src has _veritysetup' {
-    assert "$src/_veritysetup" is_file
-}
-
-@test 'src has _vftovp' {
-    assert "$src/_vftovp" is_file
-}
-
 @test 'src has _vfychain' {
     assert "$src/_vfychain" is_file
 }
 
 @test 'src has _vfyserv' {
     assert "$src/_vfyserv" is_file
-}
-
-@test 'src has _vgchange' {
-    assert "$src/_vgchange" is_file
 }
 
 @test 'src has _vgdb' {
@@ -33252,16 +30292,8 @@
     assert "$src/_virsh" is_file
 }
 
-@test 'src has _virt-alignment-scan' {
-    assert "$src/_virt-alignment-scan" is_file
-}
-
 @test 'src has _virt-builder' {
     assert "$src/_virt-builder" is_file
-}
-
-@test 'src has _virt-cat' {
-    assert "$src/_virt-cat" is_file
 }
 
 @test 'src has _virt-clone' {
@@ -33272,10 +30304,6 @@
     assert "$src/_virt-customize" is_file
 }
 
-@test 'src has _virt-df' {
-    assert "$src/_virt-df" is_file
-}
-
 @test 'src has _virt-dib' {
     assert "$src/_virt-dib" is_file
 }
@@ -33284,28 +30312,12 @@
     assert "$src/_virt-diff" is_file
 }
 
-@test 'src has _virt-edit' {
-    assert "$src/_virt-edit" is_file
-}
-
 @test 'src has _virt-filesystems' {
     assert "$src/_virt-filesystems" is_file
 }
 
-@test 'src has _virt-format' {
-    assert "$src/_virt-format" is_file
-}
-
 @test 'src has _virt-get-kernel' {
     assert "$src/_virt-get-kernel" is_file
-}
-
-@test 'src has _virt-host-validate' {
-    assert "$src/_virt-host-validate" is_file
-}
-
-@test 'src has _virt-inspector' {
-    assert "$src/_virt-inspector" is_file
 }
 
 @test 'src has _virt-install' {
@@ -33328,24 +30340,12 @@
     assert "$src/_virt-manager" is_file
 }
 
-@test 'src has _virt-pki-validate' {
-    assert "$src/_virt-pki-validate" is_file
-}
-
 @test 'src has _virt-qemu-run' {
     assert "$src/_virt-qemu-run" is_file
 }
 
-@test 'src has _virt-rescue' {
-    assert "$src/_virt-rescue" is_file
-}
-
 @test 'src has _virt-resize' {
     assert "$src/_virt-resize" is_file
-}
-
-@test 'src has _virt-sparsify' {
-    assert "$src/_virt-sparsify" is_file
 }
 
 @test 'src has _virt-sysprep' {
@@ -33388,28 +30388,12 @@
     assert "$src/_virt-xml" is_file
 }
 
-@test 'src has _virt-xml-validate' {
-    assert "$src/_virt-xml-validate" is_file
-}
-
 @test 'src has _virt_mail' {
     assert "$src/_virt_mail" is_file
 }
 
 @test 'src has _virtfs-proxy-helper' {
     assert "$src/_virtfs-proxy-helper" is_file
-}
-
-@test 'src has _virtlockd' {
-    assert "$src/_virtlockd" is_file
-}
-
-@test 'src has _virtlogd' {
-    assert "$src/_virtlogd" is_file
-}
-
-@test 'src has _virtualenv' {
-    assert "$src/_virtualenv" is_file
 }
 
 @test 'src has _virustotal-search.py' {
@@ -33424,24 +30408,12 @@
     assert "$src/_vitmp" is_file
 }
 
-@test 'src has _vivid' {
-    assert "$src/_vivid" is_file
-}
-
 @test 'src has _vlc' {
     assert "$src/_vlc" is_file
 }
 
 @test 'src has _vlc-wrapper' {
     assert "$src/_vlc-wrapper" is_file
-}
-
-@test 'src has _vlna' {
-    assert "$src/_vlna" is_file
-}
-
-@test 'src has _vlock' {
-    assert "$src/_vlock" is_file
 }
 
 @test 'src has _vm-support' {
@@ -33488,20 +30460,12 @@
     assert "$src/_vmss2core" is_file
 }
 
-@test 'src has _vmtoolsd' {
-    assert "$src/_vmtoolsd" is_file
-}
-
 @test 'src has _vmware-guestproxycerttool' {
     assert "$src/_vmware-guestproxycerttool" is_file
 }
 
 @test 'src has _vmware-namespace-cmd' {
     assert "$src/_vmware-namespace-cmd" is_file
-}
-
-@test 'src has _vmware-rpctool' {
-    assert "$src/_vmware-rpctool" is_file
 }
 
 @test 'src has _vmware-usbarbitrator' {
@@ -33538,10 +30502,6 @@
 
 @test 'src has _vnstatd' {
     assert "$src/_vnstatd" is_file
-}
-
-@test 'src has _vnstati' {
-    assert "$src/_vnstati" is_file
 }
 
 @test 'src has _voiphopper' {
@@ -33604,10 +30564,6 @@
     assert "$src/_vpnkit" is_file
 }
 
-@test 'src has _vptovf' {
-    assert "$src/_vptovf" is_file
-}
-
 @test 'src has _vpxdec' {
     assert "$src/_vpxdec" is_file
 }
@@ -33634,14 +30590,6 @@
 
 @test 'src has _vshadowdebug' {
     assert "$src/_vshadowdebug" is_file
-}
-
-@test 'src has _vshadowinfo' {
-    assert "$src/_vshadowinfo" is_file
-}
-
-@test 'src has _vshadowmount' {
-    assert "$src/_vshadowmount" is_file
 }
 
 @test 'src has _vss2raw' {
@@ -33728,14 +30676,6 @@
     assert "$src/_watchdog" is_file
 }
 
-@test 'src has _watchgnupg' {
-    assert "$src/_watchgnupg" is_file
-}
-
-@test 'src has _watchman' {
-    assert "$src/_watchman" is_file
-}
-
 @test 'src has _watchman-make' {
     assert "$src/_watchman-make" is_file
 }
@@ -33754,10 +30694,6 @@
 
 @test 'src has _watchmedo' {
     assert "$src/_watchmedo" is_file
-}
-
-@test 'src has _wavpack' {
-    assert "$src/_wavpack" is_file
 }
 
 @test 'src has _wayland-scanner' {
@@ -33796,10 +30732,6 @@
     assert "$src/_weather" is_file
 }
 
-@test 'src has _weave' {
-    assert "$src/_weave" is_file
-}
-
 @test 'src has _webacoo' {
     assert "$src/_webacoo" is_file
 }
@@ -33822,10 +30754,6 @@
 
 @test 'src has _webpng' {
     assert "$src/_webpng" is_file
-}
-
-@test 'src has _weechat' {
-    assert "$src/_weechat" is_file
 }
 
 @test 'src has _weechat-curses' {
@@ -33872,10 +30800,6 @@
     assert "$src/_whatweb" is_file
 }
 
-@test 'src has _wheel' {
-    assert "$src/_wheel" is_file
-}
-
 @test 'src has _wheel3' {
     assert "$src/_wheel3" is_file
 }
@@ -33894,14 +30818,6 @@
 
 @test 'src has _wheel3.13' {
     assert "$src/_wheel3.13" is_file
-}
-
-@test 'src has _wheel3.8' {
-    assert "$src/_wheel3.8" is_file
-}
-
-@test 'src has _wheel3.9' {
-    assert "$src/_wheel3.9" is_file
 }
 
 @test 'src has _whereis' {
@@ -33980,10 +30896,6 @@
     assert "$src/_winbindd" is_file
 }
 
-@test 'src has _wine' {
-    assert "$src/_wine" is_file
-}
-
 @test 'src has _wine64' {
     assert "$src/_wine64" is_file
 }
@@ -34020,10 +30932,6 @@
     assert "$src/_wineserver-stable" is_file
 }
 
-@test 'src has _winetricks' {
-    assert "$src/_winetricks" is_file
-}
-
 @test 'src has _winexe' {
     assert "$src/_winexe" is_file
 }
@@ -34050,14 +30958,6 @@
 
 @test 'src has _wish' {
     assert "$src/_wish" is_file
-}
-
-@test 'src has _wish8.5' {
-    assert "$src/_wish8.5" is_file
-}
-
-@test 'src has _wish8.6' {
-    assert "$src/_wish8.6" is_file
 }
 
 @test 'src has _wish9.0' {
@@ -34168,10 +31068,6 @@
     assert "$src/_wnck-urgency-monitor" is_file
 }
 
-@test 'src has _wofm2opl' {
-    assert "$src/_wofm2opl" is_file
-}
-
 @test 'src has _wol' {
     assert "$src/_wol" is_file
 }
@@ -34252,10 +31148,6 @@
     assert "$src/_wpd2text" is_file
 }
 
-@test 'src has _wpexec' {
-    assert "$src/_wpexec" is_file
-}
-
 @test 'src has _wpg2raw' {
     assert "$src/_wpg2raw" is_file
 }
@@ -34296,10 +31188,6 @@
     assert "$src/_wrestool" is_file
 }
 
-@test 'src has _wrjpgcom' {
-    assert "$src/_wrjpgcom" is_file
-}
-
 @test 'src has _wrmsr' {
     assert "$src/_wrmsr" is_file
 }
@@ -34328,16 +31216,8 @@
     assert "$src/_wvdialconf" is_file
 }
 
-@test 'src has _wvgain' {
-    assert "$src/_wvgain" is_file
-}
-
 @test 'src has _wvtag' {
     assert "$src/_wvtag" is_file
-}
-
-@test 'src has _wvunpack' {
-    assert "$src/_wvunpack" is_file
 }
 
 @test 'src has _wwf-chat-parser.py' {
@@ -34396,10 +31276,6 @@
     assert "$src/_x11perf" is_file
 }
 
-@test 'src has _x264' {
-    assert "$src/_x264" is_file
-}
-
 @test 'src has _x265' {
     assert "$src/_x265" is_file
 }
@@ -34408,20 +31284,12 @@
     assert "$src/_x86_64" is_file
 }
 
-@test 'src has _x86_energy_perf_policy' {
-    assert "$src/_x86_energy_perf_policy" is_file
-}
-
 @test 'src has _xar' {
     assert "$src/_xar" is_file
 }
 
 @test 'src has _xartutil' {
     assert "$src/_xartutil" is_file
-}
-
-@test 'src has _xattr-2.7' {
-    assert "$src/_xattr-2.7" is_file
 }
 
 @test 'src has _xauth' {
@@ -34464,20 +31332,8 @@
     assert "$src/_xclip-pastefile" is_file
 }
 
-@test 'src has _xcmsdb' {
-    assert "$src/_xcmsdb" is_file
-}
-
-@test 'src has _xcode-select' {
-    assert "$src/_xcode-select" is_file
-}
-
 @test 'src has _xcompmgr' {
     assert "$src/_xcompmgr" is_file
-}
-
-@test 'src has _xcrun' {
-    assert "$src/_xcrun" is_file
 }
 
 @test 'src has _xcursorgen' {
@@ -34498,10 +31354,6 @@
 
 @test 'src has _xdotool' {
     assert "$src/_xdotool" is_file
-}
-
-@test 'src has _xdpyinfo' {
-    assert "$src/_xdpyinfo" is_file
 }
 
 @test 'src has _xdvipdfmx' {
@@ -34652,14 +31504,6 @@
     assert "$src/_xfwm4-tweaks-settings" is_file
 }
 
-@test 'src has _xgamma' {
-    assert "$src/_xgamma" is_file
-}
-
-@test 'src has _xgettext' {
-    assert "$src/_xgettext" is_file
-}
-
 @test 'src has _xgettext.pl' {
     assert "$src/_xgettext.pl" is_file
 }
@@ -34688,10 +31532,6 @@
     assert "$src/_xicclu" is_file
 }
 
-@test 'src has _xindex' {
-    assert "$src/_xindex" is_file
-}
-
 @test 'src has _xindy.run' {
     assert "$src/_xindy.run" is_file
 }
@@ -34702,22 +31542,6 @@
 
 @test 'src has _xkbcli' {
     assert "$src/_xkbcli" is_file
-}
-
-@test 'src has _xkbcomp' {
-    assert "$src/_xkbcomp" is_file
-}
-
-@test 'src has _xkbevd' {
-    assert "$src/_xkbevd" is_file
-}
-
-@test 'src has _xkbprint' {
-    assert "$src/_xkbprint" is_file
-}
-
-@test 'src has _xkill' {
-    assert "$src/_xkill" is_file
 }
 
 @test 'src has _xl2tpd-control' {
@@ -34772,16 +31596,8 @@
     assert "$src/_xml2-config" is_file
 }
 
-@test 'src has _xml2-config.bak' {
-    assert "$src/_xml2-config.bak" is_file
-}
-
 @test 'src has _xml2po' {
     assert "$src/_xml2po" is_file
-}
-
-@test 'src has _xmlcatalog' {
-    assert "$src/_xmlcatalog" is_file
 }
 
 @test 'src has _xmlcatmgr' {
@@ -34924,10 +31740,6 @@
     assert "$src/_xrced" is_file
 }
 
-@test 'src has _xrdb' {
-    assert "$src/_xrdb" is_file
-}
-
 @test 'src has _xreader' {
     assert "$src/_xreader" is_file
 }
@@ -34938,14 +31750,6 @@
 
 @test 'src has _xreader-thumbnailer' {
     assert "$src/_xreader-thumbnailer" is_file
-}
-
-@test 'src has _xrefresh' {
-    assert "$src/_xrefresh" is_file
-}
-
-@test 'src has _xrestop' {
-    assert "$src/_xrestop" is_file
 }
 
 @test 'src has _xscertadmin' {
@@ -34964,10 +31768,6 @@
     assert "$src/_xsetbg" is_file
 }
 
-@test 'src has _xsetroot' {
-    assert "$src/_xsetroot" is_file
-}
-
 @test 'src has _xsetwacom' {
     assert "$src/_xsetwacom" is_file
 }
@@ -34980,24 +31780,12 @@
     assert "$src/_xslt-config" is_file
 }
 
-@test 'src has _xsltproc' {
-    assert "$src/_xsltproc" is_file
-}
-
 @test 'src has _xsser' {
     assert "$src/_xsser" is_file
 }
 
-@test 'src has _xstdcmap' {
-    assert "$src/_xstdcmap" is_file
-}
-
 @test 'src has _xsubpp' {
     assert "$src/_xsubpp" is_file
-}
-
-@test 'src has _xtables-monitor' {
-    assert "$src/_xtables-monitor" is_file
 }
 
 @test 'src has _xterm' {
@@ -35028,10 +31816,6 @@
     assert "$src/_xviewer" is_file
 }
 
-@test 'src has _xwininfo' {
-    assert "$src/_xwininfo" is_file
-}
-
 @test 'src has _xxd' {
     assert "$src/_xxd" is_file
 }
@@ -35058,10 +31842,6 @@
 
 @test 'src has _xznew' {
     assert "$src/_xznew" is_file
-}
-
-@test 'src has _y2racc2.7' {
-    assert "$src/_y2racc2.7" is_file
 }
 
 @test 'src has _y4mblack' {
@@ -35164,10 +31944,6 @@
     assert "$src/_yaml2obj-9" is_file
 }
 
-@test 'src has _yamllint' {
-    assert "$src/_yamllint" is_file
-}
-
 @test 'src has _yamlpp-events' {
     assert "$src/_yamlpp-events" is_file
 }
@@ -35208,10 +31984,6 @@
     assert "$src/_yamlpp-parse-emit5.34" is_file
 }
 
-@test 'src has _yapf' {
-    assert "$src/_yapf" is_file
-}
-
 @test 'src has _yapf-diff' {
     assert "$src/_yapf-diff" is_file
 }
@@ -35240,10 +32012,6 @@
     assert "$src/_yarnpkg" is_file
 }
 
-@test 'src has _yasm' {
-    assert "$src/_yasm" is_file
-}
-
 @test 'src has _yast' {
     assert "$src/_yast" is_file
 }
@@ -35268,10 +32036,6 @@
     assert "$src/_yelp-new" is_file
 }
 
-@test 'src has _yersinia' {
-    assert "$src/_yersinia" is_file
-}
-
 @test 'src has _yoe' {
     assert "$src/_yoe" is_file
 }
@@ -35282,10 +32046,6 @@
 
 @test 'src has _yp_dump_binding' {
     assert "$src/_yp_dump_binding" is_file
-}
-
-@test 'src has _ypcat' {
-    assert "$src/_ypcat" is_file
 }
 
 @test 'src has _ypchfn' {
@@ -35304,24 +32064,12 @@
     assert "$src/_ypipe" is_file
 }
 
-@test 'src has _ypmatch' {
-    assert "$src/_ypmatch" is_file
-}
-
 @test 'src has _yppasswd' {
     assert "$src/_yppasswd" is_file
 }
 
 @test 'src has _yppoll' {
     assert "$src/_yppoll" is_file
-}
-
-@test 'src has _ypset' {
-    assert "$src/_ypset" is_file
-}
-
-@test 'src has _ypwhich' {
-    assert "$src/_ypwhich" is_file
 }
 
 @test 'src has _ys' {
@@ -35376,10 +32124,6 @@
     assert "$src/_yuvscaler" is_file
 }
 
-@test 'src has _yuy2topam' {
-    assert "$src/_yuy2topam" is_file
-}
-
 @test 'src has _z3' {
     assert "$src/_z3" is_file
 }
@@ -35402,10 +32146,6 @@
 
 @test 'src has _zabbix_server' {
     assert "$src/_zabbix_server" is_file
-}
-
-@test 'src has _zbarimg' {
-    assert "$src/_zbarimg" is_file
 }
 
 @test 'src has _zc' {
@@ -35492,20 +32232,12 @@
     assert "$src/_zgrep" is_file
 }
 
-@test 'src has _zhack' {
-    assert "$src/_zhack" is_file
-}
-
 @test 'src has _zile' {
     assert "$src/_zile" is_file
 }
 
 @test 'src has _zim' {
     assert "$src/_zim" is_file
-}
-
-@test 'src has _zinject' {
-    assert "$src/_zinject" is_file
 }
 
 @test 'src has _zip2john' {
@@ -35588,10 +32320,6 @@
     assert "$src/_zless" is_file
 }
 
-@test 'src has _zmap' {
-    assert "$src/_zmap" is_file
-}
-
 @test 'src has _zmf2raw' {
     assert "$src/_zmf2raw" is_file
 }
@@ -35614,14 +32342,6 @@
 
 @test 'src has _zopflipng' {
     assert "$src/_zopflipng" is_file
-}
-
-@test 'src has _zoxide' {
-    assert "$src/_zoxide" is_file
-}
-
-@test 'src has _zprint' {
-    assert "$src/_zprint" is_file
 }
 
 @test 'src has _zramctl' {

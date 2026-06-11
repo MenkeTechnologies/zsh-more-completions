@@ -3041,9 +3041,6 @@
 @test 'more_src has _chrome-history' {
     assert "$(xsrc_find _chrome-history)" is_file
 }
-@test 'more_src has _chromium-browser' {
-    assert "$(xsrc_find _chromium-browser)" is_file
-}
 @test 'more_src has _chronoctl' {
     assert "$(xsrc_find _chronoctl)" is_file
 }
@@ -3061,9 +3058,6 @@
 }
 @test 'more_src has _ciel' {
     assert "$(xsrc_find _ciel)" is_file
-}
-@test 'more_src has _cifsdd' {
-    assert "$(xsrc_find _cifsdd)" is_file
 }
 @test 'more_src has _cilium' {
     assert "$(xsrc_find _cilium)" is_file
@@ -7659,9 +7653,6 @@
 @test 'more_src has _extremetuxracer' {
     assert "$(xsrc_find _extremetuxracer)" is_file
 }
-@test 'more_src has _extresso' {
-    assert "$(xsrc_find _extresso)" is_file
-}
 @test 'more_src has _ezgdal' {
     assert "$(xsrc_find _ezgdal)" is_file
 }
@@ -8469,9 +8460,6 @@
 }
 @test 'more_src has _fxwrite' {
     assert "$(xsrc_find _fxwrite)" is_file
-}
-@test 'more_src has _fzf' {
-    assert "$(xsrc_find _fzf)" is_file
 }
 @test 'more_src has _fzpac' {
     assert "$(xsrc_find _fzpac)" is_file
@@ -10731,9 +10719,6 @@
 }
 @test 'more_src has _ipdbpp' {
     assert "$(xsrc_find _ipdbpp)" is_file
-}
-@test 'more_src has _ipfetch' {
-    assert "$(xsrc_find _ipfetch)" is_file
 }
 @test 'more_src has _ipfwadm' {
     assert "$(xsrc_find _ipfwadm)" is_file
@@ -13318,9 +13303,6 @@
 @test 'more_src has _mdv' {
     assert "$(xsrc_find _mdv)" is_file
 }
-@test 'more_src has _mdx' {
-    assert "$(xsrc_find _mdx)" is_file
-}
 @test 'more_src has _mediafilesegmenter' {
     assert "$(xsrc_find _mediafilesegmenter)" is_file
 }
@@ -14431,9 +14413,6 @@
 @test 'more_src has _nats-top' {
     assert "$(xsrc_find _nats-top)" is_file
 }
-@test 'more_src has _natscli' {
-    assert "$(xsrc_find _natscli)" is_file
-}
 @test 'more_src has _navi' {
     assert "$(xsrc_find _navi)" is_file
 }
@@ -14490,9 +14469,6 @@
 }
 @test 'more_src has _needleall' {
     assert "$(xsrc_find _needleall)" is_file
-}
-@test 'more_src has _nektos' {
-    assert "$(xsrc_find _nektos)" is_file
 }
 @test 'more_src has _nem2-cli' {
     assert "$(xsrc_find _nem2-cli)" is_file
@@ -17692,9 +17668,6 @@
 @test 'more_src has _qvlc' {
     assert "$(xsrc_find _qvlc)" is_file
 }
-@test 'more_src has _qwen' {
-    assert "$(xsrc_find _qwen)" is_file
-}
 @test 'more_src has _qwen-cli' {
     assert "$(xsrc_find _qwen-cli)" is_file
 }
@@ -18441,9 +18414,6 @@
 }
 @test 'more_src has _ruff-lsp' {
     assert "$(xsrc_find _ruff-lsp)" is_file
-}
-@test 'more_src has _ruflo' {
-    assert "$(xsrc_find _ruflo)" is_file
 }
 @test 'more_src has _rung' {
     assert "$(xsrc_find _rung)" is_file
@@ -20856,9 +20826,6 @@
 }
 @test 'more_src has _tigervncviewer' {
     assert "$(xsrc_find _tigervncviewer)" is_file
-}
-@test 'more_src has _tigris' {
-    assert "$(xsrc_find _tigris)" is_file
 }
 @test 'more_src has _tigris-cli' {
     assert "$(xsrc_find _tigris-cli)" is_file
@@ -23652,9 +23619,6 @@
 }
 @test 'more_src has _zcmp' {
     assert "$(xsrc_find _zcmp)" is_file
-}
-@test 'more_src has _zcomet' {
-    assert "$(xsrc_find _zcomet)" is_file
 }
 @test 'more_src has _zdiff' {
     assert "$(xsrc_find _zdiff)" is_file

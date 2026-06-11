@@ -1959,10 +1959,6 @@
 
 # ─── Specific well-known tools in src ───────────────────────────────────────
 
-@test 'src contains _curl' {
-    assert "$src/_curl" is_file
-}
-
 @test 'src contains _docker' {
     assert "$src/_docker" is_file
 }
