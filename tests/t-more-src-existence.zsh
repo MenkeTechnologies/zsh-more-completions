@@ -14,7 +14,7 @@
     xsrc="$pluginDir/more_src"
     xsrc_find() {
         local d
-        for d in more_src more_src2 more_src3; do
+        for d in more_src more_src2 more_src3 more_src4 more_src5 more_src6; do
             if [[ -f "$pluginDir/$d/$1" ]]; then echo "$pluginDir/$d/$1"; return; fi
         done
         echo "$pluginDir/more_src/$1"

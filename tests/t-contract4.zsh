@@ -34,13 +34,15 @@
     assert $(( first + last + prepend + append )) equals 0
 }
 
-@test 'all six trailing fpath dirs are wired: src, more_src, more_src2, more_src3, man_src, architecture_src' {
+@test 'all nine trailing fpath dirs are wired: src, more_src, more_src2..more_src6, man_src, architecture_src' {
     # Pin: the trailing append-dirs are a curated set; dropping any one
     # leaks the matching corpus from fpath and silently breaks tab
     # completion for hundreds of commands. Verify each name appears.
+    # more_src is split a-c/d-g/h-l/m-p/q-s/t-z across six dirs so each
+    # compiled .zwc digest stays small enough not to crash zsh on autoload.
     local count
-    count=$(grep -oE '"\$1/(src|more_src|more_src2|more_src3|man_src|architecture_src)"' "$pluginFile" | sort -u | wc -l | tr -d ' ')
-    assert "$count" same_as '6'
+    count=$(grep -oE '"\$1/(src|more_src|more_src2|more_src3|more_src4|more_src5|more_src6|man_src|architecture_src)"' "$pluginFile" | sort -u | wc -l | tr -d ' ')
+    assert "$count" same_as '9'
 }
 
 @test 'fpath append is GUARDED by reverse-search so re-source is idempotent' {

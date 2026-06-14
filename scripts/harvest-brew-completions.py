@@ -31,18 +31,29 @@ REPO = pathlib.Path(os.environ.get("REPO", pathlib.Path(__file__).resolve().pare
 MORE = REPO / "more_src"
 MORE2 = REPO / "more_src2"
 MORE3 = REPO / "more_src3"
+MORE4 = REPO / "more_src4"
+MORE5 = REPO / "more_src5"
+MORE6 = REPO / "more_src6"
 
 def bucket_for(name: str) -> pathlib.Path:
-    # Split more_src into 3 dirs (a-h -> more_src, i-r -> more_src2, s-z -> more_src3)
-    # to keep each under 10k files (zsh chokes above ~10k entries per fpath dir).
+    # Split completions into 6 dirs by first letter so each fpath dir's compiled
+    # .zwc digest stays small. Large digests (>~40MB) crash zsh on autoload; this
+    # keeps every dir near ~20MB. #/digits/a-c -> more_src, d-g -> more_src2,
+    # h-l -> more_src3, m-p -> more_src4, q-s -> more_src5, t-z -> more_src6.
     stem = name[1:] if name.startswith('_') else name
     if not stem:
         return MORE
     c = stem[0].lower()
-    if 'i' <= c <= 'r':
+    if 'd' <= c <= 'g':
         return MORE2
-    if 's' <= c <= 'z':
+    if 'h' <= c <= 'l':
         return MORE3
+    if 'm' <= c <= 'p':
+        return MORE4
+    if 'q' <= c <= 's':
+        return MORE5
+    if 't' <= c <= 'z':
+        return MORE6
     return MORE
 SRC = REPO / "src"
 BLPATH = REPO / "blacklist.txt"
@@ -69,7 +80,7 @@ def load_blacklist() -> set[str]:
 
 def existing_basenames() -> set[str]:
     out: set[str] = set()
-    for d in (MORE, MORE2, MORE3, SRC):
+    for d in (MORE, MORE2, MORE3, MORE4, MORE5, MORE6, SRC):
         if d.is_dir():
             out.update(p.name for p in d.iterdir() if p.is_file() and p.name.startswith("_"))
     return out

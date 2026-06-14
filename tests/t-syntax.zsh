@@ -44,7 +44,7 @@
 
 @test 'more_src' {
     local f d
-    for d in more_src more_src2 more_src3; do
+    for d in more_src more_src2 more_src3 more_src4 more_src5 more_src6; do
         for f in "$pluginDir/$d/"_*(.); do
             [[ ${f:e} == zwc ]] && continue
             run zsh -n "$f"
