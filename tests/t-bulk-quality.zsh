@@ -15,6 +15,9 @@
     xsrc="$pluginDir/more_src"
     xsrc2="$pluginDir/more_src2"
     xsrc3="$pluginDir/more_src3"
+    xsrc4="$pluginDir/more_src4"
+    xsrc5="$pluginDir/more_src5"
+    xsrc6="$pluginDir/more_src6"
     msrc="$pluginDir/man_src"
     osrc="$pluginDir/override_src"
     asrc="$pluginDir/architecture_src"
@@ -28,7 +31,7 @@
 }
 
 @test 'more_src has more than 500 files' {
-    local count=$(( $(ls "$xsrc" | wc -l) + $(ls "$xsrc2" | wc -l) + $(ls "$xsrc3" | wc -l) ))
+    local count=$(( $(ls "$xsrc" | wc -l) + $(ls "$xsrc2" | wc -l) + $(ls "$xsrc3" | wc -l) + $(ls "$xsrc4" | wc -l) + $(ls "$xsrc5" | wc -l) + $(ls "$xsrc6" | wc -l) ))
     assert "$count" is_greater_than 500
 }
 

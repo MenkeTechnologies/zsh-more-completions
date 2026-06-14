@@ -87,9 +87,12 @@ Directory layout:
 
 ```
 src/              main completions
-more_src/         additional completions (0-9, a-h)
-more_src2/        additional completions (i-r)  split to keep dir under 10k entries
-more_src3/        additional completions (s-z)  split to keep dir under 10k entries
+more_src/         additional completions (0-9, a-c)
+more_src2/        additional completions (d-g)  split by first letter
+more_src3/        additional completions (h-l)  split by first letter
+more_src4/        additional completions (m-p)  split by first letter
+more_src5/        additional completions (q-s)  split by first letter
+more_src6/        additional completions (t-z)  split by first letter
 man_src/          completions parsed from man pages
 override_src/     overrides (prepended to fpath)
 architecture_src/ cross-architecture toolchains
