@@ -40,7 +40,8 @@
 - [\[0x01\] // JACK IN](#0x01-jack-in)
 - [\[0x02\] // BOOT SEQUENCE](#0x02-boot-sequence)
 - [\[0x03\] // STATS](#0x03-stats)
-- [\[0x04\] // TESTING](#0x04-testing)
+- [\[0x04\] // THE COMPETITION](#0x04-the-competition)
+- [\[0x05\] // TESTING](#0x05-testing)
 
 ---
 
@@ -192,7 +193,32 @@ This prints `_`-prefixed completion file counts per directory, `total_completion
 
 ---
 
-## [0x04] // TESTING
+## [0x04] // THE COMPETITION
+
+There isn't any. This is the largest zsh completion corpus ever assembled — by a wide margin.
+
+| Corpus | `_*` files | Authors | Span |
+|---|---|---|---|
+| **zsh-more-completions** (this repo) | **~39,300** | 1 (solo) | 2018–present |
+| &nbsp;&nbsp;↳ hand-written `src/` alone | **~8,360** | 1 (solo) | 2018–present |
+| zsh project bundled (`Completion/`) | 997 | entire zsh dev team | ~1992–present (30+ yrs) |
+| zsh-users/zsh-completions | 192 | community PRs | ~2009–present |
+
+> External counts are point-in-time snapshots taken **2026-06-20** via the GitHub API:
+> `zsh-users/zsh` `Completion/**/_*` = **997**, `zsh-users/zsh-completions` `src/_*` = **192**.
+> This repo's counts drift constantly — run `zsh scripts/print-repo-stats.zsh` for live totals.
+
+The math:
+
+- **This repo is ~205× the size of `zsh-completions`** (the next-largest third-party `#compdef` set) and **~39× the size of zsh's own bundled completions.**
+- **The hand-written `src/` directory alone (~8,360 files) is ~8.4× the entire zsh project's bundled completion corpus (997)** — and that 997 was built by the whole zsh dev team over three decades.
+- The two largest known `#compdef` corpora on earth combined (997 + 192 = 1,189) fit into the hand-written portion of this repo **~7 times over**.
+
+> **Note:** this is a **breadth** record (command coverage / file count), not a per-file **depth** record — upstream's `_git`, `_zsh`, `_systemctl` are individually deeper, hand-tuned option trees. The claim is precise: *largest zsh completion corpus by command coverage ever assembled, exceeding the cumulative multi-decade output of the entire zsh dev team.*
+
+---
+
+## [0x05] // TESTING
 
 From the repository root, with [ZUnit](https://github.com/MenkeTechnologies/zunit) on your `PATH`:
 
