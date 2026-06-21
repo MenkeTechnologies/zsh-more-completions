@@ -24,7 +24,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![zsh](https://img.shields.io/badge/zsh-plugin-cyan.svg)](https://github.com/MenkeTechnologies/zpwr)
 
-### `[THE LARGEST CURATED ZSH COMPLETION CORPUS IN EXISTENCE // 39,627 FILES]`
+### `[THE LARGEST CURATED ZSH COMPLETION CORPUS IN EXISTENCE // 40,712 FILES]`
 
 > *"Every CLI you've heard of, completed. Plus several you haven't."*
 
@@ -83,6 +83,49 @@ Tool names for the completion corpus were harvested from:
 - **Apache Jena (RDF / SPARQL)** — `riot` (RDF I/O Tool), `rsparql`/`sparql`/`arq`/`qparse` (SPARQL query), `shacl` (W3C SHACL validate + parse), full TDB2 toolkit (`tdb2.tdbloader`, `tdb2.tdbquery`, `tdb2.tdbstats`, `tdb2.tdbbackup`, `tdb2.tdbcompact`), `rdfcompare`/`rdfdiff` (graph isomorphism diff), `fuseki-server` (Fuseki2 SPARQL HTTP server); flag tables harvested from `jena.apache.org/documentation/{io,query,shacl,tdb2,tools,fuseki2}/` reference pages and `apache/jena/jena-cmds/src/main/java/{jena,tdb2,tdb2/cmdline}/*.java` ArgDecl + usage() sources
 - **OpenFOAM (CFD)** — mesh + solver + post-processing utilities (`checkMesh`, `renumberMesh`, `mergeMeshes`, `transformPoints`, `surfaceCheck`, `topoSet`, `setFields`, `foamRun`, `foamToVTK`, `potentialFoam`, plus existing `blockMesh`/`decomposePar`/`reconstructPar`/`pimpleFoam`/`simpleFoam`/`snappyHexMesh`); per-tool `argList::addOption()`/`addBoolOption()` strings + the common argList option set (`-case`, `-parallel`, `-roots`, `-region`, …) read from `OpenFOAM/OpenFOAM-12/applications/**/*.C` and `src/OpenFOAM/global/argList/argList.C`
 - **rt-tests** (Linux real-time benchmarks) — `hackbench`, `signaltest`, `pi_stress`, `pmqtest`, `sigwaittest` (alongside existing `cyclictest`); `getopt_long` long_options[] + `display_help()`/`print_usage_exit()` tables read from each tool's source under `rt-tests/src/*/*.c`
+- **UCSC kent utilities** (Genome Browser command-line genomics) — `faToTwoBit`, `bedToBigBed`, `bigWigToBedGraph`, `blat`, `chainNet`, `pslMap`, `liftUp`, `overlapSelect`, `hgLoadBed`, `twoBitMask`, … — usage()/optionSpec tables harvested from kent source at https://github.com/ucscGenomeBrowser/kent/tree/master/src and https://hgdownload.soe.ucsc.edu/admin/exe/
+- **GRASS GIS modules** — raster/vector/general/db/imagery/temporal (`r.mapcalc`, `r.watershed`, `v.in.ogr`, `v.overlay`, `v.net.path`, `g.region`, `db.select`, `t.create`, `i.atcorr`, …) — flag/parameter tables harvested from per-module pages at https://grass.osgeo.org/grass-stable/manuals/
+- **EMBOSS** (European Molecular Biology Open Software Suite) — `dbxfasta`, `emma`, `needle`, `water`, `transeq`, `sixpack`, `restrict`, `palindrome`, `tcode`, `infoassembly`, … — single-dash qualifier tables harvested from https://emboss.sourceforge.net/apps/release/6.6/emboss/apps/
+- **HEASOFT / FTOOLS** (NASA X-ray astronomy + FITS) — `fdump`, `fcopy`, `fcalc`, `fmerge`, `fverify`, `maketime`, `grppha`, `lcurve`, `powspec`, `saextrct`, … — parameter tables harvested from https://heasarc.gsfc.nasa.gov/ftools/caldb/help/
+- **WCSTools** (astrometry / FITS WCS, SAO) — `gethead`, `sethead`, `delhead`, `imstar`, `imsize`, `imstack`, `bincat`, `getfits`, … — flag tables harvested from per-program docs at http://tdc-www.harvard.edu/software/wcstools/ and `olebole/wcstools` source usage()
+- **AmberTools** (molecular dynamics) — `pdb4amber`, `MMPBSA.py`, `MCPB.py`, `packmol-memgen`, `sqm`, `paramfit`, `respgen`, `elsize`, … — argparse/getopt read from ambermd.org docs and AmberTools source
+- **Quantum ESPRESSO** (DFT plane-wave) — `matdyn.x`, `q2r.x`, `hp.x`, `pw2wannier90.x`, `xspectra.x`, `kcw.x`, `turbo_spectrum.x`, … — shared command-line flags (`-i`/`-in`/`-inp`, `-nk`/`-nb`/`-nt`/`-nd`) harvested from https://www.quantum-espresso.org/Doc/user_guide/
+- **OpenFOAM** (additional CFD utilities) — mesh conversion/manipulation + post-processing (`gmshToFoam`, `surfaceFeatureExtract`, `setSet`, `mergeOrSplitBaffles`, `postProcess`, `foamDictionary`, `foamRun`, `interFoam`, …) beyond the set above; `argList::addOption` strings read from `applications/**/*.C` at https://github.com/OpenFOAM
+- **CCP4** (macromolecular crystallography) — `refmac5`, `pointless`, `aimless`, `ctruncate`, `pdbset`, `pdbcur`, `coordconv`, `areaimol`, `ncont`, `dm`, `solomon`, `sfcheck`, `gesamt`, … — command-line flag + keyword tables harvested from https://www.ccp4.ac.uk/html/
+- **Phenix** (crystallography / cryo-EM) — `phenix.xtriage`, `phenix.real_space_refine`, `phenix.pdbtools`, `phenix.polder`, `phenix.process_predicted_model`, … — keyword/flag tables harvested from https://phenix-online.org/documentation/reference/
+- **HMMER + Easel** (profile-HMM) — `alimask`, `hmmconvert`, `hmmlogo`, `makehmmerdb`, `esl-afetch`, `esl-weight`, `esl-ssdraw`, … — flag tables harvested from the HMMER/Easel man pages
+- **NCBI BLAST+** (sequence search: masking/indexing/profile-db) — `dustmasker`, `segmasker`, `windowmasker`, `makembindex`, `makeprofiledb`, `blast_formatter`, `rpstblastn`, `blastn_vdb`, … — flag tables harvested from the NCBI C++ Toolkit source and the BLAST+ manual at https://www.ncbi.nlm.nih.gov/books/NBK279684/
+- **PDAL + LAStools** (LiDAR point clouds) — `lasground`, `lasheight`, `lasthin`, `lasclip`, `lasclassify`, `lasgrid`, `las2dem`, `lastile`, `lasboundary`, … — per-tool README option tables harvested from https://github.com/LAStools/LAStools/tree/master/bin
+- **SAGA GIS + GMT6** (geoscience grid/mapping) — `gravprisms`, `grdshake`, `grdvs30`, `grdflexure`, `grdspotter`, `barb`, `mlconverter`, … — per-module supplement docs harvested from https://docs.generic-mapping-tools.org/latest/
+- **Open Babel** (cheminformatics) — `obrms`, `obspectrophore`, `obtautomer`, `obthermo`, `obxyz`, `obprobe`, `obfitall`, … — flag tables harvested from tool `.cpp` sources at https://github.com/openbabel/openbabel/tree/master/tools
+- **The Sleuth Kit** (digital forensics) — `mac-robber` MAC-time collector; `-V` flag read from getopt in https://github.com/sleuthkit/mac-robber
+- **radare2** (reverse engineering) — `rapatch2`; flag table harvested from the man pages at https://github.com/radareorg/radare2/tree/master/man
+- **John the Ripper + hashcat-utils** (password cracking) — `combinator`, `cutb`, `expander`, `len`, `rli`, `splitlen`, `keyspace`, `unshadow`, `unafs`, … — usage tables harvested from https://hashcat.net/wiki/ and https://www.openwall.com/john/doc/
+- **plaso** (super-timeline forensics) — `pinfo.py`, `image_export.py`, `psteal.py`; argparse tables harvested from https://github.com/log2timeline/plaso and https://plaso.readthedocs.io/
+- **groff** — `neqn` roff preprocessor; flag table harvested from the eqn(1) man page
+- **Ghostscript** (font/PostScript helper scripts) — `font2c`, `bdftops`, `wftopfa`, `dumphint`; usage harvested from the Ghostscript Fonts/Psfiles docs
+- **PDF tooling** (PoDoFo + MuPDF + k2pdfopt) — `podofoencrypt`, `podofopdfinfo`, `podofoimg2pdf`, `mudraw`, `k2pdfopt`; flag tables harvested from man.archlinux.org and https://mupdf.readthedocs.io/
+- **JACK audio** (connection-kit CLIs + ecosystem) — `jack_delay`, `zita-a2j`/`zita-j2a`, `aj-snapshot`, `jmess`, `jack-scope`, `jackminimix`, `jack-smf-player`, … — flag tables harvested from https://github.com/jackaudio sources and Debian man pages
+- **OpenColorIO** (color management) — `ociocheck`, `ociochecklut`, `ociobakelut`, `ocioconvert`, `ociolutimage`, `ociowrite`, `ocioperf`, `ocioarchive` — flag tables harvested from https://opencolorio.readthedocs.io/
+- **Csound** (DSP analysis / soundfile utilities) — `pvanal`, `hetro`, `lpanal`, `cvanal`, `atsa`, `srconv`, `dnoise` — flag tables harvested from https://csound.com/docs/manual/
+- **Espressif / embedded** (MCU flashing & provisioning) — `espefuse.py`, `espsecure.py`, `parttool.py`, `otatool.py`, `esp-coredump`, `uflash`, `stm8flash`, `blhost`, … — flag tables harvested from https://docs.espressif.com/projects/esptool and tool sources
+- **Open EDA** (HDL / FPGA / SPICE) — `verilator_bin`, `sv2v`, `eqy`, `scy`, `fst2vcd`, `vcd2fst`, `ghwdump`, … — flag tables harvested from verilator.org, the ngspice manual, GTKWave, and YosysHQ sources
+- **IC / PCB layout** — `gds3d`, `freerouting`, `txt2gds`, `strmrun`, `flatcam` — flag tables harvested from the GDS3D, freerouting, KLayout (klayout.de), and FlatCAM docs
+- **MongoDB mtools + ecosystem** (log analysis / sync) — `mlaunch`, `mlogfilter`, `mloginfo`, `mplotqueries`, `mtransfer`, `migrate-mongo`, `mongo-orchestration`, … — option tables harvested from https://rueckstiess.github.io/mtools/ and argparse sources
+- **Distributed databases** (Couchbase / RethinkDB / Aerospike / ProxySQL / MySQL NDB / Greenplum / MonetDB / Presto / Galera) — `cbimport`, `cbexport`, `rethinkdb`, `asinfo`, `ndb_mgmd`, `garbd`, `gpfdist`, `mserver5`, `presto-cli`, … — flag tables harvested from each vendor's docs and man pages
+- **Observability** (Prometheus / VictoriaMetrics / Graphite / Thanos) — `vmgateway`, `vmbackupmanager`, `promql-cli`, `statsd_exporter`, `grok_exporter`, `mt-index-cat`, `obsctl` — flag tables harvested from docs.victoriametrics.com and project READMEs
+- **Log / telemetry agents** — `goflow`, `goflow2`, `veneur`, `veneur-emit`, `calyptia`, `signalfx-agent`, `nxlog`, `redpanda-connect`, `pktvisor`, … — flag tables harvested from upstream READMEs, the NXLog man page, and Redpanda Connect docs
+- **cargo subcommands** (third-party `cargo-*`) — `cargo-deadlinks`, `cargo-bundle-licenses`, `cargo-minimal-versions`, `cargo-get`, `cargo-unmaintained`, `cargo-multivers`, `cargo-samply`, `cargo-graph`, … — flag tables harvested from each clap source / README via the rust-lang/cargo third-party-subcommands wiki
+- **Python packaging** (build / distribution) — `abi3audit`, `repairwheel`, `delvewheel`, `whey`, `constructor`, `pyprojectsort`, `py2dsc`, `pyodide`, `wheel2deb`, … — flag tables harvested from docs.astral.sh/uv, pyodide.org, and pypa source READMEs
+- **Kubernetes ecosystem** (multi-cluster / storage / perf / backup) — `kubeswitch`, `kubestr`, `kperf`, `kanctl`, `replicated`, `kubectl-foreach` — flag tables harvested from each project's docs/README
+- **Container / SBOM security** — `sbomqs`, `sbomasm`, `sbomgr`, `sbommv`, `soci` — flag tables harvested from the interlynk-io repos and awslabs/soci-snapshotter docs
+- **HPC schedulers** (PBS / OpenPBS / Grid Engine / OpenSHMEM) — `qconf`, `qhost`, `qacct`, `qrsh`, `pbs_rsub`, `pbs_rstat`, `pbsfs`, `oshmem_info`, … — flag tables harvested from the SGE man pages, openpbs/openpbs, and docs.open-mpi.org
+- **Seismology** (SAC / ObsPy / IRIS) — `obspy-scan`, `obspy-plot`, `obspy-mopad`, `evalresp`, `rdseed` — flag tables harvested from the ObsPy script source, the IRIS/SAGE evalresp manual, and the rdseed man page
+- **Meteorology / GRIB** (WRF / WPS / GrADS / NCL) — `degrib`, `ncl_convert2nc`, `ncl_filedump`, `g2ctl`, `grib2ctl.pl`, `gribmap`, `read_wrf_nc`, `iowrf`, `g1print.exe`, `g2print.exe` — flag tables harvested from NOAA MDL, ncl.ucar.edu, CPC (wesley), and the WRF Users Guide
+- **ViennaRNA** (RNA secondary structure) — `RNA2Dfold`, `RNApaln`, `RNAlocmin`, `RNAPKplex`, `RNAmultifold`, `RNAsnoop`, `RNAxplorer`, `Kinfold`, `kinwalker`, … — gengetopt option tables harvested from https://www.tbi.univie.ac.at/RNA/
+- **Phylogenetics** (tree inference / alignment / placement / dating) — `readal`, `statal`, `mafft-linsi`, `prank`, `kalign`, `probcons`, `epa-ng`, `pplacer`, `gappa`, `modeltest-ng`, `hyphy`, `codeml`, `baseml`, `mcmctree`, `Gblocks`, … — flag tables harvested from each tool's man page / docs / source
+- **OpenMS** (TOPP mass spectrometry + ProteoWizard) — `FileInfo`, `FileConverter`, `FeatureFinderMetabo`, `MSGFPlusAdapter`, `PercolatorAdapter`, `msconvert`, … — flag tables harvested from the per-tool `TOPP_<name>.html` docs at openms.org
+- **TeX Live / fontconfig niche CLIs** — `c2chapel`, `omfonts`, `tex2aspc`, `tex2xindy`, `yplan`, `msxlint`, `xml2pmx`, `kanji-config-updmap`, `fc-genconf` — flags read from each tool's `--help`/man output
 
 Directory layout:
 
@@ -200,7 +243,7 @@ There isn't any. This is the largest zsh completion corpus ever assembled — by
 
 | Corpus | `_*` files | Authors | Span |
 |---|---|---|---|
-| **zsh-more-completions** (this repo) | **~39,500** | 1 (solo) | 2018–present |
+| **zsh-more-completions** (this repo) | **~40,700** | 1 (solo) | 2018–present |
 | &nbsp;&nbsp;↳ hand-written `src/` alone | **~8,360** | 1 (solo) | 2018–present |
 | zsh project bundled (`Completion/`) | 997 | entire zsh dev team | ~1992–present (30+ yrs) |
 | zsh-users/zsh-completions | 192 | community PRs | ~2009–present |
@@ -211,7 +254,7 @@ There isn't any. This is the largest zsh completion corpus ever assembled — by
 
 The math:
 
-- **This repo is ~205× the size of `zsh-completions`** (the next-largest third-party `#compdef` set) and **~39× the size of zsh's own bundled completions.**
+- **This repo is ~212× the size of `zsh-completions`** (the next-largest third-party `#compdef` set) and **~41× the size of zsh's own bundled completions.**
 - **The hand-written `src/` directory alone (~8,360 files) is ~8.4× the entire zsh project's bundled completion corpus (997)** — and that 997 was built by the whole zsh dev team over three decades.
 - The two largest known `#compdef` corpora on earth combined (997 + 192 = 1,189) fit into the hand-written portion of this repo **~7 times over**.
 
