@@ -24,7 +24,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![zsh](https://img.shields.io/badge/zsh-plugin-cyan.svg)](https://github.com/MenkeTechnologies/zpwr)
 
-### `[THE LARGEST CURATED ZSH COMPLETION CORPUS IN EXISTENCE // 46,449 FILES]`
+### `[THE LARGEST CURATED ZSH COMPLETION CORPUS IN EXISTENCE // 46,492 FILES]`
 
 > *"Every CLI you've heard of, completed. Plus several you haven't."*
 
@@ -557,6 +557,8 @@ Tool names for the completion corpus were harvested from:
 - **json-yaml3** (JSON/YAML/config manipulation CLIs) — `json2toml`, `toml2json`, `yaml2toml`, `hujsonfmt`, `jpterm` — flag tables harvested from github.com/remarshal-project/remarshal, github.com/tailscale/hujson, github.com/jmespath-community/jmespath.terminal
 - **time-cron3** (time/scheduling/cron CLIs) — `datezone` `fcrontab` `fcrondyn` `datefudge` `chronos` `w32tm` — flag tables harvested from man.archlinux.org (datezone/fcrontab/fcrondyn), manpages.debian.org (datefudge), mesos.github.io/chronos/docs/configuration.html, and ss64.com/nt/w32tm.html
 - **text-process3** (text-processing/stream CLIs) — `ambr`, `bwk` — flag tables harvested from https://github.com/dalance/amber and https://github.com/onetrueawk/awk
+- **lua-ecosystem** (Lua CLIs: local Lua/LuaRocks installers, Luau toolchain, doc/coverage/format tools) — `hererocks`, `luau-analyze`, `luau-compile`, `luau-ast`, `amalg.lua`, `luadoc`, `luacov`, `lua-format` — flag tables harvested from github.com/luarocks/hererocks, github.com/luau-lang/luau CLI sources, github.com/siffiejoe/lua-amalg, lunarmodules/luacov, manpages.ubuntu.com luadoc, github.com/Koihik/LuaFormatter
+- **scheme-lisp** (Scheme/Lisp implementation CLIs) — `qlot`, `buildapp` — flag tables harvested from https://github.com/fukamachi/qlot and https://www.xach.com/lisp/buildapp/
 
 Directory layout:
 
@@ -674,7 +676,7 @@ There isn't any. This is the largest zsh completion corpus ever assembled — by
 
 | Corpus | `_*` files | Authors | Span |
 |---|---|---|---|
-| **zsh-more-completions** (this repo) | **~46,400** | 1 (solo) | 2018–present |
+| **zsh-more-completions** (this repo) | **~46,500** | 1 (solo) | 2018–present |
 | &nbsp;&nbsp;↳ hand-written `src/` alone | **~8,360** | 1 (solo) | 2018–present |
 | zsh project bundled (`Completion/`) | 997 | entire zsh dev team | ~1992–present (30+ yrs) |
 | zsh-users/zsh-completions | 192 | community PRs | ~2009–present |
