@@ -24,7 +24,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![zsh](https://img.shields.io/badge/zsh-plugin-cyan.svg)](https://github.com/MenkeTechnologies/zpwr)
 
-### `[THE LARGEST CURATED ZSH COMPLETION CORPUS IN EXISTENCE // 40,712 FILES]`
+### `[THE LARGEST CURATED ZSH COMPLETION CORPUS IN EXISTENCE // 40,886 FILES]`
 
 > *"Every CLI you've heard of, completed. Plus several you haven't."*
 
@@ -126,6 +126,11 @@ Tool names for the completion corpus were harvested from:
 - **Phylogenetics** (tree inference / alignment / placement / dating) — `readal`, `statal`, `mafft-linsi`, `prank`, `kalign`, `probcons`, `epa-ng`, `pplacer`, `gappa`, `modeltest-ng`, `hyphy`, `codeml`, `baseml`, `mcmctree`, `Gblocks`, … — flag tables harvested from each tool's man page / docs / source
 - **OpenMS** (TOPP mass spectrometry + ProteoWizard) — `FileInfo`, `FileConverter`, `FeatureFinderMetabo`, `MSGFPlusAdapter`, `PercolatorAdapter`, `msconvert`, … — flag tables harvested from the per-tool `TOPP_<name>.html` docs at openms.org
 - **TeX Live / fontconfig niche CLIs** — `c2chapel`, `omfonts`, `tex2aspc`, `tex2xindy`, `yplan`, `msxlint`, `xml2pmx`, `kanji-config-updmap`, `fc-genconf` — flags read from each tool's `--help`/man output
+- **GATK4** (Broad Institute genome analysis toolkit) — `BaseRecalibrator`, `HaplotypeCaller`, `GenotypeGVCFs`, `GenomicsDBImport`, `Mutect2`, `FilterMutectCalls`, `SelectVariants`, `VariantRecalibrator`, `ModelSegments`, `GermlineCNVCaller`, … — flag tables harvested from the `@Argument` annotations in https://github.com/broadinstitute/gatk and the tool docs at https://gatk.broadinstitute.org/
+- **deepTools** (NGS coverage / visualization) — `bamCoverage`, `bamCompare`, `computeMatrix`, `plotHeatmap`, `plotProfile`, `multiBamSummary`, `plotCorrelation`, `plotFingerprint`, … — flag tables harvested from https://deeptools.readthedocs.io/en/latest/content/list_of_tools.html
+- **Sequence toolkits** (FASTA/FASTQ filtering, trimming, subsampling) — `filtlong`, `porechop`, `chopper`, `rasusa`, `sickle`, `faops`, `bbmerge.sh`, `clumpify.sh`, … — flag tables harvested from each tool's upstream GitHub README/usage
+- **Long-read aligners** (LAST, GMAP/GSNAP, ngmlr, segemehl) — `gmap`, `gsnap`, `gmap_build`, `lastal`, `lastdb`, `last-train`, `last-split`, `maf-convert`, `ngmlr`, `segemehl.x` — flag tables harvested from gitlab.com/mcfrith/last docs, Debian man pages, and github.com/philres/ngmlr
+- **VCF annotation / vcflib** — `filter_vep`, `vcffilter`, `vcfallelicprimitives`, `vcfbreakmulti`, `vcfintersect`, `vcfroc`, `vcfcombine`, `vcfannotate`, … — flag tables harvested from the Ensembl VEP filter docs and the vcflib per-tool docs at https://github.com/vcflib/vcflib/tree/master/doc
 
 Directory layout:
 
@@ -243,7 +248,7 @@ There isn't any. This is the largest zsh completion corpus ever assembled — by
 
 | Corpus | `_*` files | Authors | Span |
 |---|---|---|---|
-| **zsh-more-completions** (this repo) | **~40,700** | 1 (solo) | 2018–present |
+| **zsh-more-completions** (this repo) | **~40,900** | 1 (solo) | 2018–present |
 | &nbsp;&nbsp;↳ hand-written `src/` alone | **~8,360** | 1 (solo) | 2018–present |
 | zsh project bundled (`Completion/`) | 997 | entire zsh dev team | ~1992–present (30+ yrs) |
 | zsh-users/zsh-completions | 192 | community PRs | ~2009–present |
