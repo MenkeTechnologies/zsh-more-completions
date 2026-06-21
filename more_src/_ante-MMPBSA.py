@@ -1,4 +1,5 @@
 #compdef ante-MMPBSA.py
+# Documentation: https://ambermd.org/AmberTools.php
 # strip and create the topology files needed by MMPBSA.py
 
 local ret=1

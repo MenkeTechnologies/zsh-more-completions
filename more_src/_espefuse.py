@@ -1,4 +1,5 @@
 #compdef espefuse.py
+# Documentation: https://docs.espressif.com/projects/esptool/
 # Espressif eFuse read/write tool (espefuse.py)
 
 local ret=1

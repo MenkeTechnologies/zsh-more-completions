@@ -1,4 +1,5 @@
 #compdef pprism.x
+# Documentation: https://www.quantum-espresso.org/Doc/user_guide/
 # pprism.x — Quantum ESPRESSO 3D-RISM/Laue-RISM solvation post-processing
 
 _arguments -s -S \

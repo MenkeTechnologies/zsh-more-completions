@@ -1,4 +1,5 @@
 #compdef turbo_spectrum.x
+# Documentation: https://www.quantum-espresso.org/Doc/user_guide/
 # turbo_spectrum.x — Quantum ESPRESSO turboTDDFT post-processing of optical absorption spectra
 
 _arguments -s -S \

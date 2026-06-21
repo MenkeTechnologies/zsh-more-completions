@@ -1,4 +1,5 @@
 #compdef manycp.x
+# Documentation: https://www.quantum-espresso.org/Doc/user_guide/
 # manycp.x — Quantum ESPRESSO driver running many independent cp.x calculations
 
 _arguments -s -S \

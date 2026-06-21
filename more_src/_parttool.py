@@ -1,4 +1,5 @@
 #compdef parttool.py
+# Documentation: https://docs.espressif.com/projects/esptool/
 # ESP-IDF partition table read/write/erase tool
 
 local ret=1

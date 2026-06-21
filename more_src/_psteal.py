@@ -1,4 +1,5 @@
 #compdef psteal.py
+# Documentation: https://plaso.readthedocs.io/
 # plaso tool combining the functionality of log2timeline and psort
 
 local ret=1

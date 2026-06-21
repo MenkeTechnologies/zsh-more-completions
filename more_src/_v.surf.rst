@@ -1,4 +1,5 @@
 #compdef v.surf.rst
+# Documentation: https://grass.osgeo.org/grass-stable/manuals/v.surf.rst.html
 # GRASS GIS: spatial approximation and topographic analysis (RST interpolation)
 
 local ret=1

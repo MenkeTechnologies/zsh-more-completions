@@ -1,4 +1,5 @@
 #compdef importexport_binary.x
+# Documentation: https://www.quantum-espresso.org/Doc/user_guide/
 # importexport_binary.x — Quantum ESPRESSO conversion of wavefunction/charge files between binary and portable formats
 
 _arguments -s -S \

@@ -1,4 +1,5 @@
 #compdef db.login
+# Documentation: https://grass.osgeo.org/grass-stable/manuals/db.login.html
 # GRASS GIS: set user/password for DB driver/database
 
 local ret=1

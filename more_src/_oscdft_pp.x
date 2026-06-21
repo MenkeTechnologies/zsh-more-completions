@@ -1,4 +1,5 @@
 #compdef oscdft_pp.x
+# Documentation: https://www.quantum-espresso.org/Doc/user_guide/
 # oscdft_pp.x — Quantum ESPRESSO OSCDFT post-processing utility
 
 _arguments -s -S \

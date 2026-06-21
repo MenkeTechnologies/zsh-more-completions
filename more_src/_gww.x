@@ -1,4 +1,5 @@
 #compdef gww.x
+# Documentation: https://www.quantum-espresso.org/Doc/user_guide/
 # gww.x — Quantum ESPRESSO GWW self-energy and quasiparticle calculation
 
 _arguments -s -S \

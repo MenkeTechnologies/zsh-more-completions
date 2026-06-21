@@ -1,4 +1,5 @@
 #compdef matdyn.x
+# Documentation: https://www.quantum-espresso.org/Doc/user_guide/
 # matdyn.x — Quantum ESPRESSO phonon dispersion from real-space interatomic force constants
 
 _arguments -s -S \

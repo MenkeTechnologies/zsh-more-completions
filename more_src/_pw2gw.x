@@ -1,4 +1,5 @@
 #compdef pw2gw.x
+# Documentation: https://www.quantum-espresso.org/Doc/user_guide/
 # pw2gw.x — Quantum ESPRESSO export of pw.x results for GW/optical post-processing
 
 _arguments -s -S \

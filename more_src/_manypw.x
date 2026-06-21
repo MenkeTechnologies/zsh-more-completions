@@ -1,4 +1,5 @@
 #compdef manypw.x
+# Documentation: https://www.quantum-espresso.org/Doc/user_guide/
 # manypw.x — Quantum ESPRESSO driver running many independent pw.x calculations
 
 _arguments -s -S \

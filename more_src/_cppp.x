@@ -1,4 +1,5 @@
 #compdef cppp.x
+# Documentation: https://www.quantum-espresso.org/Doc/user_guide/
 # cppp.x — Quantum ESPRESSO Car-Parrinello (cp.x) post-processing utility
 
 _arguments -s -S \

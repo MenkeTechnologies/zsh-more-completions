@@ -1,4 +1,5 @@
 #compdef espsecure.py
+# Documentation: https://docs.espressif.com/projects/esptool/
 # Espressif secure boot and flash encryption tool (espsecure.py)
 
 local ret=1

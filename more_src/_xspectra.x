@@ -1,4 +1,5 @@
 #compdef xspectra.x
+# Documentation: https://www.quantum-espresso.org/Doc/user_guide/
 # xspectra.x — Quantum ESPRESSO X-ray absorption near-edge spectroscopy calculation
 
 _arguments -s -S \

@@ -1,4 +1,5 @@
 #compdef otatool.py
+# Documentation: https://docs.espressif.com/projects/esptool/
 # ESP-IDF OTA partitions read/write/switch tool
 
 local ret=1

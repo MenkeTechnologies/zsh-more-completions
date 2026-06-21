@@ -1,4 +1,5 @@
 #compdef r.profile
+# Documentation: https://grass.osgeo.org/grass-stable/manuals/r.profile.html
 # Outputs the raster map layer values lying on user-defined line(s)
 
 local ret=1

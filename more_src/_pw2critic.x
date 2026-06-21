@@ -1,4 +1,5 @@
 #compdef pw2critic.x
+# Documentation: https://www.quantum-espresso.org/Doc/user_guide/
 # pw2critic.x — Quantum ESPRESSO export of charge density to critic2 format
 
 _arguments -s -S \

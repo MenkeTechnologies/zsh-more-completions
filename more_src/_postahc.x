@@ -1,4 +1,5 @@
 #compdef postahc.x
+# Documentation: https://www.quantum-espresso.org/Doc/user_guide/
 # postahc.x — Quantum ESPRESSO post-processing of anharmonic/Allen-Heine-Cardona phonon self-energy
 
 _arguments -s -S \

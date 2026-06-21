@@ -1,4 +1,5 @@
 #compdef AFQMMM_NMR.py
+# Documentation: https://ambermd.org/AmberTools.php
 # set up adaptive fragmentation QM/MM NMR calculations (MCPB toolset)
 
 local ret=1

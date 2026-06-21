@@ -1,4 +1,5 @@
 #compdef gen_esp32part.py
+# Documentation: https://docs.espressif.com/projects/esptool/
 # ESP-IDF partition table CSV<->binary converter
 
 local ret=1

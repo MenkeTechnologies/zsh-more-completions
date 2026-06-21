@@ -1,4 +1,5 @@
 #compdef pinfo.py
+# Documentation: https://plaso.readthedocs.io/
 # plaso tool to provide information about the contents of a Plaso storage file
 
 local ret=1

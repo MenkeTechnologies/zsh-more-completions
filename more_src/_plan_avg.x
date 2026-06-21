@@ -1,4 +1,5 @@
 #compdef plan_avg.x
+# Documentation: https://www.quantum-espresso.org/Doc/user_guide/
 # plan_avg.x — Quantum ESPRESSO planar average of charge density along a direction (reads input from standard input: plan_avg.x < input)
 
 # plan_avg.x is a serial post-processing utility that reads its input from stdin

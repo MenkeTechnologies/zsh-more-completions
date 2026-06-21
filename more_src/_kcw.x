@@ -1,4 +1,5 @@
 #compdef kcw.x
+# Documentation: https://www.quantum-espresso.org/Doc/user_guide/
 # kcw.x — Quantum ESPRESSO Koopmans-compliant functionals calculation
 
 _arguments -s -S \

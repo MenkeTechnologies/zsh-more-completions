@@ -1,4 +1,5 @@
 #compdef grib2ctl.pl
+# Documentation: https://www.cpc.ncep.noaa.gov/products/wesley/
 # make a GrADS control (.ctl) descriptor file from a GRIB1 file (uses wgrib)
 
 local ret=1

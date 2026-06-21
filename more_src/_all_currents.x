@@ -1,4 +1,5 @@
 #compdef all_currents.x
+# Documentation: https://www.quantum-espresso.org/Doc/user_guide/
 # all_currents.x — Quantum ESPRESSO energy/heat current calculation for thermal transport
 
 _arguments -s -S \
