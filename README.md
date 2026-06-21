@@ -24,7 +24,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![zsh](https://img.shields.io/badge/zsh-plugin-cyan.svg)](https://github.com/MenkeTechnologies/zpwr)
 
-### `[THE LARGEST CURATED ZSH COMPLETION CORPUS IN EXISTENCE // 39,467 FILES]`
+### `[THE LARGEST CURATED ZSH COMPLETION CORPUS IN EXISTENCE // 39,567 FILES]`
 
 > *"Every CLI you've heard of, completed. Plus several you haven't."*
 
@@ -200,7 +200,7 @@ There isn't any. This is the largest zsh completion corpus ever assembled — by
 
 | Corpus | `_*` files | Authors | Span |
 |---|---|---|---|
-| **zsh-more-completions** (this repo) | **~39,300** | 1 (solo) | 2018–present |
+| **zsh-more-completions** (this repo) | **~39,500** | 1 (solo) | 2018–present |
 | &nbsp;&nbsp;↳ hand-written `src/` alone | **~8,360** | 1 (solo) | 2018–present |
 | zsh project bundled (`Completion/`) | 997 | entire zsh dev team | ~1992–present (30+ yrs) |
 | zsh-users/zsh-completions | 192 | community PRs | ~2009–present |
