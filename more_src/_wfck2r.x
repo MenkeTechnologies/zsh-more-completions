@@ -1,4 +1,5 @@
 #compdef wfck2r.x
+# Documentation: https://www.quantum-espresso.org/Doc/user_guide/
 # wfck2r.x — Quantum ESPRESSO export of Kohn-Sham wavefunctions to real-space grid
 
 _arguments -s -S \

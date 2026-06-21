@@ -1,4 +1,5 @@
 #compdef turbo_magnon.x
+# Documentation: https://www.quantum-espresso.org/Doc/user_guide/
 # turbo_magnon.x — Quantum ESPRESSO turboTDDFT magnon dispersion calculation
 
 _arguments -s -S \

@@ -1,4 +1,5 @@
 #compdef IPMach.py
+# Documentation: https://ambermd.org/AmberTools.php
 # ion parameter optimization machine (MCPB toolset)
 
 local ret=1

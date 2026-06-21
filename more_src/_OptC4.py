@@ -1,4 +1,5 @@
 #compdef OptC4.py
+# Documentation: https://ambermd.org/AmberTools.php
 # optimize C4 terms for metal-ion force fields (MCPB toolset)
 
 local ret=1

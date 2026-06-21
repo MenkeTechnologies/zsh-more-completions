@@ -1,4 +1,5 @@
 #compdef pw2bgw.x
+# Documentation: https://www.quantum-espresso.org/Doc/user_guide/
 # pw2bgw.x — Quantum ESPRESSO converter from pw.x output to BerkeleyGW format
 
 _arguments -s -S \

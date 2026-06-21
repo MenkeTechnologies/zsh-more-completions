@@ -1,4 +1,5 @@
 #compdef pw2wannier90.x
+# Documentation: https://www.quantum-espresso.org/Doc/user_guide/
 # pw2wannier90.x — Quantum ESPRESSO interface generating input for the Wannier90 package
 
 _arguments -s -S \

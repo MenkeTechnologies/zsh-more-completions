@@ -1,4 +1,5 @@
 #compdef simple.x
+# Documentation: https://www.quantum-espresso.org/Doc/user_guide/
 # simple.x — Quantum ESPRESSO SIMPLE interpolative optical-properties calculation
 
 _arguments -s -S \

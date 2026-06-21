@@ -1,4 +1,5 @@
 #compdef MMPBSA.py
+# Documentation: https://ambermd.org/AmberTools.php
 # end-state free energy (MM/PBSA and MM/GBSA) analysis of MD trajectories
 
 local ret=1

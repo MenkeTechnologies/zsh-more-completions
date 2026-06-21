@@ -1,4 +1,5 @@
 #compdef average.x
+# Documentation: https://www.quantum-espresso.org/Doc/user_guide/
 # average.x — Quantum ESPRESSO planar average of a 3D field produced by pp.x (reads input from standard input: average.x < input)
 
 # average.x is a serial post-processing utility that reads its input from stdin

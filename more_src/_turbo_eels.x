@@ -1,4 +1,5 @@
 #compdef turbo_eels.x
+# Documentation: https://www.quantum-espresso.org/Doc/user_guide/
 # turbo_eels.x — Quantum ESPRESSO turboTDDFT electron energy loss spectroscopy calculation
 
 _arguments -s -S \

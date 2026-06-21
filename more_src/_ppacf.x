@@ -1,4 +1,5 @@
 #compdef ppacf.x
+# Documentation: https://www.quantum-espresso.org/Doc/user_guide/
 # ppacf.x — Quantum ESPRESSO adiabatic-connection coupling-constant decomposition of correlation energy
 
 _arguments -s -S \

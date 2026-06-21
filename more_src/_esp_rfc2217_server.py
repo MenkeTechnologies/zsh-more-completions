@@ -1,4 +1,5 @@
 #compdef esp_rfc2217_server.py
+# Documentation: https://docs.espressif.com/projects/esptool/
 # RFC2217 TCP/IP remote serial port server for ESP chips
 
 local ret=1

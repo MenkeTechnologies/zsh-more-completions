@@ -1,4 +1,5 @@
 #compdef open_grid.x
+# Documentation: https://www.quantum-espresso.org/Doc/user_guide/
 # open_grid.x — Quantum ESPRESSO unfolding of a symmetry-reduced k-grid to the full grid
 
 _arguments -s -S \

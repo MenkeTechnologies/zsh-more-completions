@@ -1,4 +1,5 @@
 #compdef d3hess.x
+# Documentation: https://www.quantum-espresso.org/Doc/user_guide/
 # d3hess.x — Quantum ESPRESSO third-order DFT-D3 dispersion Hessian calculation
 
 _arguments -s -S \

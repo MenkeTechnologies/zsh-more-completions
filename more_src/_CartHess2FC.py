@@ -1,4 +1,5 @@
 #compdef CartHess2FC.py
+# Documentation: https://ambermd.org/AmberTools.php
 # derive bonded force constants from a Cartesian Hessian (MCPB toolset)
 
 local ret=1

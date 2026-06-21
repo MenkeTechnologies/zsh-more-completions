@@ -1,4 +1,5 @@
 #compdef PdbSearcher.py
+# Documentation: https://ambermd.org/AmberTools.php
 # search PDB files for metal-center environment information (MCPB toolset)
 
 local ret=1

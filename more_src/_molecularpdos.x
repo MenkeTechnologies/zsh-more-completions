@@ -1,4 +1,5 @@
 #compdef molecularpdos.x
+# Documentation: https://www.quantum-espresso.org/Doc/user_guide/
 # molecularpdos.x — Quantum ESPRESSO molecular projected density of states post-processing
 
 _arguments -s -S \

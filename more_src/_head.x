@@ -1,4 +1,5 @@
 #compdef head.x
+# Documentation: https://www.quantum-espresso.org/Doc/user_guide/
 # head.x — Quantum ESPRESSO GWW head-of-dielectric-matrix calculation
 
 _arguments -s -S \

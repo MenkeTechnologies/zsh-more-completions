@@ -1,4 +1,5 @@
 #compdef dvscf_q2r.x
+# Documentation: https://www.quantum-espresso.org/Doc/user_guide/
 # dvscf_q2r.x — Quantum ESPRESSO transform of phonon perturbation potentials to real space
 
 _arguments -s -S \

@@ -1,4 +1,5 @@
 #compdef oscdft_et.x
+# Documentation: https://www.quantum-espresso.org/Doc/user_guide/
 # oscdft_et.x — Quantum ESPRESSO OSCDFT electron-transfer coupling calculation
 
 _arguments -s -S \

@@ -1,4 +1,5 @@
 #compdef MCPB.py
+# Documentation: https://ambermd.org/AmberTools.php
 # build force fields for metal-containing complexes (Metal Center Parameter Builder)
 
 local ret=1

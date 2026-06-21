@@ -1,4 +1,5 @@
 #compdef image_export.py
+# Documentation: https://plaso.readthedocs.io/
 # plaso tool to export file content from a storage media image or device
 
 local ret=1

@@ -1,4 +1,5 @@
 #compdef hp.x
+# Documentation: https://www.quantum-espresso.org/Doc/user_guide/
 # hp.x — Quantum ESPRESSO Hubbard parameters from density-functional perturbation theory
 
 _arguments -s -S \

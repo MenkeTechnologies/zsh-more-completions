@@ -1,4 +1,5 @@
 #compdef q2r.x
+# Documentation: https://www.quantum-espresso.org/Doc/user_guide/
 # q2r.x — Quantum ESPRESSO transform of dynamical matrices from q-space to real-space force constants
 
 _arguments -s -S \
