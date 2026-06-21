@@ -24,7 +24,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![zsh](https://img.shields.io/badge/zsh-plugin-cyan.svg)](https://github.com/MenkeTechnologies/zpwr)
 
-### `[THE LARGEST CURATED ZSH COMPLETION CORPUS IN EXISTENCE // 43,831 FILES]`
+### `[THE LARGEST CURATED ZSH COMPLETION CORPUS IN EXISTENCE // 43,988 FILES]`
 
 > *"Every CLI you've heard of, completed. Plus several you haven't."*
 
@@ -366,6 +366,14 @@ Tool names for the completion corpus were harvested from:
 - **cad-mesh2** (CAD/mesh-processing CLIs) — `cq-cli`, `quadriflow`, `instant-meshes`, `vorpalite`/`vorpastat`/`vorpaview` (geogram) — flag tables harvested from github.com/CadQuery/cq-cli, github.com/hjwdzh/QuadriFlow, deepwiki.com/wjakob/instant-meshes/3.1-command-line-interface, and github.com/alicevision/geogram (command_line_args.cpp, src/bin/vorpastat & vorpaview)
 - **motif-peak-bio** (genomics motif discovery/enrichment CLIs from the MEME Suite) — `fimo`, `tomtom`, `meme-chip`, `streme`, `ame` — flag tables harvested from https://meme-suite.org/meme/doc/overview.html
 - **file-watchers** (file-watcher / live-reload / wait-for CLIs) — `wait-for-it`, `inotify-hookable`, `inoticoming` — flag tables harvested from github.com/vishnubob/wait-for-it, metacpan.org/pod/App::Inotify::Hookable, and manpages.ubuntu.com/manpages/jammy/man1/inoticoming.1.html
+- **madagascar-A** (seismic-processing sf* programs set A) — `sfadd`, `sfstack`, `sfdip`, `sfradon`, `sfmutter`, `sffft3` — flag tables harvested from https://github.com/ahay/src self-documentation comments (system/{main,generic,seismic}, user/pwd/Mdip.c)
+- **seismic-unix-A** (CWP/SU Seismic Unix processing programs, set A) — `suwind`, `sugain`, `suchw`, `sunmo`, `subfilt` — flag tables harvested from selfdoc sdoc[] arrays at https://github.com/JohnWStockwellJr/SeisUnix/tree/master/src/su/main
+- **agat-genome** (Another GFF Analysis Toolkit agat_*.pl GFF/GTF annotation CLIs) — `agat_sp_statistics.pl`, `agat_sp_manage_IDs.pl`, `agat_convert_sp_gxf2gxf.pl`, `agat_sp_filter_feature_by_attribute_value.pl` — flag tables harvested from https://agat.readthedocs.io/en/latest/tools/ per-tool pages
+- **pdb-tools** (PDB structure-manipulation CLIs) — `pdb_fetch`, `pdb_selchain`, `pdb_sort`, `pdb_wc`, `pdb_tidy` — flag tables harvested from http://www.bonvinlab.org/pdb-tools/ (cross-checked against raw GitHub sources for pdb_wc/pdb_sort/pdb_fetch)
+- **ceph-storage** (Ceph distributed-storage CLIs) — `crushtool`, `osdmaptool`, `monmaptool`, `cephfs-top`, `ceph-monstore-tool` — flag tables harvested from https://docs.ceph.com/en/latest/man/8/
+- **percona-toolkit** (pt-* MySQL admin CLIs) — `pt-upgrade`, `pt-visual-explain`, `pt-table-usage`, `pt-variable-advisor`, `pt-align` — flag tables harvested from https://docs.percona.com/percona-toolkit/
+- **mariadb-tools** (MariaDB client/admin CLIs) — `mariadb`, `mariadb-dump`, `mariadb-binlog`, `aria_chk`, `myisamchk` — no flag tables harvested; all 28 candidates already present in repo (https://mariadb.com/kb/en/clients-and-utilities/)
+- **repeat-annotation** (repeat/TE genome-annotation CLIs from RepeatModeler, RepeatScout, RepeatMasker utils, and EDTA) — `BuildDatabase`, `RepeatScout`, `DupMasker`, `EDTA.pl` — flag tables harvested from https://github.com/Dfam-consortium/RepeatModeler, https://github.com/Dfam-consortium/RepeatScout, https://github.com/rmhubley/RepeatMasker, https://github.com/oushujun/EDTA
 
 Directory layout:
 
@@ -483,7 +491,7 @@ There isn't any. This is the largest zsh completion corpus ever assembled — by
 
 | Corpus | `_*` files | Authors | Span |
 |---|---|---|---|
-| **zsh-more-completions** (this repo) | **~43,800** | 1 (solo) | 2018–present |
+| **zsh-more-completions** (this repo) | **~44,000** | 1 (solo) | 2018–present |
 | &nbsp;&nbsp;↳ hand-written `src/` alone | **~8,360** | 1 (solo) | 2018–present |
 | zsh project bundled (`Completion/`) | 997 | entire zsh dev team | ~1992–present (30+ yrs) |
 | zsh-users/zsh-completions | 192 | community PRs | ~2009–present |
