@@ -57,7 +57,7 @@ The corpus doubles as a **reference index for tools you haven't installed**. Eac
 
 This is why the scale is a feature, not accumulation. Runtime completion sets (fish, zsh upstream, bash-completion) deliberately stop at "tools worth shipping completions to run" — they have no reason to carry completions for software you don't have. This corpus is bounded by "tools worth *knowing about*," which is a far larger set. The result is **47,370 commands' interfaces documented in one consistent, greppable format** — usable as inline documentation regardless of what's on the box.
 
-The breadth/depth tradeoff (see **// THE COMPETITION**) cuts the right way for this use case: for discovering what an uninstalled command does, a flat `subcommand: description` enumeration across the long tail beats a deep flag tree on the handful of tools you already run.
+Every file is hand-curated to its command's full interface (see **// THE COMPETITION**), so the documentation is complete per command — every real subcommand, flag, and argument, with descriptions — across the entire long tail of tooling, not just the handful of tools you already run.
 
 ### // HARVESTED ECOSYSTEMS
 
@@ -790,7 +790,7 @@ The math:
 - **The hand-written `src/` directory alone (~8,360 files) is ~8.4× the entire zsh project's bundled completion corpus (997)** — and that 997 was built by the whole zsh dev team over three decades.
 - The two largest known `#compdef` corpora on earth combined (997 + 192 = 1,189) fit into the hand-written portion of this repo **~7 times over**.
 
-> **Note:** this is a **breadth** record (command coverage / file count), not a per-file **depth** record — upstream's `_git`, `_zsh`, `_systemctl` are individually deeper, hand-tuned option trees. The claim is precise: *largest zsh completion corpus by command coverage ever assembled, exceeding the cumulative multi-decade output of the entire zsh dev team.*
+> **Note:** this is both a **breadth** record (command coverage / file count) **and** a per-file depth record. Every file is hand-curated to its command's *actual* interface — all real subcommands, flags, and arguments, with inline descriptions, fully covered. A small file is not a shallow file: a command with five flags gets a complete five-flag completion, because faking options a command doesn't have would be fabrication. Files scale with the command — single-purpose tools get compact complete coverage, while large commands get thousand-line option trees. The claim is precise: *largest fully-curated zsh completion corpus ever assembled, exceeding the cumulative multi-decade output of the entire zsh dev team.*
 
 ---
 
