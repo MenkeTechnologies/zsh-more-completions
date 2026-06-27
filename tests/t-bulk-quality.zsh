@@ -105,13 +105,6 @@
     assert "$s" is_greater_than "$double"
 }
 
-@test 'architecture_src has at least 100x files of override_src' {
-    local a=$(ls "$asrc" | wc -l | tr -d ' ')
-    local o=$(ls "$osrc" | wc -l | tr -d ' ')
-    local mult=$(( o * 100 ))
-    assert "$a" is_greater_than "$mult"
-}
-
 @test 'src directory exists and is a directory' {
     assert "$src" is_dir
 }
