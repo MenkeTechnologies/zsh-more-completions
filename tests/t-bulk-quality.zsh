@@ -867,10 +867,12 @@
 
 @test 'override_src files do not contain TODO markers' {
     local bad=0
+    local total=0
     for f in "$osrc"/_*; do
         grep -q 'TODO' "$f" && (( bad += 1 )) || true
+        (( total += 1 ))
     done
-    local pct=$(( bad * 100 / 8 ))
+    local pct=$(( bad * 100 / total ))
     assert "$pct" is_less_than 30
 }
 
