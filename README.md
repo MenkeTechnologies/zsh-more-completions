@@ -24,7 +24,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![zsh](https://img.shields.io/badge/zsh-plugin-cyan.svg)](https://github.com/MenkeTechnologies/zpwr)
 
-### `[THE LARGEST CURATED ZSH COMPLETION CORPUS IN EXISTENCE // 47,455 FILES]`
+### `[THE LARGEST CURATED ZSH COMPLETION CORPUS IN EXISTENCE // 47,393 FILES]`
 
 > *"Every CLI you've heard of, completed. Plus several you haven't."*
 
@@ -55,7 +55,7 @@ A **massive** zsh completions plugin — over 40k command completions wired into
 
 The corpus doubles as a **reference index for tools you haven't installed**. Each `_command` file is that command's interface in one uniform schema: a `#compdef` header followed by `_arguments` / `_describe` blocks listing subcommands, flags, arguments, and their inline descriptions. Open the file and you have the command's surface area without installing it, without its man page, without `--help`.
 
-This is why the scale is a feature, not accumulation. Runtime completion sets (fish, zsh upstream, bash-completion) deliberately stop at "tools worth shipping completions to run" — they have no reason to carry completions for software you don't have. This corpus is bounded by "tools worth *knowing about*," which is a far larger set. The result is **47,455 commands' interfaces documented in one consistent, greppable format** — usable as inline documentation regardless of what's on the box.
+This is why the scale is a feature, not accumulation. Runtime completion sets (fish, zsh upstream, bash-completion) deliberately stop at "tools worth shipping completions to run" — they have no reason to carry completions for software you don't have. This corpus is bounded by "tools worth *knowing about*," which is a far larger set. The result is **47,393 commands' interfaces documented in one consistent, greppable format** — usable as inline documentation regardless of what's on the box.
 
 Every file is hand-curated to its command's full interface (see **// THE COMPETITION**), so the documentation is complete per command — every real subcommand, flag, and argument, with descriptions — across the entire long tail of tooling, not just the handful of tools you already run.
 
@@ -775,7 +775,7 @@ There isn't any. This is the largest zsh completion corpus ever assembled — by
 
 | Corpus | `_*` files | Authors | Span |
 |---|---|---|---|
-| **zsh-more-completions** (this repo) | **~47,455** | 1 (solo) | 2018–present |
+| **zsh-more-completions** (this repo) | **~47,393** | 1 (solo) | 2018–present |
 | &nbsp;&nbsp;↳ hand-written `src/` alone | **~8,360** | 1 (solo) | 2018–present |
 | zsh project bundled (`Completion/`) | 997 | entire zsh dev team | ~1992–present (30+ yrs) |
 | zsh-users/zsh-completions | 192 | community PRs | ~2009–present |
@@ -786,7 +786,7 @@ There isn't any. This is the largest zsh completion corpus ever assembled — by
 
 The math:
 
-- **This repo is ~212× the size of `zsh-completions`** (the next-largest third-party `#compdef` set) and **~41× the size of zsh's own bundled completions.**
+- **This repo is ~247× the size of `zsh-completions`** (the next-largest third-party `#compdef` set) and **~48× the size of zsh's own bundled completions.**
 - **The hand-written `src/` directory alone (~8,360 files) is ~8.4× the entire zsh project's bundled completion corpus (997)** — and that 997 was built by the whole zsh dev team over three decades.
 - The two largest known `#compdef` corpora on earth combined (997 + 192 = 1,189) fit into the hand-written portion of this repo **~7 times over**.
 
