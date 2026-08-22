@@ -24,7 +24,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![zsh](https://img.shields.io/badge/zsh-plugin-cyan.svg)](https://github.com/MenkeTechnologies/zpwr)
 
-### `[THE LARGEST CURATED ZSH COMPLETION CORPUS IN EXISTENCE // 47,393 FILES]`
+### `[CURATED ZSH COMPLETION CORPUS // 47,393 FILES]`
 
 > *"Every CLI you've heard of, completed. Plus several you haven't."*
 
@@ -771,7 +771,7 @@ This prints `_`-prefixed completion file counts per directory, `total_completion
 
 ## [0x04] // THE COMPETITION
 
-There isn't any. This is the largest zsh completion corpus ever assembled — by a wide margin.
+Size comparison against the other public `#compdef` corpora:
 
 | Corpus | `_*` files | Authors | Span |
 |---|---|---|---|
@@ -788,9 +788,8 @@ The math:
 
 - **This repo is ~247× the size of `zsh-completions`** (the next-largest third-party `#compdef` set) and **~48× the size of zsh's own bundled completions.**
 - **The hand-written `src/` directory alone (~8,360 files) is ~8.4× the entire zsh project's bundled completion corpus (997)** — and that 997 was built by the whole zsh dev team over three decades.
-- The two largest known `#compdef` corpora on earth combined (997 + 192 = 1,189) fit into the hand-written portion of this repo **~7 times over**.
 
-> **Note:** this is both a **breadth** record (command coverage / file count) **and** a per-file depth record. Every file is hand-curated to its command's *actual* interface — all real subcommands, flags, and arguments, with inline descriptions, fully covered. A small file is not a shallow file: a command with five flags gets a complete five-flag completion, because faking options a command doesn't have would be fabrication. Files scale with the command — single-purpose tools get compact complete coverage, while large commands get thousand-line option trees. The claim is precise: *largest fully-curated zsh completion corpus ever assembled, exceeding the cumulative multi-decade output of the entire zsh dev team.*
+> **Note:** this covers both breadth (command coverage / file count) and per-file depth. Every file is hand-curated to its command's *actual* interface — all real subcommands, flags, and arguments, with inline descriptions, fully covered. A small file is not a shallow file: a command with five flags gets a complete five-flag completion, because faking options a command doesn't have would be fabrication. Files scale with the command — single-purpose tools get compact complete coverage, while large commands get thousand-line option trees.
 
 ---
 
