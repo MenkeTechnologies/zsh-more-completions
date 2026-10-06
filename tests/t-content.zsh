@@ -205,8 +205,8 @@
     assert $state equals 0
 }
 
-@test '_claude effort level has low medium high max values' {
-    run grep -c 'low medium high max' "$pluginDir/override_src/_claude"
+@test '_claude effort level has low medium high xhigh max values' {
+    run grep -cF '(low medium high xhigh max)' "$pluginDir/override_src/_claude"
     assert $state equals 0
 }
 
@@ -216,7 +216,7 @@
 }
 
 @test '_claude marketplace subcommands defined' {
-    run grep -c 'marketplace_commands' "$pluginDir/override_src/_claude"
+    run grep -c '^_claude_plugin_marketplace() {' "$pluginDir/override_src/_claude"
     assert $state equals 0
 }
 
@@ -315,7 +315,7 @@
 # ─── _lftp ───────────────────────────────────────────────────────────────────
 
 @test '_lftp has -f flag for script file' {
-    run grep -c "'-f\[" "$pluginDir/override_src/_lftp"
+    run grep -cE "'(\([^)]*\))?-f\\[" "$pluginDir/override_src/_lftp"
     assert $state equals 0
 }
 
@@ -325,7 +325,7 @@
 }
 
 @test '_lftp has -u user flag' {
-    run grep -c "'-u\[" "$pluginDir/override_src/_lftp"
+    run grep -cE "'(\([^)]*\))?-u\\[" "$pluginDir/override_src/_lftp"
     assert $state equals 0
 }
 
