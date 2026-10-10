@@ -117,8 +117,10 @@ _zd_ops() {
         lock_acquire lock_list lock_release lock_try_acquire log_level
         log_rotate log_stats metrics notify ping publish pull_canonical
         push_canonical recorder_ingest register replay_log schedule_add
-        schedule_add_once schedule_list schedule_remove send snapshot_diff
-        snapshot_list snapshot_load snapshot_save source_resolve
+        schedule_add_once schedule_list schedule_remove send snapshot_bisect
+        snapshot_diff snapshot_list snapshot_load snapshot_publish
+        snapshot_pubkey snapshot_pull snapshot_save snapshot_sign
+        snapshot_verify source_resolve
         stats_flush subscribe subscribe_shard subscription_set_paused
         suggest tag untag unsubscribe verify view watch_list
         watch_subscribe watch_unsubscribe watcher_stats
@@ -129,6 +131,7 @@ _zd_ops() {
 local -a cmds
 cmds=(
     'health:daemon liveness probe'
+    'daemon:control the local daemon (status, start, stop, restart)'
     'ops:list every op the daemon accepts'
     'info:daemon snapshot'
     'ping:round-trip latency (optional echo words)'
@@ -141,7 +144,7 @@ cmds=(
     'events:stream pub/sub events (standalone binary only)'
     'watch:stream file events for a directory (standalone binary only)'
     'defs:federated definitions catalog'
-    'snapshot:save, list, load and diff canonical-state snapshots'
+    'snapshot:save, list, load, diff, bisect, sign, verify, publish and pull canonical-state snapshots'
     'artifact:content-addressed artifact store'
     'schedule:cron-style and one-shot scheduled jobs'
     'export:render a target in a format'
@@ -337,6 +340,12 @@ case $state in
                     'list:list saved snapshots'
                     'load:restore the canonical state from TAG'
                     'diff:diff two snapshots'
+                    'bisect:first diverging record between GOOD and BAD (BAD defaults to live state)'
+                    'sign:write a detached ed25519 signature for TAG'
+                    'verify:verify TAG against a public key or the local key'
+                    'publish:sign, verify and publish TAG to a registry'
+                    'pull:fetch TAG from a registry, verify, and install it'
+                    'pubkey:print the local signing public key'
                 )
                 if (( CURRENT == 2 )); then
                     _describe -t commands 'snapshot verb' sub && return 0
@@ -357,6 +366,27 @@ case $state in
                         ;;
                     diff)
                         (( CURRENT == 3 || CURRENT == 4 )) && _zd_snapshot_tags && return 0
+                        ;;
+                    bisect)
+                        (( CURRENT == 3 || CURRENT == 4 )) && _zd_snapshot_tags && return 0
+                        ;;
+                    sign)
+                        (( CURRENT == 3 )) && _zd_snapshot_tags && return 0
+                        ;;
+                    verify|publish|pull)
+                        if (( CURRENT == 3 )); then
+                            if [[ $words[2] == pull ]]; then _message 'registry tag' && return 0; fi
+                            _zd_snapshot_tags && return 0
+                        elif [[ $prev == --public-key ]]; then
+                            _message 'ed25519 public key (hex)' && return 0
+                        elif [[ $prev == --registry ]]; then
+                            _files -/ && return 0
+                        else
+                            flags=( '--registry:registry directory or URL' )
+                            [[ $words[2] == (verify|pull) ]] && flags+=( '--public-key:trusted public key (hex)' )
+                            [[ $words[2] == pull ]] && flags+=( '--force:replace an existing local tag' )
+                            _describe -t options 'option' flags && return 0
+                        fi
                         ;;
                 esac
                 ;;
@@ -497,6 +527,15 @@ case $state in
                 ;;
             ping)
                 _message 'echo words' && return 0
+                ;;
+            daemon)
+                sub=(
+                    'status:running state (default; exit 1 when stopped)'
+                    'start:spawn the daemon if it is down'
+                    'stop:shut it down and wait for the socket to vanish'
+                    'restart:stop, then start'
+                )
+                (( CURRENT == 2 )) && _describe -t commands 'daemon verb' sub && return 0
                 ;;
         esac
         ;;
