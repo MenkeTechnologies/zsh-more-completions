@@ -53,6 +53,11 @@
     assert $bad equals 0
 }
 
+@test '_gcloud compdef header names gcloud' {
+    run head -1 "$pluginDir/override_src/_gcloud"
+    assert $output same_as '#compdef gcloud'
+}
+
 @test '_claude compdef header names claude' {
     run head -1 "$pluginDir/override_src/_claude"
     assert $output same_as '#compdef claude'

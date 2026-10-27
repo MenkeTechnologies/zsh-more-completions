@@ -1,0 +1,241 @@
+#compdef gcloud
+# Zsh completion for the Google Cloud CLI.
+#
+# Commands, flags and flag choices come from the static completion CLI tree
+# shipped with the installed SDK (<sdk>/data/cli/gcloud_completions.py), so
+# every group, command and flag of the installed release (GA, alpha, beta)
+# completes without spawning gcloud.  The tree is converted once per SDK
+# update into ${XDG_CACHE_HOME:-~/.cache}/zsh-more-completions/gcloud-tree.zsh
+# (zcompiled) and loaded once per shell.
+#
+# Resource values the tree marks "dynamic" (--project, --zone, --region,
+# --role, ...) and positional arguments of leaf commands (config properties,
+# configurations, instances, ...) are asked from gcloud's own completers via
+# its argcomplete protocol, memoized per shell.
+
+# Convert the SDK's static tree into two associative arrays:
+#   _gcloud_cmds[path]  = space separated subcommands of group "path"
+#   _gcloud_flags[path] = newline separated "--flag<TAB>kind" lines, kind is
+#                         bool, value, dynamic or "=" + choices joined by \x1f
+_gcloud_tree_load() {
+  local sdk=${commands[gcloud]:A:h:h}
+  local tree=$sdk/data/cli/gcloud_completions.py
+  local dir=${XDG_CACHE_HOME:-$HOME/.cache}/zsh-more-completions
+  local cache=$dir/gcloud-tree.zsh head=
+
+  [[ -r $tree ]] || return 1
+  [[ $_gcloud_tree_src == $tree && ! $tree -nt $cache ]] && return 0
+
+  [[ -r $cache ]] && read -r head < $cache
+  if [[ ! -s $cache || $tree -nt $cache || $head != "# source: $tree" ]]; then
+    mkdir -p $dir || return 1
+    command perl -e '
+      local $/; my $s = <STDIN>;
+      $s =~ s/\A.*?STATIC_COMPLETION_CLI_TREE\s*=\s*//s;
+      my @tok;
+      while ($s =~ /\G\s*(?:([{}\[\],:])|"((?:[^"\\]|\\.)*)"|([-+.\w]+))/gc) {
+        if (defined $1) { push @tok, [$1]; next }
+        my $v = $2 // $3;
+        $v =~ s/\\(u([0-9a-fA-F]{4})|.)/defined $2 ? chr(hex $2) : $1 eq "n" ? "\n" : $1 eq "t" ? "\t" : $1/ge if defined $2;
+        push @tok, [undef, $v];
+      }
+      die "gcloud tree: parse error at offset " . (pos($s) // 0) . "\n" unless $s =~ /\G\s*\z/gc;
+      my $i = 0;
+      sub val {
+        my $t = $tok[$i++] or die "gcloud tree: unexpected end\n";
+        return $t->[1] unless defined $t->[0];
+        if ($t->[0] eq "{") {
+          my %h;
+          while (($tok[$i][0] // "") ne "}") {
+            my $k = $tok[$i++][1]; $i++;
+            $h{$k} = val();
+            $i++ if ($tok[$i][0] // "") eq ",";
+          }
+          $i++;
+          return \%h;
+        }
+        if ($t->[0] eq "[") {
+          my @a;
+          while (($tok[$i][0] // "") ne "]") {
+            push @a, val();
+            $i++ if ($tok[$i][0] // "") eq ",";
+          }
+          $i++;
+          return \@a;
+        }
+        die "gcloud tree: unexpected token $t->[0]\n";
+      }
+      sub zq { my $v = shift; $v =~ s/\x27/\x27\\\x27\x27/g; "\x27$v\x27" }
+      my (@c, @f);
+      sub walk {
+        my ($p, $n) = @_;
+        my @sub = sort keys %{$n->{commands}};
+        push @c, zq($p), zq(join " ", @sub) if @sub;
+        my $fl = $n->{flags};
+        push @f, zq($p), zq(join "\n", map {
+          my $k = $fl->{$_};
+          "$_\t" . (ref $k ? "=" . join("\x1f", @$k) : $k)
+        } sort keys %$fl) if %$fl;
+        walk("$p $_", $n->{commands}{$_}) for @sub;
+      }
+      walk("gcloud", val());
+      print "# source: $ARGV[0]\n_gcloud_cmds=(\n", join("\n", @c), "\n)\n_gcloud_flags=(\n", join("\n", @f), "\n)\n";
+    ' $tree < $tree > $cache.$$ && mv -f $cache.$$ $cache || { command rm -f $cache.$$; return 1 }
+    zcompile $cache 2>/dev/null
+  fi
+
+  typeset -gA _gcloud_cmds _gcloud_flags
+  source $cache || return 1
+  typeset -g _gcloud_tree_src=$tree
+}
+
+# Ask gcloud's argcomplete handler for completions of the line built from
+# the words before the cursor plus $1 (the word being completed).
+_gcloud_argcomplete() {
+  local line="gcloud ${(j: :)${(@)words[2,CURRENT-1]}} $1"
+  local -a out err noslash slash
+
+  typeset -gA _gcloud_ac_memo
+  if (( ${+_gcloud_ac_memo[$line]} )); then
+    out=(${(f)_gcloud_ac_memo[$line]})
+  else
+    out=(${(f)"$(COMP_LINE=$line COMP_POINT=${#line} _ARGCOMPLETE=1 \
+      _ARGCOMPLETE_IFS=$'\n' command gcloud 8>&1 9>/dev/null 1>/dev/null 2>/dev/null)"})
+    # gcloud adds a trailing space to a sole completion; zsh adds its own.
+    out=(${(Q)${out% }})
+    # A failing resource completer reports "ERROR: ..."/"REASON: ..." lines
+    # as completions; show them as a message and do not memoize.
+    err=(${(M)out:#(ERROR|REASON):*})
+    if (( $#err )); then
+      _message -r "${(j: :)err}"
+      return 1
+    fi
+    (( $#out )) && _gcloud_ac_memo[$line]=${(F)out}
+  fi
+  (( $#out )) || return 1
+  slash=(${(M)out:#*[/=]})
+  noslash=(${out:#*[/=]})
+  local expl ret=1
+  _wanted values expl 'gcloud value' compadd -- $noslash && ret=0
+  (( $#slash )) && _wanted values expl 'gcloud value' compadd -S '' -- $slash && ret=0
+  return ret
+}
+
+_gcloud_configurations() {
+  local -a cfgs
+  cfgs=(${CLOUDSDK_CONFIG:-$HOME/.config/gcloud}/configurations/config_*(N:t))
+  cfgs=(${cfgs#config_})
+  local expl
+  _wanted configurations expl 'gcloud configuration' compadd -- $cfgs
+}
+
+_gcloud_accounts() {
+  local -a accts
+  accts=(${(f)"$(command gcloud auth list --format='value(account)' 2>/dev/null)"})
+  local expl
+  _wanted accounts expl 'gcloud account' compadd -- $accts
+}
+
+# Complete the value of flag $1 whose tree kind is $2.
+_gcloud_flag_value() {
+  local flag=$1 kind=$2 expl
+
+  case $flag in
+    (--configuration) _gcloud_configurations; return ;;
+    (--account) _gcloud_accounts; return ;;
+    (--format)
+      _wanted formats expl 'gcloud output format' compadd -- \
+        config csv default diff disable flattened get json list multi none \
+        object table text value yaml
+      return ;;
+  esac
+
+  case $kind in
+    (\=*)
+      _wanted values expl "${flag#--} value" compadd -- ${(ps:\x1f:)kind#=}
+      ;;
+    (dynamic)
+      _gcloud_argcomplete $PREFIX || _message -e values "${flag#--} value"
+      ;;
+    (*)
+      if [[ $flag == (*-file|*-files|*-path|*-dir|*-directory|*-script|--source|--local-*) ]]; then
+        _files
+      else
+        _gcloud_argcomplete $PREFIX || _message -e values "${flag#--} value"
+      fi
+      ;;
+  esac
+}
+
+# Set REPLY to the tree kind of flag $2 at command path $1, falling back to
+# the global flags; empty when the flag is unknown.
+_gcloud_flag_kind() {
+  local -a hit
+  REPLY=
+  hit=(${(M)${(f)_gcloud_flags[$1]}:#$2$'\t'*})
+  (( $#hit )) || hit=(${(M)${(f)_gcloud_flags[gcloud]}:#$2$'\t'*})
+  (( $#hit )) && REPLY=${hit[1]#*$'\t'}
+}
+
+_gcloud() {
+  local node=gcloud w pending= REPLY expl ret=1
+  local -a subs flagspecs boolflags valflags
+
+  if ! _gcloud_tree_load; then
+    _default
+    return
+  fi
+
+  # Walk the words before the cursor down the command tree, skipping flag
+  # values the same way gcloud's static completer does.
+  for w in ${(@)words[2,CURRENT-1]}; do
+    if [[ -n $pending ]]; then
+      pending=
+    elif [[ $w == --* ]]; then
+      [[ $w == *=* ]] && continue
+      _gcloud_flag_kind "$node" "$w"
+      [[ -n $REPLY && $REPLY != bool ]] && pending=$w
+    elif [[ " ${_gcloud_cmds[$node]} " == *" $w "* ]]; then
+      node="$node $w"
+    fi
+  done
+
+  if [[ -n $pending ]]; then
+    _gcloud_flag_kind "$node" "$pending"
+    _gcloud_flag_value $pending "$REPLY"
+    return
+  fi
+
+  if [[ $PREFIX == --*=* ]]; then
+    w=${PREFIX%%=*}
+    compset -P '*='
+    _gcloud_flag_kind "$node" "$w"
+    _gcloud_flag_value $w "$REPLY"
+    return
+  fi
+
+  if [[ $PREFIX == \$* ]]; then
+    _parameters
+    return
+  fi
+
+  if [[ $PREFIX == -* ]]; then
+    flagspecs=(${(f)_gcloud_flags[$node]})
+    [[ $node != gcloud ]] && flagspecs+=(${(f)_gcloud_flags[gcloud]})
+    boolflags=(${${(M)flagspecs:#*$'\t'bool}%%$'\t'*})
+    valflags=(${${flagspecs:#*$'\t'bool}%%$'\t'*})
+    _wanted flags expl 'gcloud flag' compadd -- ${(u)boolflags} -h && ret=0
+    _wanted flags expl 'gcloud flag' compadd -S '=' -- ${(u)valflags} && ret=0
+    return ret
+  fi
+
+  subs=(${=_gcloud_cmds[$node]})
+  if (( $#subs )); then
+    _wanted commands expl "${node} command" compadd -- $subs
+    return
+  fi
+
+  _gcloud_argcomplete $PREFIX || _files
+}
+
+_gcloud "$@"
