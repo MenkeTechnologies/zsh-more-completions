@@ -33,6 +33,24 @@ if (( ! ${+_zshrs_doc_names_cache} )); then
     fi
 fi
 
+# Words _arguments cannot place, handled first:
+#   zshrs --csh-translate [--] [--source] FILE|-   (argv[1] only, bins/zshrs.rs)
+#   zshrs --docs -s|--search PATTERN               (docs_book.rs `run`)
+if [[ $words[2] == --csh-translate ]]; then
+  if (( CURRENT == 3 )); then
+    _alternative \
+      'source-mode:option:((--source\:"translate as text a csh source runs: its exit leaves only that file"))' \
+      'files:csh script (- for stdin):_files' && ret=0
+  elif (( CURRENT == 4 )) && [[ $words[3] == --source ]]; then
+    _files && ret=0
+  fi
+  return ret
+fi
+if (( CURRENT > 3 )) && [[ $words[CURRENT-2] == --docs && $words[CURRENT-1] == (-s|--search) ]]; then
+  _message -e patterns 'search pattern'
+  return 0
+fi
+
 _arguments -S -s : \
   ${not}'--emulate[specify emulation mode]:mode:(zsh sh ksh csh bash)' \
   '--bash[parity-mode drop-in for /bin/bash (caches OFF, daemon OFF)]' \
@@ -50,7 +68,9 @@ _arguments -S -s : \
   '(1 -)-c[run a command]:command:_cmdstring' \
   '(-)--help[show help message and exit]' \
   '(-)--version[show version number and exit]' \
-  '(-)--doctor[full diagnostic report of shell health, caches, and performance]' \
+  '(1 *)--doctor[full diagnostic report of shell health, caches, and performance]' \
+  '--json[with --doctor: the same report as one JSON object]' \
+  ${not}'(- 1 *)--csh-translate[print the zsh translation of a csh script]' \
   '(-)--banner[print the ZSHRS logo, version and builtin totals, and daemon status]' \
   '(-)--prewarm-autoloads[compile every _* completer on \$fpath into autoloads.rkyv]' \
   '--disasm[print fusevm bytecode to stdout before each VM run]' \
@@ -90,7 +110,7 @@ _arguments -S -s : \
   '--quiet[with --ztest: suppress per-file banners]' \
   '--dap[run the in-process DAP debugger (TCP connect-back; stdio if no addr)]::host\:port' \
   '(-)1:script file:_files' \
-  '*::script arguments:->args' -- && ret=0
+  '*::script arguments:->args' -- -i '*/*' && ret=0
 
 # `&& ret=0`, not `&& return 0`: for an optional option argument
 # (`--docs::…`) `_arguments` sets $state AND returns 0 once any other
@@ -100,13 +120,17 @@ case $state in
     # `zshrs --names` is name-only (no per-entry kind), so the names go
     # in as one flat group. `compadd -a`, not `_values`: names such as
     # `[[`, `((`, `:=` and `<(` are spec syntax to `_values`.
+    # Only the first word after --docs is an option
+    # (src/extensions/docs_book.rs `run`): -t/-l/-s/-h, a page number,
+    # or a topic name.
     book_opts=(
-      '--toc:table of contents with the page of every topic'
-      '--list:every topic, one per line'
-      '--search:topics whose name or text contains a pattern'
-      '--help:usage and the keys of the book'
+      {-t,--toc}':table of contents with the page of every topic'
+      {-l,--list}':every topic, one per line'
+      {-s,--search}':topics whose name or text contains a pattern'
+      {-h,--help}':usage and the keys of the book'
     )
     _describe -t book-options 'book option' book_opts && ret=0
+    _message -e page-numbers 'page number'
     _wanted doc-names expl 'zshrs doc name' compadd -a _zshrs_doc_names_cache && ret=0
     ;;
   (args)
